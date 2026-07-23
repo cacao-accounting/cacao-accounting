@@ -7,6 +7,7 @@
 # ---------------------------------------------------------------------------------------
 import unittest
 from datetime import date
+from os import environ
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -20,16 +21,27 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 
 
+TEST_DATABASE_URL = environ.get("DATABASE_URL") or "sqlite:///:memory:"
+
+
+def create_schema_test_app():
+    """Crea una aplicación de pruebas usando el motor indicado por ``DATABASE_URL``."""
+    return create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": TEST_DATABASE_URL,
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        }
+    )
+
+
 # -------------------------------------------------------------------------------------
 # Fixtures y configuracion
 # -------------------------------------------------------------------------------------
 @pytest.fixture(scope="module")
 def app():
-    """Instancia de aplicacion Flask con base de datos en memoria."""
-    _app = create_app(
-        {**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SQLALCHEMY_TRACK_MODIFICATIONS": False}
-    )
-    return _app
+    """Instancia Flask con el motor definido por ``DATABASE_URL``."""
+    return create_schema_test_app()
 
 
 @pytest.fixture(scope="module")
@@ -46,13 +58,11 @@ def app_ctx(app):
 # Tests: Esquema de base de datos — creacion de tablas
 # -------------------------------------------------------------------------------------
 class TestSchemaTableCreation(unittest.TestCase):
-    """Verifica que todas las tablas del esquema se crean correctamente en SQLite."""
+    """Verifica que todas las tablas del esquema se crean en el motor configurado."""
 
     def setUp(self):
-        """Configura la aplicacion y crea el esquema en memoria."""
-        self.app = create_app(
-            {**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SQLALCHEMY_TRACK_MODIFICATIONS": False}
-        )
+        """Configura la aplicacion y crea el esquema en el motor seleccionado."""
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -463,7 +473,7 @@ class TestGLEntrySchema(unittest.TestCase):
     """Verifica que gl_entry tiene todos los campos requeridos."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -554,7 +564,7 @@ class TestBookMultiLedger(unittest.TestCase):
     """Verifica que Book soporta multiples libros contables paralelos."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -596,7 +606,7 @@ class TestAccountingPeriodSchema(unittest.TestCase):
     """Verifica que accounting_period tiene los campos extendidos."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -623,7 +633,7 @@ class TestAccountsSchema(unittest.TestCase):
     """Verifica que accounts tiene el campo account_type para AR/AP."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -645,7 +655,7 @@ class TestCompanyDefaultAccountExtendedSchema(unittest.TestCase):
     """Verifica campos completos de cuentas predeterminadas."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -695,7 +705,7 @@ class TestUnitAsAnalyticDimension(unittest.TestCase):
     """Verifica que Unit esta correctamente vinculada a GLEntry como dimension."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database, Unit, Unidad
@@ -737,7 +747,7 @@ class TestDocBaseFields(unittest.TestCase):
     """Verifica que los documentos transaccionales tienen los campos DocBase."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -909,7 +919,7 @@ class TestGetNextSequenceValue(unittest.TestCase):
     """Pruebas del contador de secuencias."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -968,7 +978,7 @@ class TestGenerateIdentifier(unittest.TestCase):
     """Pruebas de integracion del generador de identificadores."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -1120,7 +1130,7 @@ class TestSequenceReset(unittest.TestCase):
     """Pruebas de la politica de reinicio de secuencias."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -1412,7 +1422,7 @@ class TestDocBaseDocumentNo(unittest.TestCase):
     """Verifica que DocBase tiene los campos document_no y naming_series_id."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -1458,7 +1468,7 @@ class TestAccountsClassificationField(unittest.TestCase):
     """Verifica que Accounts usa 'classification' (sin typo)."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -1480,7 +1490,7 @@ class TestPartyClassificationField(unittest.TestCase):
     """Verifica que Party usa 'classification' (sin typo)."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -1519,7 +1529,7 @@ class TestPaymentTermsTable(unittest.TestCase):
     """Verifica que la tabla payment_terms existe y tiene los campos requeridos."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -1562,7 +1572,7 @@ class TestCompanyPartyPaymentTermsFk(unittest.TestCase):
     """Verifica que company_party usa FK a payment_terms (no texto plano)."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -1590,7 +1600,7 @@ class TestBatchUniqueConstraint(unittest.TestCase):
     """Verifica que batch tiene constraint unico por (item_code, batch_no)."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
@@ -1632,7 +1642,7 @@ class TestExchangeRateUniqueConstraint(unittest.TestCase):
     """Verifica que exchange_rate tiene constraint unico por (origin, destination, date)."""
 
     def setUp(self):
-        self.app = create_app({**configuracion, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+        self.app = create_schema_test_app()
         self.ctx = self.app.app_context()
         self.ctx.push()
         from cacao_accounting.database import database
