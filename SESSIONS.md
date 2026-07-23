@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-07-22 — Validación del esquema por motor en GitHub Actions
+
+### Petición
+
+Se solicitó que `tests/test_04database_schema.py` se ejecutara al validar los
+múltiples motores de base de datos, pero quedara fuera de las pruebas generales
+de integración, del modo desktop y de coverage. El test debía respetar la
+variable `DATABASE_URL` para validar el motor seleccionado.
+
+### Implementación
+
+- El test ahora centraliza la URI en `DATABASE_URL`, conservando SQLite en
+  memoria como fallback local.
+- Los jobs `build`, `desktop` y `coverage` excluyen explícitamente el test de
+  esquema.
+- El job `databases` prepara una base limpia por motor y ejecuta el test con
+  `DATABASE_URL` para SQLite, MySQL/pymysql, PostgreSQL/psycopg2 y
+  PostgreSQL/pg8000.
+- La validación no usa seed, para evitar que datos demo interfieran con las
+  pruebas de secuencias e identificadores.
+
 ## 2026-07-22 — Sincronización de README y script de desarrollo con cacaoctl
 
 ### Petición
