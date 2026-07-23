@@ -1963,7 +1963,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
     )
     _update_payment_amounts(payment, payment_type, amount)
     if payment_type == "internal_transfer":
-        transfer_rate = Decimal(str(payload.get("exchange_rate") or "0"))
+        transfer_rate = Decimal(str(payload.get("exchange_rate") or "1"))
         if transfer_rate <= 0:
             raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
         if target_bank and target_bank.currency:
