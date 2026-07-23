@@ -206,7 +206,6 @@ def db_init(force: bool, seed: bool) -> None:
     """
     from cacao_accounting.database import database
     from cacao_accounting.database.helpers import (
-        entidades_creadas,
         inicia_base_de_datos,
         usuarios_creados,
         resolver_credenciales_iniciales,
@@ -220,11 +219,11 @@ def db_init(force: bool, seed: bool) -> None:
 
     app = _obtener_aplicacion()
     with app.app_context():
-        existe = entidades_creadas() or usuarios_creados()
-        if force and existe:
+        base_lista = usuarios_creados()
+        if force and base_lista:
             _mensaje_advertencia("La base de datos existente será reemplazada.")
             database.drop_all()
-        elif existe and not force:
+        elif base_lista and not force:
             _mensaje_info("La base de datos ya existe, nada que hacer.")
             raise click.exceptions.Exit(0)
 
