@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from flask_login import current_user
@@ -27,6 +28,22 @@ from cacao_accounting.document_flow.registry import normalize_doctype
 
 PENDING_APPROVAL_STATUS = "Pending Approval"
 PENDING_CANCELLATION_STATUS = "Pending Cancellation"
+
+
+def _deterministic_default(obj: Any) -> str:
+    """Serialize non-primitive types to a stable string representation.
+
+    Unlike the built-in ``default=str`` which may produce non-deterministic
+    output for some objects (e.g. ORM instances whose ``__str__`` includes a
+    memory address), this helper converts known types to canonical strings
+    and falls back to ``repr()`` which is always deterministic for a given
+    object type and value.
+    """
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, (date, datetime)):
+        return obj.isoformat()
+    return repr(obj)
 
 
 class ApprovalEngine:
@@ -134,7 +151,7 @@ class ApprovalEngine:
             # Some accounting documents do not participate in document flow.
             lines = []
         payload = {"header": header, "lines": lines}
-        serialized = json.dumps(payload, default=str, ensure_ascii=False, sort_keys=True)
+        serialized = json.dumps(payload, default=_deterministic_default, ensure_ascii=False, sort_keys=True)
         return payload, hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
     @staticmethod
