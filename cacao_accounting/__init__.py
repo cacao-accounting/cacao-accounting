@@ -12,6 +12,7 @@ WSGI.
 # ---------------------------------------------------------------------------------------
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from os import environ
 from secrets import token_urlsafe
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -129,6 +130,13 @@ def registrar_rutas_predeterminadas(app: Flask | None = None) -> None:
     """Registra rutas predeterminadas."""
     if app and isinstance(app, Flask):
         from flask import render_template
+        from flask_wtf.csrf import CSRFError
+
+        @app.errorhandler(CSRFError)
+        def error_csrf(error):
+            """Registra el motivo de un rechazo CSRF y devuelve la página 400."""
+            log.warning("Solicitud rechazada por CSRF: {}", error.description)
+            return render_template("400.html"), 400
 
         @app.errorhandler(404)
         def error_404(error):
@@ -358,9 +366,10 @@ def create_app(ajustes: dict | None = None) -> Flask:
     cacao_app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
     # Configurar cookies de sesión
-    cacao_app.config["SESSION_COOKIE_SECURE"] = True
+    cacao_app.config["SESSION_COOKIE_SECURE"] = _session_cookie_secure_default()
     cacao_app.config["SESSION_COOKIE_HTTPONLY"] = True
     cacao_app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    cacao_app.config["WTF_CSRF_SSL_STRICT"] = _csrf_ssl_strict_default()
 
     setattr(cacao_app, "wsgi_app", ProxyFix(cacao_app.wsgi_app, x_for=1, x_proto=1, x_host=1))
 
@@ -382,6 +391,18 @@ def create_app(ajustes: dict | None = None) -> Flask:
             log.error("Error al recuperar lotes de importación: {}", e)
 
     return cacao_app
+
+
+def _session_cookie_secure_default() -> bool:
+    """Return the session-cookie policy configured for the current server."""
+    value = environ.get("CACAO_SESSION_COOKIE_SECURE", "True")
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _csrf_ssl_strict_default() -> bool:
+    """Return whether CSRF must compare HTTPS referrer and host strictly."""
+    value = environ.get("CACAO_CSRF_SSL_STRICT", "True")
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def _configure_app_secret_key(app: Flask) -> None:

@@ -5,6 +5,100 @@
 
 ---
 
+## 2026-07-23 — Error 400 al iniciar sesión con el servidor de desarrollo
+
+### Petición
+
+Al iniciar la aplicación con `scripts/run_server.sh`, la pantalla de login
+respondía `400 Su solicitud no se pudo procesar` al enviar las credenciales,
+sin una excepción visible en el log.
+
+### Diagnóstico e implementación
+
+- Flask-WTF rechazaba el POST por CSRF antes de ejecutar la ruta de login: la
+  aplicación fijaba `SESSION_COOKIE_SECURE=True`, pero el script sirve HTTP.
+  El navegador no enviaba la cookie de sesión que contiene el token CSRF.
+- `SESSION_COOKIE_SECURE` ahora conserva `True` por defecto y puede ajustarse
+  con `CACAO_SESSION_COOKIE_SECURE`.
+- `scripts/run_server.sh` establece esa variable en `False` por defecto para
+  su servidor HTTP local; una instalación HTTPS puede sobrescribirla a
+  `True`.
+- Se añadió una prueba para preservar explícitamente esta configuración.
+
+---
+
+## 2026-07-23 — Arranque del servidor sin borrar la base de datos
+
+### Petición
+
+Se solicitó que `scripts/run_server.sh` no elimine datos al iniciar y que el
+reinicio de la base ocurra únicamente al pasar `--clean`.
+
+### Implementación
+
+- El arranque normal ejecuta solo `cacaoctl --env test db init --seed`, que es
+  idempotente cuando la base de datos ya existe.
+- La limpieza destructiva quedó condicionada a `scripts/run_server.sh --clean`.
+- Los argumentos desconocidos producen uso y código de salida 2.
+- Se actualizó el README para documentar el comportamiento seguro y la opción
+  explícita de reinicio.
+
+---
+
+## 2026-07-23 — Rechazo CSRF por host/puerto detrás de Replit
+
+### Diagnóstico
+
+El POST de login llegaba con HTTPS, pero Flask-WTF rechazaba el `Referer`
+porque el proxy de Replit expone un host/puerto externo diferente al que Flask
+observa internamente: `The referrer does not match the host.`
+
+### Implementación
+
+- `scripts/run_server.sh` desactiva solo la comparación estricta de
+  `Referer`/host mediante `CACAO_CSRF_SSL_STRICT=False`.
+- La validación del token CSRF continúa activa.
+- El comportamiento seguro estricto queda como valor predeterminado de la
+  aplicación y puede restaurarse con `CACAO_CSRF_SSL_STRICT=True`.
+
+---
+
+## 2026-07-23 — Persistencia de la base de datos del servidor local
+
+### Diagnóstico
+
+El script ejecutaba `db init` y `run` como procesos independientes mientras
+`CACAO_TEST=True` seleccionaba SQLite en memoria. La base creada durante
+`db init` se perdía al terminar ese proceso, por lo que el servidor arrancaba
+sin datos ni esquema.
+
+### Implementación
+
+- `scripts/run_server.sh` define una URI SQLite persistente en
+  `cacaoaccounting.db` dentro de la raíz del proyecto.
+- La URI puede cambiarse con `CACAO_DATABASE_URL`.
+- La opción `--clean` continúa siendo la única que elimina esa base.
+
+---
+
+## 2026-07-23 — Readiness de base de datos en Docker
+
+### Petición
+
+La existencia de una entidad no es suficiente para arrancar Docker. Debe
+existir la tabla `user` y al menos un usuario; de lo contrario el contenedor
+puede iniciar y fallar después con `no such table: user`.
+
+### Implementación
+
+- `db init` usa `usuarios_creados()` como criterio de base ya lista.
+- Una base con entidades pero sin usuarios se repara mediante la
+  inicialización normal, sin borrar datos.
+- `docker-entry-point.sh` ya no ignora errores de `db init` ni `db migrate`.
+  Un fallo de inicialización detiene el contenedor inmediatamente.
+
+---
+
 ## 2026-07-22 — Validación del esquema por motor en GitHub Actions
 
 ### Petición

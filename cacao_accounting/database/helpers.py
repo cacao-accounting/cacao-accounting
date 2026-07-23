@@ -125,7 +125,8 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
     """Inicia esquema de base datos."""
     from cacao_accounting.datos import base_data, dev_data
 
-    if entidades_creadas():
+    entidad_creada = entidades_creadas()
+    if usuarios_creados():
         return True
 
     log.info("Intentando inicializar base de datos.")
@@ -139,7 +140,8 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             if with_examples:
                 log.trace("Creando datos de prueba.")
                 base_data(user, passwd, carga_rapida=False)
-                dev_data()
+                if not entidad_creada:
+                    dev_data()
             else:
                 base_data(user, passwd, carga_rapida=True)
             DB_ESQUEMA = True

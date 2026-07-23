@@ -18,6 +18,34 @@ def test_session_cookie_configurations():
     assert app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
 
 
+def test_session_cookie_secure_can_be_disabled_for_http_development(monkeypatch):
+    """Allow the local HTTP server to retain the session/CSRF cookie."""
+    monkeypatch.setenv("CACAO_SESSION_COOKIE_SECURE", "False")
+    app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "testsecretkey",
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+        }
+    )
+
+    assert app.config["SESSION_COOKIE_SECURE"] is False
+
+
+def test_csrf_ssl_strict_can_be_disabled_for_reverse_proxy_development(monkeypatch):
+    """Allow a development proxy to terminate HTTPS before Flask receives it."""
+    monkeypatch.setenv("CACAO_CSRF_SSL_STRICT", "False")
+    app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "testsecretkey",
+            "SQLALCHEMY_DATABASE_URI": "sqlite://",
+        }
+    )
+
+    assert app.config["WTF_CSRF_SSL_STRICT"] is False
+
+
 def test_http_security_headers():
     app = create_app(
         {
