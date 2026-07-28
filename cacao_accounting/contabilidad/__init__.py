@@ -3208,7 +3208,6 @@ def nuevo_comprobante():
         create_journal_draft,
         parse_journal_form,
     )
-    from cacao_accounting.form_preferences import DEFAULT_VIEW_KEY, JOURNAL_FORM_KEY, get_form_preference
 
     if request.method == "POST":
         try:
@@ -3220,15 +3219,11 @@ def nuevo_comprobante():
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
 
     TITULO = "Nuevo Comprobante Contable - " + APPNAME
-    column_preferences = get_form_preference(str(current_user.id), JOURNAL_FORM_KEY, DEFAULT_VIEW_KEY)
     is_closing = request.args.get("isclosing", "").lower() in {"1", "true", "yes", "on"}
     initial_journal = {"is_closing": True} if is_closing else None
     return render_template(
         "contabilidad/journal_nuevo.html",
         titulo=TITULO,
-        column_preferences=column_preferences,
-        form_key=JOURNAL_FORM_KEY,
-        view_key=DEFAULT_VIEW_KEY,
         initial_journal=initial_journal,
         submit_url=url_for("contabilidad.nuevo_comprobante"),
         cancel_url=url_for("contabilidad.conta"),
@@ -3531,7 +3526,6 @@ def editar_comprobante(identifier: str):
         serialize_journal_for_form,
         update_journal_draft,
     )
-    from cacao_accounting.form_preferences import DEFAULT_VIEW_KEY, JOURNAL_FORM_KEY, get_form_preference
 
     journal = get_journal(identifier)
     if journal is None:
@@ -3554,13 +3548,9 @@ def editar_comprobante(identifier: str):
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
 
     TITULO = "Editar Comprobante Contable - " + APPNAME
-    column_preferences = get_form_preference(str(current_user.id), JOURNAL_FORM_KEY, DEFAULT_VIEW_KEY)
     return render_template(
         "contabilidad/journal_nuevo.html",
         titulo=TITULO,
-        column_preferences=column_preferences,
-        form_key=JOURNAL_FORM_KEY,
-        view_key=DEFAULT_VIEW_KEY,
         initial_journal=serialize_journal_for_form(journal),
         submit_url=url_for(CONTABILIDAD_EDITAR_COMPROBANTE, identifier=identifier),
         cancel_url=url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier),
