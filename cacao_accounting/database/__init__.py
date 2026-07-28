@@ -368,29 +368,7 @@ class RolesUser(database.Model, BaseTabla):  # type: ignore[name-defined]
     active = database.Column(database.Boolean, nullable=True)
 
 
-class UserFormPreference(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Preferencias persistentes de formularios por usuario."""
 
-    __tablename__ = "user_form_preference"
-    __table_args__ = (
-        database.UniqueConstraint(
-            "user_id",
-            "form_key",
-            "view_key",
-            name="uq_user_form_preference",
-        ),
-    )
-
-    user_id = database.Column(
-        database.String(26),
-        database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    form_key = database.Column(database.String(100), nullable=False, index=True)
-    view_key = database.Column(database.String(50), nullable=False, index=True)
-    schema_version = database.Column(database.Integer(), nullable=False, default=1)
-    config_json = database.Column(database.Text(), nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #
