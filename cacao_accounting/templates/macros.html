@@ -13,6 +13,7 @@
   (function(){
     var t = localStorage.getItem('ca-theme') || 'light';
     document.documentElement.setAttribute('data-theme', t);
+    document.documentElement.setAttribute('data-bs-theme', t);
   })();
 </script>
 
@@ -114,6 +115,7 @@
       var current = document.documentElement.getAttribute('data-theme') || 'light';
       var next = current === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
+      document.documentElement.setAttribute('data-bs-theme', next);
       localStorage.setItem('ca-theme', next);
       syncIcon();
     };

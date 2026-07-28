@@ -924,46 +924,6 @@ def test_financial_reports_exclude_cancelled_entries_and_reversals_by_default(ap
     assert income_statement_with_cancellations.totals["net_profit"] == Decimal("15.00")
 
 
-def test_financial_report_view_persistence_and_column_selection(app_ctx):
-    from cacao_accounting.database import Modules, User, UserFormPreference, database
-
-    accounting_module = Modules(module="accounting", default=True, enabled=True)
-    report_user = User(user="report-view-user", name="Report View User", password=b"x", classification="admin", active=True)
-    database.session.add_all([accounting_module, report_user])
-    database.session.commit()
-
-    app_ctx.config["SECRET_KEY"] = "testing"
-    client = app_ctx.test_client()
-    with client.session_transaction() as session:
-        session["_user_id"] = report_user.id
-        session["_fresh"] = True
-
-    response_save = client.get(
-        "/reports/account-movement?company=cacao&ledger=FISC&saved_view=vista-mensual&view_action=save&"
-        "visible_columns=posting_date&visible_columns=account_code"
-    )
-    assert response_save.status_code == 200
-    preference = database.session.execute(
-        database.select(UserFormPreference).filter_by(
-            user_id=report_user.id,
-            form_key="reports.financial.account-movement",
-            view_key="vista-mensual",
-        )
-    ).scalar_one()
-    assert "posting_date" in preference.config_json
-
-    response_apply = client.get(
-        "/reports/account-movement?company=cacao&ledger=FISC&saved_view=vista-mensual&view_action=apply"
-    )
-    assert response_apply.status_code == 200
-    html = response_apply.get_data(as_text=True)
-    assert "vista-mensual" in html
-    assert "Reference Type" in html
-    assert "Is Reversal" in html
-    assert ">reference_type<" not in html
-    assert ">is_reversal<" not in html
-
-
 def test_financial_report_filters_prefill_and_hide_columns_for_summary_reports(app_ctx):
     from cacao_accounting.database import AccountingPeriod, Book, FiscalYear, Modules, User, database
 

@@ -22,11 +22,11 @@ body {
 
 .sidebar .nav-link {
   font-weight: 500;
-  color: #333;
+  color: var(--ca-sidebar-hover-text);
 }
 
 .sidebar .nav-link.active {
-  color: #78BF30;
+  color: var(--ca-sidebar-active-text);
 }
 
 /* Navbar brand */

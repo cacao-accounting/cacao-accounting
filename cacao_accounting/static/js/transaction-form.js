@@ -33,48 +33,6 @@
       });
   }
 
-  function defaultColumns(messages) {
-    return [
-      { field: 'item_code', label: messages.itemCode || 'Código del item', width: 2, visible: true, required: true },
-      { field: 'item_name', label: messages.itemName || 'Descripción del item', width: 3, visible: true, required: true },
-      { field: 'uom', label: messages.uom || 'Unidad de medida', width: 2, visible: true, required: true },
-      { field: 'qty', label: messages.qty || 'Cantidad', width: 1, visible: true, required: true },
-      { field: 'rate', label: messages.rate || 'Precio / Costo Unitario', width: 2, visible: true, required: true },
-      { field: 'amount', label: messages.amount || 'Precio / Costo Total', width: 2, visible: true, required: true },
-    ];
-  }
-
-  function normalizeColumns(columns, messages) {
-    const baseColumns = defaultColumns(messages);
-    const normalized = Array.isArray(columns) ? columns
-      .filter((column) => column?.field)
-      .map((column) => {
-        return {
-          field: String(column.field),
-          label: column.label || String(column.field),
-          width: Math.min(Math.max(Number.parseInt(column.width || 1, 10), 1), 4),
-          visible: column.visible !== false,
-          required: Boolean(column.required),
-        };
-      }) : [];
-
-    if (!normalized.length) return baseColumns;
-
-    baseColumns.forEach((requiredColumn) => {
-      const existing = normalized.find((column) => column.field === requiredColumn.field);
-      if (existing) {
-        existing.label = existing.label || requiredColumn.label;
-        existing.width = existing.width || requiredColumn.width;
-        existing.visible = true;
-        existing.required = true;
-        return;
-      }
-      normalized.push(requiredColumn);
-    });
-
-    return normalized;
-  }
-
   function normalizeItems(items) {
     if (!Array.isArray(items)) return [];
     return items.map((item) => {
@@ -278,15 +236,10 @@
         amount: 'Precio / Costo Total',
         ...config.messages
       };
-      let effectivePreferences = config.initialPreferences;
-      if (!effectivePreferences || !Array.isArray(effectivePreferences.columns)) {
-        effectivePreferences = { columns: config.columns || [] };
-      }
 
       return {
         formKey: config.formKey || '',
         viewKey: config.viewKey || 'draft',
-        preferences: { columns: normalizeColumns(effectivePreferences.columns, messages) },
         messages,
         header: {
           company: '',
@@ -344,18 +297,6 @@
           this.lines = (config.initialLines || []).map(normalizeLineWithCb(this));
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
           this.queueTaxPreview();
-        },
-
-        get visibleColumns() {
-          return this._filterVisibleColumns(this.preferences.columns || []);
-        },
-
-        _filterVisibleColumns(columns) {
-          const result = [];
-          for (const column of columns) {
-            if (column.visible !== false) result.push(column);
-          }
-          return result;
         },
 
         get totalAmount() {
@@ -989,53 +930,6 @@
             }
           }
           this.lines = filtered;
-        },
-
-        moveColumn(index, direction) {
-          const target = index + direction;
-          if (target < 0 || target >= this.preferences.columns.length) return;
-          const column = this.preferences.columns.splice(index, 1)[0];
-          this.preferences.columns.splice(target, 0, column);
-        },
-
-        async savePreferences() {
-          if (!this.formKey || !this.viewKey) return;
-          const csrfInput = document.querySelector('input[name="csrf_token"]');
-          const csrfToken = csrfInput ? csrfInput.value : '';
-          try {
-            const response = await fetch(`/api/form-preferences/${encodeURIComponent(this.formKey)}/${encodeURIComponent(this.viewKey)}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-              credentials: 'same-origin',
-              body: JSON.stringify(this.preferences)
-            });
-            const payload = await response.json();
-            this.preferences = { columns: normalizeColumns(payload.columns || [], this.messages) };
-            const modalEl = document.getElementById('columnsModal');
-            if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-          } catch (err) {
-            console.warn('Error al guardar preferencias:', err);
-          }
-        },
-
-        async resetPreferences() {
-          if (!this.formKey || !this.viewKey) {
-            this.preferences = { columns: defaultColumns(this.messages) };
-            return;
-          }
-          const csrfInput = document.querySelector('input[name="csrf_token"]');
-          const csrfToken = csrfInput ? csrfInput.value : '';
-          try {
-            const response = await fetch(`/api/form-preferences/${encodeURIComponent(this.formKey)}/${encodeURIComponent(this.viewKey)}`, {
-              method: 'DELETE',
-              headers: { 'X-CSRFToken': csrfToken },
-              credentials: 'same-origin'
-            });
-            const payload = await response.json();
-            this.preferences = { columns: normalizeColumns(payload.columns || [], this.messages) };
-          } catch (err) {
-            console.warn('Error al resetear preferencias:', err);
-          }
         },
 
         formatMoney(value) {

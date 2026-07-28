@@ -201,9 +201,6 @@
 
   globalThis.journalEntryForm = function (config) {
     return {
-      formKey: config.formKey,
-      viewKey: config.viewKey,
-      preferences: config.initialPreferences || { columns: [] },
       messages: config.messages,
       header: {
         company: (config.initialJournal && config.initialJournal.company) || '',
@@ -307,10 +304,6 @@
         resolved = this.syncCompanyFilterValue(resolved);
         this.header.company = resolved;
         return resolved;
-      },
-
-      get visibleColumns() {
-        return (this.preferences.columns || []).filter(function (column) { return column.visible; });
       },
 
       get activeLine() {
@@ -570,43 +563,6 @@
         bootstrap.Modal.getOrCreateInstance(document.getElementById('journalImportLinesModal')).hide();
       },
 
-      moveColumn: function (index, direction) {
-        var target = index + direction;
-        if (target < 0 || target >= this.preferences.columns.length) return;
-        var column = this.preferences.columns.splice(index, 1)[0];
-        this.preferences.columns.splice(target, 0, column);
-      },
-
-      savePreferences: function () {
-        var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
-        var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
-        fetch('/api/form-preferences/' + encodeURIComponent(this.formKey) + '/' + encodeURIComponent(this.viewKey), {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          credentials: 'same-origin',
-          body: JSON.stringify(this.preferences)
-        })
-          .then((response) => response.json())
-          .then((payload) => {
-            this.preferences = payload;
-            bootstrap.Modal.getOrCreateInstance(document.getElementById('columnsModal')).hide();
-          });
-      },
-
-      resetPreferences: function () {
-        var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
-        var csrfToken = csrfTokenInput ? csrfTokenInput.value : '';
-        fetch('/api/form-preferences/' + encodeURIComponent(this.formKey) + '/' + encodeURIComponent(this.viewKey), {
-          method: 'DELETE',
-          headers: { 'X-CSRFToken': csrfToken },
-          credentials: 'same-origin'
-        })
-          .then((response) => response.json())
-          .then((payload) => {
-            this.preferences = payload;
-          });
-      },
-
       loadBookOptions: function (companyCode) {
         var company = typeof companyCode === 'string' ? companyCode : '';
         if (!company) {
@@ -696,9 +652,6 @@
 </script>
 
 {% set journal_initial_state = {
-  'formKey': form_key,
-  'viewKey': view_key,
-  'initialPreferences': column_preferences,
   'initialJournal': initial_journal,
   'messages': {
     'balanced': _('Balanceado'),
@@ -721,10 +674,6 @@
       <p class="text-muted mb-0">{{ _('Borrador') }}</p>
     </div>
     <div class="d-flex gap-2">
-      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="modal"
-        data-bs-target="#columnsModal">
-        <i class="bi bi-sliders"></i> {{ _('Columnas') }}
-      </button>
       <a href="{{ cancel_url or url_for('contabilidad.conta') }}"
         class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> {{ _('Cancelar') }}</a>
       <button class="btn btn-sm btn-primary" type="submit">
@@ -1508,36 +1457,6 @@
             @click="insertImportedLines()">
             {{ _('Insertar líneas') }}
           </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal fade" id="columnsModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">{{ _('Configurar columnas') }}</h5>
-          <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
-        </div>
-        <div class="modal-body">
-          <template x-for="(column, index) in preferences.columns" :key="column.field">
-            <div class="d-flex align-items-center gap-2 mb-2">
-              <input class="form-check-input" type="checkbox" x-model="column.visible">
-              <span class="flex-grow-1" x-text="column.label"></span>
-              <input class="form-control form-control-sm text-end" style="width: 80px;" type="number" min="1" max="4"
-                x-model.number="column.width">
-              <button class="btn btn-sm btn-outline-secondary" type="button" @click="moveColumn(index, -1)"><i
-                  class="bi bi-arrow-up"></i></button>
-              <button class="btn btn-sm btn-outline-secondary" type="button" @click="moveColumn(index, 1)"><i
-                  class="bi bi-arrow-down"></i></button>
-            </div>
-          </template>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline-secondary" type="button"
-            @click="resetPreferences()">{{ _('Restablecer') }}</button>
-          <button class="btn btn-primary" type="button" @click="savePreferences()">{{ _('Actualizar') }}</button>
         </div>
       </div>
     </div>

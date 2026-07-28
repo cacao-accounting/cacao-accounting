@@ -974,7 +974,6 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
 def inventario_entrada_nuevo():
     """Formulario para crear una entrada de almacén."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
 
     formulario = FormularioEntradaAlmacen()
@@ -1004,7 +1003,6 @@ def inventario_entrada_nuevo():
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, _INVENTORY_STOCK_ENTRY),
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
@@ -1277,7 +1275,6 @@ def _render_stock_entry_edit_form(
     uoms_disponibles: list,
 ):
     """Renderiza el formulario de edición de entrada de inventario."""
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
 
     formulario = FormularioEntradaAlmacen(obj=registro)
@@ -1288,7 +1285,6 @@ def _render_stock_entry_edit_form(
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, _INVENTORY_STOCK_ENTRY),
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
