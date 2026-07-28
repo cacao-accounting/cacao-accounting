@@ -242,7 +242,6 @@ def compras_solicitud_compra_nueva():
 
     formulario = FormularioSolicitudCompra()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-    from cacao_accounting.form_preferences import get_column_preferences
 
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
@@ -259,7 +258,6 @@ def compras_solicitud_compra_nueva():
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_REQUEST),
         "availableSourceTypes": [],
     }
     if request.method == "POST":
@@ -332,7 +330,6 @@ def compras_solicitud_compra_editar(request_id: str):
     """Edita una solicitud de compra en borrador."""
     from cacao_accounting.compras.forms import FormularioSolicitudCompra
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
 
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
@@ -383,7 +380,6 @@ def compras_solicitud_compra_editar(request_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_REQUEST),
         "availableSourceTypes": [],
         "initialHeader": {
             "company": registro.company or "",
@@ -768,14 +764,11 @@ def _supplier_quotation_transaction_config(
     available_source_types: list[dict[str, str]] | None = None,
 ) -> dict[str, object]:
     """Construye la configuración transaccional compartida de cotización."""
-    from cacao_accounting.form_preferences import get_column_preferences
-
     transaction_config: dict[str, object] = {
         "formKey": form_key,
         "viewKey": "draft",
         "items": items,
         "uoms": uoms,
-        "columns": get_column_preferences(current_user.id, form_key),
         "availableSourceTypes": available_source_types
         or [
             {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
@@ -1672,14 +1665,11 @@ def _persist_purchase_invoice_fiscal_snapshot(invoice: PurchaseInvoice) -> None:
 
 
 def _build_purchase_order_transaction_config(items_disponibles, uoms_disponibles, source_origen, initial_source_type):
-    from cacao_accounting.form_preferences import get_column_preferences
-
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_ORDER,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_ORDER),
         "availableSourceTypes": [
             {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
             {"value": "purchase_quotation", "label": _(LABEL_SOLICITUD_COTIZACION)},
@@ -1787,7 +1777,6 @@ def compras_orden_compra_editar(order_id: str):
     """Edita una orden de compra en borrador."""
     from cacao_accounting.compras.forms import FormularioOrdenCompra
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
 
     registro = database.session.get(PurchaseOrder, order_id)
     if not registro:
@@ -1817,7 +1806,6 @@ def compras_orden_compra_editar(order_id: str):
         registro=registro,
         items=items_disponibles,
         uoms=uoms_disponibles,
-        columns=get_column_preferences(current_user.id, FORMKEY_PURCHASE_ORDER),
     )
     return render_template(
         "compras/orden_compra_nuevo.html",
@@ -2040,7 +2028,6 @@ def compras_solicitud_cotizacion_nueva():
     """Formulario para crear una solicitud de cotización."""
     from cacao_accounting.compras.forms import FormularioSolicitudCotizacion
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
 
     formulario = FormularioSolicitudCotizacion()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
@@ -2063,7 +2050,6 @@ def compras_solicitud_cotizacion_nueva():
             if solicitud_origen
             else None
         ),
-        columns=get_column_preferences(current_user.id, FORMKEY_PURCHASE_QUOTATION),
     )
     if request.method == "POST":
         response = _create_purchase_quotation_from_request()
@@ -2219,7 +2205,6 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     """Edita una solicitud de cotizacion en borrador."""
     from cacao_accounting.compras.forms import FormularioSolicitudCotizacion
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
 
     registro = database.session.get(PurchaseQuotation, quotation_id)
     if not registro:
@@ -2251,7 +2236,6 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_QUOTATION),
         "availableSourceTypes": [{"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)}],
         "initialHeader": {
             "company": registro.company or "",
@@ -2501,7 +2485,6 @@ def compras_recepcion_nuevo():
 
     formulario = FormularioRecepcionCompra()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-    from cacao_accounting.form_preferences import get_column_preferences
 
     selected_company = request.values.get("company") or (
         formulario.company.choices[0][0] if formulario.company.choices else None
@@ -2529,7 +2512,6 @@ def compras_recepcion_nuevo():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_RECEIPT),
         "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
     }
     if request.method == "POST":
@@ -2623,7 +2605,6 @@ def compras_recepcion_editar(receipt_id: str):
     from cacao_accounting.compras.forms import FormularioRecepcionCompra
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
     from cacao_accounting.database import Warehouse
-    from cacao_accounting.form_preferences import get_column_preferences
 
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
@@ -2667,7 +2648,6 @@ def compras_recepcion_editar(receipt_id: str):
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_RECEIPT),
         "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
         "initialHeader": {
             "company": registro.company or "",
@@ -2962,7 +2942,6 @@ def compras_factura_compra_nuevo():
 
     formulario = FormularioFacturaCompra()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-    from cacao_accounting.form_preferences import get_column_preferences
 
     selected_company = _purchase_invoice_selected_company(formulario.company.choices)
     formulario.naming_series.choices = _series_choices("purchase_invoice", selected_company)
@@ -2980,7 +2959,6 @@ def compras_factura_compra_nuevo():
     transaction_config = _purchase_invoice_transaction_config(
         items=items_disponibles,
         uoms=uoms_disponibles,
-        columns=get_column_preferences(current_user.id, FORMKEY_PURCHASE_INVOICE),
     )
     if request.method == "POST":
         response = _create_purchase_invoice_from_request()
@@ -3301,7 +3279,6 @@ def compras_factura_compra_editar(invoice_id: str):
     """Edita una factura de compra en borrador."""
     from cacao_accounting.compras.forms import FormularioFacturaCompra
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
 
     registro = database.session.get(PurchaseInvoice, invoice_id)
     if not registro:
@@ -3339,7 +3316,6 @@ def compras_factura_compra_editar(invoice_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, FORMKEY_PURCHASE_INVOICE),
         "availableSourceTypes": [
             {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)},
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},

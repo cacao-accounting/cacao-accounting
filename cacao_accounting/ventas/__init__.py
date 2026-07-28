@@ -371,7 +371,6 @@ def ventas_pedido_venta_lista():
 def ventas_pedido_venta_nuevo():
     """Formulario para crear un pedido de venta."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioPedidoVenta
 
     formulario = FormularioPedidoVenta()
@@ -395,7 +394,6 @@ def ventas_pedido_venta_nuevo():
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_REQUEST),
         "availableSourceTypes": [],
     }
     if request.method == "POST":
@@ -461,7 +459,6 @@ def ventas_pedido_venta(request_id: str):
 def ventas_pedido_venta_editar(request_id: str):
     """Edita un pedido de venta en borrador."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioPedidoVenta
 
     registro = database.session.get(SalesRequest, request_id)
@@ -493,7 +490,6 @@ def ventas_pedido_venta_editar(request_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_REQUEST),
         "availableSourceTypes": [],
         "initialHeader": {
             "company": registro.company or "",
@@ -1494,7 +1490,6 @@ def _sales_order_initial_source_type(from_request_id: str | None, from_quotation
 def _build_sales_order_transaction_config(
     items_disponibles, uoms_disponibles, bodegas_disponibles, source_origen, initial_source_type
 ):
-    from cacao_accounting.form_preferences import get_column_preferences
 
     transaction_config = {
         "formKey": _FORMKEY_SALES_ORDER,
@@ -1502,7 +1497,6 @@ def _build_sales_order_transaction_config(
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_ORDER),
         "availableSourceTypes": [
             {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},
@@ -1643,7 +1637,6 @@ def ventas_orden_venta(order_id):
 def ventas_orden_venta_editar(order_id: str):
     """Edita una orden de venta en borrador."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioOrdenVenta
 
     registro = database.session.get(SalesOrder, order_id)
@@ -1688,7 +1681,6 @@ def ventas_orden_venta_editar(order_id: str):
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_ORDER),
         "availableSourceTypes": [
             {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},
@@ -1799,7 +1791,6 @@ def ventas_cotizacion_lista():
 def ventas_cotizacion_nueva():
     """Formulario para crear una cotización de venta."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioCotizacionVenta
 
     formulario = FormularioCotizacionVenta()
@@ -1825,7 +1816,6 @@ def ventas_cotizacion_nueva():
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_QUOTATION),
         "availableSourceTypes": [{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}],
     }
     if request.method == "POST":
@@ -1894,7 +1884,6 @@ def ventas_cotizacion(quotation_id: str):
 def ventas_cotizacion_editar(quotation_id: str):
     """Edita una cotizacion de venta en borrador."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioCotizacionVenta
 
     registro = database.session.get(SalesQuotation, quotation_id)
@@ -1926,7 +1915,6 @@ def ventas_cotizacion_editar(quotation_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_QUOTATION),
         "availableSourceTypes": [{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}],
         "initialHeader": {
             "company": registro.company or "",
@@ -2189,7 +2177,6 @@ def ventas_entrega_nuevo():
     """Formulario para crear una nota de entrega."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
     from cacao_accounting.database import Warehouse
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioEntregaVenta
 
     formulario = FormularioEntregaVenta()
@@ -2221,7 +2208,6 @@ def ventas_entrega_nuevo():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_DELIVERY_NOTE),
         "availableSourceTypes": [{"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)}],
     }
     if request.method == "POST":
@@ -2296,7 +2282,6 @@ def ventas_entrega_editar(note_id: str):
     """Edita una nota de entrega en borrador."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
     from cacao_accounting.database import Warehouse
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioEntregaVenta
 
     registro = database.session.get(DeliveryNote, note_id)
@@ -2340,7 +2325,6 @@ def ventas_entrega_editar(note_id: str):
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_DELIVERY_NOTE),
         "availableSourceTypes": [{"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)}],
         "initialHeader": {
             "company": registro.company or "",
@@ -2541,7 +2525,6 @@ def ventas_entrega_cancel(note_id: str):
 def ventas_factura_venta_nuevo():
     """Formulario para crear una factura de venta."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioFacturaVenta
 
     formulario = FormularioFacturaVenta()
@@ -2579,7 +2562,6 @@ def ventas_factura_venta_nuevo():
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_INVOICE),
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
@@ -2679,7 +2661,6 @@ def ventas_factura_venta(invoice_id):
 def ventas_factura_venta_editar(invoice_id: str):
     """Edita una factura de venta en borrador."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
     from cacao_accounting.ventas.forms import FormularioFacturaVenta
 
     registro = database.session.get(SalesInvoice, invoice_id)
@@ -2717,7 +2698,6 @@ def ventas_factura_venta_editar(invoice_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "columns": get_column_preferences(current_user.id, _FORMKEY_SALES_INVOICE),
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": _("Nota de Entrega")},

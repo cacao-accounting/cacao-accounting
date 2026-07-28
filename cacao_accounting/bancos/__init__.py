@@ -1738,7 +1738,6 @@ def _refresh_payment_reference_document(reference_type: str, reference_id: str) 
 def bancos_pago_nuevo():
     """Formulario para crear un nuevo pago."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.form_preferences import get_column_preferences
 
     if request.method == "POST":
         response = _create_payment_from_request()
@@ -1788,7 +1787,6 @@ def bancos_pago_nuevo():
         }
 
     transaction_config = {
-        "columns": get_column_preferences(getattr(current_user, "id", None), "banking.payment_entry"),
     }
 
     return render_template(

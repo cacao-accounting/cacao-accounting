@@ -20,10 +20,9 @@ from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
 
 from cacao_accounting.auth.permisos import Permisos
-from cacao_accounting.database import Accounts, AccountingPeriod, Book, Entity, UserFormPreference, database
+from cacao_accounting.database import Accounts, AccountingPeriod, Book, Entity, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import modulo_activo, verifica_acceso
-from cacao_accounting.form_preferences import get_form_preference, reset_form_preference, save_form_preference
 from cacao_accounting.reportes.services import (
     AgingFilters,
     BankingFilters,
@@ -283,18 +282,7 @@ def _report_form_key(report_code: str) -> str:
 
 
 def _load_report_view_options(report_code: str) -> list[str]:
-    preferences = (
-        database.session.execute(
-            database.select(UserFormPreference.view_key)
-            .filter_by(user_id=str(current_user.id), form_key=_report_form_key(report_code))
-            .order_by(UserFormPreference.view_key.asc())
-        )
-        .scalars()
-        .all()
-    )
-    views = ["default"]
-    views.extend([view for view in preferences if view != "default"])
-    return views
+    return ["default"]
 
 
 def _extract_filter_payload() -> dict[str, str]:
@@ -310,37 +298,7 @@ def _extract_filter_payload() -> dict[str, str]:
 
 
 def _restore_filters_from_view(filters: FinancialReportFilters, report_code: str, view_key: str) -> FinancialReportFilters:
-    preference = get_form_preference(str(current_user.id), _report_form_key(report_code), view_key)
-    payload = preference.get("filters", {})
-    if not isinstance(payload, dict):
-        return filters
-    page_size = _safe_page_size(payload.get("page_size"), filters.page_size)
-    return cast(
-        FinancialReportFilters,
-        replace(
-            filters,
-            company=str(payload.get("company") or filters.company),
-            ledger=_str_or_none(payload.get("ledger")),
-            accounting_period=_str_or_none(payload.get("accounting_period")),
-            voucher_number=_str_or_none(payload.get("voucher_number")),
-            account_code=_str_or_none(payload.get("account_code")),
-            account_from=_str_or_none(payload.get("account_from")),
-            account_to=_str_or_none(payload.get("account_to")),
-            cost_center_code=_str_or_none(payload.get("cost_center_code")),
-            unit_code=_str_or_none(payload.get("unit_code")),
-            project_code=_str_or_none(payload.get("project_code")),
-            party_type=_str_or_none(payload.get("party_type")),
-            party_id=_str_or_none(payload.get("party_id")),
-            voucher_type=_str_or_none(payload.get("voucher_type")),
-            status=_str_or_none(payload.get("status")) or filters.status or "submitted",
-            include_cancellations=str(payload.get("show_cancellations") or "").lower() in {"1", "true", "yes", "on"},
-            include_running_balance=str(payload.get("include_running_balance") or "").lower() in {"1", "true", "yes", "on"},
-            page_size=page_size,
-            sort_by=str(payload.get("sort_by") or filters.sort_by),
-            sort_dir=str(payload.get("sort_dir") or filters.sort_dir),
-            page=1,
-        ),
-    )
+    return filters
 
 
 def _safe_page_size(raw: object, default: int) -> int:
@@ -360,35 +318,6 @@ def _str_or_none(value: object) -> str | None:
 
 def _handle_saved_view_action(report_code: str, filters: FinancialReportFilters) -> tuple[FinancialReportFilters, str]:
     view_key = (request.args.get("saved_view") or "default").strip() or "default"
-    action = request.args.get("view_action")
-    if action == "save" and view_key:
-        payload = {
-            "schema_version": 1,
-            "filters": _extract_filter_payload(),
-            "columns": [
-                {
-                    "field": column,
-                    "label": column,
-                    "visible": True,
-                    "width": 1,
-                    "required": False,
-                }
-                for column in request.args.getlist("visible_columns")
-            ],
-        }
-        save_form_preference(
-            user_id=str(current_user.id),
-            form_key=_report_form_key(report_code),
-            view_key=view_key,
-            payload=payload,
-        )
-        flash(_("Vista guardada correctamente."), "success")
-    elif action == "reset" and view_key != "default":
-        reset_form_preference(str(current_user.id), _report_form_key(report_code), view_key)
-        flash(_("Vista eliminada correctamente."), "warning")
-        view_key = "default"
-    elif action == "apply" and view_key != "default":
-        filters = _restore_filters_from_view(filters, report_code, view_key)
     return filters, view_key
 
 
@@ -398,32 +327,11 @@ def _resolve_view_context(report_code: str, filters: FinancialReportFilters) -> 
 
 
 def _preferred_columns_from_view(report_code: str, view_key: str) -> list[str]:
-    if view_key == "default":
-        return []
-    preference = get_form_preference(str(current_user.id), _report_form_key(report_code), view_key)
-    columns = preference.get("columns", [])
-    if not isinstance(columns, list):
-        return []
-    visible: list[str] = []
-    for column in columns:
-        if not isinstance(column, dict):
-            continue
-        if not bool(column.get("visible", True)):
-            continue
-        field = str(column.get("field") or "").strip()
-        if field:
-            visible.append(field)
-    return visible
+    return []
 
 
 def _preferred_group_by_from_view(report_code: str, view_key: str) -> str:
-    if view_key == "default":
-        return ""
-    preference = get_form_preference(str(current_user.id), _report_form_key(report_code), view_key)
-    filters = preference.get("filters", {})
-    if not isinstance(filters, dict):
-        return ""
-    return str(filters.get("group_by") or "")
+    return ""
 
 
 def _resolve_company(company_code: str) -> str:
