@@ -3045,7 +3045,6 @@ def _purchase_invoice_transaction_config(
     *,
     items: list[dict[str, str | None]],
     uoms: list[dict[str, str]],
-    columns: list[dict[str, str | bool | int]],
 ) -> dict[str, object]:
     """Build the transaction configuration for purchase invoices."""
     return {
@@ -3053,7 +3052,6 @@ def _purchase_invoice_transaction_config(
         "viewKey": "draft",
         "items": items,
         "uoms": uoms,
-        "columns": columns,
         "availableSourceTypes": [
             {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)},
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
