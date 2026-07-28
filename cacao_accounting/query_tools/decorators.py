@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-
 _DEFAULT_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "description": "Resultado de consulta de solo lectura; el contenido puede incluir paginación y procedencia.",

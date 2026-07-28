@@ -237,10 +237,48 @@
         ...config.messages
       };
 
+      const defaultCols = [
+        { field: 'item_code', label: 'Código', visible: true, width: 2, required: true },
+        { field: 'item_name', label: 'Descripción', visible: true, width: 3, required: false },
+        { field: 'uom', label: 'UOM', visible: true, width: 1, required: false },
+        { field: 'qty', label: 'Cantidad', visible: true, width: 1, required: false },
+        { field: 'rate', label: 'Precio', visible: true, width: 1, required: false },
+        { field: 'amount', label: 'Monto', visible: true, width: 1, required: false }
+      ];
+
+      const configColumns = Array.isArray(config.columns) ? config.columns : [];
+
+      const columnsList = [];
+      for (const defCol of defaultCols) {
+        const matchingConfig = configColumns.find(c => c.field === defCol.field);
+        if (matchingConfig) {
+          const merged = { ...defCol, ...matchingConfig };
+          if (defCol.required) {
+            merged.required = true;
+            merged.visible = true;
+          }
+          columnsList.push(merged);
+        } else {
+          columnsList.push({ ...defCol });
+        }
+      }
+
+      for (const confCol of configColumns) {
+        if (!defaultCols.some(d => d.field === confCol.field)) {
+          columnsList.push({ ...confCol });
+        }
+      }
+
       return {
         formKey: config.formKey || '',
         viewKey: config.viewKey || 'draft',
         messages,
+        preferences: {
+          columns: columnsList
+        },
+        get visibleColumns() {
+          return (this.preferences?.columns || []).filter((column) => column.visible);
+        },
         header: {
           company: '',
           naming_series: '',

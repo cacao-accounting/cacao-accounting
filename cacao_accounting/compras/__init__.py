@@ -1848,7 +1848,7 @@ def _purchase_order_transaction_config(
     registro: PurchaseOrder,
     items: list[dict[str, str | None]],
     uoms: list[dict[str, str]],
-    columns: list[dict[str, str | bool | int]],
+    columns: list[dict[str, str | bool | int]] | None = None,
 ) -> dict[str, object]:
     """Construye la configuración transaccional para la edición de órdenes de compra."""
     lineas = database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)).scalars()
@@ -1857,7 +1857,7 @@ def _purchase_order_transaction_config(
         "viewKey": "draft",
         "items": items,
         "uoms": uoms,
-        "columns": columns,
+        "columns": columns or [],
         "availableSourceTypes": [
             {"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)},
             {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
