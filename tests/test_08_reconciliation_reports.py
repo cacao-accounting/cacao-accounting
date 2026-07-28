@@ -1015,7 +1015,7 @@ def test_financial_report_filters_prefill_and_hide_columns_for_summary_reports(a
     assert "Columnas visibles" not in summary_html
     assert 'data-bs-target="#saveViewModal">Guardar vista' not in summary_html
     assert 'name="view_action" value="reset">Eliminar vista' not in summary_html
-    assert "Columnas visibles" in detail_html
+    assert "Columnas visibles" not in detail_html
 
 
 def test_financial_report_can_group_by_voucher_type_when_column_is_hidden(app_ctx):
