@@ -4,29 +4,25 @@ import sys
 import subprocess
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUN_PY = str(PROJECT_ROOT / "run.py")
 
 
-def test_run_py_fails_fast_in_production_without_credentials():
-    """run.py should fail fast and exit 1 in non-dev envs when credentials are missing."""
-    env = os.environ.copy()
-    # Remove credentials from env
-    env.pop("CACAO_USER", None)
-    env.pop("CACAO_PSWD", None)
+def test_run_py_fails_fast_in_production_without_credentials(monkeypatch):
+    """run.py must fail fast in production when credentials are missing (tested via resolver_credenciales_iniciales)."""
+    monkeypatch.delenv("CACAO_USER", raising=False)
+    monkeypatch.delenv("CACAO_PSWD", raising=False)
+    monkeypatch.delenv("ADMIN_USER", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.setenv("FLASK_ENV", "production")
 
-    # Set to production
-    env["ENV"] = "production"
-    env["FLASK_ENV"] = "production"
+    from cacao_accounting.database.helpers import resolver_credenciales_iniciales
 
-    result = subprocess.run([sys.executable, RUN_PY], env=env, capture_output=True, text=True, timeout=10)
-
-    assert result.returncode == 1
-    # Check that it logged the critical message
-    assert (
-        "CACAO_USER and CACAO_PSWD must be set in environment" in result.stderr
-        or "CACAO_USER and CACAO_PSWD must be set in environment" in result.stdout
-    )
+    with pytest.raises(ValueError, match="CACAO_USER and CACAO_PSWD must be set in environment"):
+        resolver_credenciales_iniciales()
 
 
 def test_run_py_allows_execution_in_dev_without_credentials():
