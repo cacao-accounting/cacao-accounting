@@ -153,7 +153,7 @@
   }
 
   .dashboard-shell {
-    color: #172033;
+    color: var(--ca-text);
     padding: 1.25rem;
   }
 
@@ -172,7 +172,7 @@
   }
 
   .dashboard-subtitle {
-    color: #64748b;
+    color: var(--ca-text-muted);
     margin: .2rem 0 0;
   }
 
@@ -185,7 +185,7 @@
   }
 
   .dashboard-field span {
-    color: #64748b;
+    color: var(--ca-text-muted);
     display: block;
     font-size: .78rem;
     font-weight: 700;
@@ -203,14 +203,14 @@
   .dashboard-alert,
   .dashboard-empty,
   .dashboard-section {
-    background: #fff;
-    border: 1px solid #d8dee8;
+    background: var(--ca-surface);
+    border: 1px solid var(--ca-border);
     border-radius: 8px;
   }
 
   .dashboard-alert {
     align-items: center;
-    color: #991b1b;
+    color: var(--ca-error);
     display: flex;
     gap: .5rem;
     margin-bottom: 1rem;
@@ -218,7 +218,7 @@
   }
 
   .dashboard-empty {
-    color: #64748b;
+    color: var(--ca-text-muted);
     padding: 4rem 1rem;
     text-align: center;
   }
@@ -228,7 +228,7 @@
   }
 
   .dashboard-empty h2 {
-    color: #172033;
+    color: var(--ca-text);
     font-size: 1.2rem;
     margin: .75rem 0 .25rem;
   }
@@ -260,15 +260,15 @@
   }
 
   .dashboard-section__header p {
-    color: #64748b;
+    color: var(--ca-text-muted);
     font-size: .84rem;
     margin: .25rem 0 0;
   }
 
   .dashboard-section__badge {
-    background: #e8f2ff;
+    background: var(--ca-info-bg);
     border-radius: 999px;
-    color: #1d4ed8;
+    color: var(--ca-info);
     flex: 0 0 auto;
     font-size: .72rem;
     font-weight: 700;
@@ -282,15 +282,15 @@
   }
 
   .dashboard-kpi {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
+    background: var(--ca-g050);
+    border: 1px solid var(--ca-border);
     border-radius: 8px;
     min-height: 4.7rem;
     padding: .7rem;
   }
 
   .dashboard-kpi span {
-    color: #64748b;
+    color: var(--ca-text-muted);
     display: block;
     font-size: .75rem;
     font-weight: 700;
@@ -320,7 +320,7 @@
   }
 
   .dashboard-widget__title {
-    color: #475569;
+    color: var(--ca-text-secondary);
     font-size: .78rem;
     font-weight: 800;
     margin-bottom: .45rem;
@@ -335,19 +335,19 @@
 
   .dashboard-table th,
   .dashboard-table td {
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--ca-border);
     padding: .45rem .3rem;
     vertical-align: top;
   }
 
   .dashboard-table th {
-    color: #64748b;
+    color: var(--ca-text-muted);
     font-size: .72rem;
     text-transform: uppercase;
   }
 
   .dashboard-table__empty {
-    color: #64748b;
+    color: var(--ca-text-muted);
     padding: 2rem .5rem !important;
     text-align: center;
   }

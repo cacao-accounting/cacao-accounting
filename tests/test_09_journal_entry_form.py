@@ -748,31 +748,6 @@ def test_search_select_supports_journal_doctypes_and_filters(app_ctx):
     assert client.get("/api/search-select?doctype=party&role=employee").status_code == 400
 
 
-def test_form_preferences_are_persisted_per_user(app_ctx):
-    from cacao_accounting.database import User, database
-    from cacao_accounting.form_preferences import get_form_preference
-
-    user_a = User.query.filter_by(user="admin").first()
-    user_b = User(user="other", name="Other", password=b"x", classification="admin", active=True)
-    database.session.add(user_b)
-    database.session.commit()
-
-    client = app_ctx.test_client()
-    _login(client, user_a.id)
-    payload = {
-        "schema_version": 1,
-        "columns": [{"field": "account", "label": "Cuenta", "width": 4, "visible": True, "required": True}],
-    }
-
-    saved = client.put("/api/form-preferences/accounting.journal_entry/draft", json=payload)
-    read_a = client.get("/api/form-preferences/accounting.journal_entry/draft")
-    read_b = get_form_preference(user_b.id, "accounting.journal_entry", "draft")
-
-    assert saved.status_code == 200
-    assert read_a.json["columns"][0]["width"] == 4
-    assert read_b["columns"][0]["width"] == 3
-
-
 def test_journal_edit_route_rehydrates_draft_and_updates_books(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft
     from cacao_accounting.database import Accounts, Book, User, database

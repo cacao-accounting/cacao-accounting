@@ -3,10 +3,10 @@
 {% import "macros.html" as macros %}
 
 <style>
-    .journal-line-row.is-active { background-color: #fff3cd; border-left: 4px solid #d39e00; }
+    .journal-line-row.is-active { background-color: var(--ca-warning-bg); border-left: 4px solid var(--ca-p400); }
     .journal-line-row { cursor: pointer; }
     .ca-kv-list { display: grid; gap: .6rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .ca-kv-item label { color: #64748b; display: block; font-size: .75rem; font-weight: 700; margin-bottom: .15rem; text-transform: uppercase; }
+    .ca-kv-item label { color: var(--ca-text-muted); display: block; font-size: .75rem; font-weight: 700; margin-bottom: .15rem; text-transform: uppercase; }
     .ca-kv-item p { margin: 0; }
     @media (max-width: 768px) { .ca-kv-list { grid-template-columns: 1fr; } }
 </style>

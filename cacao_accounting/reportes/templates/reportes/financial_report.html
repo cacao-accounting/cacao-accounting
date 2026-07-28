@@ -26,22 +26,6 @@
           <button class="btn btn-primary" type="submit">{{ _("Aplicar filtros") }}</button>
           <a class="btn btn-outline-secondary" href="{{ request.path }}">{{ _("Limpiar filtros") }}</a>
         </div>
-        <label class="form-label mb-0">
-          {{ _("Vista guardada") }}
-          <div class="d-grid gap-2">
-            <input name="saved_view" class="form-control" list="saved-views-list" value="{{ saved_view }}">
-            <datalist id="saved-views-list">
-              {% for view_name in saved_views %}
-              <option value="{{ view_name }}"></option>
-              {% endfor %}
-            </datalist>
-            <div class="d-flex flex-wrap gap-2">
-              <button class="btn btn-outline-secondary" type="submit" name="view_action" value="apply">{{ _("Cargar") }}</button>
-              <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#saveViewModal">{{ _("Guardar") }}</button>
-              <button class="btn btn-outline-danger" type="submit" name="view_action" value="reset">{{ _("Eliminar") }}</button>
-            </div>
-          </div>
-        </label>
         {{ smart_select_field("Compañía", "company", "company", report_filters.company, "report-company") }}
         {{ smart_select_field("Libro contable", "ledger", "book", report_filters.ledger or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {{ smart_select_field("Periodo contable", "accounting_period", "accounting_period", report_filters.accounting_period or '', "report-accounting-period", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
@@ -94,9 +78,6 @@
               <option value="accounting_period" {% if group_by == 'accounting_period' %}selected{% endif %}>{{ _("Periodo") }}</option>
             </select>
           </label>
-          {% if allow_column_selection %}
-          <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#columnsModal">{{ _("Columnas visibles") }}</button>
-          {% endif %}
         </div>
         <div class="d-flex flex-wrap gap-2 mt-2">
           <button class="btn btn-primary" type="submit">{{ _("Aplicar filtros") }}</button>
@@ -190,45 +171,6 @@
   </section>
 </div>
 
-<div class="modal fade" id="saveViewModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">{{ _("Guardar vista") }}</h5></div>
-      <div class="modal-body">
-        <label class="form-label">{{ _("Nombre de vista") }}</label>
-        <input class="form-control" id="save-view-name" value="{{ saved_view }}">
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _("Cancelar") }}</button>
-        <button type="button" class="btn btn-primary" id="save-view-confirm">{{ _("Guardar") }}</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-{% if allow_column_selection %}
-<div class="modal fade" id="columnsModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">{{ _("Columnas visibles") }}</h5></div>
-      <div class="modal-body">
-        <div class="row row-cols-2">
-          {% for available in all_columns %}
-          <label class="form-check col">
-            <input class="form-check-input" type="checkbox" name="visible_columns" form="financial-filter-form" value="{{ available }}" {% if available in selected_columns %}checked{% endif %}>
-            <span class="form-check-label">{{ all_column_headers.get(available, available) }}</span>
-          </label>
-          {% endfor %}
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _("Cerrar") }}</button>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
 <style>
   .ca-report-layout{display:flex;gap:1rem;min-height:70vh}
   .ca-report-filters{width:340px;position:sticky;top:88px;align-self:flex-start;max-height:calc(100vh - 110px);overflow-y:auto;flex-shrink:0}
@@ -254,19 +196,8 @@
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const filterForm = document.getElementById('financial-filter-form');
-    const saveViewConfirm = document.getElementById('save-view-confirm');
-    const saveViewName = document.getElementById('save-view-name');
-    if (saveViewConfirm && saveViewName && filterForm) {
-      saveViewConfirm.addEventListener('click', function () {
-        const savedViewInput = filterForm.querySelector('input[name="saved_view"]');
-        if (savedViewInput) savedViewInput.value = saveViewName.value || '';
-        const hiddenAction = document.createElement('input');
-        hiddenAction.type = 'hidden';
-        hiddenAction.name = 'view_action';
-        hiddenAction.value = 'save';
-        filterForm.appendChild(hiddenAction);
-        filterForm.submit();
-      });
+  });
+</script>
     }
     const advancedToggle = document.getElementById('financial-advanced-toggle');
     const advancedPanel = document.getElementById('financial-advanced-filters');
