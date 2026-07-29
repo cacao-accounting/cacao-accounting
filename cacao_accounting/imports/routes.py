@@ -43,6 +43,7 @@ except ImportError:
 imports = Blueprint("imports", __name__, template_folder="templates")
 
 _ENDPOINT_IMPORTS_DETAIL = "imports.detail"
+_INVALID_FILE_TYPE_MSG = "Error al validar el tipo de archivo"
 
 
 def check_desktop_mode():
@@ -208,16 +209,16 @@ def _validate_mime_type(file: Any) -> bool:
             return False
         mime = getattr(file, "mimetype", "")
         if mime in _ALLOWED_MIMES or chunk.strip():
-            flash("Error al validar el tipo de archivo", "danger")
+            flash(_INVALID_FILE_TYPE_MSG, "danger")
             return True
-        flash("Error al validar el tipo de archivo", "danger")
+        flash(_INVALID_FILE_TYPE_MSG, "danger")
         return False
     try:
         chunk = file.read(2048)
         file.seek(0)
         mime = magic.from_buffer(chunk, mime=True)
     except (ImportError, OSError, _MAGIC_EXCEPTION):
-        flash("Error al validar el tipo de archivo", "danger")
+        flash(_INVALID_FILE_TYPE_MSG, "danger")
         return False
     if mime not in _ALLOWED_MIMES:
         flash("Tipo de archivo no válido", "danger")
