@@ -1,9 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
+import os
+
 import pytest
 import io
 from datetime import date
 from decimal import Decimal
+
+sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from z_func import init_test_db
 from cacao_accounting import create_app
