@@ -276,7 +276,7 @@ def create_document_relation(
     """Crea una relacion entre lineas validando parcialidad y compania."""
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
-    source_item, target_item = _validate_relation_documents(
+    _, target_item = _validate_relation_documents(
         source_key, source_id, source_item_id, target_key, target_id, target_item_id
     )
     _assert_same_company(source_key, source_id, target_key, target_id)
