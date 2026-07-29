@@ -337,7 +337,7 @@
           this.queueTaxPreview();
         },
 
-        get visibleColumns() {
+        get defaultColumns() {
           return [
             { field: 'item_code', label: this.messages.itemCode, width: 2 },
             { field: 'item_name', label: this.messages.itemName, width: 3 },
