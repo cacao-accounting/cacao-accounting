@@ -1646,7 +1646,7 @@ def get_budget_variance(filters: FinancialReportFilters) -> PaginatedReport:
     if filters.budget_code:
         query = query.where(Budget.budget_code == filters.budget_code)
     rows, total_budget, total_actual = _build_budget_variance_rows(
-        database.session.execute(query).all(),
+        list(database.session.execute(query).all()),
         filters,
         selected_ledger,
         period_start or date.today(),
