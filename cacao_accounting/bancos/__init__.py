@@ -1786,8 +1786,7 @@ def bancos_pago_nuevo():
             "advance_mode": any(row["reference_type"] in ("purchase_order", "sales_order") for row in source_rows),
         }
 
-    transaction_config = {
-    }
+    transaction_config = {}
 
     return render_template(
         "bancos/pago_nuevo.html",

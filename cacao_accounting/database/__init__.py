@@ -368,9 +368,6 @@ class RolesUser(database.Model, BaseTabla):  # type: ignore[name-defined]
     active = database.Column(database.Boolean, nullable=True)
 
 
-
-
-
 # <---------------------------------------------------------------------------------------------> #
 # Administración de módulos del sistema.
 # <---------------------------------------------------------------------------------------------> #
