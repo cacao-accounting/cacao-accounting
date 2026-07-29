@@ -9,6 +9,8 @@ from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.handlers.advanced import _json_value
 from cacao_accounting.query_tools.permissions import validate_permission
+_PERM_ACCOUNTING_REPORTS_READ = _PERM_ACCOUNTING_REPORTS_READ
+
 from cacao_accounting.reportes.analytics import (
     ALLOWED_DIMENSIONS,
     ALLOWED_METRICS,
@@ -32,7 +34,7 @@ def _json(value: Any) -> Any:
 
 
 def _validate(context: QueryContext, company_id: str) -> None:
-    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
 
 
 def _envelope(payload: dict[str, Any], company_id: str, **filters: Any) -> dict[str, Any]:
@@ -59,7 +61,7 @@ _PERIOD_SCHEMA: dict[str, Any] = {
     "analytics.get_kpi_snapshot",
     "Obtiene un snapshot ejecutivo determinista de liquidez, cartera, inventario y resultado.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_PERIOD_SCHEMA,
 )
 def get_kpi_snapshot_tool(*, context: QueryContext, company_id: str, date_from: str, date_to: str) -> dict[str, Any]:
@@ -76,7 +78,7 @@ def get_kpi_snapshot_tool(*, context: QueryContext, company_id: str, date_from: 
     "analytics.compare_periods",
     "Compara una métrica permitida entre dos períodos sin descargar movimientos.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -125,7 +127,7 @@ def compare_periods_tool(
     "analytics.get_trend",
     "Obtiene una tendencia mensual de una métrica permitida.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
         **_PERIOD_SCHEMA,
         "properties": {**_PERIOD_SCHEMA["properties"], "metric": {"type": "string", "enum": sorted(ALLOWED_METRICS)}},
@@ -147,7 +149,7 @@ def get_trend_tool(*, context: QueryContext, company_id: str, metric: str, date_
     "analytics.get_concentration",
     "Obtiene concentración por cliente, proveedor o artículo con un límite explícito.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
         **_PERIOD_SCHEMA,
         "properties": {
