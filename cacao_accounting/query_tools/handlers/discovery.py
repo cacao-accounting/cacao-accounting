@@ -25,6 +25,9 @@ from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
 
+_PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
+_PERM_INVENTORY_REPORTS_READ = "inventory.reports.read"
+_PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
 def _page(page: int, page_size: int) -> tuple[int, int]:
     return paginate(page, page_size)
@@ -52,13 +55,13 @@ _SCHEMA: dict[str, Any] = {
     "ledgers.list",
     "Lista libros contables autorizados de una compañía.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_SCHEMA,
 )
 def list_ledgers(
     *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
 ) -> dict[str, Any]:
-    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
     current, size = _page(page, page_size)
     statement = database.select(Book).where(Book.entity == company_id)
     if query:
@@ -121,13 +124,13 @@ def search_parties(
     "items.search",
     "Busca artículos activos por código o nombre.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_SCHEMA,
 )
 def search_items(
     *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
 ) -> dict[str, Any]:
-    validate_permission(context, "inventory.reports.read", "inventory", company_id)
+    validate_permission(context, _PERM_INVENTORY_REPORTS_READ, "inventory", company_id)
     current, size = _page(page, page_size)
     statement = database.select(Item).where(Item.is_active.is_(True))
     if query:
@@ -151,13 +154,13 @@ def search_items(
     "warehouses.list",
     "Lista almacenes activos de una compañía.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_SCHEMA,
 )
 def list_warehouses(
     *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
 ) -> dict[str, Any]:
-    validate_permission(context, "inventory.reports.read", "inventory", company_id)
+    validate_permission(context, _PERM_INVENTORY_REPORTS_READ, "inventory", company_id)
     current, size = _page(page, page_size)
     statement = database.select(Warehouse).where(Warehouse.company == company_id, Warehouse.is_active.is_(True))
     if query:
@@ -178,13 +181,13 @@ def list_warehouses(
     "bank_accounts.search",
     "Busca cuentas bancarias activas de una compañía.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_SCHEMA,
 )
 def search_bank_accounts(
     *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
 ) -> dict[str, Any]:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     current, size = _page(page, page_size)
     statement = database.select(BankAccount).where(BankAccount.company == company_id, BankAccount.is_active.is_(True))
     if query:
@@ -210,7 +213,7 @@ def search_bank_accounts(
     "currencies.list",
     "Lista monedas configuradas.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {"company_id": {"type": "string"}, **{k: v for k, v in _SCHEMA["properties"].items() if k != "query"}},
@@ -218,7 +221,7 @@ def search_bank_accounts(
     },
 )
 def list_currencies(*, context: QueryContext, company_id: str, page: int = 1, page_size: int = 100) -> dict[str, Any]:
-    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
     current, size = _page(page, page_size)
     statement = database.select(Currency).where(Currency.active.is_(True))
     total = database.session.execute(database.select(database.func.count()).select_from(statement.subquery())).scalar() or 0
@@ -236,13 +239,13 @@ def list_currencies(*, context: QueryContext, company_id: str, page: int = 1, pa
     "dimensions.list",
     "Lista tipos de dimensión analítica activos.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_SCHEMA,
 )
 def list_dimensions(
     *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
 ) -> dict[str, Any]:
-    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
     current, size = _page(page, page_size)
     statement = database.select(DimensionType).where(DimensionType.is_active.is_(True))
     if query:
@@ -256,7 +259,7 @@ def list_dimensions(
     "dimension_values.search",
     "Busca valores de una dimensión por compañía.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
         **_SCHEMA,
         "properties": {**_SCHEMA["properties"], "dimension_type_id": {"type": "string"}},
@@ -272,7 +275,7 @@ def search_dimension_values(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
     current, size = _page(page, page_size)
     statement = database.select(DimensionValue).where(
         DimensionValue.dimension_type_id == dimension_type_id,
@@ -298,13 +301,13 @@ def search_dimension_values(
     "cost_centers.list",
     "Lista centros de costo activos de una compañía.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_SCHEMA,
 )
 def list_cost_centers(
     *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
 ) -> dict[str, Any]:
-    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
     current, size = _page(page, page_size)
     statement = database.select(CostCenter).where(CostCenter.entity == company_id, CostCenter.enabled.is_(True))
     if query:
@@ -318,13 +321,13 @@ def list_cost_centers(
     "uoms.list",
     "Lista unidades de medida activas.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_SCHEMA,
 )
 def list_uoms(
     *, context: QueryContext, company_id: str, query: str | None = None, page: int = 1, page_size: int = 100
 ) -> dict[str, Any]:
-    validate_permission(context, "inventory.reports.read", "inventory", company_id)
+    validate_permission(context, _PERM_INVENTORY_REPORTS_READ, "inventory", company_id)
     current, size = _page(page, page_size)
     statement = database.select(UOM).where(UOM.is_active.is_(True))
     if query:

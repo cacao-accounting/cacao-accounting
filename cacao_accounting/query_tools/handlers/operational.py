@@ -22,6 +22,7 @@ from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
 
+_PERM_BANKING_REPORTS_READ = _PERM_BANKING_REPORTS_READ
 
 def _parse_date(value: str | None) -> date | None:
     return date.fromisoformat(value) if value else None
@@ -89,7 +90,7 @@ def _payment_items(rows: list[PaymentEntry] | Sequence[PaymentEntry]) -> list[di
     "payments.search",
     "Busca pagos y cobros de una compañía por fecha, tercero y tipo.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_PAYMENT_SCHEMA,
 )
 def search_payments(
@@ -103,7 +104,7 @@ def search_payments(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     current_page, size = paginate(page, page_size)
     query = database.select(PaymentEntry).where(PaymentEntry.company == company_id)
     start, end = _parse_date(date_from), _parse_date(date_to)
@@ -139,7 +140,7 @@ def search_payments(
     "payments.get_unapplied",
     "Obtiene pagos y cobros con importe todavía no aplicado.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_PAYMENT_SCHEMA,
 )
 def get_unapplied_payments(
@@ -153,7 +154,7 @@ def get_unapplied_payments(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     current_page, size = paginate(page, page_size)
     query = database.select(PaymentEntry).where(PaymentEntry.company == company_id)
     start, end = _parse_date(date_from), _parse_date(date_to)
@@ -195,7 +196,7 @@ def get_unapplied_payments(
     "payments.get_applications",
     "Obtiene las aplicaciones de un pago o de un documento.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -217,7 +218,7 @@ def get_payment_applications(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     if not payment_id and not document_id:
         raise ValueError("payment_id o document_id es obligatorio")
     current_page, size = paginate(page, page_size)

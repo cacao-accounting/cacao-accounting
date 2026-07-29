@@ -19,12 +19,13 @@ from cacao_accounting.query_tools.pagination import (
 )
 from cacao_accounting.query_tools.permissions import validate_permission
 
+_PERM_RECEIVABLES_REPORTS_READ = _PERM_RECEIVABLES_REPORTS_READ
 
 @query_tool(
     name="receivables.get_aging",
     description="Obtiene la antigüedad de saldos de cuentas por cobrar.",
     required_module="sales",
-    required_permission="receivables.reports.read",
+    required_permission=_PERM_RECEIVABLES_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -49,7 +50,7 @@ def get_receivables_aging(
     """Obtiene la antigüedad de saldos de cuentas por cobrar."""
     validate_permission(
         context,
-        required_permission="receivables.reports.read",
+        required_permission=_PERM_RECEIVABLES_REPORTS_READ,
         required_module="sales",
         company_id=company_id,
     )
@@ -109,7 +110,7 @@ def get_receivables_aging(
     name="receivables.get_open_documents",
     description="Consulta documentos de venta abiertos (pendientes de pago).",
     required_module="sales",
-    required_permission="receivables.reports.read",
+    required_permission=_PERM_RECEIVABLES_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -132,7 +133,7 @@ def get_receivables_open_documents(
     """Consulta documentos de venta abiertos pendientes de pago."""
     validate_permission(
         context,
-        required_permission="receivables.reports.read",
+        required_permission=_PERM_RECEIVABLES_REPORTS_READ,
         required_module="sales",
         company_id=company_id,
     )
