@@ -191,11 +191,6 @@
   border-left-color: var(--ca-p400);
 }
 
-[data-theme="dark"] .ca-tree-context,
-[data-theme="dark"] .ca-tree-panel {
-  box-shadow: none;
-}
-
 [data-theme="dark"] .link-dark {
   color: var(--ca-text) !important;
 }
@@ -1014,6 +1009,7 @@ nav[aria-label="breadcrumb"] {
 }
 [data-theme="dark"] .ca-tree-context,
 [data-theme="dark"] .ca-tree-panel {
+  box-shadow: none;
   background: rgba(21, 31, 28, .88);
   border-color: rgba(120, 143, 134, .24);
 }
