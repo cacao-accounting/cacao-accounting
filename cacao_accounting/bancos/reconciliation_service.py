@@ -274,6 +274,26 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
     return sorted(candidates, key=lambda candidate: candidate.score, reverse=True)
 
 
+def _update_reconciled_transactions(source_totals: dict[str, Decimal], matches: list[Any]) -> None:
+    """Mark bank transactions as reconciled and populate payment_entry_id."""
+    for bank_transaction_id in source_totals:
+        bank_transaction = database.session.query(BankTransaction).with_for_update().get(bank_transaction_id)
+        if bank_transaction is not None:
+            if _allocated_for_source(bank_transaction_id) >= _bank_amount(bank_transaction):
+                bank_transaction.is_reconciled = True
+            _populate_payment_entry_id(bank_transaction, bank_transaction_id, matches)
+
+
+def _populate_payment_entry_id(bank_transaction: BankTransaction | None, bank_transaction_id: str, matches: list[Any]) -> None:
+    """Set payment_entry_id when a bank transaction is reconciled against a payment."""
+    if bank_transaction is None or bank_transaction.payment_entry_id:
+        return
+    for match in matches:
+        if match.bank_transaction_id == bank_transaction_id and match.target_type == "payment_entry":
+            bank_transaction.payment_entry_id = match.target_id
+            break
+
+
 def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
     """Crea una conciliacion bancaria parcial o total."""
     if not request.matches:
@@ -303,16 +323,7 @@ def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
         )
 
     database.session.flush()
-    for bank_transaction_id in source_totals:
-        # CAS-02: FOR UPDATE para prevenir duplicación concurrente
-        bank_transaction = database.session.query(BankTransaction).with_for_update().get(bank_transaction_id)
-        if bank_transaction is not None and _allocated_for_source(bank_transaction_id) >= _bank_amount(bank_transaction):
-            bank_transaction.is_reconciled = True
-        # CAS-04: Poblar payment_entry_id si la transacción se concilia contra un pago
-        for match in request.matches:
-            if match.bank_transaction_id == bank_transaction_id and match.target_type == "payment_entry":
-                if bank_transaction and not bank_transaction.payment_entry_id:
-                    bank_transaction.payment_entry_id = match.target_id
+    _update_reconciled_transactions(source_totals, request.matches)
 
     return reconciliation
 

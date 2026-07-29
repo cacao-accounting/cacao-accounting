@@ -9,7 +9,6 @@ from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.handlers.advanced import _json_value
 from cacao_accounting.query_tools.permissions import validate_permission
-_PERM_ACCOUNTING_REPORTS_READ = _PERM_ACCOUNTING_REPORTS_READ
 
 from cacao_accounting.reportes.analytics import (
     ALLOWED_DIMENSIONS,
@@ -19,6 +18,8 @@ from cacao_accounting.reportes.analytics import (
     get_kpi_snapshot,
     get_trend,
 )
+
+_PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
 
 
 def _date(value: str) -> date:

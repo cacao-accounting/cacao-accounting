@@ -22,7 +22,8 @@ from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
 
-_PERM_BANKING_REPORTS_READ = _PERM_BANKING_REPORTS_READ
+_PERM_BANKING_REPORTS_READ = "banking.reports.read"
+
 
 def _parse_date(value: str | None) -> date | None:
     return date.fromisoformat(value) if value else None

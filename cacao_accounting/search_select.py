@@ -573,6 +573,46 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
 SEARCH_SELECT_REGISTRY = MappingProxyType(_SEARCH_SELECT_REGISTRY)
 
 
+def _normalize_active_filters(filters: dict[str, list[str]]) -> tuple[dict[str, Any], bool]:
+    """Normalize active/inactive filter flags, return (remaining_filters, active_only)."""
+    normalized = dict(filters)
+    include_inactive = _extract_filter_flag(normalized, "include_inactive")
+    active_only = _extract_filter_flag(normalized, "active_only", default=True)
+    if include_inactive:
+        active_only = False
+    return normalized, active_only
+
+
+def _build_base_query(spec: SearchSelectSpec, normalized_filters: dict[str, Any], company_scope: set[str] | None) -> Any:
+    """Build the initial query with company and party scoping."""
+    statement = select(spec.model)
+    if spec.model is Entity and company_scope is not None:
+        statement = statement.where(Entity.code.in_(sorted(company_scope)))
+    if spec.model is Party and normalized_filters.get("company"):
+        statement = statement.join(CompanyParty, CompanyParty.party_id == Party.id)
+        statement = statement.where(CompanyParty.is_active.is_(True))
+    return statement
+
+
+def _apply_active_only_filters(statement: Any, spec: SearchSelectSpec, active_only: bool) -> Any:
+    """Apply active-only filters for specific models."""
+    if not active_only:
+        return statement
+    if spec.model is Book:
+        statement = statement.where(or_(Book.status == "activo", Book.status.is_(None)))
+    if spec.model is Unit:
+        statement = statement.where(or_(Unit.enabled.is_(True), Unit.enabled.is_(None)))
+    return statement
+
+
+def _compute_query_limit(max_results: int, spec: SearchSelectSpec) -> int:
+    """Compute the query limit with dedup multiplier."""
+    query_limit = max_results + 1
+    if spec.deduplicate_by_value:
+        query_limit = max(query_limit * _DEDUP_QUERY_LIMIT_MULTIPLIER, _DEDUP_QUERY_LIMIT_MIN)
+    return query_limit
+
+
 def search_select(
     doctype: str,
     query: str,
@@ -590,11 +630,7 @@ def search_select(
     if spec is None:
         raise SearchSelectError("Tipo de seleccion no registrado.", 404)
 
-    normalized_filters = dict(filters)
-    include_inactive = _extract_filter_flag(normalized_filters, "include_inactive")
-    active_only = _extract_filter_flag(normalized_filters, "active_only", default=True)
-    if include_inactive:
-        active_only = False
+    normalized_filters, active_only = _normalize_active_filters(filters)
 
     rejected_filters = sorted(set(normalized_filters) - set(spec.allowed_filters))
     if rejected_filters:
@@ -603,24 +639,12 @@ def search_select(
     max_results = _normalize_limit(limit, spec.limit)
     normalized_query = query.strip()
 
-    statement = select(spec.model)
-    if spec.model is Entity and company_scope is not None:
-        statement = statement.where(Entity.code.in_(sorted(company_scope)))
-    if spec.model is Party and normalized_filters.get("company"):
-        statement = statement.join(CompanyParty, CompanyParty.party_id == Party.id)
-        statement = statement.where(CompanyParty.is_active.is_(True))
-
+    statement = _build_base_query(spec, normalized_filters, company_scope)
     statement = _apply_default_filters(statement, spec, normalized_filters, active_only=active_only)
-    if active_only:
-        if spec.model is Book:
-            statement = statement.where(or_(Book.status == "activo", Book.status.is_(None)))
-        if spec.model is Unit:
-            statement = statement.where(or_(Unit.enabled.is_(True), Unit.enabled.is_(None)))
+    statement = _apply_active_only_filters(statement, spec, active_only)
     statement = _apply_request_filters(statement, spec, normalized_filters)
     statement = _apply_search(statement, spec, normalized_query)
-    query_limit = max_results + 1
-    if spec.deduplicate_by_value:
-        query_limit = max(query_limit * _DEDUP_QUERY_LIMIT_MULTIPLIER, _DEDUP_QUERY_LIMIT_MIN)
+    query_limit = _compute_query_limit(max_results, spec)
     statement = statement.limit(query_limit)
 
     rows = database.session.execute(statement).scalars().all()

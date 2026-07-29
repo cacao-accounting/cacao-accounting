@@ -329,19 +329,21 @@ def get_aging_report(filters: AgingFilters) -> AgingReport:
     return AgingReport(rows=rows, totals=bucket_totals)
 
 
-def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
-    """Calcula vencimientos de cartera usando términos de pago por tercero."""
-    if filters.horizon_days < 0 or filters.horizon_days > 3650:
-        raise ValueError("horizon_days debe estar entre 0 y 3650")
-    party_terms = {
-        party_id: terms.due_days
-        for party_id, terms in database.session.execute(
-            select(CompanyParty.party_id, PaymentTerms)
-            .join(PaymentTerms, PaymentTerms.id == CompanyParty.payment_terms_id, isouter=True)
-            .where(CompanyParty.company == filters.company, CompanyParty.is_active.is_(True))
-        ).all()
-        if terms is not None
-    }
+def _compute_maturity_bucket(days: int) -> str:
+    """Classify days into an aging bucket."""
+    if days < 0:
+        return "overdue"
+    if days <= 7:
+        return "0_7"
+    if days <= 30:
+        return "8_30"
+    if days <= 90:
+        return "31_90"
+    return "over_90"
+
+
+def _fetch_maturity_documents(filters: MaturityFilters) -> list[tuple[Any, str, str | None]]:
+    """Fetch sales and purchase invoices for maturity calculation."""
     documents: list[tuple[Any, str, str | None]] = []
     if filters.party_type in (None, "customer"):
         query = select(SalesInvoice).where(SalesInvoice.company == filters.company, SalesInvoice.docstatus == 1)
@@ -353,6 +355,28 @@ def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
         if filters.party_id:
             query = query.where(PurchaseInvoice.supplier_id == filters.party_id)
         documents.extend((doc, "supplier", doc.supplier_id) for doc in database.session.execute(query).scalars())
+    return documents
+
+
+def _load_party_payment_terms(filters: MaturityFilters) -> dict[str, int]:
+    """Load payment terms for all active parties."""
+    return {
+        party_id: terms.due_days
+        for party_id, terms in database.session.execute(
+            select(CompanyParty.party_id, PaymentTerms)
+            .join(PaymentTerms, PaymentTerms.id == CompanyParty.payment_terms_id, isouter=True)
+            .where(CompanyParty.company == filters.company, CompanyParty.is_active.is_(True))
+        ).all()
+        if terms is not None
+    }
+
+
+def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
+    """Calcula vencimientos de cartera usando términos de pago por tercero."""
+    if filters.horizon_days < 0 or filters.horizon_days > 3650:
+        raise ValueError("horizon_days debe estar entre 0 y 3650")
+    party_terms = _load_party_payment_terms(filters)
+    documents = _fetch_maturity_documents(filters)
 
     cutoff = filters.as_of_date + timedelta(days=filters.horizon_days)
     rows: list[ReportRow] = []
@@ -360,13 +384,11 @@ def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
         outstanding = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
         if outstanding <= 0 or not document.posting_date:
             continue
-        due_date = document.posting_date + timedelta(days=party_terms.get(party_id, 0))
+        due_date = document.posting_date + timedelta(days=party_terms.get(party_id or "", 0))
         if due_date > cutoff:
             continue
         days = (due_date - filters.as_of_date).days
-        bucket = (
-            "overdue" if days < 0 else "0_7" if days <= 7 else "8_30" if days <= 30 else "31_90" if days <= 90 else "over_90"
-        )
+        bucket = _compute_maturity_bucket(days)
         rows.append(
             ReportRow(
                 values={
@@ -611,6 +633,27 @@ def get_inventory_transfers(filters: OperationalReportFilters) -> PaginatedRepor
     )
 
 
+def _append_slow_moving_row(
+    rows: list[ReportRow], row: Any, latest: dict[tuple[str, str], date], cutoff: date, threshold: date
+) -> None:
+    """Append a slow-moving item row if it meets the inactivity threshold."""
+    last_out = latest.get((row.item_code, row.warehouse))
+    if last_out is not None and last_out >= threshold:
+        return
+    rows.append(
+        ReportRow(
+            values={
+                "item_code": row.item_code,
+                "warehouse": row.warehouse,
+                "actual_qty": _decimal_value(row.actual_qty),
+                "stock_value": _decimal_value(row.stock_value),
+                "last_outgoing_date": last_out,
+                "inactive_days": (cutoff - last_out).days if last_out else None,
+            }
+        )
+    )
+
+
 def get_slow_moving_items(
     filters: OperationalReportFilters, inactivity_days: int = 90, as_of_date: date | None = None
 ) -> PaginatedReport:
@@ -636,23 +679,10 @@ def get_slow_moving_items(
         bins = bins.where(StockBin.item_code == filters.item_code)
     if filters.warehouse:
         bins = bins.where(StockBin.warehouse == filters.warehouse)
-    rows = []
+    rows: list[ReportRow] = []
     threshold = cutoff - timedelta(days=inactivity_days)
     for row in database.session.execute(bins.order_by(StockBin.item_code, StockBin.warehouse)).scalars():
-        last_out = latest.get((row.item_code, row.warehouse))
-        if last_out is None or last_out < threshold:
-            rows.append(
-                ReportRow(
-                    values={
-                        "item_code": row.item_code,
-                        "warehouse": row.warehouse,
-                        "actual_qty": _decimal_value(row.actual_qty),
-                        "stock_value": _decimal_value(row.stock_value),
-                        "last_outgoing_date": last_out,
-                        "inactive_days": (cutoff - last_out).days if last_out else None,
-                    }
-                )
-            )
+        _append_slow_moving_row(rows, row, latest, cutoff, threshold)
     return PaginatedReport(
         rows=rows,
         totals={"stock_value": sum((_decimal_value(row.values["stock_value"]) for row in rows), Decimal("0"))},
@@ -1534,6 +1564,66 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
     )
 
 
+def _build_actual_query(
+    filters: FinancialReportFilters,
+    selected_ledger: Any,
+    line: Any,
+    cost_center: Any,
+    period_start: date,
+    period_end: date,
+) -> Any:
+    """Build the query to fetch actual GL amount for a budget line."""
+    actual_query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+        GLEntry.company == filters.company,
+        GLEntry.ledger_id == selected_ledger.id,
+        GLEntry.account_id == line.account_id,
+        GLEntry.posting_date >= period_start,
+        GLEntry.posting_date <= period_end,
+        GLEntry.is_cancelled.is_(False),
+        GLEntry.is_reversal.is_(False),
+    )
+    if cost_center and cost_center.code:
+        actual_query = actual_query.where(GLEntry.cost_center_code == cost_center.code)
+    return actual_query
+
+
+def _build_budget_variance_rows(
+    query_results: list[Any],
+    filters: FinancialReportFilters,
+    selected_ledger: Any,
+    period_start: date,
+    period_end: date,
+    period: Any,
+) -> tuple[list[ReportRow], Decimal, Decimal]:
+    """Build budget variance report rows from query results."""
+    rows: list[ReportRow] = []
+    total_budget = Decimal("0")
+    total_actual = Decimal("0")
+    for line, budget, account, cost_center in query_results:
+        actual_query = _build_actual_query(filters, selected_ledger, line, cost_center, period_start, period_end)
+        actual = _decimal_value(database.session.execute(actual_query).scalar())
+        planned = _decimal_value(line.amount)
+        variance = actual - planned
+        total_budget += planned
+        total_actual += actual
+        rows.append(
+            ReportRow(
+                values={
+                    "budget_code": budget.budget_code,
+                    "account_code": account.code if account else None,
+                    "account_name": account.name if account else None,
+                    "cost_center": cost_center.code if cost_center else None,
+                    "period": period.name,
+                    "budget_amount": planned,
+                    "actual_amount": actual,
+                    "variance": variance,
+                    "utilization_pct": (actual / planned * Decimal("100")) if planned else None,
+                }
+            )
+        )
+    return rows, total_budget, total_actual
+
+
 def get_budget_variance(filters: FinancialReportFilters) -> PaginatedReport:
     """Compara presupuesto aprobado contra GL para un período contable."""
     period_start, period_end, period = _period_bounds(filters.company, filters.accounting_period)
@@ -1555,41 +1645,9 @@ def get_budget_variance(filters: FinancialReportFilters) -> PaginatedReport:
     )
     if filters.budget_code:
         query = query.where(Budget.budget_code == filters.budget_code)
-    rows: list[ReportRow] = []
-    total_budget = Decimal("0")
-    total_actual = Decimal("0")
-    for line, budget, account, cost_center in database.session.execute(query).all():
-        actual_query = select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
-            GLEntry.company == filters.company,
-            GLEntry.ledger_id == selected_ledger.id,
-            GLEntry.account_id == line.account_id,
-            GLEntry.posting_date >= period_start,
-            GLEntry.posting_date <= period_end,
-            GLEntry.is_cancelled.is_(False),
-            GLEntry.is_reversal.is_(False),
-        )
-        if cost_center and cost_center.code:
-            actual_query = actual_query.where(GLEntry.cost_center_code == cost_center.code)
-        actual = _decimal_value(database.session.execute(actual_query).scalar())
-        planned = _decimal_value(line.amount)
-        variance = actual - planned
-        total_budget += planned
-        total_actual += actual
-        rows.append(
-            ReportRow(
-                values={
-                    "budget_code": budget.budget_code,
-                    "account_code": account.code if account else None,
-                    "account_name": account.name if account else None,
-                    "cost_center": cost_center.code if cost_center else None,
-                    "period": period.name,
-                    "budget_amount": planned,
-                    "actual_amount": actual,
-                    "variance": variance,
-                    "utilization_pct": (actual / planned * Decimal("100")) if planned else None,
-                }
-            )
-        )
+    rows, total_budget, total_actual = _build_budget_variance_rows(
+        database.session.execute(query).all(), filters, selected_ledger, period_start or date.today(), period_end or date.today(), period
+    )
     return PaginatedReport(
         rows=rows,
         totals={"budget": total_budget, "actual": total_actual, "variance": total_actual - total_budget},
