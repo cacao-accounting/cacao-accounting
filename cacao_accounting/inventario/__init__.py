@@ -489,7 +489,7 @@ def _process_item_edit(item, formulario):
         database.session.commit()
         flash("Artículo actualizado correctamente.", "success")
         return redirect(url_for("inventario.inventario_articulo", item_id=item.code))
-    except (InventoryServiceError, ValueError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
         return None
