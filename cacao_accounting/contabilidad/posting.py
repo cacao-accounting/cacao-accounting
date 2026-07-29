@@ -445,36 +445,56 @@ def _assert_entries_balance(entries: list[GLEntry]) -> None:
     ledger_ids = {entry.ledger_id for entry in entries}
     for ledger_id in ledger_ids:
         ledger_entries = [entry for entry in entries if entry.ledger_id == ledger_id]
-        debit_total = sum((_decimal_value(entry.debit) for entry in ledger_entries), Decimal("0"))
-        credit_total = sum((_decimal_value(entry.credit) for entry in ledger_entries), Decimal("0"))
-        if abs(debit_total - credit_total) > Decimal("0.01"):
-            raise PostingError("Las entradas GL generadas no balancean por libro contable.")
-        currency_groups: dict[str, list[GLEntry]] = {}
-        for entry in ledger_entries:
-            curr = getattr(entry, "account_currency", None)
-            if curr is not None:
-                currency_groups.setdefault(curr, []).append(entry)
-        for currency, curr_entries in currency_groups.items():
-            curr_debit = sum((_decimal_value(e.debit_in_account_currency) for e in curr_entries), Decimal("0"))
-            curr_credit = sum((_decimal_value(e.credit_in_account_currency) for e in curr_entries), Decimal("0"))
-            # Each currency MUST balance independently except in cross-currency FX scenarios
-            # where explicit FX gain/loss entries in company currency are generated.
-            # A currency with only debits or only credits must be balanced by another
-            # currency (hence the OR clause). If only one currency has entries, it MUST
-            # balance independently (debits == credits).
-            if abs(curr_debit - curr_credit) > Decimal("0.01"):
-                # Allow tolerance for potential FX rounding when mixing multiple currencies
-                if len(currency_groups) == 1:
-                    # Single currency must balance perfectly
-                    raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
-                # Multi-currency: each side must at least have entries
-                if (curr_debit == Decimal("0") and curr_credit == Decimal("0")) or (
-                    (curr_debit > Decimal("0") and curr_credit == Decimal("0"))
-                    or (curr_debit == Decimal("0") and curr_credit > Decimal("0"))
-                ):
-                    pass  # Legitimate in cross-currency with FX entries
-                else:
-                    raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
+        _assert_ledger_balances(ledger_entries)
+
+        currency_groups = _build_currency_groups(ledger_entries)
+        _assert_currency_balances(currency_groups)
+
+
+def _assert_ledger_balances(ledger_entries: list[GLEntry]) -> None:
+    """Assert that debit and credit totals balance for a ledger."""
+    debit_total = sum((_decimal_value(entry.debit) for entry in ledger_entries), Decimal("0"))
+    credit_total = sum((_decimal_value(entry.credit) for entry in ledger_entries), Decimal("0"))
+    if abs(debit_total - credit_total) > Decimal("0.01"):
+        raise PostingError("Las entradas GL generadas no balancean por libro contable.")
+
+
+def _build_currency_groups(ledger_entries: list[GLEntry]) -> dict[str, list[GLEntry]]:
+    """Group ledger entries by account currency."""
+    currency_groups: dict[str, list[GLEntry]] = {}
+    for entry in ledger_entries:
+        curr = getattr(entry, "account_currency", None)
+        if curr is not None:
+            currency_groups.setdefault(curr, []).append(entry)
+    return currency_groups
+
+
+def _assert_currency_balances(currency_groups: dict[str, list[GLEntry]]) -> None:
+    """Assert that each currency group balances, allowing cross-currency FX scenarios."""
+    for currency, curr_entries in currency_groups.items():
+        _assert_single_currency_balance(currency, curr_entries, len(currency_groups))
+
+
+def _assert_single_currency_balance(currency: str, curr_entries: list[GLEntry], num_currencies: int) -> None:
+    """Assert a single currency group balances."""
+    curr_debit = sum((_decimal_value(e.debit_in_account_currency) for e in curr_entries), Decimal("0"))
+    curr_credit = sum((_decimal_value(e.credit_in_account_currency) for e in curr_entries), Decimal("0"))
+    if abs(curr_debit - curr_credit) <= Decimal("0.01"):
+        return
+    if num_currencies == 1:
+        raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
+    if _is_cross_currency_legitimate(curr_debit, curr_credit):
+        return
+    raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
+
+
+def _is_cross_currency_legitimate(curr_debit: Decimal, curr_credit: Decimal) -> bool:
+    """Check if imbalance is legitimate in a cross-currency FX scenario."""
+    return (
+        (curr_debit == Decimal("0") and curr_credit == Decimal("0"))
+        or (curr_debit > Decimal("0") and curr_credit == Decimal("0"))
+        or (curr_debit == Decimal("0") and curr_credit > Decimal("0"))
+    )
 
 
 def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
@@ -1213,6 +1233,47 @@ def _create_payment_receive_entries(
     ]
 
 
+def _resolve_fx_account_id(context: LedgerContext, difference: Decimal) -> str:
+    """Resolve the exchange gain/loss account ID for a multi-currency transfer."""
+    defaults = _company_defaults(context.company)
+    if not defaults:
+        account_id = None
+    elif difference > 0:
+        account_id = defaults.exchange_loss_account_id
+    else:
+        account_id = defaults.exchange_gain_account_id
+    return _require_account(
+        account_id,
+        "La transferencia multimoneda requiere cuentas de ganancia/pérdida cambiaria configuradas.",
+    )
+
+
+def _build_fx_difference_entries(
+    context: LedgerContext,
+    source_company_amount: Decimal,
+    target_company_amount: Decimal,
+) -> list[GLEntry]:
+    """Build GL entries for FX difference in multi-currency internal transfers."""
+    difference = source_company_amount - target_company_amount
+    if not difference:
+        return []
+    account_id = _resolve_fx_account_id(context, difference)
+    fx_context = replace(context, transaction_currency=context.company_currency, exchange_rate=Decimal("1"))
+    debit = difference if difference > 0 else Decimal("0")
+    credit = -difference if difference < 0 else Decimal("0")
+    return [
+        _create_gl_entry(
+            context=fx_context,
+            params=GLEntryParams(
+                account_id=account_id,
+                debit=debit,
+                credit=credit,
+                entry_remarks="Diferencia cambiaria de transferencia interna",
+            ),
+        )
+    ]
+
+
 def _create_payment_transfer_entries(
     context: LedgerContext,
     document: PaymentEntry,
@@ -1267,28 +1328,7 @@ def _create_payment_transfer_entries(
             ),
         ),
     ]
-    difference = source_company_amount - target_company_amount
-    if difference:
-        defaults = _company_defaults(context.company)
-        account_id = (
-            (defaults.exchange_loss_account_id if difference > 0 else defaults.exchange_gain_account_id) if defaults else None
-        )
-        account_id = _require_account(
-            account_id,
-            "La transferencia multimoneda requiere cuentas de ganancia/pérdida cambiaria configuradas.",
-        )
-        fx_context = replace(context, transaction_currency=context.company_currency, exchange_rate=Decimal("1"))
-        entries.append(
-            _create_gl_entry(
-                context=fx_context,
-                params=GLEntryParams(
-                    account_id=account_id,
-                    debit=difference if difference > 0 else Decimal("0"),
-                    credit=-difference if difference < 0 else Decimal("0"),
-                    entry_remarks="Diferencia cambiaria de transferencia interna",
-                ),
-            )
-        )
+    entries.extend(_build_fx_difference_entries(context, source_company_amount, target_company_amount))
     return entries
 
 

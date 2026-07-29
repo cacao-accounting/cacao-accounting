@@ -16,6 +16,7 @@ from cacao_accounting.query_tools.permissions import validate_permission
 
 _PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
+
 def _json(value: Any) -> Any:
     if isinstance(value, Decimal):
         return str(value)

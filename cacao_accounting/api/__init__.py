@@ -673,12 +673,66 @@ def _source_items_or_abort(source_type: str, source_id: str):
         abort(exc.status_code)
 
 
+def _lookup_related_document_ids(related_doctype: str, related_id: str, doctype_key: str) -> list[str]:
+    """Get target document IDs related to a source document."""
+    if not related_doctype or not related_id:
+        return []
+    from cacao_accounting.database import DocumentRelation, database
+
+    rows_as_target = (
+        database.session.execute(
+            database.select(DocumentRelation.target_id)
+            .filter_by(source_type=related_doctype, source_id=related_id, target_type=doctype_key)
+            .distinct()
+        )
+        .scalars()
+        .all()
+    )
+    rows_as_source = (
+        database.session.execute(
+            database.select(DocumentRelation.source_id)
+            .filter_by(target_type=related_doctype, target_id=related_id, source_type=doctype_key)
+            .distinct()
+        )
+        .scalars()
+        .all()
+    )
+    return list(set(rows_as_target) | set(rows_as_source))
+
+
+def _fetch_documents_by_ids(spec: DocumentType, target_ids: list[str]) -> list[Any]:
+    """Fetch documents by their primary key IDs."""
+    if not target_ids:
+        return []
+    from cacao_accounting.database import database
+
+    pk_col = getattr(spec.header_model, "id", None)
+    if pk_col is None:
+        return []
+    return list(database.session.execute(database.select(spec.header_model).where(pk_col.in_(target_ids))).scalars().all())
+
+
+def _filter_authorized_documents(documents: list[Any], doctype_key: str) -> list[Any]:
+    """Filter out documents the user cannot access (company-scoped)."""
+    module = _module_for_document_type(doctype_key)
+    if not module:
+        return documents
+    from cacao_accounting.auth import exige_acceso_compania
+
+    authorized: list[Any] = []
+    for document in documents:
+        try:
+            exige_acceso_compania(module, getattr(document, "company", None), "consultar")
+            authorized.append(document)
+        except Forbidden:
+            pass
+    return authorized
+
+
 @api.route("/document-flow/list/<doctype>")
 @login_required
 def document_flow_related_list(doctype: str):
     """Muestra una lista de documentos filtrada por relacion documental."""
-    from cacao_accounting.database import DocumentRelation, database
-
     doctype_key = normalize_doctype(doctype)
     spec = DOCUMENT_TYPES.get(doctype_key)
     if not spec:
@@ -694,50 +748,11 @@ def document_flow_related_list(doctype: str):
     related_spec = DOCUMENT_TYPES.get(related_doctype, None)
     related_label = related_spec.label if related_spec and related_spec.label else related_doctype
 
-    target_ids: list[str] = []
-    if related_doctype and related_id:
-        rows_as_target = (
-            database.session.execute(
-                database.select(DocumentRelation.target_id)
-                .filter_by(source_type=related_doctype, source_id=related_id, target_type=doctype_key)
-                .distinct()
-            )
-            .scalars()
-            .all()
-        )
-        rows_as_source = (
-            database.session.execute(
-                database.select(DocumentRelation.source_id)
-                .filter_by(target_type=related_doctype, target_id=related_id, source_type=doctype_key)
-                .distinct()
-            )
-            .scalars()
-            .all()
-        )
-        target_ids = list(set(rows_as_target) | set(rows_as_source))
+    target_ids = _lookup_related_document_ids(related_doctype, related_id, doctype_key)
 
-    documents: list[Any] = []
-    if target_ids:
-        pk_col = getattr(spec.header_model, "id", None)
-        if pk_col is not None:
-            documents = list(
-                database.session.execute(database.select(spec.header_model).where(pk_col.in_(target_ids))).scalars().all()
-            )
+    documents = _fetch_documents_by_ids(spec, target_ids)
 
-    # The related document is protected above, but every returned target is a
-    # separate company-scoped resource and must pass the same read boundary.
-    # Filter out documents the user cannot access instead of aborting the
-    # entire request, so that partial results are still useful.
-    module = _module_for_document_type(doctype_key)
-    if module:
-        authorized: list[Any] = []
-        for document in documents:
-            try:
-                exige_acceso_compania(module, getattr(document, "company", None), "consultar")
-                authorized.append(document)
-            except Forbidden:
-                pass
-        documents = authorized
+    documents = _filter_authorized_documents(documents, doctype_key)
 
     return render_template(
         "document_flow_related_list.html",

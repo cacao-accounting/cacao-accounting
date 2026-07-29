@@ -15,7 +15,8 @@ from cacao_accounting.query_tools.pagination import (
 )
 from cacao_accounting.query_tools.permissions import validate_permission
 
-_PERM_BANKING_REPORTS_READ = _PERM_BANKING_REPORTS_READ
+_PERM_BANKING_REPORTS_READ = "banking.reports.read"
+
 
 @query_tool(
     name="banking.get_accounts",

@@ -1325,7 +1325,7 @@ nav[aria-label="breadcrumb"] {
 
 [data-theme="dark"] .ca-flow-badge--cancelled {
   color: #fca5a5;
-  background: rgba(153, 27, 27, .25);
+  background: rgba(153, 27, 27, .40);
 }
 
 [data-theme="dark"] .ca-flow-badge--partial {
@@ -1360,7 +1360,7 @@ nav[aria-label="breadcrumb"] {
 
 [data-theme="dark"] .ca-document-flow__error {
   color: #fca5a5;
-  background: rgba(153, 27, 27, .25);
+  background: rgba(153, 27, 27, .40);
 }
 
 [data-theme="dark"] .badge-warning {

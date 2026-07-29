@@ -29,6 +29,7 @@ _PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
 _PERM_INVENTORY_REPORTS_READ = "inventory.reports.read"
 _PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
+
 def _page(page: int, page_size: int) -> tuple[int, int]:
     return paginate(page, page_size)
 

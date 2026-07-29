@@ -46,6 +46,30 @@ def _deterministic_default(obj: Any) -> str:
     return repr(obj)
 
 
+def _rule_amount_matches(rule: ApprovalMatrix, amount: Decimal) -> bool:
+    """Check if an amount falls within a rule's min/max range."""
+    if not rule.min_amount <= amount:
+        return False
+    if rule.max_amount is not None and rule.max_amount < amount:
+        return False
+    return True
+
+
+def _add_approver_from_rule(rule: ApprovalMatrix, roles: list[str], users: list[str]) -> None:
+    """Add a user or role name from a matching approval rule."""
+    if rule.user_id:
+        user = database.session.get(User, rule.user_id)
+        if user and user.name:
+            users.append(user.name)
+        return
+    if rule.role_id:
+        from cacao_accounting.database import Roles
+
+        role = database.session.get(Roles, rule.role_id)
+        if role:
+            roles.append(role.note or role.name)
+
+
 class ApprovalEngine:
     """Motor de Aprobaciones configurable por compañía."""
 
@@ -743,19 +767,8 @@ class ApprovalEngine:
         roles: list[str] = []
         users: list[str] = []
         for r in rules:
-            if not r.min_amount <= amount or (r.max_amount is not None and r.max_amount < amount):
-                continue
-            if r.user_id:
-                user = database.session.get(User, r.user_id)
-                if user and user.name:
-                    users.append(user.name)
-                continue
-            if r.role_id:
-                from cacao_accounting.database import Roles
-
-                role = database.session.get(Roles, r.role_id)
-                if role:
-                    roles.append(role.note or role.name)
+            if _rule_amount_matches(r, amount):
+                _add_approver_from_rule(r, roles, users)
         return list(set(roles)), list(set(users))
 
     @classmethod

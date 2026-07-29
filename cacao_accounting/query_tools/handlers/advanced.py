@@ -49,6 +49,7 @@ _PERM_BANKING_REPORTS_READ = "banking.reports.read"
 _PERM_RECEIVABLES_REPORTS_READ = "receivables.reports.read"
 _PERM_PAYABLES_REPORTS_READ = "payables.reports.read"
 
+
 def _json_value(value: Any) -> Any:
     if isinstance(value, Decimal):
         return str(value)
