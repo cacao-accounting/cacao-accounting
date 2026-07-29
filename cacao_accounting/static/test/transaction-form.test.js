@@ -70,12 +70,12 @@ describe('transaction-form', function () {
     delete globalThis.clearTimeout;
   });
 
-  it('uses required default columns when preferences are empty', function () {
+  it('returns default visible columns for transactional forms', function () {
     const create = loadTransactionForm();
     const component = create({
+      formKey: 'purchases.purchase_invoice',
       items: [],
       uoms: [],
-      columns: [],
       defaultRows: 1,
     });
 
@@ -88,22 +88,22 @@ describe('transaction-form', function () {
     assert.strictEqual(component.lines.length, 1);
   });
 
-  it('keeps required columns visible even when legacy preferences hide them', function () {
+  it('always returns all default columns regardless of config', function () {
     const create = loadTransactionForm();
     const component = create({
+      formKey: 'sales.sales_order',
       items: [],
       uoms: [],
-      columns: [
-        { field: 'item_code', label: 'Código', visible: false, width: 2 },
-        { field: 'item_name', label: 'Descripción', visible: true, width: 2 },
-      ],
       defaultRows: 1,
     });
 
-    component.init();
-
-    assert.strictEqual(component.preferences.columns.find((column) => column.field === 'item_code').visible, true);
-    assert.strictEqual(component.preferences.columns.find((column) => column.field === 'item_code').required, true);
+    assert.strictEqual(component.visibleColumns.length, 6);
+    assert.strictEqual(component.visibleColumns[0].field, 'item_code');
+    assert.strictEqual(component.visibleColumns[1].field, 'item_name');
+    assert.strictEqual(component.visibleColumns[2].field, 'uom');
+    assert.strictEqual(component.visibleColumns[3].field, 'qty');
+    assert.strictEqual(component.visibleColumns[4].field, 'rate');
+    assert.strictEqual(component.visibleColumns[5].field, 'amount');
   });
 
   it('filters unit options based on the selected item and keeps the selected unit valid', function () {
