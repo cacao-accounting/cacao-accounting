@@ -13,7 +13,7 @@ from decimal import DecimalException
 from io import BytesIO, StringIO
 from typing import Any, cast
 
-from flask import Blueprint, flash, render_template, request, send_file, url_for
+from flask import Blueprint, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
