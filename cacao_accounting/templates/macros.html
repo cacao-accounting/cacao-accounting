@@ -12,8 +12,8 @@
 <script>
   (function(){
     var t = localStorage.getItem('ca-theme') || 'light';
-    document.documentElement.setAttribute('data-theme', t);
-    document.documentElement.setAttribute('data-bs-theme', t);
+    document.documentElement.dataset.theme = t;
+    document.documentElement.dataset.bsTheme = t;
   })();
 </script>
 
@@ -114,8 +114,8 @@
     globalThis.caToggleTheme = function () {
       var current = document.documentElement.getAttribute('data-theme') || 'light';
       var next = current === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      document.documentElement.setAttribute('data-bs-theme', next);
+      document.documentElement.dataset.theme = next;
+      document.documentElement.dataset.bsTheme = next;
       localStorage.setItem('ca-theme', next);
       syncIcon();
     };
