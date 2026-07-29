@@ -717,8 +717,6 @@ def _filter_authorized_documents(documents: list[Any], doctype_key: str) -> list
     module = _module_for_document_type(doctype_key)
     if not module:
         return documents
-    from cacao_accounting.auth import exige_acceso_compania
-
     authorized: list[Any] = []
     for document in documents:
         try:
