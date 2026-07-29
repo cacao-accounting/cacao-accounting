@@ -242,6 +242,17 @@
         return normalized;
       },
 
+      get visibleColumns() {
+        return [
+          { field: 'account', label: 'Cuenta', width: 3 },
+          { field: 'cost_center', label: 'Centro de costos', width: 2 },
+          { field: 'party_type', label: 'Tipo de tercero', width: 1 },
+          { field: 'party', label: 'Tercero', width: 2 },
+          { field: 'debit', label: 'Debe', width: 2 },
+          { field: 'credit', label: 'Haber', width: 2 },
+        ];
+      },
+
       init: function () {
         this.lines = (this.lines || []).map(this.normalizeLine.bind(this));
         if (!this.lines.length) this.addMultipleRows(2);
