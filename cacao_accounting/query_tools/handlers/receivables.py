@@ -19,7 +19,8 @@ from cacao_accounting.query_tools.pagination import (
 )
 from cacao_accounting.query_tools.permissions import validate_permission
 
-_PERM_RECEIVABLES_REPORTS_READ = _PERM_RECEIVABLES_REPORTS_READ
+_PERM_RECEIVABLES_REPORTS_READ = "receivables.reports.read"
+
 
 @query_tool(
     name="receivables.get_aging",

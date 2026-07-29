@@ -1907,6 +1907,32 @@ def _payment_payload_from_request() -> PaymentPayload:
     }
 
 
+def _resolve_payment_exchange_rate(payload: PaymentPayload, payment_currency: str, company: str | None) -> Decimal:
+    """Determine the exchange rate for a payment."""
+    company_entity = (
+        database.session.execute(database.select(Entity).filter(Entity.code == company)).scalars().first() if company else None
+    )
+    company_currency = company_entity.currency if company_entity else None
+    posting_date_raw = payload.get("posting_date")
+    if company_currency and payment_currency != company_currency and posting_date_raw:
+        return _lookup_exchange_rate(payment_currency, company_currency, posting_date_raw)
+    return Decimal("1")
+
+
+def _apply_internal_transfer_amounts(
+    payment: PaymentEntry, payload: PaymentPayload, payment_type: str, amount: Decimal, target_bank: BankAccount | None
+) -> None:
+    """Apply multi-currency adjustments for internal transfers."""
+    if payment_type != "internal_transfer":
+        return
+    transfer_rate = Decimal(str(payload.get("exchange_rate") or "1"))
+    if transfer_rate <= 0:
+        raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
+    if target_bank and target_bank.currency:
+        payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
+        payment.base_received_amount = None
+
+
 def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, Decimal, str]:
     """Build a PaymentEntry from the normalized payload."""
     payment_type = str(payload.get("payment_type") or "receive")
@@ -1934,16 +1960,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
     target_bank = database.session.get(BankAccount, target_bank_account_id) if target_bank_account_id else None
     mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
 
-    company_entity = (
-        database.session.execute(database.select(Entity).filter(Entity.code == company)).scalars().first() if company else None
-    )
-    company_currency = company_entity.currency if company_entity else None
-    posting_date_raw = payload.get("posting_date")
-    if company_currency and payment_currency != company_currency and posting_date_raw:
-        exchange_rate = _lookup_exchange_rate(payment_currency, company_currency, posting_date_raw)
-    else:
-        exchange_rate = Decimal("1")
-
+    exchange_rate = _resolve_payment_exchange_rate(payload, payment_currency, company)
     payment = _create_payment_entry(
         payload=payload,
         payment_type=payment_type,
@@ -1959,13 +1976,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
         exchange_rate=exchange_rate,
     )
     _update_payment_amounts(payment, payment_type, amount)
-    if payment_type == "internal_transfer":
-        transfer_rate = Decimal(str(payload.get("exchange_rate") or "1"))
-        if transfer_rate <= 0:
-            raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
-        if target_bank and target_bank.currency:
-            payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
-            payment.base_received_amount = None
+    _apply_internal_transfer_amounts(payment, payload, payment_type, amount, target_bank)
     database.session.add(payment)
     database.session.flush()
     return payment, amount, mode_of_payment
