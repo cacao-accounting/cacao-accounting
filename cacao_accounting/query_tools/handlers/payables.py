@@ -19,12 +19,13 @@ from cacao_accounting.query_tools.pagination import (
 )
 from cacao_accounting.query_tools.permissions import validate_permission
 
+_PERM_PAYABLES_REPORTS_READ = _PERM_PAYABLES_REPORTS_READ
 
 @query_tool(
     name="payables.get_aging",
     description="Obtiene la antigüedad de saldos de cuentas por pagar.",
     required_module="purchases",
-    required_permission="payables.reports.read",
+    required_permission=_PERM_PAYABLES_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -49,7 +50,7 @@ def get_payables_aging(
     """Obtiene la antigüedad de saldos de cuentas por pagar."""
     validate_permission(
         context,
-        required_permission="payables.reports.read",
+        required_permission=_PERM_PAYABLES_REPORTS_READ,
         required_module="purchases",
         company_id=company_id,
     )
@@ -109,7 +110,7 @@ def get_payables_aging(
     name="payables.get_open_documents",
     description="Consulta documentos de compra abiertos (pendientes de pago).",
     required_module="purchases",
-    required_permission="payables.reports.read",
+    required_permission=_PERM_PAYABLES_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -132,7 +133,7 @@ def get_payables_open_documents(
     """Consulta documentos de compra abiertos pendientes de pago."""
     validate_permission(
         context,
-        required_permission="payables.reports.read",
+        required_permission=_PERM_PAYABLES_REPORTS_READ,
         required_module="purchases",
         company_id=company_id,
     )

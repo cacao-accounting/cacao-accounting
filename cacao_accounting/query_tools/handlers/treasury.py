@@ -14,6 +14,7 @@ from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
 
+_PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
 def _json(value: Any) -> Any:
     if isinstance(value, Decimal):
@@ -28,7 +29,7 @@ def _json(value: Any) -> Any:
 
 
 def _verify_forecast(context: QueryContext, company_id: str, forecast_id: str) -> CashForecast:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     forecast = database.session.get(CashForecast, forecast_id)
     if forecast is None or forecast.company != company_id:
         raise ValueError("Pronóstico no encontrado para la compañía autorizada")
@@ -50,11 +51,11 @@ _LIST_SCHEMA = {
     "treasury.forecasts.list",
     "Lista versiones de pronósticos de caja de una compañía.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_LIST_SCHEMA,
 )
 def list_cash_forecasts(*, context: QueryContext, company_id: str, page: int = 1, page_size: int = 50) -> dict[str, Any]:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     current, size = paginate(page, page_size)
     query = database.select(CashForecast).where(CashForecast.company == company_id)
     total = database.session.execute(database.select(database.func.count()).select_from(query.subquery())).scalar() or 0
@@ -88,7 +89,7 @@ _FORECAST_SCHEMA = {
     "treasury.get_cash_forecast",
     "Obtiene el pronóstico de caja por períodos, sin modificarlo.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_FORECAST_SCHEMA,
 )
 def get_cash_forecast(*, context: QueryContext, company_id: str, forecast_id: str) -> dict[str, Any]:
@@ -105,7 +106,7 @@ def get_cash_forecast(*, context: QueryContext, company_id: str, forecast_id: st
     "treasury.compare_forecasts",
     "Compara dos versiones de pronóstico de caja de una misma compañía.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -137,7 +138,7 @@ def compare_cash_forecasts(
     "treasury.get_maturity_schedule",
     "Obtiene vencimientos de cartera y proveedores calculados desde términos de pago.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -163,7 +164,7 @@ def get_maturity_schedule_handler(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     report = get_maturity_schedule(
         MaturityFilters(
             company=company_id,

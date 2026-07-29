@@ -15,12 +15,13 @@ from cacao_accounting.query_tools.pagination import (
 )
 from cacao_accounting.query_tools.permissions import validate_permission
 
+_PERM_BANKING_REPORTS_READ = _PERM_BANKING_REPORTS_READ
 
 @query_tool(
     name="banking.get_accounts",
     description="Lista las cuentas bancarias de una compañía.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -41,7 +42,7 @@ def get_banking_accounts(
     """Lista las cuentas bancarias de una compañía."""
     validate_permission(
         context,
-        required_permission="banking.reports.read",
+        required_permission=_PERM_BANKING_REPORTS_READ,
         required_module="cash",
         company_id=company_id,
     )
@@ -86,7 +87,7 @@ def get_banking_accounts(
     name="banking.get_transactions",
     description="Consulta movimientos bancarios.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     max_date_range_months=12,
     parameters_schema={
         "type": "object",
@@ -114,7 +115,7 @@ def get_banking_transactions(
     """Consulta movimientos bancarios con filtros opcionales por cuenta y fechas."""
     validate_permission(
         context,
-        required_permission="banking.reports.read",
+        required_permission=_PERM_BANKING_REPORTS_READ,
         required_module="cash",
         company_id=company_id,
     )

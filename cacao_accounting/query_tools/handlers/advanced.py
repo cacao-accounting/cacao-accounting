@@ -43,6 +43,11 @@ from cacao_accounting.reportes.services import (
     get_stock_balance,
 )
 
+_PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
+_PERM_INVENTORY_REPORTS_READ = "inventory.reports.read"
+_PERM_BANKING_REPORTS_READ = "banking.reports.read"
+_PERM_RECEIVABLES_REPORTS_READ = "receivables.reports.read"
+_PERM_PAYABLES_REPORTS_READ = "payables.reports.read"
 
 def _json_value(value: Any) -> Any:
     if isinstance(value, Decimal):
@@ -107,7 +112,7 @@ def _financial(
     page: int = 1,
     page_size: int = 100,
 ) -> FinancialReportFilters:
-    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
     return FinancialReportFilters(
         company=company_id,
         ledger=ledger_id,
@@ -147,7 +152,7 @@ _FINANCIAL_SCHEMA: dict[str, Any] = {
     "accounting.get_income_statement",
     "Obtiene el estado de resultados acumulado.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_FINANCIAL_SCHEMA,
 )
 def get_income_statement(
@@ -167,7 +172,7 @@ def get_income_statement(
     "accounting.get_balance_sheet",
     "Obtiene el balance general por clasificación.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_FINANCIAL_SCHEMA,
 )
 def get_balance_sheet(
@@ -187,7 +192,7 @@ def get_balance_sheet(
     "accounting.get_account_summary",
     "Obtiene el resumen de movimientos por cuenta.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_FINANCIAL_SCHEMA,
 )
 def get_account_summary(
@@ -207,7 +212,7 @@ def get_account_summary(
     "accounting.get_account_movement_detail",
     "Obtiene el detalle de asientos de una cuenta con saldo acumulado opcional.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
         **_FINANCIAL_SCHEMA,
         "properties": {
@@ -234,7 +239,7 @@ def get_account_movement_detail_handler(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
     filters = FinancialReportFilters(
         company=company_id,
         ledger=ledger_id,
@@ -254,7 +259,7 @@ def get_account_movement_detail_handler(
     "accounting.get_budget_variance",
     "Compara presupuesto aprobado contra ejecución real por cuenta y período.",
     required_module="accounting",
-    required_permission="accounting.reports.read",
+    required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
         **_FINANCIAL_SCHEMA,
         "properties": {**_FINANCIAL_SCHEMA["properties"], "budget_code": {"type": "string"}},
@@ -271,7 +276,7 @@ def get_budget_variance_handler(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "accounting.reports.read", "accounting", company_id)
+    validate_permission(context, _PERM_ACCOUNTING_REPORTS_READ, "accounting", company_id)
     filters = FinancialReportFilters(
         company=company_id,
         ledger=ledger_id,
@@ -334,7 +339,7 @@ def _register_operational(name: str, description: str, permission: str, module: 
 
 
 _register_operational(
-    "sales.get_by_customer", "Agrega ventas por cliente.", "receivables.reports.read", "sales", get_sales_by_customer
+    "sales.get_by_customer", "Agrega ventas por cliente.", _PERM_RECEIVABLES_REPORTS_READ, "sales", get_sales_by_customer
 )
 
 
@@ -364,7 +369,7 @@ def _inventory_query(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "inventory.reports.read", "inventory", company_id)
+    validate_permission(context, _PERM_INVENTORY_REPORTS_READ, "inventory", company_id)
     filters = KardexFilters(
         company=company_id,
         item_code=item_code,
@@ -381,7 +386,7 @@ def _inventory_query(
     "inventory.get_kardex",
     "Consulta movimientos de inventario por artículo y almacén.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_INVENTORY_SCHEMA,
 )
 def get_inventory_kardex(
@@ -402,7 +407,7 @@ def get_inventory_kardex(
     "inventory.get_existence",
     "Obtiene existencia histórica o actual de inventario.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_INVENTORY_SCHEMA,
 )
 def get_inventory_existence(
@@ -430,7 +435,7 @@ def _inventory_operational(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "inventory.reports.read", "inventory", company_id)
+    validate_permission(context, _PERM_INVENTORY_REPORTS_READ, "inventory", company_id)
     filters = OperationalReportFilters(
         company=company_id, item_code=item_code, warehouse=warehouse, page=page, page_size=page_size
     )
@@ -441,7 +446,7 @@ def _inventory_operational(
     "inventory.get_batches",
     "Lista lotes de inventario.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_INVENTORY_SCHEMA,
 )
 def get_inventory_batches(
@@ -462,7 +467,7 @@ def get_inventory_batches(
     "inventory.get_serials",
     "Lista números de serie de inventario.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_INVENTORY_SCHEMA,
 )
 def get_inventory_serials(
@@ -483,7 +488,7 @@ def get_inventory_serials(
     "inventory.get_negative_stock",
     "Detecta existencias negativas por artículo y almacén.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_operational_schema(),
 )
 def get_inventory_negative_stock(
@@ -498,7 +503,7 @@ def get_inventory_negative_stock(
     filters = _operational(
         context,
         company_id,
-        "inventory.reports.read",
+        _PERM_INVENTORY_REPORTS_READ,
         "inventory",
         None,
         None,
@@ -514,7 +519,7 @@ def get_inventory_negative_stock(
     "inventory.get_reorder_alerts",
     "Detecta artículos por debajo del mínimo o punto de reorden configurado.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_operational_schema(),
 )
 def get_inventory_reorder_alerts(
@@ -529,7 +534,7 @@ def get_inventory_reorder_alerts(
     filters = _operational(
         context,
         company_id,
-        "inventory.reports.read",
+        _PERM_INVENTORY_REPORTS_READ,
         "inventory",
         None,
         None,
@@ -545,7 +550,7 @@ def get_inventory_reorder_alerts(
     "inventory.get_transfers",
     "Consulta traslados de material entre almacenes.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_operational_schema(),
 )
 def get_inventory_transfer_report(
@@ -562,7 +567,7 @@ def get_inventory_transfer_report(
     filters = _operational(
         context,
         company_id,
-        "inventory.reports.read",
+        _PERM_INVENTORY_REPORTS_READ,
         "inventory",
         date_from,
         date_to,
@@ -578,7 +583,7 @@ def get_inventory_transfer_report(
     "inventory.get_slow_moving_items",
     "Lista inventario con existencias y sin salidas durante un umbral.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema={
         **_operational_schema(),
         "properties": {
@@ -601,7 +606,7 @@ def get_inventory_slow_moving_items(
     filters = _operational(
         context,
         company_id,
-        "inventory.reports.read",
+        _PERM_INVENTORY_REPORTS_READ,
         "inventory",
         None,
         date_to,
@@ -617,7 +622,7 @@ def get_inventory_slow_moving_items(
     "inventory.get_turnover",
     "Calcula rotación de inventario por artículo y almacén.",
     required_module="inventory",
-    required_permission="inventory.reports.read",
+    required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema={
         **_operational_schema(),
         "required": ["company_id", "date_from", "date_to"],
@@ -637,7 +642,7 @@ def get_inventory_turnover_report(
     filters = _operational(
         context,
         company_id,
-        "inventory.reports.read",
+        _PERM_INVENTORY_REPORTS_READ,
         "inventory",
         date_from,
         date_to,
@@ -653,7 +658,7 @@ def get_inventory_turnover_report(
     "banking.get_balance_summary",
     "Obtiene saldos bancarios consolidados.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_operational_schema(),
 )
 def get_banking_balance_summary(
@@ -666,7 +671,7 @@ def get_banking_balance_summary(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     filters = BankingFilters(
         company=company_id,
         bank_account_id=bank_account_id,
@@ -683,7 +688,7 @@ def get_banking_balance_summary(
     "banking.get_reconciliation_status",
     "Obtiene el estado de conciliaciones bancarias y pendientes de compras.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={
         "type": "object",
         "properties": {
@@ -703,7 +708,7 @@ def get_banking_reconciliation_status(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     report = get_reconciliation_report(company_id, _date(as_of_date))
     filters = SimpleNamespace(as_of_date=as_of_date, page=page, page_size=page_size)
     return _report_result(report, company_id, filters)
@@ -713,7 +718,7 @@ def get_banking_reconciliation_status(
     "banking.get_unreconciled_transactions",
     "Lista movimientos de extracto pendientes de conciliación.",
     required_module="cash",
-    required_permission="banking.reports.read",
+    required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_operational_schema(),
 )
 def get_banking_unreconciled_transactions(
@@ -726,7 +731,7 @@ def get_banking_unreconciled_transactions(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    validate_permission(context, "banking.reports.read", "cash", company_id)
+    validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     filters = BankingFilters(
         company=company_id,
         bank_account_id=bank_account_id,
@@ -761,7 +766,7 @@ def _subledger(
     page: int = 1,
     page_size: int = 100,
 ) -> dict[str, Any]:
-    permission = "receivables.reports.read" if party_type == "customer" else "payables.reports.read"
+    permission = _PERM_RECEIVABLES_REPORTS_READ if party_type == "customer" else _PERM_PAYABLES_REPORTS_READ
     module = "sales" if party_type == "customer" else "purchases"
     validate_permission(context, permission, module, company_id)
     filters = SubledgerFilters(
@@ -779,7 +784,7 @@ def _subledger(
     "receivables.get_subledger",
     "Obtiene el subledger detallado de clientes.",
     required_module="sales",
-    required_permission="receivables.reports.read",
+    required_permission=_PERM_RECEIVABLES_REPORTS_READ,
     parameters_schema=_SUBLEDGER_SCHEMA,
 )
 def get_receivables_subledger(
@@ -799,7 +804,7 @@ def get_receivables_subledger(
     "payables.get_subledger",
     "Obtiene el subledger detallado de proveedores.",
     required_module="purchases",
-    required_permission="payables.reports.read",
+    required_permission=_PERM_PAYABLES_REPORTS_READ,
     parameters_schema=_SUBLEDGER_SCHEMA,
 )
 def get_payables_subledger(
@@ -816,32 +821,32 @@ def get_payables_subledger(
 
 
 _register_operational(
-    "sales.get_by_item", "Agrega ventas por artículo.", "receivables.reports.read", "sales", get_sales_by_item
+    "sales.get_by_item", "Agrega ventas por artículo.", _PERM_RECEIVABLES_REPORTS_READ, "sales", get_sales_by_item
 )
 _register_operational(
-    "sales.get_gross_margin", "Calcula margen bruto de ventas.", "receivables.reports.read", "sales", get_gross_margin
+    "sales.get_gross_margin", "Calcula margen bruto de ventas.", _PERM_RECEIVABLES_REPORTS_READ, "sales", get_gross_margin
 )
 _register_operational(
     "purchases.get_by_supplier",
     "Agrega compras por proveedor.",
-    "payables.reports.read",
+    _PERM_PAYABLES_REPORTS_READ,
     "purchases",
     get_purchases_by_supplier,
 )
 _register_operational(
-    "purchases.get_by_item", "Agrega compras por artículo.", "payables.reports.read", "purchases", get_purchases_by_item
+    "purchases.get_by_item", "Agrega compras por artículo.", _PERM_PAYABLES_REPORTS_READ, "purchases", get_purchases_by_item
 )
 _register_operational(
     "inventory.get_stock_balance",
     "Obtiene existencias actuales por artículo y almacén.",
-    "inventory.reports.read",
+    _PERM_INVENTORY_REPORTS_READ,
     "inventory",
     get_stock_balance,
 )
 _register_operational(
     "inventory.get_valuation",
     "Obtiene valoración de inventario.",
-    "inventory.reports.read",
+    _PERM_INVENTORY_REPORTS_READ,
     "inventory",
     get_inventory_valuation,
 )
