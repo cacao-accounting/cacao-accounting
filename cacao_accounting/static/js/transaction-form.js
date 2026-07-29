@@ -337,6 +337,17 @@
           this.queueTaxPreview();
         },
 
+        get visibleColumns() {
+          return [
+            { field: 'item_code', label: this.messages.itemCode, width: 2 },
+            { field: 'item_name', label: this.messages.itemName, width: 3 },
+            { field: 'uom', label: this.messages.uom, width: 1 },
+            { field: 'qty', label: this.messages.qty, width: 1 },
+            { field: 'rate', label: this.messages.rate, width: 1 },
+            { field: 'amount', label: this.messages.amount, width: 1 },
+          ];
+        },
+
         get totalAmount() {
           return this._sumLineAmounts(this.lines);
         },
