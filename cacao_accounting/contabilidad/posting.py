@@ -412,7 +412,7 @@ def _create_gl_entry(
     debit_in_ac = params.debit_in_account_currency
     credit_in_ac = params.credit_in_account_currency
     exchange_rate = context.exchange_rate
-    if context.company_currency == context.document_base_currency and params.exchange_rate is not None:
+    if params.exchange_rate is not None:
         exchange_rate = params.exchange_rate
 
     requires_conversion = (
