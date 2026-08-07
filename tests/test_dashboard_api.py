@@ -182,6 +182,63 @@ def test_dashboard_excludes_cancelled_and_reversal_gl_entries(app, client):
     assert sections["banks"]["tables"]["account_balances"][0]["balance"] == 1000.0
 
 
+def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
+    """Credit notes reduce every executive sales/purchases projection."""
+    from cacao_accounting.reportes.analytics import get_concentration, get_kpi_snapshot, metric_value
+
+    with app.app_context():
+        existing_sales = database.session.get(SalesInvoice, "SI-1")
+        assert existing_sales is not None
+        existing_sales.grand_total = Decimal("900.00")
+        existing_sales.outstanding_amount = Decimal("350.00")
+        existing_sales.transaction_currency = "USD"
+        existing_sales.base_currency = "USD"
+        database.session.add_all(
+            [
+                SalesInvoice(
+                    id="SI-RETURN",
+                    company="COMP",
+                    posting_date=date(2024, 1, 17),
+                    docstatus=1,
+                    is_return=True,
+                    customer_id="CUST-1",
+                    customer_name="Cliente Demo",
+                    grand_total=Decimal("100.00"),
+                    base_grand_total=Decimal("100.00"),
+                    outstanding_amount=Decimal("100.00"),
+                    base_outstanding_amount=Decimal("100.00"),
+                ),
+                PurchaseInvoice(
+                    id="PI-RETURN",
+                    company="COMP",
+                    posting_date=date(2024, 1, 17),
+                    docstatus=1,
+                    is_return=True,
+                    supplier_id="SUP-1",
+                    supplier_name="Proveedor Demo",
+                    base_grand_total=Decimal("75.00"),
+                    base_outstanding_amount=Decimal("75.00"),
+                ),
+            ]
+        )
+        database.session.commit()
+
+        assert metric_value("COMP", "sales", date(2024, 1, 1), date(2024, 1, 31)) == Decimal("800")
+        assert metric_value("COMP", "purchases", date(2024, 1, 1), date(2024, 1, 31)) == Decimal("425")
+        assert get_concentration("COMP", "customer", date(2024, 1, 1), date(2024, 1, 31))[0]["amount"] == Decimal("800")
+        snapshot = get_kpi_snapshot("COMP", date(2024, 1, 1), date(2024, 1, 31))
+        assert snapshot["metrics"]["sales"] == Decimal("800")
+        assert snapshot["metrics"]["accounts_receivable"] == Decimal("800")
+
+    _login(client, "admin")
+    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+    assert response.status_code == 200
+    sections = response.get_json()["sections"]
+    assert sections["sales"]["kpis"]["sales"]["value"] == 800.0
+    assert sections["purchases"]["kpis"]["total"]["value"] == 425.0
+    assert sections["sales"]["tables"]["top_customers"][0]["total"] == 800.0
+
+
 def test_dashboard_hides_sales_without_permission(client):
     """Sin permiso de ventas no se devuelven datos sensibles de ventas."""
     _login(client, "accountant")
