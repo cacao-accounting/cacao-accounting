@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-08-07 — Capitalización multilínea y neteo de anticipos por libro
+
+### Petición
+
+Como cierre del ciclo de correcciones R2R se atendieron los dos hallazgos
+pendientes, evitando abrir nuevos frentes de análisis.
+
+### Diagnóstico e implementación
+
+- La capitalización recorría entradas individuales y marcaba el comprobante
+  fuente después de la primera; las demás líneas del mismo comprobante quedaban
+  sin capitalizar. Ahora agrupa todas las líneas elegibles por voucher y genera
+  un único comprobante atómico, con sus dimensiones, moneda y usuario.
+- El contador de resultados representa comprobantes realmente generados y una
+  segunda ejecución no duplica la capitalización.
+- El neteo automático de anticipos se limitaba al libro primario y usaba el mismo
+  nominal en ambos lados. Ahora obtiene el valor histórico de factura y anticipo
+  en cada libro, prorratea la aplicación, publica líneas funcionales dirigidas a
+  todos los libros activos y reconoce la ganancia o pérdida cambiaria realizada
+  cuando sus valores en libros difieren.
+- La ruta conserva compatibilidad para documentos anteriores sin GL, usando la
+  moneda y tasa histórica del documento como respaldo explícito.
+- Verificación focal: capitalización multilínea multimoneda e idempotente, y
+  neteo de anticipo existente; ambos casos aprobaron.
+
+---
+
 ## 2026-08-07 — Diferencias bancarias con cuentas y moneda válidas
 
 ### Petición
