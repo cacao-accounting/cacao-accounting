@@ -260,6 +260,87 @@ def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
         )
 
 
+def test_bank_difference_journal_uses_account_codes_and_each_book_currency(app_ctx):
+    """El ajuste bancario se contabiliza en la moneda del banco y se convierte por libro."""
+    from cacao_accounting.bancos.statement_service import create_bank_difference_journal
+    from cacao_accounting.contabilidad.journal_service import submit_journal
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        BankTransaction,
+        Book,
+        CompanyDefaultAccount,
+        Currency,
+        ExchangeRate,
+        GLEntry,
+        Reconciliation,
+        ReconciliationItem,
+        database,
+    )
+
+    bank_gl = Accounts(entity="cacao", code="BANK-FX", name="Bank USD", classification="asset")
+    difference = Accounts(entity="cacao", code="BANK-DIFF", name="Bank difference", classification="expense")
+    bank = Bank(name="Banco FX")
+    local_book = Book(entity="cacao", code="BANK-NIO", name="NIO", currency="NIO", status="activo", is_primary=True)
+    eur_book = Book(entity="cacao", code="BANK-EUR", name="EUR", currency="EUR", status="activo")
+    database.session.add_all(
+        [
+            bank_gl,
+            difference,
+            bank,
+            local_book,
+            eur_book,
+            Currency(code="NIO", name="Cordoba", decimals=2, active=True),
+            Currency(code="USD", name="US Dollar", decimals=2, active=True),
+            Currency(code="EUR", name="Euro", decimals=2, active=True),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 5, 5)),
+            ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.9"), date=date(2026, 5, 5)),
+        ]
+    )
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="USD account",
+        currency="USD",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+    transaction = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        withdrawal=Decimal("5"),
+    )
+    reconciliation = Reconciliation(company="cacao", recon_date=date(2026, 5, 5), recon_type="bank")
+    database.session.add_all([transaction, reconciliation])
+    database.session.flush()
+    database.session.add_all(
+        [
+            ReconciliationItem(
+                reconciliation_id=reconciliation.id,
+                reference_type="bank_transaction",
+                reference_id=transaction.id,
+                source_type="bank_transaction",
+                source_id=transaction.id,
+                amount=Decimal("5"),
+            ),
+            CompanyDefaultAccount(company="cacao", bank_difference_account_id=difference.id),
+        ]
+    )
+    database.session.commit()
+
+    journal = create_bank_difference_journal(reconciliation.id, Decimal("5"))
+    database.session.commit()
+    submit_journal(journal.id)
+
+    entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
+    assert len(entries) == 4
+    assert sum(entry.debit for entry in entries if entry.ledger_id == local_book.id) == Decimal("180")
+    assert sum(entry.debit for entry in entries if entry.ledger_id == eur_book.id) == Decimal("4.5")
+
+
 def test_ar_ap_subledger_excludes_nonposted_documents_and_cancelled_payments(app_ctx):
     """AP/AR solo concilia facturas contabilizadas y pagos vivos."""
     from cacao_accounting.database import (
