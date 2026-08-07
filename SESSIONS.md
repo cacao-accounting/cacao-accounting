@@ -38,6 +38,16 @@ push.
   corresponden a reservas/flujo de inventario. Se conserva el resultado para
   su tratamiento separado.
 
+### Cierre de verificación
+
+- Las fixtures de los flujos multilibro ahora declaran tasas históricas NIO→USD
+  y NIO→EUR para las fechas de posting, y la prueba de revalorización completa
+  las cuentas no realizadas aun cuando ya exista una configuración parcial.
+- Regresión de los módulos afectados: **7 passed**; regresión de los archivos
+  completos: **1546 passed, 8 skipped**.
+- Suite completa exigida en `test_results.log`: **1546 passed, 8 skipped, 239
+  warnings** en 16m29s. No quedaron fallos.
+
 ---
 
 ## 2026-08-07 — Auditoría R2R: reportería robusta y KPIs sin mezcla de monedas
