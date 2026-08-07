@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -16,12 +17,15 @@ from sqlalchemy import select
 
 from cacao_accounting.bancos.reconciliation_service import BankCandidate, find_bank_reconciliation_candidates
 from cacao_accounting.database import (
+    Accounts,
     BankAccount,
     BankMatchingRule,
     BankTransaction,
+    Book,
     ComprobanteContable,
     ComprobanteContableDetalle,
     CompanyDefaultAccount,
+    Entity,
     Reconciliation,
     ReconciliationItem,
     database,
@@ -205,35 +209,59 @@ def create_bank_difference_journal(
     reconciliation_item = database.session.execute(
         select(ReconciliationItem).filter_by(reconciliation_id=reconciliation.id, source_type="bank_transaction")
     ).scalar_one_or_none()
-    bank_account_id = None
+    bank_account = None
     if reconciliation_item:
         transaction = database.session.get(BankTransaction, reconciliation_item.source_id)
         bank_account = database.session.get(BankAccount, transaction.bank_account_id) if transaction else None
-        bank_account_id = bank_account.gl_account_id if bank_account else None
-    if not bank_account_id:
+    bank_account_gl_id = bank_account.gl_account_id if bank_account else None
+    if not bank_account_gl_id:
         raise BankStatementError("No se encontro cuenta bancaria GL para balancear el ajuste.")
+    difference_account = database.session.get(Accounts, difference_account_id)
+    bank_gl_account = database.session.get(Accounts, bank_account_gl_id)
+    if not difference_account or difference_account.entity != reconciliation.company:
+        raise BankStatementError("La cuenta de diferencia bancaria no pertenece a la compañía.")
+    if not bank_gl_account or bank_gl_account.entity != reconciliation.company:
+        raise BankStatementError("La cuenta bancaria GL no pertenece a la compañía.")
+    entity = database.session.execute(select(Entity).where(Entity.code == reconciliation.company)).scalars().first()
+    transaction_currency = bank_account.currency or (entity.currency if entity else None)
+    if not transaction_currency:
+        raise BankStatementError("No se pudo determinar la moneda de la cuenta bancaria.")
+    books = list(
+        database.session.execute(
+            select(Book).where(Book.entity == reconciliation.company, Book.status == "activo").order_by(Book.code)
+        ).scalars()
+    )
     journal = ComprobanteContable(
         entity=reconciliation.company,
         date=reconciliation.recon_date,
         memo="Ajuste de diferencia bancaria",
+        status="draft",
+        voucher_type="journal_entry",
+        book=books[0].code if books else None,
+        book_codes=json.dumps([book.code for book in books]) if books else None,
+        transaction_currency=transaction_currency,
     )
     database.session.add(journal)
     database.session.flush()
-    debit_account_id = difference_account_id if amount > 0 else bank_account_id
-    credit_account_id = bank_account_id if amount > 0 else difference_account_id
+    debit_account = difference_account if amount > 0 else bank_gl_account
+    credit_account = bank_gl_account if amount > 0 else difference_account
     database.session.add_all(
         [
             ComprobanteContableDetalle(
                 transaction="journal_entry",
                 transaction_id=journal.id,
-                account=debit_account_id,
+                entity=reconciliation.company,
+                account=debit_account.code,
+                currency_id=transaction_currency,
                 value=abs(amount),
                 memo="Diferencia bancaria",
             ),
             ComprobanteContableDetalle(
                 transaction="journal_entry",
                 transaction_id=journal.id,
-                account=credit_account_id,
+                entity=reconciliation.company,
+                account=credit_account.code,
+                currency_id=transaction_currency,
                 value=-abs(amount),
                 memo="Diferencia bancaria",
             ),
