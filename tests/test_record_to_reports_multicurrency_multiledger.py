@@ -51,8 +51,12 @@ def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
     )
     from cacao_accounting.reportes.services import (
         FinancialReportFilters,
+        OperationalReportFilters,
         get_balance_sheet_report,
+        get_gross_margin,
         get_income_statement_report,
+        get_sales_by_customer,
+        get_sales_by_item,
         get_trial_balance_report,
     )
 
@@ -116,7 +120,9 @@ def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
         exchange_rate=Decimal("36"),
         docstatus=1,
         total=Decimal("10"),
+        base_total=Decimal("360"),
         grand_total=Decimal("10"),
+        base_grand_total=Decimal("360"),
         outstanding_amount=Decimal("10"),
         base_outstanding_amount=Decimal("360"),
     )
@@ -130,13 +136,67 @@ def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
             qty=Decimal("1"),
             rate=Decimal("10"),
             amount=Decimal("10"),
+            base_amount=Decimal("360"),
             income_account_id=income.id,
         )
+    )
+    sales_return = SalesInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 7),
+        customer_id="CUST-R2R",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+        is_return=True,
+        grand_total=Decimal("2"),
+        base_grand_total=Decimal("72"),
+    )
+    draft_invoice = SalesInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 7),
+        customer_id="CUST-R2R",
+        docstatus=0,
+        grand_total=Decimal("1000"),
+        base_grand_total=Decimal("36000"),
+    )
+    database.session.add_all([sales_return, draft_invoice])
+    database.session.flush()
+    database.session.add_all(
+        [
+            SalesInvoiceItem(
+                sales_invoice_id=sales_return.id,
+                item_code="SERVICE-R2R",
+                qty=Decimal("0.2"),
+                amount=Decimal("2"),
+                base_amount=Decimal("72"),
+            ),
+            SalesInvoiceItem(
+                sales_invoice_id=draft_invoice.id,
+                item_code="SERVICE-R2R",
+                qty=Decimal("100"),
+                amount=Decimal("1000"),
+                base_amount=Decimal("36000"),
+            ),
+        ]
     )
     database.session.commit()
 
     post_document_to_gl(invoice)
     database.session.commit()
+
+    operational_filters = OperationalReportFilters(company="r2r")
+    sales_by_customer = get_sales_by_customer(operational_filters)
+    sales_by_item = get_sales_by_item(operational_filters)
+    gross_margin = get_gross_margin(operational_filters)
+    assert sales_by_customer.totals["amount"] == Decimal("288")
+    assert sales_by_item.totals["qty"] == Decimal("0.8")
+    assert sales_by_item.totals["amount"] == Decimal("288")
+    assert gross_margin.totals == {
+        "income": Decimal("360"),
+        "cogs": Decimal("0"),
+        "gross_margin": Decimal("360"),
+    }
 
     entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=invoice.id)).scalars().all()
     assert len(entries) == 4
