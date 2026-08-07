@@ -612,6 +612,8 @@ def _bool_arg(name: str) -> bool:
 def _financial_filters() -> FinancialReportFilters:
     company_code = _resolve_company(request.args.get("company", "cacao"))
     show_cancellations = _bool_arg("show_cancellations")
+    requested_status = request.args.get("status") or "submitted"
+    status = None if show_cancellations else requested_status
     ledger = request.args.get("ledger") or _default_ledger_for_company(company_code)
     accounting_period = request.args.get("accounting_period") or _default_period_for_company(company_code)
     return FinancialReportFilters(
@@ -628,8 +630,8 @@ def _financial_filters() -> FinancialReportFilters:
         party_type=request.args.get("party_type") or None,
         party_id=request.args.get("party_id") or None,
         voucher_type=request.args.get("voucher_type") or None,
-        status=(request.args.get("status") or "submitted") if not show_cancellations else None,
-        include_cancellations=show_cancellations,
+        status=status,
+        include_cancellations=show_cancellations or (status == "cancelled"),
         include_running_balance=_bool_arg("include_running_balance"),
         page=max(_int_arg("page", 1), 1),
         page_size=max(_int_arg("page_size", 100), 1),
