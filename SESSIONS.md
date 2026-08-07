@@ -5,6 +5,31 @@
 
 ---
 
+## 2026-08-07 — Capitalización multimoneda sin doble conversión
+
+### Petición
+
+La auditoría R2R avanzó a los generadores automáticos posteriores al registro,
+comenzando por la capitalización de proyectos.
+
+### Diagnóstico e implementación
+
+- La capitalización tomaba el débito funcional del libro primario y lo declaraba
+  como moneda original. Un gasto USD 10 registrado como NIO 360 podía volver a
+  multiplicarse por 36 al crear el activo.
+- El asiento automático usa ahora `debit_in_account_currency` o
+  `credit_in_account_currency` cuando existe, y solo recurre al importe funcional
+  para movimientos sin moneda original.
+- Se eliminó el fallback fijo a NIO: la moneda se resuelve desde la entrada GL
+  (`account_currency` y luego `company_currency`) y la ausencia de ambas se
+  rechaza expresamente.
+- La selección de gastos reconoce de forma normalizada `expense`, `gasto` y
+  `gastos`, sin depender de mayúsculas.
+- Evidencia focal: un gasto USD 10 / NIO 360 genera capitalización NIO 360 en el
+  libro primario y EUR 9 en el libro secundario, ambos balanceados.
+
+---
+
 ## 2026-08-07 — Submayores e inventario en moneda funcional
 
 ### Petición
