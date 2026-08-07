@@ -82,6 +82,7 @@ class LedgerContext:
     fiscal_year_id: str | None
     transaction_currency: str | None
     company_currency: str | None
+    document_base_currency: str | None
     exchange_rate: Decimal | None
     document_remarks: str | None
 
@@ -95,6 +96,7 @@ class GLEntryParams:
     credit: Decimal
     debit_in_account_currency: Decimal | None = None
     credit_in_account_currency: Decimal | None = None
+    exchange_rate: Decimal | None = None
     party_type: str | None = None
     party_id: str | None = None
     bank_account_id: str | None = None
@@ -208,13 +210,22 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     allow_closing = bool(getattr(document, "is_closing", False))
     validate_accounting_period(company, posting_date, allow_closing=allow_closing)
     accounting_period_id, fiscal_year_id = _find_period_ids(company, posting_date)
-    exchange_rate = getattr(document, "exchange_rate", None)
+    document_exchange_rate = getattr(document, "exchange_rate", None)
+    document_base_currency = getattr(document, "base_currency", None)
+    transaction_currency = getattr(document, "transaction_currency", None)
     entity = database.session.get(Entity, company)
     default_company_currency = getattr(entity, "currency", None) if entity else None
     contexts: list[LedgerContext] = []
     for book in _active_books(company, ledger_code):
         book_currency = getattr(book, "currency", None)
-        company_currency = getattr(document, "base_currency", None) or book_currency or default_company_currency
+        company_currency = book_currency or document_base_currency or default_company_currency
+        exchange_rate = _ledger_exchange_rate(
+            transaction_currency=transaction_currency,
+            ledger_currency=company_currency,
+            document_base_currency=document_base_currency,
+            document_exchange_rate=document_exchange_rate,
+            posting_date=posting_date,
+        )
         contexts.append(
             LedgerContext(
                 company=company,
@@ -226,13 +237,33 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
                 naming_series_id=getattr(document, "naming_series_id", None),
                 accounting_period_id=accounting_period_id,
                 fiscal_year_id=fiscal_year_id,
-                transaction_currency=getattr(document, "transaction_currency", None),
+                transaction_currency=transaction_currency,
                 company_currency=company_currency,
-                exchange_rate=_decimal_value(exchange_rate) if exchange_rate is not None else None,
+                document_base_currency=document_base_currency,
+                exchange_rate=exchange_rate,
                 document_remarks=getattr(document, "remarks", None),
             )
         )
     return contexts
+
+
+def _ledger_exchange_rate(
+    *,
+    transaction_currency: str | None,
+    ledger_currency: str | None,
+    document_base_currency: str | None,
+    document_exchange_rate: Any,
+    posting_date: Any,
+) -> Decimal | None:
+    """Resolve the historical conversion rate independently for each book."""
+    if not transaction_currency or not ledger_currency or transaction_currency == ledger_currency:
+        return None
+    if ledger_currency == document_base_currency and document_exchange_rate is not None:
+        rate = _decimal_value(document_exchange_rate)
+        if rate <= 0:
+            raise PostingError("El tipo de cambio debe ser mayor que cero.")
+        return rate
+    return _lookup_exchange_rate(transaction_currency, ledger_currency, posting_date)
 
 
 def _account_code_for(account_id: str) -> str | None:
@@ -381,15 +412,18 @@ def _create_gl_entry(
     debit_in_ac = params.debit_in_account_currency
     credit_in_ac = params.credit_in_account_currency
     exchange_rate = context.exchange_rate
+    if context.company_currency == context.document_base_currency and params.exchange_rate is not None:
+        exchange_rate = params.exchange_rate
 
-    if (
+    requires_conversion = (
         not params.is_reversal
         and context.transaction_currency
         and context.company_currency
         and context.transaction_currency != context.company_currency
-        and debit_in_ac is None
-        and credit_in_ac is None
-    ):
+    )
+    if requires_conversion:
+        assert context.transaction_currency is not None
+        assert context.company_currency is not None
         if exchange_rate is None or exchange_rate == 0:
             try:
                 exchange_rate = _lookup_exchange_rate(
@@ -400,10 +434,10 @@ def _create_gl_entry(
             except (PostingError, SQLAlchemyError) as exc:
                 raise PostingError(f"No se pudo determinar el tipo de cambio para multimoneda: {str(exc)}") from exc
 
-        debit_in_ac = debit
-        credit_in_ac = credit
-        debit = _to_company_currency(debit, exchange_rate)
-        credit = _to_company_currency(credit, exchange_rate)
+        debit_in_ac = debit if debit_in_ac is None else debit_in_ac
+        credit_in_ac = credit if credit_in_ac is None else credit_in_ac
+        debit = _ledger_amount(context, debit, debit_in_ac, exchange_rate)
+        credit = _ledger_amount(context, credit, credit_in_ac, exchange_rate)
 
     resolved_debit_in_ac = _resolve_currency_amount(debit_in_ac, params.debit, bool(context.transaction_currency))
     resolved_credit_in_ac = _resolve_currency_amount(credit_in_ac, params.credit, bool(context.transaction_currency))
@@ -439,6 +473,23 @@ def _create_gl_entry(
         is_reversal=params.is_reversal,
         reversal_of=params.reversal_of,
     )
+
+
+def _ledger_amount(
+    context: LedgerContext,
+    company_amount: Decimal,
+    transaction_amount: Decimal,
+    transaction_rate: Decimal,
+) -> Decimal:
+    """Convert a transaction or base-only pro-forma amount into book currency."""
+    if transaction_amount != 0 or company_amount == 0:
+        return _to_company_currency(transaction_amount, transaction_rate)
+    base_currency = context.document_base_currency
+    ledger_currency = context.company_currency
+    if not base_currency or not ledger_currency or base_currency == ledger_currency:
+        return company_amount
+    base_rate = _lookup_exchange_rate(base_currency, ledger_currency, context.posting_date)
+    return _to_company_currency(company_amount, base_rate)
 
 
 def _assert_entries_balance(entries: list[GLEntry]) -> None:
@@ -2997,6 +3048,7 @@ def _create_gl_reversals(
             fiscal_year_id=entry.fiscal_year_id,
             transaction_currency=entry.account_currency,
             company_currency=entry.company_currency,
+            document_base_currency=entry.company_currency,
             exchange_rate=entry.exchange_rate,
             document_remarks=getattr(document, "remarks", None),
         )
