@@ -5,6 +5,35 @@
 
 ---
 
+## 2026-08-07 — Submayores e inventario en moneda funcional
+
+### Petición
+
+Se continuó la validación rigurosa R2R conciliando AR/AP e inventario con el
+mayor por libro y moneda.
+
+### Diagnóstico e implementación
+
+- AR/AP y el cronograma de vencimientos sumaban saldos nominales de distintas
+  monedas como una sola cifra. Los importes se expresan ahora en moneda base al
+  factor histórico del documento, conservando también la moneda original en
+  cada fila.
+- Las facturas de devolución se presentaban como cuentas por cobrar/pagar
+  positivas. Ahora tienen signo contrario y reducen el saldo del submayor.
+- La existencia de inventario a una fecha dependía del orden físico devuelto por
+  SQL. Los movimientos se procesan cronológicamente por fecha, creación e ID,
+  por lo que el saldo final es determinista incluso con inserciones retroactivas.
+- Los documentos operativos de inventario sin moneda explícita clonaban su valor
+  base en todos los libros. El contexto contable ahora reconoce esos importes
+  como moneda base de la entidad y los convierte a la moneda funcional de cada
+  libro. Los comprobantes manuales dirigidos por libro conservan su tratamiento
+  específico.
+- Evidencia focal: una recepción por NIO 36 produce inventario NIO 36 y EUR 0.90
+  a tasa 0.025; un submayor con factura USD 10 y devolución USD 2 presenta NIO
+  288, y una carga retroactiva conserva el último saldo cronológico.
+
+---
+
 ## 2026-08-07 — Reportes operativos conciliables con moneda funcional
 
 ### Petición
