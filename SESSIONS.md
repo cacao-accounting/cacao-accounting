@@ -5,6 +5,40 @@
 
 ---
 
+## 2026-08-07 — Auditoría R2R: reportería robusta y KPIs sin mezcla de monedas
+
+### Petición
+
+Revisar el flujo records-to-reports para garantizar reportes financieros
+confiables y una reportería robusta, corrigiendo los errores encontrados.
+
+### Diagnóstico e implementación
+
+- **Template financiero con JavaScript roto:** `financial_report.html` tenía un
+  `});` sobrante al final del bloque `<script>`, lo que invalidaba todo el
+  script: el toggle de filtros avanzados, el colapso/expansión del árbol de
+  cuentas y la navegación jerárquica no funcionaban. Se eliminó la llave extra
+  y se verificó la sintaxis.
+- **Filtro «Cancelado» que devolvía siempre cero filas:** al elegir
+  `status=cancelled`, `_apply_cancellation_scope` seguía aplicando
+  `is_cancelled=False` y `_apply_status_filter` agregaba `is_cancelled=True`,
+  produciendo una consulta contradictoria. Ahora `include_cancellations` se
+  activa cuando el usuario pide explícitamente el estado cancelado, de modo que
+  el reporte muestra solo los asientos originales anulados.
+- **Métrica «income» inconsistente entre herramientas:** `metric_value("income")`
+  devolvía el resultado neto mientras que `get_kpi_snapshot` expone el ingreso
+  bruto. Ahora ambas coinciden en el ingreso bruto, dejando `net_income` y
+  `gross_margin` como métricas separadas.
+- **KPIs del dashboard mezclando monedas:** `_invoice_total`, la concentración
+  por cliente/proveedor/artículo y el AR/AP del snapshot sumaban montos en
+  moneda de transacción. Se priorizan `base_grand_total`, `base_total` y
+  `base_amount` (con compatibilidad para registros antiguos), el AR/AP se
+  convierte a moneda base con el factor histórico del documento y el snapshot
+  ahora declara la moneda base de la entidad. Con esto `working_capital` deja
+  de combinar divisas incompatibles.
+
+---
+
 ## 2026-08-07 — Revisión de Lógica de Negocios del ERP y Solidez Financiera
 
 ### Petición
