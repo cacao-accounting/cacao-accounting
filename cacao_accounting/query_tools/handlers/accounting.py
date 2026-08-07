@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, or_
@@ -231,6 +232,8 @@ def get_trial_balance(
         .where(GLEntry.ledger_id == ledger_id)
         .where(GLEntry.posting_date >= date_from)
         .where(GLEntry.posting_date <= date_to)
+        .where(GLEntry.is_cancelled.is_(False))
+        .where(GLEntry.is_reversal.is_(False))
         .group_by(GLEntry.account_id, Accounts.code, Accounts.name)
     )
 
@@ -245,7 +248,7 @@ def get_trial_balance(
             "account_name": r.name,
             "total_debit": str(r.total_debit),
             "total_credit": str(r.total_credit),
-            "balance": str(abs(float(r.total_debit) - float(r.total_credit))),
+            "balance": str(abs(Decimal(str(r.total_debit)) - Decimal(str(r.total_credit)))),
         }
         for r in rows
     ]
@@ -306,6 +309,8 @@ def get_general_ledger(
         .where(GLEntry.ledger_id == ledger_id)
         .where(GLEntry.posting_date >= date_from)
         .where(GLEntry.posting_date <= date_to)
+        .where(GLEntry.is_cancelled.is_(False))
+        .where(GLEntry.is_reversal.is_(False))
     )
 
     if account_id:

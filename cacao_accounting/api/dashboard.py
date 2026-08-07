@@ -40,12 +40,16 @@ from cacao_accounting.modulos import (
     MODULE_PURCHASES,
     MODULE_SALES,
 )
-from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries, primary_ledger_id
+from cacao_accounting.ledger_queries import (
+    exclude_cancelled_gl_entries,
+    exclude_cancelled_stock_entries,
+    primary_ledger_id,
+)
 
 dashboard_api = Blueprint("dashboard_api", __name__)
 
-INCOME_CLASSIFICATIONS = {"Income", "Ingresos"}
-EXPENSE_CLASSIFICATIONS = {"Expense", "Gastos"}
+INCOME_CLASSIFICATIONS = {"income", "ingreso", "ingresos"}
+EXPENSE_CLASSIFICATIONS = {"cost", "costo", "costos", "expense", "gasto", "gastos"}
 
 
 @dashboard_api.route("/api/dashboard/data")
@@ -228,7 +232,9 @@ def get_accounting_data(
     expenses = balances["expenses"]
     profit = income - expenses
     pending_vouchers = _count_model(PaymentEntry, company, docstatus=0)
-    journal_entries = _gl_query(company, start_date, end_date).count()
+    journal_entries = (
+        _gl_query(company, start_date, end_date).with_entities(GLEntry.voucher_type, GLEntry.voucher_id).distinct().count()
+    )
 
     return {
         "kpis": {
@@ -402,7 +408,7 @@ def get_sales_data(
 
 def _gl_query(company: str, start_date: date | None, end_date: date | None):
     """Crea query base de GL filtrada por compañía y fechas."""
-    query = database.session.query(GLEntry).filter_by(company=company)
+    query = exclude_cancelled_gl_entries(database.session.query(GLEntry).filter_by(company=company))
     ledger_id = primary_ledger_id(company)
     if ledger_id:
         query = query.filter(GLEntry.ledger_id == ledger_id)
@@ -437,8 +443,9 @@ def _income_expense_balances(
         database.session.query(Accounts.classification, func.sum(GLEntry.debit - GLEntry.credit).label("balance"))
         .join(GLEntry, Accounts.id == GLEntry.account_id)
         .filter(GLEntry.company == company, Accounts.entity == company)
-        .filter(Accounts.classification.in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
+        .filter(func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
     )
+    query = exclude_cancelled_gl_entries(query)
     ledger_id = primary_ledger_id(company)
     if ledger_id:
         query = query.filter(GLEntry.ledger_id == ledger_id)
@@ -449,9 +456,10 @@ def _income_expense_balances(
     expenses = Decimal("0")
     for result in results:
         balance = Decimal(result.balance or 0)
-        if result.classification in INCOME_CLASSIFICATIONS:
+        classification = (result.classification or "").lower()
+        if classification in INCOME_CLASSIFICATIONS:
             income += abs(balance)
-        elif result.classification in EXPENSE_CLASSIFICATIONS:
+        elif classification in EXPENSE_CLASSIFICATIONS:
             expenses += balance
     return {"income": float(income), "expenses": float(expenses)}
 
@@ -470,8 +478,9 @@ def _accounting_monthly_result(
         )
         .join(Accounts, Accounts.id == GLEntry.account_id)
         .filter(GLEntry.company == company, Accounts.entity == company)
-        .filter(Accounts.classification.in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
+        .filter(func.lower(Accounts.classification).in_(INCOME_CLASSIFICATIONS | EXPENSE_CLASSIFICATIONS))
     )
+    query = exclude_cancelled_gl_entries(query)
     ledger_id = primary_ledger_id(company)
     if ledger_id:
         query = query.filter(GLEntry.ledger_id == ledger_id)
@@ -483,9 +492,10 @@ def _accounting_monthly_result(
         month = int(row.month)
         payload = months.setdefault(month, {"month": month, "income": 0.0, "expenses": 0.0})
         balance = float(row.balance or 0)
-        if row.classification in INCOME_CLASSIFICATIONS:
+        classification = (row.classification or "").lower()
+        if classification in INCOME_CLASSIFICATIONS:
             payload["income"] = float(payload["income"]) + abs(balance)
-        elif row.classification in EXPENSE_CLASSIFICATIONS:
+        elif classification in EXPENSE_CLASSIFICATIONS:
             payload["expenses"] = float(payload["expenses"]) + balance
     return list(months.values())
 
@@ -500,6 +510,7 @@ def _bank_balances(company: str, accounts: list[BankAccount]) -> dict[str | None
         .filter(GLEntry.account_id.in_(gl_account_ids), GLEntry.company == company)
         .group_by(GLEntry.account_id)
     )
+    results = exclude_cancelled_gl_entries(results)
     ledger_id = primary_ledger_id(company)
     if ledger_id:
         results = results.filter(GLEntry.ledger_id == ledger_id)
