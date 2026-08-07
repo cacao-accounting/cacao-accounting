@@ -74,6 +74,8 @@ def app_ctx():
         )
         database.session.add_all(
             [
+                ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.00"), date=date(2026, 5, 1)),
+                ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.90"), date=date(2026, 5, 1)),
                 ExchangeRate(origin="USD", destination="NIO", rate=Decimal("37.00"), date=date(2026, 5, 31)),
                 ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.93"), date=date(2026, 5, 31)),
             ]
@@ -159,9 +161,17 @@ def _book(code: str):
 
 
 def _create_sales_invoice(open_amount: Decimal = Decimal("100.00")):
-    from cacao_accounting.database import Accounts, GLEntry, PaymentEntry, PaymentReference, SalesInvoice, database
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        PaymentEntry,
+        PaymentReference,
+        SalesInvoice,
+        SalesInvoiceItem,
+        database,
+    )
 
-    ar = database.session.execute(database.select(Accounts.id).filter_by(entity="cacao", code="1105")).scalar_one()
+    income = database.session.execute(database.select(Accounts.id).filter_by(entity="cacao", code="4000")).scalar_one()
     invoice = SalesInvoice(
         company="cacao",
         posting_date=date(2026, 5, 1),
@@ -178,44 +188,19 @@ def _create_sales_invoice(open_amount: Decimal = Decimal("100.00")):
     )
     database.session.add(invoice)
     database.session.flush()
-    database.session.add_all(
-        [
-            GLEntry(
-                posting_date=date(2026, 5, 1),
-                company="cacao",
-                ledger_id=_book("NIO").id,
-                account_id=ar,
-                account_code="1105",
-                debit=Decimal("3600.00"),
-                credit=Decimal("0"),
-                debit_in_account_currency=open_amount,
-                account_currency="USD",
-                company_currency="NIO",
-                exchange_rate=Decimal("36.00"),
-                party_type="customer",
-                party_id="CUST-1",
-                voucher_type="sales_invoice",
-                voucher_id=invoice.id,
-            ),
-            GLEntry(
-                posting_date=date(2026, 5, 1),
-                company="cacao",
-                ledger_id=_book("EUR").id,
-                account_id=ar,
-                account_code="1105",
-                debit=Decimal("90.00"),
-                credit=Decimal("0"),
-                debit_in_account_currency=open_amount,
-                account_currency="USD",
-                company_currency="EUR",
-                exchange_rate=Decimal("0.90"),
-                party_type="customer",
-                party_id="CUST-1",
-                voucher_type="sales_invoice",
-                voucher_id=invoice.id,
-            ),
-        ]
+    database.session.add(
+        SalesInvoiceItem(
+            sales_invoice_id=invoice.id,
+            item_code="SERVICE-USD",
+            item_name="Foreign service",
+            qty=Decimal("1"),
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+            income_account_id=income,
+        )
     )
+    database.session.flush()
+    post_document_to_gl(invoice)
     if open_amount < Decimal("100.00"):
         payment = PaymentEntry(
             company="cacao",
@@ -246,6 +231,12 @@ def _create_sales_invoice(open_amount: Decimal = Decimal("100.00")):
 def test_service_revalues_open_sales_invoice_per_destination_ledger(app_ctx):
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
     from cacao_accounting.database import ExchangeRevaluationItem, GLEntry, database
+    from cacao_accounting.reportes.services import (
+        FinancialReportFilters,
+        get_balance_sheet_report,
+        get_income_statement_report,
+        get_trial_balance_report,
+    )
 
     _create_sales_invoice()
 
@@ -260,6 +251,26 @@ def test_service_revalues_open_sales_invoice_per_destination_ledger(app_ctx):
     assert {line.exchange_difference for line in lines} == {Decimal("100.0000"), Decimal("3.0000")}
     entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=run.id)).scalars().all()
     assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
+    monetary_entries = [entry for entry in entries if entry.account_code == "1105"]
+    assert {entry.account_currency for entry in monetary_entries} == {"USD"}
+    assert sum(entry.debit_in_account_currency or 0 for entry in monetary_entries) == 0
+    assert sum(entry.credit_in_account_currency or 0 for entry in monetary_entries) == 0
+
+    for ledger_code, currency, closing_balance in (
+        ("USD", "USD", Decimal("100")),
+        ("NIO", "NIO", Decimal("3700")),
+        ("EUR", "EUR", Decimal("93")),
+    ):
+        filters = FinancialReportFilters(company="cacao", ledger=ledger_code)
+        trial_balance = get_trial_balance_report(filters)
+        income_statement = get_income_statement_report(filters)
+        balance_sheet = get_balance_sheet_report(filters)
+        assert trial_balance.ledger_currency == currency
+        assert trial_balance.totals["difference"] == 0
+        assert income_statement.totals["net_profit"] == closing_balance
+        assert balance_sheet.totals["assets"] == closing_balance
+        assert balance_sheet.totals["period_profit"] == closing_balance
+        assert balance_sheet.totals["difference"] == 0
 
 
 def test_service_uses_only_open_partial_balance(app_ctx):
@@ -291,6 +302,20 @@ def test_service_does_not_duplicate_previous_revaluation(app_ctx):
     assert second.affected_documents_count == 0
 
 
+def test_service_does_not_duplicate_partial_balance_revaluation(app_ctx):
+    """A repeated run must preserve an adjustment calculated on a partial balance."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+
+    _create_sales_invoice(open_amount=Decimal("40.00"))
+    service = ExchangeRevaluationService()
+    first = service.run(company="cacao", year=2026, month=5, user_id="admin")
+    second = service.run(company="cacao", year=2026, month=5, user_id="admin")
+
+    assert first.status == "posted"
+    assert second.status == "completed_no_changes"
+    assert second.affected_documents_count == 0
+
+
 def test_service_raises_controlled_error_when_closing_rate_is_missing(app_ctx):
     from cacao_accounting.contabilidad.exchange_revaluation_service import (
         ExchangeRevaluationError,
@@ -304,6 +329,33 @@ def test_service_raises_controlled_error_when_closing_rate_is_missing(app_ctx):
 
     with pytest.raises(ExchangeRevaluationError, match="Falta tasa de cierre"):
         ExchangeRevaluationService().run(company="cacao", year=2026, month=5, user_id="admin")
+
+
+def test_service_excludes_draft_invoices(app_ctx):
+    """Draft documents are not accounting records and cannot be revalued."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import SalesInvoice, database
+
+    database.session.add(
+        SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 1),
+            customer_id="CUST-DRAFT",
+            transaction_currency="USD",
+            base_currency="NIO",
+            exchange_rate=Decimal("36"),
+            grand_total=Decimal("100"),
+            outstanding_amount=Decimal("100"),
+            docstatus=0,
+        )
+    )
+    database.session.commit()
+
+    run = ExchangeRevaluationService().run(company="cacao", year=2026, month=5, user_id="admin")
+
+    assert run.processed_documents_count == 0
+    assert run.status == "completed_no_changes"
+    assert run.generated_journal is False
 
 
 def test_service_revalues_foreign_currency_bank_balance(app_ctx):
