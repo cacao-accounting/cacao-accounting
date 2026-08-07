@@ -346,6 +346,7 @@ def test_e2e_monthly_close_finalizes_and_closes_period(app_ctx):
     from cacao_accounting.database import (
         AccountingPeriod,
         FiscalYear,
+        PeriodCloseCheck,
         PeriodCloseRun,
         User,
         database,
@@ -385,6 +386,30 @@ def test_e2e_monthly_close_finalizes_and_closes_period(app_ctx):
     assert create_response.status_code == 302
     assert close_run.run_status == "open"
 
+    database.session.add_all(
+        [
+            PeriodCloseCheck(
+                close_run_id=close_run.id,
+                check_type="apply_recurring_journals",
+                check_status="skipped",
+                message="No applicable templates.",
+            ),
+            PeriodCloseCheck(
+                close_run_id=close_run.id,
+                check_type="exchange_revaluation",
+                check_status="passed",
+                message="No changes.",
+            ),
+            PeriodCloseCheck(
+                close_run_id=close_run.id,
+                check_type="project_capitalization",
+                check_status="passed",
+                message="No projects.",
+            ),
+        ]
+    )
+    database.session.commit()
+
     close_response = client.post(
         f"/accounting/period-close/monthly/{close_run.id}/close",
         follow_redirects=False,
@@ -397,6 +422,49 @@ def test_e2e_monthly_close_finalizes_and_closes_period(app_ctx):
     assert close_run.closed_by == str(user.id)
     assert close_run.closed_at is not None
     assert period.is_closed is True
+
+
+def test_e2e_monthly_close_rejects_missing_mandatory_checks(app_ctx):
+    """A period cannot close before every mandatory R2R step has run."""
+    from cacao_accounting.database import AccountingPeriod, FiscalYear, PeriodCloseRun, User, database
+
+    user = User.query.filter_by(user="admin").first()
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-CLOSE-CHECKS",
+        year_start_date=date(2027, 1, 1),
+        year_end_date=date(2027, 12, 31),
+    )
+    database.session.add(fiscal_year)
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2027-01",
+        start=date(2027, 1, 1),
+        end=date(2027, 1, 31),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(period)
+    database.session.flush()
+    close_run = PeriodCloseRun(company="cacao", period_id=period.id, run_status="open")
+    database.session.add(close_run)
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.post(
+        f"/accounting/period-close/monthly/{close_run.id}/close",
+        follow_redirects=True,
+    )
+    database.session.refresh(close_run)
+    database.session.refresh(period)
+
+    assert response.status_code == 200
+    assert "faltan verificaciones obligatorias aprobadas" in response.get_data(as_text=True)
+    assert close_run.run_status == "open"
+    assert period.is_closed is False
 
 
 def test_posting_initializes_outstanding_amount(app_ctx):
