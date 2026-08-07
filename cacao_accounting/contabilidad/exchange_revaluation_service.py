@@ -315,10 +315,7 @@ class ExchangeRevaluationService:
     def _open_sales_invoices(self, company: str, as_of_date: date) -> list[RevaluationCandidate]:
         rows = (
             database.session.execute(
-                select(SalesInvoice)
-                .filter_by(company=company)
-                .where(SalesInvoice.posting_date <= as_of_date)
-                .where(SalesInvoice.docstatus != 2)
+                select(SalesInvoice).filter_by(company=company, docstatus=1).where(SalesInvoice.posting_date <= as_of_date)
             )
             .scalars()
             .all()
@@ -352,9 +349,8 @@ class ExchangeRevaluationService:
         rows = (
             database.session.execute(
                 select(PurchaseInvoice)
-                .filter_by(company=company)
+                .filter_by(company=company, docstatus=1)
                 .where(PurchaseInvoice.posting_date <= as_of_date)
-                .where(PurchaseInvoice.docstatus != 2)
             )
             .scalars()
             .all()
@@ -475,7 +471,6 @@ class ExchangeRevaluationService:
             "naming_series_id": run.naming_series_id,
             "fiscal_year_id": fiscal_year_id,
             "accounting_period_id": period_id,
-            "account_currency": draft.ledger.currency,
             "company_currency": draft.ledger.currency,
             "exchange_rate": draft.closing_rate,
             "exchange_revaluation_run_id": run.id,
@@ -486,8 +481,9 @@ class ExchangeRevaluationService:
             account_code=self._account_code(draft.candidate.account_id),
             debit=amount if monetary_debit else Decimal("0"),
             credit=amount if monetary_credit else Decimal("0"),
-            debit_in_account_currency=amount if monetary_debit else None,
-            credit_in_account_currency=amount if monetary_credit else None,
+            debit_in_account_currency=Decimal("0"),
+            credit_in_account_currency=Decimal("0"),
+            account_currency=draft.candidate.original_currency,
             party_type=draft.candidate.partner_type,
             party_id=draft.candidate.partner_id,
             bank_account_id=draft.candidate.bank_account_id,
@@ -501,6 +497,7 @@ class ExchangeRevaluationService:
             credit=amount if not monetary_credit else Decimal("0"),
             debit_in_account_currency=amount if not monetary_debit else None,
             credit_in_account_currency=amount if not monetary_credit else None,
+            account_currency=draft.ledger.currency,
             remarks=f"Resultado cambiario {journal.document_no or run.document_no}",
         )
         return monetary, offset
@@ -605,32 +602,24 @@ class ExchangeRevaluationService:
         return balance
 
     def _active_revaluation_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal:
-        items = (
-            database.session.execute(
-                select(ExchangeRevaluationItem)
-                .join(ExchangeRevaluation, ExchangeRevaluation.id == ExchangeRevaluationItem.revaluation_id)
-                .filter(ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED)
-                .filter(ExchangeRevaluationItem.source_document_type == candidate.source_document_type)
-                .filter(ExchangeRevaluationItem.source_document_id == candidate.source_document_id)
-                .filter(ExchangeRevaluationItem.account_id == candidate.account_id)
-                .filter(ExchangeRevaluationItem.ledger_id == ledger.id)
-            )
-            .scalars()
-            .all()
-        )
-        entry_ids = [item.journal_line_id for item in items if item.journal_line_id]
-        if not entry_ids:
-            return Decimal("0")
-        entries = (
-            database.session.execute(select(GLEntry).where(GLEntry.id.in_(entry_ids)).where(GLEntry.is_cancelled.is_(False)))
-            .scalars()
-            .all()
-        )
-        balance = self._normal_balance(entries, candidate.normal_balance)
-        if candidate.total_amount_original > 0 and candidate.open_amount_original < candidate.total_amount_original:
-            proportion = candidate.open_amount_original / candidate.total_amount_original
-            return (balance * proportion).quantize(Decimal("0.0001"))
-        return balance
+        rows = database.session.execute(
+            select(ExchangeRevaluationItem, GLEntry)
+            .join(ExchangeRevaluation, ExchangeRevaluation.id == ExchangeRevaluationItem.revaluation_id)
+            .join(GLEntry, GLEntry.id == ExchangeRevaluationItem.journal_line_id)
+            .filter(ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED)
+            .filter(ExchangeRevaluationItem.source_document_type == candidate.source_document_type)
+            .filter(ExchangeRevaluationItem.source_document_id == candidate.source_document_id)
+            .filter(ExchangeRevaluationItem.account_id == candidate.account_id)
+            .filter(ExchangeRevaluationItem.ledger_id == ledger.id)
+            .filter(GLEntry.is_cancelled.is_(False))
+        ).all()
+        balance = Decimal("0")
+        for item, entry in rows:
+            item_balance = self._normal_balance([entry], candidate.normal_balance)
+            item_open = self._decimal(item.open_amount_original)
+            proportion = min(candidate.open_amount_original / item_open, Decimal("1")) if item_open > 0 else Decimal("1")
+            balance += item_balance * proportion
+        return balance.quantize(Decimal("0.0001"))
 
     def _normal_balance(self, entries: Sequence[GLEntry], normal_balance: str) -> Decimal:
         debit = sum((self._decimal(entry.debit) for entry in entries), Decimal("0"))

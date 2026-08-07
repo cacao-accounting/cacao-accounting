@@ -111,6 +111,8 @@ CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = "Periodo no encontrado."
 CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = "Cierre mensual no encontrado."
 ENTIDAD_NO_EXISTE_MSG = "La entidad indicada no existe."
 CONTABILIDAD_CUENTAS_ENDPOINT = "contabilidad.cuentas"
+REQUIRED_MONTHLY_CLOSE_CHECKS = frozenset({"apply_recurring_journals", "exchange_revaluation", "project_capitalization"})
+COMPLETED_MONTHLY_CLOSE_STATUSES = frozenset({"passed", "skipped"})
 
 # ---------------------------------------------------------------------------------------
 # Constantes para templates (evita duplicacion de cadenas literales - SonarQube S1192)
@@ -2757,6 +2759,20 @@ def _get_period_close_checks(close_run: Any) -> Sequence[Any]:
     )
 
 
+def _monthly_close_check_errors(checks: Sequence[Any]) -> tuple[set[str], set[str]]:
+    """Return missing and unsuccessful mandatory close steps using latest results."""
+    latest: dict[str, Any] = {}
+    for check in checks:
+        latest.setdefault(str(check.check_type), check)
+    missing = set(REQUIRED_MONTHLY_CLOSE_CHECKS) - set(latest)
+    unsuccessful = {
+        check_type
+        for check_type, check in latest.items()
+        if check_type in REQUIRED_MONTHLY_CLOSE_CHECKS and check.check_status not in COMPLETED_MONTHLY_CLOSE_STATUSES
+    }
+    return missing, unsuccessful
+
+
 def _discover_applicable_templates(company: str, period_end: date) -> list[str]:
     templates = (
         database.session.execute(
@@ -2957,9 +2973,19 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
         flash("El periodo ya se encuentra cerrado.", "warning")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
-    checks = database.session.execute(database.select(PeriodCloseCheck).filter_by(close_run_id=close_run.id)).scalars().all()
-    if checks and any(check.check_status != "passed" for check in checks):
-        flash("No se puede cerrar el periodo: existen verificaciones pendientes o fallidas.", "danger")
+    checks = (
+        database.session.execute(
+            database.select(PeriodCloseCheck)
+            .filter_by(close_run_id=close_run.id)
+            .order_by(PeriodCloseCheck.created.desc(), PeriodCloseCheck.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+    missing, unsuccessful = _monthly_close_check_errors(checks)
+    if missing or unsuccessful:
+        detail = ", ".join(sorted(missing | unsuccessful))
+        flash(f"No se puede cerrar el periodo: faltan verificaciones obligatorias aprobadas ({detail}).", "danger")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
     close_run.run_status = "closed"
