@@ -5,6 +5,45 @@
 
 ---
 
+## 2026-08-07 — R2R multimoneda y multilibro por moneda funcional del libro
+
+### Petición
+
+Se solicitó validar rigurosamente el flujo Records to Reports y demostrar que
+su implementación sea realmente multimoneda y multilibro, no solo que replique
+asientos nominalmente entre libros.
+
+### Diagnóstico e implementación
+
+- Los documentos operativos usaban `base_currency` antes que `Book.currency`,
+  por lo que un libro secundario podía almacenar montos de la moneda base del
+  documento etiquetados con la moneda del libro.
+- Una única tasa del documento se propagaba a todos los libros. La resolución
+  ahora conserva esa tasa histórica únicamente para el libro cuya moneda
+  coincide con la base documental y busca independientemente la tasa entre la
+  moneda de transacción y la moneda funcional de cada libro.
+- La persistencia GL ahora toma el monto original de la proforma como fuente
+  para convertir cada libro. Las líneas de diferencia cambiaria que existen
+  solo en moneda base preservan su importe en el libro base y se convierten
+  explícitamente para libros secundarios.
+- `GLEntryParams` transporta la tasa calculada por línea para distinguir tasas
+  de documento y liquidación en pagos, evitando perder las diferencias
+  realizadas al persistir la proforma.
+
+### Evidencia de aceptación
+
+- Se agregó una regresión end-to-end que registra una factura de venta de USD
+  10 con libros NIO y EUR, tasas USD/NIO 36 y USD/EUR 0.9.
+- La prueba exige cuatro entradas GL (dos por libro), conservación de USD 10
+  en moneda original, saldos funcionales NIO 360 y EUR 9, balance por libro y
+  aislamiento de resultados en balanza, estado de resultados y balance
+  general.
+- El bloque focal de posting, seed multilibro y reportes terminó con 53 pruebas
+  aprobadas. La suite completa se ejecutó en segundo plano y su resultado se
+  conserva en `/tmp/cacao-r2r-full-pytest-20260807.txt` para el control final.
+
+---
+
 ## 2026-07-23 — Error 400 al iniciar sesión con el servidor de desarrollo
 
 ### Petición
