@@ -12,6 +12,7 @@ from cacao_accounting import create_app
 from cacao_accounting.database import (
     Accounts,
     DeliveryNote,
+    ExchangeRate,
     Item,
     Party,
     SalesInvoice,
@@ -39,6 +40,12 @@ def app_ctx():
 
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         master_data()
+        database.session.add_all(
+            [
+                ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.0273224044"), date=date(2026, 5, 1)),
+                ExchangeRate(origin="NIO", destination="EUR", rate=Decimal("0.0245"), date=date(2026, 5, 1)),
+            ]
+        )
         database.session.commit()
         yield app
 
