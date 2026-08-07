@@ -3,6 +3,8 @@
 
 import pytest
 from datetime import date
+from decimal import Decimal
+
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     database,
@@ -13,6 +15,9 @@ from cacao_accounting.database import (
     User,
     AccountingPeriod,
     Book,
+    Currency,
+    ExchangeRate,
+    GLEntry,
 )
 from cacao_accounting.contabilidad.fiscal_year_closing import (
     create_fiscal_year_closing_voucher,
@@ -65,9 +70,18 @@ def setup_data(app):
         database.session.add_all([income_acc, expense_acc, equity_acc, cash_acc])
         database.session.flush()
 
-        # Setup Book
+        database.session.add_all(
+            [
+                Currency(code="USD", name="US Dollar", decimals=2, active=True),
+                Currency(code="EUR", name="Euro", decimals=2, active=True),
+            ]
+        )
+
+        # Setup Books
         book = Book(code="GEN", name="General Ledger", entity="CMP", is_primary=True, currency="USD")
-        database.session.add(book)
+        eur_book = Book(code="EUR", name="EUR Ledger", entity="CMP", is_primary=False, currency="EUR")
+        database.session.add_all([book, eur_book])
+        database.session.add(ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.90"), date=date(2024, 12, 15)))
 
         # Setup Defaults
         defaults = CompanyDefaultAccount(company="CMP", retained_earnings_account_id=equity_acc.id)
@@ -110,6 +124,8 @@ def test_fiscal_year_closing_cycle(app, setup_data):
         payload1 = {
             "company": "CMP",
             "posting_date": "2024-12-15",
+            "transaction_currency": "USD",
+            "exchange_rate": "1",
             "lines": [
                 {"account": setup_data["cash_acc_code"], "debit": "100", "credit": "0"},
                 {"account": setup_data["income_acc_code"], "debit": "0", "credit": "100"},
@@ -126,6 +142,21 @@ def test_fiscal_year_closing_cycle(app, setup_data):
         closing_journal = create_fiscal_year_closing_voucher("CMP", setup_data["fiscal_year_id"], setup_data["admin_user_id"])
         assert closing_journal.status == "submitted"
         assert closing_journal.is_fiscal_year_closing is True
+
+        books = {book.code: book for book in database.session.execute(database.select(Book)).scalars().all()}
+        closing_entries = (
+            database.session.execute(
+                database.select(GLEntry).filter_by(voucher_id=closing_journal.id, is_fiscal_year_closing=True)
+            )
+            .scalars()
+            .all()
+        )
+        income_by_book = {
+            code: next(entry for entry in closing_entries if entry.ledger_id == book.id and entry.account_code == "41.01")
+            for code, book in books.items()
+        }
+        assert income_by_book["GEN"].debit == Decimal("100.0000")
+        assert income_by_book["EUR"].debit == Decimal("90.0000")
 
         fy = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
         assert fy.financial_closed is True
