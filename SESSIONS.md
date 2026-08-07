@@ -5,6 +5,34 @@
 
 ---
 
+## 2026-08-07 — Cierre fiscal con saldos funcionales por libro
+
+### Petición
+
+Se pidió priorizar la corrección de errores e imprecisiones contables sobre la
+ejecución repetitiva de pruebas y linters, manteniendo el objetivo de una
+implementación realmente multimoneda y multilibro.
+
+### Diagnóstico e implementación
+
+- El cierre fiscal calculaba las cuentas de resultados únicamente en el libro
+  principal y replicaba esos importes en todos los libros. En libros con moneda
+  funcional distinta, el asiento de cierre no correspondía con sus saldos.
+- El cálculo de cierre ahora se ejecuta por cada libro activo y cada línea queda
+  dirigida explícitamente a ese libro. La contrapartida de utilidades acumuladas
+  también se calcula independientemente por libro.
+- Los comprobantes manuales admiten líneas internas dirigidas a un libro, sin
+  cambiar el comportamiento normal de las líneas que deben postearse en todos
+  los libros seleccionados.
+- Se valida que todo libro indicado en una línea pertenezca a la compañía y a
+  la selección del comprobante; así se evita omitir silenciosamente líneas al
+  contabilizar.
+- Comprobación focal: cierre USD 100 en el libro principal y EUR 90 en el libro
+  secundario a tasa histórica 0.90; además pasaron los 42 casos existentes de
+  comprobantes contables afectados.
+
+---
+
 ## 2026-08-07 — Revaluación incremental y cierre mensual obligatorio por pasos
 
 ### Petición

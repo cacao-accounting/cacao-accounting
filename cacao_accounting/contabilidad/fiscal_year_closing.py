@@ -27,7 +27,11 @@ class FiscalYearClosingError(ValueError):
     """Error en el proceso de cierre de año fiscal."""
 
 
-def calculate_closing_balances(company: str, fiscal_year: FiscalYear) -> list[dict[str, Any]]:
+def calculate_closing_balances(
+    company: str,
+    fiscal_year: FiscalYear,
+    ledger_id: str | None = None,
+) -> list[dict[str, Any]]:
     """Calcula los saldos de cierre para cuentas de ingresos, costos y gastos."""
     # Filtrar entradas por compañia y rango de fechas del año fiscal
     # Excluir registros de cierre previos si los hubiera (is_fiscal_year_closing=False)
@@ -58,7 +62,7 @@ def calculate_closing_balances(company: str, fiscal_year: FiscalYear) -> list[di
             GLEntry.project_code,
         )
     )
-    ledger_id = primary_ledger_id(company)
+    ledger_id = ledger_id or primary_ledger_id(company)
     if ledger_id:
         query = query.where(GLEntry.ledger_id == ledger_id)
 
@@ -100,6 +104,7 @@ def _closing_line_payload(
     debit, credit = _closing_entry_amounts(Decimal(str(balance_row["balance"])))
     return {
         "order": order,
+        "book": balance_row.get("book"),
         "account": balance_row["account_code"],
         "cost_center": balance_row["cost_center"],
         "unit": balance_row["unit"],
@@ -111,7 +116,12 @@ def _closing_line_payload(
 
 
 def _closing_retain_earnings_payload(
-    *, fiscal_year_name: str, order: int, total_net_balance: Decimal, retained_earnings_code: str
+    *,
+    fiscal_year_name: str,
+    order: int,
+    total_net_balance: Decimal,
+    retained_earnings_code: str,
+    book: str,
 ) -> dict[str, Any]:
     """Construye la línea de contrapartida para utilidades acumuladas."""
     debit = Decimal("0")
@@ -122,6 +132,7 @@ def _closing_retain_earnings_payload(
         credit = abs(total_net_balance)
     return {
         "order": order,
+        "book": book,
         "account": retained_earnings_code,
         "debit": str(debit) if debit > 0 else "",
         "credit": str(credit) if credit > 0 else "",
@@ -137,37 +148,43 @@ def _build_closing_voucher_payload(
     retained_earnings_code: str,
 ) -> dict[str, Any]:
     """Construye el payload completo del comprobante de cierre."""
-    lines = []
-    total_net_balance = Decimal("0")
-
-    for order, balance_row in enumerate(balances, start=1):
+    lines: list[dict[str, Any]] = []
+    order = 1
+    for book in sorted({str(row["book"]) for row in balances}):
+        book_balances = [row for row in balances if row["book"] == book]
+        total_net_balance = Decimal("0")
+        for balance_row in book_balances:
+            lines.append(
+                _closing_line_payload(
+                    fiscal_year_name=fiscal_year.name,
+                    order=order,
+                    balance_row=balance_row,
+                )
+            )
+            total_net_balance += Decimal(str(balance_row["balance"]))
+            order += 1
         lines.append(
-            _closing_line_payload(
+            _closing_retain_earnings_payload(
                 fiscal_year_name=fiscal_year.name,
                 order=order,
-                balance_row=balance_row,
+                total_net_balance=total_net_balance,
+                retained_earnings_code=retained_earnings_code,
+                book=book,
             )
         )
-        total_net_balance += Decimal(str(balance_row["balance"]))
-
-    lines.append(
-        _closing_retain_earnings_payload(
-            fiscal_year_name=fiscal_year.name,
-            order=len(balances) + 1,
-            total_net_balance=total_net_balance,
-            retained_earnings_code=retained_earnings_code,
-        )
-    )
+        order += 1
 
     return {
         "company": company,
-        # Fiscal closing is an accounting operation, but it must explicitly
-        # post the same closing to every active book. The balance calculation
-        # above uses one canonical book to avoid multiplying N identical books.
+        # Cada línea ya contiene el saldo funcional de su libro. La selección
+        # completa permite que posting cree únicamente las entradas dirigidas
+        # a cada libro, sin reconvertir ni replicar importes de otro libro.
         "books": [
             book.code
             for book in database.session.execute(
-                select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.code)
+                select(Book)
+                .where(Book.entity == company, (Book.status == "activo") | (Book.status.is_(None)))
+                .order_by(Book.code)
             ).scalars()
         ],
         "posting_date": fiscal_year.year_end_date.isoformat(),
@@ -194,7 +211,15 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     if fiscal_year.financial_closed:
         raise FiscalYearClosingError("El año fiscal ya tiene un cierre contable realizado.")
 
-    balances = calculate_closing_balances(company, fiscal_year)
+    books = list(
+        database.session.execute(
+            select(Book).where(Book.entity == company, (Book.status == "activo") | (Book.status.is_(None))).order_by(Book.code)
+        ).scalars()
+    )
+    balances: list[dict[str, Any]] = []
+    for book in books:
+        book_balances = calculate_closing_balances(company, fiscal_year, ledger_id=book.id)
+        balances.extend({**balance, "book": book.code} for balance in book_balances)
     if not balances:
         raise FiscalYearClosingError("No hay movimientos en cuentas de resultados para cerrar en este año fiscal.")
 
