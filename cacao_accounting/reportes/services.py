@@ -236,6 +236,23 @@ def _payment_allocations(reference_type: str, reference_id: str, as_of_date: dat
     )
 
 
+def _document_base_factor(document: Any) -> Decimal:
+    """Obtiene el factor histórico de moneda original a moneda base del documento."""
+    original = _decimal_value(getattr(document, "grand_total", None) or getattr(document, "total", None))
+    base_value = getattr(document, "base_grand_total", None)
+    if base_value is None:
+        base_value = getattr(document, "base_total", None)
+    if base_value is not None and original != 0:
+        return _decimal_value(base_value) / original
+    rate = _decimal_value(getattr(document, "exchange_rate", None))
+    return rate if rate > 0 else Decimal("1")
+
+
+def _document_sign(document: Any) -> Decimal:
+    """Devuelve signo negativo para devoluciones que reducen el submayor."""
+    return Decimal("-1") if bool(getattr(document, "is_return", False)) else Decimal("1")
+
+
 def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
     """Devuelve subledger AR/AP basado en documentos y aplicaciones de pago."""
     if filters.party_type == "customer":
@@ -261,9 +278,14 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
     total_paid = Decimal("0")
     total_outstanding = Decimal("0")
     for document in database.session.execute(query.order_by(document_model.posting_date)).scalars():
-        original = _decimal_value(document.grand_total)
-        paid = _payment_allocations(document_type, document.id, filters.as_of_date)
-        outstanding = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
+        sign = _document_sign(document)
+        base_factor = _document_base_factor(document)
+        original_original_currency = _decimal_value(document.grand_total)
+        paid_original_currency = _payment_allocations(document_type, document.id, filters.as_of_date)
+        outstanding_original_currency = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
+        original = sign * original_original_currency * base_factor
+        paid = sign * paid_original_currency * base_factor
+        outstanding = sign * outstanding_original_currency * base_factor
         total_original += original
         total_paid += paid
         total_outstanding += outstanding
@@ -278,6 +300,8 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
                     "original_amount": original,
                     "paid_amount": paid,
                     "outstanding_amount": outstanding,
+                    "transaction_currency": document.transaction_currency,
+                    "currency": document.base_currency or document.transaction_currency,
                 }
             )
         )
@@ -381,8 +405,9 @@ def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
     cutoff = filters.as_of_date + timedelta(days=filters.horizon_days)
     rows: list[ReportRow] = []
     for document, party_type, party_id in documents:
-        outstanding = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
-        if outstanding <= 0 or not document.posting_date:
+        outstanding_original_currency = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
+        outstanding = _document_sign(document) * outstanding_original_currency * _document_base_factor(document)
+        if outstanding == 0 or not document.posting_date:
             continue
         due_date = document.posting_date + timedelta(days=party_terms.get(party_id or "", 0))
         if due_date > cutoff:
@@ -402,7 +427,8 @@ def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
                     "days_to_due": days,
                     "bucket": bucket,
                     "outstanding_amount": outstanding,
-                    "currency": document.transaction_currency,
+                    "transaction_currency": document.transaction_currency,
+                    "currency": document.base_currency or document.transaction_currency,
                 }
             )
         )
@@ -496,7 +522,9 @@ def get_inventory_existence(filters: KardexFilters) -> PaginatedReport:
 
     item_names = {item.code: item.name for item in database.session.execute(select(Item)).scalars().all()}
     grouped: dict[tuple[str, str], dict[str, Decimal | str]] = {}
-    for entry in database.session.execute(query).scalars():
+    for entry in database.session.execute(
+        query.order_by(StockLedgerEntry.posting_date, StockLedgerEntry.created, StockLedgerEntry.id)
+    ).scalars():
         key = (entry.item_code, entry.warehouse)
         row = grouped.setdefault(
             key,

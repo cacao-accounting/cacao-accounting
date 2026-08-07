@@ -321,6 +321,53 @@ def test_ar_ap_subledger_excludes_nonposted_documents_and_cancelled_payments(app
     assert report.rows[0].values["outstanding_amount"] == Decimal("100")
 
 
+def test_ar_subledger_uses_base_currency_and_offsets_returns(app_ctx):
+    """AR no mezcla USD nominales con NIO ni presenta devoluciones como débitos."""
+    from cacao_accounting.database import SalesInvoice, database
+    from cacao_accounting.reportes.services import (
+        MaturityFilters,
+        SubledgerFilters,
+        get_ar_ap_subledger,
+        get_maturity_schedule,
+    )
+
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        customer_id="CUST-FX",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        grand_total=Decimal("10"),
+        base_grand_total=Decimal("360"),
+        docstatus=1,
+    )
+    credit_note = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        customer_id="CUST-FX",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        grand_total=Decimal("2"),
+        base_grand_total=Decimal("72"),
+        is_return=True,
+        docstatus=1,
+    )
+    database.session.add_all([invoice, credit_note])
+    database.session.commit()
+
+    subledger = get_ar_ap_subledger(SubledgerFilters(company="cacao", party_type="customer"))
+    maturity = get_maturity_schedule(MaturityFilters(company="cacao", party_type="customer", as_of_date=date(2026, 5, 3)))
+
+    assert subledger.totals["original_amount"] == Decimal("288")
+    assert subledger.totals["outstanding_amount"] == Decimal("288")
+    assert {row.values["currency"] for row in subledger.rows} == {"NIO"}
+    assert {row.values["transaction_currency"] for row in subledger.rows} == {"USD"}
+    assert sorted(row.values["outstanding_amount"] for row in subledger.rows) == [Decimal("-72"), Decimal("360")]
+    assert maturity.totals["outstanding_amount"] == Decimal("288")
+
+
 def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
     from cacao_accounting.database import (
         DocumentRelation,
@@ -408,6 +455,49 @@ def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
     assert aging.totals["31_60"] == Decimal("75.00")
     assert kardex.totals["incoming_qty"] == Decimal("3.000000000")
     assert reconciliations.totals["bank_reconciled_amount"] == Decimal("0")
+
+
+def test_inventory_existence_uses_latest_chronological_balance(app_ctx):
+    """La existencia histórica no depende del orden físico de inserción."""
+    from cacao_accounting.database import StockLedgerEntry, database
+    from cacao_accounting.reportes.services import KardexFilters, get_inventory_existence
+
+    database.session.add_all(
+        [
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 10),
+                item_code="ITEM-ASOF",
+                warehouse="WH-ASOF",
+                company="cacao",
+                qty_change=Decimal("2"),
+                qty_after_transaction=Decimal("7"),
+                valuation_rate=Decimal("4"),
+                stock_value_difference=Decimal("8"),
+                stock_value=Decimal("28"),
+                voucher_type="stock_entry",
+                voucher_id="NEWER-FIRST",
+            ),
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-ASOF",
+                warehouse="WH-ASOF",
+                company="cacao",
+                qty_change=Decimal("5"),
+                qty_after_transaction=Decimal("5"),
+                valuation_rate=Decimal("4"),
+                stock_value_difference=Decimal("20"),
+                stock_value=Decimal("20"),
+                voucher_type="stock_entry",
+                voucher_id="OLDER-SECOND",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    report = get_inventory_existence(KardexFilters(company="cacao", item_code="ITEM-ASOF", date_to=date(2026, 5, 31)))
+
+    assert report.totals["balance_qty"] == Decimal("7")
+    assert report.totals["stock_value"] == Decimal("28")
 
 
 def test_cancelled_pairs_are_hidden_from_bank_and_stock_reports_but_rebuild_to_net(app_ctx):
