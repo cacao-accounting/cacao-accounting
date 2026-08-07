@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     CompanyParty,
     CostCenter,
     DocumentRelation,
+    FiscalYear,
     GLEntry,
     Item,
     PaymentReference,
@@ -1273,9 +1274,9 @@ def _apply_base_filters(query: Any, filters: FinancialReportFilters) -> Any:
     return query
 
 
-def _apply_hierarchical_filter(query: Any, column, code_value: str, model_class, database) -> Any:
+def _apply_hierarchical_filter(query: Any, column: Any, code_value: str, model_class: Any) -> Any:
     """Aplica filtro jerarquico con soporte de descendientes."""
-    node = database.session.execute(database.select(model_class).filter_by(code=code_value)).scalar_one_or_none()
+    node = database.session.execute(select(model_class).filter_by(code=code_value)).scalar_one_or_none()
     if node:
         codes_list = [node.code] + [d.code for d in node.descendants]
         return query.where(column.in_(codes_list))
@@ -1283,7 +1284,7 @@ def _apply_hierarchical_filter(query: Any, column, code_value: str, model_class,
 
 
 def _apply_account_filters(query: Any, filters: FinancialReportFilters) -> Any:
-    from cacao_accounting.database import Unit, Project, database
+    from cacao_accounting.database import Unit, Project
 
     if filters.account_code:
         query = query.where(GLEntry.account_code == filters.account_code)
@@ -1295,12 +1296,12 @@ def _apply_account_filters(query: Any, filters: FinancialReportFilters) -> Any:
         query = query.where(GLEntry.cost_center_code == filters.cost_center_code)
     if filters.unit_code:
         if filters.include_descendants:
-            query = _apply_hierarchical_filter(query, GLEntry.unit_code, filters.unit_code, Unit, database)
+            query = _apply_hierarchical_filter(query, GLEntry.unit_code, filters.unit_code, Unit)
         else:
             query = query.where(GLEntry.unit_code == filters.unit_code)
     if filters.project_code:
         if filters.include_descendants:
-            query = _apply_hierarchical_filter(query, GLEntry.project_code, filters.project_code, Project, database)
+            query = _apply_hierarchical_filter(query, GLEntry.project_code, filters.project_code, Project)
         else:
             query = query.where(GLEntry.project_code == filters.project_code)
     return query
@@ -1852,13 +1853,13 @@ def _accumulate_income_entry(
 
 
 def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedReport:
-    """Estado de resultado acumulado por clasificación contable."""
-    _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    """Estado de resultado del periodo contable seleccionado."""
+    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
     base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-    base_query = _apply_gl_filters(base_query, filters, None, period_end).where(GLEntry.ledger_id == selected_ledger.id)
+    base_query = _apply_gl_filters(base_query, filters, period_start, period_end).where(GLEntry.ledger_id == selected_ledger.id)
     summary: dict[str, Decimal] = {
         "income": Decimal("0"),
         "cost": Decimal("0"),
@@ -1986,9 +1987,21 @@ def _accumulate_balance_sheet_entry(
     return False
 
 
+def _fiscal_year_start_for_period(period: AccountingPeriod | None) -> date | None:
+    """Resuelve la fecha de inicio del año fiscal del período dado."""
+    if period is None or not period.fiscal_year_id:
+        return None
+    fy = database.session.get(FiscalYear, period.fiscal_year_id)
+    return fy.year_start_date if fy else None
+
+
+_PL_CLASSIFICATIONS = frozenset({"ingreso", "income", "costo", "cost", "gasto", "expense"})
+
+
 def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Balance general por clasificación Activo/Pasivo/Patrimonio."""
-    _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    _, period_end, period_obj = _period_bounds(filters.company, filters.accounting_period)
+    fiscal_year_start = _fiscal_year_start_for_period(period_obj)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
@@ -2008,6 +2021,9 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         if account is None:
             continue
         classification = _normalize_account_classification(account)
+        # Limitar cuentas de P&L al año fiscal para no acumular ejercicios cerrados
+        if classification in _PL_CLASSIFICATIONS and fiscal_year_start and entry.posting_date < fiscal_year_start:
+            continue
         debit = _decimal_value(entry.debit)
         credit = _decimal_value(entry.credit)
         account_code = account.code or (entry.account_code or "")
