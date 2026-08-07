@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from cacao_accounting.database import (
     Accounts,
+    Entity,
     GLEntry,
     PurchaseInvoice,
     SalesInvoice,
@@ -35,6 +36,15 @@ def _percentage(current: Decimal, previous: Decimal) -> Decimal | None:
     return (current - previous) / abs(previous) * Decimal("100")
 
 
+def _invoice_base_amount(row: Any) -> Decimal:
+    """Devuelve el total de la factura en la moneda base del documento."""
+    return _decimal(
+        row.base_grand_total
+        if row.base_grand_total is not None
+        else row.base_total if row.base_total is not None else row.grand_total or row.total
+    )
+
+
 def _invoice_total(model: Any, company: str, start: date, end: date) -> Decimal:
     query = select(model).where(
         model.company == company,
@@ -42,7 +52,7 @@ def _invoice_total(model: Any, company: str, start: date, end: date) -> Decimal:
         model.posting_date >= start,
         model.posting_date <= end,
     )
-    return sum((_decimal(row.grand_total or row.total) for row in database.session.execute(query).scalars()), Decimal("0"))
+    return sum((_invoice_base_amount(row) for row in database.session.execute(query).scalars()), Decimal("0"))
 
 
 def _gl_totals(company: str, start: date, end: date) -> dict[str, Decimal]:
@@ -84,10 +94,22 @@ def metric_value(company: str, metric: str, start: date, end: date) -> Decimal:
         return _invoice_total(PurchaseInvoice, company, start, end)
     gl = _gl_totals(company, start, end)
     if metric == "income":
-        return gl["net_income"]
+        return gl["income"]
     if metric == "expenses":
         return gl["expense"]
     return gl["income"] - gl["cost"]
+
+
+def _document_base_factor(document: Any) -> Decimal:
+    """Devuelve el factor historico de moneda original a moneda base del documento."""
+    original = _decimal(getattr(document, "grand_total", None) or getattr(document, "total", None))
+    base_value = getattr(document, "base_grand_total", None)
+    if base_value is None:
+        base_value = getattr(document, "base_total", None)
+    if base_value is not None and original != 0:
+        return _decimal(base_value) / original
+    rate = _decimal(getattr(document, "exchange_rate", None))
+    return rate if rate > 0 else Decimal("1")
 
 
 def get_kpi_snapshot(company: str, start: date, end: date) -> dict[str, Any]:
@@ -109,10 +131,17 @@ def get_kpi_snapshot(company: str, start: date, end: date) -> dict[str, Any]:
             PurchaseInvoice.posting_date <= end,
         )
     ).scalars()
-    ar = sum((_decimal(compute_outstanding_amount(row, as_of_date=end)) for row in ar_rows), Decimal("0"))
-    ap = sum((_decimal(compute_outstanding_amount(row, as_of_date=end)) for row in ap_rows), Decimal("0"))
+    ar = sum(
+        (_decimal(compute_outstanding_amount(row, as_of_date=end)) * _document_base_factor(row) for row in ar_rows),
+        Decimal("0"),
+    )
+    ap = sum(
+        (_decimal(compute_outstanding_amount(row, as_of_date=end)) * _document_base_factor(row) for row in ap_rows),
+        Decimal("0"),
+    )
     inventory = database.session.execute(select(StockBin.stock_value).where(StockBin.company == company)).scalars()
     inventory_value = sum((_decimal(value) for value in inventory), Decimal("0"))
+    base_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
     return {
         "company_id": company,
         "date_from": start,
@@ -129,7 +158,7 @@ def get_kpi_snapshot(company: str, start: date, end: date) -> dict[str, Any]:
             "working_capital": ar + inventory_value - ap,
             "inventory_value": inventory_value,
         },
-        "currency": None,
+        "currency": base_currency,
         "complete": True,
     }
 
@@ -193,7 +222,7 @@ def get_concentration(company: str, dimension: str, start: date, end: date, limi
             )
         ).scalars()
         for row in rows:
-            totals[row.customer_id or ""] += _decimal(row.grand_total or row.total)
+            totals[row.customer_id or ""] += _invoice_base_amount(row)
     elif dimension == "supplier":
         rows = database.session.execute(
             select(PurchaseInvoice).where(
@@ -204,7 +233,7 @@ def get_concentration(company: str, dimension: str, start: date, end: date, limi
             )
         ).scalars()
         for row in rows:
-            totals[row.supplier_id or ""] += _decimal(row.grand_total or row.total)
+            totals[row.supplier_id or ""] += _invoice_base_amount(row)
     else:
         query = (
             select(SalesInvoiceItem, SalesInvoice)
@@ -217,7 +246,7 @@ def get_concentration(company: str, dimension: str, start: date, end: date, limi
             )
         )
         for item, _ in database.session.execute(query).all():
-            totals[item.item_code] += _decimal(item.amount)
+            totals[item.item_code] += _decimal(item.base_amount if item.base_amount is not None else item.amount)
     ordered = sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
     grand_total = sum(totals.values(), Decimal("0"))
     return [
