@@ -45,6 +45,20 @@ bloqueo formal del período.
 - La batería focal de revaluación, cierre, posting y reportes terminó con 86
   pruebas aprobadas.
 
+### Precisiones contables posteriores
+
+- La revaluación periódica dejó de usar cuentas de diferencia cambiaria
+  realizada. Ahora postea exclusivamente en ganancia/pérdida **no realizada**;
+  las cuentas realizadas quedan reservadas para cobros y pagos.
+- Los totales de cabecera ya no suman importes de monedas funcionales
+  incompatibles. `currency`, `total_gain` y `total_loss` representan el libro
+  en la moneda base de la entidad; el detalle conserva los importes de todos
+  los libros.
+- Se corrigieron cinco búsquedas de `Entity` que trataban el código de compañía
+  como si fuera la clave primaria interna. La resolución de moneda en posting,
+  calculation contexts y revaluación ahora consulta explícitamente por
+  `Entity.code`, evitando fallbacks silenciosos a otra moneda o libro.
+
 ---
 
 ## 2026-08-07 — Liquidación multimoneda recalculada por libro

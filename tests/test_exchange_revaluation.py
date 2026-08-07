@@ -70,6 +70,8 @@ def app_ctx():
                 default_bank=accounts["bank"].id,
                 exchange_gain_account_id=accounts["gain"].id,
                 exchange_loss_account_id=accounts["loss"].id,
+                unrealized_exchange_gain_account_id=accounts["unrealized_gain"].id,
+                unrealized_exchange_loss_account_id=accounts["unrealized_loss"].id,
             )
         )
         database.session.add_all(
@@ -138,6 +140,24 @@ def _seed_accounts() -> dict[str, object]:
             enabled=True,
             classification="expense",
             account_type="exchange_loss",
+        ),
+        "unrealized_gain": Accounts(
+            entity="cacao",
+            code="4210",
+            name="Ganancia cambiaria no realizada",
+            active=True,
+            enabled=True,
+            classification="income",
+            account_type="unrealized_exchange_gain",
+        ),
+        "unrealized_loss": Accounts(
+            entity="cacao",
+            code="5210",
+            name="Perdida cambiaria no realizada",
+            active=True,
+            enabled=True,
+            classification="expense",
+            account_type="unrealized_exchange_loss",
         ),
         "income": Accounts(
             entity="cacao",
@@ -244,6 +264,9 @@ def test_service_revalues_open_sales_invoice_per_destination_ledger(app_ctx):
 
     assert run.status == "posted"
     assert run.generated_journal is True
+    assert run.currency == "NIO"
+    assert run.total_gain == Decimal("100.0000")
+    assert run.total_loss == Decimal("0.0000")
     assert run.processed_documents_count == 1
     assert run.affected_documents_count == 2
     lines = database.session.execute(database.select(ExchangeRevaluationItem)).scalars().all()
@@ -252,7 +275,9 @@ def test_service_revalues_open_sales_invoice_per_destination_ledger(app_ctx):
     entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=run.id)).scalars().all()
     assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
     monetary_entries = [entry for entry in entries if entry.account_code == "1105"]
+    offset_entries = [entry for entry in entries if entry.account_code != "1105"]
     assert {entry.account_currency for entry in monetary_entries} == {"USD"}
+    assert {entry.account_code for entry in offset_entries} == {"4210"}
     assert sum(entry.debit_in_account_currency or 0 for entry in monetary_entries) == 0
     assert sum(entry.credit_in_account_currency or 0 for entry in monetary_entries) == 0
 
