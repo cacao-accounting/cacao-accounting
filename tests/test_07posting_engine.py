@@ -1741,30 +1741,32 @@ def test_compute_outstanding_amount_from_payment_references(app_ctx):
     )
     database.session.add_all([ref1, ref2])
     database.session.flush()
-    database.session.add_all([
-        DocumentRelation(
-            source_type="purchase_invoice",
-            source_id=purchase_invoice.id,
-            target_type="payment_entry",
-            target_id=pay1.id,
-            target_item_id=ref1.id,
-            qty=Decimal("1"),
-            amount=Decimal("30"),
-            relation_type="payment_reference",
-            status="active",
-        ),
-        DocumentRelation(
-            source_type="sales_invoice",
-            source_id=sales_invoice.id,
-            target_type="payment_entry",
-            target_id=pay2.id,
-            target_item_id=ref2.id,
-            qty=Decimal("1"),
-            amount=Decimal("50"),
-            relation_type="payment_reference",
-            status="active",
-        ),
-    ])
+    database.session.add_all(
+        [
+            DocumentRelation(
+                source_type="purchase_invoice",
+                source_id=purchase_invoice.id,
+                target_type="payment_entry",
+                target_id=pay1.id,
+                target_item_id=ref1.id,
+                qty=Decimal("1"),
+                amount=Decimal("30"),
+                relation_type="payment_reference",
+                status="active",
+            ),
+            DocumentRelation(
+                source_type="sales_invoice",
+                source_id=sales_invoice.id,
+                target_type="payment_entry",
+                target_id=pay2.id,
+                target_item_id=ref2.id,
+                qty=Decimal("1"),
+                amount=Decimal("50"),
+                relation_type="payment_reference",
+                status="active",
+            ),
+        ]
+    )
     database.session.commit()
 
     assert compute_outstanding_amount(purchase_invoice) == Decimal("70.00")
@@ -1816,30 +1818,32 @@ def test_compute_outstanding_amount_as_of_date_filters_allocations(app_ctx):
     )
     database.session.add_all([ref1, ref2])
     database.session.flush()
-    database.session.add_all([
-        DocumentRelation(
-            source_type="sales_invoice",
-            source_id=invoice.id,
-            target_type="payment_entry",
-            target_id=pay1.id,
-            target_item_id=ref1.id,
-            qty=Decimal("1"),
-            amount=Decimal("50"),
-            relation_type="payment_reference",
-            status="active",
-        ),
-        DocumentRelation(
-            source_type="sales_invoice",
-            source_id=invoice.id,
-            target_type="payment_entry",
-            target_id=pay2.id,
-            target_item_id=ref2.id,
-            qty=Decimal("1"),
-            amount=Decimal("25"),
-            relation_type="payment_reference",
-            status="active",
-        ),
-    ])
+    database.session.add_all(
+        [
+            DocumentRelation(
+                source_type="sales_invoice",
+                source_id=invoice.id,
+                target_type="payment_entry",
+                target_id=pay1.id,
+                target_item_id=ref1.id,
+                qty=Decimal("1"),
+                amount=Decimal("50"),
+                relation_type="payment_reference",
+                status="active",
+            ),
+            DocumentRelation(
+                source_type="sales_invoice",
+                source_id=invoice.id,
+                target_type="payment_entry",
+                target_id=pay2.id,
+                target_item_id=ref2.id,
+                qty=Decimal("1"),
+                amount=Decimal("25"),
+                relation_type="payment_reference",
+                status="active",
+            ),
+        ]
+    )
     database.session.commit()
 
     assert compute_outstanding_amount(invoice, as_of_date=date(2026, 5, 4)) == Decimal("150.00")
@@ -2390,7 +2394,10 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
         Accounts,
+        Book,
         CompanyDefaultAccount,
+        Currency,
+        ExchangeRate,
         GLEntry,
         Item,
         ItemAccount,
@@ -2403,6 +2410,18 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
         Warehouse,
         WarehouseCompanyAccount,
         database,
+    )
+
+    local_book = Book(entity="cacao", code="ST-NIO", name="Stock NIO", currency="NIO", status="activo", is_primary=True)
+    eur_book = Book(entity="cacao", code="ST-EUR", name="Stock EUR", currency="EUR", status="activo")
+    database.session.add_all(
+        [
+            Currency(code="NIO", name="Cordoba", decimals=2, active=True),
+            Currency(code="EUR", name="Euro", decimals=2, active=True),
+            local_book,
+            eur_book,
+            ExchangeRate(origin="NIO", destination="EUR", rate=Decimal("0.025"), date=date(2026, 5, 4)),
+        ]
     )
 
     inventory_account = Accounts(
@@ -2497,8 +2516,14 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
         .scalars()
         .all()
     )
-    assert len(gl_entries) == 2
-    assert sum(line.debit for line in gl_entries) == sum(line.credit for line in gl_entries)
+    assert len(gl_entries) == 4
+    assert sum(line.debit for line in gl_entries if line.ledger_id == local_book.id) == Decimal("36")
+    assert sum(line.debit for line in gl_entries if line.ledger_id == eur_book.id) == Decimal("0.9")
+    assert {line.company_currency for line in gl_entries if line.ledger_id == local_book.id} == {"NIO"}
+    assert {line.company_currency for line in gl_entries if line.ledger_id == eur_book.id} == {"EUR"}
+    for book in (local_book, eur_book):
+        book_entries = [line for line in gl_entries if line.ledger_id == book.id]
+        assert sum(line.debit for line in book_entries) == sum(line.credit for line in book_entries)
     assert len(stock_entries) == 1
     assert stock_entries[0].qty_change == Decimal("3.000000000")
     assert bin_row.actual_qty == Decimal("3.000000000")
