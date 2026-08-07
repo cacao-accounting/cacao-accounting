@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-08-07 — Revisión de Lógica de Negocios del ERP y Solidez Financiera
+
+### Petición
+
+Se solicitó una revisión integral de la lógica de negocios del sistema Cacao Accounting para garantizar la precisión, consistencia y fiabilidad operacional en todos sus módulos.
+
+### Diagnóstico e implementación
+
+- **Ciclo de Ventas (O2C):** Validación de separación entre evento logístico (Entrega) y financiero (Factura), controles de sobre-entrega/sobre-facturación, reserva de inventario en Orden de Venta y límite de crédito por cliente.
+- **Ciclo de Compras (S2P):** Verificación de matching 2-Way/3-Way con tolerancias de cantidad/monto, manejo de cuenta puente (Goods Received Not Invoiced) y costeo de importación (Landed Cost Engine) por valor, peso o volumen.
+- **Gestión de Inventario (Stock):** Confirmación de inmutabilidad del Kardex (`StockLedgerEntry`), valoración por FIFO/Promedio Móvil, snapshot atómico (`StockBin`) e inserción segregada de ítems de servicio.
+- **Tesorería y Bancos (Cash/Bank):** Verificación de liquidación multimoneda de pagos con reconocimiento de ganancia/pérdida cambiaria realizada, conciliación bancaria automatizada y proyección de flujo de caja.
+- **Núcleo Contable (R2R):** Partida doble estricta multilibro y multimoneda (`posting.py`), revalorización cambiaria al cierre de periodo NIIF, capitalización atómica de proyectos y cierre contable de ejercicio.
+
+---
+
 ## 2026-08-07 — Capitalización multilínea y neteo de anticipos por libro
 
 ### Petición
