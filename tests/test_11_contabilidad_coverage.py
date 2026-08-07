@@ -2431,6 +2431,8 @@ def test_route_new_exchange_revaluation_creates_run_from_accounting_period(app_c
             exchange_loss_account_id=loss_account.id,
         )
         database.session.add(company_defaults)
+    company_defaults.unrealized_exchange_gain_account_id = gain_account.id
+    company_defaults.unrealized_exchange_loss_account_id = loss_account.id
 
     book = database.session.execute(database.select(Book).filter_by(entity="cacao", code="FISC")).scalar_one_or_none()
     if book is None:

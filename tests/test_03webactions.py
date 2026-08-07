@@ -866,6 +866,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 SalesRequest,
                 SalesRequestItem,
                 StockEntry,
+                ExchangeRate,
                 SupplierQuotation,
                 SupplierQuotationItem,
                 database,
@@ -1172,6 +1173,13 @@ def test_transaccional_full_transition_routes_get_post(request):
                 database.session.flush()
                 from cacao_accounting.contabilidad.posting import submit_document
 
+                database.session.add_all(
+                    [
+                        ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.0273224044"), date=date(2026, 5, 16)),
+                        ExchangeRate(origin="NIO", destination="EUR", rate=Decimal("0.0245"), date=date(2026, 5, 16)),
+                    ]
+                )
+                database.session.flush()
                 submit_document(se_stock)
                 database.session.commit()
 

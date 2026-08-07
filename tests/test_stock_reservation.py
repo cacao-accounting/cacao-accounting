@@ -23,6 +23,7 @@ from cacao_accounting.database import (
     WarehouseCompanyAccount,
     Accounts,
     CompanyDefaultAccount,
+    ExchangeRate,
     database,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -50,6 +51,12 @@ def app_ctx():
 
 
 def _seed_data():
+    database.session.add_all(
+        [
+            ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.0273224044"), date=date(2026, 6, 16)),
+            ExchangeRate(origin="NIO", destination="EUR", rate=Decimal("0.0245"), date=date(2026, 6, 16)),
+        ]
+    )
     item = database.session.get(Item, "ART-RESERVE")
     if not item:
         item = Item(
@@ -322,7 +329,7 @@ class TestReservaNotaEntrega:
         bin_row.reserved_qty = Decimal("10")
         database.session.commit()
 
-        dn = _make_dn("DN-RES-01", Decimal("6"), sales_order_id=so.id)
+        _make_dn("DN-RES-01", Decimal("6"), sales_order_id=so.id)
 
         client = app_ctx.test_client()
         login(client)
@@ -335,12 +342,12 @@ class TestReservaNotaEntrega:
         assert bin_row2.reserved_qty == Decimal("4")
 
     def test_dn_submit_sin_so_no_libera_reserva(self, app_ctx):
-        so = _make_so("SO-RES-DN-02", Decimal("5"), docstatus=1)
+        _make_so("SO-RES-DN-02", Decimal("5"), docstatus=1)
         bin_row = _get_bin()
         bin_row.reserved_qty = Decimal("5")
         database.session.commit()
 
-        dn = _make_dn("DN-RES-02", Decimal("3"), sales_order_id=None)
+        _make_dn("DN-RES-02", Decimal("3"), sales_order_id=None)
         client = app_ctx.test_client()
         login(client)
 

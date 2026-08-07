@@ -3,6 +3,41 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-07 — Blindaje de devoluciones en analítica y dashboard R2R
+
+### Petición
+
+Continuar la revisión profunda del proceso record-to-reports y blindarlo con
+pruebas unitarias rigurosas para asegurar reportes financieros robustos y
+confiables. El trabajo se solicitó únicamente para correcciones locales, sin
+push.
+
+### Diagnóstico e implementación
+
+- Las consultas de `cacao_accounting/reportes/analytics.py` excluían anulaciones
+  y reversas, pero sumaban las devoluciones como ventas y compras positivas.
+  Esto contaminaba `metric_value`, concentración por cliente/artículo y los
+  KPIs de cuentas por cobrar/pagar.
+- El dashboard repetía el problema en ventas, compras, tendencias, clientes y
+  tablas de facturas. Ahora las devoluciones se expresan con signo negativo.
+- El saldo pendiente del dashboard calcula aplicaciones posteadas cuando el
+  documento tiene total transaccional y conserva un fallback explícito para
+  filas legacy que solo almacenan el importe base.
+- Se agregó `test_r2r_analytics_and_dashboard_net_credit_notes`, que verifica
+  ventas, compras, concentración, AR y payload ejecutivo con una factura y una
+  devolución posteadas.
+
+### Verificación
+
+- Pruebas focales R2R/dashboard/reportes operativos: **17 passed**.
+- Black, Ruff, Flake8 y Mypy focales: sin errores; Black se aplicó al archivo
+  editado.
+- Suite completa exigida en `test_results.log`: **1539 passed, 8 skipped, 7
+  failed**. Los siete fallos están fuera de este cambio: cuatro casos requieren
+  tipo de cambio NIO→USD ausente, uno requiere cuenta de revalorización y dos
+  corresponden a reservas/flujo de inventario. Se conserva el resultado para
+  su tratamiento separado.
+
 ---
 
 ## 2026-08-07 — Auditoría R2R: reportería robusta y KPIs sin mezcla de monedas
