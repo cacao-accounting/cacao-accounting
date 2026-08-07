@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-08-07 — Reportes operativos conciliables con moneda funcional
+
+### Petición
+
+Se prosiguió la validación record-to-report sobre los reportes operativos de
+ventas, compras y margen bruto.
+
+### Diagnóstico e implementación
+
+- Los agregados por cliente, proveedor y artículo incluían documentos en
+  borrador o anulados. Ahora solo consideran facturas posteadas (`docstatus=1`).
+- Los importes se sumaban en moneda de transacción, mezclando divisas en una
+  sola cifra. Se priorizan `base_grand_total`, `base_total` y `base_amount`, con
+  compatibilidad para registros antiguos sin valores base.
+- Las devoluciones se añadían como ventas/compras y cantidades positivas. Ahora
+  reducen tanto el importe como la cantidad del agregado correspondiente.
+- El margen bruto infería COGS buscando la palabra «costo» en observaciones y
+  trataba todas las demás líneas de una factura como ingreso, incluyendo la
+  cuenta por cobrar y los impuestos. Ahora clasifica exclusivamente cuentas de
+  ingreso y costo desde el plan contable del GL del libro primario.
+- El escenario R2R focal valida una factura extranjera, una devolución posteada
+  y un borrador: el reporte presenta NIO 288 y 0.8 unidades, mientras el margen
+  derivado del asiento posteado presenta NIO 360 sin contaminarse con la cuenta
+  por cobrar.
+
+---
+
 ## 2026-08-07 — KPIs R2R sin anulaciones ni mezcla de clasificaciones
 
 ### Petición

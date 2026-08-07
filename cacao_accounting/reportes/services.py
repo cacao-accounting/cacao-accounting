@@ -2027,7 +2027,7 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
 
 def get_purchases_by_supplier(filters: OperationalReportFilters) -> PaginatedReport:
     """Compras agregadas por proveedor."""
-    query = select(PurchaseInvoice).filter_by(company=filters.company)
+    query = select(PurchaseInvoice).filter_by(company=filters.company, docstatus=1)
     if filters.party_id:
         query = query.filter_by(supplier_id=filters.party_id)
     if filters.date_from:
@@ -2037,7 +2037,12 @@ def get_purchases_by_supplier(filters: OperationalReportFilters) -> PaginatedRep
     totals: dict[str, Decimal] = {}
     for invoice in database.session.execute(query).scalars():
         supplier_id = invoice.supplier_id or ""
-        totals[supplier_id] = totals.get(supplier_id, Decimal("0")) + _decimal_value(invoice.grand_total or invoice.total)
+        amount = _decimal_value(
+            invoice.base_grand_total
+            if invoice.base_grand_total is not None
+            else invoice.base_total if invoice.base_total is not None else invoice.grand_total or invoice.total
+        )
+        totals[supplier_id] = totals.get(supplier_id, Decimal("0")) + (-amount if invoice.is_return else amount)
     rows = [ReportRow({"supplier_id": supplier_id, "amount": amount}) for supplier_id, amount in sorted(totals.items())]
     return PaginatedReport(rows=rows, totals={"amount": sum(totals.values(), Decimal("0"))})
 
@@ -2047,7 +2052,7 @@ def get_purchases_by_item(filters: OperationalReportFilters) -> PaginatedReport:
     query = (
         select(PurchaseInvoice, PurchaseInvoiceItem)
         .join(PurchaseInvoiceItem, PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id)
-        .filter(PurchaseInvoice.company == filters.company)
+        .filter(PurchaseInvoice.company == filters.company, PurchaseInvoice.docstatus == 1)
     )
     if filters.item_code:
         query = query.filter(PurchaseInvoiceItem.item_code == filters.item_code)
@@ -2056,10 +2061,11 @@ def get_purchases_by_item(filters: OperationalReportFilters) -> PaginatedReport:
     if filters.date_to:
         query = query.where(PurchaseInvoice.posting_date <= filters.date_to)
     totals: dict[str, dict[str, Decimal]] = {}
-    for _, item in database.session.execute(query).all():
+    for invoice, item in database.session.execute(query).all():
+        sign = Decimal("-1") if invoice.is_return else Decimal("1")
         row = totals.setdefault(item.item_code, {"qty": Decimal("0"), "amount": Decimal("0")})
-        row["qty"] += _decimal_value(item.qty)
-        row["amount"] += _decimal_value(item.amount)
+        row["qty"] += sign * _decimal_value(item.qty)
+        row["amount"] += sign * _decimal_value(item.base_amount if item.base_amount is not None else item.amount)
     rows = [
         ReportRow({"item_code": item_code, "qty": values["qty"], "amount": values["amount"]})
         for item_code, values in sorted(totals.items())
@@ -2075,7 +2081,7 @@ def get_purchases_by_item(filters: OperationalReportFilters) -> PaginatedReport:
 
 def get_sales_by_customer(filters: OperationalReportFilters) -> PaginatedReport:
     """Ventas agregadas por cliente."""
-    query = select(SalesInvoice).filter_by(company=filters.company)
+    query = select(SalesInvoice).filter_by(company=filters.company, docstatus=1)
     if filters.party_id:
         query = query.filter_by(customer_id=filters.party_id)
     if filters.date_from:
@@ -2085,7 +2091,12 @@ def get_sales_by_customer(filters: OperationalReportFilters) -> PaginatedReport:
     totals: dict[str, Decimal] = {}
     for invoice in database.session.execute(query).scalars():
         customer_id = invoice.customer_id or ""
-        totals[customer_id] = totals.get(customer_id, Decimal("0")) + _decimal_value(invoice.grand_total or invoice.total)
+        amount = _decimal_value(
+            invoice.base_grand_total
+            if invoice.base_grand_total is not None
+            else invoice.base_total if invoice.base_total is not None else invoice.grand_total or invoice.total
+        )
+        totals[customer_id] = totals.get(customer_id, Decimal("0")) + (-amount if invoice.is_return else amount)
     rows = [ReportRow({"customer_id": customer_id, "amount": amount}) for customer_id, amount in sorted(totals.items())]
     return PaginatedReport(rows=rows, totals={"amount": sum(totals.values(), Decimal("0"))})
 
@@ -2095,7 +2106,7 @@ def get_sales_by_item(filters: OperationalReportFilters) -> PaginatedReport:
     query = (
         select(SalesInvoice, SalesInvoiceItem)
         .join(SalesInvoiceItem, SalesInvoiceItem.sales_invoice_id == SalesInvoice.id)
-        .filter(SalesInvoice.company == filters.company)
+        .filter(SalesInvoice.company == filters.company, SalesInvoice.docstatus == 1)
     )
     if filters.item_code:
         query = query.filter(SalesInvoiceItem.item_code == filters.item_code)
@@ -2104,10 +2115,11 @@ def get_sales_by_item(filters: OperationalReportFilters) -> PaginatedReport:
     if filters.date_to:
         query = query.where(SalesInvoice.posting_date <= filters.date_to)
     totals: dict[str, dict[str, Decimal]] = {}
-    for _, item in database.session.execute(query).all():
+    for invoice, item in database.session.execute(query).all():
+        sign = Decimal("-1") if invoice.is_return else Decimal("1")
         row = totals.setdefault(item.item_code, {"qty": Decimal("0"), "amount": Decimal("0")})
-        row["qty"] += _decimal_value(item.qty)
-        row["amount"] += _decimal_value(item.amount)
+        row["qty"] += sign * _decimal_value(item.qty)
+        row["amount"] += sign * _decimal_value(item.base_amount if item.base_amount is not None else item.amount)
     rows = [
         ReportRow({"item_code": item_code, "qty": values["qty"], "amount": values["amount"]})
         for item_code, values in sorted(totals.items())
@@ -2123,7 +2135,11 @@ def get_sales_by_item(filters: OperationalReportFilters) -> PaginatedReport:
 
 def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
     """Margen bruto basado en GL: ingresos menos COGS."""
-    query = exclude_cancelled_gl_entries(select(GLEntry).filter_by(company=filters.company))
+    query = exclude_cancelled_gl_entries(
+        select(GLEntry, Accounts)
+        .join(Accounts, Accounts.id == GLEntry.account_id)
+        .where(GLEntry.company == filters.company, Accounts.entity == filters.company)
+    )
     ledger_id = primary_ledger_id(filters.company)
     if ledger_id:
         query = query.where(GLEntry.ledger_id == ledger_id)
@@ -2133,11 +2149,11 @@ def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
         query = query.where(GLEntry.posting_date <= filters.date_to)
     income = Decimal("0")
     cogs = Decimal("0")
-    for entry in database.session.execute(query).scalars():
-        remarks = (entry.remarks or "").lower()
-        if "costo" in remarks:
+    for entry, account in database.session.execute(query).all():
+        classification = (account.classification or "").lower()
+        if classification in {"costo", "cost"}:
             cogs += _decimal_value(entry.debit) - _decimal_value(entry.credit)
-        elif entry.voucher_type == "sales_invoice":
+        elif classification in {"ingreso", "income"}:
             income += _decimal_value(entry.credit) - _decimal_value(entry.debit)
     margin = income - cogs
     return PaginatedReport(
