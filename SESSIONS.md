@@ -5,6 +5,44 @@
 
 ---
 
+## 2026-08-07 — Liquidación multimoneda recalculada por libro
+
+### Petición
+
+Como continuación de la auditoría R2R multimoneda/multilibro, se exigió que
+los cobros y pagos conservaran por libro el costo histórico de AR/AP, la tasa
+de liquidación y la diferencia cambiaria realizada hasta los reportes.
+
+### Diagnóstico e implementación
+
+- El motor de liquidación se ejecutaba una sola vez en la moneda base y la
+  proforma resultante se clonaba a libros secundarios. Esto hacía imposible
+  obtener diferencias cambiarias funcionales distintas por libro.
+- Las proformas ahora se recalculan por cada moneda funcional. Para pagos, el
+  saldo abierto se valora con las tasas históricas de las facturas
+  referenciadas y la pata bancaria usa la tasa de la fecha de liquidación.
+- Varias facturas se agregan como un costo histórico ponderado; facturas sin
+  moneda explícita heredan la moneda base del pago en vez de asumir
+  erróneamente la moneda del libro destino.
+- Las cuentas de ganancia/pérdida cambiaria realizada y no realizada admiten
+  `payment_entry`, en concordancia con las líneas que genera el propio motor
+  de liquidación.
+- Se tolera únicamente ruido aritmético inferior a 0.0001 antes de cuantizar
+  GL y se descartan líneas que redondean a cero, preservando la restricción de
+  débito o crédito positivo de `GLEntry`.
+
+### Evidencia de aceptación
+
+- La regresión R2R ahora continúa la factura USD con un cobro posterior: el
+  libro NIO elimina AR 360, registra banco 370 y ganancia 10; el libro EUR
+  elimina AR 9, registra banco 9.5 y ganancia 0.5.
+- Después de liquidar, balanza, estado de resultados y balance general se
+  reconcilian independientemente a NIO 370 y EUR 9.5.
+- La batería focal de pagos, posting, seed multilibro, cobertura contable y
+  reportes terminó con 354 pruebas aprobadas.
+
+---
+
 ## 2026-08-07 — R2R multimoneda y multilibro por moneda funcional del libro
 
 ### Petición
