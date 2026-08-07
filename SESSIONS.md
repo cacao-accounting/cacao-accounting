@@ -5,6 +5,48 @@
 
 ---
 
+## 2026-08-07 — Revaluación incremental y cierre mensual obligatorio por pasos
+
+### Petición
+
+Se continuó la validación rigurosa R2R multimoneda/multilibro sobre la
+revaluación de partidas monetarias, su impacto en estados financieros y el
+bloqueo formal del período.
+
+### Diagnóstico e implementación
+
+- Los ajustes de una revaluación previa se prorrateaban siempre contra el
+  total original del documento. Si la primera revaluación ya se había hecho
+  sobre un saldo parcial, una segunda ejecución volvía a reducir el ajuste y
+  generaba una diferencia ficticia.
+- Cada ajuste activo ahora se escala contra el saldo abierto que tenía su
+  propia línea de revaluación. Una ejecución repetida sin cambios produce
+  `completed_no_changes`, tanto para saldos completos como parciales.
+- La pata monetaria de revaluación conserva la moneda extranjera original con
+  importe nominal cero: modifica exclusivamente el valor funcional del libro.
+  La contrapartida de resultado se registra en la moneda funcional.
+- Solo facturas aprobadas (`docstatus=1`) son candidatas. Los borradores ya no
+  pueden originar diferencias cambiarias ni asientos de cierre.
+- El cierre mensual exige resultados actuales para comprobantes recurrentes,
+  revaluación cambiaria y capitalización de proyectos. Estados `passed` y
+  `skipped` completan un paso; pasos ausentes o fallidos bloquean el cierre.
+  Se usa el resultado más reciente para permitir corregir y repetir un paso.
+
+### Evidencia de aceptación
+
+- La prueba integrada crea una factura USD mediante el posting real en libros
+  USD, NIO y EUR, revalúa NIO de 3,600 a 3,700 y EUR de 90 a 93, y reconcilia
+  balanza, resultados y balance general en cada libro.
+- Se verifica que la revaluación no cambie las 100 unidades USD nominales, que
+  los borradores sean excluidos y que una segunda corrida parcial no duplique
+  diferencias.
+- El cierre rechaza explícitamente períodos sin los tres controles
+  obligatorios y permite cerrar cuando todos terminaron correctamente.
+- La batería focal de revaluación, cierre, posting y reportes terminó con 86
+  pruebas aprobadas.
+
+---
+
 ## 2026-08-07 — Liquidación multimoneda recalculada por libro
 
 ### Petición
