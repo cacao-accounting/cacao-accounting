@@ -8,6 +8,8 @@ from datetime import date
 from typing import Any
 from uuid import uuid4
 
+from sqlalchemy import func
+
 from cacao_accounting.database import (
     database,
     GLEntry,
@@ -50,8 +52,10 @@ def _resolve_capitalization_accounts(entry: GLEntry, proj: Project) -> tuple[str
         raise ValueError(f"La cuenta de activo de capitalizacion para el proyecto {proj.code} no existe.")
 
     if not entry.is_reversal:
-        return cap_account.code, entry.account_code, entry.debit
-    return entry.account_code, cap_account.code, entry.credit
+        value = entry.debit_in_account_currency if entry.debit_in_account_currency is not None else entry.debit
+        return cap_account.code, entry.account_code, value
+    value = entry.credit_in_account_currency if entry.credit_in_account_currency is not None else entry.credit
+    return entry.account_code, cap_account.code, value
 
 
 def _create_capitalization_journal(
@@ -66,12 +70,16 @@ def _create_capitalization_journal(
     today = date.today()
     doc_no = f"CAP-{today.year}-{today.month:02d}-{unique_suffix}"
 
+    transaction_currency = entry.account_currency or entry.company_currency
+    if not transaction_currency:
+        raise ValueError("No se pudo determinar la moneda del movimiento a capitalizar.")
+
     cap_journal = ComprobanteContable(
         id=f"CAP-{unique_suffix}",
         entity=company,
         date=entry.posting_date,
         status="draft",
-        transaction_currency=entry.account_currency or "NIO",
+        transaction_currency=transaction_currency,
         # Resolve the rate independently for each active book at posting time.
         exchange_rate=None,
         voucher_type="Capitalización Automática de Proyecto",
@@ -100,7 +108,7 @@ def _create_capitalization_journal(
         "cost_center": entry.cost_center_code,
         "date": entry.posting_date,
         "memo": memo_text,
-        "currency_id": entry.account_currency or "NIO",
+        "currency_id": transaction_currency,
         "exchange_rate": None,
     }
 
@@ -147,7 +155,7 @@ class ProjectCapitalizationService:
                 GLEntry.is_cancelled.is_(False),
                 GLEntry.is_reversal.is_(False),
                 GLEntry.project_code.isnot(None),
-                Accounts.classification.in_(["Gastos", "expense", "gastos", "EXPENSE"]),
+                func.lower(Accounts.classification).in_(["gasto", "gastos", "expense"]),
             )
         )
         ledger_id = primary_ledger_id(company)
