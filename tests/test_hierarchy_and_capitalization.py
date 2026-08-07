@@ -18,6 +18,8 @@ from cacao_accounting.database import (
     FiscalYear,
     Entity,
     Book,
+    Currency,
+    ExchangeRate,
 )
 from cacao_accounting.database.helpers import check_hierarchy_cycle, update_hierarchy_attributes
 from cacao_accounting.contabilidad.project_capitalization_service import ProjectCapitalizationService
@@ -221,6 +223,17 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
 
     def test_automatic_project_capitalization(self):
         """Prueba de flujo completo para la Capitalización Automática de Proyectos."""
+        eur_book = Book(id="EUR", code="EUR", name="Libro EUR", entity="cacao", currency="EUR")
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Cordoba", decimals=2, active=True),
+                Currency(code="USD", name="US Dollar", decimals=2, active=True),
+                Currency(code="EUR", name="Euro", decimals=2, active=True),
+                eur_book,
+                ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 7, 10)),
+                ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.9"), date=date(2026, 7, 10)),
+            ]
+        )
         # 1. Crear proyecto capitalizable
         proj = Project(
             id="P_CAP_01",
@@ -251,8 +264,12 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
             ledger_id="NIO",
             account_id=self.acc_expense.id,
             account_code=self.acc_expense.code,
-            debit=Decimal("12000.00"),
+            debit=Decimal("360.00"),
             credit=Decimal("0.00"),
+            debit_in_account_currency=Decimal("10.00"),
+            account_currency="USD",
+            company_currency="NIO",
+            exchange_rate=Decimal("36"),
             voucher_type="journal_entry",
             voucher_id=jv_orig.id,
             document_no=jv_orig.document_no,
@@ -320,11 +337,20 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
 
         self.assertEqual(debit_line.account, self.acc_asset.code)
         self.assertEqual(debit_line.project, proj.code)
-        self.assertEqual(debit_line.value, Decimal("12000.00"))
+        self.assertEqual(debit_line.value, Decimal("10.00"))
 
         self.assertEqual(credit_line.account, self.acc_expense.code)
         self.assertEqual(credit_line.project, proj.code)
-        self.assertEqual(credit_line.value, Decimal("-12000.00"))
+        self.assertEqual(credit_line.value, Decimal("-10.00"))
+
+        capitalization_entries = (
+            database.session.execute(database.select(GLEntry).filter_by(voucher_id=cap_jv.id)).scalars().all()
+        )
+        self.assertEqual(len(capitalization_entries), 4)
+        self.assertEqual(
+            sum(entry.debit for entry in capitalization_entries if entry.ledger_id == self.book.id), Decimal("360")
+        )
+        self.assertEqual(sum(entry.debit for entry in capitalization_entries if entry.ledger_id == eur_book.id), Decimal("9"))
 
         # 6. Intentar anular la transacción original (debe estar bloqueada)
         with self.assertRaises(PostingError):
