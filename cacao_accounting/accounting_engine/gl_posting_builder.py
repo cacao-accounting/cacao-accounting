@@ -50,6 +50,7 @@ def post_proforma_to_gl(
                         credit=credit,
                         debit_in_account_currency=debit_in_account_currency,
                         credit_in_account_currency=credit_in_account_currency,
+                        exchange_rate=Decimal(line.exchange_rate_used or Decimal("1")),
                         party_type=context.party_type if line.party_id else None,
                         party_id=line.party_id,
                         cost_center_code=line.cost_center_id,
