@@ -38,11 +38,12 @@ def _percentage(current: Decimal, previous: Decimal) -> Decimal | None:
 
 def _invoice_base_amount(row: Any) -> Decimal:
     """Devuelve el total de la factura en la moneda base del documento."""
-    return _decimal(
+    amount = _decimal(
         row.base_grand_total
         if row.base_grand_total is not None
         else row.base_total if row.base_total is not None else row.grand_total or row.total
     )
+    return -amount if getattr(row, "is_return", False) else amount
 
 
 def _invoice_total(model: Any, company: str, start: date, end: date) -> Decimal:
@@ -132,11 +133,21 @@ def get_kpi_snapshot(company: str, start: date, end: date) -> dict[str, Any]:
         )
     ).scalars()
     ar = sum(
-        (_decimal(compute_outstanding_amount(row, as_of_date=end)) * _document_base_factor(row) for row in ar_rows),
+        (
+            (-1 if row.is_return else 1)
+            * _decimal(compute_outstanding_amount(row, as_of_date=end))
+            * _document_base_factor(row)
+            for row in ar_rows
+        ),
         Decimal("0"),
     )
     ap = sum(
-        (_decimal(compute_outstanding_amount(row, as_of_date=end)) * _document_base_factor(row) for row in ap_rows),
+        (
+            (-1 if row.is_return else 1)
+            * _decimal(compute_outstanding_amount(row, as_of_date=end))
+            * _document_base_factor(row)
+            for row in ap_rows
+        ),
         Decimal("0"),
     )
     inventory = database.session.execute(select(StockBin.stock_value).where(StockBin.company == company)).scalars()
@@ -245,8 +256,9 @@ def get_concentration(company: str, dimension: str, start: date, end: date, limi
                 SalesInvoice.posting_date <= end,
             )
         )
-        for item, _ in database.session.execute(query).all():
-            totals[item.item_code] += _decimal(item.base_amount if item.base_amount is not None else item.amount)
+        for item, invoice in database.session.execute(query).all():
+            amount = _decimal(item.base_amount if item.base_amount is not None else item.amount)
+            totals[item.item_code] += -amount if invoice.is_return else amount
     ordered = sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
     grand_total = sum(totals.values(), Decimal("0"))
     return [

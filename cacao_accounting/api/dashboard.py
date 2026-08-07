@@ -10,7 +10,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
-from sqlalchemy import extract, func
+from sqlalchemy import case, extract, func
 
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import (
@@ -33,6 +33,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.modulos import (
     MODULE_ACCOUNTING,
     MODULE_BANKS,
@@ -312,7 +313,7 @@ def get_purchases_data(
 ) -> dict[str, Any]:
     """Obtiene métricas de compras y cuentas por pagar."""
     invoices = _document_query(PurchaseInvoice, company, start_date, end_date).filter_by(docstatus=1)
-    total = _sum_query(invoices, func.coalesce(PurchaseInvoice.base_grand_total, PurchaseInvoice.grand_total))
+    total = _sum_signed_documents(invoices, PurchaseInvoice)
     outstanding = _sum_document_field(PurchaseInvoice, company, "base_outstanding_amount", "outstanding_amount")
     open_orders = database.session.query(PurchaseOrder).filter_by(company=company, docstatus=1).count()
     suppliers = _active_parties(company, "supplier")
@@ -380,7 +381,7 @@ def get_sales_data(
 ) -> dict[str, Any]:
     """Obtiene métricas de ventas, cobranza y clientes."""
     invoices = _document_query(SalesInvoice, company, start_date, end_date).filter_by(docstatus=1)
-    sales_total = _sum_query(invoices, func.coalesce(SalesInvoice.base_grand_total, SalesInvoice.grand_total))
+    sales_total = _sum_signed_documents(invoices, SalesInvoice)
     receivables = _sum_document_field(SalesInvoice, company, "base_outstanding_amount", "outstanding_amount")
     invoice_count = invoices.count()
     customers = _active_parties(company, "customer")
@@ -583,12 +584,13 @@ def _payable_invoices(company: str, currency: str) -> list[dict[str, Any]]:
 
 def _purchase_invoice_payload(invoice: PurchaseInvoice, currency: str) -> dict[str, Any]:
     """Serializa una factura de compra para tablas del dashboard."""
+    sign = -1 if invoice.is_return else 1
     return {
         "date": invoice.posting_date.isoformat() if invoice.posting_date else "",
         "document_no": invoice.document_no or invoice.id,
         "party": invoice.supplier_name or "Proveedor",
-        "total": _numeric(invoice.base_grand_total or invoice.grand_total),
-        "outstanding": _numeric(invoice.base_outstanding_amount or invoice.outstanding_amount),
+        "total": sign * _numeric(invoice.base_grand_total or invoice.grand_total),
+        "outstanding": sign * _numeric(invoice.base_outstanding_amount or invoice.outstanding_amount),
         "currency": currency,
     }
 
@@ -645,7 +647,7 @@ def _sales_trend(
         .filter_by(docstatus=1)
         .with_entities(
             extract("month", SalesInvoice.posting_date).label("month"),
-            func.sum(func.coalesce(SalesInvoice.base_grand_total, SalesInvoice.grand_total)).label("total"),
+            func.sum(_signed_document_expression(SalesInvoice)).label("total"),
         )
         .group_by("month")
         .order_by("month")
@@ -665,10 +667,10 @@ def _top_customers(
         .filter_by(docstatus=1)
         .with_entities(
             SalesInvoice.customer_name,
-            func.sum(func.coalesce(SalesInvoice.base_grand_total, SalesInvoice.grand_total)).label("total"),
+            func.sum(_signed_document_expression(SalesInvoice)).label("total"),
         )
         .group_by(SalesInvoice.customer_name)
-        .order_by(func.sum(func.coalesce(SalesInvoice.base_grand_total, SalesInvoice.grand_total)).desc())
+        .order_by(func.sum(_signed_document_expression(SalesInvoice)).desc())
         .limit(5)
     )
     return [{"name": row.customer_name or "Cliente", "total": _numeric(row.total), "currency": currency} for row in query]
@@ -692,8 +694,8 @@ def _recent_sales_invoices(
             "date": row.posting_date.isoformat() if row.posting_date else "",
             "document_no": row.document_no or row.id,
             "party": row.customer_name or "Cliente",
-            "total": _numeric(row.base_grand_total or row.grand_total),
-            "outstanding": _numeric(row.base_outstanding_amount or row.outstanding_amount),
+            "total": (-1 if row.is_return else 1) * _numeric(row.base_grand_total or row.grand_total),
+            "outstanding": (-1 if row.is_return else 1) * _numeric(row.base_outstanding_amount or row.outstanding_amount),
             "currency": currency,
         }
         for row in rows
@@ -714,14 +716,42 @@ def _active_parties(company: str, role: str) -> int:
 
 
 def _sum_document_field(model: Any, company: str, base_field: str, fallback_field: str) -> float:
-    """Suma un campo monetario con fallback en documentos aprobados."""
-    expression = func.coalesce(getattr(model, base_field), getattr(model, fallback_field))
-    return _numeric(database.session.query(func.sum(expression)).filter_by(company=company, docstatus=1).scalar())
+    """Sum outstanding documents in the document base currency.
+
+    When a document has its transaction total, compute the balance from posted
+    allocations; legacy rows without that total retain their stored base value.
+    """
+    rows = database.session.query(model).filter_by(company=company, docstatus=1).all()
+    total = Decimal("0")
+    for row in rows:
+        original = Decimal(str(getattr(row, "grand_total", None) or getattr(row, "total", None) or 0))
+        if original:
+            outstanding = compute_outstanding_amount(row)
+            base_total = getattr(row, "base_grand_total", None) or getattr(row, "base_total", None)
+            factor = Decimal(str(base_total)) / original if base_total is not None else Decimal(str(row.exchange_rate or 1))
+            amount = outstanding * factor
+        else:
+            amount = Decimal(str(getattr(row, base_field, None) or getattr(row, fallback_field, None) or 0))
+        total += -amount if row.is_return else amount
+    return float(total)
 
 
 def _sum_query(query: Any, expression: Any) -> float:
     """Suma una expresión sobre un query existente."""
     return _numeric(query.with_entities(func.sum(expression)).scalar())
+
+
+def _signed_document_expression(model: Any, base_field: str | None = None, fallback_field: str | None = None) -> Any:
+    """Return a base-currency document amount with returns as negative values."""
+    if base_field is None:
+        base_field, fallback_field = "base_grand_total", "grand_total"
+    amount = func.coalesce(getattr(model, base_field), getattr(model, fallback_field or "grand_total"))
+    return case((model.is_return.is_(True), -amount), else_=amount)
+
+
+def _sum_signed_documents(query: Any, model: Any) -> float:
+    """Sum posted document totals without treating credit notes as sales."""
+    return _numeric(query.with_entities(func.sum(_signed_document_expression(model))).scalar())
 
 
 def _count_model(model: Any, company: str, docstatus: int) -> int:
