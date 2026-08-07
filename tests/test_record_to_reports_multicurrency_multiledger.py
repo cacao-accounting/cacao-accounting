@@ -35,11 +35,16 @@ def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
         Accounts,
+        Bank,
+        BankAccount,
         Book,
+        CompanyDefaultAccount,
         Currency,
         ExchangeRate,
         GLEntry,
         PartyAccount,
+        PaymentEntry,
+        PaymentReference,
         SalesInvoice,
         SalesInvoiceItem,
         database,
@@ -64,13 +69,42 @@ def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
         classification="income",
         account_type="income",
     )
-    database.session.add_all([*currencies, local_book, ifrs_book, receivable, income])
+    bank_account_gl = Accounts(
+        entity="r2r", code="BANK-R2R", name="Bank", active=True, enabled=True, classification="asset", account_type="bank"
+    )
+    exchange_gain = Accounts(
+        entity="r2r",
+        code="FXG-R2R",
+        name="Exchange gain",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    bank = Bank(name="R2R Bank")
+    database.session.add_all([*currencies, local_book, ifrs_book, receivable, income, bank_account_gl, exchange_gain, bank])
     database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="r2r",
+        account_name="USD account",
+        currency="USD",
+        gl_account_id=bank_account_gl.id,
+    )
     database.session.add_all(
         [
             ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 8, 7)),
             ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.9"), date=date(2026, 8, 7)),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("37"), date=date(2026, 8, 8)),
+            ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.95"), date=date(2026, 8, 8)),
             PartyAccount(party_id="CUST-R2R", company="r2r", receivable_account_id=receivable.id),
+            CompanyDefaultAccount(
+                company="r2r",
+                default_receivable=receivable.id,
+                default_bank=bank_account_gl.id,
+                exchange_gain_account_id=exchange_gain.id,
+            ),
+            bank_account,
         ]
     )
     invoice = SalesInvoice(
@@ -83,6 +117,8 @@ def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
         docstatus=1,
         total=Decimal("10"),
         grand_total=Decimal("10"),
+        outstanding_amount=Decimal("10"),
+        base_outstanding_amount=Decimal("360"),
     )
     database.session.add(invoice)
     database.session.flush()
@@ -129,4 +165,65 @@ def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
         assert income_statement.totals["net_profit"] == amount
         assert balance_sheet.totals["assets"] == amount
         assert balance_sheet.totals["period_profit"] == amount
+        assert balance_sheet.totals["difference"] == 0
+
+    payment = PaymentEntry(
+        company="r2r",
+        posting_date=date(2026, 8, 8),
+        payment_type="receive",
+        party_type="customer",
+        party_id="CUST-R2R",
+        bank_account_id=bank_account.id,
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("37"),
+        received_amount=Decimal("10"),
+        base_received_amount=Decimal("370"),
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.flush()
+    database.session.add(
+        PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id=invoice.id,
+            total_amount=Decimal("10"),
+            outstanding_amount=Decimal("10"),
+            allocated_amount=Decimal("10"),
+            allocation_date=payment.posting_date,
+        )
+    )
+    database.session.commit()
+
+    post_document_to_gl(payment)
+    database.session.commit()
+
+    payment_entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=payment.id)).scalars().all()
+    assert len(payment_entries) == 6
+    payment_expected = {
+        local_book.id: (Decimal("370"), Decimal("360"), Decimal("10")),
+        ifrs_book.id: (Decimal("9.5"), Decimal("9"), Decimal("0.5")),
+    }
+    for ledger_id, (cash_amount, carrying_amount, gain_amount) in payment_expected.items():
+        book_entries = [entry for entry in payment_entries if entry.ledger_id == ledger_id]
+        assert sum(entry.debit for entry in book_entries) == sum(entry.credit for entry in book_entries)
+        assert any(entry.account_id == bank_account_gl.id and entry.debit == cash_amount for entry in book_entries)
+        assert any(entry.account_id == receivable.id and entry.credit == carrying_amount for entry in book_entries)
+        assert any(entry.account_id == exchange_gain.id and entry.credit == gain_amount for entry in book_entries)
+
+    for ledger_code, currency, balance, cumulative in (
+        ("R2RLOC", "NIO", Decimal("370"), Decimal("730")),
+        ("R2REUR", "EUR", Decimal("9.5"), Decimal("18.5")),
+    ):
+        filters = FinancialReportFilters(company="r2r", ledger=ledger_code)
+        trial_balance = get_trial_balance_report(filters)
+        income_statement = get_income_statement_report(filters)
+        balance_sheet = get_balance_sheet_report(filters)
+        assert trial_balance.ledger_currency == currency
+        assert trial_balance.totals["debit"] == cumulative
+        assert trial_balance.totals["credit"] == cumulative
+        assert income_statement.totals["net_profit"] == balance
+        assert balance_sheet.totals["assets"] == balance
+        assert balance_sheet.totals["period_profit"] == balance
         assert balance_sheet.totals["difference"] == 0
