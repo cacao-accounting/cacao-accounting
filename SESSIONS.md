@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-08-07 — Diferencias bancarias con cuentas y moneda válidas
+
+### Petición
+
+La validación R2R continuó sobre los asientos automáticos originados por la
+conciliación bancaria.
+
+### Diagnóstico e implementación
+
+- El comprobante de diferencia bancaria escribía IDs internos en el campo de
+  código contable; el posting busca ese campo por `Accounts.code`, por lo que el
+  ajuste podía fallar al contabilizar.
+- Las cuentas bancaria y de diferencia se resuelven y validan ahora contra la
+  compañía antes de crear líneas, y se almacenan sus códigos correctos.
+- El comprobante declara la moneda de la cuenta bancaria, selecciona todos los
+  libros activos y conserva el estado/tipo normal de un borrador contable.
+- Evidencia focal: una diferencia USD 5 genera NIO 180 y EUR 4.50 en sus libros
+  funcionales respectivos, con cuatro líneas GL balanceadas.
+
+---
+
 ## 2026-08-07 — Capitalización multimoneda sin doble conversión
 
 ### Petición
