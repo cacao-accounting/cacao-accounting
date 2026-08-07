@@ -2689,7 +2689,11 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
     entries: list[GLEntry] = []
     is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
     for context in _document_contexts(document, ledger_code=ledger_code):
+        context_book = database.session.get(Book, context.ledger_id) if context.ledger_id else None
         for line in lines:
+            line_book = str(getattr(line, "book", None) or "")
+            if line_book and context_book and line_book not in {context_book.id, context_book.code}:
+                continue
             original_value = _decimal_value(getattr(line, "value", None))
             if original_value == 0:
                 raise PostingError("Las lineas del comprobante contable deben tener un valor distinto de cero.")

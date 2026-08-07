@@ -32,6 +32,7 @@ from cacao_accounting.audit_trail_service import (
 from cacao_accounting.database import (
     AccountingPeriod,
     Accounts,
+    Book,
     ComprobanteContable,
     ComprobanteContableDetalle,
     CostCenter,
@@ -66,6 +67,7 @@ class JournalLineInput:
     """Linea normalizada de comprobante contable manual."""
 
     order: int
+    book: str | None
     account: str
     cost_center: str | None
     party_type: str | None
@@ -107,6 +109,7 @@ def create_journal_draft(payload: dict[str, Any], user_id: str, assign_identifie
     """Crea un comprobante contable manual en borrador."""
     data = _normalize_journal_payload(payload)
     _validate_balanced_lines(data.company, data.lines)
+    _validate_line_books(data.company, data.books, data.lines)
     primary_book = data.books[0] if data.books else None
     journal = ComprobanteContable(
         entity=data.company,
@@ -125,9 +128,7 @@ def create_journal_draft(payload: dict[str, Any], user_id: str, assign_identifie
         is_fiscal_year_closing=data.is_fiscal_year_closing,
         fiscal_year_id=data.fiscal_year_id,
     )
-    lines = [
-        _line_model(data.company, data.posting_date, primary_book, data.transaction_currency, line) for line in data.lines
-    ]
+    lines = [_line_model(data.company, data.posting_date, data.transaction_currency, line) for line in data.lines]
     journal = add_journal(journal, lines)
     if assign_identifier:
         _assign_identifier_if_needed(journal, data.naming_series_id)
@@ -328,6 +329,7 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     previous_naming_series_id = journal.naming_series_id
     data = _normalize_journal_payload(payload)
     _validate_balanced_lines(data.company, data.lines)
+    _validate_line_books(data.company, data.books, data.lines)
     primary_book = data.books[0] if data.books else None
 
     journal.entity = data.company
@@ -344,9 +346,7 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     journal.fiscal_year_id = data.fiscal_year_id
     journal.user_id = user_id
 
-    lines = [
-        _line_model(data.company, data.posting_date, primary_book, data.transaction_currency, line) for line in data.lines
-    ]
+    lines = [_line_model(data.company, data.posting_date, data.transaction_currency, line) for line in data.lines]
     journal = replace_journal_lines(journal, lines)
     should_renumber = bool(journal.document_no) and (
         previous_posting_date != data.posting_date or previous_naming_series_id != data.naming_series_id
@@ -497,6 +497,7 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
     credit = _decimal(raw_line.get("credit"))
     return JournalLineInput(
         order=int(raw_line.get("order") or fallback_order),
+        book=_optional_text(raw_line.get("book")),
         account=_optional_text(raw_line.get("account")) or "",
         cost_center=_optional_text(raw_line.get("cost_center")),
         party_type=_optional_text(raw_line.get("party_type")),
@@ -537,20 +538,35 @@ def _validate_journal_line(company: str, line: JournalLineInput, account_cache: 
 
 def _validate_balanced_lines(company: str, lines: list[JournalLineInput]) -> None:
     account_cache: dict[str, Accounts | None] = {}
-    total_debit = Decimal("0")
-    total_credit = Decimal("0")
+    totals: dict[str | None, tuple[Decimal, Decimal]] = {}
     for line in lines:
         _validate_journal_line(company, line, account_cache)
-        total_debit += line.debit
-        total_credit += line.credit
-    if total_debit != total_credit:
-        raise JournalValidationError("El comprobante contable no esta balanceado.")
+        debit, credit = totals.get(line.book, (Decimal("0"), Decimal("0")))
+        totals[line.book] = debit + line.debit, credit + line.credit
+    if any(debit != credit for debit, credit in totals.values()):
+        raise JournalValidationError("El comprobante contable no esta balanceado por libro.")
+
+
+def _validate_line_books(company: str, books: list[str] | None, lines: list[JournalLineInput]) -> None:
+    """Valida que los libros específicos pertenezcan a la selección del comprobante."""
+    requested = {line.book for line in lines if line.book}
+    if not requested:
+        return
+
+    company_books = list(database.session.execute(select(Book).where(Book.entity == company)).scalars())
+    book_ids = {value: book.id for book in company_books for value in (book.id, book.code)}
+    invalid = requested - book_ids.keys()
+    if invalid:
+        raise JournalValidationError(f"Libro contable no válido para la compañía: {sorted(invalid)[0]}.")
+    selected_ids = {book_ids[value] for value in (books or []) if value in book_ids}
+    requested_ids = {book_ids[value] for value in requested}
+    if selected_ids and not requested_ids.issubset(selected_ids):
+        raise JournalValidationError("Las líneas por libro deben pertenecer a los libros seleccionados.")
 
 
 def _line_model(
     company: str,
     posting_date: date,
-    book: str | None,
     transaction_currency: str | None,
     line: JournalLineInput,
 ) -> ComprobanteContableDetalle:
@@ -561,7 +577,7 @@ def _line_model(
         cost_center=line.cost_center,
         unit=line.unit,
         project=line.project,
-        book=book,
+        book=line.book,
         date=posting_date,
         transaction=JOURNAL_TRANSACTION_TYPE,
         order=line.order,
@@ -656,6 +672,7 @@ def _serialize_journal_line(
     values = _journal_line_values(line)
     return {
         "order": line.order or 0,
+        "book": line.book or "",
         "account": values["account"],
         "account_label": account_labels.get(values["account"], values["account"]),
         "cost_center": values["cost_center"],
