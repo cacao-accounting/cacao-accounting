@@ -5,6 +5,32 @@
 
 ---
 
+## 2026-08-07 — KPIs R2R sin anulaciones ni mezcla de clasificaciones
+
+### Petición
+
+Se continuó la validación rigurosa del flujo record-to-report, priorizando la
+corrección de errores e imprecisiones sobre verificaciones generales.
+
+### Diagnóstico e implementación
+
+- Los KPIs contables y bancarios del dashboard incluían líneas marcadas como
+  anuladas o como reversas, aunque los estados financieros ordinarios las
+  excluyen. Todos esos agregados usan ahora el mismo predicado vigente del GL.
+- La clasificación del dashboard solo reconocía variantes capitalizadas y
+  plurales. Se normalizó sin distinguir mayúsculas y se incluyeron ingreso,
+  costo y gasto en sus variantes admitidas por el motor contable; la utilidad
+  ya no omite el costo de ventas.
+- El indicador «Asientos del periodo» ahora cuenta comprobantes distintos y no
+  líneas individuales del mayor.
+- Las consultas de balanza y libro mayor para herramientas de consulta también
+  excluyen anulaciones y reversas. El saldo de la balanza conserva precisión
+  decimal y deja de convertir importes contables a `float`.
+- Comprobación focal del dashboard: 12 casos aprobados, incluyendo asientos
+  anulados/reversados y una cuenta de costo en clasificación minúscula.
+
+---
+
 ## 2026-08-07 — Cierre fiscal con saldos funcionales por libro
 
 ### Petición
