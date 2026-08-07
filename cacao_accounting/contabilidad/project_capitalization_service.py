@@ -3,6 +3,7 @@
 """Servicio para la Capitalización Automática de Proyectos."""
 
 import json
+from dataclasses import dataclass
 from decimal import Decimal
 from datetime import date
 from typing import Any
@@ -22,6 +23,16 @@ from cacao_accounting.database import (
 from cacao_accounting.contabilidad.journal_service import submit_journal
 from cacao_accounting.ledger_queries import primary_ledger_id
 from cacao_accounting.logs import log
+
+
+@dataclass(frozen=True)
+class CapitalizationLine:
+    """Línea fuente normalizada para un comprobante de capitalización."""
+
+    entry: GLEntry
+    debit_account_code: str
+    credit_account_code: str
+    value: Decimal
 
 
 def _is_eligible_capitalization_entry(entry: GLEntry) -> bool:
@@ -60,12 +71,13 @@ def _resolve_capitalization_accounts(entry: GLEntry, proj: Project) -> tuple[str
 
 def _create_capitalization_journal(
     company: str,
-    entry: GLEntry,
-    deb_acc_code: str,
-    cred_acc_code: str,
-    val: Decimal,
+    lines: list[CapitalizationLine],
+    user_id: str,
 ) -> ComprobanteContable:
-    """Crea el comprobante de capitalizacion con sus lineas."""
+    """Crea un comprobante que capitaliza todas las líneas de un documento fuente."""
+    if not lines:
+        raise ValueError("No hay líneas elegibles para capitalizar.")
+    entry = lines[0].entry
     unique_suffix = str(uuid4())[:8].upper()
     today = date.today()
     doc_no = f"CAP-{today.year}-{today.month:02d}-{unique_suffix}"
@@ -77,6 +89,7 @@ def _create_capitalization_journal(
     cap_journal = ComprobanteContable(
         id=f"CAP-{unique_suffix}",
         entity=company,
+        user_id=user_id,
         date=entry.posting_date,
         status="draft",
         transaction_currency=transaction_currency,
@@ -97,23 +110,38 @@ def _create_capitalization_journal(
     database.session.add(cap_journal)
     database.session.flush()
 
-    orig_doc_no = entry.document_no or "JV-000000"
-    memo_text = f"Capitalizacion automatica ({orig_doc_no})"
-    common_kwargs: dict[str, Any] = {
-        "transaction": "journal_entry",
-        "transaction_id": cap_journal.id,
-        "entity": company,
-        "project": entry.project_code,
-        "unit": entry.unit_code,
-        "cost_center": entry.cost_center_code,
-        "date": entry.posting_date,
-        "memo": memo_text,
-        "currency_id": transaction_currency,
-        "exchange_rate": None,
-    }
-
-    database.session.add(ComprobanteContableDetalle(account=deb_acc_code, value=val, **common_kwargs))
-    database.session.add(ComprobanteContableDetalle(account=cred_acc_code, value=-val, **common_kwargs))
+    for capitalization_line in lines:
+        source = capitalization_line.entry
+        source_currency = source.account_currency or source.company_currency
+        if source_currency != transaction_currency:
+            raise ValueError("Un comprobante fuente contiene líneas capitalizables en monedas incompatibles.")
+        orig_doc_no = source.document_no or "JV-000000"
+        common_kwargs: dict[str, Any] = {
+            "transaction": "journal_entry",
+            "transaction_id": cap_journal.id,
+            "entity": company,
+            "project": source.project_code,
+            "unit": source.unit_code,
+            "cost_center": source.cost_center_code,
+            "date": source.posting_date,
+            "memo": f"Capitalizacion automatica ({orig_doc_no})",
+            "currency_id": transaction_currency,
+            "exchange_rate": None,
+        }
+        database.session.add(
+            ComprobanteContableDetalle(
+                account=capitalization_line.debit_account_code,
+                value=capitalization_line.value,
+                **common_kwargs,
+            )
+        )
+        database.session.add(
+            ComprobanteContableDetalle(
+                account=capitalization_line.credit_account_code,
+                value=-capitalization_line.value,
+                **common_kwargs,
+            )
+        )
     database.session.flush()
 
     return cap_journal
@@ -127,21 +155,40 @@ class ProjectCapitalizationService:
         success_count = 0
         errors: list[str] = []
 
-        entries = self._query_eligible_entries(company, period_id)
+        groups = self._capitalization_groups(company, period_id)
 
-        for entry in entries:
-            if not _is_eligible_capitalization_entry(entry):
-                continue
+        for voucher_id, lines in groups.items():
             try:
-                self._process_single_entry(company, entry)
+                self._process_group(company, voucher_id, lines, user_id)
                 success_count += 1
             except Exception as e:
                 database.session.rollback()
-                log.exception(f"Error capitalizando entrada {entry.id}")
-                errors.append(f"Entrada {entry.document_no or entry.id}: {str(e)}")
+                log.exception(f"Error capitalizando comprobante {voucher_id}")
+                errors.append(f"Comprobante {voucher_id}: {str(e)}")
 
         database.session.commit()
         return success_count, errors
+
+    @classmethod
+    def _capitalization_groups(cls, company: str, period_id: str) -> dict[str, list[CapitalizationLine]]:
+        """Agrupa todas las líneas elegibles por comprobante fuente."""
+        groups: dict[str, list[CapitalizationLine]] = {}
+        for entry in cls._query_eligible_entries(company, period_id):
+            if not _is_eligible_capitalization_entry(entry) or _is_already_capitalized(entry):
+                continue
+            project = _find_capitalizable_project(company, entry.project_code)
+            if not project:
+                continue
+            debit_code, credit_code, value = _resolve_capitalization_accounts(entry, project)
+            groups.setdefault(entry.voucher_id, []).append(
+                CapitalizationLine(
+                    entry=entry,
+                    debit_account_code=debit_code,
+                    credit_account_code=credit_code,
+                    value=value,
+                )
+            )
+        return groups
 
     @staticmethod
     def _query_eligible_entries(company: str, period_id: str) -> list[GLEntry]:
@@ -164,21 +211,19 @@ class ProjectCapitalizationService:
         return query.all()
 
     @staticmethod
-    def _process_single_entry(company: str, entry: GLEntry) -> None:
-        """Procesa una unica entrada GL para capitalizacion."""
-        proj = _find_capitalizable_project(company, entry.project_code)
-        if not proj:
-            return
-        if _is_already_capitalized(entry):
-            return
-
-        deb_acc_code, cred_acc_code, val = _resolve_capitalization_accounts(entry, proj)
-        cap_journal = _create_capitalization_journal(company, entry, deb_acc_code, cred_acc_code, val)
+    def _process_group(
+        company: str,
+        voucher_id: str,
+        lines: list[CapitalizationLine],
+        user_id: str,
+    ) -> None:
+        """Capitaliza atómicamente todas las líneas elegibles de un comprobante."""
+        cap_journal = _create_capitalization_journal(company, lines, user_id)
 
         submit_journal(cap_journal.id)
 
-        orig_journal = database.session.get(ComprobanteContable, entry.voucher_id)
+        orig_journal = database.session.get(ComprobanteContable, voucher_id)
         if orig_journal:
             orig_journal.capitalized_by_id = cap_journal.id
 
-        database.session.flush()
+        database.session.commit()

@@ -11,6 +11,7 @@ Convencion de naming para referencias de pago:
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -19,10 +20,13 @@ from typing import Any
 from sqlalchemy import func, or_, select
 
 from cacao_accounting.database import (
+    Accounts,
     Book,
     ComprobanteContable,
     ComprobanteContableDetalle,
     DocumentRelation,
+    Entity,
+    GLEntry,
     PaymentEntry,
     PaymentReference,
     PurchaseInvoice,
@@ -930,8 +934,11 @@ def _maybe_settle_advance_against_invoice(
         party_account_id=party_account_id,
         advance_account_id=advance_account_id,
         payment=payment,
+        invoice=invoice,
         amount=amount,
         allocation_date=allocation_date,
+        exchange_gain_account_id=defaults.exchange_gain_account_id,
+        exchange_loss_account_id=defaults.exchange_loss_account_id,
     )
 
 
@@ -942,29 +949,32 @@ def _post_advance_settlement_journal(
     party_account_id: str,
     advance_account_id: str,
     payment: PaymentEntry,
+    invoice: SalesInvoice | PurchaseInvoice,
     amount: Decimal,
     allocation_date: date,
+    exchange_gain_account_id: str | None,
+    exchange_loss_account_id: str | None,
 ) -> None:
     """Crea y publica el asiento de neteo de anticipo contra factura."""
     from cacao_accounting.contabilidad.posting import post_comprobante_contable
     from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
-    book = (
-        database.session.execute(select(Book).filter_by(entity=company).order_by(Book.is_primary.desc(), Book.code))
-        .scalars()
-        .first()
+    books = list(
+        database.session.execute(
+            select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.is_primary.desc(), Book.code)
+        ).scalars()
     )
     user_id = getattr(payment, "created_by", None) or "system"
     journal = ComprobanteContable(
         entity=company,
-        book=book.code if book else None,
+        book=books[0].code if books else None,
         user_id=str(user_id),
         date=allocation_date,
         reference=payment.document_no or payment.id,
         memo="Neteo de anticipo contra factura",
         status="submitted",
         voucher_type="journal_entry",
-        book_codes=book.code if book else None,
+        book_codes=json.dumps([book.code for book in books]) if books else None,
         transaction_currency=None,
     )
     database.session.add(journal)
@@ -982,65 +992,200 @@ def _post_advance_settlement_journal(
     debit_account, credit_account = (
         (party_account_id, advance_account_id) if is_purchase else (advance_account_id, party_account_id)
     )
-    _resolve_and_create_journal_lines(
+    _create_advance_settlement_lines(
         company=company,
         journal=journal,
-        debit_account=debit_account,
-        credit_account=credit_account,
+        party_account_id=party_account_id,
+        advance_account_id=advance_account_id,
+        is_purchase=is_purchase,
+        payment=payment,
+        invoice=invoice,
         amount=amount,
         allocation_date=allocation_date,
-        book=book,
+        books=books,
+        exchange_gain_account_id=exchange_gain_account_id,
+        exchange_loss_account_id=exchange_loss_account_id,
     )
-    post_comprobante_contable(journal)
+    post_comprobante_contable(journal, ledger_code=[book.code for book in books] or None)
     journal.status = "submitted"
     database.session.add(journal)
 
 
-def _resolve_and_create_journal_lines(
+def _document_total_for_allocation(document: Any) -> Decimal:
+    """Resuelve el total nominal usado para prorratear el valor en libros."""
+    return decimal_or_zero(
+        getattr(document, "grand_total", None)
+        or getattr(document, "paid_amount", None)
+        or getattr(document, "received_amount", None)
+    )
+
+
+def _document_currency_for_settlement(document: Any, company: str) -> str | None:
+    """Resuelve la moneda original, incluyendo columnas legacy de pagos."""
+    currency = (
+        getattr(document, "transaction_currency", None)
+        or getattr(document, "currency", None)
+        or getattr(document, "base_currency", None)
+    )
+    if currency:
+        return str(currency)
+    entity = database.session.execute(select(Entity).where(Entity.code == company)).scalars().first()
+    return str(entity.currency) if entity and entity.currency else None
+
+
+def _fallback_settlement_value(
+    document: Any,
+    company: str,
+    book: Book,
+    amount: Decimal,
+    allocation_date: date,
+) -> Decimal:
+    """Convierte el monto cuando todavía no existen entradas GL de soporte."""
+    source_currency = _document_currency_for_settlement(document, company)
+    if not source_currency or not book.currency or source_currency == book.currency:
+        return amount
+    base_currency = getattr(document, "base_currency", None)
+    exchange_rate = decimal_or_zero(getattr(document, "exchange_rate", None))
+    if base_currency == book.currency and exchange_rate > 0:
+        return amount * exchange_rate
+    from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
+
+    return amount * _lookup_exchange_rate(source_currency, book.currency, allocation_date)
+
+
+def _allocated_carrying_value(
+    document: Any,
+    account_id: str,
+    company: str,
+    book: Book,
+    amount: Decimal,
+    allocation_date: date,
+) -> Decimal:
+    """Prorratea el saldo histórico real del documento en un libro."""
+    net = database.session.execute(
+        select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+            GLEntry.company == company,
+            GLEntry.ledger_id == book.id,
+            GLEntry.voucher_id == document.id,
+            GLEntry.account_id == account_id,
+            GLEntry.is_cancelled.is_(False),
+            GLEntry.is_reversal.is_(False),
+        )
+    ).scalar_one()
+    carrying_total = abs(decimal_or_zero(net))
+    nominal_total = _document_total_for_allocation(document)
+    if carrying_total > 0 and nominal_total > 0:
+        return carrying_total * amount / nominal_total
+    return _fallback_settlement_value(document, company, book, amount, allocation_date)
+
+
+def _add_settlement_line(
+    *,
+    journal: ComprobanteContable,
+    company: str,
+    account_code: str,
+    book: Book,
+    value: Decimal,
+    allocation_date: date,
+    memo: str,
+) -> None:
+    """Agrega una línea funcional dirigida a un libro específico."""
+    database.session.add(
+        ComprobanteContableDetalle(
+            entity=company,
+            account=account_code,
+            book=book.code,
+            date=allocation_date,
+            transaction="journal_entry",
+            transaction_id=journal.id,
+            value=value,
+            value_default=value,
+            currency_id=book.currency,
+            memo=memo,
+            voucher_type="journal_entry",
+        )
+    )
+
+
+def _create_advance_settlement_lines(
     *,
     company: str,
     journal: ComprobanteContable,
-    debit_account: str,
-    credit_account: str,
+    party_account_id: str,
+    advance_account_id: str,
+    is_purchase: bool,
+    payment: PaymentEntry,
+    invoice: SalesInvoice | PurchaseInvoice,
     amount: Decimal,
     allocation_date: date,
-    book: Any,
+    books: list[Book],
+    exchange_gain_account_id: str | None,
+    exchange_loss_account_id: str | None,
 ) -> None:
-    """Resuelve codigos de cuenta y crea las lineas del comprobante."""
-    from cacao_accounting.database import Accounts as _Accounts
+    """Crea el neteo por libro y reconoce la diferencia cambiaria realizada."""
+    accounts = {
+        account.id: account
+        for account in database.session.execute(
+            select(Accounts).where(
+                Accounts.entity == company,
+                Accounts.id.in_(
+                    [
+                        party_account_id,
+                        advance_account_id,
+                        exchange_gain_account_id,
+                        exchange_loss_account_id,
+                    ]
+                ),
+            )
+        ).scalars()
+    }
+    party_account = accounts.get(party_account_id)
+    advance_account = accounts.get(advance_account_id)
+    if not party_account or not advance_account:
+        raise _document_flow_error("Las cuentas de anticipo y del tercero no son válidas para la compañía.")
 
-    _debit_code = database.session.execute(select(_Accounts).filter_by(id=debit_account)).scalars().first()
-    _credit_code = database.session.execute(select(_Accounts).filter_by(id=credit_account)).scalars().first()
-    debit_code = _debit_code.code if _debit_code else debit_account
-    credit_code = _credit_code.code if _credit_code else credit_account
-    database.session.add(
-        ComprobanteContableDetalle(
-            entity=company,
-            account=debit_code,
-            book=book.code if book else None,
-            date=allocation_date,
-            transaction="journal_entry",
-            transaction_id=journal.id,
-            value=amount,
-            value_default=amount,
-            memo="Neteo de anticipo",
-            voucher_type="journal_entry",
+    for book in books:
+        party_value = _allocated_carrying_value(invoice, party_account_id, company, book, amount, allocation_date)
+        advance_value = _allocated_carrying_value(payment, advance_account_id, company, book, amount, allocation_date)
+        debit_account, debit_value, credit_account, credit_value = (
+            (party_account, party_value, advance_account, advance_value)
+            if is_purchase
+            else (advance_account, advance_value, party_account, party_value)
         )
-    )
-    database.session.add(
-        ComprobanteContableDetalle(
-            entity=company,
-            account=credit_code,
-            book=book.code if book else None,
-            date=allocation_date,
-            transaction="journal_entry",
-            transaction_id=journal.id,
-            value=-amount,
-            value_default=-amount,
+        _add_settlement_line(
+            journal=journal,
+            company=company,
+            account_code=debit_account.code,
+            book=book,
+            value=debit_value,
+            allocation_date=allocation_date,
             memo="Neteo de anticipo",
-            voucher_type="journal_entry",
         )
-    )
+        _add_settlement_line(
+            journal=journal,
+            company=company,
+            account_code=credit_account.code,
+            book=book,
+            value=-credit_value,
+            allocation_date=allocation_date,
+            memo="Neteo de anticipo",
+        )
+        difference = debit_value - credit_value
+        if difference == 0:
+            continue
+        fx_account_id = exchange_gain_account_id if difference > 0 else exchange_loss_account_id
+        fx_account = accounts.get(fx_account_id) if fx_account_id else None
+        if not fx_account:
+            raise _document_flow_error("Falta la cuenta de diferencia cambiaria para netear el anticipo.")
+        _add_settlement_line(
+            journal=journal,
+            company=company,
+            account_code=fx_account.code,
+            book=book,
+            value=-difference,
+            allocation_date=allocation_date,
+            memo="Diferencia cambiaria realizada en neteo de anticipo",
+        )
 
 
 def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:

@@ -276,7 +276,25 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
             project_code=proj.code,
             accounting_period_id=self.period.id,
         )
-        database.session.add(gl_orig)
+        gl_orig_second_line = GLEntry(
+            posting_date=date(2026, 7, 10),
+            company="cacao",
+            ledger_id="NIO",
+            account_id=self.acc_expense.id,
+            account_code=self.acc_expense.code,
+            debit=Decimal("180.00"),
+            credit=Decimal("0.00"),
+            debit_in_account_currency=Decimal("5.00"),
+            account_currency="USD",
+            company_currency="NIO",
+            exchange_rate=Decimal("36"),
+            voucher_type="journal_entry",
+            voucher_id=jv_orig.id,
+            document_no=jv_orig.document_no,
+            project_code=proj.code,
+            accounting_period_id=self.period.id,
+        )
+        database.session.add_all([gl_orig, gl_orig_second_line])
         database.session.commit()
 
         # 3. Registrar serie de numeración necesaria para el servicio
@@ -329,28 +347,44 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
             .scalars()
             .all()
         )
-        self.assertEqual(len(lines), 2)
+        self.assertEqual(len(lines), 4)
 
         # Debe y Haber deben estar balanceados conservando el mismo proyecto
-        debit_line = next(line for line in lines if line.value > 0)
-        credit_line = next(line for line in lines if line.value < 0)
+        debit_lines = [line for line in lines if line.value > 0]
+        credit_lines = [line for line in lines if line.value < 0]
 
-        self.assertEqual(debit_line.account, self.acc_asset.code)
-        self.assertEqual(debit_line.project, proj.code)
-        self.assertEqual(debit_line.value, Decimal("10.00"))
+        self.assertEqual({line.account for line in debit_lines}, {self.acc_asset.code})
+        self.assertEqual({line.project for line in debit_lines}, {proj.code})
+        self.assertEqual(sum(line.value for line in debit_lines), Decimal("15.00"))
 
-        self.assertEqual(credit_line.account, self.acc_expense.code)
-        self.assertEqual(credit_line.project, proj.code)
-        self.assertEqual(credit_line.value, Decimal("-10.00"))
+        self.assertEqual({line.account for line in credit_lines}, {self.acc_expense.code})
+        self.assertEqual({line.project for line in credit_lines}, {proj.code})
+        self.assertEqual(sum(line.value for line in credit_lines), Decimal("-15.00"))
 
         capitalization_entries = (
             database.session.execute(database.select(GLEntry).filter_by(voucher_id=cap_jv.id)).scalars().all()
         )
-        self.assertEqual(len(capitalization_entries), 4)
+        self.assertEqual(len(capitalization_entries), 8)
         self.assertEqual(
-            sum(entry.debit for entry in capitalization_entries if entry.ledger_id == self.book.id), Decimal("360")
+            sum(entry.debit for entry in capitalization_entries if entry.ledger_id == self.book.id), Decimal("540")
         )
-        self.assertEqual(sum(entry.debit for entry in capitalization_entries if entry.ledger_id == eur_book.id), Decimal("9"))
+        self.assertEqual(
+            sum(entry.debit for entry in capitalization_entries if entry.ledger_id == eur_book.id), Decimal("13.5")
+        )
+
+        repeated_success, repeated_errors = svc.run_capitalization(
+            company="cacao", period_id=self.period.id, user_id="test_user"
+        )
+        self.assertEqual(repeated_success, 0)
+        self.assertEqual(repeated_errors, [])
+        self.assertEqual(
+            database.session.execute(
+                database.select(ComprobanteContable).filter_by(voucher_type="Capitalización Automática de Proyecto")
+            )
+            .scalars()
+            .all(),
+            [cap_jv],
+        )
 
         # 6. Intentar anular la transacción original (debe estar bloqueada)
         with self.assertRaises(PostingError):
