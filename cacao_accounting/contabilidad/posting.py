@@ -213,7 +213,7 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     document_exchange_rate = getattr(document, "exchange_rate", None)
     document_base_currency = getattr(document, "base_currency", None)
     transaction_currency = getattr(document, "transaction_currency", None)
-    entity = database.session.get(Entity, company)
+    entity = database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
     default_company_currency = getattr(entity, "currency", None) if entity else None
     contexts: list[LedgerContext] = []
     for book in _active_books(company, ledger_code):

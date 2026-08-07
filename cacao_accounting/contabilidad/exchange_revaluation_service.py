@@ -105,6 +105,7 @@ class ExchangeRevaluationService:
 
         defaults = self._validated_defaults(company)
         ledgers = self._active_ledgers(company)
+        summary_ledger = self._summary_ledger(company, ledgers)
         candidates = self._open_candidates(company, period.end)
 
         run = ExchangeRevaluation(
@@ -121,6 +122,7 @@ class ExchangeRevaluationService:
             affected_documents_count=0,
             total_gain=Decimal("0"),
             total_loss=Decimal("0"),
+            currency=summary_ledger.currency,
             generated_journal=False,
             voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
         )
@@ -148,11 +150,19 @@ class ExchangeRevaluationService:
         run.journal_entry_id = journal.id
         run.affected_documents_count = len(affected)
         run.total_gain = sum(
-            (self._decimal(entry.credit) for entry in entries if entry.account_id == defaults.exchange_gain_account_id),
+            (
+                self._decimal(entry.credit)
+                for entry in entries
+                if entry.ledger_id == summary_ledger.id and entry.account_id == defaults.unrealized_exchange_gain_account_id
+            ),
             Decimal("0"),
         )
         run.total_loss = sum(
-            (self._decimal(entry.debit) for entry in entries if entry.account_id == defaults.exchange_loss_account_id),
+            (
+                self._decimal(entry.debit)
+                for entry in entries
+                if entry.ledger_id == summary_ledger.id and entry.account_id == defaults.unrealized_exchange_loss_account_id
+            ),
             Decimal("0"),
         )
         log_submit(run)
@@ -282,10 +292,10 @@ class ExchangeRevaluationService:
         defaults = database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalars().first()
         if defaults is None:
             raise ExchangeRevaluationError("No existe configuracion de cuentas predeterminadas para la compania.")
-        if not defaults.exchange_gain_account_id:
-            raise ExchangeRevaluationError("No existe cuenta de ganancia cambiaria configurada.")
-        if not defaults.exchange_loss_account_id:
-            raise ExchangeRevaluationError("No existe cuenta de perdida cambiaria configurada.")
+        if not defaults.unrealized_exchange_gain_account_id:
+            raise ExchangeRevaluationError("No existe cuenta de ganancia cambiaria no realizada configurada.")
+        if not defaults.unrealized_exchange_loss_account_id:
+            raise ExchangeRevaluationError("No existe cuenta de perdida cambiaria no realizada configurada.")
         return defaults
 
     def _active_ledgers(self, company: str) -> list[Book]:
@@ -305,6 +315,12 @@ class ExchangeRevaluationService:
         if invalid:
             raise ExchangeRevaluationError("Hay libros activos sin moneda configurada: " + ", ".join(invalid))
         return list(ledgers)
+
+    def _summary_ledger(self, company: str, ledgers: list[Book]) -> Book:
+        """Select the entity-currency book used for run-level totals."""
+        entity = database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
+        entity_currency = str(entity.currency or "") if entity else ""
+        return next((ledger for ledger in ledgers if ledger.currency == entity_currency), ledgers[0])
 
     def _open_candidates(self, company: str, as_of_date: date) -> list[RevaluationCandidate]:
         candidates = self._open_sales_invoices(company, as_of_date)
@@ -507,11 +523,15 @@ class ExchangeRevaluationService:
         if draft.candidate.normal_balance == "credit":
             monetary_debit = not increased
             monetary_credit = increased
-            offset_account = defaults.exchange_loss_account_id if increased else defaults.exchange_gain_account_id
+            offset_account = (
+                defaults.unrealized_exchange_loss_account_id if increased else defaults.unrealized_exchange_gain_account_id
+            )
         else:
             monetary_debit = increased
             monetary_credit = not increased
-            offset_account = defaults.exchange_gain_account_id if increased else defaults.exchange_loss_account_id
+            offset_account = (
+                defaults.unrealized_exchange_gain_account_id if increased else defaults.unrealized_exchange_loss_account_id
+            )
         if offset_account is None:
             raise ExchangeRevaluationError("No existe cuenta de resultado cambiario configurada.")
         return monetary_debit, monetary_credit, offset_account
@@ -729,7 +749,7 @@ class ExchangeRevaluationService:
         return str(defaults.default_receivable if receivable else defaults.default_payable)
 
     def _document_currency(self, document: Any, company: str) -> str:
-        entity = database.session.get(Entity, company)
+        entity = database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
         return str(
             getattr(document, "transaction_currency", None)
             or getattr(document, "base_currency", None)
