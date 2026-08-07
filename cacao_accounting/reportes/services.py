@@ -1859,7 +1859,9 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
     base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-    base_query = _apply_gl_filters(base_query, filters, period_start, period_end).where(GLEntry.ledger_id == selected_ledger.id)
+    base_query = _apply_gl_filters(base_query, filters, period_start, period_end).where(
+        GLEntry.ledger_id == selected_ledger.id
+    )
     summary: dict[str, Decimal] = {
         "income": Decimal("0"),
         "cost": Decimal("0"),

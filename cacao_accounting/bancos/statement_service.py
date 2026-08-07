@@ -223,7 +223,7 @@ def create_bank_difference_journal(
     if not bank_gl_account or bank_gl_account.entity != reconciliation.company:
         raise BankStatementError("La cuenta bancaria GL no pertenece a la compañía.")
     entity = database.session.execute(select(Entity).where(Entity.code == reconciliation.company)).scalars().first()
-    transaction_currency = bank_account.currency or (entity.currency if entity else None)
+    transaction_currency = (bank_account.currency if bank_account else None) or (entity.currency if entity else None)
     if not transaction_currency:
         raise BankStatementError("No se pudo determinar la moneda de la cuenta bancaria.")
     books = list(
