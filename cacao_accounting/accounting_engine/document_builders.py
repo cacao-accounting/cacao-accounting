@@ -1067,9 +1067,14 @@ def _company_defaults(company: str) -> CompanyDefaultAccount | None:
     return database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalars().first()
 
 
+def _company_entity(company: str) -> Entity | None:
+    """Resolve an entity by the company code used on transactions."""
+    return database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
+
+
 def _document_currency(document: Any, company: str) -> str:
     """Resolve the transaction currency for the document."""
-    entity = database.session.get(Entity, company)
+    entity = _company_entity(company)
     return str(
         getattr(document, "transaction_currency", None)
         or getattr(document, "currency", None)
@@ -1080,7 +1085,7 @@ def _document_currency(document: Any, company: str) -> str:
 
 def _company_currency(document: Any, company: str) -> str:
     """Resolve the functional currency for the company/document."""
-    entity = database.session.get(Entity, company)
+    entity = _company_entity(company)
     return str(
         getattr(document, "base_currency", None) or getattr(entity, "currency", None) or _document_currency(document, company)
     )
