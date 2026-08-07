@@ -134,8 +134,8 @@ def test_dashboard_returns_uniform_sections_and_metrics(client):
     accounting = data["sections"]["accounting"]
     assert accounting["visible"] is True
     assert accounting["kpis"]["income"]["value"] == 300.0
-    assert accounting["kpis"]["expenses"]["value"] == 80.0
-    assert accounting["kpis"]["profit"]["value"] == 220.0
+    assert accounting["kpis"]["expenses"]["value"] == 100.0
+    assert accounting["kpis"]["profit"]["value"] == 200.0
     assert accounting["tables"]["summary"][3]["label"] == "Asientos del periodo"
 
     banks = data["sections"]["banks"]
@@ -160,6 +160,26 @@ def test_dashboard_returns_uniform_sections_and_metrics(client):
     assert sales["kpis"]["receivables"]["value"] == 350.0
     assert sales["kpis"]["customers"]["value"] == 1
     assert sales["tables"]["top_customers"][0]["name"] == "Cliente Demo"
+
+
+def test_dashboard_excludes_cancelled_and_reversal_gl_entries(app, client):
+    """Los KPIs no mezclan actividad vigente con asientos anulados."""
+    with app.app_context():
+        cancelled_income = _gl("GL-CANCELLED", "ACC-INCOME-EN", debit=0, credit=700)
+        cancelled_income.is_cancelled = True
+        reversal_bank = _gl("GL-REVERSAL", "ACC-BANK", debit=900, credit=0)
+        reversal_bank.is_reversal = True
+        database.session.add_all([cancelled_income, reversal_bank])
+        database.session.commit()
+
+    _login(client, "admin")
+    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+
+    assert response.status_code == 200
+    sections = response.get_json()["sections"]
+    assert sections["accounting"]["kpis"]["income"]["value"] == 300.0
+    assert sections["accounting"]["tables"]["summary"][3]["amount"] == 5
+    assert sections["banks"]["tables"]["account_balances"][0]["balance"] == 1000.0
 
 
 def test_dashboard_hides_sales_without_permission(client):
@@ -346,15 +366,18 @@ def _seed_financial_activity() -> None:
     book = Book(id="BOOK-COMP", code="FISC", name="Fiscal", entity="COMP", currency="USD", is_primary=True, status="activo")
     database.session.add(book)
     database.session.flush()
-    database.session.add_all([
-        UserBookAccess(user_id="USER-ACC", book_id=book.id, can_read=True),
-        UserBookAccess(user_id="USER-SALES", book_id=book.id, can_read=True),
-    ])
+    database.session.add_all(
+        [
+            UserBookAccess(user_id="USER-ACC", book_id=book.id, can_read=True),
+            UserBookAccess(user_id="USER-SALES", book_id=book.id, can_read=True),
+        ]
+    )
     accounts = [
         Accounts(id="ACC-INCOME-EN", entity="COMP", code="4000", name="Income", classification="Income"),
         Accounts(id="ACC-INCOME-ES", entity="COMP", code="4001", name="Ingresos", classification="Ingresos"),
         Accounts(id="ACC-EXP-EN", entity="COMP", code="5000", name="Expense", classification="Expense"),
         Accounts(id="ACC-EXP-ES", entity="COMP", code="5001", name="Gastos", classification="Gastos"),
+        Accounts(id="ACC-COST", entity="COMP", code="5100", name="Cost", classification="cost"),
         Accounts(id="ACC-BANK", entity="COMP", code="1000", name="Bank", classification="Activo"),
     ]
     database.session.add_all(accounts)
@@ -373,9 +396,10 @@ def _seed_financial_activity() -> None:
     database.session.add_all(
         [
             _gl("GL-INCOME-EN", "ACC-INCOME-EN", debit=0, credit=100),
-            _gl("GL-INCOME-ES", "ACC-INCOME-ES", debit=0, credit=200),
+            _gl("GL-INCOME-ES", "ACC-INCOME-ES", debit=0, credit=200, voucher_id="JE-GL-INCOME-EN"),
             _gl("GL-EXP-EN", "ACC-EXP-EN", debit=50, credit=0),
             _gl("GL-EXP-ES", "ACC-EXP-ES", debit=30, credit=0),
+            _gl("GL-COST", "ACC-COST", debit=20, credit=0),
             _gl("GL-BANK", "ACC-BANK", debit=1000, credit=0),
         ]
     )
@@ -446,7 +470,7 @@ def _seed_financial_activity() -> None:
     )
 
 
-def _gl(identifier: str, account_id: str, debit: int, credit: int) -> GLEntry:
+def _gl(identifier: str, account_id: str, debit: int, credit: int, voucher_id: str | None = None) -> GLEntry:
     """Crea una línea GL de prueba."""
     return GLEntry(
         id=identifier,
@@ -456,7 +480,7 @@ def _gl(identifier: str, account_id: str, debit: int, credit: int) -> GLEntry:
         credit=Decimal(credit),
         posting_date=date(2024, 1, 15),
         voucher_type="journal_entry",
-        voucher_id=f"JE-{identifier}",
+        voucher_id=voucher_id or f"JE-{identifier}",
         ledger_id="BOOK-COMP",
     )
 
