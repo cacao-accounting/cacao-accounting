@@ -1566,6 +1566,18 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
   pytest local por instrucción del usuario.
 
+## 2026-08-10 — Precio de factura O2C desde nota de entrega
+
+- #297 confirmado parcialmente: `_resolve_source_item_rate` ignoraba toda
+  relación cuyo origen no fuera una orden de venta, permitiendo que una factura
+  desde nota de entrega evadiera la tolerancia de precio.
+- Corrección local: la validación reutiliza la tasa de líneas fuente de orden,
+  nota de entrega o factura previa. Las facturas manuales sin origen aún
+  requieren definir la fuente de precio/lista aplicable; el issue permanece
+  abierto.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
 ## 2026-08-10 — Scope de compañía en listados S2P
 
 - #288 confirmado parcialmente: los listados de compras construían consultas
