@@ -1866,3 +1866,17 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   y documenta que no representa un saldo inicial no importado.
 - No se ejecutó pytest local por instrucción del usuario; Black, Ruff, mypy,
   compilación y `git diff --check` pasaron. El issue #276 permanece abierto.
+
+## 2026-08-10 — Precio de catálogo para facturas O2C sin origen (#297)
+
+- Se confirmó el gap restante: la tolerancia de precio cubría OV, DN y
+  factura fuente, pero una factura manual sin relación no tenía referencia.
+- El submit ahora resuelve la lista de precios de venta configurada para el
+  cliente y, como fallback, la lista predeterminada activa de la compañía;
+  aplica la fecha, UOM y cantidad mínima antes de comparar la tolerancia.
+- Si no existe una lista o precio vigente, no se inventa un valor de control;
+  la comparación queda explícitamente sin referencia de catálogo.
+- Se añadió regresión para una factura manual a 120 contra catálogo a 100 con
+  tolerancia del 5%. El issue permanece abierto para verificación posterior.
+- Black, Ruff, mypy, compilación y `git diff --check` pasan; no se ejecutó
+  pytest local por instrucción del usuario.
