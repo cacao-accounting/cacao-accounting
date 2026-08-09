@@ -6,7 +6,7 @@ Conclusión: **PARTIAL — no debe declararse listo para producción financiera 
 
 ## 1. Executive Summary
 
-El sistema tiene una base contable significativa: el posting genera `GLEntry`, existen libros paralelos, subledger de inventario, pagos/aplicaciones, revaluación FX, reportes y pruebas de regresión. La suite completa posterior a los cambios terminó con **1591 passed, 10 skipped y 242 warnings**; el esquema MariaDB pasó **214 pruebas**.
+El sistema tiene una base contable significativa: el posting genera `GLEntry`, existen libros paralelos, subledger de inventario, pagos/aplicaciones, revaluación FX, reportes y pruebas de regresión. La suite completa posterior a los cambios terminó con **1591 passed, 10 skipped y 174 warnings**; el esquema MariaDB pasó **214 pruebas**.
 
 La evidencia sí confirma cinco defectos corregidos durante esta auditoría: dos incompatibilidades del esquema con MariaDB, una agregación bancaria entre libros, el signo FX incorrecto de notas de crédito abiertas y cifras/signos incorrectos en datasets semánticos y forecast de caja. La suite verde demuestra regresión de software, pero no prueba por sí sola que todos los subledgers reconcilien con GL en todos los libros, compañías, monedas y períodos. Por eso la evaluación final es PARTIAL en todos los procesos auditados.
 
@@ -88,9 +88,10 @@ No se inventan importes ni se etiqueta cero una diferencia que no fue calculada 
 
 ## 12. End-to-End Test Results
 
-- Suite requerida en `.venv`: **1591 passed, 10 skipped, 242 warnings**, log `test_results_audit_final_20260809.log`.
+- Suite requerida en `.venv`: **1591 passed, 10 skipped, 174 warnings**, log `test_results_audit_authoritative_20260809.log`.
 - Suite completa autoritativa sobre el árbol final: **1591 passed, 10 skipped, 174 warnings**, log `test_results_audit_authoritative_20260809.log`.
 - Esquema MariaDB 11.4 en Docker (`mysql+pymysql`, puerto 3307): **214 passed**, log `test_results_mariadb_schema_current.log`.
+- Flujo de migraciones MySQL 8, PostgreSQL 16 y MariaDB 11.4: **PASS**; cada motor registró `20260809_0001` después de `db init`, en `test_results_migration_mysql_20260809.log`, `test_results_migration_postgresql_20260809.log` y `test_results_migration_mariadb_20260809.log`.
 - Pruebas focales FX/multi-ledger/reportes: **12 passed**.
 - Fixture afectado por hacer obligatorio `Entity.code`: **24 passed** de `test_line_import_api.py` tras completar el dato requerido.
 - Regresión final de pagos/conciliaciones tras el último reemplazo de bloqueo ORM: **131 passed, 41 warnings**, log `test_results_payment_last_orm_20260809.log`.
@@ -178,7 +179,8 @@ Los escenarios base, multimoneda, multilibro, inventario y 3-way están document
 
 ## 15. Medium/Low Findings
 
-- **CONTROL GAP — HIGH:** el repositorio contiene `script.py.mako` pero no se identificaron versiones de migración para aplicar `nullable=False` en bases existentes. Requiere migración explícita antes de producción.
+- **CONFIRMED BUG — HIGH (corregido):** `db migrate` declaraba éxito sin aplicar revisiones: una SQLite limpia terminaba con `alembic_version` vacío porque no existían scripts versionados. Se añadió `cacao_accounting/migrations/20260809_0001_baseline.py`, la CLI rechaza bases sin tabla `user` y `tests/test_database_migrations.py` cubre ambos casos. Sigue pendiente una migración posterior para constraints históricas de `Entity.code`/`Book.code` con preflight de nulos.
+- **CONTROL GAP — HIGH:** el baseline no sustituye la migración de datos/constraints para bases históricas que pudieran contener `NULL` en `Entity.code` o `Book.code`; debe ejecutarse con preflight y no inventar códigos.
 - **POTENTIAL RISK — MEDIUM:** existen superficies de presentación que convierten Decimal a `float`/`parseFloat`/`toFixed`; no se confirmó pérdida material en posting, pero falta una prueba de contrato de precisión UI/API.
 - **DESIGN QUESTION — LOW:** `Book.code` es globalmente único además de único por entidad; puede limitar códigos iguales entre compañías. No se confirmó impacto contable.
 - **CONTROL GAP — LOW:** la corrida focal emitió 110 warnings; después de reemplazar
@@ -190,7 +192,7 @@ Los escenarios base, multimoneda, multilibro, inventario y 3-way están document
 
 ## 16. Missing Controls
 
-1. Migraciones versionadas y verificadas para cambios de constraints.
+1. Migraciones versionadas y verificadas para cambios de constraints, incluyendo preflight de datos existentes.
 2. Job/consulta de reconciliación formal por company, book, currency y fiscal period para AR, AP, inventory, bank y tax.
 3. Alertas ante GLEntry huérfanos, subledger sin GL, journals duplicados y diferencias no cero.
 4. Pruebas de concurrencia/retry/event replay con idempotency keys persistentes.
@@ -202,14 +204,14 @@ Faltan o deben consolidarse pruebas independientes de: realized FX parcial y pos
 
 ## 18. Recommended Fix Order
 
-- **P0:** crear y probar migraciones para `Entity.code`/`Book.code`; bloquear posting si faltan company/book/period/currency; ejecutar reconciliación de saldos antes de producción.
+- **P0:** crear y probar la migración de constraints para `Entity.code`/`Book.code`; bloquear posting si faltan company/book/period/currency; ejecutar reconciliación de saldos antes de producción.
 - **P1:** implementar matriz AR/AP/inventory/bank/tax ↔ GL por dimensiones y alertas de diferencia; completar FX realized/unrealized y cierres.
 - **P2:** reforzar idempotencia, locks, retries y reversals; añadir escenarios de concurrencia y replay.
 - **P3:** eliminar floats de fronteras financieras, documentar precisión y resolver la política de unicidad de códigos.
 
 ## 19. Residual Risks
 
-La auditoría actual ejecutó MariaDB, no una corrida equivalente de PostgreSQL. No se certifica comportamiento bajo carga/concurrencia real, migración de datos existentes, autorización multi-entidad ni todas las combinaciones de cierre, impuestos y reversals. Los 242 warnings deben revisarse aunque no hayan producido fallos.
+La auditoría ejecutó flujos de migración en MySQL 8, PostgreSQL 16 y MariaDB 11.4; MariaDB se probó mediante `mysql+pymysql`, no mediante el controlador nativo `mariadb+mariadbconnector` porque no está instalado en el entorno. No se certifica comportamiento bajo carga/concurrencia real, migración de datos existentes, autorización multi-entidad ni todas las combinaciones de cierre, impuestos y reversals. Los 174 warnings deben revisarse aunque no hayan producido fallos.
 
 ## 20. Final Assessment
 
