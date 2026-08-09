@@ -211,7 +211,7 @@ def _normalize_account_classification(account: Accounts | None) -> str:
     return aliases.get(raw_classification, raw_classification)
 
 
-def _payment_allocations(reference_type: str, reference_id: str, as_of_date: date | None) -> Decimal:
+def _payment_allocations(reference_type: str, reference_id: str, company: str, as_of_date: date | None) -> Decimal:
     query = (
         select(PaymentReference)
         .join(
@@ -227,6 +227,8 @@ def _payment_allocations(reference_type: str, reference_id: str, as_of_date: dat
             PaymentReference.reference_type == reference_type,
             PaymentReference.reference_id == reference_id,
             PaymentEntry.docstatus == 1,
+            PaymentEntry.company == company,
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == company),
         )
     )
     if as_of_date is not None:
@@ -287,7 +289,7 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
         sign = _document_sign(document)
         base_factor = _document_base_factor(document)
         original_original_currency = _decimal_value(document.grand_total)
-        paid_original_currency = _payment_allocations(document_type, document.id, filters.as_of_date)
+        paid_original_currency = _payment_allocations(document_type, document.id, filters.company, filters.as_of_date)
         outstanding_original_currency = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
         original = sign * original_original_currency * base_factor
         paid = sign * paid_original_currency * base_factor
