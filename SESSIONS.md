@@ -133,6 +133,27 @@ revaluación cambiaria, sin cerrar el issue.
 - Se verificaron Black, compileall, diff whitespace, Ruff y Flake8 con `.venv`;
   no se ejecutó pytest local por la instrucción de no saturar la suite.
 
+## 2026-08-10 — Ajustes de diferencias en conciliación bancaria
+
+### Petición
+
+Corregir el control gap #318 e integrar el ajuste de diferencias bancarias en
+el flujo productivo, manteniendo el issue abierto para verificación.
+
+### Implementación
+
+- La pantalla de conciliación permite indicar una diferencia positiva por
+  transacción, además del importe conciliado contra el candidato GL/pago.
+- El servidor exige candidato válido y que `monto conciliado + diferencia`
+  coincida exactamente con el monto bancario; no acepta diferencias huérfanas
+  ni mayores al saldo de la transacción.
+- Se genera y contabiliza el journal con la cuenta de diferencia configurada,
+  preservando `bank_account_id` en la línea bancaria.
+- La línea GL del ajuste se agrega a `ReconciliationItem` y la transacción
+  queda reconciliada solo después de contabilizar el ajuste.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
 ## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
 
 ### Petición
