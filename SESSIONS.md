@@ -1284,3 +1284,11 @@ Validación: 2 pruebas de notas `passed`; batería focal de saldos, subledger, a
 Se confirmó que `SalesMatchingConfig.require_sales_order` se almacenaba pero no se consultaba durante el submit de facturas. Se añadió `_validate_sales_order_requirement`, que acepta una OV directa, una DN vinculada a OV o una relación activa de línea; rechaza facturas manuales cuando la compañía exige OV y mantiene exentas las notas de crédito/débito y devoluciones.
 
 Validación: la regresión de factura manual sin OV pasa; la batería O2C de `test_o2c_sales_fixes.py` y `test_sales_price_validation.py` terminó `27 passed`. Black, Ruff, Flake8 y Mypy pasan en archivos tocados. El issue #280 permanece abierto porque aún faltan controles de reserva, precios desde DN, reversals y reconciliación contra GL.
+
+### 2026-08-09 — Corrección de reserva de inventario en entregas parciales
+
+Se reprodujo el caso INV-10 con stock 100, reserva 100 y una DN vinculada a OV por 60. El posting reducía el stock a 40 y el clamp de `StockBin` reducía primero la reserva; el hook posterior restaba otra vez 60. El resultado previo era reserva 0, aunque debían quedar 40 reservadas.
+
+`_upsert_stock_bin` ahora permite preservar temporalmente la reserva para movimientos de DN vinculados a OV; `_release_reservation_for_delivery_note` continúa siendo el único punto que libera la cantidad entregada. Los movimientos generales y conciliaciones conservan el clamp de reserva.
+
+Validación: regresión de reserva parcial `1 passed`; batería de inventario/reservas `40 passed`; Black, Ruff y Flake8 pasan en archivos tocados. El issue #279 permanece abierto para reconciliar cantidades, valoración, COGS y GL de inventario de extremo a extremo.
