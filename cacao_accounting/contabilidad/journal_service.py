@@ -105,9 +105,22 @@ class JournalDraftInput:
     lines: list[JournalLineInput]
 
 
-def create_journal_draft(payload: dict[str, Any], user_id: str, assign_identifier: bool = True) -> ComprobanteContable:
+def create_journal_draft(
+    payload: dict[str, Any],
+    user_id: str,
+    assign_identifier: bool = True,
+    *,
+    allow_closing: bool = False,
+    allow_fiscal_year_closing: bool = False,
+) -> ComprobanteContable:
     """Crea un comprobante contable manual en borrador."""
     data = _normalize_journal_payload(payload)
+    if data.is_closing and not allow_closing:
+        raise JournalValidationError("El comprobante de cierre solo puede crearse desde un flujo autorizado.")
+    if data.is_fiscal_year_closing and not allow_fiscal_year_closing:
+        raise JournalValidationError("El cierre fiscal solo puede crearse desde el servicio de cierre.")
+    if data.is_fiscal_year_closing and not data.is_closing:
+        raise JournalValidationError("El cierre fiscal debe marcarse también como comprobante de cierre.")
     _validate_balanced_lines(data.company, data.lines)
     _validate_line_books(data.company, data.books, data.lines)
     primary_book = data.books[0] if data.books else None
@@ -144,6 +157,15 @@ def submit_journal(journal_id: str) -> list[Any]:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError("Solo se puede contabilizar un comprobante en borrador.")
+    fiscal_year = None
+    if journal.is_fiscal_year_closing:
+        if not journal.fiscal_year_id:
+            raise JournalValidationError("El cierre fiscal debe indicar un año fiscal.")
+        fiscal_year = database.session.get(FiscalYear, journal.fiscal_year_id, with_for_update=True)
+        if not fiscal_year or fiscal_year.entity != journal.entity or not fiscal_year.is_closed:
+            raise JournalValidationError("El año fiscal del cierre no es válido o no está cerrado administrativamente.")
+        if fiscal_year.financial_closed and fiscal_year.closing_voucher_id != journal.id:
+            raise JournalValidationError("El año fiscal ya tiene un cierre contable.")
     if not journal.document_no:
         _assign_identifier_if_needed(journal, journal.naming_series_id)
     try:
@@ -155,12 +177,10 @@ def submit_journal(journal_id: str) -> list[Any]:
     journal.status = JOURNAL_STATUS_SUBMITTED
 
     # Hook para cierre de año fiscal
-    if journal.is_fiscal_year_closing and journal.fiscal_year_id:
-        fiscal_year = database.session.get(FiscalYear, journal.fiscal_year_id)
-        if fiscal_year:
-            fiscal_year.financial_closed = True
-            fiscal_year.closing_voucher_id = journal.id
-            database.session.add(fiscal_year)
+    if fiscal_year is not None:
+        fiscal_year.financial_closed = True
+        fiscal_year.closing_voucher_id = journal.id
+        database.session.add(fiscal_year)
 
     database.session.add(journal)
     log_submit(journal)
@@ -301,10 +321,15 @@ def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str, reversal_
     # Para corregir en el mismo periodo, usar cancel_submitted_journal (ver R2R-03 / ISSUE #128).
     if source_period.id == reversal_period.id:
         raise JournalValidationError("La reversión debe registrarse en un periodo contable distinto al comprobante origen.")
+    if source.is_fiscal_year_closing:
+        raise JournalValidationError("El cierre fiscal debe revertirse desde el flujo de cierre fiscal.")
     payload = serialize_journal_for_form(source)
     payload["posting_date"] = reversal_date.isoformat()
     payload["reference"] = source.document_no or source.id
     payload["memo"] = f"Reversión de {source.document_no or source.id}"
+    payload["is_closing"] = False
+    payload["is_fiscal_year_closing"] = False
+    payload["fiscal_year_id"] = None
     payload["lines"] = _reversed_payload_lines(payload.get("lines", []))
 
     reversed_draft = create_journal_draft(payload, user_id=user_id, assign_identifier=False)
@@ -328,6 +353,8 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     previous_posting_date = journal.date
     previous_naming_series_id = journal.naming_series_id
     data = _normalize_journal_payload(payload)
+    if data.is_closing != bool(journal.is_closing) or data.is_fiscal_year_closing != bool(journal.is_fiscal_year_closing):
+        raise JournalValidationError("Los flags de cierre no pueden cambiarse al editar un borrador.")
     _validate_balanced_lines(data.company, data.lines)
     _validate_line_books(data.company, data.books, data.lines)
     primary_book = data.books[0] if data.books else None
