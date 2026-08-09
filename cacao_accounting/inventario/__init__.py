@@ -846,16 +846,18 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
-            uom = request.form.get(f"uom_{i}") or None
+            default_uom = _item_default_uom(item_code)
+            uom = request.form.get(f"uom_{i}") or default_uom
+            if not uom:
+                raise ValueError(f"La linea del item {item_code} requiere una unidad de medida.")
             # INV-05: Calcular qty_in_base_uom para consistencia con StockReconciliation
             # Este campo es requerido para reportes de inventario y cálculos de FIFO
-            default_uom = _item_default_uom(item_code)
             qty_in_base_uom = qty
             if uom and default_uom:
                 try:
                     qty_in_base_uom = convert_item_qty(item_code, qty, uom, default_uom)
-                except InventoryServiceError:
-                    qty_in_base_uom = qty
+                except InventoryServiceError as exc:
+                    raise ValueError(f"No se pudo convertir {qty} {uom} a {default_uom} para el item {item_code}.") from exc
             line = StockEntryItem(
                 stock_entry_id=entry.id,
                 item_code=item_code,
@@ -919,19 +921,16 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
             qty_difference = counted_qty - current_qty
             value_difference = target_value - current_value
             uom = request.form.get(f"uom_{i}") or _item_default_uom(item_code)
+            if not uom:
+                raise ValueError(f"La conciliacion del item {item_code} requiere una unidad de medida.")
             default_uom = _item_default_uom(item_code)
             if uom and default_uom:
                 try:
                     base_qty = convert_item_qty(item_code, abs(qty_difference), uom, default_uom)
-                except InventoryServiceError:
-                    logger.warning(
-                        "UOM conversion failed for item %s: qty=%s uom=%s default_uom=%s",
-                        item_code,
-                        qty_difference,
-                        uom,
-                        default_uom,
-                    )
-                    base_qty = abs(qty_difference)
+                except InventoryServiceError as exc:
+                    raise ValueError(
+                        f"No se pudo convertir {qty_difference} {uom} a {default_uom} para el item {item_code}."
+                    ) from exc
             else:
                 base_qty = abs(qty_difference)
             line = StockEntryItem(
@@ -1098,7 +1097,7 @@ def _handle_stock_entry_new_post(form_data):
         database.session.commit()
         flash("Entrada de almacén creada correctamente.", "success")
         return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
-    except IdentifierConfigurationError as exc:
+    except (IdentifierConfigurationError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
 
