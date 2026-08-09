@@ -710,6 +710,57 @@ def test_ar_subledger_paid_amount_includes_undated_allocation(app_ctx):
     assert report.rows[0].values["outstanding_amount"] == Decimal("60")
 
 
+def test_ar_subledger_ignores_payment_from_another_company(app_ctx):
+    """A cross-company payment relation must not reduce the invoice balance."""
+    from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference, SalesInvoice, database
+    from cacao_accounting.reportes.services import SubledgerFilters, get_ar_ap_subledger
+
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        customer_id="CUST-COMPANY",
+        grand_total=Decimal("100"),
+        docstatus=1,
+    )
+    payment = PaymentEntry(
+        company="other-company",
+        posting_date=date(2026, 5, 2),
+        payment_type="receive",
+        paid_amount=Decimal("100"),
+        docstatus=1,
+    )
+    database.session.add_all([invoice, payment])
+    database.session.flush()
+    reference = PaymentReference(
+        payment_id=payment.id,
+        reference_type="sales_invoice",
+        reference_id=invoice.id,
+        allocated_amount=Decimal("100"),
+    )
+    database.session.add(reference)
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=invoice.id,
+            target_type="payment_entry",
+            target_id=payment.id,
+            target_item_id=reference.id,
+            qty=Decimal("1"),
+            amount=Decimal("100"),
+            relation_type="payment_reference",
+            status="active",
+            company="cacao",
+        )
+    )
+    database.session.commit()
+
+    report = get_ar_ap_subledger(SubledgerFilters(company="cacao", party_type="customer"))
+
+    assert report.rows[0].values["paid_amount"] == Decimal("0")
+    assert report.rows[0].values["outstanding_amount"] == Decimal("100")
+
+
 def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
     from cacao_accounting.database import (
         DocumentRelation,
