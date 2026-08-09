@@ -1480,6 +1480,12 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Corrección en curso: se añadieron controles de compañía y acción para detalle, creación, edición, aprobación, cierre, archivo, eliminación e importación de pronósticos; conciliación por cuenta, aplicación de matches y reglas bancarias validan la compañía persistida.
 - Se mantiene la regla de no confiar en `company` enviado por el cliente; los issues #309 y #310 permanecen abiertos para verificación posterior.
 
+## 2026-08-10 — Integridad de conciliación y reversas bancarias
+
+- Hallazgos: #308 y #305 confirmados; se podía conciliar una línea GL ajena a la cuenta bancaria y las reversas GL de pagos perdían la dimensión bancaria.
+- Corrección: los targets `gl_entry` ahora deben usar la cuenta GL de la cuenta bancaria origen/destino; las reversas preservan `bank_account_id` del asiento original.
+- Revisión: #306 y #307 son falsos positivos contra el código actual, porque la dirección depósito/retiro ya se valida y los candidatos se calculan sobre el saldo pendiente sin el filtro total descrito.
+
 ## 2026-08-10 — Corrección de expectativa contable en CI
 
 - CI falló en `test_accounting_entries_for_payment_variants` porque el caso de reembolso de cliente esperaba una cuenta `payable`.
