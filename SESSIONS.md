@@ -1927,3 +1927,17 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   diagnóstico correcto no podía detectar el pago huérfano.
 - Se ajusta únicamente el fixture para persistir la cuenta bancaria antes de
   crear el pago; no se modifica la lógica de producción.
+
+## 2026-08-10 — Aislamiento de listados bancarios (#301)
+
+- Se confirmó un residuo de aislamiento: `_paginate_list` del módulo Bancos
+  podía devolver `BankAccount`, `PaymentEntry` y `BankTransaction` de cualquier
+  compañía cuando no se enviaba un filtro explícito.
+- El helper ahora valida la compañía solicitada y, sin filtro, limita el query
+  a las compañías de los libros con permiso `can_read` del módulo Cash; los
+  administradores conservan acceso global.
+- Se añadió regresión con dos compañías y dos libros: un usuario autorizado
+  solo al libro de Cacao no recibe la cuenta bancaria de `other`.
+- Los issues #301, #246, #197 y #189 permanecen abiertos para verificación de
+  endpoints completos y decisiones funcionales pendientes. No se ejecuta
+  pytest local por instrucción; este cambio se publicará en lote.
