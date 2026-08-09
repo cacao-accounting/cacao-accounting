@@ -3151,6 +3151,42 @@ def test_bank_statement_adapter_rejects_empty_movement(app_ctx):
     assert any("depósito o un retiro" in error for error in errors)
 
 
+def test_bank_company_lists_use_authorized_book_scope(app_ctx, monkeypatch):
+    """Los listados bancarios no exponen compañías fuera de los libros autorizados."""
+    from types import SimpleNamespace
+
+    import cacao_accounting.bancos as bancos_module
+    from cacao_accounting.database import Bank, BankAccount, Book, Entity, database
+
+    other = Entity(code="other", name="Other", company_name="Other", tax_id="J0002", currency="NIO")
+    allowed_book = Book(code="CASH-SCOPE", name="Cash scope", entity="cacao", currency="NIO", is_primary=True)
+    other_book = Book(code="CASH-OTHER", name="Cash other", entity="other", currency="NIO", is_primary=True)
+    bank = Bank(name="Banco scope")
+    database.session.add_all([other, allowed_book, other_book, bank])
+    database.session.flush()
+    allowed = BankAccount(bank_id=bank.id, company="cacao", account_name="Permitida", account_no="SCOPE-1")
+    hidden = BankAccount(bank_id=bank.id, company="other", account_name="Oculta", account_no="SCOPE-2")
+    database.session.add_all([allowed, hidden])
+    database.session.commit()
+
+    monkeypatch.setattr(bancos_module, "current_user", SimpleNamespace(id="user-1", classification="user"))
+    monkeypatch.setattr(
+        bancos_module,
+        "Permisos",
+        lambda **_: SimpleNamespace(obtener_libros_autorizados=lambda *_args, **_kwargs: [allowed_book.id]),
+    )
+
+    with app_ctx.test_request_context("/bank-account/list"):
+        page = bancos_module._paginate_list(
+            BankAccount,
+            (BankAccount.account_name,),
+            database.select(BankAccount),
+            include_status=False,
+        )
+
+    assert [account.id for account in page.items] == [allowed.id]
+
+
 def test_bank_reconciliation_panel_ignores_invalid_historical_transaction(app_ctx, monkeypatch):
     import importlib
 
