@@ -3153,9 +3153,10 @@ def test_bank_statement_adapter_rejects_empty_movement(app_ctx):
 
 def test_bank_company_lists_use_authorized_book_scope(app_ctx, monkeypatch):
     """Los listados bancarios no exponen compañías fuera de los libros autorizados."""
+    import importlib
     from types import SimpleNamespace
 
-    import cacao_accounting.bancos as bancos_module
+    bancos_module = importlib.import_module("cacao_accounting.bancos")
     from cacao_accounting.database import Bank, BankAccount, Book, Entity, database
 
     other = Entity(code="other", name="Other", company_name="Other", tax_id="J0002", currency="NIO")
