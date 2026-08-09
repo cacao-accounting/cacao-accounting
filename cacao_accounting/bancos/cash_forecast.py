@@ -5,6 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
+from urllib.parse import unquote, urlsplit
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
@@ -30,6 +31,19 @@ from cacao_accounting.document_flow.status import _
 CASH_FORECAST_DETAIL_ENDPOINT = "bancos.cash_forecast_detail"
 BANCOS_PREFIX = "bancos.bancos_"
 PRONOSTICO_NO_MODIFICABLE_MSG = "No se pueden modificar pronósticos aprobados o cerrados."
+
+
+def _safe_next_url(value: str | None) -> str | None:
+    """Return an internal redirect path and reject external redirect targets."""
+    if not value:
+        return None
+    decoded = unquote(value)
+    if "\\" in decoded:
+        return None
+    parsed = urlsplit(decoded)
+    if parsed.scheme or parsed.netloc or not decoded.startswith("/") or decoded.startswith("//"):
+        return None
+    return decoded
 
 
 def _check_desktop_mode():
@@ -299,8 +313,8 @@ def cash_forecast_entry_add(forecast_id):
         database.session.rollback()
         flash(f"Error al agregar proyección: {str(exc)}", "danger")
 
-    next_url = request.args.get("next")
-    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+    next_url = _safe_next_url(request.args.get("next"))
+    if next_url:
         return redirect(next_url)
     return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
@@ -326,8 +340,8 @@ def cash_forecast_entry_delete(forecast_id, entry_id):
         database.session.commit()
         flash("Proyección manual eliminada correctamente.", "success")
 
-    next_url = request.args.get("next")
-    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+    next_url = _safe_next_url(request.args.get("next"))
+    if next_url:
         return redirect(next_url)
     return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
@@ -482,7 +496,7 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
         database.session.rollback()
         flash(f"Error al actualizar la proyección: {str(exc)}", "danger")
 
-    next_url = request.args.get("next")
-    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+    next_url = _safe_next_url(request.args.get("next"))
+    if next_url:
         return redirect(next_url)
     return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))

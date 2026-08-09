@@ -1295,7 +1295,7 @@ def _create_payment_receive_entries(
                 account_id=bank_account_id,
                 debit=amount,
                 credit=Decimal("0"),
-                bank_account_id=document.target_bank_account_id,
+                bank_account_id=document.bank_account_id,
                 entry_remarks="Cuenta bancaria receptora",
             ),
         ),
