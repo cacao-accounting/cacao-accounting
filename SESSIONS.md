@@ -88,6 +88,14 @@ debe probarse con movimientos y valores calculados, no con asserts triviales.
 - La suite pytest focal `--full` continúa en segundo plano; su resumen final
   aún es requisito para cerrar la auditoría.
 
+### Ajuste del workflow
+
+- Los jobs `build`, `desktop` y `coverage` de `python-package.yml` ahora
+  ejecutan pytest con `--full`, haciendo explícita la matriz de escenarios.
+- `coverage` dejó de usar `continue-on-error`, de modo que una regresión de
+  pruebas o cobertura no pueda aparecer como check exitoso.
+- Ambos workflows locales cargan correctamente como YAML.
+
 ## 2026-08-07 — Blindaje de devoluciones en analítica y dashboard R2R
 
 ### Petición
