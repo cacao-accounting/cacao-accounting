@@ -1456,3 +1456,8 @@ Commit firmado: `4df8253 fix(inventory): honor reconciliation and period control
 CI reveló que el contrato de error de stock insuficiente también se aplicaba al camino de `DeliveryNote`. Se corrigió el segundo caller para propagar `No hay suficiente inventario` cuando `allow_negative_stock` es falso. Commit firmado: `7ade05a fix(inventory): preserve delivery shortage errors`.
 
 CI detectó además que el caller de `StockEntry` requiere conservar su mensaje específico `no permite stock negativo`, mientras que mypy exigía estrechar la UOM base en conciliaciones. Ambos contratos quedaron corregidos. Commit firmado: `73a5a7a fix(inventory): preserve caller error contracts`.
+## 2026-08-10 — Correcciones bancarias agrupadas
+
+- Petición: continuar con bug fixes sin ejecutar la suite local ni saturar el workflow.
+- Plan implementado: corregir el open redirect del parámetro `next` en Cash Forecast y preservar la cuenta bancaria origen del formulario de cobro simple en el posting GL de recepción. Se mantienen los issues abiertos para tracking.
+- Verificación: Black, `compileall` y `git diff --check`; la suite pytest local no se ejecutó por instrucción del usuario.
