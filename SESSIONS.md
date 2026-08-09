@@ -1386,3 +1386,11 @@ Se confirmó que los flags `is_closing` e `is_fiscal_year_closing` no deben acep
 Para evitar doble cierre concurrente, `create_fiscal_year_closing_voucher` y `submit_journal` bloquean la fila `FiscalYear` con `with_for_update` durante la transacción; el segundo proceso observa `financial_closed` y es rechazado. Las reversiones genéricas ya no heredan flags de cierre y los cierres fiscales deben revertirse mediante el flujo fiscal dedicado.
 
 Validación: `tests/test_09_journal_entry_form.py` y `tests/test_fiscal_year_closing.py`: `29 passed`; Ruff, Flake8, Mypy y `git diff --check` pasan en archivos tocados. Los issues #334 y #335 permanecen abiertos para tracking y revisión posterior.
+
+### 2026-08-09 — Estado transaccional de comprobantes recurrentes (#337)
+
+Se verificó el flujo existente: la aplicación recurrente genera intencionalmente un borrador para permitir revisión y posteo manual desde el cierre mensual, pero la marcaba `applied` antes de que existiera cualquier GLEntry. Esto era inconsistente con el modelo GL como fuente de verdad y podía ocultar borradores no contabilizados.
+
+La aplicación ahora se registra como `pending` y cambia a `applied` únicamente dentro de `submit_journal`, después de que el posting haya sido validado. La plantilla se marca completada en ese mismo momento; una cancelación del comprobante marca la aplicación como `reversed` y reabre la plantilla cuando correspondía. La plantilla se bloquea con `with_for_update` durante la aplicación para serializar reintentos concurrentes y evitar duplicados.
+
+Validación: `tests/test_12_recurring_journals.py`: `7 passed`; la prueba E2E comprueba `pending → applied → reversed`, junto con la reapertura de la plantilla. Black, Ruff y `git diff --check` pasan en archivos tocados. El issue #337 permanece abierto para tracking y validación en CI.
