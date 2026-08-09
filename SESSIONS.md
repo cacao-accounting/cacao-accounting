@@ -1538,3 +1538,15 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   abiertos para verificación CI y escenarios de regresión.
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy sobre `posting.py`;
   no se ejecutó pytest local por instrucción del usuario.
+
+## 2026-08-10 — Controles O2C y ACL de conciliación
+
+- #299 confirmado: las facturas normales aceptaban montos de línea negativos o
+  distintos de `qty × rate`. El submit ahora rechaza montos no positivos y
+  diferencias superiores a un centavo; las notas de crédito/débito y retornos
+  conservan su semántica de reversa.
+- #301 confirmado: la conciliación de pagos confiaba en la compañía enviada en
+  el payload. La ruta ahora exige acceso de edición al módulo Cash para esa
+  compañía antes de crear cualquier Reconciliation.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy sobre los módulos
+  modificados; no se ejecutó pytest local por instrucción del usuario.

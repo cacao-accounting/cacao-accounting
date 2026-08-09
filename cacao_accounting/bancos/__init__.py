@@ -434,9 +434,11 @@ def bancos_conciliacion_facturas_pagos():
     if request.method == "POST":
         try:
             payload = json.loads(request.form.get("payment_reconciliation_payload") or "{}")
+            company = str(payload.get("company") or "")
+            exige_acceso_compania("cash", company, "editar")
             allocation_date = date.fromisoformat(payload.get("allocation_date") or date.today().isoformat())
             reconciliation = apply_payment_reconciliation(
-                company=str(payload.get("company") or ""),
+                company=company,
                 party_type=str(payload.get("party_type") or ""),
                 party_id=str(payload.get("party_id") or ""),
                 allocation_date=allocation_date,
