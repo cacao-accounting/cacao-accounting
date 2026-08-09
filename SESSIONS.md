@@ -1231,3 +1231,11 @@ El análisis del PR en SonarCloud reportó 0 issues, pero GitHub Actions falló 
 Se solicitó revisar los cambios locales frente a `origin/main`. Durante la validación de calidad se detectó D401 en el docstring privado de `_validate_and_fix_stock_bin_reserved_qty`; se corrigió la primera línea a modo imperativo (`Validate and correct...`) sin modificar el comportamiento.
 
 El review continúa sobre los 52 commits divergentes, con foco en aislamiento por compañía, selección multilibro, aprobaciones y filtros de anulaciones.
+
+### 2026-08-09 — Referencias legacy de pagos en AR/AP
+
+Durante la auditoría end-to-end se confirmó que `compute_outstanding_amount` retornaba temprano cuando encontraba referencias modernas enlazadas mediante `DocumentRelation`. En ese caso ignoraba referencias históricas de `PaymentReference` sin relación documental, inflando el saldo pendiente. El reporte AR/AP también excluía esas referencias legacy al usar un `JOIN` interno.
+
+Se corrigió la lectura para combinar referencias modernas y legacy, excluir relaciones canceladas y evitar duplicados en el reporte. Se añadió una prueba con una factura de 100, un pago moderno de 30 y un pago legacy de 20; el saldo y el total pagado esperado son 50.
+
+Validación: prueba de regresión individual `1 passed`; batería AR/AP de saldos, subledger, aging, maturity y allocations `11 passed`; `git diff --check` limpio. El issue #280 permanece abierto para completar la matriz O2C, créditos, reversals y reconciliación integral contra GL.

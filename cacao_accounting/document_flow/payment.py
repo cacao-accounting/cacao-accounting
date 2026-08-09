@@ -174,8 +174,6 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
             )
         )
     references = list(database.session.execute(relation_query).scalars().all())
-    if references:
-        return references
 
     physical_reference_type = "purchase_invoice" if document_type.startswith("purchase_") else "sales_invoice"
     fallback_query = (
@@ -191,7 +189,7 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
             PaymentEntry.docstatus == 1,
             PaymentEntry.company == document.company,
             or_(DocumentRelation.company.is_(None), DocumentRelation.company == document.company),
-            or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active"),
+            DocumentRelation.id.is_(None),
         )
     )
     if as_of_date is not None:
@@ -201,7 +199,8 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
                 PaymentReference.allocation_date <= as_of_date,
             )
         )
-    return list(database.session.execute(fallback_query).scalars().all())
+    legacy_references = list(database.session.execute(fallback_query).scalars().all())
+    return references + legacy_references
 
 
 def compute_outstanding_amount(document: Any, as_of_date: date | None = None) -> Decimal:
