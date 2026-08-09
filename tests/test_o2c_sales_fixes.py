@@ -261,6 +261,27 @@ def test_validate_invoice_prices_warns_without_raising(app_ctx):
         _validate_invoice_prices_against_source(si, raise_on_violation=True)
 
 
+def test_sales_invoice_requires_sales_order_when_configured(app_ctx):
+    """La configuración de matching debe bloquear facturas manuales sin OV."""
+    from cacao_accounting.ventas import _validate_sales_order_requirement
+
+    customer = _ensure_customer("CUST-O2C-REQUIRE-OV", "Cliente requiere OV")
+    database.session.add(SalesMatchingConfig(company="cacao", require_sales_order=True))
+    invoice = SalesInvoice(
+        customer_id=customer.id,
+        company="cacao",
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        is_return=False,
+        docstatus=0,
+    )
+    database.session.add(invoice)
+    database.session.commit()
+
+    with pytest.raises(ValueError, match="Orden de Venta"):
+        _validate_sales_order_requirement(invoice)
+
+
 def test_edit_invoice_rejects_reversal_of_on_customer_change(app_ctx):
     client = app_ctx.test_client()
     client.post("/login", data={"usuario": "cacao", "acceso": "cacao"}, follow_redirects=True)
