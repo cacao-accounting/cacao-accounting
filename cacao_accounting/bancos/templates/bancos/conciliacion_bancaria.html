@@ -25,6 +25,7 @@
           <th scope="col">{{ _("Monto") }}</th>
           <th scope="col">{{ _("Candidato") }}</th>
           <th scope="col">{{ _("Monto a conciliar") }}</th>
+          <th scope="col">{{ _("Diferencia") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -47,9 +48,10 @@
             </select>
           </td>
           <td><input name="amount_{{ transaction.id }}" class="form-control form-control-sm" value="{{ amount }}"></td>
+          <td><input name="difference_{{ transaction.id }}" class="form-control form-control-sm" value="0" min="0" step="0.01"></td>
         </tr>
         {% else %}
-        <tr><td colspan="6">{{ _("No hay transacciones pendientes de conciliación.") }}</td></tr>
+        <tr><td colspan="7">{{ _("No hay transacciones pendientes de conciliación.") }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
