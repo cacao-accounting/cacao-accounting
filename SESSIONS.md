@@ -1440,3 +1440,9 @@ CI detectó una regresión de compatibilidad en el mensaje de rechazo de salidas
 Se confirmaron y corrigieron seis riesgos upstream. Los reembolsos ahora conservan `party_type` y seleccionan AR/AP y anticipos del tercero correcto; las conciliaciones rechazan fechas anteriores a aplicaciones existentes; las notas de crédito no incrementan exposición ni bloqueo de vencidos; las devoluciones no generan notas de entrega de salida; `base_outstanding_amount` usa el tipo de cambio del documento; y la deduplicación de referencias es local a cada request.
 
 Commit firmado: `c39ca7b fix(o2c): align refunds and payment allocation controls`. No se ejecutó pytest local por instrucción del usuario; se ejecutó Black, `compileall` y `git diff --check`. El lote queda para validación de CI. Los issues permanecen abiertos.
+
+### 2026-08-10 — Lote S2P de matching, moneda y proveedor (#339, #340, #342, #343)
+
+Se corrigieron cuatro hallazgos confirmados. La diferencia de precio del matching 2-way/3-way ahora se acumula como diferencia unitaria por cantidad de referencia; los detalles limitan `matched_qty` y `matched_amount` a lo realmente recibido/ordenado y conservan estado parcial. Los duplicados de órdenes y facturas de compra recalculan sus importes base con `exchange_rate`, y una recepción rechaza una orden cuyo proveedor no coincide.
+
+Commit firmado: `0b8505e fix(s2p): enforce reconciliation quantities and supplier scope`. No se ejecutó pytest local; se ejecutó Black, `compileall` y `git diff --check`. El lote queda para CI y los issues permanecen abiertos.
