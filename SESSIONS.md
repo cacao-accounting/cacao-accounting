@@ -57,6 +57,31 @@ dupliquen cifras históricas ni incluyan movimientos futuros.
 La corrección no sustituye la reconciliación por libro, período y cuenta
 control; esa cobertura sigue pendiente.
 
+## 2026-08-09 — Aislamiento de libros inactivos en reportes R2R
+
+### Petición
+
+Monitorear riesgos nuevos de GitHub y verificar que los reportes financieros no
+consulten libros fuera de operación.
+
+### Implementación y evidencia
+
+- `reportes.services._resolve_ledger` podía devolver un `Book` explícitamente
+  inactivo; esto debilitaba el aislamiento multi-ledger y permitía emitir
+  reportes sobre un libro no operativo.
+- El commit `fix(r2r): exclude inactive ledgers from reports` restringe la
+  resolución a libros activos o a registros legacy sin estado.
+- Se agregó una regresión que solicita una balanza para un libro inactivo y
+  verifica que no se resuelva ni devuelva movimientos.
+- Black, Ruff y Flake8 pasaron; la prueba focal R2R pasó.
+- El riesgo fue documentado en el issue #276, que permanece abierto para la
+  matriz completa por compañía, libro, moneda y período.
+
+### Continuidad
+
+La resolución segura del libro no reemplaza la reconciliación matemática de
+AR, AP, inventario, banco y tax contra sus cuentas control.
+
 ## 2026-08-09 — Corte temporal de reportes de vencimiento AR/AP
 
 ### Petición
