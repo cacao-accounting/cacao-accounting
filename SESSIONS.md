@@ -36,6 +36,30 @@ para ejecutarse con `pytest --full`.
   introducidos por esta sesión; la suite `--full` quedó ejecutándose en
   segundo plano para su resultado consolidado.
 
+## 2026-08-09 — Matriz de valoración y reconstrucción de inventario
+
+### Ampliación solicitada
+
+Se pidió elevar la cobertura a aproximadamente 50 pruebas por ciclo de
+negocio, con especial atención a que el sistema es contable y que inventario
+debe probarse con movimientos y valores calculados, no con asserts triviales.
+
+### Implementación y evidencia
+
+- Se agregaron **26 escenarios `full`** de reconstrucción de inventario.
+- Cada escenario persiste movimientos de recepción, salida, devolución,
+  conteo o ajuste con cantidades y valores independientes, reconstruye
+  `StockBin` y `StockValuationLayer`, y verifica cantidad, valor, tasa final,
+  capas generadas y reserva preservada.
+- La expectativa contable se calcula fuera del servicio como suma de
+  `qty_change` y `stock_value_difference`, con tasa `valor / cantidad`.
+- La matriz pasó **26 passed**. El primer ensayo detectó dos expectativas
+  manuales mal formuladas (redondeo y signo de una salida); se corrigieron y
+  se repitió el bloque completo.
+- Con las suites existentes, el inventario queda en aproximadamente 50 casos
+  identificables por nombre de archivo; R2R, O2C, S2R y bancos ya superan esa
+  magnitud según el inventario de pruebas de esta sesión.
+
 ## 2026-08-07 — Blindaje de devoluciones en analítica y dashboard R2R
 
 ### Petición
