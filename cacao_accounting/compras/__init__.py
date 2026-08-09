@@ -32,6 +32,7 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
 )
 from cacao_accounting.database import (
     CompanyParty,
+    Book,
     DocumentRelation,
     ImportLandedCost,
     ImportLandedCostCharge,
@@ -63,6 +64,8 @@ from ulid import ULID
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.database.helpers import get_active_naming_series
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.decorators import (  # noqa: F401
     exige_acceso_compania,
     modulo_activo,
@@ -187,6 +190,20 @@ def _party_or_404(party_id: str) -> Party:
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
     """Pagina un listado aplicando los filtros GET comunes."""
     base_query = query if query is not None else database.select(model)
+    if hasattr(model, "company"):
+        company = request.args.get("company")
+        if company:
+            exige_acceso_compania("purchases", company, "consultar")
+            base_query = base_query.filter(model.company == company)
+        elif not getattr(current_user, "classification", None) == "admin":
+            module_id = obtener_id_modulo_por_nombre("purchases")
+            permissions = Permisos(modulo=module_id, usuario=current_user.id)
+            book_ids = permissions.obtener_libros_autorizados("can_read")
+            if not book_ids:
+                base_query = base_query.where(database.false())
+            else:
+                accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
+                base_query = base_query.where(model.company.in_(accessible_companies))
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     return database.paginate(
         filtered_query,
@@ -1210,6 +1227,7 @@ def compras_proveedor_lista():
 def compras_purchase_reconciliation():
     """Report pending purchase reconciliation lines."""
     company = request.args.get("company", "cacao")
+    exige_acceso_compania("purchases", company, "consultar")
     rows = get_purchase_reconciliation_pending(company=company)
     order_status_report = get_purchase_order_status_report(company=company)
     unlinked_invoices = get_unlinked_purchase_invoices(company=company)
@@ -1232,6 +1250,7 @@ def compras_purchase_reconciliation():
 def compras_reconciliation_panel():
     """Panel de conciliacion de compras agrupado por orden de compra."""
     company = request.args.get("company", "cacao")
+    exige_acceso_compania("purchases", company, "consultar")
     groups = get_purchase_reconciliation_panel_groups(company=company)
     titulo = _("Panel de Conciliacion de Compras") + " - " + APPNAME
     return render_template(
