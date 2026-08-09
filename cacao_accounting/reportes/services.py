@@ -465,8 +465,6 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
         query = query.filter_by(warehouse=filters.warehouse)
-    if filters.date_from:
-        query = query.where(StockLedgerEntry.posting_date >= filters.date_from)
     if filters.date_to:
         query = query.where(StockLedgerEntry.posting_date <= filters.date_to)
 
@@ -474,6 +472,7 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
     total_in = Decimal("0")
     total_out = Decimal("0")
     total_value = Decimal("0")
+    running: dict[tuple[str, str], tuple[Decimal, Decimal]] = {}
     for entry in database.session.execute(
         query.order_by(StockLedgerEntry.posting_date, StockLedgerEntry.created, StockLedgerEntry.id)
     ).scalars():
@@ -481,6 +480,13 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
         incoming = qty if qty > 0 else Decimal("0")
         outgoing = abs(qty) if qty < 0 else Decimal("0")
         value_change = _decimal_value(entry.stock_value_difference)
+        key = (entry.item_code, entry.warehouse)
+        current_qty, current_value = running.get(key, (Decimal("0"), Decimal("0")))
+        running_qty = current_qty + qty
+        running_value = current_value + value_change
+        running[key] = (running_qty, running_value)
+        if filters.date_from and entry.posting_date < filters.date_from:
+            continue
         total_in += incoming
         total_out += outgoing
         total_value += value_change
@@ -494,10 +500,10 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
                     "voucher_id": entry.voucher_id,
                     "incoming_qty": incoming,
                     "outgoing_qty": outgoing,
-                    "balance_qty": _decimal_value(entry.qty_after_transaction),
-                    "valuation_rate": _decimal_value(entry.valuation_rate),
+                    "balance_qty": running_qty,
+                    "valuation_rate": running_value / running_qty if running_qty > 0 else Decimal("0"),
                     "value_change": value_change,
-                    "stock_value": _decimal_value(entry.stock_value),
+                    "stock_value": running_value,
                 }
             )
         )
@@ -548,9 +554,10 @@ def get_inventory_existence(filters: KardexFilters) -> PaginatedReport:
                 "stock_value": Decimal("0"),
             },
         )
-        row["balance_qty"] = _decimal_value(entry.qty_after_transaction)
-        row["valuation_rate"] = _decimal_value(entry.valuation_rate)
-        row["stock_value"] = _decimal_value(entry.stock_value)
+        row["balance_qty"] = _decimal_value(row["balance_qty"]) + _decimal_value(entry.qty_change)
+        row["stock_value"] = _decimal_value(row["stock_value"]) + _decimal_value(entry.stock_value_difference)
+        balance_qty = _decimal_value(row["balance_qty"])
+        row["valuation_rate"] = _decimal_value(row["stock_value"]) / balance_qty if balance_qty > 0 else Decimal("0")
 
     rows = [ReportRow(values=row) for row in grouped.values() if _decimal_value(row["balance_qty"]) != Decimal("0")]
     rows.sort(key=lambda row: (str(row.values["item_code"]), str(row.values["warehouse"])))

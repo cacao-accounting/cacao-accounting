@@ -3,6 +3,26 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-10 — Corrección de saldos de inventario para movimientos retroactivos
+
+### Petición
+
+Continuar los bug fixes de la rama de estabilización sin ejecutar la suite local
+completa, acumulando cambios antes de publicar.
+
+### Implementación
+
+- Se confirmó el riesgo del issue #325: los reportes Kardex y Existencia usaban
+  snapshots almacenados (`qty_after_transaction` y `stock_value`) que podían
+  quedar obsoletos cuando se insertaba un movimiento con fecha retroactiva.
+- `get_kardex` ahora reconstruye el saldo por artículo y bodega desde los
+  movimientos ordenados, procesa el histórico anterior a `date_from` como saldo
+  inicial y muestra únicamente el rango solicitado.
+- `get_inventory_existence` ahora suma cantidades y valores desde el stock
+  ledger hasta la fecha de corte y calcula la tasa sobre el saldo reconstruido.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
 ## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
 
 ### Petición
