@@ -78,10 +78,11 @@ def _decimal_value(value: Any) -> Decimal:
             normalized = normalized.replace(",", "")
     elif "," in normalized:
         decimal_part = normalized.rsplit(",", 1)[1]
-        normalized = normalized.replace(",", ".") if len(decimal_part) <= 2 else normalized.replace(",", "")
+        if len(decimal_part) > 2:
+            raise InvalidOperation("Separador de miles ambiguo")
+        normalized = normalized.replace(",", ".")
     elif normalized.count(".") > 1:
-        parts = normalized.split(".")
-        normalized = "".join(parts[:-1]) + "." + parts[-1] if len(parts[-1]) <= 2 else "".join(parts)
+        raise InvalidOperation("Separador de miles ambiguo")
     try:
         return Decimal(normalized)
     except InvalidOperation as exc:
