@@ -717,6 +717,59 @@ def test_reconciliation_report_diagnoses_posting_without_bank_transaction(app_ct
     assert report.totals["bank_orphan_count"] == Decimal("1")
 
 
+def test_reconciliation_matrix_exposes_uninvoiced_receipts_against_grni(app_ctx):
+    """La matriz muestra recepciones pendientes contra la cuenta puente GRNI."""
+    from cacao_accounting.database import (
+        Accounts,
+        Book,
+        CompanyDefaultAccount,
+        Item,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        UOM,
+        database,
+    )
+    from cacao_accounting.reportes.services import ReconciliationFilters, get_reconciliation_matrix
+
+    bridge = Accounts(
+        entity="cacao",
+        code="GRNI-MATRIX",
+        name="GRNI matriz",
+        active=True,
+        enabled=True,
+        classification="Pasivo",
+        account_type="liability",
+    )
+    book = Book(code="GRNI-MATRIX-BOOK", name="GRNI matrix book", entity="cacao", currency="NIO", is_primary=True)
+    uom = UOM(code="EA", name="Each")
+    item = Item(code="ITEM-GRNI-MATRIX", name="Item GRNI", item_type="goods", is_stock_item=True, default_uom="EA")
+    receipt = PurchaseReceipt(company="cacao", posting_date=date(2026, 5, 15), docstatus=1, grand_total=Decimal("50"))
+    database.session.add_all([bridge, book, uom, item, receipt])
+    database.session.flush()
+    database.session.add_all(
+        [
+            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge.id),
+            PurchaseReceiptItem(
+                purchase_receipt_id=receipt.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("10"),
+                qty_in_base_uom=Decimal("10"),
+                uom=uom.code,
+                rate=Decimal("5"),
+                amount=Decimal("50"),
+                base_amount=Decimal("50"),
+            ),
+        ]
+    )
+    database.session.commit()
+
+    report = get_reconciliation_matrix(ReconciliationFilters(company="cacao", ledger=None))
+    grni_row = next(row.values for row in report.rows if row.values["area"] == "GRNI/AP 3-way")
+    assert grni_row["subledger_amount"] == Decimal("-50")
+    assert grni_row["gl_control_amount"] == Decimal("0")
+
+
 def test_inventory_valuation_uses_latest_layer_at_cutoff(app_ctx):
     """Inventory valuation must not sum historical snapshots or future layers."""
     from cacao_accounting.database import StockValuationLayer, database
