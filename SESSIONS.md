@@ -1240,6 +1240,12 @@ Se corrigió la lectura para combinar referencias modernas y legacy, excluir rel
 
 Validación: prueba de regresión individual `1 passed`; batería AR/AP de saldos, subledger, aging, maturity y allocations `11 passed`; `git diff --check` limpio. El issue #280 permanece abierto para completar la matriz O2C, créditos, reversals y reconciliación integral contra GL.
 
+### 2026-08-09 — Suite completa posterior a la corrección AR/AP
+
+La ejecución indicada por `AGENTS.md`, usando `.venv`, terminó con código de salida `0`: `1603 passed, 8 skipped, 174 warnings` en 27:30. El resultado quedó persistido en `test_results_audit_current_20260809.log`.
+
+Validación de los archivos modificados: Black, Ruff, Flake8, Mypy y `git diff --check` pasan. El chequeo global de Black todavía identifica tres tests preexistentes para reformatear y Ruff identifica 28 incidencias en el conjunto global; no se modificaron archivos no relacionados. Flake8 y Mypy globales pasan. Esto queda como deuda de calidad, no como un fallo introducido por `cab6493`.
+
 ## 2026-08-09 — Auditoría O2C (Order to Cash): hallazgos y controles verificados
 
 ### Petición
