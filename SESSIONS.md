@@ -1566,6 +1566,19 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
   pytest local por instrucción del usuario.
 
+## 2026-08-10 — Scope de compañía en listados S2P
+
+- #288 confirmado parcialmente: los listados de compras construían consultas
+  sin scope de compañía y los reportes de conciliación aceptaban cualquier
+  company del query string.
+- Corrección local: `_paginate_list` filtra por compañías asociadas a libros
+  accesibles del usuario, valida explícitamente una compañía solicitada y los
+  dos reportes de conciliación exigen acceso de lectura antes de consultar.
+- Queda pendiente aplicar el mismo guard directamente a todas las rutas de
+  detalle/edición; el issue permanece abierto.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
 ## 2026-08-10 — Clasificación de issues bancarios y R2R multimoneda
 
 - #338, #341, #304, #350, #351, #352 y #353 fueron revisados contra el código
