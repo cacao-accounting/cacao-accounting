@@ -649,6 +649,8 @@ def _normal_entries_for_amount(
     cost_center_code: str | None = None,
     unit_code: str | None = None,
     project_code: str | None = None,
+    debit_bank_account_id: str | None = None,
+    credit_bank_account_id: str | None = None,
     debit_remarks: str | None = None,
     credit_remarks: str | None = None,
 ) -> list[GLEntry]:
@@ -662,6 +664,7 @@ def _normal_entries_for_amount(
                     credit=Decimal("0"),
                     party_type=party_type,
                     party_id=party_id,
+                    bank_account_id=debit_bank_account_id,
                     cost_center_code=cost_center_code,
                     unit_code=unit_code,
                     project_code=project_code,
@@ -674,6 +677,7 @@ def _normal_entries_for_amount(
                     account_id=credit_account_id,
                     debit=Decimal("0"),
                     credit=amount,
+                    bank_account_id=credit_bank_account_id,
                     cost_center_code=cost_center_code,
                     unit_code=unit_code,
                     project_code=project_code,
@@ -690,6 +694,7 @@ def _normal_entries_for_amount(
                     account_id=credit_account_id,
                     debit=reversed_amount,
                     credit=Decimal("0"),
+                    bank_account_id=credit_bank_account_id,
                     cost_center_code=cost_center_code,
                     unit_code=unit_code,
                     project_code=project_code,
@@ -704,6 +709,7 @@ def _normal_entries_for_amount(
                     credit=reversed_amount,
                     party_type=party_type,
                     party_id=party_id,
+                    bank_account_id=debit_bank_account_id,
                     cost_center_code=cost_center_code,
                     unit_code=unit_code,
                     project_code=project_code,
@@ -1210,6 +1216,7 @@ def _create_payment_pay_entries(
                 amount=allocated,
                 party_type="supplier",
                 party_id=document.party_id,
+                credit_bank_account_id=document.bank_account_id,
                 debit_remarks="Pago a proveedor",
                 credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
             )
@@ -1224,6 +1231,7 @@ def _create_payment_pay_entries(
                     amount=excess,
                     party_type="supplier",
                     party_id=document.party_id,
+                    credit_bank_account_id=document.bank_account_id,
                     debit_remarks="Anticipo a proveedor",
                     credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
                 )
@@ -1242,6 +1250,7 @@ def _create_payment_pay_entries(
         amount=amount,
         party_type="supplier",
         party_id=document.party_id,
+        credit_bank_account_id=document.bank_account_id,
         debit_remarks="Pago a proveedor" if party_account_id else "Anticipo a proveedor",
         credit_remarks="Cuenta bancaria de pago",
     )
@@ -1273,6 +1282,7 @@ def _create_payment_receive_entries(
                 account_id=bank_account_id,
                 debit=amount,
                 credit=Decimal("0"),
+                bank_account_id=document.target_bank_account_id,
                 entry_remarks="Cuenta bancaria receptora",
             ),
         ),
@@ -1412,6 +1422,7 @@ def _create_bank_debit_note_entries(
         amount=amount,
         debit_remarks="Nota de debito bancaria",
         credit_remarks="Retiro bancario",
+        credit_bank_account_id=document.bank_account_id,
     )
 
 
@@ -1438,6 +1449,7 @@ def _create_bank_credit_note_entries(
         amount=amount,
         debit_remarks="Deposito bancario",
         credit_remarks="Nota de credito bancaria",
+        debit_bank_account_id=document.target_bank_account_id,
     )
 
 
@@ -1705,6 +1717,7 @@ def post_bank_transaction(document: BankTransaction, ledger_code: str | None = N
                     amount=amount,
                     debit_remarks="Depósito bancario",
                     credit_remarks="Ingreso bancario",
+                    debit_bank_account_id=document.bank_account_id,
                 )
             )
         else:
@@ -1716,6 +1729,7 @@ def post_bank_transaction(document: BankTransaction, ledger_code: str | None = N
                     amount=amount,
                     debit_remarks="Gasto bancario",
                     credit_remarks="Retiro bancario",
+                    credit_bank_account_id=document.bank_account_id,
                 )
             )
 

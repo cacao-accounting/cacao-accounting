@@ -3,6 +3,34 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-09 — Dimensión bancaria en postings y conciliación de caja
+
+### Petición
+
+Monitorear issues nuevos de GitHub y continuar la auditoría end-to-end de caja,
+asegurando que los importes publicados reconcilien con los reportes bancarios.
+
+### Implementación y evidencia
+
+- Se confirmó que varios postings de pagos y notas bancarias usaban la cuenta
+  GL correcta, pero dejaban `GLEntry.bank_account_id` vacío. El resumen
+  bancario filtra por esa dimensión y podía mostrar saldo cero pese a existir
+  movimiento en el GL.
+- El commit `fix(bank): preserve bank dimension in payment postings` añade la
+  dimensión a los caminos clásicos y al conversor de proformas del motor de
+  cálculo, incluyendo transferencias y notas bancarias.
+- Se agregó una prueba end-to-end que publica un pago de 100, verifica la línea
+  GL asociada a la cuenta bancaria y reconcilia el saldo reportado de -100.
+- Validación: Black, Ruff, Flake8; 2 pruebas focales de conciliación bancaria y
+  10 pruebas de posting de pagos/notas pasaron.
+- El issue #282 fue comentado y permanece abierto para completar huérfanos,
+  fees, intereses, transferencias, reversals e idempotencia.
+
+### Continuidad
+
+La matriz Subledger ↔ GL por compañía, libro, moneda y período (#276) sigue
+siendo el siguiente control transversal.
+
 ## 2026-08-09 — Corte temporal de reportes de vencimiento AR/AP
 
 ### Petición

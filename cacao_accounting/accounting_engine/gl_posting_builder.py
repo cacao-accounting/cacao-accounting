@@ -21,7 +21,15 @@ from cacao_accounting.contabilidad.posting import (
     _document_contexts,
     _lookup_exchange_rate,
 )
-from cacao_accounting.database import GLEntry, PaymentEntry, PaymentReference, PurchaseInvoice, SalesInvoice, database
+from cacao_accounting.database import (
+    BankAccount,
+    GLEntry,
+    PaymentEntry,
+    PaymentReference,
+    PurchaseInvoice,
+    SalesInvoice,
+    database,
+)
 
 
 def post_proforma_to_gl(
@@ -61,6 +69,7 @@ def post_proforma_to_gl(
                     exchange_rate=Decimal(line.exchange_rate_used or Decimal("1")),
                     party_type=context.party_type if line.party_id else None,
                     party_id=line.party_id,
+                    bank_account_id=_bank_account_id_for_line(document, account_id),
                     cost_center_code=line.cost_center_id,
                     project_code=line.project_id,
                     entry_remarks=line.description or proforma.memo,
@@ -70,6 +79,19 @@ def post_proforma_to_gl(
                 continue
             entries.append(entry)
     return _add_entries(entries)
+
+
+def _bank_account_id_for_line(document: Any, account_id: str) -> str | None:
+    """Return the bank dimension for a payment pro-forma line, when applicable."""
+    if not isinstance(document, PaymentEntry):
+        return None
+    for bank_account_id in (document.bank_account_id, document.target_bank_account_id):
+        if not bank_account_id:
+            continue
+        bank_account = database.session.get(BankAccount, bank_account_id)
+        if bank_account and bank_account.gl_account_id == account_id:
+            return bank_account.id
+    return None
 
 
 def _proforma_for_ledger(
