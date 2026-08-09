@@ -1104,10 +1104,16 @@ def test_invoice_submit_rejects_over_invoice(app_ctx):
 
 def test_supplier_invoice_no_duplication_validation(app_ctx):
     """S2P-24: Valida la duplicidad de supplier_invoice_no para un mismo proveedor."""
-    from cacao_accounting.database import PurchaseInvoice, CompanyParty, database
+    from cacao_accounting.database import Party, PurchaseInvoice, CompanyParty, database
     from cacao_accounting.compras import _validate_duplicate_supplier_invoice
 
-    # Setup suppliers in company party
+    # Setup suppliers in company party and global party master.
+    database.session.add_all(
+        [
+            Party(id="SUPLR-00001", code="SUPLR-00001", name="Proveedor 1", is_supplier=True),
+            Party(id="SUPLR-00002", code="SUPLR-00002", name="Proveedor 2", is_supplier=True),
+        ]
+    )
     cp1 = CompanyParty(
         party_id="SUPLR-00001",
         company="cacao",
