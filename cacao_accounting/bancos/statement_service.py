@@ -232,7 +232,7 @@ def create_bank_difference_journal(
         transaction = database.session.get(BankTransaction, reconciliation_item.source_id)
         bank_account = database.session.get(BankAccount, transaction.bank_account_id) if transaction else None
     bank_account_gl_id = bank_account.gl_account_id if bank_account else None
-    if not bank_account_gl_id:
+    if not bank_account or not bank_account_gl_id:
         raise BankStatementError("No se encontro cuenta bancaria GL para balancear el ajuste.")
     difference_account = database.session.get(Accounts, difference_account_id)
     bank_gl_account = database.session.get(Accounts, bank_account_gl_id)
@@ -271,6 +271,7 @@ def create_bank_difference_journal(
                 entity=reconciliation.company,
                 account=debit_account.code,
                 currency_id=transaction_currency,
+                bank_account_id=bank_account.id if debit_account.id == bank_gl_account.id else None,
                 value=abs(amount),
                 memo="Diferencia bancaria",
             ),
@@ -280,6 +281,7 @@ def create_bank_difference_journal(
                 entity=reconciliation.company,
                 account=credit_account.code,
                 currency_id=transaction_currency,
+                bank_account_id=bank_account.id if credit_account.id == bank_gl_account.id else None,
                 value=-abs(amount),
                 memo="Diferencia bancaria",
             ),
