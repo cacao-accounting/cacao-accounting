@@ -1414,3 +1414,9 @@ Se verificaron y corrigieron cinco riesgos que afectaban cantidades físicas y r
 - Las transferencias aplican el mismo fallback de costo que las salidas para artículos con `allow_negative_stock=True`.
 
 Validación conjunta: `tests/test_stock_reservation.py`, `tests/test_07posting_engine.py` y `tests/test_o2c_sales_fixes.py`: `84 passed, 9 warnings`. Validación adicional tras el ajuste de tipos: `15 passed, 7 warnings`. Ruff, Flake8, Mypy y `git diff --check` pasan en los archivos tocados. Los issues #321, #327, #328, #331 y #332 permanecen abiertos para tracking y validación CI.
+
+### 2026-08-09 — Lote bancario y O2C acumulado (#300, #306, #307)
+
+Se corrigieron dos riesgos del lote acumulado. La búsqueda de candidatos bancarios ahora exige que la dirección económica coincida (depósito con cobro/débito GL; retiro con pago/crédito GL), calcula el importe conciliable limitado por el movimiento bancario y conserva matches parciales legítimos. En O2C, las notas de crédito nuevas y editadas se validan contra el saldo acumulado de la factura origen, considerando pagos y notas aprobadas anteriores; las notas de débito no se limitan porque incrementan la cuenta por cobrar.
+
+Validación focal: `113 passed, 2 warnings`. Calidad: Black, Ruff, Flake8, Mypy y `git diff --check` pasan. Suite completa ejecutada una vez para el lote: `1616 passed, 8 skipped, 174 warnings` en `test_results_audit_batch_full_20260809.log`. Los issues #300, #306 y #307 permanecen abiertos para tracking y validación CI.
