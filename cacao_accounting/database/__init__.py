@@ -7,6 +7,7 @@
 # ---------------------------------------------------------------------------------------
 from decimal import Decimal
 from dataclasses import dataclass
+import hashlib
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -2724,6 +2725,8 @@ class BankTransaction(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Transaccion bancaria importada o ingresada manualmente."""
 
     __tablename__ = "bank_transaction"
+    __table_args__ = (UniqueConstraint("identity_key", name="uq_bank_transaction_identity"),)
+    identity_key = database.Column(database.String(64), nullable=False, index=True)
     bank_account_id = database.Column(
         database.String(26),
         database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -2742,6 +2745,25 @@ class BankTransaction(database.Model, BaseTabla):  # type: ignore[name-defined]
         nullable=True,
         index=True,
     )
+
+
+def _bank_transaction_identity(transaction: BankTransaction) -> str:
+    """Build a deterministic identity independent of nullable amount columns."""
+    values = (
+        str(transaction.bank_account_id or ""),
+        transaction.posting_date.isoformat() if transaction.posting_date else "",
+        str(transaction.reference_number or ""),
+        str(transaction.deposit if transaction.deposit is not None else ""),
+        str(transaction.withdrawal if transaction.withdrawal is not None else ""),
+    )
+    return hashlib.sha256("|".join(values).encode("utf-8")).hexdigest()
+
+
+@event.listens_for(BankTransaction, "before_insert")
+@event.listens_for(BankTransaction, "before_update")
+def _set_bank_transaction_identity(mapper, connection, target: BankTransaction) -> None:
+    """Keep the database-enforced import identity synchronized on writes."""
+    target.identity_key = _bank_transaction_identity(target)
 
 
 # <---------------------------------------------------------------------------------------------> #
