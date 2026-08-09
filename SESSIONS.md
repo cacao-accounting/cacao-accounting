@@ -1452,3 +1452,5 @@ Commit firmado: `0b8505e fix(s2p): enforce reconciliation quantities and supplie
 Se corrigió el propósito `stock_adjustment` para que pueda postearse, las conciliaciones deficitarias ahora conservan el valor objetivo en lugar de sustituirlo por el costo FIFO, las transferencias entre cuentas iguales validan el período contable antes del retorno temprano y los conteos en UOM no base se convierten a UOM base antes de calcular diferencias y valor objetivo.
 
 Commit firmado: `4df8253 fix(inventory): honor reconciliation and period controls`. No se ejecutó pytest local; se ejecutó Black, `compileall` y `git diff --check`. Los issues permanecen abiertos para CI y verificación posterior.
+
+CI reveló que el contrato de error de stock insuficiente también se aplicaba al camino de `DeliveryNote`. Se corrigió el segundo caller para propagar `No hay suficiente inventario` cuando `allow_negative_stock` es falso. Commit firmado: `7ade05a fix(inventory): preserve delivery shortage errors`.
