@@ -437,23 +437,21 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
 def _payment_build_spec(document: PaymentEntry) -> PaymentBuildSpec | None:
     """Resolve directional behavior for supported payment types."""
     payment_type = (document.payment_type or "").lower()
-    if payment_type == "pay":
+    party_type = (getattr(document, "party_type", None) or "").lower()
+    if party_type not in {"customer", "supplier"}:
+        party_type = "supplier" if payment_type == "pay" else "customer"
+    if payment_type in {"pay", "receive"}:
         return PaymentBuildSpec(
             payment_type=payment_type,
-            direction="purchase",
-            event_type="payment_confirmed",
-            amount_field="paid_amount",
-            base_amount_field="base_paid_amount",
-            party_type="supplier",
-        )
-    if payment_type == "receive":
-        return PaymentBuildSpec(
-            payment_type=payment_type,
-            direction="sales",
-            event_type="collection_confirmed",
-            amount_field="received_amount",
-            base_amount_field="base_received_amount",
-            party_type="customer",
+            direction="sales" if party_type == "customer" else "purchase",
+            event_type=(
+                "payment_confirmed"
+                if payment_type == "pay" and party_type == "supplier"
+                else "collection_confirmed" if payment_type == "receive" and party_type == "customer" else "refund_confirmed"
+            ),
+            amount_field="paid_amount" if payment_type == "pay" else "received_amount",
+            base_amount_field="base_paid_amount" if payment_type == "pay" else "base_received_amount",
+            party_type=party_type,
         )
     return None
 

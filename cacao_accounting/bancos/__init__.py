@@ -1251,6 +1251,7 @@ def _validate_payment_reference_line(
     payment: PaymentEntry,
     line: dict,
     allow_order_references: bool,
+    processed_keys: set[tuple[str, str]],
 ) -> tuple[str, str, str, Decimal, Decimal]:
     """Valida una línea de referencia y devuelve sus valores normalizados."""
     reference_type = line.get("reference_type", "")
@@ -1258,11 +1259,11 @@ def _validate_payment_reference_line(
     allocated = Decimal(str(line.get("allocated_amount", "0")))
     requested_flow_source_type = str(line.get("flow_source_type") or reference_type)
     reference_key = (normalize_doctype(requested_flow_source_type), reference_id)
-    if reference_key in _validate_payment_reference_line.processed_keys:  # type: ignore[attr-defined]
+    if reference_key in processed_keys:
         from werkzeug.exceptions import Conflict
 
         raise Conflict(_("No se puede aplicar la misma factura dos veces en un pago."))
-    _validate_payment_reference_line.processed_keys.add(reference_key)  # type: ignore[attr-defined]
+    processed_keys.add(reference_key)
     if allocated <= 0:
         if allocated < 0:
             from werkzeug.exceptions import Conflict
@@ -1272,9 +1273,6 @@ def _validate_payment_reference_line(
     if normalize_doctype(requested_flow_source_type) in ("purchase_order", "sales_order") and not allow_order_references:
         raise ValueError(_("Las órdenes solo pueden referenciarse en flujo de anticipo."))
     return reference_type, reference_id, requested_flow_source_type, allocated, allocated
-
-
-_validate_payment_reference_line.processed_keys = set()  # type: ignore[attr-defined]
 
 
 def _append_payment_source_row(
@@ -1612,13 +1610,14 @@ def _save_payment_references(
         lines = _payment_reference_lines_from_form()
 
     totals = _payment_reference_totals()
-    _reset_payment_reference_line_cache()
+    processed_keys: set[tuple[str, str]] = set()
     for line in lines:
         totals = _process_payment_reference_line(
             payment=payment,
             line=line,
             totals=totals,
             allow_order_references=allow_order_references,
+            processed_keys=processed_keys,
         )
     return totals
 
@@ -1632,23 +1631,20 @@ def _payment_reference_totals() -> dict[str, Decimal]:
     }
 
 
-def _reset_payment_reference_line_cache() -> None:
-    """Reinicia el cache de validación de líneas de referencias de pago."""
-    _validate_payment_reference_line.processed_keys = set()  # type: ignore[attr-defined]
-
-
 def _process_payment_reference_line(
     *,
     payment: PaymentEntry,
     line: dict,
     totals: dict[str, Decimal],
     allow_order_references: bool,
+    processed_keys: set[tuple[str, str]],
 ) -> dict[str, Decimal]:
     """Valida una línea de referencia y la aplica cuando corresponde."""
     reference_type, reference_id, requested_flow_source_type, allocated, applied_amount = _validate_payment_reference_line(
         payment=payment,
         line=line,
         allow_order_references=allow_order_references,
+        processed_keys=processed_keys,
     )
     if applied_amount <= 0:
         return totals
@@ -1717,7 +1713,9 @@ def _apply_payment_reference_line(
     )
     if flow_source_type not in {"purchase_order", "sales_order"}:
         document.outstanding_amount = reference.outstanding_amount_after
-        document.base_outstanding_amount = document.outstanding_amount
+        document.base_outstanding_amount = document.outstanding_amount * (
+            Decimal(str(getattr(document, "exchange_rate", None) or 1))
+        )
     totals["allocated"] += allocated
     totals["discount"] += reference.discount_amount
     totals["gain_loss"] += reference.gain_loss_amount

@@ -578,6 +578,20 @@ def apply_payment_reconciliation(
         )
     if not company or party_type not in {"supplier", "customer"} or not party_id:
         raise _document_flow_error("Debe indicar compania, tipo de tercero y tercero.")
+    latest_allocation = database.session.execute(
+        select(func.max(PaymentReference.allocation_date))
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .where(
+            PaymentEntry.company == company,
+            PaymentEntry.party_type == party_type,
+            PaymentEntry.party_id == party_id,
+            PaymentEntry.docstatus == 1,
+        )
+    ).scalar_one()
+    if latest_allocation and allocation_date < latest_allocation:
+        raise _document_flow_error(
+            "La fecha de conciliación no puede ser anterior a una aplicación existente " f"({latest_allocation})."
+        )
 
     reconciliation = Reconciliation(
         company=company,
