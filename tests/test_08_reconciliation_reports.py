@@ -603,6 +603,28 @@ def test_inventory_valuation_uses_latest_layer_at_cutoff(app_ctx):
     assert report.totals["remaining_stock_value"] == Decimal("50")
 
 
+def test_financial_reports_ignore_inactive_ledgers(app_ctx):
+    """Financial reports must not resolve an inactive book."""
+    from cacao_accounting.database import Book, database
+    from cacao_accounting.reportes.services import FinancialReportFilters, get_trial_balance_report
+
+    database.session.add(
+        Book(
+            entity="cacao",
+            code="INACTIVE-REPORT",
+            name="Libro inactivo de prueba",
+            currency="NIO",
+            status="inactivo",
+            is_primary=True,
+        )
+    )
+    database.session.commit()
+
+    report = get_trial_balance_report(FinancialReportFilters(company="cacao", ledger="INACTIVE-REPORT"))
+
+    assert report.rows == []
+
+
 def test_bank_difference_journal_uses_account_codes_and_each_book_currency(app_ctx):
     """El ajuste bancario se contabiliza en la moneda del banco y se convierte por libro."""
     from cacao_accounting.bancos.statement_service import create_bank_difference_journal
