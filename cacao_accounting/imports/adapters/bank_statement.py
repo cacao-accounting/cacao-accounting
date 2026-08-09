@@ -29,7 +29,19 @@ class BankStatementAdapter(BaseImportAdapter):
         """Convierte una columna vacía o cero en un lado bancario ausente."""
         if value in (None, ""):
             return None
-        amount = Decimal(str(value))
+        normalized = str(value).strip().replace(" ", "")
+        if "," in normalized and "." in normalized:
+            if normalized.rfind(",") > normalized.rfind("."):
+                normalized = normalized.replace(".", "").replace(",", ".")
+            else:
+                normalized = normalized.replace(",", "")
+        elif "," in normalized:
+            decimal_part = normalized.rsplit(",", 1)[1]
+            normalized = normalized.replace(",", ".") if len(decimal_part) <= 2 else normalized.replace(",", "")
+        elif normalized.count(".") > 1:
+            parts = normalized.split(".")
+            normalized = "".join(parts[:-1]) + "." + parts[-1] if len(parts[-1]) <= 2 else "".join(parts)
+        amount = Decimal(normalized)
         return amount if amount != 0 else None
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
@@ -109,6 +121,8 @@ class BankStatementAdapter(BaseImportAdapter):
                     "withdrawal": self._optional_amount(row.get("withdrawal")),
                 }
             )
+            if transactions[-1]["deposit"] is not None and transactions[-1]["withdrawal"] is not None:
+                raise ValueError("Una fila bancaria no puede contener depósito y retiro simultáneamente.")
         return transactions
 
     def persist_document(self, document: Any) -> None:

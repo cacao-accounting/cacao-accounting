@@ -338,7 +338,7 @@ class ImportService:
                 success_count, error_count = self._process_all_documents(batch, batch_id, adapter, docs, context)
                 self._finalize_execution(batch, batch_id, success_count, error_count)
 
-            except (SQLAlchemyError, ValueError, OSError) as e:
+            except (ArithmeticError, SQLAlchemyError, ValueError, OSError) as e:
                 self._handle_execution_error(batch, batch_id, e)
 
     def _process_all_documents(
@@ -356,7 +356,7 @@ class ImportService:
                 s, e = self._process_document(adapter, ref, rows, context, batch, batch_id)
                 success_count += s
                 error_count += e
-            except (ValueError, SQLAlchemyError) as exc:
+            except (ArithmeticError, ValueError, SQLAlchemyError) as exc:
                 error_count = self._handle_document_error(batch_id, batch, ref, exc, error_count)
 
             self._update_batch_progress(batch, batch_id, success_count, error_count)
