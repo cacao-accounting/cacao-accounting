@@ -1446,3 +1446,9 @@ Commit firmado: `c39ca7b fix(o2c): align refunds and payment allocation controls
 Se corrigieron cuatro hallazgos confirmados. La diferencia de precio del matching 2-way/3-way ahora se acumula como diferencia unitaria por cantidad de referencia; los detalles limitan `matched_qty` y `matched_amount` a lo realmente recibido/ordenado y conservan estado parcial. Los duplicados de órdenes y facturas de compra recalculan sus importes base con `exchange_rate`, y una recepción rechaza una orden cuyo proveedor no coincide.
 
 Commit firmado: `0b8505e fix(s2p): enforce reconciliation quantities and supplier scope`. No se ejecutó pytest local; se ejecutó Black, `compileall` y `git diff --check`. El lote queda para CI y los issues permanecen abiertos.
+
+### 2026-08-10 — Lote de controles de conciliación de inventario (#322, #323, #326, #329)
+
+Se corrigió el propósito `stock_adjustment` para que pueda postearse, las conciliaciones deficitarias ahora conservan el valor objetivo en lugar de sustituirlo por el costo FIFO, las transferencias entre cuentas iguales validan el período contable antes del retorno temprano y los conteos en UOM no base se convierten a UOM base antes de calcular diferencias y valor objetivo.
+
+Commit firmado: `4df8253 fix(inventory): honor reconciliation and period controls`. No se ejecutó pytest local; se ejecutó Black, `compileall` y `git diff --check`. Los issues permanecen abiertos para CI y verificación posterior.
