@@ -96,6 +96,15 @@ debe probarse con movimientos y valores calculados, no con asserts triviales.
   pruebas o cobertura no pueda aparecer como check exitoso.
 - Ambos workflows locales cargan correctamente como YAML.
 
+### Resultado final de regresión actual
+
+- Después de los últimos cambios se ejecutó la batería afectada completa con
+  `pytest --full --slow=True` y salida persistida en
+  `test_results_current_full.log`: **286 passed, 129 warnings**, 7m22s.
+- La batería amplia anterior del baseline terminó en **562 passed, 129
+  warnings**; la regresión actual es la evidencia válida para los archivos
+  modificados.
+
 ## 2026-08-07 — Blindaje de devoluciones en analítica y dashboard R2R
 
 ### Petición
