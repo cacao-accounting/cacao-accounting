@@ -741,7 +741,8 @@ def _two_way_reconciliation_item(
     ordered_qty = _line_qty(order_item)
     order_rate = _line_rate(order_item)
     invoice_rate = _line_rate(invoice_item)
-    matched_qty = min(invoice_qty, ordered_qty)
+    pending_qty = max(Decimal("0"), ordered_qty - _matched_qty_for_order_item(order_item.id))
+    matched_qty = min(invoice_qty, pending_qty)
     matched_amount = matched_qty * order_rate
     invoiced_amount = invoice_qty * invoice_rate
     price_difference = invoice_rate - order_rate
@@ -756,7 +757,7 @@ def _two_way_reconciliation_item(
         received_qty=ordered_qty,  # "received" = ordered in 2-way context
         invoiced_qty=invoice_qty,
         matched_qty=matched_qty,
-        received_amount=invoice_qty * order_rate,
+        received_amount=matched_qty * order_rate,
         invoiced_amount=invoiced_amount,
         matched_amount=matched_amount,
         price_difference=price_difference,
@@ -776,7 +777,8 @@ def _three_way_reconciliation_item(
     receipt_qty = _line_qty(receipt_item)
     receipt_rate = _line_rate(receipt_item)
     invoice_rate = _line_rate(invoice_item)
-    matched_qty = min(invoice_qty, receipt_qty)
+    pending_qty = max(Decimal("0"), receipt_qty - _matched_qty_for_receipt_item(receipt_item.id))
+    matched_qty = min(invoice_qty, pending_qty)
     matched_amount = matched_qty * receipt_rate
     invoiced_amount = invoice_qty * invoice_rate
     price_difference = invoice_rate - receipt_rate
@@ -791,7 +793,7 @@ def _three_way_reconciliation_item(
         received_qty=receipt_qty,
         invoiced_qty=invoice_qty,
         matched_qty=matched_qty,
-        received_amount=invoice_qty * receipt_rate,
+        received_amount=matched_qty * receipt_rate,
         invoiced_amount=invoiced_amount,
         matched_amount=matched_amount,
         price_difference=price_difference,
