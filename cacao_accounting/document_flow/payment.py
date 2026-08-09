@@ -124,11 +124,13 @@ def _payment_order_allocated(flow_source_type: str, source_id: str) -> Decimal:
     rows = database.session.execute(
         select(PaymentReference.allocated_amount)
         .join(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
         .where(
             DocumentRelation.source_type == flow_source_type,
             DocumentRelation.source_id == source_id,
             DocumentRelation.target_type == "payment_entry",
             DocumentRelation.status == "active",
+            PaymentEntry.docstatus == 1,
         )
     ).scalars()
     return sum((decimal_or_zero(amount) for amount in rows), Decimal("0"))
