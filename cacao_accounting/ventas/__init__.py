@@ -2709,7 +2709,8 @@ def _create_sales_invoice_from_form():
             document_type=document_type,
             sales_order_id=request.form.get("from_order") or None,
             delivery_note_id=request.form.get("from_note") or None,
-            update_inventory=bool(request.form.get("update_inventory")),
+            update_inventory=bool(request.form.get("update_inventory"))
+            and document_type not in ("sales_credit_note", "sales_return"),
             is_return=document_type in ("sales_credit_note", "sales_return"),
             reversal_of=reversal_of,
             remarks=request.form.get("remarks"),
@@ -2870,7 +2871,7 @@ def _handle_sales_invoice_edit_post(registro):
         registro.company = request.form.get("company") or None
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.remarks = request.form.get("remarks")
-        registro.update_inventory = bool(request.form.get("update_inventory"))
+        registro.update_inventory = bool(request.form.get("update_inventory")) and not registro.is_return
         if registro.reversal_of and (
             before_state.get("customer_id") != registro.customer_id or before_state.get("company") != registro.company
         ):
@@ -2998,7 +2999,7 @@ def ventas_factura_venta_submit(invoice_id: str):
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
         submit_document(registro)
-        if registro.update_inventory and not registro.delivery_note_id:
+        if registro.update_inventory and not registro.is_return and not registro.delivery_note_id:
             dn = _create_delivery_note_from_invoice(registro)
             flash(
                 _("Se ha creado y aprobado la Nota de Entrega %s asociada a esta factura.") % (dn.document_no or dn.id),
@@ -3117,7 +3118,12 @@ def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, cu
 
 def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInvoice]:
     """Obtiene facturas aprobadas del cliente y compañía."""
-    query = database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
+    query = database.select(SalesInvoice).filter_by(
+        company=company,
+        customer_id=customer_id,
+        docstatus=1,
+        is_return=False,
+    )
     return list(database.session.execute(query).scalars().all())
 
 
