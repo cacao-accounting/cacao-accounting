@@ -627,7 +627,7 @@ def _process_reconciliation_line(
         raise _document_flow_error("No se puede aplicar la misma factura dos veces en un pago.", 409)
     processed.add(key)
 
-    payment = database.session.query(PaymentEntry).with_for_update().get(payment_id)
+    payment = database.session.get(PaymentEntry, payment_id, with_for_update=True)
     _validate_payment(payment, company, party_type, party_id, flow_source_type)
     assert payment is not None
 
@@ -682,7 +682,7 @@ def _validate_payment(payment: Any, company: str, party_type: str, party_id: str
 
 def _get_reference_document(flow_source_type: str, document_id: str, company: str, party_type: str, party_id: str) -> Any:
     model = _payment_reference_model(flow_source_type)
-    document = database.session.query(model).with_for_update().get(document_id)
+    document = database.session.get(model, document_id, with_for_update=True)
     if not document or getattr(document, "docstatus", 0) != 1:
         raise _document_flow_error("El documento referenciado debe existir y estar aprobado.", 404)
     if getattr(document, "company", None) != company:
@@ -1273,7 +1273,7 @@ def _apply_payment_target_line(
     processed_reference_keys.add(reference_key)
 
     model = _payment_reference_model(reference_type)
-    invoice = database.session.query(model).with_for_update().get(reference_id)
+    invoice = database.session.get(model, reference_id, with_for_update=True)
     if not invoice:
         raise _document_flow_error("Factura origen no encontrada.", 404)
     if company and getattr(invoice, "company", None) and getattr(invoice, "company") != company:
