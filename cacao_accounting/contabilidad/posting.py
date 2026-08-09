@@ -1744,6 +1744,7 @@ def _upsert_stock_bin(
     qty_change: Decimal,
     valuation_rate: Decimal,
     value_change: Decimal,
+    preserve_reserved_qty: bool = False,
 ) -> tuple[Decimal, Decimal]:
     """Actualiza StockBin con FOR UPDATE para evitar condiciones de carrera.
 
@@ -1774,10 +1775,11 @@ def _upsert_stock_bin(
     bin_row.stock_value = _decimal_value(bin_row.stock_value) + value_change
 
     # INV-10: una reserva nunca puede superar stock disponible ni ser negativa.
-    # El stock puede ser negativo cuando la compañía lo permite, pero eso no
-    # convierte una deuda de stock en una reserva negativa.
-    reserved_qty = _decimal_value(bin_row.reserved_qty)
-    bin_row.reserved_qty = max(Decimal("0"), min(reserved_qty, max(bin_row.actual_qty, Decimal("0"))))
+    # Una DN vinculada a una OV libera su reserva en un hook posterior; si se
+    # clamp aquí primero, ese hook restaría dos veces la cantidad entregada.
+    if not preserve_reserved_qty:
+        reserved_qty = _decimal_value(bin_row.reserved_qty)
+        bin_row.reserved_qty = max(Decimal("0"), min(reserved_qty, max(bin_row.actual_qty, Decimal("0"))))
 
     if bin_row.actual_qty > 0:
         bin_row.valuation_rate = bin_row.stock_value / bin_row.actual_qty
@@ -2318,6 +2320,7 @@ def _create_stock_ledger_for_document(
         qty_change=qty_change,
         valuation_rate=valuation_rate,
         value_change=value_change,
+        preserve_reserved_qty=isinstance(document, DeliveryNote) and bool(document.sales_order_id),
     )
     stock_layer = StockValuationLayer(
         item_code=line.item_code,
