@@ -57,6 +57,14 @@ identidad `williamjmorenor@gmail.com`.
   migraciones versionadas, una matriz consolidada AR/AP/inventario/bancos/Tax
   contra GL por dimensiones y evidencia completa de concurrencia, PostgreSQL,
   cierres FX y todas las reversiones.
+- Se ejecutó una corrida focal consolidada de los flujos R2R/O2C/S2P,
+  inventario, caja, FX y cierre: **161 passed, 110 warnings** en 216.61 s,
+  registrada en `test_results_flow_focal_20260809.log`.
+- La cobertura verificada incluye subledger/aging AR-AP, kardex histórico,
+  banco contra GL, anulaciones, posting de inventario, matching 3-way,
+  pagos/aplicaciones, cierre fiscal, doble posting y dos libros con monedas
+  distintas. El informe ahora incluye una matriz explícita de estas cadenas y
+  separa lo probado de lo que sigue pendiente.
 - Cambios realizados en commits semánticos `5b049bf` y `8cd297f`; la identidad
   Git es `William Jose Moreno Reyes <williamjmorenor@gmail.com>`.
 
