@@ -247,11 +247,16 @@ def db_migrate(head: str, revision: str | None) -> None:
     termina con éxito (código 0). Esto permite ejecutarlo de forma segura
     en el inicio de un contenedor Docker.
     """
+    from sqlalchemy import inspect
+
     from cacao_accounting import alembic
+    from cacao_accounting.database import database
 
     app = _obtener_aplicacion()
     with app.app_context():
         try:
+            if not inspect(database.engine).has_table("user"):
+                raise RuntimeError("La base de datos no está inicializada; ejecute primero 'cacaoctl db init'.")
             target = revision or head
             alembic.upgrade(target=target)
             _mensaje_exito("Migraciones aplicadas correctamente.")
