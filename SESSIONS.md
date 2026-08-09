@@ -1565,3 +1565,18 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   GitHub sin cerrar los issues.
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
   pytest local por instrucción del usuario.
+
+## 2026-08-10 — Clasificación de issues bancarios y R2R multimoneda
+
+- #338, #341, #304, #350, #351, #352 y #353 fueron revisados contra el código
+  vigente y clasificados como mitigados/falsos positivos: las reversas copian
+  importes de moneda de cuenta, las aplicaciones destino validan moneda, el
+  adaptador valida retiros, compañía, período y filas sin monto, y los locks de
+  conciliación incluyen el objetivo.
+- #287 confirmado: el fallback de `_first_available_line` devolvía una línea
+  agotada. Ahora retorna `None` y el matching rechaza la factura cuando no queda
+  cantidad pendiente.
+- #289 confirmado: el matching 2-way/3-way ahora exige que OC/recepción y
+  factura tengan el mismo proveedor además de compañía, moneda y estado.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
