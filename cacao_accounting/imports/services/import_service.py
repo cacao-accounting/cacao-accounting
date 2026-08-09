@@ -231,7 +231,7 @@ class ImportService:
 
     def execute(self, batch_id: str):
         """Ejecuta la importación del lote de forma síncrona o asíncrona."""
-        batch = database.session.query(ImportBatch).with_for_update().get(batch_id)
+        batch = database.session.get(ImportBatch, batch_id, with_for_update=True)
         if not batch:
             return
 
