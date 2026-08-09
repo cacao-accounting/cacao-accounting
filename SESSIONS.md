@@ -43,8 +43,22 @@ identidad `williamjmorenor@gmail.com`.
 - Black, Ruff, Flake8 y Mypy focales: sin errores; Mypy solo emitió notas
   informativas sobre cuerpos de funciones sin anotación.
 - La suite completa exigida se dejó ejecutando en
-  `test_results_audit_full_20260809.log`; su resultado final aún es requisito
-  antes de cerrar la auditoría.
+  `test_results_audit_full_20260809.log`. La corrida final posterior a todos
+  los cambios terminó en `test_results_audit_final_20260809.log` con **1591
+  passed, 10 skipped y 242 warnings** en 26:26.
+
+### Entregable y estado
+
+- Se generó [`CACAO_ACCOUNTING_DEEP_AUDIT.md`](CACAO_ACCOUNTING_DEEP_AUDIT.md)
+  con arquitectura, modelo contable, hallazgos en el formato solicitado,
+  evidencia de pruebas, matriz de reconciliación, controles faltantes y
+  evaluación final.
+- La evaluación permanece **PARTIAL**: la suite está verde, pero faltan
+  migraciones versionadas, una matriz consolidada AR/AP/inventario/bancos/Tax
+  contra GL por dimensiones y evidencia completa de concurrencia, PostgreSQL,
+  cierres FX y todas las reversiones.
+- Cambios realizados en commits semánticos `5b049bf` y `8cd297f`; la identidad
+  Git es `William Jose Moreno Reyes <williamjmorenor@gmail.com>`.
 
 ### Continuidad
 
