@@ -1799,3 +1799,16 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   factura tengan el mismo proveedor además de compañía, moneda y estado.
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
   pytest local por instrucción del usuario.
+
+## 2026-08-10 — Precisión en importación de comprobantes
+
+- #284 confirmó un riesgo concreto en `JournalEntryAdapter`: la validación de
+  balance convertía débitos y créditos a `float`, permitiendo que `NaN` evitara
+  la comparación y exponiendo importes de alta precisión a redondeos binarios.
+- Corrección local: los importes se convierten a `Decimal`, se rechazan valores
+  no finitos y la tolerancia de balance se expresa como `Decimal("0.0001")`.
+  Se añadieron regresiones para `NaN` y cantidades decimales de alta precisión.
+- El issue permanece abierto para continuar la auditoría global de precisión,
+  escalas por moneda y redondeos en los demás módulos.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
