@@ -23,6 +23,23 @@ El flujo observado es, en términos funcionales:
 - FX: `contabilidad/exchange_revaluation_service.py`; reportes semánticos normalizan valores de transacción y base.
 - Multi-ledger: `Book`/`ledger_id`; los journals y consultas relevantes deben aislarse por compañía, libro, período y moneda.
 
+### Cobertura de flujos verificada
+
+| Flujo | Cadena comprobada | Pruebas/evidencia | Estado de cifras |
+|---|---|---|---|
+| R2R | journal/documento → posting → GLEntry → trial balance/BS/P&L | `test_07posting_engine.py`, `test_e2e_journalentry.py`, `test_fiscal_year_closing.py`, `test_r2r11_double_posting.py`, `test_record_to_reports_multicurrency_multiledger.py` | Doble partida y aislamiento probados; cierre/reapertura dimensional aún parcial |
+| O2C | SalesInvoice → AR → PaymentEntry/Reference → banco → GL → reportes | `test_payment_entry_improved.py`, `test_o2c_sales_fixes.py`, `test_08_reconciliation_reports.py`, escenario multimoneda | Cálculos base, pagos, devoluciones y FX focales probados; refunds/write-offs completos pendientes |
+| S2P/P2P | PurchaseReceipt → 3-way → PurchaseInvoice → AP → pago → GL | `test_s2p15_downstream_revert.py`, `test_08_reconciliation_reports.py`, `test_07posting_engine.py` | Matching parcial/completo y posting probados; créditos/prepagos completos pendientes |
+| Inventory | recepción/entrada → SLE → capas/StockBin → salida/COGS → GL → kardex | `test_update_inventory.py`, `test_07posting_engine.py`, escenarios `INVENTORY_REBUILD_SCENARIOS`, `test_08_reconciliation_reports.py` | cantidades, capas, transferencias, reversals y reconstrucción probados; matriz GL por dimensión pendiente |
+| Caja/bancos | PaymentEntry/BankTransaction → GL → candidate/reconciliation → balance/forecast | `test_cash_forecast.py`, `test_08_reconciliation_reports.py`, `test_exchange_revaluation.py` | banco contra GL y cancelaciones probados; statement/reconciling-items completo pendiente |
+| FX/multi-ledger | moneda transacción → rate → valor libro → realized/unrealized → reportes | `test_record_to_reports_multicurrency_multiledger.py`, `test_exchange_revaluation.py` | NIO/EUR, rate, ganancias y exposición bancaria probados; cobertura exhaustiva de cierre pendiente |
+
+La corrida consolidada de estos flujos produjo **161 passed, 110 warnings** en
+216.61 segundos. La suite completa posterior a las correcciones produjo
+**1591 passed, 10 skipped, 242 warnings**. Los nombres de pruebas anteriores
+son evidencia ejecutada, no una inferencia basada únicamente en la existencia
+del código.
+
 ## 3. Accounting Data Model
 
 `Entity` representa la compañía/legal entity; `Book` representa libros paralelos; `Account` y cuentas de control alimentan `GLEntry`; los documentos de ventas/compras y pagos forman los subledgers; `BankAccount`/`BankTransaction` representan caja; SLE/StockBin/valoración representan inventario. La fuente auditable primaria del GL es el conjunto de líneas `GLEntry`; los campos derivados (`outstanding_amount`, saldos de forecast, bins y totales de reportes) deben reconstruirse desde transacciones fuente.
