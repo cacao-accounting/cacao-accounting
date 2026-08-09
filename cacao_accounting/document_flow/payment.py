@@ -162,6 +162,8 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
             DocumentRelation.target_type == "payment_entry",
             DocumentRelation.status == "active",
             PaymentEntry.docstatus == 1,
+            PaymentEntry.company == document.company,
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == document.company),
         )
     )
     if as_of_date is not None:
@@ -187,6 +189,8 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
             PaymentReference.reference_type == physical_reference_type,
             PaymentReference.reference_id == document_id,
             PaymentEntry.docstatus == 1,
+            PaymentEntry.company == document.company,
+            or_(DocumentRelation.company.is_(None), DocumentRelation.company == document.company),
             or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active"),
         )
     )
