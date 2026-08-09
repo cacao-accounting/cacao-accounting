@@ -919,6 +919,8 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
             if not uom:
                 raise ValueError(f"La conciliacion del item {item_code} requiere una unidad de medida.")
             default_uom = _item_default_uom(item_code)
+            if not default_uom:
+                raise ValueError(f"El item {item_code} requiere una UOM base configurada.")
             counted_qty = _form_decimal(f"counted_qty_{i}", str(current_qty))
             if uom != default_uom:
                 try:
