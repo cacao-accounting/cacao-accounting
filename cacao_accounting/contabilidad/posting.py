@@ -2050,7 +2050,7 @@ def _create_stock_movement(
             line._inventory_cost_amount = cost_amount
         except PostingError:
             if not item.allow_negative_stock:
-                raise
+                raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
             cost_rate = _consume_available_layers_for_negative_stock(
                 company=document.company,
                 item_code=line.item_code,
