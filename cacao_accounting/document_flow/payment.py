@@ -114,14 +114,18 @@ def _payment_candidate_outstanding(document: Any, flow_source_type: str) -> Deci
     source_key = normalize_doctype(flow_source_type)
     total = decimal_or_zero(getattr(document, "grand_total", None))
     if source_key in {"purchase_order", "sales_order"}:
-        pending = total - _payment_order_allocated(source_key, str(getattr(document, "id", "")))
+        pending = total - _payment_order_allocated(
+            source_key,
+            str(getattr(document, "id", "")),
+            company=getattr(document, "company", None),
+        )
         return pending if pending > 0 else Decimal("0")
     return compute_outstanding_amount(document)
 
 
-def _payment_order_allocated(flow_source_type: str, source_id: str) -> Decimal:
+def _payment_order_allocated(flow_source_type: str, source_id: str, company: str | None = None) -> Decimal:
     """Calcula anticipos activos ya vinculados a una orden."""
-    rows = database.session.execute(
+    query = (
         select(PaymentReference.allocated_amount)
         .join(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
@@ -132,7 +136,10 @@ def _payment_order_allocated(flow_source_type: str, source_id: str) -> Decimal:
             DocumentRelation.status == "active",
             PaymentEntry.docstatus == 1,
         )
-    ).scalars()
+    )
+    if company:
+        query = query.where(PaymentEntry.company == company)
+    rows = database.session.execute(query).scalars()
     return sum((decimal_or_zero(amount) for amount in rows), Decimal("0"))
 
 
