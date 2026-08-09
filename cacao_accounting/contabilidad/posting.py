@@ -1570,16 +1570,22 @@ def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[tuple
         .all()
     )
     queue: list[tuple[Decimal, Decimal]] = []
+    negative_balance = Decimal("0")
     for layer in layers:
         qty = _decimal_value(layer.qty)
         rate = _decimal_value(layer.rate)
         if qty > 0:
+            if negative_balance > 0:
+                offset = min(qty, negative_balance)
+                negative_balance -= offset
+                qty -= offset
+            if qty <= 0:
+                continue
             queue.append((qty, rate))
             continue
         if qty < 0:
             remaining = _consume_valuation_layer(queue, abs(qty))
-            if remaining > 0:
-                raise PostingError("El registro de valuacion de inventario esta inconsistente.")
+            negative_balance += remaining
     return [(qty, rate) for qty, rate in queue if qty > 0]
 
 
