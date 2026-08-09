@@ -1278,3 +1278,9 @@ Se reprodujo el cálculo con una factura de 100 y una nota de crédito de 25 enl
 La consulta AR/AP ahora identifica la naturaleza de la nota por `SalesInvoice.document_type` o `PurchaseInvoice.document_type`, manteniendo el aislamiento por documento, estado y fecha. Se añadió la regresión `test_compute_outstanding_amount_applies_credit_note_by_document_type`, que exige saldo 75.
 
 Validación: 2 pruebas de notas `passed`; batería focal de saldos, subledger, aging, maturity y notas `15 passed`; Black, Ruff, Flake8, Mypy y `git diff --check` pasan para los archivos tocados. El issue #280 continúa abierto para completar créditos, reversals y conciliación O2C ↔ GL.
+
+### 2026-08-09 — Control de OV obligatoria en O2C
+
+Se confirmó que `SalesMatchingConfig.require_sales_order` se almacenaba pero no se consultaba durante el submit de facturas. Se añadió `_validate_sales_order_requirement`, que acepta una OV directa, una DN vinculada a OV o una relación activa de línea; rechaza facturas manuales cuando la compañía exige OV y mantiene exentas las notas de crédito/débito y devoluciones.
+
+Validación: la regresión de factura manual sin OV pasa; la batería O2C de `test_o2c_sales_fixes.py` y `test_sales_price_validation.py` terminó `27 passed`. Black, Ruff, Flake8 y Mypy pasan en archivos tocados. El issue #280 permanece abierto porque aún faltan controles de reserva, precios desde DN, reversals y reconciliación contra GL.

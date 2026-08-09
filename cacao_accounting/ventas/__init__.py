@@ -1447,6 +1447,36 @@ def _validate_sales_invoice_quantities(invoice_id: str) -> None:
             _validate_sales_invoice_relation(rel)
 
 
+def _validate_sales_order_requirement(invoice: SalesInvoice) -> None:
+    """Rechaza facturas sin orden de venta cuando la compañía lo exige."""
+    if invoice.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or invoice.is_return:
+        return
+    config = database.session.execute(
+        database.select(SalesMatchingConfig).filter_by(company=invoice.company)
+    ).scalar_one_or_none()
+    if not config or not config.require_sales_order:
+        return
+    if invoice.sales_order_id:
+        return
+    if invoice.delivery_note_id:
+        delivery_note = database.session.get(DeliveryNote, invoice.delivery_note_id)
+        if delivery_note and delivery_note.sales_order_id:
+            return
+    linked_order = database.session.execute(
+        database.select(DocumentRelation.id).where(
+            DocumentRelation.source_type == "sales_order",
+            DocumentRelation.source_id.is_not(None),
+            DocumentRelation.target_type == "sales_invoice",
+            DocumentRelation.target_id == invoice.id,
+            DocumentRelation.status == "active",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if linked_order:
+        return
+    raise ValueError("La factura debe estar vinculada a una Orden de Venta aprobada.")
+
+
 def _validate_sales_invoice_relation(relation: DocumentRelation) -> None:
     """Valida una relación de factura contra su documento fuente."""
     sources = {"delivery_note": (DeliveryNoteItem, "entregada"), "sales_order": (SalesOrderItem, "ordenada")}
@@ -2867,6 +2897,7 @@ def ventas_factura_venta_submit(invoice_id: str):
         )
         if not getattr(registro, "is_return", False):
             _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
+        _validate_sales_order_requirement(registro)
         _validate_sales_invoice_quantities(invoice_id)
         warnings = _validate_invoice_prices_against_source(registro)
         from cacao_accounting.approval_engine import ApprovalEngine
