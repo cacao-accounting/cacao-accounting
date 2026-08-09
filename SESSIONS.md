@@ -1965,3 +1965,41 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Se añadió regresión para `Decimal("1.005")`, verificando que el payload no
   contenga artefactos binarios. No se ejecutó pytest local por instrucción del
   usuario; Black, Ruff, flake8, mypy, compilación y `git diff --check` pasan.
+
+## 2026-08-09 — Revisión por código de los issues de auditoría (O2C/INV/S2P/R2R)
+
+- Sesión de consolidación: se revisó por código (sin pytest, por instrucción
+  del usuario) cada issue abierto de los lotes de auditoría y se cerró cuando
+  el fix ya estaba presente en la rama `stabilization/inventory-audit`.
+- Metodología: lectura del diff de los commits marcados en cada issue,
+  verificación del código vigente en `master`/rama, y lint (ruff, flake8,
+  black) de los archivos tocados. Solo se editó código en #322.
+- O2C cerrados: #346 (NC no cuentan como exposición crediticia, filtro
+  `is_return=False` en `_approved_customer_invoices`), #345 (guard de
+  `allocation_date` retroactivo en `apply_payment_reconciliation`), #344
+  (reembolsos postean a la cuenta del tercero real, no del `payment_type`).
+- INV cerrados: #321 (reserva SO/DN en UOM base), #322, #323 (conciliación
+  con déficit usa el valor objetivo, no costo FIFO), #324 (capas qty=0 de
+  landed cost se procesan en `_valuation_queue`), #325 (reportes reconstruyen
+  saldos corridos), #326–#333 (período en transferencias, clamp de reservas,
+  `allow_negative_stock` en transferencias y ND, UOM de conteo, round-trip de
+  edición/duplicado, bodega de reserva, race de INSERT + scope de bodega,
+  scope de compañía en listados).
+- R2R cerrados: #334/#335 (cierre fiscal con `with_for_update` y flags
+  `is_closing` restringidos), #336 (capitalización idempotente), #337
+  (recurrentes pending→applied tras posting), #338 (reversas GL conservan
+  moneda de cuenta).
+- S2P cerrados: #339 (tolerancia de precio por importe), #340 (matched_qty
+  acotado por pendiente), #341 (validación de moneda en create_payment_target),
+  #342 (duplicados aplican exchange_rate), #343 (recepción vs proveedor de la
+  OC).
+- INV recientes cerrados: #359 (promedio móvil desde StockBin real), #360
+  (tasas en UOM base), #361 (capa de conciliación qty×rate==stock_value_difference),
+  #362 (`allow_negative_stock` en camino documental), #363 (delta contra bin
+  actual), #364/#365 (conversión UOM estricta y sin IntegrityError NOT NULL).
+- Único cambio de código de la sesión: commit `66ba2b8` añade
+  `stock_adjustment` a la rama positiva del GL en `_create_stock_entry_gl_entries`
+  (posting.py:2957) para que postee como débito a inventario, consistente con
+  el ledger (issue #322).
+- Quedan abiertos los lotes previos: INV-AUDIT-01/02 (valoración crítica),
+  BANK-AUDIT y demás tickets de auditoría descritos en los issues abiertos.
