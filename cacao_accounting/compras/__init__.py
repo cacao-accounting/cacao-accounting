@@ -221,6 +221,13 @@ def _require_purchase_document_access(document: Any, action: str = "consultar") 
     exige_acceso_compania("purchases", str(company), action)
 
 
+def _require_requested_purchase_company_access(document: Any, action: str = "editar") -> None:
+    """Validate access when an edit attempts to move a document to another company."""
+    requested_company = request.form.get("company")
+    if requested_company and requested_company != getattr(document, "company", None):
+        exige_acceso_compania("purchases", requested_company, action)
+
+
 @compras.route("/")
 @compras.route("/compras")
 @compras.route("/buying")
@@ -360,6 +367,7 @@ def compras_solicitud_compra_editar(request_id: str):
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     if registro.docstatus != 0:
         abort(400)
 
@@ -374,6 +382,7 @@ def compras_solicitud_compra_editar(request_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         try:
             before_state = _capture_purchase_state(registro)
             registro.requested_by = request.form.get("requested_by")
@@ -444,6 +453,7 @@ def compras_solicitud_compra_duplicar(request_id: str):
     origen = database.session.get(PurchaseRequest, request_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     duplicada = PurchaseRequest(
         requested_by=origen.requested_by,
         department=origen.department,
@@ -696,6 +706,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     registro = database.session.get(SupplierQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     if registro.docstatus != 0:
         abort(400)
 
@@ -707,6 +718,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         return _handle_supplier_quotation_update(registro, request.form, quotation_id)
 
     lineas = database.session.execute(
@@ -939,6 +951,7 @@ def compras_cotizacion_proveedor_duplicar(quotation_id: str):
     origen = database.session.get(SupplierQuotation, quotation_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -1830,6 +1843,7 @@ def compras_orden_compra_editar(order_id: str):
     items_disponibles, uoms_disponibles = _purchase_order_catalogs()
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         response = _update_purchase_order_from_request(registro)
         if response is not None:
             return response
@@ -1993,6 +2007,7 @@ def compras_orden_compra_duplicar(order_id: str):
     origen = database.session.get(PurchaseOrder, order_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -2242,6 +2257,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     registro = database.session.get(PurchaseQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     if registro.docstatus != 0:
         abort(400)
 
@@ -2259,6 +2275,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         return _handle_purchase_quotation_edit_post(registro)
 
     lineas = database.session.execute(
@@ -2311,6 +2328,7 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
     origen = database.session.get(PurchaseQuotation, quotation_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -2643,6 +2661,7 @@ def compras_recepcion_editar(receipt_id: str):
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
@@ -2671,6 +2690,7 @@ def compras_recepcion_editar(receipt_id: str):
     ]
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         return _handle_purchase_receipt_edit_post(registro)
 
     lineas = database.session.execute(
@@ -2755,6 +2775,7 @@ def compras_recepcion_duplicar(receipt_id: str):
     origen = database.session.get(PurchaseReceipt, receipt_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -3325,6 +3346,7 @@ def compras_factura_compra_editar(invoice_id: str):
     registro = database.session.get(PurchaseInvoice, invoice_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
@@ -3348,6 +3370,7 @@ def compras_factura_compra_editar(invoice_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         return _handle_purchase_invoice_edit_post(registro)
 
     lineas = database.session.execute(
@@ -3463,6 +3486,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
     origen = database.session.get(PurchaseInvoice, invoice_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
