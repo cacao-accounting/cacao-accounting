@@ -1378,3 +1378,11 @@ Se reprodujo INV-AUDIT-01 con capas `+10 @ 10`, `-15` y `+10 @ 12`. La cola ante
 `_valuation_queue` ahora mantiene un déficit de cantidad; las recepciones posteriores compensan primero ese déficit y solo el remanente entra a FIFO/promedio. La regresión verifica que quedan 5 unidades a 12 y que su costo es 60.
 
 Validación: pruebas de stock negativo/cola `4 passed`; Black, Ruff, Flake8 y Mypy pasan en archivos tocados. El issue #319 permanece abierto para revisar el resto de la valoración negativa, reconstrucción y controles de stock.
+
+### 2026-08-09 — Protección del cierre fiscal y flags R2R (#334, #335)
+
+Se confirmó que los flags `is_closing` e `is_fiscal_year_closing` no deben aceptarse desde un payload manual sin autorización. El servicio de comprobantes ahora exige un flujo autorizado para crear cierres, impide cambiar los flags al editar borradores y valida el año fiscal antes de generar cualquier GLEntry. El cierre fiscal requiere año indicado, entidad coincidente y cierre administrativo previo.
+
+Para evitar doble cierre concurrente, `create_fiscal_year_closing_voucher` y `submit_journal` bloquean la fila `FiscalYear` con `with_for_update` durante la transacción; el segundo proceso observa `financial_closed` y es rechazado. Las reversiones genéricas ya no heredan flags de cierre y los cierres fiscales deben revertirse mediante el flujo fiscal dedicado.
+
+Validación: `tests/test_09_journal_entry_form.py` y `tests/test_fiscal_year_closing.py`: `29 passed`; Ruff, Flake8, Mypy y `git diff --check` pasan en archivos tocados. Los issues #334 y #335 permanecen abiertos para tracking y revisión posterior.
