@@ -16,7 +16,7 @@ from cacao_accounting.database import (
     CashForecastEntry,
     FiscalYear,
 )
-from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.decorators import exige_acceso_compania, modulo_activo
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_entidades_por_id_razonsocial,
@@ -54,6 +54,11 @@ def _check_desktop_mode():
     return False
 
 
+def _require_forecast_access(forecast: CashForecast, action: str = "consultar") -> None:
+    """Require access to the company owning a cash forecast."""
+    exige_acceso_compania("cash", forecast.company, action)
+
+
 @bancos.route("/cash-forecast/list")
 @modulo_activo("cash")
 @login_required
@@ -69,6 +74,7 @@ def cash_forecast_list():
             if code:
                 company = code
                 break
+    exige_acceso_compania("cash", company, "consultar")
 
     forecasts = database.session.query(CashForecast).filter_by(company=company).order_by(CashForecast.created.desc()).all()
 
@@ -96,6 +102,7 @@ def cash_forecast_new():
             if code:
                 company = code
                 break
+    exige_acceso_compania("cash", company, "crear")
 
     fiscal_years = database.session.query(FiscalYear).filter_by(entity=company).all()
 
@@ -115,6 +122,7 @@ def cash_forecast_new():
 
 def _handle_cash_forecast_new_post(company: str):
     """Procesa el POST del formulario de nuevo pronostico. Retorna redirect o None."""
+    exige_acceso_compania("cash", company, "crear")
     version = request.form.get("version", "").strip()
     description = request.form.get("description", "").strip()
     fiscal_year_id = request.form.get("fiscal_year_id")
@@ -157,6 +165,7 @@ def cash_forecast_detail(forecast_id):
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
+    _require_forecast_access(forecast)
 
     fiscal_year = database.session.get(FiscalYear, forecast.fiscal_year_id)
     currencies = obtener_lista_monedas()
@@ -194,6 +203,7 @@ def cash_forecast_approve(forecast_id):
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
+    _require_forecast_access(forecast, "autorizar")
     if forecast.status != "Draft":
         flash("Sólo los pronósticos en estado Borrador pueden ser aprobados.", "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
@@ -217,6 +227,7 @@ def cash_forecast_close(forecast_id):
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
+    _require_forecast_access(forecast, "autorizar")
     if forecast.status != "Approved":
         flash("Sólo los pronósticos en estado Aprobado pueden ser cerrados.", "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
@@ -238,6 +249,7 @@ def cash_forecast_archive(forecast_id):
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
+    _require_forecast_access(forecast, "autorizar")
     if forecast.status not in ("Approved", "Closed"):
         flash("Sólo los pronósticos Aprobados o Cerrados pueden ser archivados.", "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
@@ -259,6 +271,7 @@ def cash_forecast_delete(forecast_id):
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
+    _require_forecast_access(forecast, "anular")
     if forecast.status != "Draft":
         flash("Sólo los pronósticos en estado Borrador pueden ser eliminados.", "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
@@ -281,6 +294,7 @@ def cash_forecast_entry_add(forecast_id):
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
+    _require_forecast_access(forecast, "editar")
     if forecast.status != "Draft":
         flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
@@ -330,6 +344,7 @@ def cash_forecast_entry_delete(forecast_id, entry_id):
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
+    _require_forecast_access(forecast, "editar")
     if forecast.status != "Draft":
         flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
@@ -351,6 +366,10 @@ def cash_forecast_entry_delete(forecast_id, entry_id):
 @login_required
 def cash_forecast_entry_import(forecast_id):
     """Redirige al asistente de importación compartido."""
+    forecast = database.session.get(CashForecast, forecast_id)
+    if not forecast:
+        abort(404)
+    _require_forecast_access(forecast, "editar")
     flash(
         _("La importación de proyecciones manuales ahora se realiza a través del asistente de importación compartido."),
         "info",
@@ -373,6 +392,7 @@ def cash_forecast_compare():
             if code:
                 company = code
                 break
+    exige_acceso_compania("cash", company, "consultar")
 
     # Obtener todos los forecast de esta compañía
     forecasts = database.session.query(CashForecast).filter_by(company=company).order_by(CashForecast.version.asc()).all()
@@ -419,6 +439,7 @@ def cash_forecast_manual_entries():
             if code:
                 company = code
                 break
+    exige_acceso_compania("cash", company, "consultar")
 
     # Obtener todos los forecast de esta compañía
     forecasts = database.session.query(CashForecast).filter_by(company=company).order_by(CashForecast.version.asc()).all()
@@ -433,6 +454,7 @@ def cash_forecast_manual_entries():
     if selected_forecast_id:
         selected_forecast = database.session.get(CashForecast, selected_forecast_id)
         if selected_forecast:
+            _require_forecast_access(selected_forecast)
             entries = (
                 database.session.query(CashForecastEntry)
                 .filter_by(forecast_id=selected_forecast.id)
@@ -465,6 +487,7 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         abort(404)
+    _require_forecast_access(forecast, "editar")
     if forecast.status != "Draft":
         flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))

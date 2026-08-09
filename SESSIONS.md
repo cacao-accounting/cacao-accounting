@@ -1474,3 +1474,8 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Hallazgos: #354 es falso positivo contra el código actual porque las rutas de importación ya rechazan fechas inválidas; #357 es confirmado por conversión Decimal no localizada y captura incompleta; #355 es confirmado en el servicio de importación directa, que no rechazaba ambos lados monetarios.
 - Corrección: normalización de separadores decimales en ambos importadores, rechazo explícito de depósito/retiro simultáneos y captura de `ArithmeticError` para finalizar lotes con error en vez de dejarlos en procesamiento.
 - Verificación: Black, `compileall` y `git diff --check`; no pytest local.
+
+## 2026-08-10 — Autorización de Cash Forecast y conciliación
+
+- Corrección en curso: se añadieron controles de compañía y acción para detalle, creación, edición, aprobación, cierre, archivo, eliminación e importación de pronósticos; conciliación por cuenta, aplicación de matches y reglas bancarias validan la compañía persistida.
+- Se mantiene la regla de no confiar en `company` enviado por el cliente; los issues #309 y #310 permanecen abiertos para verificación posterior.
