@@ -1,7 +1,69 @@
 # ISSUES.md — REGISTRO DE AUDITORÍA FUNCIONAL ERP
 
-**Última actualización:** 2026-07-10 (actualizado con issues de GitHub)
-**Versión del código auditado:** HEAD `5a1374d`
+**Última actualización:** 2026-08-09 (catálogo upstream sincronizado)
+**Versión del código auditado:** HEAD `1d4cee9`
+
+## CATÁLOGO VIGENTE DE ISSUES ABIERTOS — 2026-08-09
+
+Fuente: GitHub upstream, consultado durante la sincronización de `stabilization/inventory-audit`. Total: **53 issues abiertos**. Ninguno fue cerrado; la columna OPEN refleja el estado remoto y no sustituye la clasificación técnica registrada en los comentarios de cada issue.
+
+| Issue | Título | Estado remoto | Última actualización |
+|---|---|---|---|
+| [#320](https://github.com/cacao-accounting/cacao-accounting/issues/320) | INV-AUDIT-02 [HIGH] — Cancelar una entrada de stock puede llevar el bin a negativo y envenenar la valoración | OPEN | 2026-08-09 |
+| [#319](https://github.com/cacao-accounting/cacao-accounting/issues/319) | INV-AUDIT-01 [CRITICAL] — Una salida con stock negativo rompe permanentemente la valoración ("registro inconsistente") | OPEN | 2026-08-09 |
+| [#318](https://github.com/cacao-accounting/cacao-accounting/issues/318) | BANK-AUDIT-15 [LOW] — El ajuste de diferencia bancaria es inalcanzable en producción | OPEN | 2026-08-09 |
+| [#317](https://github.com/cacao-accounting/cacao-accounting/issues/317) | BANK-AUDIT-14 [LOW] — `ExchangeRevaluation` sin constraint único sobre (company, year, month) | OPEN | 2026-08-09 |
+| [#316](https://github.com/cacao-accounting/cacao-accounting/issues/316) | BANK-AUDIT-13 [LOW] — Ruta legacy de cobro postea la pata bancaria sin dimensión bancaria | OPEN | 2026-08-09 |
+| [#315](https://github.com/cacao-accounting/cacao-accounting/issues/315) | BANK-AUDIT-12 [MEDIUM] — El adaptador de importación en vivo no detecta duplicados de estado bancario | OPEN | 2026-08-09 |
+| [#314](https://github.com/cacao-accounting/cacao-accounting/issues/314) | BANK-AUDIT-11 [MEDIUM] — La matriz del pronóstico de caja mezcla compañías cuando `company` difiere del pronóstico | OPEN | 2026-08-09 |
+| [#313](https://github.com/cacao-accounting/cacao-accounting/issues/313) | BANK-AUDIT-10 [MEDIUM] — Las vistas GET de conciliación adquieren locks `FOR UPDATE` sobre cada transacción pendiente | OPEN | 2026-08-09 |
+| [#312](https://github.com/cacao-accounting/cacao-accounting/issues/312) | BANK-AUDIT-09 [MEDIUM] — Sin limpieza de conciliación bancaria al cancelar un pago | OPEN | 2026-08-09 |
+| [#311](https://github.com/cacao-accounting/cacao-accounting/issues/311) | BANK-AUDIT-08 [MEDIUM] — Borradores de pago abandonados consumen permanentemente la capacidad de anticipos de la orden | OPEN | 2026-08-09 |
+| [#310](https://github.com/cacao-accounting/cacao-accounting/issues/310) | BANK-AUDIT-07 [HIGH] — Rutas de pronóstico de caja sin autorización por compañía ni permiso (IDOR) | OPEN | 2026-08-09 |
+| [#309](https://github.com/cacao-accounting/cacao-accounting/issues/309) | BANK-AUDIT-06 [HIGH] — Rutas de conciliación bancaria sin autorización por compañía (IDOR) | OPEN | 2026-08-09 |
+| [#308](https://github.com/cacao-accounting/cacao-accounting/issues/308) | BANK-AUDIT-05 [HIGH] — Cualquier asiento GL de la misma compañía puede conciliarse contra una transacción bancaria | OPEN | 2026-08-09 |
+| [#307](https://github.com/cacao-accounting/cacao-accounting/issues/307) | BANK-AUDIT-04 [HIGH] — El filtro de candidatos usa el monto total del pago, excluyendo matches parciales legítimos | OPEN | 2026-08-09 |
+| [#306](https://github.com/cacao-accounting/cacao-accounting/issues/306) | BANK-AUDIT-03 [HIGH] — Los candidatos de conciliación ignoran la dirección depósito/retiro vs pago/cobro | OPEN | 2026-08-09 |
+| [#305](https://github.com/cacao-accounting/cacao-accounting/issues/305) | BANK-AUDIT-02 [HIGH] — Las reversas GL al cancelar un pago pierden la dimensión bancaria | OPEN | 2026-08-09 |
+| [#304](https://github.com/cacao-accounting/cacao-accounting/issues/304) | BANK-AUDIT-01 [CRITICAL] — Transacciones bancarias de solo retiro (withdrawal) importadas nunca pueden conciliarse | OPEN | 2026-08-09 |
+| [#303](https://github.com/cacao-accounting/cacao-accounting/issues/303) | O2C-AUDIT-10 [LOW] — Anticipo→factura: asiento de compensación GL solo si `apply_advances_automatically` | OPEN | 2026-08-09 |
+| [#302](https://github.com/cacao-accounting/cacao-accounting/issues/302) | O2C-AUDIT-09 [LOW] — `_payment_order_allocated` sin filtro de compañía | OPEN | 2026-08-09 |
+| [#301](https://github.com/cacao-accounting/cacao-accounting/issues/301) | O2C-AUDIT-08 [MEDIUM] — Conciliación de pagos/facturas sin control de acceso por compañía (residuo del fix `561b440`) | OPEN | 2026-08-09 |
+| [#300](https://github.com/cacao-accounting/cacao-accounting/issues/300) | O2C-AUDIT-07 [MEDIUM] — Notas de crédito/débito sobre la misma factura sin tope acumulativo | OPEN | 2026-08-09 |
+| [#299](https://github.com/cacao-accounting/cacao-accounting/issues/299) | O2C-AUDIT-06 [MEDIUM] — Montos de línea negativos o inconsistentes con qty×rate se aceptan | OPEN | 2026-08-09 |
+| [#298](https://github.com/cacao-accounting/cacao-accounting/issues/298) | O2C-AUDIT-05 [MEDIUM] — El límite de crédito ignora las órdenes de venta aprobadas | OPEN | 2026-08-09 |
+| [#297](https://github.com/cacao-accounting/cacao-accounting/issues/297) | O2C-AUDIT-04 [MEDIUM] — Validación de precio omitida para facturas desde ND o sin origen | OPEN | 2026-08-09 |
+| [#296](https://github.com/cacao-accounting/cacao-accounting/issues/296) | O2C-AUDIT-03 [HIGH] — Doble liberación de reserva en entregas parciales → sobre-venta | OPEN | 2026-08-09 |
+| [#295](https://github.com/cacao-accounting/cacao-accounting/issues/295) | O2C-AUDIT-02 [HIGH] — `require_sales_order` es configuración muerta; facturas sin OV/ND evaden controles | OPEN | 2026-08-09 |
+| [#294](https://github.com/cacao-accounting/cacao-accounting/issues/294) | O2C-AUDIT-01 [HIGH] — Las notas de crédito nunca reducen el saldo de la factura origen | OPEN | 2026-08-09 |
+| [#293](https://github.com/cacao-accounting/cacao-accounting/issues/293) | S2P-AUDIT-07 [MEDIUM] — Validación de duplicidad de `supplier_invoice_no` sin constraint a nivel DB (race condition) | OPEN | 2026-08-09 |
+| [#292](https://github.com/cacao-accounting/cacao-accounting/issues/292) | S2P-AUDIT-06 [MEDIUM] — `price_ok` compara unidades incompatibles en la conciliación | OPEN | 2026-08-09 |
+| [#291](https://github.com/cacao-accounting/cacao-accounting/issues/291) | S2P-AUDIT-05 [MEDIUM] — Cuenta puente sin compensar en flujo 2-way cuando la recepción llega después | OPEN | 2026-08-09 |
+| [#290](https://github.com/cacao-accounting/cacao-accounting/issues/290) | S2P-AUDIT-04 [MEDIUM] — La edición de una factura de compra vinculada falla con flags estrictos | OPEN | 2026-08-09 |
+| [#289](https://github.com/cacao-accounting/cacao-accounting/issues/289) | S2P-AUDIT-03 [HIGH] — Factura de compra puede referenciar OC/recepción de un proveedor distinto sin validación | OPEN | 2026-08-09 |
+| [#288](https://github.com/cacao-accounting/cacao-accounting/issues/288) | S2P-AUDIT-02 [HIGH] — Fuga de aislamiento entre compañías (IDOR) en listados y rutas de detalle de compras | OPEN | 2026-08-09 |
+| [#287](https://github.com/cacao-accounting/cacao-accounting/issues/287) | S2P-AUDIT-01 [HIGH] — Sobre-matching en conciliación de compras: `_first_available_line` devuelve líneas agotadas | OPEN | 2026-08-09 |
+| [#285](https://github.com/cacao-accounting/cacao-accounting/issues/285) | AUDIT-010: Completar period close, reopen, audit trail y source-to-report | OPEN | 2026-08-09 |
+| [#284](https://github.com/cacao-accounting/cacao-accounting/issues/284) | AUDIT-009: Eliminar riesgo de floats y definir rounding financiero | OPEN | 2026-08-09 |
+| [#283](https://github.com/cacao-accounting/cacao-accounting/issues/283) | AUDIT-008: Probar idempotencia, retries y concurrencia de operaciones financieras | OPEN | 2026-08-09 |
+| [#282](https://github.com/cacao-accounting/cacao-accounting/issues/282) | AUDIT-007: Completar conciliación bancaria y detectar huérfanos | OPEN | 2026-08-09 |
+| [#281](https://github.com/cacao-accounting/cacao-accounting/issues/281) | AUDIT-006: Completar matriz S2P/P2P de AP y conciliación 3-way | OPEN | 2026-08-09 |
+| [#280](https://github.com/cacao-accounting/cacao-accounting/issues/280) | AUDIT-005: Completar matriz O2C de pagos, créditos y reversals | OPEN | 2026-08-09 |
+| [#279](https://github.com/cacao-accounting/cacao-accounting/issues/279) | AUDIT-004: Reconciliar inventario físico, valoración, COGS y GL end-to-end | OPEN | 2026-08-09 |
+| [#278](https://github.com/cacao-accounting/cacao-accounting/issues/278) | AUDIT-003: Completar realized/unrealized FX y remeasurement de AR/AP | OPEN | 2026-08-09 |
+| [#277](https://github.com/cacao-accounting/cacao-accounting/issues/277) | AUDIT-002: Crear migración histórica para Entity.code y Book.code | OPEN | 2026-08-09 |
+| [#276](https://github.com/cacao-accounting/cacao-accounting/issues/276) | AUDIT-001: Implementar matriz de reconciliación Subledger ↔ GL por dimensiones | OPEN | 2026-08-09 |
+| [#256](https://github.com/cacao-accounting/cacao-accounting/issues/256) | TST-E2E-01: Ampliar cobertura de pruebas E2E/Playwright | OPEN | 2026-08-09 |
+| [#253](https://github.com/cacao-accounting/cacao-accounting/issues/253) | CROSS-03: Evaluar acciones de flujo documental para registros maestros | OPEN | 2026-08-09 |
+| [#251](https://github.com/cacao-accounting/cacao-accounting/issues/251) | RPT-01: Drill-down universal en reportes operativos | OPEN | 2026-08-09 |
+| [#250](https://github.com/cacao-accounting/cacao-accounting/issues/250) | FIS-01: Cobertura de pruebas funcionales por doctype del MVP fiscal | OPEN | 2026-08-09 |
+| [#249](https://github.com/cacao-accounting/cacao-accounting/issues/249) | CAS-22: Pruebas de formularios bancarios nota_nueva y transferencia_nueva | OPEN | 2026-08-09 |
+| [#246](https://github.com/cacao-accounting/cacao-accounting/issues/246) | R2R-20: Implementar LedgerMappingRule para diferencias automáticas entre libros | OPEN | 2026-08-09 |
+| [#197](https://github.com/cacao-accounting/cacao-accounting/issues/197) | INV-26: Sin alerta de punto de reorden en movimientos de salida | OPEN | 2026-08-09 |
+| [#193](https://github.com/cacao-accounting/cacao-accounting/issues/193) | R2R-18: Sin consolidación multi-empresa | OPEN | 2026-08-09 |
+| [#189](https://github.com/cacao-accounting/cacao-accounting/issues/189) | S2P-22: Sin automatización de punto de reorden | OPEN | 2026-08-09 |
+
+
 
 | ID | Descripción | Status | GitHub | Commits |
 |---|---|---|---|---|
