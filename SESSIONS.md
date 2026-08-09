@@ -63,6 +63,23 @@ abiertos para verificación posterior y acumulando commits antes del push.
 - Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
   `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
 
+## 2026-08-10 — Aislamiento de edición y duplicación en compras
+
+### Petición
+
+Continuar con el issue de aislamiento multi-compañía de compras (#288), sin
+cerrar el issue y acumulando el cambio para publicarlo junto con el lote.
+
+### Implementación
+
+- Se extendió la validación de compañía a las rutas de edición y duplicación de
+  solicitudes, cotizaciones, RFQ, órdenes, recepciones y facturas de compra.
+- Las ediciones ahora validan además la compañía enviada en el formulario si
+  intenta cambiar el documento de entidad, evitando eludir el ACL usando un
+  POST con otra compañía.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
 ## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
 
 ### Petición
