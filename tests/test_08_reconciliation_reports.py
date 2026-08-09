@@ -214,6 +214,112 @@ def test_three_way_multicurrency_receipt_compensation_report(app_ctx):
     assert pending_after_second[0].pending_amount == Decimal("24.0000")
 
 
+INVENTORY_REBUILD_SCENARIOS = [
+    ("two_receipts", [("10", "100"), ("5", "60")], "15", "160", "10.666666667"),
+    ("receipt_return", [("20", "240"), ("-4", "-48")], "16", "192", "12"),
+    ("receipt_issue", [("30", "450"), ("-12", "-180")], "18", "270", "15"),
+    ("three_costs", [("3", "21"), ("4", "32"), ("5", "45")], "12", "98", "8.166666667"),
+    ("issue_then_replenish", [("25", "250"), ("-7", "-70"), ("10", "120")], "28", "300", "10.714285714"),
+    ("count_increase", [("8", "80"), ("2", "22")], "10", "102", "10.2"),
+    ("count_decrease", [("12", "144"), ("-3", "-36")], "9", "108", "12"),
+    ("fractional_units", [("1.5", "18"), ("2.25", "29.25")], "3.75", "47.25", "12.6"),
+    ("fractional_return", [("7.5", "90"), ("-2.5", "-30")], "5", "60", "12"),
+    ("zero_value_receipt", [("10", "0"), ("5", "25")], "15", "25", "1.666666667"),
+    ("zero_balance", [("10", "100"), ("-10", "-100")], "0", "0", "0"),
+    ("small_rounding", [("3", "10.01"), ("2", "6.67")], "5", "16.68", "3.336"),
+    ("large_batch", [("1000", "12500"), ("-125", "-1562.5")], "875", "10937.5", "12.5"),
+    ("mixed_adjustments", [("10", "100"), ("-1", "-9"), ("2", "22")], "11", "113", "10.272727273"),
+    ("negative_adjustment", [("20", "200"), ("-2", "-30"), ("-3", "-45")], "15", "125", "8.333333333"),
+    ("three_receipts", [("2", "20"), ("3", "36"), ("4", "56")], "9", "112", "12.444444444"),
+    ("two_returns", [("40", "480"), ("-5", "-60"), ("-7", "-84")], "28", "336", "12"),
+    ("moving_average", [("10", "100"), ("10", "140"), ("-5", "-60")], "15", "180", "12"),
+    ("cost_reversal", [("6", "72"), ("-2", "-24"), ("2", "30")], "6", "78", "13"),
+    ("decimal_costs", [("1.25", "13.75"), ("2.75", "35.75")], "4", "49.5", "12.375"),
+    ("negative_then_recover", [("-2", "-20"), ("10", "130")], "8", "110", "13.75"),
+    ("zero_cost_return", [("5", "50"), ("-1", "0")], "4", "50", "12.5"),
+    ("high_precision", [("0.333", "4.329"), ("0.667", "9.343")], "1", "13.672", "13.672"),
+    ("manual_recount", [("14", "210"), ("-4", "-60"), ("1", "17")], "11", "167", "15.181818182"),
+    ("purchase_credit", [("9", "108"), ("-3", "-36"), ("4", "52")], "10", "124", "12.4"),
+    ("purchase_debit", [("10", "120"), ("2", "30"), ("-1", "-12")], "11", "138", "12.545454545"),
+]
+
+
+@pytest.mark.full
+@pytest.mark.parametrize(
+    "scenario, movements, expected_qty, expected_value, expected_rate",
+    INVENTORY_REBUILD_SCENARIOS,
+)
+def test_inventory_rebuild_manual_business_scenarios(
+    app_ctx, scenario, movements, expected_qty, expected_value, expected_rate
+):
+    """Reconstruye stock desde movimientos manuales y verifica valor algebraico.
+
+    Cada caso representa una combinación real de recepción, salida, retorno o
+    ajuste. La expectativa no usa el servicio: es la suma independiente de
+    cantidades y valores, con tasa final = valor / cantidad.
+    """
+    from cacao_accounting.database import Item, StockBin, StockLedgerEntry, Warehouse, database
+    from cacao_accounting.inventario.service import rebuild_stock_bins
+
+    item_code = f"ITEM-REBUILD-{scenario.upper()}"
+    warehouse_code = f"WH-{scenario.upper()}"
+    database.session.add_all(
+        [
+            Item(code=item_code, name=f"Item {scenario}", item_type="goods", is_stock_item=True, default_uom="EA"),
+            Warehouse(code=warehouse_code, name=f"Warehouse {scenario}", company="cacao"),
+            StockBin(
+                company="cacao",
+                item_code=item_code,
+                warehouse=warehouse_code,
+                actual_qty=Decimal("999"),
+                reserved_qty=Decimal("2"),
+                stock_value=Decimal("9999"),
+            ),
+        ]
+    )
+    qty_after = Decimal("0")
+    stock_value = Decimal("0")
+    entries = []
+    for index, (qty_raw, value_raw) in enumerate(movements, start=1):
+        qty = Decimal(qty_raw)
+        value = Decimal(value_raw)
+        qty_after += qty
+        stock_value += value
+        entries.append(
+            StockLedgerEntry(
+                posting_date=date(2026, 1, index),
+                item_code=item_code,
+                warehouse=warehouse_code,
+                company="cacao",
+                qty_change=qty,
+                qty_after_transaction=qty_after,
+                valuation_rate=(abs(value / qty) if qty else Decimal("0")),
+                stock_value_difference=value,
+                stock_value=stock_value,
+                voucher_type="inventory_test",
+                voucher_id=f"{scenario}-{index}",
+            )
+        )
+    database.session.add_all(entries)
+    database.session.commit()
+
+    result = rebuild_stock_bins("cacao", item_code=item_code, warehouse=warehouse_code)
+    database.session.commit()
+    bin_row = database.session.execute(
+        database.select(StockBin).filter_by(company="cacao", item_code=item_code, warehouse=warehouse_code)
+    ).scalar_one()
+
+    expected_qty_decimal = Decimal(expected_qty)
+    expected_value_decimal = Decimal(expected_value)
+    expected_rate_decimal = Decimal(expected_rate)
+    assert result.rebuilt_bins == 1
+    assert result.rebuilt_layers == len(movements)
+    assert bin_row.actual_qty == expected_qty_decimal
+    assert bin_row.stock_value == expected_value_decimal
+    assert bin_row.valuation_rate.quantize(Decimal("0.000000001")) == expected_rate_decimal.quantize(Decimal("0.000000001"))
+    assert bin_row.reserved_qty == Decimal("2")
+
+
 def test_purchase_reconciliation_rejects_overbilling_and_price_difference(app_ctx):
     from cacao_accounting.compras.purchase_reconciliation_service import reconcile_purchase_invoice
     from cacao_accounting.database import (
