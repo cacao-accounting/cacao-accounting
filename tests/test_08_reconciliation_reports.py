@@ -694,6 +694,8 @@ def test_reconciliation_report_diagnoses_posting_without_bank_transaction(app_ct
         account_name="Cuenta diagnóstico",
         account_no="DIAG-001",
     )
+    database.session.add(bank_account)
+    database.session.flush()
     payment = PaymentEntry(
         company="cacao",
         posting_date=date(2026, 5, 20),
@@ -702,7 +704,7 @@ def test_reconciliation_report_diagnoses_posting_without_bank_transaction(app_ct
         paid_amount=Decimal("25.00"),
         docstatus=1,
     )
-    database.session.add_all([bank_account, payment])
+    database.session.add(payment)
     database.session.commit()
 
     report = get_reconciliation_report(company="cacao", as_of_date=date(2026, 5, 31))
