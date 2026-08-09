@@ -1454,3 +1454,5 @@ Se corrigió el propósito `stock_adjustment` para que pueda postearse, las conc
 Commit firmado: `4df8253 fix(inventory): honor reconciliation and period controls`. No se ejecutó pytest local; se ejecutó Black, `compileall` y `git diff --check`. Los issues permanecen abiertos para CI y verificación posterior.
 
 CI reveló que el contrato de error de stock insuficiente también se aplicaba al camino de `DeliveryNote`. Se corrigió el segundo caller para propagar `No hay suficiente inventario` cuando `allow_negative_stock` es falso. Commit firmado: `7ade05a fix(inventory): preserve delivery shortage errors`.
+
+CI detectó además que el caller de `StockEntry` requiere conservar su mensaje específico `no permite stock negativo`, mientras que mypy exigía estrechar la UOM base en conciliaciones. Ambos contratos quedaron corregidos. Commit firmado: `73a5a7a fix(inventory): preserve caller error contracts`.
