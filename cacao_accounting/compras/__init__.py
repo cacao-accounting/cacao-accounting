@@ -2001,7 +2001,7 @@ def compras_orden_compra_duplicar(order_id: str):
     duplicada.total = total
     duplicada.net_total = total
     duplicada.grand_total = total
-    duplicada.base_total = total
+    duplicada.base_total = (total * Decimal(str(duplicada.exchange_rate or 1))).quantize(Decimal("0.0001"))
     log_create(duplicada)
     database.session.commit()
     flash(_("Orden de compra duplicada como nuevo borrador."), "success")
@@ -2766,6 +2766,11 @@ def compras_recepcion_duplicar(receipt_id: str):
 
 def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
     """Valida que las cantidades recibidas no excedan las ordenadas en la OC."""
+    receipt = database.session.get(PurchaseReceipt, receipt_id)
+    if receipt and receipt.purchase_order_id:
+        purchase_order = database.session.get(PurchaseOrder, receipt.purchase_order_id)
+        if purchase_order and purchase_order.supplier_id != receipt.supplier_id:
+            raise ValueError(_("El proveedor de la recepción no coincide con el proveedor de la orden de compra."))
     relations = database.session.execute(
         database.select(DocumentRelation).filter_by(
             target_type="purchase_receipt",
@@ -3457,11 +3462,13 @@ def compras_factura_compra_duplicar(invoice_id: str):
         database.session.add(linea)
         total += item.amount or Decimal("0")
     duplicada.total = total
-    duplicada.base_total = total
+    exchange_rate = Decimal(str(duplicada.exchange_rate or 1))
+    base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
+    duplicada.base_total = base_total
     duplicada.grand_total = total
-    duplicada.base_grand_total = total
+    duplicada.base_grand_total = base_total
     duplicada.outstanding_amount = total
-    duplicada.base_outstanding_amount = total
+    duplicada.base_outstanding_amount = base_total
     log_create(duplicada)
     database.session.commit()
     flash(_("Factura de compra duplicada como nuevo borrador."), "success")
