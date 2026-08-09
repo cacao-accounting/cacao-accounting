@@ -1892,3 +1892,18 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Esto cubre el ciclo parcial secuencial del issue, pero no sustituye la
   prueba E2E completa de remeasurement/reversal posterior; #278 permanece
   abierto.
+
+## 2026-08-10 — Diagnóstico de huérfanos bancarios (#282)
+
+- Se confirmó que `get_reconciliation_report` solo mostraba conciliaciones
+  existentes y pendientes de compras; no diagnosticaba pagos posteados sin
+  `BankTransaction`, vínculos a pagos inexistentes, BankTransaction sin GL
+  bancario ni ReconciliationItem cuyo source ya no existe.
+- El reporte ahora agrega filas `bank_diagnostic` con estados explícitos:
+  `posting_without_bank_transaction`, `orphan_payment_link`,
+  `payment_without_bank_gl` y `orphan_reconciliation_item`.
+- Las transacciones bancarias simplemente no conciliadas no se clasifican como
+  huérfanas. Se añadió regresión para un pago posteado sin extracto enlazado.
+- Black, Ruff, mypy, compilación y `git diff --check` pasan; no se ejecutó
+  pytest local. #282 permanece abierto para validar fees, intereses,
+  reversals, saldos y dimensiones por ledger/moneda/período.
