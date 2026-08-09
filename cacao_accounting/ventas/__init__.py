@@ -30,7 +30,7 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from ulid import ULID
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
@@ -138,16 +138,28 @@ def _stock_bin_or_create(company: str, item_code: str, warehouse: str, for_updat
         query = query.with_for_update()
     bin_row = database.session.execute(query).scalar_one_or_none()
     if not bin_row:
-        bin_row = StockBin(
-            company=company,
-            item_code=item_code,
-            warehouse=warehouse,
-            actual_qty=Decimal("0"),
-            reserved_qty=Decimal("0"),
-            stock_value=Decimal("0"),
-        )
-        database.session.add(bin_row)
-        database.session.flush()
+        try:
+            with database.session.begin_nested():
+                bin_row = StockBin(
+                    company=company,
+                    item_code=item_code,
+                    warehouse=warehouse,
+                    actual_qty=Decimal("0"),
+                    reserved_qty=Decimal("0"),
+                    stock_value=Decimal("0"),
+                )
+                database.session.add(bin_row)
+                database.session.flush()
+        except IntegrityError:
+            # Another transaction may have inserted the unique bin between
+            # the SELECT and INSERT. The savepoint keeps the caller's outer
+            # transaction usable while the committed row is locked/read.
+            retry_query = database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
+            if for_update:
+                retry_query = retry_query.with_for_update()
+            bin_row = database.session.execute(retry_query).scalar_one_or_none()
+            if bin_row is None:
+                raise
     return bin_row
 
 
@@ -275,7 +287,7 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
         if not warehouse:
             continue
 
-        bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse)
+        bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
         new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item, item_obj))
         bin_row.reserved_qty = new_reserved
@@ -306,7 +318,7 @@ def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
         if not warehouse:
             continue
 
-        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse)
+        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
         new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item, item_obj))
         bin_row.reserved_qty = new_reserved
@@ -333,7 +345,7 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
         if not warehouse:
             continue
 
-        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse)
+        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
         bin_row.reserved_qty = reserved + _base_qty_for_sales_line(item, item_obj)
     dn.reservation_released = False
