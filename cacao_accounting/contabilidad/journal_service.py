@@ -41,6 +41,8 @@ from cacao_accounting.database import (
     Entity,
     FiscalYear,
     NamingSeries,
+    RecurringJournalApplication,
+    RecurringJournalTemplate,
     database,
 )
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier, parse_posting_date
@@ -182,6 +184,22 @@ def submit_journal(journal_id: str) -> list[Any]:
         fiscal_year.closing_voucher_id = journal.id
         database.session.add(fiscal_year)
 
+    if journal.recurrent_application_id:
+        application = database.session.get(RecurringJournalApplication, journal.recurrent_application_id, with_for_update=True)
+        if not application or application.journal_id != journal.id:
+            database.session.rollback()
+            raise JournalValidationError("La aplicación recurrente del comprobante no es válida.")
+        application.status = "applied"
+        template = database.session.get(RecurringJournalTemplate, application.template_id)
+        if template:
+            template.last_applied_date = application.application_date
+            if application.application_date >= template.end_date:
+                template.is_completed = True
+                template.status = "completed"
+                template.docstatus = 3
+            database.session.add(template)
+        database.session.add(application)
+
     database.session.add(journal)
     log_submit(journal)
     # QR Validation support
@@ -233,6 +251,29 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
             fiscal_year.financial_closed = False
             fiscal_year.closing_voucher_id = None
             database.session.add(fiscal_year)
+
+    if journal.recurrent_application_id:
+        application = database.session.get(RecurringJournalApplication, journal.recurrent_application_id, with_for_update=True)
+        if application and application.journal_id == journal.id:
+            application.status = "reversed"
+            database.session.add(application)
+            template = database.session.get(RecurringJournalTemplate, application.template_id)
+            if template and template.last_applied_date == application.application_date:
+                latest_date = database.session.execute(
+                    select(RecurringJournalApplication.application_date)
+                    .where(
+                        RecurringJournalApplication.template_id == template.id,
+                        RecurringJournalApplication.status == "applied",
+                    )
+                    .order_by(RecurringJournalApplication.application_date.desc())
+                    .limit(1)
+                ).scalar_one_or_none()
+                template.last_applied_date = latest_date
+                if template.status == "completed":
+                    template.is_completed = False
+                    template.status = "approved"
+                    template.docstatus = 1
+                database.session.add(template)
 
     database.session.add(journal)
     log_cancel(journal)
