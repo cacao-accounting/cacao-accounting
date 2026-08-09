@@ -1907,3 +1907,14 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Black, Ruff, mypy, compilación y `git diff --check` pasan; no se ejecutó
   pytest local. #282 permanece abierto para validar fees, intereses,
   reversals, saldos y dimensiones por ledger/moneda/período.
+
+## 2026-08-10 — Matriz GRNI/AP 3-way (#281)
+
+- Se añadió a `get_reconciliation_matrix` una fila `GRNI/AP 3-way` que compara
+  recepciones aprobadas pendientes de factura contra la cuenta puente de la
+  compañía en GL, filtrando compañía, libro, moneda y fecha de corte.
+- La prueba focalizada cubre una recepción de 50 sin factura y demuestra el
+  importe pendiente de 50 como crédito neto del puente, con GL cero.
+- Esto no cierra el alcance completo de #281: siguen pendientes la conciliación
+  AP detallada, escenarios parciales, anticipos, créditos, reversos y
+  duplicados. No se ejecuta pytest local por instrucción del usuario.
