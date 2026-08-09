@@ -2770,6 +2770,145 @@ def test_stock_transfer_creates_stock_ledger_without_gl(app_ctx):
     assert sorted(line.qty_change for line in stock_entries) == [Decimal("-2.000000000"), Decimal("2.000000000")]
 
 
+def test_stock_transfer_rejects_warehouse_from_other_company(app_ctx):
+    from cacao_accounting.contabilidad.posting import PostingError, post_document_to_gl
+    from cacao_accounting.database import Entity, Item, StockEntry, StockEntryItem, UOM, Warehouse, database
+
+    database.session.add_all(
+        [
+            Entity(code="other", name="Other", company_name="Other", tax_id="J0002", currency="NIO"),
+            UOM(code="EA-OTHER", name="Each"),
+            Item(code="ITEM-TR-ISO", name="Item aislamiento", item_type="goods", is_stock_item=True, default_uom="EA-OTHER"),
+            Warehouse(code="WH-LOCAL-ISO", name="Bodega local", company="cacao"),
+            Warehouse(code="WH-FOREIGN-ISO", name="Bodega ajena", company="other"),
+        ]
+    )
+    entry = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="material_transfer",
+        from_warehouse="WH-LOCAL-ISO",
+        to_warehouse="WH-FOREIGN-ISO",
+        docstatus=1,
+    )
+    database.session.add(entry)
+    database.session.flush()
+    database.session.add(
+        StockEntryItem(
+            stock_entry_id=entry.id,
+            item_code="ITEM-TR-ISO",
+            source_warehouse="WH-LOCAL-ISO",
+            target_warehouse="WH-FOREIGN-ISO",
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom="EA-OTHER",
+            basic_rate=Decimal("5"),
+            valuation_rate=Decimal("5"),
+            amount=Decimal("5"),
+        )
+    )
+    database.session.commit()
+
+    with pytest.raises(PostingError, match="no pertenece a la compañía"):
+        post_document_to_gl(entry)
+
+
+def test_stock_transfer_allows_negative_stock_when_item_is_configured(app_ctx):
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Item,
+        StockBin,
+        StockEntry,
+        StockEntryItem,
+        StockLedgerEntry,
+        StockValuationLayer,
+        UOM,
+        Warehouse,
+        database,
+    )
+
+    database.session.add_all(
+        [
+            UOM(code="EA-NEG-TR", name="Each"),
+            Item(
+                code="ITEM-TR-NEG",
+                name="Item traslado negativo",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="EA-NEG-TR",
+                allow_negative_stock=True,
+            ),
+            Warehouse(code="WH-NEG-A", name="Bodega negativa A", company="cacao"),
+            Warehouse(code="WH-NEG-B", name="Bodega negativa B", company="cacao"),
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-TR-NEG",
+                warehouse="WH-NEG-A",
+                company="cacao",
+                qty_change=Decimal("2"),
+                qty_after_transaction=Decimal("2"),
+                valuation_rate=Decimal("5"),
+                stock_value_difference=Decimal("10"),
+                stock_value=Decimal("10"),
+                voucher_type="seed",
+                voucher_id="seed-tr-neg",
+            ),
+            StockValuationLayer(
+                item_code="ITEM-TR-NEG",
+                warehouse="WH-NEG-A",
+                company="cacao",
+                qty=Decimal("2"),
+                rate=Decimal("5"),
+                stock_value_difference=Decimal("10"),
+                remaining_qty=Decimal("2"),
+                remaining_stock_value=Decimal("10"),
+                voucher_type="seed",
+                voucher_id="seed-tr-neg",
+                posting_date=date(2026, 5, 1),
+            ),
+            StockBin(
+                company="cacao",
+                item_code="ITEM-TR-NEG",
+                warehouse="WH-NEG-A",
+                actual_qty=Decimal("2"),
+                stock_value=Decimal("10"),
+                valuation_rate=Decimal("5"),
+            ),
+        ]
+    )
+    entry = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="material_transfer",
+        from_warehouse="WH-NEG-A",
+        to_warehouse="WH-NEG-B",
+        docstatus=1,
+    )
+    database.session.add(entry)
+    database.session.flush()
+    database.session.add(
+        StockEntryItem(
+            stock_entry_id=entry.id,
+            item_code="ITEM-TR-NEG",
+            source_warehouse="WH-NEG-A",
+            target_warehouse="WH-NEG-B",
+            qty=Decimal("3"),
+            qty_in_base_uom=Decimal("3"),
+            uom="EA-NEG-TR",
+            basic_rate=Decimal("5"),
+            valuation_rate=Decimal("5"),
+            amount=Decimal("15"),
+        )
+    )
+    database.session.commit()
+
+    post_document_to_gl(entry)
+    source_bin = database.session.execute(
+        database.select(StockBin).filter_by(item_code="ITEM-TR-NEG", warehouse="WH-NEG-A")
+    ).scalar_one()
+    assert source_bin.actual_qty == Decimal("-1.000000000")
+
+
 def test_stock_transfer_preserves_valuation_cost_from_source(app_ctx):
     """INV-01: Verifica que transferencia entre bodegas use el costo real FIFO/MA,
     no la tasa ingresada por el usuario."""

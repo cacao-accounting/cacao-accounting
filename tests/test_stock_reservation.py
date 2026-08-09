@@ -12,13 +12,16 @@ from cacao_accounting import create_app
 from cacao_accounting.database import (
     DeliveryNote,
     DeliveryNoteItem,
+    DocumentRelation,
     Item,
+    ItemUOMConversion,
     ItemAccount,
     SalesOrder,
     SalesOrderItem,
     StockBin,
     StockLedgerEntry,
     StockValuationLayer,
+    UOM,
     Warehouse,
     WarehouseCompanyAccount,
     Accounts,
@@ -300,6 +303,55 @@ class TestReservaOrdenVenta:
         bin_row2 = _get_bin()
         assert bin_row2.reserved_qty == Decimal("15")
 
+    def test_so_submit_reserva_en_uom_base(self, app_ctx):
+        from cacao_accounting.ventas import _validate_and_reserve_stock_for_sales_order
+
+        database.session.add(UOM(code="BOX", name="Caja", is_active=True))
+        item = Item(
+            code="ART-BOX",
+            name="Articulo por caja",
+            item_type="goods",
+            is_stock_item=True,
+            default_uom="UND",
+            sale_uom="BOX",
+        )
+        database.session.add(item)
+        database.session.add(ItemUOMConversion(item_code="ART-BOX", from_uom="BOX", to_uom="UND", conversion_factor=12))
+        database.session.add(
+            StockBin(
+                company="cacao",
+                item_code="ART-BOX",
+                warehouse="WH-RESERVE",
+                actual_qty=Decimal("12"),
+                reserved_qty=Decimal("0"),
+                stock_value=Decimal("120"),
+                valuation_rate=Decimal("10"),
+            )
+        )
+        so = SalesOrder(id="SO-RES-UOM", company="cacao", posting_date=date(2026, 6, 15), customer_id="CUST-RESERVE")
+        database.session.add(so)
+        database.session.flush()
+        database.session.add(
+            SalesOrderItem(
+                sales_order_id=so.id,
+                item_code="ART-BOX",
+                qty=Decimal("1"),
+                uom="BOX",
+                rate=Decimal("120"),
+                amount=Decimal("120"),
+                warehouse="WH-RESERVE",
+            )
+        )
+        database.session.commit()
+
+        _validate_and_reserve_stock_for_sales_order(so)
+        database.session.commit()
+
+        bin_row = database.session.execute(
+            database.select(StockBin).filter_by(item_code="ART-BOX", warehouse="WH-RESERVE")
+        ).scalar_one()
+        assert bin_row.reserved_qty == Decimal("12")
+
     def test_so_cancel_libera_reserva(self, app_ctx):
         so = _make_so("SO-RES-04", Decimal("8"), docstatus=1)
         database.session.refresh(so)
@@ -391,6 +443,36 @@ class TestReservaNotaEntrega:
         bin_row2 = _get_bin()
         assert bin_row2.reserved_qty == Decimal("5")
 
+    def test_dn_libera_reserva_en_bodega_origen_de_la_orden(self, app_ctx):
+        from cacao_accounting.ventas import _release_reservation_for_delivery_note
+
+        database.session.add(Warehouse(code="WH-OTHER", name="Bodega alternativa", company="cacao"))
+        so = _make_so("SO-RES-DN-WH", Decimal("10"), warehouse="WH-RESERVE", docstatus=1)
+        bin_row = _get_bin()
+        bin_row.reserved_qty = Decimal("10")
+        dn = _make_dn("DN-RES-WH", Decimal("10"), warehouse="WH-OTHER", sales_order_id=so.id, docstatus=1)
+        dn_item = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalar_one()
+        so_item = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalar_one()
+        database.session.add(
+            DocumentRelation(
+                source_type="sales_order",
+                source_id=so.id,
+                source_item_id=so_item.id,
+                target_type="delivery_note",
+                target_id=dn.id,
+                target_item_id=dn_item.id,
+                qty=Decimal("10"),
+                relation_type="fulfillment",
+                status="active",
+            )
+        )
+        database.session.commit()
+
+        _release_reservation_for_delivery_note(dn)
+        database.session.commit()
+        database.session.refresh(bin_row)
+        assert bin_row.reserved_qty == Decimal("0")
+
     def test_dn_cancel_restaura_reserva(self, app_ctx):
         so = _make_so("SO-RES-DN-03", Decimal("10"), docstatus=1)
         bin_row = _get_bin()
@@ -434,6 +516,30 @@ def test_rebuild_stock_bins_preserva_reserved_qty(app_ctx):
     database.session.refresh(bin_row)
     assert bin_row.actual_qty == Decimal("20")
     assert bin_row.reserved_qty == Decimal("7")
+
+
+def test_stock_posting_preserva_reserva_con_stock_negativo(app_ctx):
+    from cacao_accounting.contabilidad.posting import _upsert_stock_bin
+
+    bin_row = _get_bin()
+    bin_row.actual_qty = Decimal("10")
+    bin_row.reserved_qty = Decimal("10")
+    bin_row.stock_value = Decimal("100")
+    database.session.commit()
+
+    _upsert_stock_bin(
+        company="cacao",
+        item_code="ART-RESERVE",
+        warehouse="WH-RESERVE",
+        qty_change=Decimal("-15"),
+        valuation_rate=Decimal("10"),
+        value_change=Decimal("-150"),
+    )
+    database.session.commit()
+    database.session.refresh(bin_row)
+
+    assert bin_row.actual_qty == Decimal("-5")
+    assert bin_row.reserved_qty == Decimal("10")
 
 
 def login(client, username="cacao", password="cacao"):
