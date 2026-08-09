@@ -3237,7 +3237,11 @@ def nuevo_comprobante():
 
     if request.method == "POST":
         try:
-            journal = create_journal_draft(parse_journal_form(request.form), user_id=str(current_user.id))
+            journal = create_journal_draft(
+                parse_journal_form(request.form),
+                user_id=str(current_user.id),
+                allow_closing=current_user.classification == "admin",
+            )
         except JournalValidationError as exc:
             flash_error(exc)
         else:
