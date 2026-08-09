@@ -3194,6 +3194,7 @@ def _create_gl_reversals(
                     cost_center_code=entry.cost_center_code,
                     unit_code=entry.unit_code,
                     project_code=entry.project_code,
+                    bank_account_id=entry.bank_account_id,
                     entry_remarks="Reversion " + (entry.remarks or ""),
                     is_reversal=True,
                     reversal_of=entry.id,

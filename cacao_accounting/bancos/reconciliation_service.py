@@ -473,6 +473,11 @@ def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: s
     _lock_reconciliation_target(match.target_type, match.target_id)
     if _target_company(match.target_type, match.target_id) != company:
         raise BankReconciliationError("El documento destino pertenece a otra compania.")
+    if match.target_type == "gl_entry":
+        entry = database.session.get(GLEntry, match.target_id)
+        bank_gl_account_id = _bank_gl_account_id(transaction)
+        if not entry or not bank_gl_account_id or entry.account_id != bank_gl_account_id:
+            raise BankReconciliationError("La entrada GL no pertenece a la cuenta bancaria conciliada.")
     return transaction
 
 
