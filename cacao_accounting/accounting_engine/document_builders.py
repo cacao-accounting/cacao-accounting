@@ -137,6 +137,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         getattr(defaults, "bridge_account_id", None),
         "Falta la cuenta puente configurada para la compañía.",
     )
+    late_two_way_amounts = _late_two_way_invoice_amounts(document)
     account_lines: list[AccountLineSpec] = []
     item_contexts: list[ItemContext] = []
     for item in items:
@@ -154,15 +155,33 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
                 description=f"{description} - {_event_label('purchase_receipt_confirmed')}",
             )
         )
-        account_lines.append(
-            AccountLineSpec(
-                account_id=bridge_account_id,
-                amount=amount,
-                side="credit",
-                description=f"{description} - {_('Cuenta puente compras')}",
-                party_id=document.supplier_id,
+        reclassified_amount = min(late_two_way_amounts.get(item.item_code, Decimal("0")), amount)
+        if reclassified_amount > 0:
+            expense_account_id = _require_account_id(
+                _item_account_for_line(item, company, "expense"),
+                "Falta la cuenta de gasto para compensar una factura 2-way contabilizada.",
             )
-        )
+            account_lines.append(
+                AccountLineSpec(
+                    account_id=expense_account_id,
+                    amount=reclassified_amount,
+                    side="credit",
+                    description=f"{description} - {_('Recepción posterior a factura 2-way')}",
+                    party_id=document.supplier_id,
+                )
+            )
+            late_two_way_amounts[item.item_code] -= reclassified_amount
+        bridge_amount = amount - reclassified_amount
+        if bridge_amount > 0:
+            account_lines.append(
+                AccountLineSpec(
+                    account_id=bridge_account_id,
+                    amount=bridge_amount,
+                    side="credit",
+                    description=f"{description} - {_('Cuenta puente compras')}",
+                    party_id=document.supplier_id,
+                )
+            )
         item_contexts.append(_item_context_from_purchase_receipt_item(item))
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="purchase", event_type=event_type)
     return CalculationContext(
@@ -186,6 +205,36 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
             account_lines=account_lines,
         ),
     )
+
+
+def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decimal]:
+    """Return active 2-way invoice amounts that precede a purchase receipt.
+
+    A 2-way invoice records the item in expense before goods are received. A
+    later receipt must reclassify that amount to inventory instead of creating
+    an orphan credit in GRNI. Unmatched receipt value remains in the bridge
+    account until a future invoice is posted.
+    """
+    if not document.purchase_order_id:
+        return {}
+    invoices = database.session.execute(
+        select(PurchaseInvoice).where(
+            PurchaseInvoice.company == document.company,
+            PurchaseInvoice.supplier_id == document.supplier_id,
+            PurchaseInvoice.purchase_order_id == document.purchase_order_id,
+            PurchaseInvoice.purchase_receipt_id.is_(None),
+            PurchaseInvoice.docstatus == 1,
+            PurchaseInvoice.is_return.is_(False),
+        )
+    ).scalars()
+    amounts: dict[str, Decimal] = {}
+    for invoice in invoices:
+        invoice_items = database.session.execute(
+            select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)
+        ).scalars()
+        for item in invoice_items:
+            amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
+    return amounts
 
 
 def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationContext:
