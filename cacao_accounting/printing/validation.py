@@ -11,6 +11,7 @@ import json
 import secrets
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import select
@@ -206,7 +207,7 @@ class ValidationService:
             "document_number": str(_first_attr(document, "document_no", "name") or document.id),
             "document_date": _first_attr(document, "posting_date", "document_date", "run_date", "date"),
             "currency": _first_attr(document, "transaction_currency", "currency"),
-            "grand_total": float(explicit_total if explicit_total is not None else grand_total),
+            "grand_total": _as_decimal(explicit_total if explicit_total is not None else grand_total),
             "status": _status(document),
             "line_count": line_count,
         }
@@ -269,7 +270,7 @@ def _model_for_type(document_type: str) -> Any | None:
     }.get(document_type)
 
 
-def _document_line_summary(document_type: str, document_id: str) -> tuple[int, float]:
+def _document_line_summary(document_type: str, document_id: str) -> tuple[int, Decimal]:
     from cacao_accounting.database import (
         ComprobanteContableDetalle,
         DeliveryNoteItem,
@@ -304,10 +305,13 @@ def _document_line_summary(document_type: str, document_id: str) -> tuple[int, f
     }
     config = line_map.get(document_type)
     if config is None:
-        return 0, 0.0
+        return 0, Decimal("0")
     model, fk_name, amount_name = config
     rows = database.session.execute(select(model).filter_by(**{fk_name: document_id})).scalars().all()
-    total = sum(abs(float(getattr(row, amount_name, 0) or 0)) for row in rows)
+    total = sum(
+        (abs(_as_decimal(getattr(row, amount_name, 0) or 0)) for row in rows),
+        Decimal("0"),
+    )
     return len(rows), total
 
 
@@ -358,4 +362,16 @@ def _first_attr(obj: Any, *names: str) -> Any:
 def _json_value(value: Any) -> Any:
     if isinstance(value, (date, datetime)):
         return value.strftime("%Y-%m-%d")
+    if isinstance(value, Decimal):
+        return format(value, "f")
     return value
+
+
+def _as_decimal(value: Any) -> Decimal:
+    """Convert a financial value without introducing binary float artifacts."""
+    if isinstance(value, Decimal):
+        return value
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ValueError(f"Invalid financial amount: {value!r}") from exc
