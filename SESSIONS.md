@@ -97,6 +97,25 @@ creación del primer bin de inventario y manteniendo el issue abierto.
 - Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
   `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
 
+## 2026-08-10 — Scope multi-compañía en listados de inventario
+
+### Petición
+
+Continuar con el issue #333 y corregir la exposición de bodegas y movimientos
+de inventario entre compañías, conservando los issues abiertos.
+
+### Implementación
+
+- Se añadió una consulta reutilizable que limita los registros de inventario a
+  las compañías de los libros donde el usuario tiene permiso de lectura.
+- Se aplicó a bodegas y a todos los listados de `StockEntry` (general,
+  recepciones, salidas, transferencias, ajustes y conciliaciones).
+- El catálogo de artículos no se filtró por compañía porque `Item` es un
+  maestro global en el modelo actual; esta decisión queda documentada como
+  riesgo de diseño separado, no como una falsa solución de aislamiento.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
 ## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
 
 ### Petición

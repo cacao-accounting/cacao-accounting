@@ -15,6 +15,7 @@ from flask_login import current_user, login_required
 
 from cacao_accounting.database import (
     Accounts,
+    Book,
     CostCenter,
     DocumentRelation,
     Entity,
@@ -29,6 +30,8 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import get_active_naming_series
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target, validate_submit_prerequisites
 from cacao_accounting.document_flow.status import _
@@ -69,6 +72,20 @@ INVENTARIO_ENTRADA_LISTA_HTML = "inventario/entrada_lista.html"
 INVENTARIO_INVENTARIO_ENTRADA = "inventario.inventario_entrada"
 _INVENTORY_STOCK_ENTRY = "inventory.stock_entry"
 _LABEL_DOCUMENTO_ORIGEN = "documento origen"
+
+
+def _inventory_company_scoped_select(model: type[Any]):
+    """Build an inventory query restricted to companies in accessible books."""
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("inventory"),
+        usuario=current_user.id,
+    )
+    book_ids = permissions.obtener_libros_autorizados("can_read")
+    query = database.select(model)
+    if not book_ids:
+        return query.where(database.false())
+    accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
+    return query.where(model.company.in_(accessible_companies))
 
 
 def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:
@@ -133,7 +150,7 @@ def inventario_uom_lista():
 def inventario_bodega_lista():
     """Listado de bodegas."""
     consulta = database.paginate(
-        database.select(Warehouse),
+        _inventory_company_scoped_select(Warehouse),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -148,7 +165,7 @@ def inventario_bodega_lista():
 def inventario_entrada_lista():
     """Listado de entradas de almacen."""
     consulta = database.paginate(
-        database.select(StockEntry),
+        _inventory_company_scoped_select(StockEntry),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -170,7 +187,7 @@ def inventario_entrada_lista():
 def inventario_material_receipt_lista():
     """Listado de recepciones de material."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="material_receipt"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_receipt"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -192,7 +209,7 @@ def inventario_material_receipt_lista():
 def inventario_material_issue_lista():
     """Listado de salidas de material."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="material_issue"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_issue"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -214,7 +231,7 @@ def inventario_material_issue_lista():
 def inventario_material_transfer_lista():
     """Listado de transferencias de material."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="material_transfer"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_transfer"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -236,7 +253,7 @@ def inventario_material_transfer_lista():
 def inventario_ajuste_lista():
     """Listado de ajustes de inventario."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="stock_adjustment"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_adjustment"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -258,7 +275,7 @@ def inventario_ajuste_lista():
 def inventario_reconciliacion_lista():
     """Listado de conciliaciones físicas de inventario."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="stock_reconciliation"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_reconciliation"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -280,7 +297,7 @@ def inventario_reconciliacion_lista():
 def inventario_ajuste_positivo_lista():
     """Listado de ajustes positivos de inventario."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="adjustment_positive"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_positive"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -301,7 +318,7 @@ def inventario_ajuste_positivo_lista():
 def inventario_salida_inventario_lista():
     """Listado de salidas de inventario (incluyendo ajustes negativos)."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="adjustment_negative"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_negative"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
