@@ -228,13 +228,14 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
             select(func.sum(DocumentRelation.amount))
             .join(
                 SalesInvoice,
-                (DocumentRelation.target_id == SalesInvoice.id) & (DocumentRelation.target_type.startswith("sales_")),
+                (DocumentRelation.target_id == SalesInvoice.id)
+                & DocumentRelation.target_type.in_(("sales_invoice", "sales_credit_note", "sales_debit_note")),
             )
             .where(
                 DocumentRelation.source_type == document_type,
                 DocumentRelation.source_id == document_id,
                 DocumentRelation.status == "active",
-                DocumentRelation.target_type.in_(target_types),
+                SalesInvoice.document_type.in_(target_types),
                 SalesInvoice.docstatus == 1,
                 SalesInvoice.posting_date <= as_of_date,
             )
@@ -245,13 +246,14 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
             select(func.sum(DocumentRelation.amount))
             .join(
                 PurchaseInvoice,
-                (DocumentRelation.target_id == PurchaseInvoice.id) & (DocumentRelation.target_type.startswith("purchase_")),
+                (DocumentRelation.target_id == PurchaseInvoice.id)
+                & DocumentRelation.target_type.in_(("purchase_invoice", "purchase_credit_note", "purchase_debit_note")),
             )
             .where(
                 DocumentRelation.source_type == document_type,
                 DocumentRelation.source_id == document_id,
                 DocumentRelation.status == "active",
-                DocumentRelation.target_type.in_(target_types),
+                PurchaseInvoice.document_type.in_(target_types),
                 PurchaseInvoice.docstatus == 1,
                 PurchaseInvoice.posting_date <= as_of_date,
             )
