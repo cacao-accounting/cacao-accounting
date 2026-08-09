@@ -421,6 +421,24 @@ def test_service_revalues_foreign_currency_bank_balance(app_ctx):
             voucher_id="PAY-1",
         )
     )
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 5, 1),
+            company="cacao",
+            ledger_id=_book("EUR").id,
+            account_id=bank_account_id,
+            account_code="1005",
+            debit=Decimal("9.00"),
+            credit=Decimal("0"),
+            debit_in_account_currency=Decimal("10.00"),
+            account_currency="USD",
+            company_currency="EUR",
+            exchange_rate=Decimal("0.90"),
+            bank_account_id=bank_account.id,
+            voucher_type="payment_entry",
+            voucher_id="PAY-1-EUR",
+        )
+    )
     database.session.commit()
 
     ExchangeRevaluationService().run(company="cacao", year=2026, month=5, user_id="admin")
@@ -430,6 +448,45 @@ def test_service_revalues_foreign_currency_bank_balance(app_ctx):
     ).scalar_one()
     assert bank_line.open_amount_original == Decimal("10.0000")
     assert bank_line.exchange_difference == Decimal("10.0000")
+
+
+def test_revaluation_uses_credit_note_nature_for_open_ar_and_ap(app_ctx):
+    """Open credit notes must revalue with the opposite subledger nature."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import PurchaseInvoice, SalesInvoice, database
+
+    database.session.add_all(
+        [
+            SalesInvoice(
+                company="cacao",
+                posting_date=date(2026, 5, 1),
+                customer_id="CUST-CREDIT-NOTE",
+                transaction_currency="USD",
+                grand_total=Decimal("10"),
+                outstanding_amount=Decimal("10"),
+                is_return=True,
+                docstatus=1,
+            ),
+            PurchaseInvoice(
+                company="cacao",
+                posting_date=date(2026, 5, 1),
+                supplier_id="SUPP-CREDIT-NOTE",
+                transaction_currency="USD",
+                grand_total=Decimal("10"),
+                outstanding_amount=Decimal("10"),
+                is_return=True,
+                docstatus=1,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    service = ExchangeRevaluationService()
+    ar = service._open_sales_invoices("cacao", date(2026, 5, 31))
+    ap = service._open_purchase_invoices("cacao", date(2026, 5, 31))
+
+    assert ar[-1].normal_balance == "credit"
+    assert ap[-1].normal_balance == "debit"
 
 
 def test_service_voids_posted_revaluation_with_reversal_entries(app_ctx):

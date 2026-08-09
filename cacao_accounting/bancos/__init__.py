@@ -1145,7 +1145,7 @@ def _payment_reference_expected_payment_type(flow_source_type: str) -> str | Non
 def _load_payment_reference_document(reference_type: str, reference_id: str, flow_source_type: str) -> Any:
     """Obtiene el documento real referenciado para el pago con bloqueo de fila."""
     model = _payment_reference_model(reference_type)
-    document = database.session.query(model).with_for_update().get(reference_id)
+    document = database.session.get(model, reference_id, with_for_update=True)
     if not document:
         raise ValueError(_("Documento referenciado no existe."))
     return document
