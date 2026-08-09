@@ -2003,3 +2003,15 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   el ledger (issue #322).
 - Quedan abiertos los lotes previos: INV-AUDIT-01/02 (valoración crítica),
   BANK-AUDIT y demás tickets de auditoría descritos en los issues abiertos.
+
+## 2026-08-09 — Sincronización remota y catálogo upstream de issues
+
+- Se actualizó `origin/stabilization/inventory-audit` y se integraron mediante
+  fast-forward los commits remotos `16edc7e` (`fix(inventory): post
+  stock_adjustment GL as positive adjustment`) y `1d4cee9` (`docs(sessions):
+  record code-review signoff of audit issues`). No hubo conflictos ni se
+  sobrescribieron cambios locales.
+- `ISSUES.md` quedó sincronizado con GitHub upstream en `1d4cee9`: 53 issues
+  permanecen abiertos, con número, título y fecha de actualización. No se
+  cerró ningún issue; la clasificación técnica y las correcciones siguen
+  documentándose en sus comentarios.
