@@ -1906,6 +1906,48 @@ def test_compute_outstanding_amount_includes_legacy_reference_without_relation(a
     assert report.totals["outstanding_amount"] == Decimal("50.00")
 
 
+def test_compute_outstanding_amount_applies_credit_note_by_document_type(app_ctx):
+    """Una nota enlazada como invoice fisica debe reducir AR por su naturaleza."""
+    from cacao_accounting.database import DocumentRelation, SalesInvoice, database
+    from cacao_accounting.document_flow.service import compute_outstanding_amount
+
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        customer_id="CUST-CREDIT-NOTE",
+        grand_total=Decimal("100.00"),
+        docstatus=1,
+        document_type="sales_invoice",
+    )
+    credit_note = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        customer_id="CUST-CREDIT-NOTE",
+        grand_total=Decimal("25.00"),
+        docstatus=1,
+        document_type="sales_credit_note",
+        is_return=True,
+    )
+    database.session.add_all([invoice, credit_note])
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=invoice.id,
+            target_type="sales_invoice",
+            target_id=credit_note.id,
+            qty=Decimal("1"),
+            amount=Decimal("25.00"),
+            relation_type="credit_note",
+            status="active",
+            company="cacao",
+        )
+    )
+    database.session.commit()
+
+    assert compute_outstanding_amount(invoice, as_of_date=date(2026, 5, 5)) == Decimal("75.00")
+
+
 def test_compute_outstanding_amount_for_note_types_uses_document_relations(app_ctx):
     from cacao_accounting.database import (
         DocumentRelation,
