@@ -116,6 +116,23 @@ de inventario entre compañías, conservando los issues abiertos.
 - Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
   `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
 
+## 2026-08-10 — Unicidad de revaluación cambiaria por período
+
+### Petición
+
+Continuar con el issue #317 y reforzar la integridad de ejecuciones de
+revaluación cambiaria, sin cerrar el issue.
+
+### Implementación
+
+- `ExchangeRevaluation` ahora declara unicidad por compañía, año y mes.
+- La migración `20260810_0004` valida duplicados históricos antes de crear la
+  restricción y aborta explícitamente si requiere intervención contable.
+- La unicidad evita que reintentos concurrentes o ejecuciones repetidas creen
+  comprobantes y trazas duplicadas para el mismo período.
+- Se verificaron Black, compileall, diff whitespace, Ruff y Flake8 con `.venv`;
+  no se ejecutó pytest local por la instrucción de no saturar la suite.
+
 ## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
 
 ### Petición
