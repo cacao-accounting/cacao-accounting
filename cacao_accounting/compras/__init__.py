@@ -213,6 +213,14 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
     )
 
 
+def _require_purchase_document_access(document: Any, action: str = "consultar") -> None:
+    """Require company-scoped access before exposing a purchase document."""
+    company = getattr(document, "company", None)
+    if not company:
+        abort(404)
+    exige_acceso_compania("purchases", str(company), action)
+
+
 @compras.route("/")
 @compras.route("/compras")
 @compras.route("/buying")
@@ -325,6 +333,7 @@ def compras_solicitud_compra(request_id: str):
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=request_id)).all()
     create_actions = get_create_actions("purchase_request", request_id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
@@ -665,6 +674,7 @@ def compras_cotizacion_proveedor(quotation_id: str):
     registro = database.session.get(SupplierQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(
         database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=quotation_id)
     ).all()
@@ -1064,6 +1074,7 @@ def compras_comparativo_ofertas(rfq_id: str):
     registro = database.session.get(PurchaseQuotation, rfq_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     offers = database.session.execute(database.select(SupplierQuotation).filter_by(purchase_quotation_id=rfq_id)).all()
     titulo = "Comparativo de Ofertas - " + (registro.document_no or rfq_id)
     return render_template("compras/comparativo_ofertas.html", registro=registro, offers=offers, titulo=titulo)
@@ -1781,6 +1792,7 @@ def compras_orden_compra(order_id):
     registro = database.session.get(PurchaseOrder, order_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=order_id)).all()
     titulo = (registro.document_no or order_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("purchase_order", registro.id)
@@ -1800,6 +1812,7 @@ def compras_orden_compra_editar(order_id: str):
     registro = database.session.get(PurchaseOrder, order_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
@@ -2175,6 +2188,7 @@ def compras_solicitud_cotizacion(quotation_id: str):
     registro = database.session.get(PurchaseQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(
         database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=quotation_id)
     ).all()
@@ -2602,6 +2616,7 @@ def compras_recepcion(receipt_id):
         ).scalar_one_or_none()
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)).all()
     create_actions = get_create_actions("purchase_receipt", receipt_id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
@@ -3280,6 +3295,7 @@ def compras_factura_compra(invoice_id):
     registro = database.session.get(PurchaseInvoice, invoice_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)).all()
     titulo = (registro.document_no or invoice_id) + " - " + APPNAME
     document_type_label = DOCUMENT_TYPE_LABELS.get(registro.document_type, FACTURA_DE_COMPRA)
