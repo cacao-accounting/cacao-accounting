@@ -153,10 +153,12 @@ def _allocated_for_source(bank_transaction_id: str) -> Decimal:
 
 def _allocated_for_target(target_type: str, target_id: str) -> Decimal:
     value = database.session.execute(
-        select(func.coalesce(func.sum(ReconciliationItem.allocated_amount), 0)).filter_by(
+        select(func.coalesce(func.sum(ReconciliationItem.allocated_amount), 0))
+        .filter_by(
             target_type=target_type,
             target_id=target_id,
         )
+        .where(ReconciliationItem.status != "cancelled")
     ).scalar_one()
     return _decimal_value(value)
 

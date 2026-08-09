@@ -2272,6 +2272,15 @@ def _apply_payment_cancellation_hooks(payment: PaymentEntry) -> None:
     for transaction in linked_transactions:
         transaction.is_reconciled = False
         transaction.payment_entry_id = None
+    database.session.execute(
+        database.update(ReconciliationItem)
+        .where(
+            ReconciliationItem.target_type == "payment_entry",
+            ReconciliationItem.target_id == payment.id,
+            ReconciliationItem.status != "cancelled",
+        )
+        .values(status="cancelled")
+    )
     references = database.session.execute(database.select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
     affected_docs = {
         (reference.flow_source_type or reference.reference_type, reference.reference_id)
