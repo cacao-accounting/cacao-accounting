@@ -1239,3 +1239,28 @@ Durante la auditoría end-to-end se confirmó que `compute_outstanding_amount` r
 Se corrigió la lectura para combinar referencias modernas y legacy, excluir relaciones canceladas y evitar duplicados en el reporte. Se añadió una prueba con una factura de 100, un pago moderno de 30 y un pago legacy de 20; el saldo y el total pagado esperado son 50.
 
 Validación: prueba de regresión individual `1 passed`; batería AR/AP de saldos, subledger, aging, maturity y allocations `11 passed`; `git diff --check` limpio. El issue #280 permanece abierto para completar la matriz O2C, créditos, reversals y reconciliación integral contra GL.
+
+## 2026-08-09 — Auditoría O2C (Order to Cash): hallazgos y controles verificados
+
+### Petición
+Ejecutar una auditoría READ-ONLY del flujo O2C (Cotización→OV→ND→Factura→Nota de Crédito/Débito→Pago) contra los objetivos de negocio (AR es proyección del GL, control de sobre-entrega/sobre-facturación, aislamiento por compañía), verificando la corrección del commit `561b440` y listando hasta 15 hallazgos por severidad más los controles que se verificaron como OK.
+
+### Plan implementado
+- Mapeo de rutas y validaciones en `ventas/__init__.py` (submit OV/ND/Factura, límite de crédito, tolerancia de precio, reserva de inventario, relaciones documentales) y `document_flow/` (pagos, conciliación, outstanding, validación de cantidades/precios).
+- Verificación del motor de contabilización (`posting.py`: `_signed_amount`, `_upsert_stock_bin` INV-10/FOR UPDATE, `_update_grand_total_if_needed`) y del subledger AR/AP (`reportes/services.py`).
+- Confirmación del fix `561b440` (aislamiento por compañía en `_document_payment_references` y `_payment_allocations`).
+
+### Hallazgos confirmados (resumen)
+1. Notas de crédito no reducen el saldo de la factura origen: `_compute_allocated_notes_amount` busca `target_type IN (sales_credit_note, purchase_credit_note)` pero `_save_sales_invoice_items` guarda relaciones con `target_type="sales_invoice"` → código muerto; sobre-aplicación de pagos, dunning y límite de crédito distorsionados (Alto).
+2. `SalesMatchingConfig.require_sales_order` nunca se ejecuta: facturas sin OV/ND evaden sobre-facturación (`_validate_sales_invoice_quantities` solo revisa líneas con relación) y con `update_inventory` auto-generan ND que consume stock sin reserva (Alto).
+3. Doble liberación de reserva en entregas parciales: `_release_reservation_for_delivery_note` corre DESPUÉS del posting cuyo clamp INV-10 ya redujo `reserved_qty` a `actual_qty`; OV=100/stock=100/ND=60 deja `reserved=0` en vez de 40 → sobre-venta (Alto).
+4. Validación de precio solo para fuentes `sales_order`; facturas desde ND o manuales omiten la tolerancia (`_resolve_source_item_rate` retorna None) (Medio).
+5. Límite de crédito ignora OVs aprobadas (solo facturas aprobadas vía `_approved_customer_invoices`) (Medio).
+6. Montos de línea negativos o inconsistentes con `qty×rate` se aceptan (`_line_amount` confía en `amount_N`; solo se valida `rate>0` y `amount!=0`) (Medio).
+7. `_validate_reversal_of` no limita el monto de la NC/ND contra el saldo de la factura origen (Medio).
+8. Ruta de conciliación facturas/pagos (`bancos_conciliacion_facturas_pagos`) sin `exige_acceso_compania`/`verifica_permiso`: cualquier usuario autenticado puede conciliar pagos de cualquier compañía (Medio).
+9. `_payment_order_allocated` sin filtro de compañía (solo usada en la ruta de anticipos sin UI) (Bajo).
+10. Anticipos aplicados a factura solo generan asiento de compensación si `apply_advances_automatically=True` (default False); divergencia AR proyección vs GL si se usa la API directamente (Bajo).
+
+### Controles verificados OK
+Aislamiento por compañía en `_document_payment_references`/`_payment_allocations`; `apply_payment_reconciliation` valida compañía/tercero/tipo de pago, moneda (CAS-03), tope contra saldo (`_validate_and_get_outstanding`), duplicados y consumo de caja; límite de crédito implementado (submit + re-chequeo en approval engine); sobre-entrega en ND; sobre-facturación en líneas con relación; `StockBin` con FOR UPDATE; signo de retornos en GL (`_signed_amount`) y subledger; revalidación en aprobación final.
