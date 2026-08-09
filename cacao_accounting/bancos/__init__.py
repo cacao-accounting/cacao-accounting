@@ -78,6 +78,16 @@ bancos = Blueprint("bancos", __name__, template_folder="templates")
 
 BANCOS_TRANSACCION_LISTA_HTML = "bancos/transaccion_lista.html"
 BANCOS_BANCO_CUENTA_NUEVO_HTML = "bancos/banco_cuenta_nuevo.html"
+
+
+def _safe_bank_reconciliation_candidates(transaction: BankTransaction) -> list[Any]:
+    """Obtiene sugerencias sin romper el panel por datos bancarios históricos inválidos."""
+    try:
+        return find_bank_reconciliation_candidates(transaction.id)
+    except BankReconciliationError:
+        return []
+
+
 BANCOS_PAGO_LISTA_HTML = "bancos/pago_lista.html"
 BANCOS_BANCOS_PAGO = "bancos.bancos_pago"
 BANCOS_CONCILIACION_ENDPOINT = "bancos.bancos_conciliacion_bancaria"
@@ -617,7 +627,7 @@ def bancos_conciliacion_bancaria():
             BankAccount.company == company
         )
     transactions = database.session.execute(query.order_by(BankTransaction.posting_date)).scalars().all()
-    suggestions = {transaction.id: find_bank_reconciliation_candidates(transaction.id) for transaction in transactions}
+    suggestions = {transaction.id: _safe_bank_reconciliation_candidates(transaction) for transaction in transactions}
     return render_template(
         "bancos/conciliacion_bancaria.html",
         titulo="Conciliación Bancaria - " + APPNAME,
@@ -644,7 +654,7 @@ def bancos_conciliacion_bancaria_cuenta(bank_account_id: str):
         .scalars()
         .all()
     )
-    suggestions = {transaction.id: find_bank_reconciliation_candidates(transaction.id) for transaction in transactions}
+    suggestions = {transaction.id: _safe_bank_reconciliation_candidates(transaction) for transaction in transactions}
     return render_template(
         "bancos/conciliacion_bancaria.html",
         titulo="Conciliación Bancaria - " + APPNAME,

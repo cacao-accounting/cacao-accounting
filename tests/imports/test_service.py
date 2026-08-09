@@ -3,12 +3,15 @@
 
 from datetime import date
 
+import pytest
+
 from cacao_accounting import create_app
 from cacao_accounting.database import Book, database
 from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
 from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.imports.adapters import journal_entry as journal_entry_adapter
+from cacao_accounting.imports.services import import_service as import_service_module
 from ulid import ULID
 
 
@@ -105,6 +108,16 @@ def test_validate_uses_batch_company_for_period_check(tmp_path, monkeypatch):
 
         assert captured["company"] == "cacao"
         assert captured["posting_date"] == date(2026, 1, 10)
+
+
+def test_import_service_validates_period_for_list_documents(monkeypatch):
+    """Los documentos construidos como lista también respetan el período cerrado."""
+    service = ImportService()
+    batch = ImportBatch(company_id="cacao")
+    monkeypatch.setattr(import_service_module, "is_period_open", lambda _company, _date: False)
+
+    with pytest.raises(ValueError, match="periodo contable"):
+        service._validate_document_period([{"posting_date": date(2026, 1, 15)}], batch)
 
 
 def test_journal_import_without_book_uses_all_active_company_books():

@@ -2932,6 +2932,71 @@ def test_bank_statement_withdrawal_only_is_reconcilable(app_ctx):
     assert _bank_reconciliation_allocated_amount(transaction) == Decimal("25.00")
 
 
+def test_bank_statement_adapter_rejects_invalid_amount_date_and_cross_company(app_ctx):
+    """El importador no crea filas sin monto ni cruza cuentas entre compañías."""
+    from cacao_accounting.database import Bank, BankAccount, database
+    from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
+
+    bank = Bank(name="Banco validación")
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta validación")
+    database.session.add(account)
+    database.session.flush()
+    adapter = BankStatementAdapter()
+
+    row_errors = adapter.validate_row(
+        {
+            "bank_account_id": account.id,
+            "posting_date": "2026-02-31",
+            "deposit": "1,000",
+            "withdrawal": "",
+        }
+    )
+    assert any("Fecha bancaria inválida" in error for error in row_errors)
+    assert any("Monto bancario inválido" in error for error in row_errors)
+
+    account.company = "otra"
+    document_errors = adapter.validate_document(
+        [{"bank_account_id": account.id, "posting_date": "2026-05-05"}], {"company_id": "cacao"}
+    )
+    assert any("pertenece a la compañía" in error for error in document_errors)
+
+
+def test_bank_statement_adapter_rejects_empty_movement(app_ctx):
+    from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
+
+    adapter = BankStatementAdapter()
+    errors = adapter.validate_row(
+        {"bank_account_id": "missing", "posting_date": "2026-05-05", "deposit": "", "withdrawal": ""}
+    )
+    assert any("depósito o un retiro" in error for error in errors)
+
+
+def test_bank_reconciliation_panel_ignores_invalid_historical_transaction(app_ctx, monkeypatch):
+    import importlib
+
+    bancos = importlib.import_module("cacao_accounting.bancos")
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, database
+
+    bank = Bank(name="Banco histórico")
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta histórica")
+    database.session.add(account)
+    database.session.flush()
+    transaction = BankTransaction(bank_account_id=account.id, posting_date=date(2026, 5, 5))
+    database.session.add(transaction)
+    database.session.commit()
+
+    monkeypatch.setattr(
+        bancos,
+        "find_bank_reconciliation_candidates",
+        lambda _id: (_ for _ in ()).throw(bancos.BankReconciliationError("sin monto")),
+    )
+    assert bancos._safe_bank_reconciliation_candidates(transaction) == []
+
+
 # ---------------------------------------------------------------------------
 # Criterios de aceptacion del Issue: Framework de Conciliacion de Compras
 # ---------------------------------------------------------------------------
