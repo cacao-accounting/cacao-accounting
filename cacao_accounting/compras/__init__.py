@@ -3210,6 +3210,10 @@ def _validate_duplicate_supplier_invoice(
     if not supplier_invoice_no_cleaned:
         return
 
+    supplier = database.session.get(Party, supplier_id, with_for_update=True)
+    if supplier is None:
+        raise ValueError("El proveedor indicado no existe.")
+
     stmt = database.select(PurchaseInvoice).filter(
         PurchaseInvoice.supplier_id == supplier_id,
         PurchaseInvoice.supplier_invoice_no == supplier_invoice_no_cleaned,

@@ -1566,6 +1566,18 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
   pytest local por instrucción del usuario.
 
+## 2026-08-10 — Serialización de números de factura S2P
+
+- #293 confirmado: la validación de `supplier_invoice_no` era un SELECT sin
+  serialización y podía permitir duplicados en submits concurrentes.
+- Corrección local: `_validate_duplicate_supplier_invoice` bloquea la fila
+  global del proveedor con `FOR UPDATE` antes de consultar facturas activas;
+  la segunda transacción vuelve a ver el duplicado después del commit de la
+  primera. No se añadió una constraint que pudiera fallar por duplicados
+  históricos sin preflight.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
 ## 2026-08-10 — Precio de factura O2C desde nota de entrega
 
 - #297 confirmado parcialmente: `_resolve_source_item_rate` ignoraba toda
