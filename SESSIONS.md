@@ -1951,3 +1951,17 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   parchear el módulo correcto. No cambia código de producción.
 - El run fue cancelado después de capturar el fallo para no mantener activos
   los jobs restantes de la matriz.
+
+## 2026-08-10 — Preservación decimal en validación QR (#284)
+
+- Se confirmó una frontera de precisión en `printing/validation.py`: los
+  totales de líneas y totales explícitos se convertían a `float` antes de
+  formar el payload canónico, exponiendo importes financieros a artefactos de
+  coma flotante y haciendo imposible preservar un `Decimal` exacto.
+- La extracción y suma de importes ahora usa `Decimal(str(valor))`; los
+  valores `Decimal` se serializan como texto decimal determinista únicamente
+  en el hash canónico. La vista pública conserva la conversión a `float` como
+  frontera explícita de presentación.
+- Se añadió regresión para `Decimal("1.005")`, verificando que el payload no
+  contenga artefactos binarios. No se ejecutó pytest local por instrucción del
+  usuario; Black, Ruff, flake8, mypy, compilación y `git diff --check` pasan.
