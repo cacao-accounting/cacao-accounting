@@ -1850,6 +1850,62 @@ def test_compute_outstanding_amount_as_of_date_filters_allocations(app_ctx):
     assert compute_outstanding_amount(invoice, as_of_date=date(2026, 5, 10)) == Decimal("125.00")
 
 
+def test_compute_outstanding_amount_includes_legacy_reference_without_relation(app_ctx):
+    """AR/AP debe sumar referencias legacy junto con relaciones modernas."""
+    from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference, SalesInvoice, database
+    from cacao_accounting.document_flow.service import compute_outstanding_amount
+    from cacao_accounting.reportes.services import SubledgerFilters, get_ar_ap_subledger
+
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        customer_id="CUST-LEGACY-REF",
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+        docstatus=1,
+    )
+    modern_payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 4), payment_type="receive", docstatus=1)
+    legacy_payment = PaymentEntry(company="cacao", posting_date=date(2026, 5, 5), payment_type="receive", docstatus=1)
+    database.session.add_all([invoice, modern_payment, legacy_payment])
+    database.session.flush()
+    modern_reference = PaymentReference(
+        payment_id=modern_payment.id,
+        reference_type="sales_invoice",
+        reference_id=invoice.id,
+        allocated_amount=Decimal("30.00"),
+        allocation_date=modern_payment.posting_date,
+    )
+    legacy_reference = PaymentReference(
+        payment_id=legacy_payment.id,
+        reference_type="sales_invoice",
+        reference_id=invoice.id,
+        allocated_amount=Decimal("20.00"),
+        allocation_date=legacy_payment.posting_date,
+    )
+    database.session.add_all([modern_reference, legacy_reference])
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=invoice.id,
+            target_type="payment_entry",
+            target_id=modern_payment.id,
+            target_item_id=modern_reference.id,
+            qty=Decimal("1"),
+            amount=Decimal("30.00"),
+            relation_type="payment_reference",
+            status="active",
+            company="cacao",
+        )
+    )
+    database.session.commit()
+
+    assert compute_outstanding_amount(invoice) == Decimal("50.00")
+    report = get_ar_ap_subledger(SubledgerFilters(company="cacao", party_type="customer"))
+    assert report.totals["paid_amount"] == Decimal("50.00")
+    assert report.totals["outstanding_amount"] == Decimal("50.00")
+
+
 def test_compute_outstanding_amount_for_note_types_uses_document_relations(app_ctx):
     from cacao_accounting.database import (
         DocumentRelation,
