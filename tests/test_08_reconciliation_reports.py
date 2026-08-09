@@ -658,6 +658,58 @@ def test_ar_subledger_uses_base_currency_and_offsets_returns(app_ctx):
     assert maturity.totals["outstanding_amount"] == Decimal("288")
 
 
+def test_ar_subledger_paid_amount_includes_undated_allocation(app_ctx):
+    """An allocation without a date remains visible in an as-of report."""
+    from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference, SalesInvoice, database
+    from cacao_accounting.reportes.services import SubledgerFilters, get_ar_ap_subledger
+
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        customer_id="CUST-UNDATED",
+        grand_total=Decimal("100"),
+        outstanding_amount=Decimal("60"),
+        docstatus=1,
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        payment_type="receive",
+        paid_amount=Decimal("40"),
+        docstatus=1,
+    )
+    database.session.add_all([invoice, payment])
+    database.session.flush()
+    reference = PaymentReference(
+        payment_id=payment.id,
+        reference_type="sales_invoice",
+        reference_id=invoice.id,
+        allocated_amount=Decimal("40"),
+        allocation_date=None,
+    )
+    database.session.add(reference)
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=invoice.id,
+            target_type="payment_entry",
+            target_id=payment.id,
+            target_item_id=reference.id,
+            qty=Decimal("1"),
+            amount=Decimal("40"),
+            relation_type="payment_reference",
+            status="active",
+        )
+    )
+    database.session.commit()
+
+    report = get_ar_ap_subledger(SubledgerFilters(company="cacao", party_type="customer", as_of_date=date(2026, 5, 3)))
+
+    assert report.rows[0].values["paid_amount"] == Decimal("40")
+    assert report.rows[0].values["outstanding_amount"] == Decimal("60")
+
+
 def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
     from cacao_accounting.database import (
         DocumentRelation,
