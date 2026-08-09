@@ -627,6 +627,59 @@ def test_posted_payment_bank_dimension_reconciles_with_bank_summary(app_ctx):
     assert report.totals["ending_balance"] == Decimal("-100.0000")
 
 
+def test_reconciliation_matrix_isolates_selected_ledger(app_ctx):
+    """La matriz no debe mezclar el saldo de otro libro contable."""
+    from cacao_accounting.database import Accounts, Book, CompanyDefaultAccount, GLEntry, database
+    from cacao_accounting.reportes.services import ReconciliationFilters, get_reconciliation_matrix
+
+    receivable = Accounts(
+        entity="cacao",
+        code="AR-MATRIX",
+        name="Cuentas por cobrar matriz",
+        active=True,
+        enabled=True,
+        classification="Activo",
+        account_type="receivable",
+    )
+    primary = Book(code="MATRIX-P", name="Matriz primaria", entity="cacao", currency="NIO", is_primary=True)
+    secondary = Book(code="MATRIX-S", name="Matriz secundaria", entity="cacao", currency="NIO")
+    database.session.add_all([receivable, primary, secondary])
+    database.session.flush()
+    database.session.add(CompanyDefaultAccount(company="cacao", default_receivable=receivable.id))
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                ledger_id=primary.id,
+                account_id=receivable.id,
+                account_code=receivable.code,
+                debit=Decimal("100.00"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="MATRIX-P-1",
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                ledger_id=secondary.id,
+                account_id=receivable.id,
+                account_code=receivable.code,
+                debit=Decimal("900.00"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="MATRIX-S-1",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    report = get_reconciliation_matrix(ReconciliationFilters(company="cacao", ledger=primary.code))
+    ar_row = next(row.values for row in report.rows if row.values["area"] == "AR")
+    assert ar_row["gl_control_amount"] == Decimal("100.00")
+    assert ar_row["difference"] == Decimal("-100.00")
+
+
 def test_inventory_valuation_uses_latest_layer_at_cutoff(app_ctx):
     """Inventory valuation must not sum historical snapshots or future layers."""
     from cacao_accounting.database import StockValuationLayer, database

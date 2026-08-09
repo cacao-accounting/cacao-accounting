@@ -29,6 +29,7 @@ from cacao_accounting.reportes.services import (
     FinancialReportFilters,
     KardexFilters,
     OperationalReportFilters,
+    ReconciliationFilters,
     SubledgerFilters,
     PaginatedReport,
     get_account_movement_detail,
@@ -47,6 +48,7 @@ from cacao_accounting.reportes.services import (
     get_purchases_by_item,
     get_purchases_by_supplier,
     get_reconciliation_report,
+    get_reconciliation_matrix,
     get_sales_by_customer,
     get_sales_by_item,
     get_serial_report,
@@ -1260,6 +1262,43 @@ def reconciliations():
         report_title="Reconciliaciones",
         rows=report.rows,
         totals=report.totals,
+    )
+
+
+@reportes.route("/reports/reconciliation-matrix")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def reconciliation_matrix():
+    """Reconcilia AR, AP, inventario, bancos e impuestos contra GL."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    period = request.args.get("accounting_period") or _default_period_for_company(company)
+    report = get_reconciliation_matrix(
+        ReconciliationFilters(
+            company=company,
+            ledger=request.args.get("ledger") or _default_ledger_for_company(company),
+            accounting_period=period,
+            as_of_date=_date_arg("as_of_date"),
+            currency=request.args.get("currency") or None,
+        )
+    )
+    return _render_operational_framework(
+        "reconciliation-matrix",
+        _("Matriz de Reconciliación Subledger ↔ GL"),
+        report,
+        module_home_endpoint="reportes.trial_balance",
+        module_home_label=_("Balanza de Comprobación"),
+        filter_mode="reconciliation_matrix",
+        filter_state={
+            "company": company,
+            "ledger": request.args.get("ledger") or "",
+            "accounting_period": period or "",
+            "as_of_date": request.args.get("as_of_date") or "",
+            "currency": request.args.get("currency") or "",
+        },
+        context_summary=_operational_context_summary(
+            report, company=company, ledger=report.ledger_currency or "—", period=period
+        ),
     )
 
 
