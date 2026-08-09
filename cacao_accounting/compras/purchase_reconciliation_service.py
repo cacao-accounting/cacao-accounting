@@ -560,7 +560,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
         amount_difference = invoice_group.amount - reference_amount
 
         total_amount += matched_amount
-        total_price_difference += price_difference
+        total_price_difference += price_difference * reference_qty
         total_amount_difference += amount_difference
         total_invoiced_qty += invoice_group.qty
         total_received_qty += reference_qty
@@ -580,7 +580,14 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
         for invoice_item in invoice_items:
             receipt_item = _first_available_line(receipt_groups[_line_key(invoice_item)].lines, order_mode=False)
-            database.session.add(_three_way_reconciliation_item(reconciliation.id, receipt_item, invoice_item))
+            database.session.add(
+                _three_way_reconciliation_item(
+                    reconciliation.id,
+                    receipt_item,
+                    invoice_item,
+                    status=str(reconciliation.status),
+                )
+            )
     return result
 
 
@@ -633,7 +640,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
         amount_difference = invoice_group.amount - reference_amount
 
         total_amount += matched_amount
-        total_price_difference += price_difference
+        total_price_difference += price_difference * reference_qty
         total_amount_difference += amount_difference
         total_invoiced_qty += invoice_group.qty
         total_ordered_qty += reference_qty
@@ -653,7 +660,14 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
         for invoice_item in invoice_items:
             order_item = _first_available_line(order_groups[_line_key(invoice_item)].lines, order_mode=True)
-            database.session.add(_two_way_reconciliation_item(reconciliation.id, order_item, invoice_item))
+            database.session.add(
+                _two_way_reconciliation_item(
+                    reconciliation.id,
+                    order_item,
+                    invoice_item,
+                    status=str(reconciliation.status),
+                )
+            )
     return result
 
 
@@ -708,14 +722,19 @@ def _purchase_order_items(purchase_order_id: str) -> list[Any]:
 
 
 def _two_way_reconciliation_item(
-    reconciliation_id: str, order_item: Any, invoice_item: PurchaseInvoiceItem
+    reconciliation_id: str,
+    order_item: Any,
+    invoice_item: PurchaseInvoiceItem,
+    *,
+    status: str = "reconciled",
 ) -> PurchaseReconciliationItem:
     """Construye el detalle de conciliacion para una linea 2-way."""
     invoice_qty = _line_qty(invoice_item)
     ordered_qty = _line_qty(order_item)
     order_rate = _line_rate(order_item)
     invoice_rate = _line_rate(invoice_item)
-    matched_amount = invoice_qty * order_rate
+    matched_qty = min(invoice_qty, ordered_qty)
+    matched_amount = matched_qty * order_rate
     invoiced_amount = invoice_qty * invoice_rate
     price_difference = invoice_rate - order_rate
     return PurchaseReconciliationItem(
@@ -728,24 +747,29 @@ def _two_way_reconciliation_item(
         uom=invoice_item.uom,
         received_qty=ordered_qty,  # "received" = ordered in 2-way context
         invoiced_qty=invoice_qty,
-        matched_qty=invoice_qty,
+        matched_qty=matched_qty,
         received_amount=invoice_qty * order_rate,
         invoiced_amount=invoiced_amount,
         matched_amount=matched_amount,
         price_difference=price_difference,
-        status="reconciled",
+        status=status,
     )
 
 
 def _three_way_reconciliation_item(
-    reconciliation_id: str, receipt_item: PurchaseReceiptItem, invoice_item: PurchaseInvoiceItem
+    reconciliation_id: str,
+    receipt_item: PurchaseReceiptItem,
+    invoice_item: PurchaseInvoiceItem,
+    *,
+    status: str = "reconciled",
 ) -> PurchaseReconciliationItem:
     """Construye el detalle de conciliacion para una linea 3-way."""
     invoice_qty = _line_qty(invoice_item)
     receipt_qty = _line_qty(receipt_item)
     receipt_rate = _line_rate(receipt_item)
     invoice_rate = _line_rate(invoice_item)
-    matched_amount = invoice_qty * receipt_rate
+    matched_qty = min(invoice_qty, receipt_qty)
+    matched_amount = matched_qty * receipt_rate
     invoiced_amount = invoice_qty * invoice_rate
     price_difference = invoice_rate - receipt_rate
     return PurchaseReconciliationItem(
@@ -758,12 +782,12 @@ def _three_way_reconciliation_item(
         uom=invoice_item.uom,
         received_qty=receipt_qty,
         invoiced_qty=invoice_qty,
-        matched_qty=invoice_qty,
+        matched_qty=matched_qty,
         received_amount=invoice_qty * receipt_rate,
         invoiced_amount=invoiced_amount,
         matched_amount=matched_amount,
         price_difference=price_difference,
-        status="reconciled",
+        status=status,
     )
 
 
