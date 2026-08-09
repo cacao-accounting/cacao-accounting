@@ -3123,6 +3123,8 @@ def _create_gl_reversals(
                     account_id=entry.account_id,
                     debit=_decimal_value(entry.credit),
                     credit=_decimal_value(entry.debit),
+                    debit_in_account_currency=entry.credit_in_account_currency,
+                    credit_in_account_currency=entry.debit_in_account_currency,
                     party_type=entry.party_type,
                     party_id=entry.party_id,
                     cost_center_code=entry.cost_center_code,
