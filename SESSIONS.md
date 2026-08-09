@@ -3,6 +3,45 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-09 — Control de migraciones y validación multi-motor
+
+### Petición
+
+Continuar la auditoría y probar el flujo de migraciones en MySQL, PostgreSQL y
+MariaDB, manteniendo el uso de `.venv` y evidencia reproducible en logs.
+
+### Implementación y evidencia
+
+- Se confirmó que `db migrate` podía devolver código 0 sin aplicar revisiones:
+  el repositorio tenía `script.py.mako`, pero no una revisión en la ruta que
+  Flask-Alembic inspecciona. Una SQLite limpia terminó con `alembic_version`
+  vacío.
+- Se añadió el baseline versionado
+  `cacao_accounting/migrations/20260809_0001_baseline.py`. No modifica datos:
+  registra el esquema que `db init` crea con SQLAlchemy para habilitar futuras
+  migraciones ordenadas.
+- `db migrate` ahora rechaza explícitamente una base sin tabla `user`, en vez
+  de informar una migración exitosa sin esquema.
+- Se añadieron `tests/test_database_migrations.py` para probar bootstrap,
+  revisión no vacía y rechazo de base no inicializada.
+- Evidencia multi-motor: MySQL 8 PASS (`test_results_migration_mysql_20260809.log`),
+  PostgreSQL 16 PASS (`test_results_migration_postgresql_20260809.log`) y
+  MariaDB 11.4 PASS mediante `mysql+pymysql`
+  (`test_results_migration_mariadb_20260809.log`); cada uno registró
+  `20260809_0001`.
+- La URI `mariadb+pymysql` sigue siendo rechazada por la validación actual;
+  no se presenta como soporte nativo certificado. El controlador `mariadb`
+  requiere MariaDB Connector/C y no está instalado en `.venv`.
+- La prueba focal de migraciones terminó **2 passed**. La suite autoritativa
+  previa continúa en **1591 passed, 10 skipped, 174 warnings**.
+
+### Continuidad
+
+La siguiente corrección P0 sigue siendo una migración de constraints para
+`Entity.code` y `Book.code` con preflight de datos históricos, además de las
+reconciliaciones AR/AP/inventario/bancos/Tax por compañía, libro, moneda y
+período. El baseline no debe confundirse con esa migración de constraints.
+
 ## 2026-08-09 — Auditoría profunda multi-motor y reconciliación de cifras
 
 ### Petición
