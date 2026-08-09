@@ -3,6 +3,39 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-09 — Pruebas full de cobros y compensación 3-way multimoneda
+
+### Petición
+
+Ampliar el test drive de un sistema contable con escenarios end-to-end para
+R2R, O2C, S2R, inventario y bancos. Se solicitó cubrir pagos parciales,
+pagos de más, anticipos, devoluciones, entradas, multimoneda, multilibro y la
+compensación de facturas contra reportes de recepción, usando pruebas marcadas
+para ejecutarse con `pytest --full`.
+
+### Implementación
+
+- Se agregó la opción `--full` y el marcador `full` en pytest.
+- Se agregó un ciclo integrado de cobro: factura de 1,000, cobro parcial de
+  600, rechazo de aplicación de 500 sobre el saldo 400 y anticipo de 300
+  aplicado después de su aprobación; el saldo manual esperado es 100.
+- Se agregó una conciliación 3-way en USD con recepción de 15 unidades a 12,
+  facturas de 9 y 4 unidades, y reporte pendiente de 2 unidades / USD 24.
+- Los valores base del segundo escenario se fijan manualmente a NIO 6,480 y
+  se conserva la trazabilidad de la recepción como fuente de compensación.
+- Se configuró la identidad Git local para commits semánticos de
+  `williamjmorenor@gmail.com`.
+
+### Verificación parcial
+
+- Prueba de cobro parcial/anticipo: **1 passed**.
+- Prueba 3-way multimoneda y reporte de recepción: **1 passed**.
+- Regresión focal previa de ciclos: **178 passed**.
+- Black, Ruff y Flake8 sobre los archivos modificados: sin errores.
+- Mypy del archivo legado de pagos conserva tres errores preexistentes no
+  introducidos por esta sesión; la suite `--full` quedó ejecutándose en
+  segundo plano para su resultado consolidado.
+
 ## 2026-08-07 — Blindaje de devoluciones en analítica y dashboard R2R
 
 ### Petición

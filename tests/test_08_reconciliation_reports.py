@@ -111,6 +111,109 @@ def test_purchase_reconciliation_line_matching_supports_partial_and_completion(a
     assert database.session.execute(database.select(PurchaseReconciliationItem)).scalars().all()
 
 
+@pytest.mark.full
+def test_three_way_multicurrency_receipt_compensation_report(app_ctx):
+    """Conciliación 3-way en USD: recepción, dos facturas y saldo pendiente.
+
+    Cálculo manual: recepción 15 x USD 12 = USD 180; primera factura 9 x
+    USD 12 = USD 108; segunda factura 4 x USD 12 = USD 48; queda 2 unidades,
+    USD 24, pendientes de compensar en el reporte de recepción.
+    """
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        get_purchase_reconciliation_pending,
+        reconcile_purchase_invoice,
+    )
+    from cacao_accounting.database import (
+        Currency,
+        Item,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        UOM,
+        Warehouse,
+        database,
+    )
+
+    database.session.add_all(
+        [
+            Currency(code="NIO", name="Cordoba", decimals=2, active=True),
+            Currency(code="USD", name="Dollar", decimals=2, active=True),
+            UOM(code="EA-FULL", name="Each"),
+            Item(code="ITEM-FULL-3W", name="Item 3-way USD", item_type="goods", is_stock_item=True, default_uom="EA-FULL"),
+            Warehouse(code="WH-FULL-3W", name="Bodega 3-way", company="cacao"),
+        ]
+    )
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date(2026, 8, 1),
+        supplier_id="SUPP-FULL-3W",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ITEM-FULL-3W",
+            item_name="Item 3-way USD",
+            qty=Decimal("15"),
+            qty_in_base_uom=Decimal("15"),
+            uom="EA-FULL",
+            rate=Decimal("12"),
+            amount=Decimal("180"),
+            base_amount=Decimal("6480"),
+            warehouse="WH-FULL-3W",
+        )
+    )
+    invoices = []
+    for qty in (Decimal("9"), Decimal("4")):
+        invoice = PurchaseInvoice(
+            company="cacao",
+            posting_date=date(2026, 8, 2),
+            supplier_id="SUPP-FULL-3W",
+            purchase_receipt_id=receipt.id,
+            transaction_currency="USD",
+            base_currency="NIO",
+            exchange_rate=Decimal("36"),
+            docstatus=1,
+        )
+        database.session.add(invoice)
+        database.session.flush()
+        database.session.add(
+            PurchaseInvoiceItem(
+                purchase_invoice_id=invoice.id,
+                item_code="ITEM-FULL-3W",
+                item_name="Item 3-way USD",
+                qty=qty,
+                uom="EA-FULL",
+                rate=Decimal("12"),
+                amount=qty * Decimal("12"),
+                base_amount=qty * Decimal("12") * Decimal("36"),
+                warehouse="WH-FULL-3W",
+            )
+        )
+        invoices.append(invoice)
+    database.session.commit()
+
+    first = reconcile_purchase_invoice(invoices[0].id)
+    database.session.commit()
+    pending_after_first = get_purchase_reconciliation_pending("cacao")
+    assert first.matched_qty == Decimal("9.000000000")
+    assert pending_after_first[0].pending_qty == Decimal("6.000000000")
+    assert pending_after_first[0].pending_amount == Decimal("72.0000")
+
+    second = reconcile_purchase_invoice(invoices[1].id)
+    database.session.commit()
+    pending_after_second = get_purchase_reconciliation_pending("cacao")
+    assert second.matched_qty == Decimal("4.000000000")
+    assert pending_after_second[0].pending_qty == Decimal("2.000000000")
+    assert pending_after_second[0].pending_amount == Decimal("24.0000")
+
+
 def test_purchase_reconciliation_rejects_overbilling_and_price_difference(app_ctx):
     from cacao_accounting.compras.purchase_reconciliation_service import reconcile_purchase_invoice
     from cacao_accounting.database import (

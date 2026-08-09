@@ -107,6 +107,7 @@ disable_error_code = [
 addopts = ""
 markers = [
     "slow: Pruebas unitarias que tardan mucho en ejecurse, normalmente requieren un set de datos real.",
+    "full: Pruebas end-to-end de ciclos de negocio completos con cálculos contables verificables.",
 ]
 norecursedirs = [
     "build",
