@@ -1362,3 +1362,11 @@ Se reprodujo el caso INV-10 con stock 100, reserva 100 y una DN vinculada a OV p
 `_upsert_stock_bin` ahora permite preservar temporalmente la reserva para movimientos de DN vinculados a OV; `_release_reservation_for_delivery_note` continúa siendo el único punto que libera la cantidad entregada. Los movimientos generales y conciliaciones conservan el clamp de reserva.
 
 Validación: regresión de reserva parcial `1 passed`; batería de inventario/reservas `40 passed`; Black, Ruff y Flake8 pasan en archivos tocados. El issue #279 permanece abierto para reconciliar cantidades, valoración, COGS y GL de inventario de extremo a extremo.
+
+### 2026-08-09 — Corrección de retiros bancarios importados
+
+Se reprodujo el flujo del issue #304 con una fila de extracto que contiene `withdrawal=25.00` y depósito vacío. El adaptador vivo convertía el lado vacío a `Decimal("0")`; `_bank_amount` prefería ese cero y la conciliación rechazaba la transacción como sin monto.
+
+El adaptador ahora conserva el lado vacío como `None`, y los resolvers de monto usan el retiro cuando no existe un depósito positivo. Se añadió una regresión que verifica importación, monto conciliable y monto asignable de 25.
+
+Validación: prueba nueva y prueba existente de importación `2 passed`; Black, Ruff, Flake8 y Mypy pasan en archivos tocados. El issue #304 permanece abierto para completar la conciliación bancaria, autorización, dirección y reversas.
