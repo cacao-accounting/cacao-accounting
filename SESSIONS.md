@@ -1467,3 +1467,10 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Petición: analizar y corregir issues upstream abiertos sin cerrar los issues.
 - Plan implementado: #356 ahora exige compatibilidad entre moneda de cuenta bancaria, moneda funcional, moneda de pago y `GLEntry.account_currency`; usa importes base o importes en moneda de cuenta según corresponda y rechaza asignaciones incompatibles.
 - Verificación prevista: Black, `compileall` y `git diff --check`; no se ejecuta pytest local por instrucción del usuario.
+
+## 2026-08-10 — Importación bancaria y separadores numéricos
+
+- Petición: continuar corrigiendo bugs upstream sin cerrar issues.
+- Hallazgos: #354 es falso positivo contra el código actual porque las rutas de importación ya rechazan fechas inválidas; #357 es confirmado por conversión Decimal no localizada y captura incompleta; #355 es confirmado en el servicio de importación directa, que no rechazaba ambos lados monetarios.
+- Corrección: normalización de separadores decimales en ambos importadores, rechazo explícito de depósito/retiro simultáneos y captura de `ArithmeticError` para finalizar lotes con error en vez de dejarlos en procesamiento.
+- Verificación: Black, `compileall` y `git diff --check`; no pytest local.

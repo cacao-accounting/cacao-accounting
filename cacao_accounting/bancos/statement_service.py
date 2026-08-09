@@ -9,7 +9,7 @@ import csv
 import json
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import StringIO
 from typing import Any
 
@@ -70,7 +70,22 @@ def _decimal_value(value: Any) -> Decimal:
         return Decimal("0")
     if isinstance(value, Decimal):
         return value
-    return Decimal(str(value).replace(",", ""))
+    normalized = str(value).strip().replace(" ", "")
+    if "," in normalized and "." in normalized:
+        if normalized.rfind(",") > normalized.rfind("."):
+            normalized = normalized.replace(".", "").replace(",", ".")
+        else:
+            normalized = normalized.replace(",", "")
+    elif "," in normalized:
+        decimal_part = normalized.rsplit(",", 1)[1]
+        normalized = normalized.replace(",", ".") if len(decimal_part) <= 2 else normalized.replace(",", "")
+    elif normalized.count(".") > 1:
+        parts = normalized.split(".")
+        normalized = "".join(parts[:-1]) + "." + parts[-1] if len(parts[-1]) <= 2 else "".join(parts)
+    try:
+        return Decimal(normalized)
+    except InvalidOperation as exc:
+        raise BankStatementError(f"El monto del extracto no es válido: {value}") from exc
 
 
 def _parse_date(value: str) -> date:
@@ -176,6 +191,8 @@ def _parse_bank_statement_row(source: dict[str, str], mapping: dict[str, str]) -
     withdrawal = withdrawal_value if withdrawal_value > 0 else None
     if not deposit and not withdrawal:
         raise BankStatementError("Cada fila debe tener deposito o retiro.")
+    if deposit and withdrawal:
+        raise BankStatementError("Cada fila debe tener deposito o retiro, no ambos.")
     return BankImportRow(posting_date, reference_number, description, deposit, withdrawal, False)
 
 
