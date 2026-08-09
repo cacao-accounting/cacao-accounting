@@ -3,6 +3,30 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-09 — Corte temporal de reportes de vencimiento AR/AP
+
+### Petición
+
+Continuar la corrección de riesgos de la auditoría, registrar los cambios con
+commits semánticos y documentarlos en los issues sin cerrarlos.
+
+### Implementación y evidencia
+
+- El reporte de vencimientos filtraba facturas posteadas después de su fecha
+  de corte, lo que podía contaminar saldos históricos de AR/AP.
+- El commit `67edcc9` (`fix(ar): exclude future invoices from maturity reports`)
+  aplica `posting_date <= as_of_date` para facturas de clientes y proveedores.
+- Se agregó una regresión que crea una factura anterior y otra posterior al
+  corte y verifica que solo la anterior forme parte del reporte.
+- Black, Ruff y Flake8 pasaron; la prueba focal de AR/maturity pasó.
+- El cambio fue publicado en la rama `agent/audit-risk-fixes` y comentado en
+  el issue #280, que permanece abierto.
+
+### Continuidad
+
+La matriz O2C completa, incluyendo créditos, reversals y conciliación AR ↔ GL,
+sigue pendiente en el issue #280.
+
 ## 2026-08-09 — Control de migraciones y validación multi-motor
 
 ### Petición
