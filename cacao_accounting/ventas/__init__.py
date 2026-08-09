@@ -5,7 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Sequence
 
 from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -1520,6 +1520,25 @@ def _validate_sales_invoice_quantities(invoice_id: str) -> None:
             _validate_sales_invoice_relation(rel)
 
 
+def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[SalesInvoiceItem]) -> None:
+    """Reject inconsistent or negative amounts on ordinary sales invoices."""
+    if getattr(invoice, "is_return", False) or invoice.document_type in {"sales_credit_note", "sales_debit_note"}:
+        return
+    tolerance = Decimal("0.01")
+    for item in items:
+        qty = Decimal(str(item.qty or 0))
+        rate = Decimal(str(item.rate or 0))
+        amount = Decimal(str(item.amount or 0))
+        expected = qty * rate
+        if amount <= 0:
+            raise ValueError(f"La línea {item.item_code} debe tener un monto positivo.")
+        if abs(amount - expected) > tolerance:
+            raise ValueError(
+                f"El monto de la línea {item.item_code} no coincide con cantidad por precio "
+                f"({amount} frente a {expected})."
+            )
+
+
 def _validate_sales_order_requirement(invoice: SalesInvoice) -> None:
     """Rechaza facturas sin orden de venta cuando la compañía lo exige."""
     if invoice.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or invoice.is_return:
@@ -2566,6 +2585,7 @@ def ventas_entrega_submit(note_id: str):
             require_rate_positive=True,
             require_amount_nonzero=True,
         )
+        _validate_sales_invoice_line_amounts(registro, items)
         _validate_delivery_quantities_against_so(note_id)
         from cacao_accounting.approval_engine import ApprovalEngine
 
