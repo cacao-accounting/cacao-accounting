@@ -1492,6 +1492,11 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - #315 confirmado: el adaptador activo detecta duplicados dentro del lote y contra la base; `BankTransaction` incorpora constraint único y una migración aborta si encuentra duplicados históricos, evitando consolidarlos silenciosamente.
 - La identidad se materializa en un hash no nulo para que la unicidad funcione también cuando depósito o retiro sean `NULL`; el listener la recalcula en inserts y updates.
 
+## 2026-08-10 — Lectura de candidatos sin locks
+
+- #313 confirmado: la consulta GET de conciliación invocaba `FOR UPDATE` sobre cada transacción pendiente.
+- Corrección local: el lock de `find_bank_reconciliation_candidates` es opcional y por defecto está desactivado; la ruta de escritura mantiene los locks de validación al aplicar la conciliación.
+
 ## 2026-08-10 — Corrección de expectativa contable en CI
 
 - CI falló en `test_accounting_entries_for_payment_variants` porque el caso de reembolso de cliente esperaba una cuenta `payable`.

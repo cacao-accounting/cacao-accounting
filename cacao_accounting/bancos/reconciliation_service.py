@@ -266,10 +266,9 @@ def _append_candidate(
     )
 
 
-def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCandidate]:
+def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool = False) -> list[BankCandidate]:
     """Busca pagos y GL bancario candidatos para una transaccion bancaria."""
-    # CAS-02: FOR UPDATE para prevenir duplicación concurrente
-    transaction = database.session.get(BankTransaction, bank_transaction_id, with_for_update=True)
+    transaction = database.session.get(BankTransaction, bank_transaction_id, with_for_update=lock)
     if not transaction:
         raise BankReconciliationError("La transaccion bancaria no existe.")
     company = _bank_company(transaction)
