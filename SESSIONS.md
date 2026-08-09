@@ -104,6 +104,10 @@ debe probarse con movimientos y valores calculados, no con asserts triviales.
 - La batería amplia anterior del baseline terminó en **562 passed, 129
   warnings**; la regresión actual es la evidencia válida para los archivos
   modificados.
+- El job de esquema SQLite del workflow se reprodujo en `.venv` con salida en
+  `test_results_schema.log`: **213 passed** en 2m34s. MySQL y PostgreSQL no se
+  ejecutaron localmente porque requieren servicios/servidores externos; sus
+  comandos permanecen en el workflow para CI.
 
 ## 2026-08-07 — Blindaje de devoluciones en analítica y dashboard R2R
 
