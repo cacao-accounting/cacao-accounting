@@ -3,6 +3,76 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
+
+### Petición
+
+Realizar una auditoría completa de los flujos de negocio **R2R, S2P, O2C, Bancos
+e Inventario** y documentar los hallazgos abriendo issues en GitHub. La auditoría
+es de solo lectura (no se modificó código).
+
+### Metodología
+
+- Auditoría de código de los módulos `contabilidad/`, `compras/`, `ventas/`,
+  `bancos/`, `inventario/`, `document_flow/`, `accounting_engine/` y
+  `imports/adapters/` con subagentes de exploración en paralelo, verificando
+  cada hallazgo contra el código fuente con Read/Grep.
+- Los subagentes R2R devolvieron resúmenes de estado en vez de hallazgos; el
+  bloque R2R se completó con revisión directa de `fiscal_year_closing.py`,
+  `journal_service.py`, `project_capitalization_service.py` y
+  `recurring_journal_service.py`.
+- Se abrieron **51 issues** en GitHub (#287–#337) con etiquetas
+  `bug`, `python`, `severity-*` y `auth` cuando aplica.
+
+### Hallazgos por flujo
+
+- **S2P (7 issues, #287–#293):** sobre-matching en conciliación
+  (`_first_available_line` devuelve líneas agotadas), IDOR en listados/detalle
+  de compras, factura que referencia OC/recepción de otro proveedor, edición de
+  factura vinculada rota con flags estrictos, puente sin compensar en 2-way,
+  `price_ok` con unidades incompatibles, duplicidad de `supplier_invoice_no`
+  sin constraint DB.
+- **O2C (10 issues, #294–#303):** notas de crédito que nunca reducen el saldo
+  de la factura (`_compute_allocated_notes_amount` código muerto),
+  `require_sales_order` configuración muerta, doble liberación de reserva en
+  entregas parciales (sobre-venta), validación de precio omitida desde ND/manual,
+  límite de crédito sin OVs aprobadas, montos negativos/`qty×rate` inconsistentes,
+  NC/ND sin tope acumulativo, conciliación de pagos sin ACL por compañía,
+  `_payment_order_allocated` sin filtro de compañía y neteo GL de anticipos
+  condicionado a config.
+- **Bancos (15 issues, #304–#318):** transacciones de solo retiro importadas
+  imposibles de conciliar (CRITICAL), reversas GL sin dimensión bancaria,
+  candidatos sin dirección depósito/retiro, filtro por monto total excluye
+  matches parciales, conciliación de cualquier GL de la misma compañía, IDOR en
+  conciliación y pronóstico de caja, borradores abandonados consumen capacidad
+  de anticipos, sin limpieza de `ReconciliationItem` al cancelar pago, locks
+  FOR UPDATE en GET, matriz de forecast mezcla compañías, importación sin
+  dedupe, ruta legacy sin dimensión bancaria, `ExchangeRevaluation` sin
+  constraint único y ajuste de diferencia bancaria inalcanzable.
+- **Inventario (15 issues, #319–#333):** salida negativa rompe la valoración
+  (CRITICAL), cancelación de recepción consume bin negativo, reserva en UOM de
+  línea vs bin en UOM base, `stock_adjustment` imposible de postear,
+  conciliación con déficit ignora el valor objetivo, capas de landed cost
+  excluidas de FIFO/MA, retroactivos corrompen kardex, transferencias de misma
+  cuenta sin validación de período, clamp de `reserved_qty` borra reservas,
+  transferencias sin `allow_negative_stock`, conciliación mezcla UOM, edición de
+  conciliación destruye campos, ND de bodega distinta deja reserva atascada,
+  race de INSERT de reserva y MA retrospectivo + listados sin scope.
+- **R2R (4 issues, #334–#337):** race condition de doble cierre fiscal, flags
+  `is_closing`/`is_fiscal_year_closing` forjables desde el payload (elusión de
+  período cerrado y cierre fiscal falso), ventana de doble capitalización de
+  proyectos y `apply_recurring_template` que deja el comprobante en borrador y
+  lo marca `applied` sin postear.
+
+### Estado
+
+- Total de issues abiertos en el repositorio: 70 (51 nuevos + preexistentes).
+- La suite autoritativa previa sigue siendo **1591 passed, 10 skipped**; esta
+  sesión no modificó código.
+- Continuidad: corregir por severidad (2 CRITICAL: #304 y #319; luego los HIGH)
+  con commits semánticos y regresión focal por issue, sin cerrar el issue hasta
+  tener evidencia.
+
 ## 2026-08-09 — Dimensión bancaria en postings y conciliación de caja
 
 ### Petición
