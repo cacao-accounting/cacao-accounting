@@ -2753,6 +2753,59 @@ def _sales_reversal_source(document_type: str) -> str | None:
     return request.form.get("from_invoice") or request.form.get("from_return") or None
 
 
+def _persist_sales_reversal_relation(invoice: SalesInvoice) -> None:
+    """Persist the invoice-to-credit-note relation used by AR outstanding."""
+    if invoice.document_type not in {"sales_credit_note", "sales_debit_note"} or not invoice.reversal_of:
+        return
+    target_type = invoice.document_type
+    relation = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                source_type="sales_invoice",
+                source_id=invoice.reversal_of,
+                target_type=target_type,
+                target_id=invoice.id,
+                relation_type="invoice_reversal",
+            )
+        )
+        .scalars()
+        .first()
+    )
+    amount = Decimal(str(invoice.grand_total or "0"))
+    if relation:
+        relation.qty = Decimal("1")
+        relation.amount = amount
+        relation.status = "active"
+        from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+        source = database.session.get(SalesInvoice, invoice.reversal_of)
+        if source:
+            refresh_outstanding_amount_cache(source)
+        return
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=invoice.reversal_of,
+            source_item_id=None,
+            target_type=target_type,
+            target_id=invoice.id,
+            target_item_id=None,
+            company=invoice.company,
+            qty=Decimal("1"),
+            uom=None,
+            rate=amount,
+            amount=amount,
+            relation_type="invoice_reversal",
+            status="active",
+        )
+    )
+    from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+    source = database.session.get(SalesInvoice, invoice.reversal_of)
+    if source:
+        refresh_outstanding_amount_cache(source)
+
+
 @ventas.route("/sales-invoice/<invoice_id>")
 @modulo_activo("sales")
 @login_required
@@ -2999,6 +3052,7 @@ def ventas_factura_venta_submit(invoice_id: str):
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
         submit_document(registro)
+        _persist_sales_reversal_relation(registro)
         if registro.update_inventory and not registro.is_return and not registro.delivery_note_id:
             dn = _create_delivery_note_from_invoice(registro)
             flash(
@@ -3060,8 +3114,9 @@ def ventas_factura_venta_cancel(invoice_id: str):
         _cancel_linked_delivery_note(registro)
         cancel_document(registro)
         log_cancel(registro)
-        revert_relations_for_target("sales_invoice", invoice_id)
-        refresh_source_caches_for_target("sales_invoice", invoice_id)
+        target_type = registro.document_type or "sales_invoice"
+        revert_relations_for_target(target_type, invoice_id)
+        refresh_source_caches_for_target(target_type, invoice_id)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()
