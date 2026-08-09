@@ -46,6 +46,7 @@ from cacao_accounting.database import (
     StockLedgerEntry,
     StockValuationLayer,
     Entity,
+    Warehouse,
     database,
 )
 from cacao_accounting.warehouse_accounting import (
@@ -1780,12 +1781,12 @@ def _upsert_stock_bin(
     bin_row.actual_qty = _decimal_value(bin_row.actual_qty) + qty_change
     bin_row.stock_value = _decimal_value(bin_row.stock_value) + value_change
 
-    # INV-10: una reserva nunca puede superar stock disponible ni ser negativa.
-    # Una DN vinculada a una OV libera su reserva en un hook posterior; si se
-    # clamp aquí primero, ese hook restaría dos veces la cantidad entregada.
+    # Las reservas representan compromisos de venta, no un límite derivado del
+    # stock físico. Mantenerlas permite que sobrevivan a stock cero/negativo;
+    # su liberación debe ocurrir explícitamente al cancelar o entregar.
     if not preserve_reserved_qty:
         reserved_qty = _decimal_value(bin_row.reserved_qty)
-        bin_row.reserved_qty = max(Decimal("0"), min(reserved_qty, max(bin_row.actual_qty, Decimal("0"))))
+        bin_row.reserved_qty = max(Decimal("0"), reserved_qty)
 
     if bin_row.actual_qty > 0:
         bin_row.valuation_rate = bin_row.stock_value / bin_row.actual_qty
@@ -2189,6 +2190,7 @@ def _create_stock_movements_for_items(document: StockEntry, items: Sequence[Any]
     movements: list[StockLedgerEntry] = []
     for line in items:
         _stock_item_for(line)
+        _validate_stock_entry_warehouses(document, line)
         if purpose == "stock_reconciliation":
             movement = _create_stock_reconciliation_movement(document, line)
             if movement is not None:
@@ -2197,6 +2199,22 @@ def _create_stock_movements_for_items(document: StockEntry, items: Sequence[Any]
             line_movements = _create_movement_for_purpose(document, line, purpose)
             movements.extend(line_movements)
     return movements
+
+
+def _validate_stock_entry_warehouses(document: StockEntry, line: StockEntryItem) -> None:
+    """Valida que las bodegas usadas por un movimiento pertenezcan a la compañía."""
+    warehouse_codes = {
+        getattr(document, "from_warehouse", None),
+        getattr(document, "to_warehouse", None),
+        getattr(line, "source_warehouse", None),
+        getattr(line, "target_warehouse", None),
+    }
+    for warehouse_code in filter(None, warehouse_codes):
+        warehouse = database.session.execute(select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
+        if not warehouse or warehouse.company != document.company:
+            raise PostingError(f"La bodega {warehouse_code} no pertenece a la compañía {document.company}.")
+        if not warehouse.is_active:
+            raise PostingError(f"La bodega {warehouse_code} está inactiva.")
 
 
 def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) -> list[StockLedgerEntry]:
@@ -2230,12 +2248,25 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
     if purpose == "material_transfer":
         source_warehouse = line.source_warehouse or document.from_warehouse
         target_warehouse = line.target_warehouse or document.to_warehouse
-        cost_amount, cost_rate = _consume_stock_valuation_layers(
-            company=document.company,
-            item_code=line.item_code,
-            warehouse=source_warehouse,
-            quantity=qty,
-        )
+        item = _stock_item_for(line)
+        try:
+            cost_amount, cost_rate = _consume_stock_valuation_layers(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=source_warehouse,
+                quantity=qty,
+            )
+        except PostingError:
+            if not item.allow_negative_stock:
+                raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {source_warehouse}.")
+            cost_rate = _consume_available_layers_for_negative_stock(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=source_warehouse,
+                total_qty=qty,
+                fallback_rate=valuation_rate,
+            )
+            cost_amount = cost_rate * qty
         line._inventory_cost_amount = cost_amount
         return [
             _create_stock_movement(

@@ -51,6 +51,7 @@ from cacao_accounting.decorators import (  # noqa: F401
     verifica_permiso,
 )
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
+from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_settings import (
     draft_party_company_settings_rows,
@@ -165,6 +166,72 @@ def _resolve_item_warehouse(item: SalesOrderItem, item_obj: Item | None) -> str:
     return warehouse or ""
 
 
+def _item_by_code(item_code: str) -> Item | None:
+    """Busca un artículo por su clave primaria histórica o por código."""
+    item = database.session.get(Item, item_code)
+    if item is not None:
+        return item
+    return database.session.execute(database.select(Item).filter_by(code=item_code)).scalars().first()
+
+
+def _base_qty_for_sales_line(item: Any, item_obj: Item | None) -> Decimal:
+    """Convierte la cantidad de una línea de venta a la UOM base del artículo."""
+    stored_qty = item.qty_in_base_uom
+    if stored_qty is not None and Decimal(str(stored_qty)) > 0:
+        return Decimal(str(stored_qty))
+
+    line_qty = Decimal(str(item.qty or 0))
+    if item_obj is None:
+        item.qty_in_base_uom = line_qty
+        database.session.add(item)
+        return line_qty
+    line_uom = item.uom or item_obj.default_uom
+    try:
+        base_qty = convert_item_qty(item.item_code, line_qty, line_uom, item_obj.default_uom)
+    except InventoryServiceError as exc:
+        raise ValueError(str(exc)) from exc
+    item.qty_in_base_uom = base_qty
+    database.session.add(item)
+    return base_qty
+
+
+def _reservation_warehouse_for_delivery_note(dn: DeliveryNote, item: DeliveryNoteItem, item_obj: Item | None) -> str:
+    """Obtiene la bodega de la reserva original de una línea entregada."""
+    relation = (
+        database.session.execute(
+            database.select(DocumentRelation)
+            .filter_by(
+                source_type="sales_order",
+                source_id=dn.sales_order_id,
+                target_type="delivery_note",
+                target_id=dn.id,
+                target_item_id=item.id,
+                status="active",
+            )
+            .order_by(DocumentRelation.created.desc())
+        )
+        .scalars()
+        .first()
+    )
+    if relation and relation.source_item_id:
+        source_item = database.session.get(SalesOrderItem, relation.source_item_id)
+        if source_item:
+            return _resolve_item_warehouse(source_item, item_obj)
+
+    source_item = (
+        database.session.execute(
+            database.select(SalesOrderItem)
+            .filter_by(sales_order_id=dn.sales_order_id, item_code=item.item_code)
+            .order_by(SalesOrderItem.created)
+        )
+        .scalars()
+        .first()
+    )
+    if source_item:
+        return _resolve_item_warehouse(source_item, item_obj)
+    return item.warehouse or (item_obj.default_warehouse_id if item_obj else None) or ""
+
+
 def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
     """Valida disponibilidad y reserva inventario al aprobar una Orden de Venta.
 
@@ -175,7 +242,7 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
     for item in items:
-        item_obj = database.session.get(Item, item.item_code)
+        item_obj = _item_by_code(item.item_code)
         if item_obj and not item_obj.is_stock_item:
             continue
 
@@ -186,12 +253,13 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
         bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         available = Decimal(str(bin_row.actual_qty or 0)) - Decimal(str(bin_row.reserved_qty or 0))
 
-        if available < item.qty:
+        required_qty = _base_qty_for_sales_line(item, item_obj)
+        if available < required_qty:
             raise ValueError(
-                f"Stock insuficiente para {item.item_code} en {warehouse}: disponible {available}, requerido {item.qty}."
+                f"Stock insuficiente para {item.item_code} en {warehouse}: disponible {available}, requerido {required_qty}."
             )
 
-        bin_row.reserved_qty = Decimal(str(bin_row.reserved_qty or 0)) + item.qty
+        bin_row.reserved_qty = Decimal(str(bin_row.reserved_qty or 0)) + required_qty
 
 
 def _release_reservation_for_sales_order(so: SalesOrder) -> None:
@@ -199,7 +267,7 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
     for item in items:
-        item_obj = database.session.get(Item, item.item_code)
+        item_obj = _item_by_code(item.item_code)
         if item_obj and not item_obj.is_stock_item:
             continue
 
@@ -209,7 +277,7 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
 
         bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
-        new_reserved = max(Decimal("0"), reserved - item.qty)
+        new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item, item_obj))
         bin_row.reserved_qty = new_reserved
 
 
@@ -230,17 +298,17 @@ def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
 
     for item in items:
-        item_obj = database.session.get(Item, item.item_code)
+        item_obj = _item_by_code(item.item_code)
         if item_obj and not item_obj.is_stock_item:
             continue
 
-        warehouse = item.warehouse
+        warehouse = _reservation_warehouse_for_delivery_note(dn, item, item_obj)
         if not warehouse:
             continue
 
         bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
-        new_reserved = max(Decimal("0"), reserved - item.qty)
+        new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item, item_obj))
         bin_row.reserved_qty = new_reserved
     dn.reservation_released = True
 
@@ -257,17 +325,17 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
 
     for item in items:
-        item_obj = database.session.get(Item, item.item_code)
+        item_obj = _item_by_code(item.item_code)
         if item_obj and not item_obj.is_stock_item:
             continue
 
-        warehouse = item.warehouse
+        warehouse = _reservation_warehouse_for_delivery_note(dn, item, item_obj)
         if not warehouse:
             continue
 
         bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
-        bin_row.reserved_qty = reserved + item.qty
+        bin_row.reserved_qty = reserved + _base_qty_for_sales_line(item, item_obj)
     dn.reservation_released = False
 
 
@@ -1089,12 +1157,17 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
+            item_obj = _item_by_code(item_code)
+            if not item_obj:
+                raise ValueError(f"El item {item_code} no existe.")
+            qty_in_base_uom = convert_item_qty(item_code, qty, uom or item_obj.default_uom, item_obj.default_uom)
             linea = SalesOrderItem(
                 sales_order_id=order_id,
                 item_code=item_code,
                 item_name=request.form.get(f"item_name_{i}", ""),
                 qty=qty,
                 uom=uom,
+                qty_in_base_uom=qty_in_base_uom,
                 rate=rate,
                 amount=amount,
                 warehouse=request.form.get(f"warehouse_{i}") or None,
