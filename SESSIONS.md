@@ -1812,3 +1812,13 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   escalas por moneda y redondeos en los demás módulos.
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
   pytest local por instrucción del usuario.
+
+## 2026-08-10 — Revisión de issues de inventario, bancos y O2C
+
+- Los issues #345, #347, #356, #359, #360, #361, #362, #363, #364 y #365
+  fueron contrastados contra la rama vigente y comentados como mitigados o
+  desactualizados: el código actual ya contiene los guards de fecha, moneda,
+  UOM, stock negativo, reconciliación contra bin bloqueado y devoluciones.
+- No se realizaron cambios de código para esos issues porque no se obtuvo una
+  reproducción vigente distinta del comportamiento esperado. Todos permanecen
+  abiertos para validación CI/E2E.
