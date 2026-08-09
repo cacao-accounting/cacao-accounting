@@ -1566,6 +1566,20 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
   pytest local por instrucción del usuario.
 
+## 2026-08-10 — Edición de facturas vinculadas S2P
+
+- #290 confirmado: la edición de una factura de compra validaba flags estrictos
+  usando solo from_order/from_receipt del formulario, ausentes en la vista de
+  edición.
+- Corrección local: el handler usa primero los campos enviados y, si faltan,
+  recupera purchase_order_id/purchase_receipt_id persistidos en la factura.
+- #343 fue contrastado contra el código actual: la validación de submit de
+  recepción ya compara supplier_id de la recepción y la OC antes de validar
+  cantidades; se comentará como falso positivo. Ambos issues permanecen
+  abiertos.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
 ## 2026-08-10 — Tope de detalle en matching S2P
 
 - #340 confirmado: los constructores de `PurchaseReconciliationItem` usaban la

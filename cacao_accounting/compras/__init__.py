@@ -3408,11 +3408,13 @@ def _handle_purchase_invoice_edit_post(registro):
         before_state = _capture_purchase_state(registro)
         registro.supplier_id = request.form.get("supplier_id") or None
         registro.company = request.form.get("company") or None
+        purchase_order_id = request.form.get("from_order") or getattr(registro, "purchase_order_id", None)
+        purchase_receipt_id = request.form.get("from_receipt") or getattr(registro, "purchase_receipt_id", None)
         _validate_supplier_invoice_flags(
             registro.supplier_id,
             registro.company,
-            request.form.get("from_order") or None,
-            request.form.get("from_receipt") or None,
+            purchase_order_id,
+            purchase_receipt_id,
         )
         _validate_duplicate_supplier_invoice(
             registro.supplier_id,
