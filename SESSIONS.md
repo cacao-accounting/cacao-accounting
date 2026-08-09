@@ -80,6 +80,23 @@ cerrar el issue y acumulando el cambio para publicarlo junto con el lote.
 - Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
   `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
 
+## 2026-08-10 — Serialización de creación y actualización de reservas
+
+### Petición
+
+Continuar con el issue #332, corrigiendo la condición de carrera restante en la
+creación del primer bin de inventario y manteniendo el issue abierto.
+
+### Implementación
+
+- `_stock_bin_or_create` ahora crea el bin dentro de un savepoint y recupera la
+  fila ganadora ante una violación de unicidad concurrente, sin invalidar la
+  transacción exterior.
+- Las rutas de liberación y restauración de reservas bloquean el bin existente
+  con `FOR UPDATE` para serializar las actualizaciones de `reserved_qty`.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
 ## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
 
 ### Petición
