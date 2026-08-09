@@ -20,7 +20,6 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 
-
 TEST_DATABASE_URL = environ.get("DATABASE_URL") or "sqlite:///:memory:"
 
 
@@ -114,6 +113,12 @@ class TestSchemaTableCreation(unittest.TestCase):
     # Company
     def test_entity_table_exists(self):
         self.assertIn("entity", self.tables)
+
+    def test_entity_code_is_required_for_company_foreign_keys(self):
+        """Entity.code must be a valid non-null FK target on MySQL-family engines."""
+        from cacao_accounting.database import Entity
+
+        self.assertFalse(Entity.__table__.c.code.nullable)
 
     def test_unit_table_exists(self):
         self.assertIn("unit", self.tables)
