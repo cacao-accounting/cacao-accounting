@@ -31,6 +31,32 @@ asegurando que los importes publicados reconcilien con los reportes bancarios.
 La matriz Subledger ↔ GL por compañía, libro, moneda y período (#276) sigue
 siendo el siguiente control transversal.
 
+## 2026-08-09 — Valoración de inventario al corte
+
+### Petición
+
+Continuar monitoreando issues y verificar que los reportes de inventario no
+dupliquen cifras históricas ni incluyan movimientos futuros.
+
+### Implementación y evidencia
+
+- Se confirmó que `get_inventory_valuation` sumaba snapshots de todas las
+  capas, aunque cada capa ya contenía el saldo acumulado posterior al
+  movimiento.
+- El reporte ahora selecciona la última capa por artículo/almacén hasta
+  `date_to`, evitando doble conteo y contaminación temporal.
+- La regresión independiente verifica capas 10/100, salida 5/50 y una capa
+  futura 99/990; el resultado al 31 de mayo es exactamente 5 unidades y 50.
+- Black, Ruff y Flake8 pasaron; el bloque focal de inventario y bancos terminó
+  con **35 passed**.
+- El issue #279 fue comentado y permanece abierto para FIFO/promedio, backdated
+  transactions, reversals y conciliación Inventory ↔ GL.
+
+### Continuidad
+
+La corrección no sustituye la reconciliación por libro, período y cuenta
+control; esa cobertura sigue pendiente.
+
 ## 2026-08-09 — Corte temporal de reportes de vencimiento AR/AP
 
 ### Petición

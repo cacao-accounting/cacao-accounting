@@ -2248,6 +2248,13 @@ def get_inventory_valuation(filters: OperationalReportFilters) -> PaginatedRepor
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
         query = query.filter_by(warehouse=filters.warehouse)
+    if filters.date_to:
+        query = query.where(StockValuationLayer.posting_date <= filters.date_to)
+    latest_layers: dict[tuple[str, str], StockValuationLayer] = {}
+    for layer in database.session.execute(
+        query.order_by(StockValuationLayer.posting_date, StockValuationLayer.created, StockValuationLayer.id)
+    ).scalars():
+        latest_layers[(layer.item_code, layer.warehouse)] = layer
     rows = [
         ReportRow(
             {
@@ -2257,8 +2264,9 @@ def get_inventory_valuation(filters: OperationalReportFilters) -> PaginatedRepor
                 "remaining_stock_value": _decimal_value(layer.remaining_stock_value),
             }
         )
-        for layer in database.session.execute(query).scalars()
+        for layer in latest_layers.values()
     ]
+    rows.sort(key=lambda row: (str(row.values["item_code"]), str(row.values["warehouse"])))
     return PaginatedReport(
         rows=rows,
         totals={
