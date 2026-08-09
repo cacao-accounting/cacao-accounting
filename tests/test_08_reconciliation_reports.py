@@ -680,6 +680,43 @@ def test_reconciliation_matrix_isolates_selected_ledger(app_ctx):
     assert ar_row["difference"] == Decimal("-100.00")
 
 
+def test_reconciliation_report_diagnoses_posting_without_bank_transaction(app_ctx):
+    """El reporte identifica pagos posteados sin extracto bancario enlazado."""
+    from cacao_accounting.database import Bank, BankAccount, PaymentEntry, database
+    from cacao_accounting.reportes.services import get_reconciliation_report
+
+    bank = Bank(name="Banco diagnóstico")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta diagnóstico",
+        account_no="DIAG-001",
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 20),
+        payment_type="pay",
+        bank_account_id=bank_account.id,
+        paid_amount=Decimal("25.00"),
+        docstatus=1,
+    )
+    database.session.add_all([bank_account, payment])
+    database.session.commit()
+
+    report = get_reconciliation_report(company="cacao", as_of_date=date(2026, 5, 31))
+
+    diagnostics = [row.values for row in report.rows if row.values["recon_type"] == "bank_diagnostic"]
+    assert any(
+        row["status"] == "posting_without_bank_transaction"
+        and row["source_id"] == payment.id
+        and row["amount"] == Decimal("25.00")
+        for row in diagnostics
+    )
+    assert report.totals["bank_orphan_count"] == Decimal("1")
+
+
 def test_inventory_valuation_uses_latest_layer_at_cutoff(app_ctx):
     """Inventory valuation must not sum historical snapshots or future layers."""
     from cacao_accounting.database import StockValuationLayer, database
