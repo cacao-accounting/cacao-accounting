@@ -2120,14 +2120,13 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
     )
     current_qty = _decimal_value(current_bin.actual_qty) if current_bin else Decimal("0")
     counted_qty = _decimal_value(line.counted_qty)
-    qty_change = _decimal_value(line.qty_difference)
-    if line.qty_difference is None:
-        qty_change = counted_qty - current_qty
+    # A reconciliation draft stores a snapshot for display only. Recompute the
+    # delta against the locked bin so movements posted after draft creation do
+    # not compound a stale quantity difference.
+    qty_change = counted_qty - current_qty
     current_value = _decimal_value(current_bin.stock_value) if current_bin else Decimal("0")
     target_value = _decimal_value(line.target_stock_value)
-    value_change = _decimal_value(line.stock_value_difference)
-    if line.stock_value_difference is None:
-        value_change = target_value - current_value
+    value_change = target_value - current_value
     if qty_change == 0 and value_change == 0:
         return None
     if counted_qty < 0 or target_value < 0:
