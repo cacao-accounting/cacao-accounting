@@ -1497,6 +1497,11 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - #313 confirmado: la consulta GET de conciliación invocaba `FOR UPDATE` sobre cada transacción pendiente.
 - Corrección local: el lock de `find_bank_reconciliation_candidates` es opcional y por defecto está desactivado; la ruta de escritura mantiene los locks de validación al aplicar la conciliación.
 
+## 2026-08-10 — Corrección de formato bancario ambiguo
+
+- CI detectó que el parser aceptaba `1,000`, aunque el contrato de validación lo considera ambiguo.
+- Corrección: se conservan formatos inequívocos con ambos separadores o coma decimal de hasta dos dígitos; separadores de miles aislados se rechazan para evitar interpretar una moneda con escala incorrecta.
+
 ## 2026-08-10 — Cancelación de pagos y anticipos
 
 - #312 confirmado: la cancelación de pagos ahora marca sus ReconciliationItem como `cancelled`, conserva el audit trail y deja de consumir saldo conciliable.
