@@ -199,7 +199,7 @@ def _build_closing_voucher_payload(
 
 def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_id: str) -> ComprobanteContable:
     """Ejecuta el proceso de cierre de año fiscal."""
-    fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
+    fiscal_year = database.session.get(FiscalYear, fiscal_year_id, with_for_update=True)
     if not fiscal_year:
         raise FiscalYearClosingError("Año fiscal no encontrado.")
 
@@ -238,7 +238,12 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
         retained_earnings_code=retained_earnings_account.code,
     )
 
-    journal = create_journal_draft(payload, user_id=user_id)
+    journal = create_journal_draft(
+        payload,
+        user_id=user_id,
+        allow_closing=True,
+        allow_fiscal_year_closing=True,
+    )
     submit_journal(journal.id)
     return journal
 

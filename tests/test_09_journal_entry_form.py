@@ -449,6 +449,7 @@ def test_submit_journal_allows_manual_closing_in_closed_period(app_ctx):
             ],
         },
         user_id="user-1",
+        allow_closing=True,
     )
 
     entries = submit_journal(journal.id)
@@ -457,6 +458,33 @@ def test_submit_journal_allows_manual_closing_in_closed_period(app_ctx):
     assert len(entries) == 2
     assert len(posted_entries) == 2
     assert all(entry.ledger_id == fiscal_book.id for entry in posted_entries)
+
+
+def test_create_journal_draft_rejects_client_controlled_closing_flags(app_ctx):
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, create_journal_draft
+    from cacao_accounting.database import Accounts, Book, database
+
+    debit_account = Accounts(entity="cacao", code="EXP-CL-SEC", name="Gasto", active=True, enabled=True, group=False)
+    credit_account = Accounts(entity="cacao", code="CASH-CL-SEC", name="Caja", active=True, enabled=True, group=False)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    database.session.add_all([debit_account, credit_account, fiscal_book])
+    database.session.commit()
+
+    payload = {
+        "company": "cacao",
+        "posting_date": "2026-05-06",
+        "books": ["FISC"],
+        "is_closing": True,
+        "is_fiscal_year_closing": True,
+        "fiscal_year_id": "forged-fiscal-year",
+        "lines": [
+            {"account": debit_account.id, "debit": "20.00", "credit": "0"},
+            {"account": credit_account.id, "debit": "0", "credit": "20.00"},
+        ],
+    }
+
+    with pytest.raises(JournalValidationError, match="solo puede crearse"):
+        create_journal_draft(payload, user_id="user-1")
 
 
 def test_submit_journal_rejects_missing_exchange_rate_for_foreign_currency(app_ctx):
