@@ -65,11 +65,14 @@ identidad `williamjmorenor@gmail.com`.
   referencias e importación. La regresión afectada terminó **146 passed**;
   los warnings focales bajaron a **56**, principalmente por fixtures JWT y
   avisos externos/legacy.
-- La suite completa posterior a este cambio se está ejecutando en
-  `test_results_audit_final2_20260809.log`; terminó con **1591 passed, 10
-  skipped y 182 warnings** en 24:20. La regresión final de pagos y
-  conciliaciones después del octavo reemplazo ORM terminó **131 passed y 41
-  warnings** en `test_results_payment_last_orm_20260809.log`.
+- La suite completa posterior a este cambio terminó en
+  `test_results_audit_final2_20260809.log` con **1591 passed, 10 skipped y
+  182 warnings** en 24:20. La regresión final de pagos y conciliaciones
+  después del octavo reemplazo ORM terminó **131 passed y 41 warnings** en
+  `test_results_payment_last_orm_20260809.log`.
+- La ejecución autoritativa sobre el árbol final, registrada en
+  `test_results_audit_authoritative_20260809.log`, terminó con **1591 passed,
+  10 skipped y 174 warnings** en 26:33.
 - La cobertura verificada incluye subledger/aging AR-AP, kardex histórico,
   banco contra GL, anulaciones, posting de inventario, matching 3-way,
   pagos/aplicaciones, cierre fiscal, doble posting y dos libros con monedas

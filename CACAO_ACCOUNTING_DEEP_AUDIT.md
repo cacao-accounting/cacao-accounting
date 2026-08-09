@@ -89,7 +89,7 @@ No se inventan importes ni se etiqueta cero una diferencia que no fue calculada 
 ## 12. End-to-End Test Results
 
 - Suite requerida en `.venv`: **1591 passed, 10 skipped, 242 warnings**, log `test_results_audit_final_20260809.log`.
-- Suite completa posterior a los reemplazos ORM iniciales: **1591 passed, 10 skipped, 182 warnings**, log `test_results_audit_final2_20260809.log`.
+- Suite completa autoritativa sobre el árbol final: **1591 passed, 10 skipped, 174 warnings**, log `test_results_audit_authoritative_20260809.log`.
 - Esquema MariaDB 11.4 en Docker (`mysql+pymysql`, puerto 3307): **214 passed**, log `test_results_mariadb_schema_current.log`.
 - Pruebas focales FX/multi-ledger/reportes: **12 passed**.
 - Fixture afectado por hacer obligatorio `Entity.code`: **24 passed** de `test_line_import_api.py` tras completar el dato requerido.
