@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from cacao_accounting.database import (
     BankAccount,
     BankTransaction,
+    Entity,
     GLEntry,
     PaymentEntry,
     Reconciliation,
@@ -128,6 +129,18 @@ def _bank_gl_account_id(transaction: BankTransaction) -> str | None:
     return str(bank_account.gl_account_id) if bank_account and bank_account.gl_account_id else None
 
 
+def _bank_currency(transaction: BankTransaction) -> str | None:
+    """Return the currency configured for the bank account."""
+    bank_account = database.session.get(BankAccount, transaction.bank_account_id)
+    return str(bank_account.currency) if bank_account and bank_account.currency else None
+
+
+def _company_currency(company: str) -> str | None:
+    """Return the functional currency configured for a company."""
+    entity = database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
+    return str(entity.currency) if entity and entity.currency else None
+
+
 def _allocated_for_source(bank_transaction_id: str) -> Decimal:
     value = database.session.execute(
         select(func.coalesce(func.sum(ReconciliationItem.allocated_amount), 0)).filter_by(
@@ -148,7 +161,11 @@ def _allocated_for_target(target_type: str, target_id: str) -> Decimal:
     return _decimal_value(value)
 
 
-def _target_amount(target_type: str, target_id: str) -> Decimal:
+def _target_amount(target_type: str, target_id: str, transaction: BankTransaction | None = None) -> Decimal:
+    """Return a target amount expressed in the bank transaction currency."""
+    bank_currency = _bank_currency(transaction) if transaction else None
+    company = _bank_company(transaction) if transaction else None
+    company_currency = _company_currency(company) if company else None
     match target_type:
         case "payment_entry":
             payment = database.session.get(PaymentEntry, target_id)
@@ -156,11 +173,28 @@ def _target_amount(target_type: str, target_id: str) -> Decimal:
                 raise BankReconciliationError("La entrada de pago a conciliar no existe.")
             if getattr(payment, "docstatus", 0) != 1:
                 raise BankReconciliationError("La entrada de pago debe estar aprobada para conciliarse.")
+            payment_currency = str(payment.currency) if payment.currency else company_currency
+            if bank_currency and payment_currency != bank_currency:
+                if bank_currency != company_currency:
+                    raise BankReconciliationError("La moneda del pago no coincide con la cuenta bancaria.")
+                base_amount = (
+                    payment.base_paid_amount if payment.payment_type in ("pay", "debit_note") else payment.base_received_amount
+                )
+                if base_amount is None:
+                    raise BankReconciliationError("El pago no tiene monto en moneda funcional para conciliarse.")
+                return _decimal_value(base_amount)
             return _payment_amount(payment)
         case "gl_entry":
             entry = database.session.get(GLEntry, target_id)
             if not entry:
                 raise BankReconciliationError("La entrada GL a conciliar no existe.")
+            entry_currency = str(entry.account_currency or entry.company_currency or company_currency or "")
+            if bank_currency and entry_currency != bank_currency:
+                raise BankReconciliationError("La moneda de la entrada GL no coincide con la cuenta bancaria.")
+            if entry.account_currency == bank_currency:
+                amount = entry.debit_in_account_currency or entry.credit_in_account_currency
+                if amount is not None:
+                    return _decimal_value(amount)
             return _gl_amount(entry)
         case _:
             raise BankReconciliationError("Tipo de destino no soportado para conciliacion bancaria.")
@@ -246,6 +280,8 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
     date_from = transaction.posting_date - timedelta(days=7)
     date_to = transaction.posting_date + timedelta(days=7)
     candidates: list[BankCandidate] = []
+    bank_currency = _bank_currency(transaction)
+    company_currency = _company_currency(company)
 
     payments = (
         database.session.execute(
@@ -261,7 +297,18 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
     for payment in payments:
         if _payment_direction(payment, transaction) != _bank_direction(transaction):
             continue
-        payment_amount = _payment_amount(payment)
+        payment_currency = str(payment.currency) if payment.currency else company_currency
+        if bank_currency and payment_currency != bank_currency and bank_currency != company_currency:
+            continue
+        if not bank_currency or payment_currency == bank_currency:
+            payment_amount = _payment_amount(payment)
+        else:
+            base_amount = (
+                payment.base_paid_amount if payment.payment_type in ("pay", "debit_note") else payment.base_received_amount
+            )
+            if base_amount is None:
+                continue
+            payment_amount = _decimal_value(base_amount)
         pending = payment_amount - _allocated_for_target("payment_entry", payment.id)
         if pending <= 0:
             continue
@@ -294,7 +341,15 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
         for entry in gl_entries:
             if _gl_direction(entry) != _bank_direction(transaction):
                 continue
-            entry_amount = _gl_amount(entry)
+            entry_currency = str(entry.account_currency or entry.company_currency or company_currency or "")
+            if bank_currency and entry_currency != bank_currency:
+                continue
+            entry_amount = (
+                _decimal_value(entry.debit_in_account_currency or entry.credit_in_account_currency)
+                if entry.account_currency == bank_currency
+                and (entry.debit_in_account_currency is not None or entry.credit_in_account_currency is not None)
+                else _gl_amount(entry)
+            )
             pending = entry_amount - _allocated_for_target("gl_entry", entry.id)
             if pending <= 0:
                 continue
@@ -451,7 +506,7 @@ def _reconciliation_pending_amounts(
         - source_totals.get(transaction.id, Decimal("0"))
     )
     target_pending = (
-        _target_amount(target_type, target_id)
+        _target_amount(target_type, target_id, transaction)
         - existing_target_allocations[target_key]
         - target_totals.get(target_key, Decimal("0"))
     )
