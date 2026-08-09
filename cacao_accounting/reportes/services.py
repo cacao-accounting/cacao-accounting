@@ -230,7 +230,12 @@ def _payment_allocations(reference_type: str, reference_id: str, as_of_date: dat
         )
     )
     if as_of_date is not None:
-        query = query.where(PaymentReference.allocation_date <= as_of_date)
+        query = query.where(
+            or_(
+                PaymentReference.allocation_date.is_(None),
+                PaymentReference.allocation_date <= as_of_date,
+            )
+        )
     return sum(
         (_decimal_value(reference.allocated_amount) for reference in database.session.execute(query).scalars().all()),
         Decimal("0"),
