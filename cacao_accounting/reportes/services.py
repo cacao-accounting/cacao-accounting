@@ -214,12 +214,11 @@ def _normalize_account_classification(account: Accounts | None) -> str:
 def _payment_allocations(reference_type: str, reference_id: str, company: str, as_of_date: date | None) -> Decimal:
     query = (
         select(PaymentReference)
-        .join(
+        .outerjoin(
             DocumentRelation,
             and_(
                 DocumentRelation.target_type == "payment_entry",
                 DocumentRelation.target_item_id == PaymentReference.id,
-                DocumentRelation.status == "active",
             ),
         )
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
@@ -229,7 +228,9 @@ def _payment_allocations(reference_type: str, reference_id: str, company: str, a
             PaymentEntry.docstatus == 1,
             PaymentEntry.company == company,
             or_(DocumentRelation.company.is_(None), DocumentRelation.company == company),
+            or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active"),
         )
+        .distinct()
     )
     if as_of_date is not None:
         query = query.where(
