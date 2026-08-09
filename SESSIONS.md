@@ -1402,3 +1402,15 @@ Se confirmó una ventana transaccional en la que el comprobante de capitalizaci�
 `_process_group` ahora bloquea el comprobante fuente con `with_for_update`, vuelve a comprobar `capitalized_by_id`, asigna el vínculo antes de invocar `submit_journal` y deja que el commit del posting persista ambos cambios atómicamente. Si otra ejecución llega después del commit, omite el grupo y no lo cuenta como una nueva capitalización.
 
 Validación: `tests/test_hierarchy_and_capitalization.py`: `4 passed`; Black, Ruff y `git diff --check` pasan en archivos tocados. El issue #336 permanece abierto para tracking y validación concurrente en CI.
+
+### 2026-08-09 — Lote de controles de inventario y aislamiento de bodegas (#321, #327, #328, #331, #332)
+
+Se verificaron y corrigieron cinco riesgos que afectaban cantidades físicas y reservas:
+
+- Las reservas de órdenes de venta y sus liberaciones ahora se calculan en UOM base; una orden de 1 caja con conversión 12 reserva 12 unidades.
+- La liberación/restauración de una nota de entrega consulta la relación con la orden y usa la bodega que originó la reserva, aunque la DN indique otra bodega.
+- El posting de movimientos de stock valida en servidor que cada bodega exista, esté activa y pertenezca a la compañía del documento.
+- `StockBin` ya no elimina reservas al cruzar stock cero o negativo; la reserva se libera solo mediante cancelación/entrega explícita.
+- Las transferencias aplican el mismo fallback de costo que las salidas para artículos con `allow_negative_stock=True`.
+
+Validación conjunta: `tests/test_stock_reservation.py`, `tests/test_07posting_engine.py` y `tests/test_o2c_sales_fixes.py`: `84 passed, 9 warnings`. Validación adicional tras el ajuste de tipos: `15 passed, 7 warnings`. Ruff, Flake8, Mypy y `git diff --check` pasan en los archivos tocados. Los issues #321, #327, #328, #331 y #332 permanecen abiertos para tracking y validación CI.
