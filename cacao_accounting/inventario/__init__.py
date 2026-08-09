@@ -915,24 +915,23 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
         warehouse = request.form.get(f"warehouse_{i}") or entry.to_warehouse or entry.from_warehouse
         if item_code:
             current_qty, current_rate, current_value, _reserved_qty = _stock_bin_snapshot(entry.company, item_code, warehouse)
-            counted_qty = _form_decimal(f"counted_qty_{i}", str(current_qty))
-            target_rate = _form_decimal(f"target_valuation_rate_{i}", str(current_rate))
-            target_value = _form_decimal(f"target_stock_value_{i}", str(counted_qty * target_rate))
-            qty_difference = counted_qty - current_qty
-            value_difference = target_value - current_value
             uom = request.form.get(f"uom_{i}") or _item_default_uom(item_code)
             if not uom:
                 raise ValueError(f"La conciliacion del item {item_code} requiere una unidad de medida.")
             default_uom = _item_default_uom(item_code)
-            if uom and default_uom:
+            counted_qty = _form_decimal(f"counted_qty_{i}", str(current_qty))
+            if uom != default_uom:
                 try:
-                    base_qty = convert_item_qty(item_code, abs(qty_difference), uom, default_uom)
+                    counted_qty = convert_item_qty(item_code, counted_qty, uom, default_uom)
                 except InventoryServiceError as exc:
                     raise ValueError(
-                        f"No se pudo convertir {qty_difference} {uom} a {default_uom} para el item {item_code}."
+                        f"No se pudo convertir {counted_qty} {uom} a {default_uom} para el item {item_code}."
                     ) from exc
-            else:
-                base_qty = abs(qty_difference)
+            target_rate = _form_decimal(f"target_valuation_rate_{i}", str(current_rate))
+            target_value = _form_decimal(f"target_stock_value_{i}", str(counted_qty * target_rate))
+            qty_difference = counted_qty - current_qty
+            value_difference = target_value - current_value
+            base_qty = abs(qty_difference)
             line = StockEntryItem(
                 stock_entry_id=entry.id,
                 item_code=item_code,
