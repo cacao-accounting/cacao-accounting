@@ -1370,3 +1370,11 @@ Se reprodujo el flujo del issue #304 con una fila de extracto que contiene `with
 El adaptador ahora conserva el lado vacío como `None`, y los resolvers de monto usan el retiro cuando no existe un depósito positivo. Se añadió una regresión que verifica importación, monto conciliable y monto asignable de 25.
 
 Validación: prueba nueva y prueba existente de importación `2 passed`; Black, Ruff, Flake8 y Mypy pasan en archivos tocados. El issue #304 permanece abierto para completar la conciliación bancaria, autorización, dirección y reversas.
+
+### 2026-08-09 — Recuperación de cola FIFO/promedio tras stock negativo
+
+Se reprodujo INV-AUDIT-01 con capas `+10 @ 10`, `-15` y `+10 @ 12`. La cola anterior lanzaba `PostingError("El registro de valuacion de inventario esta inconsistente")` al reconstruir o calcular la siguiente salida, aunque `allow_negative_stock` estuviera activo.
+
+`_valuation_queue` ahora mantiene un déficit de cantidad; las recepciones posteriores compensan primero ese déficit y solo el remanente entra a FIFO/promedio. La regresión verifica que quedan 5 unidades a 12 y que su costo es 60.
+
+Validación: pruebas de stock negativo/cola `4 passed`; Black, Ruff, Flake8 y Mypy pasan en archivos tocados. El issue #319 permanece abierto para revisar el resto de la valoración negativa, reconstrucción y controles de stock.
