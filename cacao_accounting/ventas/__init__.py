@@ -1456,7 +1456,7 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
 
 
 def _resolve_source_item_rate(si_item: SalesInvoiceItem, invoice_id: str) -> Decimal | None:
-    """Resuelve la tasa del item fuente (Orden de Venta) para un item de factura."""
+    """Resuelve la tasa del item fuente para un item de factura."""
     relation = (
         database.session.execute(
             database.select(DocumentRelation).filter_by(
@@ -1471,14 +1471,16 @@ def _resolve_source_item_rate(si_item: SalesInvoiceItem, invoice_id: str) -> Dec
     )
     if not relation or not relation.source_item_id:
         return None
-    if relation.source_type != "sales_order":
+    source_models = {
+        "sales_order": SalesOrderItem,
+        "delivery_note": DeliveryNoteItem,
+        "sales_invoice": SalesInvoiceItem,
+    }
+    source_model = source_models.get(relation.source_type)
+    source_item: Any = database.session.get(source_model, relation.source_item_id) if source_model else None
+    if source_item is None:
         return None
-
-    so_item = database.session.get(SalesOrderItem, relation.source_item_id)
-    if not so_item:
-        return None
-
-    return Decimal(str(so_item.rate or 0))
+    return Decimal(str(source_item.rate or 0))
 
 
 def _validate_delivery_quantities_against_so(note_id: str) -> None:
