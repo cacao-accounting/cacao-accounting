@@ -390,7 +390,7 @@ class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Todas las transacciones se deben grabar a una entidad."""
 
     __tablename__ = "entity"
-    code = database.Column(database.String(10), unique=True, index=True)
+    code = database.Column(database.String(10), unique=True, index=True, nullable=False)
     status = database.Column(database.String(50), nullable=True)
     company_name = database.Column(database.String(100), unique=True, nullable=False)
     name = database.Column(database.String(100))
@@ -514,7 +514,7 @@ class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
         database.UniqueConstraint("entity", "code", name="libro_unico"),
         database.Index("ix_book_entity_code", "entity", "code"),
     )
-    code = database.Column(database.String(10), unique=True, index=True)
+    code = database.Column(database.String(10), unique=True, index=True, nullable=False)
     name = database.Column(database.String(100), nullable=False)
     entity = database.Column(database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
     currency = database.Column(

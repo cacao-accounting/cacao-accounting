@@ -3,6 +3,57 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-09 — Auditoría profunda multi-motor y reconciliación de cifras
+
+### Petición
+
+Realizar una auditoría end-to-end de R2R, O2C, S2P/P2P, inventario, caja y
+bancos, incluyendo doble partida, subledgers, FX realizado/no realizado,
+multi-ledger, cierres, reversiones, trazabilidad, aislamiento y pruebas con
+cálculos independientes. La ejecución de calidad debe usar `.venv`, Docker
+puede utilizarse para motores SQL, y los commits deben ser semánticos con la
+identidad `williamjmorenor@gmail.com`.
+
+### Descubrimiento y hallazgos confirmados
+
+- El esquema fallaba al crear `FiscalYear.entity -> Entity.code` en MariaDB
+  11.4 porque `Entity.code` era nullable aunque fuera destino de una FK
+  única. Después de corregirlo, MariaDB reveló el mismo problema en
+  `LedgerMappingRule.source_book/target_book -> Book.code`; `Book.code` también
+  quedó obligatorio. El esquema completo pasó 214 pruebas en MariaDB.
+- Los datasets semánticos de ventas/compras y AR/AP expresaban devoluciones
+  posteadas como importes positivos y no exponían el valor base de línea. Se
+  normalizaron los signos y se agregó `base_amount` con fallback legacy.
+- El pronóstico de caja podía omitir documentos cuyo saldo solo existía en
+  `base_outstanding_amount`, no convertir correctamente el fallback legacy y
+  tratar notas de crédito abiertas como entradas positivas. Se corrigió la
+  selección, conversión histórica y signo.
+- La revaluación cambiaria de cuentas bancarias sumaba el saldo original de
+  todos los libros al construir una sola exposición, duplicando el saldo al
+  procesar varios books. Ahora usa el libro resumen como fuente de exposición.
+- Las notas de crédito abiertas se revaluaban con la naturaleza de una factura
+  normal. AR credit note ahora usa naturaleza credit y AP credit note naturaleza
+  debit.
+
+### Pruebas y evidencia
+
+- Regresión focal semántica, multi-ledger, reportes operativos y FX: **12
+  passed**; nueva prueba de cifras semánticas/caja: incluida en ese bloque.
+- Esquema MariaDB 11.4 en Docker mediante `mysql+pymysql`: **214 passed**.
+- Black, Ruff, Flake8 y Mypy focales: sin errores; Mypy solo emitió notas
+  informativas sobre cuerpos de funciones sin anotación.
+- La suite completa exigida se dejó ejecutando en
+  `test_results_audit_full_20260809.log`; su resultado final aún es requisito
+  antes de cerrar la auditoría.
+
+### Continuidad
+
+La auditoría debe continuar con una matriz explícita de reconciliación
+AR/AP/inventario/bancos contra GL por compañía, libro, moneda y período, más
+la revisión de period close, impuestos, rounding, concurrencia, reversals y
+los escenarios end-to-end restantes. No declarar PASS sin evidencia de cada
+matriz.
+
 ## 2026-08-09 — Pruebas full de cobros y compensación 3-way multimoneda
 
 ### Petición

@@ -106,7 +106,7 @@ class ExchangeRevaluationService:
         defaults = self._validated_defaults(company)
         ledgers = self._active_ledgers(company)
         summary_ledger = self._summary_ledger(company, ledgers)
-        candidates = self._open_candidates(company, period.end)
+        candidates = self._open_candidates(company, period.end, summary_ledger.id)
 
         run = ExchangeRevaluation(
             company=company,
@@ -322,10 +322,11 @@ class ExchangeRevaluationService:
         entity_currency = str(entity.currency or "") if entity else ""
         return next((ledger for ledger in ledgers if ledger.currency == entity_currency), ledgers[0])
 
-    def _open_candidates(self, company: str, as_of_date: date) -> list[RevaluationCandidate]:
+    def _open_candidates(self, company: str, as_of_date: date, source_ledger_id: str) -> list[RevaluationCandidate]:
+        """Collect open monetary items using one ledger as the source of exposure."""
         candidates = self._open_sales_invoices(company, as_of_date)
         candidates.extend(self._open_purchase_invoices(company, as_of_date))
-        candidates.extend(self._open_bank_accounts(company, as_of_date))
+        candidates.extend(self._open_bank_accounts(company, as_of_date, source_ledger_id))
         return candidates
 
     def _open_sales_invoices(self, company: str, as_of_date: date) -> list[RevaluationCandidate]:
@@ -354,7 +355,7 @@ class ExchangeRevaluationService:
                         account_id=account_id,
                         original_currency=currency,
                         open_amount_original=outstanding,
-                        normal_balance="debit",
+                        normal_balance="credit" if invoice.is_return else "debit",
                         total_amount_original=self._decimal(invoice.grand_total),
                         as_of_date=as_of_date,
                     )
@@ -389,14 +390,14 @@ class ExchangeRevaluationService:
                         account_id=account_id,
                         original_currency=currency,
                         open_amount_original=outstanding,
-                        normal_balance="credit",
+                        normal_balance="debit" if invoice.is_return else "credit",
                         total_amount_original=self._decimal(invoice.grand_total),
                         as_of_date=as_of_date,
                     )
                 )
         return candidates
 
-    def _open_bank_accounts(self, company: str, as_of_date: date) -> list[RevaluationCandidate]:
+    def _open_bank_accounts(self, company: str, as_of_date: date, source_ledger_id: str) -> list[RevaluationCandidate]:
         bank_accounts = (
             database.session.execute(select(BankAccount).filter_by(company=company, is_active=True)).scalars().all()
         )
@@ -404,7 +405,7 @@ class ExchangeRevaluationService:
         for account in bank_accounts:
             if not account.gl_account_id or not account.currency:
                 continue
-            amount = self._bank_original_balance(account, as_of_date)
+            amount = self._bank_original_balance(account, as_of_date, source_ledger_id)
             if amount == 0:
                 continue
             candidates.append(
@@ -648,7 +649,7 @@ class ExchangeRevaluationService:
             return credit - debit
         return debit - credit
 
-    def _bank_original_balance(self, account: BankAccount, as_of_date: date) -> Decimal:
+    def _bank_original_balance(self, account: BankAccount, as_of_date: date, ledger_id: str) -> Decimal:
         entries = (
             database.session.execute(
                 select(GLEntry)
@@ -656,6 +657,7 @@ class ExchangeRevaluationService:
                     company=account.company,
                     account_id=account.gl_account_id,
                     bank_account_id=account.id,
+                    ledger_id=ledger_id,
                     is_cancelled=False,
                 )
                 .where(GLEntry.is_reversal.is_(False))

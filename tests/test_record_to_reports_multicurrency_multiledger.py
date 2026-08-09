@@ -287,3 +287,93 @@ def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
         assert balance_sheet.totals["assets"] == balance
         assert balance_sheet.totals["period_profit"] == balance
         assert balance_sheet.totals["difference"] == 0
+
+
+def test_semantic_reports_net_returns_and_expose_base_amount(app_ctx):
+    """Semantic datasets must not inflate sales, purchases, or open items with returns."""
+    from cacao_accounting.database import (
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        SalesInvoice,
+        SalesInvoiceItem,
+        database,
+    )
+    from cacao_accounting.reportes.semantic import (
+        get_payables_analysis,
+        get_purchase_analysis,
+        get_receivables_analysis,
+        get_sales_analysis,
+    )
+
+    def invoice(model, party_field, party, amount, is_return=False):
+        return model(
+            company="r2r",
+            posting_date=date(2026, 8, 1),
+            **{party_field: party},
+            transaction_currency="USD",
+            exchange_rate=Decimal("36"),
+            grand_total=amount,
+            base_grand_total=amount * Decimal("36"),
+            outstanding_amount=amount,
+            base_outstanding_amount=amount * Decimal("36"),
+            is_return=is_return,
+            docstatus=1,
+        )
+
+    sale, sale_return = invoice(SalesInvoice, "customer_id", "CUSTOMER-SEMANTIC", Decimal("10")), invoice(
+        SalesInvoice, "customer_id", "CUSTOMER-SEMANTIC", Decimal("2"), True
+    )
+    purchase, purchase_return = invoice(PurchaseInvoice, "supplier_id", "SUPPLIER-SEMANTIC", Decimal("20")), invoice(
+        PurchaseInvoice, "supplier_id", "SUPPLIER-SEMANTIC", Decimal("5"), True
+    )
+    database.session.add_all([sale, sale_return, purchase, purchase_return])
+    database.session.flush()
+    database.session.add_all(
+        [
+            SalesInvoiceItem(sales_invoice_id=sale.id, item_code="ITEM-SEMANTIC", qty=1, amount=10, base_amount=360),
+            SalesInvoiceItem(sales_invoice_id=sale_return.id, item_code="ITEM-SEMANTIC", qty=1, amount=2, base_amount=72),
+            PurchaseInvoiceItem(purchase_invoice_id=purchase.id, item_code="ITEM-SEMANTIC", qty=2, amount=20, base_amount=720),
+            PurchaseInvoiceItem(
+                purchase_invoice_id=purchase_return.id, item_code="ITEM-SEMANTIC", qty=1, amount=5, base_amount=180
+            ),
+        ]
+    )
+    database.session.commit()
+
+    sales = get_sales_analysis(company="r2r")
+    purchases = get_purchase_analysis(company="r2r")
+    receivables = get_receivables_analysis(company="r2r")
+    payables = get_payables_analysis(company="r2r")
+
+    assert sum(row["amount"] for row in sales) == Decimal("8")
+    assert sum(row["base_amount"] for row in sales) == Decimal("288")
+    assert sum(row["amount"] for row in purchases) == Decimal("15")
+    assert sum(row["base_amount"] for row in purchases) == Decimal("540")
+    assert sum(row["outstanding_amount"] for row in receivables) == Decimal("8")
+    assert sum(row["outstanding_amount"] for row in payables) == Decimal("15")
+
+
+def test_cash_forecast_uses_base_legacy_balance_and_nets_returns():
+    """Cash projections must use base balances and subtract credit notes."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.bancos.cash_forecast_service import _sum_invoice_amount
+
+    invoices = [
+        SimpleNamespace(
+            posting_date=date(2026, 8, 1),
+            outstanding_amount=Decimal("10"),
+            base_outstanding_amount=None,
+            exchange_rate=Decimal("36"),
+            is_return=False,
+        ),
+        SimpleNamespace(
+            posting_date=date(2026, 8, 2),
+            outstanding_amount=Decimal("2"),
+            base_outstanding_amount=Decimal("72"),
+            exchange_rate=Decimal("36"),
+            is_return=True,
+        ),
+    ]
+
+    assert _sum_invoice_amount(invoices, date(2026, 8, 1), date(2026, 8, 31)) == Decimal("288")
