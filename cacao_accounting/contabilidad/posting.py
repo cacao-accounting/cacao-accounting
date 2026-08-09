@@ -1198,8 +1198,12 @@ def _create_payment_pay_entries(
 ) -> list[GLEntry]:
     """Crea entradas GL para pagos a proveedores."""
     defaults = _company_defaults(company)
-    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=False)
-    advance_account_id = defaults.supplier_advance_account_id if defaults else None
+    party_type = (getattr(document, "party_type", None) or "supplier").lower()
+    receivable = party_type == "customer"
+    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=receivable)
+    advance_account_id = (
+        (defaults.customer_advance_account_id if receivable else defaults.supplier_advance_account_id) if defaults else None
+    )
     bank_account_id = _require_account(
         _resolve_bank_gl_account_id(document, destination=False),
         "El pago no tiene una cuenta bancaria de origen configurada.",
@@ -1215,7 +1219,7 @@ def _create_payment_pay_entries(
                 debit_account_id=party_account_id,
                 credit_account_id=bank_account_id,
                 amount=allocated,
-                party_type="supplier",
+                party_type=party_type,
                 party_id=document.party_id,
                 credit_bank_account_id=document.bank_account_id,
                 debit_remarks="Pago a proveedor",
@@ -1230,7 +1234,7 @@ def _create_payment_pay_entries(
                     debit_account_id=advance_account_id,
                     credit_account_id=bank_account_id,
                     amount=excess,
-                    party_type="supplier",
+                    party_type=party_type,
                     party_id=document.party_id,
                     credit_bank_account_id=document.bank_account_id,
                     debit_remarks="Anticipo a proveedor",
@@ -1249,10 +1253,14 @@ def _create_payment_pay_entries(
         debit_account_id=payable_account_id,
         credit_account_id=bank_account_id,
         amount=amount,
-        party_type="supplier",
+        party_type=party_type,
         party_id=document.party_id,
         credit_bank_account_id=document.bank_account_id,
-        debit_remarks="Pago a proveedor" if party_account_id else "Anticipo a proveedor",
+        debit_remarks=(
+            "Reembolso a cliente"
+            if receivable
+            else "Pago a proveedor" if party_account_id else "Reembolso a cliente" if receivable else "Anticipo a proveedor"
+        ),
         credit_remarks="Cuenta bancaria de pago",
     )
 
@@ -1265,8 +1273,12 @@ def _create_payment_receive_entries(
 ) -> list[GLEntry]:
     """Crea entradas GL para cobros de clientes."""
     defaults = _company_defaults(company)
-    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=True)
-    advance_account_id = defaults.customer_advance_account_id if defaults else None
+    party_type = (getattr(document, "party_type", None) or "customer").lower()
+    receivable = party_type == "customer"
+    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=receivable)
+    advance_account_id = (
+        (defaults.customer_advance_account_id if receivable else defaults.supplier_advance_account_id) if defaults else None
+    )
     account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
     receivable_account_id = _require_account(
         account_id,
@@ -1293,9 +1305,13 @@ def _create_payment_receive_entries(
                 account_id=receivable_account_id,
                 debit=Decimal("0"),
                 credit=amount,
-                party_type="customer",
+                party_type=party_type,
                 party_id=document.party_id,
-                entry_remarks="Cobro de cliente" if party_account_id else "Anticipo de cliente",
+                entry_remarks=(
+                    ("Cobro de cliente" if receivable else "Reembolso de proveedor")
+                    if party_account_id
+                    else ("Anticipo de cliente" if receivable else "Reembolso de proveedor")
+                ),
             ),
         ),
     ]
