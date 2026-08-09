@@ -619,6 +619,7 @@ class TestPaymentOrderAllocated:
 
         result = _payment_order_allocated("sales_order", so.id)
         assert result == Decimal("200")
+        assert _payment_order_allocated("sales_order", so.id, company="other") == Decimal("0")
 
 
 # ---------------------------------------------------------------------------
