@@ -1498,6 +1498,10 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Corrección local: al contabilizar una nota de crédito/débito se persiste una relación auditable `sales_invoice -> sales_credit_note/sales_debit_note`; la cancelación revierte el target_type real y la función de saldo puede descontar la NC.
 - #300 revisado como cubierto por `_validate_reversal_of` y el cálculo de saldo actual; #296 revisado como mitigado por `preserve_reserved_qty` en entregas ligadas a OV.
 
+## 2026-08-10 — Exposición de crédito O2C
+
+- #298 confirmado: el límite de crédito ahora incluye el saldo no facturado de órdenes de venta aprobadas, y evita doble conteo de la OV cuando se está aprobando una factura vinculada a ella.
+
 ## 2026-08-10 — Lectura de candidatos sin locks
 
 - #313 confirmado: la consulta GET de conciliación invocaba `FOR UPDATE` sobre cada transacción pendiente.
