@@ -1948,6 +1948,53 @@ def test_compute_outstanding_amount_applies_credit_note_by_document_type(app_ctx
     assert compute_outstanding_amount(invoice, as_of_date=date(2026, 5, 5)) == Decimal("75.00")
 
 
+def test_valuation_queue_recovers_after_allowed_negative_stock(app_ctx):
+    """Una recepción posterior debe compensar el déficit antes de valorar salidas."""
+    from cacao_accounting.contabilidad.posting import _consume_stock_valuation_layers, _valuation_queue
+    from cacao_accounting.database import StockValuationLayer, database
+
+    database.session.add_all(
+        [
+            StockValuationLayer(
+                company="cacao",
+                item_code="ITEM-NEG-QUEUE",
+                warehouse="WH-NEG-QUEUE",
+                qty=Decimal("10"),
+                rate=Decimal("10"),
+                posting_date=date(2026, 5, 1),
+                voucher_type="seed",
+                voucher_id="QUEUE-IN-1",
+            ),
+            StockValuationLayer(
+                company="cacao",
+                item_code="ITEM-NEG-QUEUE",
+                warehouse="WH-NEG-QUEUE",
+                qty=Decimal("-15"),
+                rate=Decimal("10"),
+                posting_date=date(2026, 5, 2),
+                voucher_type="stock_entry",
+                voucher_id="QUEUE-OUT-1",
+            ),
+            StockValuationLayer(
+                company="cacao",
+                item_code="ITEM-NEG-QUEUE",
+                warehouse="WH-NEG-QUEUE",
+                qty=Decimal("10"),
+                rate=Decimal("12"),
+                posting_date=date(2026, 5, 3),
+                voucher_type="purchase_receipt",
+                voucher_id="QUEUE-IN-2",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    assert _valuation_queue("cacao", "ITEM-NEG-QUEUE", "WH-NEG-QUEUE") == [(Decimal("5"), Decimal("12"))]
+    cost, rate = _consume_stock_valuation_layers("cacao", "ITEM-NEG-QUEUE", "WH-NEG-QUEUE", Decimal("5"))
+    assert cost == Decimal("60")
+    assert rate == Decimal("12")
+
+
 def test_compute_outstanding_amount_for_note_types_uses_document_relations(app_ctx):
     from cacao_accounting.database import (
         DocumentRelation,
