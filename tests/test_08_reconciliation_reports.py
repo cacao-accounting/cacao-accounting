@@ -761,6 +761,44 @@ def test_ar_subledger_ignores_payment_from_another_company(app_ctx):
     assert report.rows[0].values["outstanding_amount"] == Decimal("100")
 
 
+def test_maturity_schedule_excludes_documents_after_as_of_date(app_ctx):
+    """Maturity reports must not include invoices posted after their cutoff."""
+    from cacao_accounting.database import SalesInvoice, database
+    from cacao_accounting.reportes.services import MaturityFilters, get_maturity_schedule
+
+    database.session.add_all(
+        [
+            SalesInvoice(
+                company="cacao",
+                posting_date=date(2026, 5, 1),
+                customer_id="CUST-MATURITY",
+                grand_total=Decimal("100"),
+                docstatus=1,
+            ),
+            SalesInvoice(
+                company="cacao",
+                posting_date=date(2026, 6, 1),
+                customer_id="CUST-MATURITY",
+                grand_total=Decimal("200"),
+                docstatus=1,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    report = get_maturity_schedule(
+        MaturityFilters(
+            company="cacao",
+            party_type="customer",
+            party_id="CUST-MATURITY",
+            as_of_date=date(2026, 5, 31),
+        )
+    )
+
+    assert report.totals["outstanding_amount"] == Decimal("100")
+    assert len(report.rows) == 1
+
+
 def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
     from cacao_accounting.database import (
         DocumentRelation,

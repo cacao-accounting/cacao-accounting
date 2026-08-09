@@ -379,11 +379,13 @@ def _fetch_maturity_documents(filters: MaturityFilters) -> list[tuple[Any, str, 
     documents: list[tuple[Any, str, str | None]] = []
     if filters.party_type in (None, "customer"):
         query = select(SalesInvoice).where(SalesInvoice.company == filters.company, SalesInvoice.docstatus == 1)
+        query = query.where(SalesInvoice.posting_date <= filters.as_of_date)
         if filters.party_id:
             query = query.where(SalesInvoice.customer_id == filters.party_id)
         documents.extend((doc, "customer", doc.customer_id) for doc in database.session.execute(query).scalars())
     if filters.party_type in (None, "supplier"):
         query = select(PurchaseInvoice).where(PurchaseInvoice.company == filters.company, PurchaseInvoice.docstatus == 1)
+        query = query.where(PurchaseInvoice.posting_date <= filters.as_of_date)
         if filters.party_id:
             query = query.where(PurchaseInvoice.supplier_id == filters.party_id)
         documents.extend((doc, "supplier", doc.supplier_id) for doc in database.session.execute(query).scalars())
