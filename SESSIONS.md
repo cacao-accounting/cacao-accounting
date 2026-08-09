@@ -1880,3 +1880,15 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   tolerancia del 5%. El issue permanece abierto para verificación posterior.
 - Black, Ruff, mypy, compilación y `git diff --check` pasan; no se ejecutó
   pytest local por instrucción del usuario.
+
+## 2026-08-10 — Cobertura de liquidaciones FX parciales (#278)
+
+- La revisión del motor `SettlementEngine` no reprodujo un error matemático
+  en el segundo pago: el flujo recalcula el saldo abierto en moneda funcional
+  y evita duplicar la diferencia realizada.
+- Se añadió una regresión independiente para factura AR de 100 USD a 36.5,
+  pagos de 40 USD a 36.8 y 60 USD a 37.0: FX realizado 12 + 30, revaluación
+  pendiente 18 después del primer pago y saldo final cero.
+- Esto cubre el ciclo parcial secuencial del issue, pero no sustituye la
+  prueba E2E completa de remeasurement/reversal posterior; #278 permanece
+  abierto.
