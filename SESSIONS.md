@@ -23,6 +23,26 @@ completa, acumulando cambios antes de publicar.
 - Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
   `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
 
+## 2026-08-10 — Edición y duplicación de conciliaciones de inventario
+
+### Petición
+
+Continuar con bug fixes de inventario y mantener los issues abiertos para
+tracking, acumulando cambios antes de publicar.
+
+### Implementación
+
+- Se confirmó #330: la edición de una conciliación usaba el formulario genérico
+  y recreaba líneas sin sus campos de conteo y valoración.
+- La edición ahora renderiza el formulario específico de conciliación y
+  conserva las cantidades, tasas, valores objetivo y dimensiones contables.
+- El guardado de edición selecciona el saver de conciliación, evitando perder
+  `current_qty`, `counted_qty`, diferencias y valores almacenados.
+- La duplicación copia todos los campos específicos de conciliación para que el
+  nuevo borrador pueda revisarse y volver a postearse correctamente.
+- Se verificaron Black, diff whitespace, Ruff, Flake8 y mypy con `.venv`; no se
+  ejecutó pytest local por la instrucción de no saturar la suite.
+
 ## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
 
 ### Petición
