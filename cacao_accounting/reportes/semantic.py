@@ -40,6 +40,20 @@ def _decimal(value: Any) -> Decimal:
     return Decimal(str(value or 0))
 
 
+def _signed(value: Any, document: Any) -> Decimal:
+    """Return a document amount with credit notes represented as negatives."""
+    amount = _decimal(value)
+    return -amount if getattr(document, "is_return", False) else amount
+
+
+def _base_amount(line: Any, document: Any) -> Decimal:
+    """Resolve a line amount in company currency with legacy fallbacks."""
+    amount = getattr(line, "base_amount", None)
+    if amount is None:
+        amount = _decimal(getattr(line, "amount", None)) * _decimal(getattr(document, "exchange_rate", None) or 1)
+    return _signed(amount, document)
+
+
 def _bounded(query: Any, limit: int | None, offset: int | None) -> Any:
     if offset is not None:
         query = query.offset(max(offset, 0))
@@ -79,7 +93,8 @@ def get_sales_analysis(
             "customer_code": invoice.customer_id,
             "item_code": line.item_code,
             "quantity": _decimal(line.qty),
-            "amount": _decimal(line.amount),
+            "amount": _signed(line.amount, invoice),
+            "base_amount": _base_amount(line, invoice),
         }
         for invoice, line in database.session.execute(query).all()
     ]
@@ -116,7 +131,8 @@ def get_purchase_analysis(
             "supplier_code": invoice.supplier_id,
             "item_code": line.item_code,
             "quantity": _decimal(line.qty),
-            "amount": _decimal(line.amount),
+            "amount": _signed(line.amount, invoice),
+            "base_amount": _base_amount(line, invoice),
         }
         for invoice, line in database.session.execute(query).all()
     ]
@@ -144,8 +160,8 @@ def get_receivables_analysis(
             "date": invoice.posting_date,
             "company_code": invoice.company,
             "customer_code": invoice.customer_id,
-            "amount": _decimal(invoice.grand_total or invoice.total),
-            "outstanding_amount": _decimal(compute_outstanding_amount(invoice)),
+            "amount": _signed(invoice.grand_total or invoice.total, invoice),
+            "outstanding_amount": _signed(compute_outstanding_amount(invoice), invoice),
         }
         for invoice in database.session.execute(query).scalars().all()
     ]
@@ -173,8 +189,8 @@ def get_payables_analysis(
             "date": invoice.posting_date,
             "company_code": invoice.company,
             "supplier_code": invoice.supplier_id,
-            "amount": _decimal(invoice.grand_total or invoice.total),
-            "outstanding_amount": _decimal(compute_outstanding_amount(invoice)),
+            "amount": _signed(invoice.grand_total or invoice.total, invoice),
+            "outstanding_amount": _signed(compute_outstanding_amount(invoice), invoice),
         }
         for invoice in database.session.execute(query).scalars().all()
     ]
