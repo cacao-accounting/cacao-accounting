@@ -146,6 +146,41 @@ def test_settlement_partial_payment_calculates_unrealized_exchange_difference():
     assert result.unrealized_exchange_difference == Decimal("18.00")
 
 
+def test_sequential_partial_fx_settlements_reach_zero_without_duplicate_gain():
+    """Two partial collections recognize only their own realized FX difference."""
+    engine = SettlementEngine()
+    common = {
+        "withholding_rules": [],
+        "transaction_direction": "sales",
+        "document_currency": "USD",
+        "company_currency": "NIO",
+        "document_exchange_rate": Decimal("36.5"),
+    }
+
+    first = engine.calculate(
+        document_total=Decimal("100"),
+        open_balance=Decimal("3650"),
+        settlement_amount=Decimal("40"),
+        settlement_exchange_rate=Decimal("36.8"),
+        **common,
+    )
+    second = engine.calculate(
+        document_total=Decimal("60"),
+        open_balance=Decimal("2190"),
+        settlement_amount=Decimal("60"),
+        settlement_exchange_rate=Decimal("37.0"),
+        **common,
+    )
+
+    # Independent calculation: 40*(36.8-36.5)=12 and 60*(37-36.5)=30.
+    assert first.exchange_difference == Decimal("12.00")
+    assert first.unrealized_exchange_difference == Decimal("18.00")
+    assert second.exchange_difference == Decimal("30.00")
+    assert second.unrealized_exchange_difference == Decimal("0.00")
+    assert second.remaining_balance == Decimal("0.00")
+    assert first.exchange_difference + second.exchange_difference == Decimal("42.00")
+
+
 def test_settlement_discount_partial_gap_maintains_invariant():
     """When the eligible discount is smaller than the cash gap, cash_amount must adjust to keep the components balanced."""
     engine = SettlementEngine()
