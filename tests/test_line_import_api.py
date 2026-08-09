@@ -21,7 +21,7 @@ def app():
     with app.app_context():
         database.create_all()
         # Setup basic data
-        e = Entity(id="cacao", company_name="Cacao Company", tax_id="12345")
+        e = Entity(id="cacao", code="cacao", company_name="Cacao Company", tax_id="12345")
         database.session.add(e)
         u = UOM(id="und", code="UND", name="Unidad")
         database.session.add(u)
