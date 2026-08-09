@@ -469,6 +469,81 @@ def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
         )
 
 
+def test_posted_payment_bank_dimension_reconciles_with_bank_summary(app_ctx):
+    """Payment GL lines must retain the bank account used by the posting."""
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        CompanyDefaultAccount,
+        GLEntry,
+        PaymentEntry,
+        database,
+    )
+    from cacao_accounting.reportes.services import BankingFilters, get_bank_balance_summary
+
+    bank_gl = Accounts(
+        entity="cacao",
+        code="BANK-DIMENSION",
+        name="Banco dimensión",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="bank",
+    )
+    advance = Accounts(
+        entity="cacao",
+        code="ADV-DIMENSION",
+        name="Anticipo dimensión",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="asset",
+    )
+    bank = Bank(name="Banco dimensión")
+    database.session.add_all([bank_gl, advance, bank])
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta dimensión",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 12),
+        payment_type="pay",
+        bank_account_id=bank_account.id,
+        paid_amount=Decimal("100.00"),
+        docstatus=1,
+    )
+    database.session.add_all(
+        [
+            payment,
+            CompanyDefaultAccount(
+                company="cacao",
+                default_bank=bank_gl.id,
+                supplier_advance_account_id=advance.id,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    post_document_to_gl(payment)
+    database.session.commit()
+
+    bank_line = database.session.execute(
+        database.select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id, account_id=bank_gl.id)
+    ).scalar_one()
+    report = get_bank_balance_summary(BankingFilters(company="cacao", bank_account_id=bank_account.id))
+
+    assert bank_line.bank_account_id == bank_account.id
+    assert report.totals["ending_balance"] == Decimal("-100.0000")
+
+
 def test_bank_difference_journal_uses_account_codes_and_each_book_currency(app_ctx):
     """El ajuste bancario se contabiliza en la moneda del banco y se convierte por libro."""
     from cacao_accounting.bancos.statement_service import create_bank_difference_journal
