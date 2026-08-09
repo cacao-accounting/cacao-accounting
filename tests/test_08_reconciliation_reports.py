@@ -469,6 +469,56 @@ def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
         )
 
 
+def test_bank_candidates_match_direction_and_allow_partial_payment(app_ctx):
+    from cacao_accounting.bancos.reconciliation_service import find_bank_reconciliation_candidates
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, PaymentEntry, database
+
+    bank = Bank(name="Banco candidatos")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta candidatos")
+    database.session.add(bank_account)
+    database.session.flush()
+    deposit = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        deposit=Decimal("500"),
+    )
+    withdrawal = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        withdrawal=Decimal("500"),
+    )
+    receive = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="receive",
+        received_amount=Decimal("1000"),
+        bank_account_id=bank_account.id,
+        docstatus=1,
+    )
+    pay = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="pay",
+        paid_amount=Decimal("1000"),
+        bank_account_id=bank_account.id,
+        docstatus=1,
+    )
+    database.session.add_all([deposit, withdrawal, receive, pay])
+    database.session.commit()
+
+    deposit_candidates = find_bank_reconciliation_candidates(deposit.id)
+    withdrawal_candidates = find_bank_reconciliation_candidates(withdrawal.id)
+
+    assert [(candidate.reference_id, candidate.amount, candidate.status) for candidate in deposit_candidates] == [
+        (receive.id, Decimal("500.00"), "partial")
+    ]
+    assert [(candidate.reference_id, candidate.amount, candidate.status) for candidate in withdrawal_candidates] == [
+        (pay.id, Decimal("500.00"), "partial")
+    ]
+
+
 def test_posted_payment_bank_dimension_reconciles_with_bank_summary(app_ctx):
     """Payment GL lines must retain the bank account used by the posting."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
