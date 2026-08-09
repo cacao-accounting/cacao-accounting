@@ -1566,6 +1566,21 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
   pytest local por instrucción del usuario.
 
+## 2026-08-10 — Tope de detalle en matching S2P
+
+- #340 confirmado: los constructores de `PurchaseReconciliationItem` usaban la
+  cantidad facturada completa para `received_amount` y no descontaban el
+  matched_qty ya consumido del origen.
+- Corrección local: el detalle 2-way/3-way calcula cantidad pendiente por línea,
+  limita `matched_qty` y registra el monto recibido solo por lo realmente
+  conciliado.
+- #339 fue contrastado contra el código actual: `total_price_difference` ya se
+  acumula como diferencia unitaria por cantidad antes de evaluar tolerancia; el
+  escenario descrito corresponde a una versión anterior. Issue permanece
+  abierto para verificación.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
 ## 2026-08-10 — Serialización de números de factura S2P
 
 - #293 confirmado: la validación de `supplier_invoice_no` era un SELECT sin
