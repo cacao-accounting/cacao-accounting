@@ -1479,3 +1479,8 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 
 - Corrección en curso: se añadieron controles de compañía y acción para detalle, creación, edición, aprobación, cierre, archivo, eliminación e importación de pronósticos; conciliación por cuenta, aplicación de matches y reglas bancarias validan la compañía persistida.
 - Se mantiene la regla de no confiar en `company` enviado por el cliente; los issues #309 y #310 permanecen abiertos para verificación posterior.
+
+## 2026-08-10 — Corrección de expectativa contable en CI
+
+- CI falló en `test_accounting_entries_for_payment_variants` porque el caso de reembolso de cliente esperaba una cuenta `payable`.
+- Evidencia: `sales_credit_note` de cliente con `payment_type=pay` debe liquidar el saldo acreedor del cliente contra AR, por lo que la cuenta esperada es `receivable`; se corrigió solo la expectativa del test, no el comportamiento contable.
