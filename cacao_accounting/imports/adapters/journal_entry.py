@@ -4,6 +4,7 @@
 """Adaptador para importación de comprobantes contables."""
 
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from typing import List, Dict, Any
 from sqlalchemy import or_, select
 
@@ -15,6 +16,16 @@ from cacao_accounting.imports.utils.validation import is_period_open
 
 class JournalEntryAdapter(BaseImportAdapter):
     """Adaptador para Comprobantes Contables."""
+
+    _BALANCE_TOLERANCE = Decimal("0.0001")
+
+    @staticmethod
+    def _amount(value: Any) -> Decimal:
+        """Parsea un importe sin perder precisión ni aceptar valores no finitos."""
+        amount = Decimal(str(value or "0").strip())
+        if not amount.is_finite():
+            raise InvalidOperation("El importe debe ser finito")
+        return amount
 
     columns = [
         "document_ref",
@@ -35,16 +46,16 @@ class JournalEntryAdapter(BaseImportAdapter):
         if len(document_data) < 2:
             errors.append("Un comprobante contable debe tener al menos dos líneas.")
 
-        total_debit = 0.0
-        total_credit = 0.0
+        total_debit = Decimal("0")
+        total_credit = Decimal("0")
         for row in document_data:
             try:
-                total_debit += float(row.get("debito") or 0)
-                total_credit += float(row.get("credito") or 0)
-            except (ValueError, TypeError):
+                total_debit += self._amount(row.get("debito"))
+                total_credit += self._amount(row.get("credito"))
+            except (InvalidOperation, ValueError, TypeError):
                 errors.append(f"Monto inválido en referencia {row.get('document_ref')}")
 
-        if abs(total_debit - total_credit) > 0.0001:
+        if abs(total_debit - total_credit) > self._BALANCE_TOLERANCE:
             errors.append(f"El comprobante {document_data[0].get('document_ref')} no está balanceado.")
 
         # Período contable
