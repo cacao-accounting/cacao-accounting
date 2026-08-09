@@ -60,6 +60,34 @@ debe probarse con movimientos y valores calculados, no con asserts triviales.
   identificables por nombre de archivo; R2R, O2C, S2R y bancos ya superan esa
   magnitud según el inventario de pruebas de esta sesión.
 
+## 2026-08-09 — Matriz O2C y auditoría de checks de GitHub Actions
+
+### Implementación
+
+- Se agregaron **15 escenarios `full` O2C** de orden aprobada a factura
+  aprobada, con cantidades parciales y completas, tarifas decimales,
+  cantidades fraccionarias y saldos pendientes calculados manualmente.
+- Las pruebas verifican la relación documental, el consumo por cantidad y el
+  reporte pendiente (`orden - facturado` y `pendiente × tarifa`). El bloque
+  quedó en **15 passed**.
+- La cobertura por selección de workflows queda en aproximadamente R2R 270,
+  O2C 50, S2R 84, inventario 102 (incluye casos compartidos de reportes) y
+  bancos 153 pruebas recolectadas.
+
+### Auditoría local de workflows
+
+- `flake8 cacao_accounting/`: exit 0.
+- `ruff check cacao_accounting/`: exit 0.
+- `pydocstyle cacao_accounting/`: exit 0.
+- `mypy cacao_accounting/`: sin errores en 197 archivos.
+- `npm ci` + `npm test`: **33 passing**.
+- `python -m build` + `twine check`: ambos artefactos PASSED.
+- Bandit no es ejecutado actualmente por el workflow aunque se instala; una
+  ejecución informativa detecta hallazgos heredados (139 bajos, 1 medio), por
+  lo que no se presenta como check verde.
+- La suite pytest focal `--full` continúa en segundo plano; su resumen final
+  aún es requisito para cerrar la auditoría.
+
 ## 2026-08-07 — Blindaje de devoluciones en analítica y dashboard R2R
 
 ### Petición
