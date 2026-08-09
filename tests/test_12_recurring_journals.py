@@ -15,6 +15,7 @@ from cacao_accounting.contabilidad.recurring_journal_service import (
     apply_recurring_template,
     RecurringJournalError,
 )
+from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal, submit_journal
 
 
 @pytest.fixture()
@@ -29,7 +30,7 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Accounts, Currency, Entity, Modules, User, database
+        from cacao_accounting.database import Accounts, Book, Currency, Entity, Modules, User, database
 
         database.create_all()
         database.session.add_all(
@@ -52,6 +53,8 @@ def app_ctx():
                 Modules(module="accounting", default=True, enabled=True),
                 User(user="admin", name="Admin", password=b"x", classification="admin", active=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Book(entity="abc", code="L01", name="Libro principal", status="activo", is_primary=True),
+                Book(entity="abc", code="L02", name="Libro secundario", status="activo"),
                 Accounts(entity="abc", code="6101", name="Gasto", active=True, enabled=True, group=False),
                 Accounts(entity="abc", code="1105", name="Seguro pagado", active=True, enabled=True, group=False),
                 Accounts(entity="abc", code="6000", name="Gasto extendido", active=True, enabled=True, group=False),
@@ -70,6 +73,8 @@ def _login(client, user_id: str) -> None:
 
 def test_recurring_journal_flow(app_ctx):
     with app_ctx.app_context():
+        from cacao_accounting.database import GLEntry
+
         # 1. Crear plantilla
         data = {
             "code": "REC-001",
@@ -78,7 +83,7 @@ def test_recurring_journal_flow(app_ctx):
             "ledger_id": "L01",
             "books": ["L01", "L02"],
             "start_date": date(2026, 1, 1),
-            "end_date": date(2026, 12, 31),
+            "end_date": date(2026, 5, 31),
             "frequency": "monthly",
         }
         items = [
@@ -101,13 +106,14 @@ def test_recurring_journal_flow(app_ctx):
             application_date=date(2026, 5, 31),
             user_id="admin",
         )
-        assert app_log.status == "applied"
+        assert app_log.status == "pending"
         assert app_log.journal_id is not None
 
         journal = database.session.get(ComprobanteContable, app_log.journal_id)
         assert journal.is_recurrent is True
         assert journal.recurrent_template_id == template.id
         assert json.loads(journal.book_codes) == ["L01", "L02"]
+        assert database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().first() is None
 
         # 4. Evitar duplicados
         with pytest.raises(RecurringJournalError, match="ya fue aplicada"):
@@ -118,6 +124,19 @@ def test_recurring_journal_flow(app_ctx):
                 application_date=date(2026, 5, 31),
                 user_id="admin",
             )
+
+        submit_journal(journal.id)
+        database.session.refresh(app_log)
+        assert app_log.status == "applied"
+        assert (
+            database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().first() is not None
+        )
+
+        cancel_submitted_journal(journal.id, user_id="admin")
+        database.session.refresh(app_log)
+        database.session.refresh(template)
+        assert app_log.status == "reversed"
+        assert template.status == "approved"
 
 
 def test_recurring_journal_balance_validation(app_ctx):
