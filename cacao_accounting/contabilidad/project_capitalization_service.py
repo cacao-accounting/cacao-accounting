@@ -159,8 +159,8 @@ class ProjectCapitalizationService:
 
         for voucher_id, lines in groups.items():
             try:
-                self._process_group(company, voucher_id, lines, user_id)
-                success_count += 1
+                if self._process_group(company, voucher_id, lines, user_id):
+                    success_count += 1
             except Exception as e:
                 database.session.rollback()
                 log.exception(f"Error capitalizando comprobante {voucher_id}")
@@ -216,14 +216,15 @@ class ProjectCapitalizationService:
         voucher_id: str,
         lines: list[CapitalizationLine],
         user_id: str,
-    ) -> None:
+    ) -> bool:
         """Capitaliza atómicamente todas las líneas elegibles de un comprobante."""
+        orig_journal = database.session.get(ComprobanteContable, voucher_id, with_for_update=True)
+        if not orig_journal or orig_journal.capitalized_by_id:
+            return False
+
         cap_journal = _create_capitalization_journal(company, lines, user_id)
+        orig_journal.capitalized_by_id = cap_journal.id
+        database.session.add(orig_journal)
 
         submit_journal(cap_journal.id)
-
-        orig_journal = database.session.get(ComprobanteContable, voucher_id)
-        if orig_journal:
-            orig_journal.capitalized_by_id = cap_journal.id
-
-        database.session.commit()
+        return True
