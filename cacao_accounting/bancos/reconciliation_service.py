@@ -69,7 +69,9 @@ def _decimal_value(value: Any) -> Decimal:
 
 
 def _bank_amount(transaction: BankTransaction) -> Decimal:
-    return _decimal_value(transaction.deposit if transaction.deposit is not None else transaction.withdrawal)
+    deposit = _decimal_value(transaction.deposit)
+    withdrawal = _decimal_value(transaction.withdrawal)
+    return deposit if deposit > 0 else withdrawal
 
 
 def _payment_amount(payment: PaymentEntry) -> Decimal:
