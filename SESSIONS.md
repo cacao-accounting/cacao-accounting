@@ -1918,3 +1918,12 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Esto no cierra el alcance completo de #281: siguen pendientes la conciliación
   AP detallada, escenarios parciales, anticipos, créditos, reversos y
   duplicados. No se ejecuta pytest local por instrucción del usuario.
+
+## 2026-08-10 — Corrección de fixture bancario detectado por CI (#282)
+
+- El CI del lote `a94bfb0` falló en `test_reconciliation_report_diagnoses_posting_without_bank_transaction`.
+- Causa confirmada en el fixture: `PaymentEntry.bank_account_id` se asignaba
+  antes de hacer `flush()` de `BankAccount`, por lo que recibía `None` y el
+  diagnóstico correcto no podía detectar el pago huérfano.
+- Se ajusta únicamente el fixture para persistir la cuenta bancaria antes de
+  crear el pago; no se modifica la lógica de producción.
