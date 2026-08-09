@@ -90,7 +90,7 @@ def validate_template_balance(items: List[Dict[str, Any]]):
 
 def approve_recurring_template(template_id: str, user_id: str):
     """Aprueba una plantilla recurrente."""
-    template = database.session.get(RecurringJournalTemplate, template_id)
+    template = database.session.get(RecurringJournalTemplate, template_id, with_for_update=True)
     if not template:
         raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
 
@@ -144,7 +144,7 @@ def apply_recurring_template(
     user_id: str,
 ) -> RecurringJournalApplication:
     """Aplica una plantilla recurrente a un periodo específico."""
-    template = database.session.get(RecurringJournalTemplate, template_id)
+    template = database.session.get(RecurringJournalTemplate, template_id, with_for_update=True)
     if not template:
         raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
     if template.status != "approved":
@@ -163,7 +163,7 @@ def apply_recurring_template(
         .first()
     )
 
-    if existing and existing.status == "applied":
+    if existing and existing.status in {"pending", "applied"}:
         raise RecurringJournalError(f"La plantilla ya fue aplicada al periodo {period_name}.")
 
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
@@ -218,7 +218,7 @@ def apply_recurring_template(
         fiscal_year=fiscal_year,
         accounting_period=period_name,
         application_date=application_date,
-        status="applied",
+        status="pending",
         journal_id=journal.id,
         applied_by=user_id,
     )
@@ -226,15 +226,7 @@ def apply_recurring_template(
     database.session.flush()
     journal.recurrent_application_id = application.id
 
-    template.last_applied_date = application_date
-    # Lógica para marcar como completado si es la última aplicación según end_date
-    # (Simplificado: si la fecha de aplicación >= end_date)
-    if application_date >= template.end_date:
-        template.is_completed = True
-        template.status = "completed"
-        template.docstatus = 3
-
-    log_submit(application)
+    # La aplicación queda pendiente hasta que el comprobante pase al GL.
     database.session.commit()
     return application
 
