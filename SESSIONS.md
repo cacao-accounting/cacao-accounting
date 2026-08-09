@@ -1550,3 +1550,18 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   compañía antes de crear cualquier Reconciliation.
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy sobre los módulos
   modificados; no se ejecutó pytest local por instrucción del usuario.
+
+## 2026-08-10 — Conciliación de inventario contra saldo actual
+
+- #363 confirmado: una conciliación de inventario guardaba `qty_difference` y
+  `stock_value_difference` al crear el borrador y luego los aplicaba aunque el
+  StockBin hubiera cambiado antes del submit.
+- Corrección local: `_create_stock_reconciliation_movement` conserva el conteo y
+  valor objetivo, pero recalcula cantidad y valor de ajuste contra el StockBin
+  bloqueado durante el posting. Así el resultado final alcanza el objetivo sin
+  acumular el delta de un snapshot obsoleto.
+- #345–#348, #359–#362, #364 y #365 fueron contrastados con el código actual y
+  quedaron clasificados como falsos positivos o mitigados; se comentarán en
+  GitHub sin cerrar los issues.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
