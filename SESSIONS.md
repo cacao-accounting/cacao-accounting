@@ -1822,3 +1822,13 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - No se realizaron cambios de código para esos issues porque no se obtuvo una
   reproducción vigente distinta del comportamiento esperado. Todos permanecen
   abiertos para validación CI/E2E.
+
+## 2026-08-10 — Regresiones de seguridad en redirecciones internas
+
+- #358 fue contrastado contra cash_forecast.py: safe_next_url ya decodifica el
+  valor, rechaza backslashes, esquemas, hosts y rutas con doble slash.
+- Se añadieron pruebas de regresión para backslash, doble slash codificado,
+  URL externa y ruta interna válida. El issue permanece abierto.
+- #346, #348 y #355 también fueron contrastados contra guards ya presentes:
+  las notas de crédito se excluyen de exposición, el saldo base se convierte
+  con FX y las filas bancarias con depósito y retiro se rechazan.
