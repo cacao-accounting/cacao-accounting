@@ -1521,3 +1521,20 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 
 - CI falló en `test_accounting_entries_for_payment_variants` porque el caso de reembolso de cliente esperaba una cuenta `payable`.
 - Evidencia: `sales_credit_note` de cliente con `payment_type=pay` debe liquidar el saldo acreedor del cliente contra AR, por lo que la cuenta esperada es `receivable`; se corrigió solo la expectativa del test, no el comportamiento contable.
+
+## 2026-08-10 — Reversas de inventario y aislamiento de bodegas
+
+- #320 confirmado: cancelar una recepción ya consumida podía crear stock negativo
+  aunque el artículo no permitiera inventario negativo. Se añadió una validación
+  previa que proyecta el efecto de todas las reversas por compañía, artículo y
+  bodega y rechaza la cancelación antes de crear movimientos inválidos.
+- #332 confirmado parcialmente: los postings de PurchaseReceipt y DeliveryNote
+  no reutilizaban la validación de pertenencia de bodega que ya existía para
+  StockEntry. El posting genérico ahora valida también `line.warehouse`, compañía
+  y estado activo antes de actualizar StockBin o GL.
+- #319 y #328 fueron revisados contra el código actual: la cola de valoración ya
+  conserva un `negative_balance` para compensar capas positivas posteriores y
+  las transferencias ya aplican el fallback de `allow_negative_stock`; quedan
+  abiertos para verificación CI y escenarios de regresión.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy sobre `posting.py`;
+  no se ejecutó pytest local por instrucción del usuario.
