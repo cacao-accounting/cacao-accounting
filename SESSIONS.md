@@ -1851,3 +1851,18 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   sus relaciones de compañía. No se relajó la validación de existencia.
 - El issue funcional de duplicidad permanece abierto; este cambio solo corrige
   el fixture que impedía verificarlo.
+
+## 2026-08-10 — Matriz de reconciliación subledger contra GL (#276)
+
+- Se implementó `get_reconciliation_matrix` y el endpoint
+  `/reports/reconciliation-matrix` con filtros de compañía, libro, período,
+  fecha y moneda.
+- La matriz calcula AR/AP desde facturas y aplicaciones, inventario desde
+  Stock Ledger, impuestos desde facturas y movimientos bancarios desde el
+  extracto; compara cada fuente contra cuentas GL filtradas por `company` y
+  `ledger_id`.
+- Se añadió una prueba que demuestra que el saldo de otro libro no contamina
+  el libro seleccionado. El reporte marca bancos como `statement_movement`
+  y documenta que no representa un saldo inicial no importado.
+- No se ejecutó pytest local por instrucción del usuario; Black, Ruff, mypy,
+  compilación y `git diff --check` pasaron. El issue #276 permanece abierto.

@@ -23,6 +23,7 @@ from cacao_accounting.database import (
     Book,
     Budget,
     BudgetLine,
+    CompanyDefaultAccount,
     CompanyParty,
     CostCenter,
     DocumentRelation,
@@ -45,6 +46,7 @@ from cacao_accounting.database import (
     StockEntryItem,
     StockLedgerEntry,
     StockValuationLayer,
+    WarehouseCompanyAccount,
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
@@ -154,6 +156,17 @@ class FinancialReportFilters:
     export_all: bool = False
     include_descendants: bool = False
     budget_code: str | None = None
+
+
+@dataclass(frozen=True)
+class ReconciliationFilters:
+    """Dimensiones de la matriz independiente de submayores contra GL."""
+
+    company: str
+    ledger: str | None = None
+    accounting_period: str | None = None
+    as_of_date: date | None = None
+    currency: str | None = None
 
 
 @dataclass(frozen=True)
@@ -322,6 +335,254 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
             "paid_amount": total_paid,
             "outstanding_amount": total_outstanding,
         },
+    )
+
+
+def _reconciliation_gl_amount(
+    company: str,
+    ledger_id: str,
+    account_ids: Sequence[str],
+    *,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    currency: str | None = None,
+) -> Decimal:
+    """Calcula el saldo GL filtrando todas las dimensiones contables."""
+    if not account_ids:
+        return Decimal("0")
+    query = exclude_cancelled_gl_entries(select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0))).where(
+        GLEntry.company == company,
+        GLEntry.ledger_id == ledger_id,
+        GLEntry.account_id.in_(list(account_ids)),
+    )
+    if date_from is not None:
+        query = query.where(GLEntry.posting_date >= date_from)
+    if date_to is not None:
+        query = query.where(GLEntry.posting_date <= date_to)
+    if currency:
+        query = query.where(GLEntry.company_currency == currency)
+    return _decimal_value(database.session.execute(query).scalar_one())
+
+
+def _reconciliation_row(
+    area: str,
+    account_ids: Sequence[str],
+    subledger_amount: Decimal,
+    gl_amount: Decimal,
+    *,
+    basis: str,
+    currency: str | None,
+    note: str | None = None,
+) -> ReportRow:
+    """Construye una fila con diferencia explícita y trazabilidad de cuentas."""
+    difference = subledger_amount - gl_amount
+    return ReportRow(
+        values={
+            "area": area,
+            "basis": basis,
+            "account_ids": ",".join(sorted(set(account_ids))),
+            "subledger_amount": subledger_amount,
+            "gl_control_amount": gl_amount,
+            "difference": difference,
+            "currency": currency or "—",
+            "status": "reconciled" if difference == 0 else "difference",
+            "note": note or "",
+        }
+    )
+
+
+def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport:
+    """Reconcilia submayores independientes contra GL por compañía, libro y período.
+
+    AR/AP se calculan desde facturas y aplicaciones; inventario desde Stock Ledger;
+    impuestos desde impuestos de facturas; bancos se presentan como movimientos
+    de pagos, porque el extracto bancario no tiene un saldo contable persistido.
+    La cuenta GL siempre se filtra por ``company`` y ``ledger_id`` para impedir
+    contaminación entre libros.
+    """
+    selected_ledger = _resolve_ledger(filters.company, filters.ledger)
+    if selected_ledger is None:
+        return PaginatedReport(rows=[], totals={}, columns=[])
+    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    as_of_date = filters.as_of_date or period_end or date.today()
+    defaults = database.session.execute(
+        select(CompanyDefaultAccount).where(CompanyDefaultAccount.company == filters.company)
+    ).scalar_one_or_none()
+
+    rows: list[ReportRow] = []
+    ar_account = str(defaults.default_receivable) if defaults and defaults.default_receivable else None
+    ap_account = str(defaults.default_payable) if defaults and defaults.default_payable else None
+    ar_subledger = get_ar_ap_subledger(
+        SubledgerFilters(company=filters.company, party_type="customer", as_of_date=as_of_date)
+    ).totals.get("outstanding_amount", Decimal("0"))
+    ap_subledger = get_ar_ap_subledger(
+        SubledgerFilters(company=filters.company, party_type="supplier", as_of_date=as_of_date)
+    ).totals.get("outstanding_amount", Decimal("0"))
+    rows.append(
+        _reconciliation_row(
+            "AR",
+            [ar_account] if ar_account else [],
+            ar_subledger,
+            _reconciliation_gl_amount(
+                filters.company,
+                selected_ledger.id,
+                [ar_account] if ar_account else [],
+                date_to=as_of_date,
+                currency=filters.currency,
+            ),
+            basis="ending_balance",
+            currency=selected_ledger.currency,
+            note="Fuente: facturas de venta y aplicaciones de pago.",
+        )
+    )
+    rows.append(
+        _reconciliation_row(
+            "AP",
+            [ap_account] if ap_account else [],
+            -ap_subledger,
+            _reconciliation_gl_amount(
+                filters.company,
+                selected_ledger.id,
+                [ap_account] if ap_account else [],
+                date_to=as_of_date,
+                currency=filters.currency,
+            ),
+            basis="ending_balance",
+            currency=selected_ledger.currency,
+            note="Fuente: facturas de compra y aplicaciones de pago; el pasivo se expresa como crédito neto.",
+        )
+    )
+
+    inventory_accounts = [
+        str(account_id)
+        for account_id in database.session.execute(
+            select(WarehouseCompanyAccount.inventory_account_id).where(
+                WarehouseCompanyAccount.company == filters.company,
+                WarehouseCompanyAccount.is_active.is_(True),
+                WarehouseCompanyAccount.inventory_account_id.is_not(None),
+            )
+        ).scalars()
+        if account_id
+    ]
+    inventory_query = exclude_cancelled_stock_entries(
+        select(func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0)).where(
+            StockLedgerEntry.company == filters.company,
+            StockLedgerEntry.posting_date <= as_of_date,
+        )
+    )
+    inventory_subledger = _decimal_value(database.session.execute(inventory_query).scalar_one())
+    rows.append(
+        _reconciliation_row(
+            "Inventory",
+            inventory_accounts,
+            inventory_subledger,
+            _reconciliation_gl_amount(
+                filters.company, selected_ledger.id, inventory_accounts, date_to=as_of_date, currency=filters.currency
+            ),
+            basis="ending_balance",
+            currency=selected_ledger.currency,
+            note="Fuente: Stock Ledger; cuentas derivadas de la configuración activa por bodega.",
+        )
+    )
+
+    sales_tax_account = (
+        str(defaults.default_sales_tax_account_id) if defaults and defaults.default_sales_tax_account_id else None
+    )
+    purchase_tax_account = (
+        str(defaults.default_purchase_tax_account_id) if defaults and defaults.default_purchase_tax_account_id else None
+    )
+    sales_tax = sum(
+        (
+            _decimal_value(invoice.tax_total) * _document_base_factor(invoice) * _document_sign(invoice)
+            for invoice in database.session.execute(
+                select(SalesInvoice).where(
+                    SalesInvoice.company == filters.company,
+                    SalesInvoice.docstatus == 1,
+                    SalesInvoice.posting_date <= as_of_date,
+                )
+            ).scalars()
+        ),
+        Decimal("0"),
+    )
+    purchase_tax = sum(
+        (
+            _decimal_value(invoice.tax_total) * _document_base_factor(invoice) * _document_sign(invoice)
+            for invoice in database.session.execute(
+                select(PurchaseInvoice).where(
+                    PurchaseInvoice.company == filters.company,
+                    PurchaseInvoice.docstatus == 1,
+                    PurchaseInvoice.posting_date <= as_of_date,
+                )
+            ).scalars()
+        ),
+        Decimal("0"),
+    )
+    tax_accounts = [account for account in (sales_tax_account, purchase_tax_account) if account]
+    rows.append(
+        _reconciliation_row(
+            "Tax",
+            tax_accounts,
+            purchase_tax - sales_tax,
+            _reconciliation_gl_amount(
+                filters.company, selected_ledger.id, tax_accounts, date_to=as_of_date, currency=filters.currency
+            ),
+            basis="ending_balance",
+            currency=selected_ledger.currency,
+            note="Impuestos netos: compras debitadas menos ventas acreditadas.",
+        )
+    )
+
+    bank_accounts = [
+        account
+        for account in database.session.execute(
+            select(BankAccount.gl_account_id).where(
+                BankAccount.company == filters.company,
+                BankAccount.gl_account_id.is_not(None),
+            )
+        ).scalars()
+        if account
+    ]
+    bank_subledger = _decimal_value(
+        database.session.execute(
+            select(
+                func.coalesce(
+                    func.sum(func.coalesce(BankTransaction.deposit, 0) - func.coalesce(BankTransaction.withdrawal, 0)),
+                    0,
+                )
+            )
+            .join(BankAccount, BankTransaction.bank_account_id == BankAccount.id)
+            .where(BankAccount.company == filters.company, BankTransaction.posting_date <= as_of_date)
+        ).scalar_one()
+    )
+    rows.append(
+        _reconciliation_row(
+            "Bank",
+            [str(account) for account in bank_accounts],
+            bank_subledger,
+            _reconciliation_gl_amount(
+                filters.company,
+                selected_ledger.id,
+                [str(account) for account in bank_accounts],
+                date_to=as_of_date,
+                currency=filters.currency,
+            ),
+            basis="statement_movement",
+            currency=selected_ledger.currency,
+            note="Movimiento de extracto; no equivale a saldo de libro si existe saldo inicial no importado.",
+        )
+    )
+    return PaginatedReport(
+        rows=rows,
+        totals={
+            "subledger_amount": sum((_decimal_value(row.values["subledger_amount"]) for row in rows), Decimal("0")),
+            "gl_control_amount": sum((_decimal_value(row.values["gl_control_amount"]) for row in rows), Decimal("0")),
+            "difference": sum((_decimal_value(row.values["difference"]) for row in rows), Decimal("0")),
+        },
+        columns=list(rows[0].values.keys()),
+        total_rows=len(rows),
+        page=1,
+        page_size=len(rows),
+        ledger_currency=selected_ledger.currency,
     )
 
 
