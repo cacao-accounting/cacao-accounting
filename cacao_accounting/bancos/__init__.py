@@ -621,6 +621,8 @@ def _bank_reconciliation_allocated_amount(transaction: BankTransaction) -> Decim
 def bancos_conciliacion_bancaria():
     """Panel de conciliacion bancaria con transacciones pendientes."""
     company = request.args.get("company") or None
+    if company:
+        exige_acceso_compania("cash", company, "consultar")
     query = database.select(BankTransaction).filter_by(is_reconciled=False)
     if company:
         query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
@@ -645,6 +647,7 @@ def bancos_conciliacion_bancaria_cuenta(bank_account_id: str):
     bank_account = database.session.get(BankAccount, bank_account_id)
     if not bank_account:
         abort(404)
+    exige_acceso_compania("cash", bank_account.company, "consultar")
     transactions = (
         database.session.execute(
             database.select(BankTransaction)
@@ -677,6 +680,14 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
             .scalars()
             .all()
         )
+        companies: set[str] = set()
+        for transaction in transactions:
+            bank_account = database.session.get(BankAccount, transaction.bank_account_id)
+            if bank_account:
+                companies.add(str(bank_account.company))
+        if len(companies) != 1 or company not in companies:
+            abort(403)
+        exige_acceso_compania("cash", company, "editar")
         if any(txn.is_reconciled for txn in transactions):
             flash(_("Una o mas transacciones ya estan reconciliadas."), "danger")
             return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
@@ -728,8 +739,10 @@ def bancos_reglas_matching():
         .all()
     )
     if request.method == "POST":
+        company = request.form.get("company") or ""
+        exige_acceso_compania("cash", company, "editar")
         rule = BankMatchingRule(
-            company=request.form.get("company") or "",
+            company=company,
             bank_account_id=request.form.get("bank_account_id") or None,
             name=request.form.get("name") or "",
             days_tolerance=int(request.form.get("days_tolerance") or 7),
@@ -754,6 +767,10 @@ def bancos_reglas_matching():
 def bancos_regla_matching_ejecutar(rule_id: str):
     """Ejecuta una regla de matching para una cuenta y rango."""
     try:
+        rule = database.session.get(BankMatchingRule, rule_id)
+        if not rule:
+            raise BankStatementError("La regla de matching no existe.")
+        exige_acceso_compania("cash", rule.company, "editar")
         date_from = date.fromisoformat(request.form.get("date_from") or date.today().isoformat())
         date_to = date.fromisoformat(request.form.get("date_to") or date.today().isoformat())
         result = apply_bank_matching_rule(rule_id, request.form.get("bank_account_id") or "", (date_from, date_to))
