@@ -341,6 +341,40 @@ class TestReservaNotaEntrega:
         assert bin_row2.actual_qty == Decimal("14")
         assert bin_row2.reserved_qty == Decimal("4")
 
+    def test_dn_submit_preserva_reserva_pendiente_cuando_reserva_iguala_stock(self, app_ctx):
+        """Una entrega parcial no debe liberar también la reserva ya clampada."""
+        from cacao_accounting.contabilidad.posting import post_document_to_gl
+
+        so = _make_so("SO-RES-DN-FULL", Decimal("100"), docstatus=1)
+        bin_row = _get_bin()
+        bin_row.actual_qty = Decimal("100")
+        bin_row.reserved_qty = Decimal("100")
+        bin_row.stock_value = Decimal("1000")
+        bin_row.valuation_rate = Decimal("10")
+        layer = database.session.execute(
+            database.select(StockValuationLayer).filter_by(voucher_id="seed-reserve")
+        ).scalar_one()
+        layer.qty = Decimal("100")
+        layer.remaining_qty = Decimal("100")
+        layer.stock_value_difference = Decimal("1000")
+        layer.remaining_stock_value = Decimal("1000")
+        database.session.commit()
+
+        dn = _make_dn("DN-RES-FULL", Decimal("60"), sales_order_id=so.id)
+        dn.docstatus = 1
+        post_document_to_gl(dn)
+        database.session.commit()
+
+        database.session.refresh(bin_row)
+        assert bin_row.actual_qty == Decimal("40")
+        assert bin_row.reserved_qty == Decimal("100")
+        from cacao_accounting.ventas import _release_reservation_for_delivery_note
+
+        _release_reservation_for_delivery_note(dn)
+        database.session.commit()
+        database.session.refresh(bin_row)
+        assert bin_row.reserved_qty == Decimal("40")
+
     def test_dn_submit_sin_so_no_libera_reserva(self, app_ctx):
         _make_so("SO-RES-DN-02", Decimal("5"), docstatus=1)
         bin_row = _get_bin()
