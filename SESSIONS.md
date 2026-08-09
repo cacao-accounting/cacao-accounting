@@ -1434,3 +1434,9 @@ Se corrigieron controles de valoración y captura de movimientos. El promedio m�
 Commit de código firmado: `534c9de fix(inventory): stabilize valuation and stock entry controls`. Se detuvo deliberadamente la suite completa a solicitud del usuario en 52%; no se reporta como verde. El lote se publicará en la rama `stabilization/inventory-audit` para que CI encuentre regresiones. Los issues permanecen abiertos para tracking.
 
 CI detectó una regresión de compatibilidad en el mensaje de rechazo de salidas sin stock. Se conservó la nueva ruta de stock negativo permitido, pero el caso no permitido vuelve a propagar el error contractual `No hay suficiente inventario`. Commit firmado: `53047c2 fix(inventory): preserve shortage rejection semantics`.
+
+### 2026-08-10 — Lote O2C de reembolsos, FX y aplicaciones (#344, #345, #346, #347, #348, #349)
+
+Se confirmaron y corrigieron seis riesgos upstream. Los reembolsos ahora conservan `party_type` y seleccionan AR/AP y anticipos del tercero correcto; las conciliaciones rechazan fechas anteriores a aplicaciones existentes; las notas de crédito no incrementan exposición ni bloqueo de vencidos; las devoluciones no generan notas de entrega de salida; `base_outstanding_amount` usa el tipo de cambio del documento; y la deduplicación de referencias es local a cada request.
+
+Commit firmado: `c39ca7b fix(o2c): align refunds and payment allocation controls`. No se ejecutó pytest local por instrucción del usuario; se ejecutó Black, `compileall` y `git diff --check`. El lote queda para validación de CI. Los issues permanecen abiertos.
