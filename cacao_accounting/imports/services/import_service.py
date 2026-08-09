@@ -279,14 +279,21 @@ class ImportService:
 
     def _validate_document_period(self, doc_obj: Any, batch: Any) -> None:
         """Valida que el periodo contable esté abierto para el documento."""
-        doc_date = self._extract_document_date(doc_obj)
-        if not doc_date:
-            return
-        if not is_period_open(batch.company_id, doc_date):
-            raise ValueError(f"El periodo contable para la fecha {doc_date} está cerrado.")
+        raw_dates = self._extract_document_date(doc_obj)
+        dates = raw_dates if isinstance(raw_dates, list) else [raw_dates]
+        for raw_date in dates:
+            if raw_date in (None, ""):
+                continue
+            doc_date = self._parse_document_date(raw_date)
+            if doc_date is None:
+                raise ValueError(f"Fecha de documento inválida: {raw_date}")
+            if not is_period_open(batch.company_id, doc_date):
+                raise ValueError(f"El periodo contable para la fecha {doc_date} está cerrado.")
 
     def _extract_document_date(self, doc_obj: Any) -> Any:
         """Extrae la fecha de publicación del documento."""
+        if isinstance(doc_obj, list):
+            return [self._extract_document_date(item) for item in doc_obj]
         if isinstance(doc_obj, dict):
             return doc_obj.get("posting_date")
         if hasattr(doc_obj, "posting_date"):
