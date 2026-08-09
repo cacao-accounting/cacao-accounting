@@ -2954,7 +2954,7 @@ def _add_stock_entry_line_gl_entries(
 
     if purpose == "stock_reconciliation":
         _add_reconciliation_entries(entries, context, inventory_account_id, offset_account_id, amount, line, dimension_kwargs)
-    elif purpose in ("material_receipt", "adjustment_positive"):
+    elif purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
         entries.extend(
             _normal_entries_for_amount(
                 context=context,
