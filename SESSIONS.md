@@ -1394,3 +1394,11 @@ Se verificó el flujo existente: la aplicación recurrente genera intencionalmen
 La aplicación ahora se registra como `pending` y cambia a `applied` únicamente dentro de `submit_journal`, después de que el posting haya sido validado. La plantilla se marca completada en ese mismo momento; una cancelación del comprobante marca la aplicación como `reversed` y reabre la plantilla cuando correspondía. La plantilla se bloquea con `with_for_update` durante la aplicación para serializar reintentos concurrentes y evitar duplicados.
 
 Validación: `tests/test_12_recurring_journals.py`: `7 passed`; la prueba E2E comprueba `pending → applied → reversed`, junto con la reapertura de la plantilla. Black, Ruff y `git diff --check` pasan en archivos tocados. El issue #337 permanece abierto para tracking y validación en CI.
+
+### 2026-08-09 — Idempotencia de capitalización automática de proyectos (#336)
+
+Se confirmó una ventana transaccional en la que el comprobante de capitalización ya estaba contabilizado, pero el comprobante fuente aún no tenía `capitalized_by_id`. Dos ejecuciones concurrentes podían seleccionar el mismo gasto y duplicar el activo capitalizado.
+
+`_process_group` ahora bloquea el comprobante fuente con `with_for_update`, vuelve a comprobar `capitalized_by_id`, asigna el vínculo antes de invocar `submit_journal` y deja que el commit del posting persista ambos cambios atómicamente. Si otra ejecución llega después del commit, omite el grupo y no lo cuenta como una nueva capitalización.
+
+Validación: `tests/test_hierarchy_and_capitalization.py`: `4 passed`; Black, Ruff y `git diff --check` pasan en archivos tocados. El issue #336 permanece abierto para tracking y validación concurrente en CI.
