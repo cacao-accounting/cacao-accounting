@@ -1941,3 +1941,13 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Los issues #301, #246, #197 y #189 permanecen abiertos para verificación de
   endpoints completos y decisiones funcionales pendientes. No se ejecuta
   pytest local por instrucción; este cambio se publicará en lote.
+
+## 2026-08-10 — Corrección de import en regresión de aislamiento (#301)
+
+- El CI del commit `e62d735` falló únicamente en la regresión nueva porque la
+  sintaxis `import cacao_accounting.bancos as bancos_module` resolvió el objeto
+  Blueprint exportado por el paquete, no el módulo con `_paginate_list`.
+- Se reemplaza por `importlib.import_module("cacao_accounting.bancos")` para
+  parchear el módulo correcto. No cambia código de producción.
+- El run fue cancelado después de capturar el fallo para no mantener activos
+  los jobs restantes de la matriz.
