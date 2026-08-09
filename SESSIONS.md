@@ -1574,8 +1574,10 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Corrección local: `_paginate_list` filtra por compañías asociadas a libros
   accesibles del usuario, valida explícitamente una compañía solicitada y los
   dos reportes de conciliación exigen acceso de lectura antes de consultar.
-- Queda pendiente aplicar el mismo guard directamente a todas las rutas de
-  detalle/edición; el issue permanece abierto.
+- Se extendió el guard a los detalles de solicitud, OC, recepción, factura,
+  cotización de proveedor y solicitudes/comparativos de cotización; las rutas
+  de edición/duplicación menos frecuentes aún requieren revisión individual.
+  El issue permanece abierto.
 - Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
   pytest local por instrucción del usuario.
 
