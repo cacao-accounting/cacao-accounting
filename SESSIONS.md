@@ -43,6 +43,26 @@ tracking, acumulando cambios antes de publicar.
 - Se verificaron Black, diff whitespace, Ruff, Flake8 y mypy con `.venv`; no se
   ejecutó pytest local por la instrucción de no saturar la suite.
 
+## 2026-08-10 — Compensación de recepción posterior a factura 2-way
+
+### Petición
+
+Continuar corrigiendo issues upstream confirmados, manteniendo los issues
+abiertos para verificación posterior y acumulando commits antes del push.
+
+### Implementación
+
+- Se confirmó #291: una factura 2-way posteada antes de la recepción reconoce
+  gasto, pero la recepción posterior acreditaba GRNI sin cancelar ese gasto.
+- El builder de recepción ahora detecta facturas 2-way aprobadas de la misma
+  compañía, proveedor y orden, y consume por artículo el importe previamente
+  facturado.
+- La recepción acredita gasto para la parte ya facturada y conserva GRNI solo
+  para la parte recibida aún no facturada; cada línea mantiene el asiento
+  balanceado y las facturas de devolución quedan excluidas.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
 ## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
 
 ### Petición
