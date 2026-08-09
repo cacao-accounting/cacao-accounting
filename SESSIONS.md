@@ -1841,3 +1841,13 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   aplica `PaymentEntry.company` al query; sin compañía mantiene compatibilidad
   para callers internos existentes.
 - El issue permanece abierto para verificación de aislamiento entre compañías.
+
+## 2026-08-10 — Fixture de duplicidad de factura S2P
+
+- El CI falló en Python 3.13 y desktop porque el test de duplicidad de
+  `supplier_invoice_no` creaba `CompanyParty` sin crear los registros globales
+  `Party`; la validación vigente rechazaba correctamente el proveedor ausente.
+- Corrección de test: el fixture ahora crea ambos proveedores globales antes de
+  sus relaciones de compañía. No se relajó la validación de existencia.
+- El issue funcional de duplicidad permanece abierto; este cambio solo corrige
+  el fixture que impedía verificarlo.
