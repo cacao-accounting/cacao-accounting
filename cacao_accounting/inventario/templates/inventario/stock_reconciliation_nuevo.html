@@ -14,7 +14,7 @@
   </ol>
 </nav>
 
-<form method="post" id="form-main" x-data="stockReconciliationForm()">
+<form method="post" id="form-main" x-data='stockReconciliationForm({{ reconciliation_config | default({}) | tojson }})'>
   {{ form.csrf_token }}
   <input type="hidden" name="purpose" value="stock_reconciliation">
 
@@ -117,7 +117,7 @@
       </div>
       <div class="col-12">
         <label class="form-label" for="remarks">{{ _("Observaciones") }}</label>
-        <textarea class="form-control" id="remarks" name="remarks" rows="2"></textarea>
+        <textarea class="form-control" id="remarks" name="remarks" rows="2" x-model="header.remarks"></textarea>
       </div>
     </div>
   </div>
@@ -193,7 +193,9 @@
 </form>
 
 <script>
-function stockReconciliationForm() {
+function stockReconciliationForm(config = {}) {
+  const configuredHeader = config.header || {};
+  const configuredLines = config.lines || [];
   return {
     header: {
       company: '',
@@ -202,10 +204,12 @@ function stockReconciliationForm() {
       cost_center_code: '',
       unit_code: '',
       project_code: '',
+      remarks: '',
+      ...configuredHeader,
     },
-    lines: [],
+    lines: configuredLines.map((line) => ({ uid: `${Date.now()}-${Math.random()}`, ...line })),
     init() {
-      this.addLine();
+      if (!this.lines.length) this.addLine();
     },
     addLine() {
       this.lines.push({

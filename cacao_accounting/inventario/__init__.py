@@ -1209,6 +1209,8 @@ def inventario_entrada_editar(entry_id: str):
     if request.method == "POST":
         return _handle_stock_entry_edit_post(registro)
 
+    if registro.purpose == "stock_reconciliation":
+        return _render_stock_reconciliation_edit_form(registro, items_disponibles, uoms_disponibles)
     return _render_stock_entry_edit_form(registro, items_disponibles, uoms_disponibles)
 
 
@@ -1247,6 +1249,10 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.from_warehouse = request.form.get("from_warehouse") or None
     registro.to_warehouse = request.form.get("to_warehouse") or None
+    registro.adjustment_account_id = request.form.get("adjustment_account_id") or None
+    registro.cost_center_code = request.form.get("cost_center_code") or None
+    registro.unit_code = request.form.get("unit_code") or None
+    registro.project_code = request.form.get("project_code") or None
     registro.remarks = request.form.get("remarks")
 
 
@@ -1266,7 +1272,10 @@ def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
         database.session.delete(rel)
     for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars():
         database.session.delete(item)
-    registro.total_amount = _save_stock_entry_items(registro)
+    if registro.purpose == "stock_reconciliation":
+        registro.total_amount = _save_stock_reconciliation_items(registro)
+    else:
+        registro.total_amount = _save_stock_entry_items(registro)
 
 
 def _render_stock_entry_edit_form(
@@ -1321,6 +1330,53 @@ def _render_stock_entry_edit_form(
     )
 
 
+def _render_stock_reconciliation_edit_form(
+    registro: StockEntry,
+    items_disponibles: list,
+    uoms_disponibles: list,
+):
+    """Renderiza el formulario específico para editar una conciliación."""
+    from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
+
+    formulario = FormularioEntradaAlmacen(obj=registro)
+    lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
+    reconciliation_config = {
+        "header": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+            "adjustment_account_id": registro.adjustment_account_id or "",
+            "cost_center_code": registro.cost_center_code or "",
+            "unit_code": registro.unit_code or "",
+            "project_code": registro.project_code or "",
+            "remarks": registro.remarks or "",
+        },
+        "lines": [
+            {
+                "item_code": line.item_code,
+                "warehouse": line.target_warehouse or line.source_warehouse or "",
+                "uom": line.uom or "",
+                "current_qty": str(line.current_qty or 0),
+                "counted_qty": str(line.counted_qty or 0),
+                "current_valuation_rate": str(line.current_valuation_rate or 0),
+                "target_valuation_rate": str(line.target_valuation_rate or 0),
+                "current_stock_value": str(line.current_stock_value or 0),
+                "target_stock_value": str(line.target_stock_value or 0),
+            }
+            for line in lineas
+        ],
+    }
+    return render_template(
+        "inventario/stock_reconciliation_nuevo.html",
+        form=formulario,
+        titulo="Editar Conciliación de Inventario - " + APPNAME,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        reconciliation_config=reconciliation_config,
+        edit=True,
+        registro=registro,
+    )
+
+
 @inventario.route("/stock-entry/<entry_id>/duplicate", methods=["POST"])
 @modulo_activo("inventory")
 @login_required
@@ -1360,6 +1416,16 @@ def inventario_entrada_duplicar(entry_id: str):
             uom=item.uom,
             basic_rate=item.basic_rate,
             amount=item.amount,
+            qty_in_base_uom=item.qty_in_base_uom,
+            valuation_rate=item.valuation_rate,
+            current_qty=item.current_qty,
+            counted_qty=item.counted_qty,
+            qty_difference=item.qty_difference,
+            current_valuation_rate=item.current_valuation_rate,
+            target_valuation_rate=item.target_valuation_rate,
+            current_stock_value=item.current_stock_value,
+            target_stock_value=item.target_stock_value,
+            stock_value_difference=item.stock_value_difference,
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
