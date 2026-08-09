@@ -469,6 +469,39 @@ def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
         )
 
 
+def test_bank_reconciliation_locks_shared_target(app_ctx, monkeypatch):
+    """El destino compartido se lee con FOR UPDATE antes de calcular pendiente."""
+    from cacao_accounting.bancos import reconciliation_service
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, PaymentEntry, database
+
+    bank = Bank(name="Banco lock target")
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta lock target")
+    database.session.add(account)
+    database.session.flush()
+    transaction = BankTransaction(bank_account_id=account.id, posting_date=date(2026, 5, 5), deposit=Decimal("100"))
+    payment = PaymentEntry(
+        company="cacao", posting_date=date(2026, 5, 5), payment_type="receive", received_amount=Decimal("100"), docstatus=1
+    )
+    database.session.add_all([transaction, payment])
+    database.session.commit()
+
+    calls = []
+    original_get = database.session.get
+
+    def recording_get(model, ident, **kwargs):
+        calls.append((model, ident, kwargs.get("with_for_update")))
+        return original_get(model, ident, **kwargs)
+
+    monkeypatch.setattr(database.session, "get", recording_get)
+    reconciliation_service._validate_reconciliation_match(
+        match=reconciliation_service.BankReconciliationMatch(transaction.id, "payment_entry", payment.id, Decimal("100")),
+        company="cacao",
+    )
+    assert (PaymentEntry, payment.id, True) in calls
+
+
 def test_bank_candidates_match_direction_and_allow_partial_payment(app_ctx):
     from cacao_accounting.bancos.reconciliation_service import find_bank_reconciliation_candidates
     from cacao_accounting.database import Bank, BankAccount, BankTransaction, PaymentEntry, database
