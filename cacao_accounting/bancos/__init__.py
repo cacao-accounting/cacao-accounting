@@ -32,6 +32,7 @@ from cacao_accounting.bancos.reconciliation_service import (
 from cacao_accounting.bancos.statement_service import (
     BankStatementError,
     apply_bank_matching_rule,
+    create_bank_difference_journal,
 )
 from cacao_accounting.database import (
     Accounts,
@@ -71,6 +72,7 @@ from cacao_accounting.document_identifiers import (
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
+from cacao_accounting.ledger_queries import primary_ledger_id
 from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
 
@@ -617,6 +619,57 @@ def _bank_reconciliation_allocated_amount(transaction: BankTransaction) -> Decim
     return transaction.withdrawal
 
 
+def _post_bank_difference_adjustment(
+    reconciliation_id: str,
+    transaction: BankTransaction,
+    difference_amount: Decimal,
+) -> None:
+    """Post and attach a bank-difference journal to its reconciliation."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, submit_journal
+
+    try:
+        journal = create_bank_difference_journal(reconciliation_id, difference_amount)
+        submit_journal(journal.id)
+    except (BankStatementError, JournalValidationError) as exc:
+        raise BankReconciliationError(str(exc)) from exc
+
+    bank_account = database.session.get(BankAccount, transaction.bank_account_id)
+    if not bank_account or not bank_account.gl_account_id:
+        raise BankReconciliationError("La transaccion no tiene cuenta bancaria GL para registrar el ajuste.")
+    ledger_id = primary_ledger_id(str(bank_account.company))
+    bank_entry = database.session.execute(
+        database.select(GLEntry)
+        .filter_by(
+            company=bank_account.company,
+            voucher_type="journal_entry",
+            voucher_id=journal.id,
+            account_id=bank_account.gl_account_id,
+            ledger_id=ledger_id,
+            is_cancelled=False,
+            is_reversal=False,
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if bank_entry is None:
+        raise BankReconciliationError("No se encontró la línea bancaria del ajuste contabilizado.")
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation_id,
+            reference_type="bank_transaction",
+            reference_id=transaction.id,
+            amount=difference_amount,
+            allocated_amount=difference_amount,
+            reconciliation_date=date.today(),
+            status="reconciled",
+            source_type="bank_transaction",
+            source_id=transaction.id,
+            target_type="gl_entry",
+            target_id=bank_entry.id,
+        )
+    )
+    transaction.is_reconciled = True
+
+
 @bancos.route("/bank-reconciliation")
 @modulo_activo("cash")
 @login_required
@@ -694,11 +747,26 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
             flash(_("Una o mas transacciones ya estan reconciliadas."), "danger")
             return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
     matches: list[BankReconciliationMatch] = []
+    difference_requests: list[tuple[str, Decimal]] = []
     for transaction_id in transaction_ids:
         target = request.form.get(f"target_{transaction_id}") or ""
         amount = _form_decimal(f"amount_{transaction_id}")
+        difference = _form_decimal(f"difference_{transaction_id}")
         if not target or amount <= 0:
+            if difference > 0:
+                flash(_("Una diferencia bancaria requiere un candidato y un monto conciliado."), "danger")
+                return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
             continue
+        if difference < 0:
+            flash(_("La diferencia bancaria debe ser mayor o igual a cero."), "danger")
+            return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
+        if difference > 0:
+            transaction = database.session.get(BankTransaction, transaction_id)
+            bank_amount = _bank_reconciliation_allocated_amount(transaction) if transaction else None
+            if bank_amount is None or amount + difference != bank_amount:
+                flash(_("El monto conciliado más la diferencia debe coincidir con el monto bancario."), "danger")
+                return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
+            difference_requests.append((transaction_id, difference))
         target_type, target_id = target.split(":", 1)
         matches.append(
             BankReconciliationMatch(
@@ -709,9 +777,16 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
             )
         )
     try:
-        reconcile_bank_items(BankReconciliationRequest(company=company, reconciliation_date=date.today(), matches=matches))
+        reconciliation = reconcile_bank_items(
+            BankReconciliationRequest(company=company, reconciliation_date=date.today(), matches=matches)
+        )
+        for transaction_id, difference in difference_requests:
+            transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)
+            if transaction is None:
+                raise BankReconciliationError("La transaccion bancaria no existe.")
+            _post_bank_difference_adjustment(reconciliation.id, transaction, difference)
         database.session.commit()
-        flash(_("Conciliación bancaria aplicada correctamente."), "success")
+        flash(_("Conciliación bancaria y diferencia aplicadas correctamente."), "success")
     except BankReconciliationError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
