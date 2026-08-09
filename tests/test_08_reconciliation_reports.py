@@ -544,6 +544,65 @@ def test_posted_payment_bank_dimension_reconciles_with_bank_summary(app_ctx):
     assert report.totals["ending_balance"] == Decimal("-100.0000")
 
 
+def test_inventory_valuation_uses_latest_layer_at_cutoff(app_ctx):
+    """Inventory valuation must not sum historical snapshots or future layers."""
+    from cacao_accounting.database import StockValuationLayer, database
+    from cacao_accounting.reportes.services import OperationalReportFilters, get_inventory_valuation
+
+    database.session.add_all(
+        [
+            StockValuationLayer(
+                item_code="ITEM-VALUATION",
+                warehouse="WH-VALUATION",
+                company="cacao",
+                qty=Decimal("10"),
+                rate=Decimal("10"),
+                remaining_qty=Decimal("10"),
+                remaining_stock_value=Decimal("100"),
+                stock_value_difference=Decimal("100"),
+                voucher_type="stock_entry",
+                voucher_id="RECEIPT-VALUATION",
+                posting_date=date(2026, 5, 1),
+            ),
+            StockValuationLayer(
+                item_code="ITEM-VALUATION",
+                warehouse="WH-VALUATION",
+                company="cacao",
+                qty=Decimal("-5"),
+                rate=Decimal("10"),
+                remaining_qty=Decimal("5"),
+                remaining_stock_value=Decimal("50"),
+                stock_value_difference=Decimal("-50"),
+                voucher_type="stock_entry",
+                voucher_id="ISSUE-VALUATION",
+                posting_date=date(2026, 5, 15),
+            ),
+            StockValuationLayer(
+                item_code="ITEM-VALUATION",
+                warehouse="WH-VALUATION",
+                company="cacao",
+                qty=Decimal("1"),
+                rate=Decimal("10"),
+                remaining_qty=Decimal("99"),
+                remaining_stock_value=Decimal("990"),
+                stock_value_difference=Decimal("940"),
+                voucher_type="stock_entry",
+                voucher_id="FUTURE-VALUATION",
+                posting_date=date(2026, 6, 1),
+            ),
+        ]
+    )
+    database.session.commit()
+
+    report = get_inventory_valuation(
+        OperationalReportFilters(company="cacao", item_code="ITEM-VALUATION", date_to=date(2026, 5, 31))
+    )
+
+    assert len(report.rows) == 1
+    assert report.rows[0].values["remaining_qty"] == Decimal("5")
+    assert report.totals["remaining_stock_value"] == Decimal("50")
+
+
 def test_bank_difference_journal_uses_account_codes_and_each_book_currency(app_ctx):
     """El ajuste bancario se contabiliza en la moneda del banco y se convierte por libro."""
     from cacao_accounting.bancos.statement_service import create_bank_difference_journal
