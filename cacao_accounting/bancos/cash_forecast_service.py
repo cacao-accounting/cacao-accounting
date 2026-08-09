@@ -279,6 +279,8 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
     forecast = database.session.get(CashForecast, forecast_id)
     if not forecast:
         return []
+    if forecast.company != company:
+        raise ValueError("El pronóstico no pertenece a la compañía solicitada.")
 
     fiscal_year = database.session.get(FiscalYear, forecast.fiscal_year_id)
     if not fiscal_year:
@@ -365,6 +367,12 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
 
 def get_forecast_comparison(company, base_id, compare_id, today_date=None):
     """Compara dos pronósticos de flujo de caja para identificar variaciones."""
+    base_forecast = database.session.get(CashForecast, base_id)
+    compare_forecast = database.session.get(CashForecast, compare_id)
+    if not base_forecast or not compare_forecast:
+        return []
+    if base_forecast.company != company or compare_forecast.company != company:
+        raise ValueError("Los pronósticos comparados deben pertenecer a la compañía solicitada.")
     base_matrix = get_cash_forecast_matrix(company, base_id, today_date)
     compare_matrix = get_cash_forecast_matrix(company, compare_id, today_date)
 

@@ -1486,6 +1486,12 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Corrección: los targets `gl_entry` ahora deben usar la cuenta GL de la cuenta bancaria origen/destino; las reversas preservan `bank_account_id` del asiento original.
 - Revisión: #306 y #307 son falsos positivos contra el código actual, porque la dirección depósito/retiro ya se valida y los candidatos se calculan sobre el saldo pendiente sin el filtro total descrito.
 
+## 2026-08-10 — Aislamiento de pronósticos y deduplicación bancaria
+
+- #314 confirmado: `get_cash_forecast_matrix` y la comparación ahora rechazan pronósticos cuyo `company` no coincide con la compañía solicitada.
+- #315 confirmado: el adaptador activo detecta duplicados dentro del lote y contra la base; `BankTransaction` incorpora constraint único y una migración aborta si encuentra duplicados históricos, evitando consolidarlos silenciosamente.
+- La identidad se materializa en un hash no nulo para que la unicidad funcione también cuando depósito o retiro sean `NULL`; el listener la recalcula en inserts y updates.
+
 ## 2026-08-10 — Corrección de expectativa contable en CI
 
 - CI falló en `test_accounting_entries_for_payment_variants` porque el caso de reembolso de cliente esperaba una cuenta `payable`.
