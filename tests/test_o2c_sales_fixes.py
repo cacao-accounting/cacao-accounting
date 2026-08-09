@@ -335,6 +335,64 @@ def test_edit_invoice_rejects_reversal_of_on_customer_change(app_ctx):
     assert invoice.customer_id == customer_a.id
 
 
+def test_credit_note_cannot_exceed_cumulative_source_balance(app_ctx):
+    """Una nota de credito nueva respeta pagos y notas anteriores acumuladas."""
+    from cacao_accounting.ventas import _validate_reversal_of
+
+    customer = _ensure_customer("CUST-O2C-CAP", "Cliente limite NC")
+    source = SalesInvoice(
+        customer_id=customer.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="sales_invoice",
+        grand_total=Decimal("100"),
+    )
+    previous_note = SalesInvoice(
+        customer_id=customer.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="sales_credit_note",
+        grand_total=Decimal("60"),
+        reversal_of=None,
+    )
+    database.session.add_all([source, previous_note])
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=source.id,
+            target_type="sales_credit_note",
+            target_id=previous_note.id,
+            qty=Decimal("1"),
+            amount=Decimal("60"),
+            relation_type="reference",
+            status="active",
+        )
+    )
+    database.session.commit()
+
+    with pytest.raises(ValueError, match="excede el saldo pendiente"):
+        _validate_reversal_of(
+            source.id,
+            customer.id,
+            "cacao",
+            note_amount=Decimal("41"),
+            document_type="sales_credit_note",
+            posting_date=date.today(),
+        )
+
+    _validate_reversal_of(
+        source.id,
+        customer.id,
+        "cacao",
+        note_amount=Decimal("40"),
+        document_type="sales_credit_note",
+        posting_date=date.today(),
+    )
+
+
 def test_create_document_relation_rejects_cancelled_source(app_ctx):
     from cacao_accounting.document_flow.service import create_document_relation
     from cacao_accounting.document_flow import DocumentFlowError
