@@ -198,7 +198,7 @@ def _append_candidate(
 def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCandidate]:
     """Busca pagos y GL bancario candidatos para una transaccion bancaria."""
     # CAS-02: FOR UPDATE para prevenir duplicación concurrente
-    transaction = database.session.query(BankTransaction).with_for_update().get(bank_transaction_id)
+    transaction = database.session.get(BankTransaction, bank_transaction_id, with_for_update=True)
     if not transaction:
         raise BankReconciliationError("La transaccion bancaria no existe.")
     company = _bank_company(transaction)
@@ -277,7 +277,7 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
 def _update_reconciled_transactions(source_totals: dict[str, Decimal], matches: list[Any]) -> None:
     """Mark bank transactions as reconciled and populate payment_entry_id."""
     for bank_transaction_id in source_totals:
-        bank_transaction = database.session.query(BankTransaction).with_for_update().get(bank_transaction_id)
+        bank_transaction = database.session.get(BankTransaction, bank_transaction_id, with_for_update=True)
         if bank_transaction is not None:
             if _allocated_for_source(bank_transaction_id) >= _bank_amount(bank_transaction):
                 bank_transaction.is_reconciled = True
@@ -372,7 +372,7 @@ def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: s
     if match.allocated_amount <= 0:
         raise BankReconciliationError("El monto conciliado debe ser mayor que cero.")
     # CAS-02: FOR UPDATE para prevenir duplicación concurrente
-    transaction = database.session.query(BankTransaction).with_for_update().get(match.bank_transaction_id)
+    transaction = database.session.get(BankTransaction, match.bank_transaction_id, with_for_update=True)
     if not transaction:
         raise BankReconciliationError("La transaccion bancaria no existe.")
     if _bank_company(transaction) != company:

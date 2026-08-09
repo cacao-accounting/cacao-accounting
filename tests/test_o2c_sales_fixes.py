@@ -115,6 +115,108 @@ def test_sales_order_new_handles_unexpected_error(app_ctx):
     assert result is None
 
 
+O2C_BILLING_SCENARIOS = [
+    (10, 4, "12"),
+    (10, 10, "12"),
+    (25, 7, "8.50"),
+    (25, 25, "8.50"),
+    (1, 1, "100"),
+    (100, 33, "2.75"),
+    (100, 99, "2.75"),
+    (12, 5, "36.40"),
+    (12, 12, "36.40"),
+    (7, 3, "19.99"),
+    (7, 6, "19.99"),
+    (50, 1, "0.25"),
+    (50, 49, "0.25"),
+    (3, 2, "1250"),
+    (3, 3, "1250"),
+]
+
+
+@pytest.mark.full
+@pytest.mark.parametrize("ordered_qty, billed_qty, rate_raw", O2C_BILLING_SCENARIOS)
+def test_o2c_sales_order_to_invoice_relation_manual_balances(app_ctx, ordered_qty, billed_qty, rate_raw):
+    """Verifica cantidades pendientes y valor facturado en quince ciclos O2C.
+
+    La expectativa es independiente del servicio: pendiente = orden - factura
+    y valor facturado = factura x tarifa. Cada caso usa una orden y factura
+    aprobadas, crea la relación documental y consulta el estado resultante.
+    """
+    from cacao_accounting.document_flow import create_document_relation
+    from cacao_accounting.document_flow.repository import consumed_qty_for_source
+    from cacao_accounting.document_flow.service import get_source_items, pending_qty
+
+    item = _ensure_item(f"ART-O2C-FULL-{ordered_qty}-{billed_qty}")
+    customer = _ensure_customer(f"CUST-O2C-FULL-{ordered_qty}-{billed_qty}", "Cliente O2C full")
+    rate = Decimal(rate_raw)
+    order = SalesOrder(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date(2026, 8, 1),
+        docstatus=1,
+        grand_total=Decimal(ordered_qty) * rate,
+    )
+    database.session.add(order)
+    database.session.flush()
+    order_item = SalesOrderItem(
+        sales_order_id=order.id,
+        item_code=item.code,
+        qty=Decimal(ordered_qty),
+        uom="UND",
+        rate=rate,
+        amount=Decimal(ordered_qty) * rate,
+    )
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date(2026, 8, 2),
+        docstatus=1,
+        grand_total=Decimal(billed_qty) * rate,
+    )
+    database.session.add_all([order_item, invoice])
+    database.session.flush()
+    invoice_item = SalesInvoiceItem(
+        sales_invoice_id=invoice.id,
+        item_code=item.code,
+        qty=Decimal(billed_qty),
+        uom="UND",
+        rate=rate,
+        amount=Decimal(billed_qty) * rate,
+    )
+    database.session.add(invoice_item)
+    database.session.flush()
+    create_document_relation(
+        source_type="sales_order",
+        source_id=order.id,
+        source_item_id=order_item.id,
+        target_type="sales_invoice",
+        target_id=invoice.id,
+        target_item_id=invoice_item.id,
+        qty=Decimal(billed_qty),
+        uom="UND",
+        rate=rate,
+        amount=Decimal(billed_qty) * rate,
+    )
+    database.session.commit()
+
+    source_rows = get_source_items("sales_order", order.id, "sales_invoice")
+    expected_pending = Decimal(ordered_qty - billed_qty)
+    assert consumed_qty_for_source("sales_order", order.id, order_item.id, "sales_invoice") == Decimal(billed_qty)
+    assert pending_qty("sales_order", order.id, order_item.id, "sales_invoice") == expected_pending
+    relation = database.session.execute(
+        database.select(DocumentRelation).filter_by(source_id=order.id, target_id=invoice.id)
+    ).scalar_one()
+    assert relation.qty == Decimal(billed_qty)
+    if expected_pending:
+        assert source_rows[0]["source_qty"] == Decimal(ordered_qty)
+        assert source_rows[0]["consumed_qty"] == Decimal(billed_qty)
+        assert source_rows[0]["pending_qty"] == expected_pending
+        assert Decimal(str(source_rows[0]["amount"])) == expected_pending * rate
+    else:
+        assert source_rows == []
+
+
 def test_validate_invoice_prices_warns_without_raising(app_ctx):
     from cacao_accounting.ventas import _validate_invoice_prices_against_source
 
