@@ -1461,3 +1461,9 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Petición: continuar con bug fixes sin ejecutar la suite local ni saturar el workflow.
 - Plan implementado: corregir el open redirect del parámetro `next` en Cash Forecast y preservar la cuenta bancaria origen del formulario de cobro simple en el posting GL de recepción. Se mantienen los issues abiertos para tracking.
 - Verificación: Black, `compileall` y `git diff --check`; la suite pytest local no se ejecutó por instrucción del usuario.
+
+## 2026-08-10 — Conciliación bancaria multimoneda
+
+- Petición: analizar y corregir issues upstream abiertos sin cerrar los issues.
+- Plan implementado: #356 ahora exige compatibilidad entre moneda de cuenta bancaria, moneda funcional, moneda de pago y `GLEntry.account_currency`; usa importes base o importes en moneda de cuenta según corresponda y rechaza asignaciones incompatibles.
+- Verificación prevista: Black, `compileall` y `git diff --check`; no se ejecuta pytest local por instrucción del usuario.
