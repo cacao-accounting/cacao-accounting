@@ -2250,13 +2250,14 @@ def _create_stock_movements_for_items(document: StockEntry, items: Sequence[Any]
     return movements
 
 
-def _validate_stock_entry_warehouses(document: StockEntry, line: StockEntryItem) -> None:
+def _validate_stock_entry_warehouses(document: Any, line: Any) -> None:
     """Valida que las bodegas usadas por un movimiento pertenezcan a la compañía."""
     warehouse_codes = {
         getattr(document, "from_warehouse", None),
         getattr(document, "to_warehouse", None),
         getattr(line, "source_warehouse", None),
         getattr(line, "target_warehouse", None),
+        getattr(line, "warehouse", None),
     }
     for warehouse_code in filter(None, warehouse_codes):
         warehouse = database.session.execute(select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
@@ -2368,6 +2369,7 @@ def _create_stock_ledger_for_document(
 ) -> StockLedgerEntry:
     from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
 
+    _validate_stock_entry_warehouses(document, line)
     item = _stock_item_for(line)
     if qty_change < 0:
         if not warehouse:
@@ -2602,6 +2604,29 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
         batch_id=movement.batch_id,
         serial_no=movement.serial_no,
     )
+
+
+def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
+    """Reject reversals that would create forbidden negative stock."""
+    projected: dict[tuple[str, str, str], Decimal] = {}
+    items: dict[tuple[str, str, str], Any] = {}
+    for movement in movements:
+        key = (str(movement.company), str(movement.item_code), str(movement.warehouse))
+        if key not in projected:
+            bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse)
+            projected[key] = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
+            item = database.session.get(Item, movement.item_code)
+            if item is None:
+                item = database.session.execute(select(Item).filter_by(code=movement.item_code)).scalar_one_or_none()
+            if item is None:
+                raise PostingError(f"El artículo {movement.item_code} no existe.")
+            items[key] = item
+        projected[key] -= _decimal_value(movement.qty_change)
+        if projected[key] < 0 and not items[key].allow_negative_stock:
+            raise PostingError(
+                f"No se puede cancelar el movimiento de {items[key].name}: "
+                f"la bodega {movement.warehouse} quedaría con stock negativo."
+            )
 
 
 def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id, ledger_code):
@@ -3226,6 +3251,7 @@ def _cancel_stock_movements_if_needed(document: Any, company: str, voucher_type:
     if not original_movements:
         raise PostingError("El documento no tiene movimientos de inventario para reversar.")
 
+    _validate_stock_reversal_capacity(original_movements)
     stock_reversals: list[StockLedgerEntry] = []
     for movement in original_movements:
         stock_reversals.append(_create_stock_reversal(document, movement))
