@@ -1536,7 +1536,8 @@ def _validate_sales_order_requirement(invoice: SalesInvoice) -> None:
         if delivery_note and delivery_note.sales_order_id:
             return
     linked_order = database.session.execute(
-        database.select(DocumentRelation.id).where(
+        database.select(DocumentRelation.id)
+        .where(
             DocumentRelation.source_type == "sales_order",
             DocumentRelation.source_id.is_not(None),
             DocumentRelation.target_type == "sales_invoice",
@@ -2725,6 +2726,15 @@ def _create_sales_invoice_from_form():
         _total_qty, total = _save_sales_invoice_items(factura.id)
         factura.total = factura.base_total = factura.grand_total = factura.base_grand_total = total
         factura.outstanding_amount = factura.base_outstanding_amount = total
+        if reversal_of:
+            _validate_reversal_of(
+                reversal_of,
+                factura.customer_id,
+                factura.company,
+                note_amount=total,
+                document_type=document_type,
+                posting_date=factura.posting_date,
+            )
         _persist_sales_invoice_fiscal_snapshot(factura)
         database.session.commit()
         flash("Factura de venta creada correctamente.", "success")
@@ -2876,6 +2886,15 @@ def _handle_sales_invoice_edit_post(registro):
         registro.base_grand_total = total
         registro.outstanding_amount = total
         registro.base_outstanding_amount = total
+        if registro.reversal_of:
+            _validate_reversal_of(
+                registro.reversal_of,
+                registro.customer_id,
+                registro.company,
+                note_amount=total,
+                document_type=registro.document_type,
+                posting_date=registro.posting_date,
+            )
         warnings = _validate_invoice_prices_against_source(registro, raise_on_violation=False)
         _persist_sales_invoice_fiscal_snapshot(registro)
         after_state = _capture_sales_state(registro)
@@ -3121,8 +3140,22 @@ def _reject_overdue_invoices(invoices, payment_terms_id, outstanding_getter) -> 
             )
 
 
-def _validate_reversal_of(reversal_of: str, customer_id: str | None, company: str | None) -> None:
-    """Valida que la factura referenciada exista, este aprobada y pertenezca al mismo cliente y compania."""
+def _validate_reversal_of(
+    reversal_of: str,
+    customer_id: str | None,
+    company: str | None,
+    *,
+    note_amount: Decimal | None = None,
+    document_type: str | None = None,
+    posting_date: date | None = None,
+) -> None:
+    """Valida origen y limite acumulado de una nota de credito.
+
+    Las notas de debito incrementan la cuenta por cobrar y no se limitan al
+    saldo de la factura origen. Las notas de credito, en cambio, no pueden
+    superar el saldo pendiente de la factura considerando notas y pagos ya
+    aplicados.
+    """
     source = database.session.get(SalesInvoice, reversal_of)
     if not source:
         raise ValueError(f"La factura origen '{reversal_of}' no existe.")
@@ -3132,6 +3165,14 @@ def _validate_reversal_of(reversal_of: str, customer_id: str | None, company: st
         raise ValueError(f"La factura origen '{reversal_of}' no pertenece al mismo cliente.")
     if company and source.company != company:
         raise ValueError(f"La factura origen '{reversal_of}' no pertenece a la misma compania.")
+    if document_type == "sales_credit_note" and note_amount is not None:
+        from cacao_accounting.document_flow.payment import compute_outstanding_amount
+
+        outstanding = compute_outstanding_amount(source, as_of_date=posting_date)
+        if note_amount > outstanding:
+            raise ValueError(
+                f"La nota de credito ({note_amount}) excede el saldo pendiente " f"de la factura origen ({outstanding})."
+            )
 
 
 @ventas.route("/cliente/<customer_id>/deshabilitar-proveedor", methods=["POST"])
