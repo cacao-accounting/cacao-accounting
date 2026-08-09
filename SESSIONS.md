@@ -60,6 +60,16 @@ identidad `williamjmorenor@gmail.com`.
 - Se ejecutó una corrida focal consolidada de los flujos R2R/O2C/S2P,
   inventario, caja, FX y cierre: **161 passed, 110 warnings** en 216.61 s,
   registrada en `test_results_flow_focal_20260809.log`.
+- Se sustituyeron siete usos de `Query.get()` con bloqueo por
+  `Session.get(..., with_for_update=True)` en conciliación bancaria, pagos,
+  referencias e importación. La regresión afectada terminó **146 passed**;
+  los warnings focales bajaron a **56**, principalmente por fixtures JWT y
+  avisos externos/legacy.
+- La suite completa posterior a este cambio se está ejecutando en
+  `test_results_audit_final2_20260809.log`; terminó con **1591 passed, 10
+  skipped y 182 warnings** en 24:20. La regresión final de pagos y
+  conciliaciones después del octavo reemplazo ORM terminó **131 passed y 41
+  warnings** en `test_results_payment_last_orm_20260809.log`.
 - La cobertura verificada incluye subledger/aging AR-AP, kardex histórico,
   banco contra GL, anulaciones, posting de inventario, matching 3-way,
   pagos/aplicaciones, cierre fiscal, doble posting y dos libros con monedas

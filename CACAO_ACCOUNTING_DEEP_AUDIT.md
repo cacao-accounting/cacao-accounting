@@ -89,9 +89,11 @@ No se inventan importes ni se etiqueta cero una diferencia que no fue calculada 
 ## 12. End-to-End Test Results
 
 - Suite requerida en `.venv`: **1591 passed, 10 skipped, 242 warnings**, log `test_results_audit_final_20260809.log`.
+- Suite completa posterior a los reemplazos ORM iniciales: **1591 passed, 10 skipped, 182 warnings**, log `test_results_audit_final2_20260809.log`.
 - Esquema MariaDB 11.4 en Docker (`mysql+pymysql`, puerto 3307): **214 passed**, log `test_results_mariadb_schema_current.log`.
 - Pruebas focales FX/multi-ledger/reportes: **12 passed**.
 - Fixture afectado por hacer obligatorio `Entity.code`: **24 passed** de `test_line_import_api.py` tras completar el dato requerido.
+- Regresión final de pagos/conciliaciones tras el último reemplazo de bloqueo ORM: **131 passed, 41 warnings**, log `test_results_payment_last_orm_20260809.log`.
 
 Los escenarios base, multimoneda, multilibro, inventario y 3-way están documentados en `SESSIONS.md` y en los tests correspondientes. No se declara PASS para escenarios no ejecutados con una matriz de conciliación independiente.
 
@@ -179,6 +181,12 @@ Los escenarios base, multimoneda, multilibro, inventario y 3-way están document
 - **CONTROL GAP — HIGH:** el repositorio contiene `script.py.mako` pero no se identificaron versiones de migración para aplicar `nullable=False` en bases existentes. Requiere migración explícita antes de producción.
 - **POTENTIAL RISK — MEDIUM:** existen superficies de presentación que convierten Decimal a `float`/`parseFloat`/`toFixed`; no se confirmó pérdida material en posting, pero falta una prueba de contrato de precisión UI/API.
 - **DESIGN QUESTION — LOW:** `Book.code` es globalmente único además de único por entidad; puede limitar códigos iguales entre compañías. No se confirmó impacto contable.
+- **CONTROL GAP — LOW:** la corrida focal emitió 110 warnings; después de reemplazar
+  `Query.get()` por `Session.get(..., with_for_update=True)` en conciliación bancaria,
+  pagos, referencias e importación, la regresión afectada pasó 146 pruebas y la
+  superficie focal quedó en 56 warnings. Los restantes corresponden principalmente
+  a claves JWT cortas de fixtures, `PytestCollectionWarning` y APIs legacy externas;
+  deben limpiarse para que una advertencia transaccional no quede oculta.
 
 ## 16. Missing Controls
 
