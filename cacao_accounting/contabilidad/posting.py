@@ -2136,9 +2136,11 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
         raise PostingError("No se puede ajustar valor sin stock positivo o cantidad contada positiva.")
 
     if qty_change < 0:
-        valuation_rate, value_change = _consume_reconciliation_stock(
+        valuation_rate, _fifo_value_change = _consume_reconciliation_stock(
             document, line, warehouse, qty_change, target_value, counted_qty
         )
+        valuation_rate = abs(value_change) / abs(qty_change) if qty_change else Decimal("0")
+        line._inventory_cost_amount = abs(value_change)
     else:
         valuation_rate = value_change / qty_change if qty_change != 0 else Decimal("0")
     line.current_qty = current_qty
@@ -2270,7 +2272,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
     valuation_rate = _line_rate(line)
     value = _decimal_value(line.amount) or (qty * valuation_rate)
 
-    if purpose in ("material_receipt", "adjustment_positive"):
+    if purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
         return [
             _create_stock_movement(
                 document=document,
@@ -2845,6 +2847,7 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
     # In Material Transfer, we only generate GL if source and target warehouses
     # use different GL accounts. Otherwise, it's just a stock movement.
     if purpose == "material_transfer" and not _is_cross_account_transfer(document, company):
+        _document_contexts(document, ledger_code=ledger_code)
         return []
 
     entries = _create_stock_entry_gl_entries(document, company, purpose, ledger_code)
