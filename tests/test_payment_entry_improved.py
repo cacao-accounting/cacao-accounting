@@ -578,9 +578,11 @@ def test_multiple_payments_to_single_invoice(app_ctx):
     p2["paid_amount"] = 300
     p2["lines"] = [{"reference_type": "sales_invoice", "reference_id": si.id, "allocated_amount": 300}]
     client.post("/cash_management/payment/new", data={"payment_payload": json.dumps(p2)}, follow_redirects=True)
-    pe2 = database.session.execute(
-        database.select(PaymentEntry).filter_by(docstatus=0).order_by(PaymentEntry.created.desc())
-    ).scalars().first()
+    pe2 = (
+        database.session.execute(database.select(PaymentEntry).filter_by(docstatus=0).order_by(PaymentEntry.created.desc()))
+        .scalars()
+        .first()
+    )
     client.post(f"/cash_management/payment/{pe2.id}/submit", follow_redirects=True)
 
     database.session.refresh(si)
@@ -592,9 +594,11 @@ def test_multiple_payments_to_single_invoice(app_ctx):
     p3["lines"] = [{"reference_type": "sales_invoice", "reference_id": si.id, "allocated_amount": 450}]
     response = client.post("/cash_management/payment/new", data={"payment_payload": json.dumps(p3)}, follow_redirects=True)
     assert b"Pago registrado correctamente" in response.data
-    pe3 = database.session.execute(
-        database.select(PaymentEntry).filter_by(docstatus=0).order_by(PaymentEntry.created.desc())
-    ).scalars().first()
+    pe3 = (
+        database.session.execute(database.select(PaymentEntry).filter_by(docstatus=0).order_by(PaymentEntry.created.desc()))
+        .scalars()
+        .first()
+    )
     client.post(f"/cash_management/payment/{pe3.id}/submit", follow_redirects=True)
     database.session.refresh(si)
     assert compute_outstanding_amount(si) == 0
@@ -2167,3 +2171,110 @@ def test_payment_reference_loads_with_row_lock(app_ctx):
 
     database.session.refresh(invoice)
     assert invoice.outstanding_amount == Decimal("900")
+
+
+@pytest.mark.full
+def test_collection_cycle_partial_overpayment_and_advance(app_ctx):
+    """Recorre cobro parcial, rechazo de exceso y aplicación posterior de anticipo.
+
+    La expectativa independiente es: factura 1,000 - cobro 600 - anticipo
+    300 = saldo 100. El intento de aplicar 500 después del cobro parcial debe
+    rechazarse porque excede el saldo real de 400, aunque el efectivo pagado
+    sea suficiente.
+    """
+    from cacao_accounting.document_flow.payment import apply_advance_to_invoice
+    from cacao_accounting.document_flow.service import compute_outstanding_amount, compute_payment_unallocated_amount
+
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        docstatus=1,
+        grand_total=Decimal("1000"),
+        outstanding_amount=Decimal("1000"),
+        base_outstanding_amount=Decimal("1000"),
+    )
+    database.session.add(invoice)
+    database.session.commit()
+
+    partial_payload = {
+        "payment_type": "receive",
+        "company": "cacao",
+        "bank_account_id": bank.id,
+        "posting_date": date.today().isoformat(),
+        "paid_amount": 600,
+        "party_id": customer.id,
+        "party_type": "customer",
+        "lines": [{"reference_type": "sales_invoice", "reference_id": invoice.id, "allocated_amount": 600}],
+    }
+    response = client.post(
+        "/cash_management/payment/new",
+        data={"payment_payload": json.dumps(partial_payload)},
+        follow_redirects=True,
+    )
+    assert b"Pago registrado correctamente" in response.data
+    database.session.refresh(invoice)
+    assert invoice.outstanding_amount == Decimal("400")
+    partial_payment = (
+        database.session.execute(
+            database.select(PaymentEntry)
+            .filter_by(company="cacao", received_amount=Decimal("600"))
+            .order_by(PaymentEntry.created.desc())
+        )
+        .scalars()
+        .first()
+    )
+    assert partial_payment is not None
+    assert b"Pago aprobado" in client.post(f"/cash_management/payment/{partial_payment.id}/submit", follow_redirects=True).data
+
+    overpayment_payload = {**partial_payload, "paid_amount": 500}
+    overpayment_payload["lines"] = [{"reference_type": "sales_invoice", "reference_id": invoice.id, "allocated_amount": 500}]
+    response = client.post(
+        "/cash_management/payment/new",
+        data={"payment_payload": json.dumps(overpayment_payload)},
+        follow_redirects=True,
+    )
+    assert b"Pago registrado correctamente" not in response.data
+    assert "saldo pendiente" in response.data.decode("utf-8").lower()
+    database.session.refresh(invoice)
+    assert invoice.outstanding_amount == Decimal("400")
+
+    advance_payload = {
+        **partial_payload,
+        "paid_amount": 300,
+        "lines": [],
+        "advance_mode": True,
+    }
+    response = client.post(
+        "/cash_management/payment/new",
+        data={"payment_payload": json.dumps(advance_payload)},
+        follow_redirects=True,
+    )
+    assert b"Pago registrado correctamente" in response.data
+    advance = (
+        database.session.execute(
+            database.select(PaymentEntry)
+            .filter_by(company="cacao", received_amount=Decimal("300"))
+            .order_by(PaymentEntry.created.desc())
+        )
+        .scalars()
+        .first()
+    )
+    assert advance is not None
+    assert compute_payment_unallocated_amount(advance) == Decimal("300")
+
+    submit_response = client.post(f"/cash_management/payment/{advance.id}/submit", follow_redirects=True)
+    assert b"Pago aprobado" in submit_response.data
+
+    reference = apply_advance_to_invoice(advance.id, invoice.id, Decimal("300"), date.today())
+    database.session.commit()
+    database.session.refresh(invoice)
+    assert reference.allocated_amount == Decimal("300")
+    assert compute_outstanding_amount(invoice, as_of_date=date.today()) == Decimal("100")
+    assert invoice.outstanding_amount == Decimal("100")
+    assert compute_payment_unallocated_amount(advance) == Decimal("0")

@@ -186,8 +186,12 @@ def _sum_invoice_amount(invoices: list, start_date: date, end_date: date) -> Dec
     total = Decimal("0")
     for inv in invoices:
         if start_date <= inv.posting_date <= end_date:
-            amt = inv.base_outstanding_amount or inv.outstanding_amount or Decimal("0")
-            total += Decimal(str(amt))
+            amount = inv.base_outstanding_amount
+            if amount is None:
+                amount = Decimal(str(inv.outstanding_amount or 0)) * Decimal(str(inv.exchange_rate or 1))
+            if getattr(inv, "is_return", False):
+                amount = -Decimal(str(amount))
+            total += Decimal(str(amount))
     return total
 
 
@@ -292,7 +296,7 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         database.session.query(SalesInvoice)
         .filter(
             SalesInvoice.company == company,
-            SalesInvoice.outstanding_amount > 0,
+            or_(SalesInvoice.outstanding_amount > 0, SalesInvoice.base_outstanding_amount > 0),
             SalesInvoice.docstatus == 1,
         )
         .all()
@@ -301,7 +305,7 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         database.session.query(PurchaseInvoice)
         .filter(
             PurchaseInvoice.company == company,
-            PurchaseInvoice.outstanding_amount > 0,
+            or_(PurchaseInvoice.outstanding_amount > 0, PurchaseInvoice.base_outstanding_amount > 0),
             PurchaseInvoice.docstatus == 1,
         )
         .all()

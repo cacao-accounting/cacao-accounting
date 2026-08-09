@@ -3,6 +3,198 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-09 — Auditoría profunda multi-motor y reconciliación de cifras
+
+### Petición
+
+Realizar una auditoría end-to-end de R2R, O2C, S2P/P2P, inventario, caja y
+bancos, incluyendo doble partida, subledgers, FX realizado/no realizado,
+multi-ledger, cierres, reversiones, trazabilidad, aislamiento y pruebas con
+cálculos independientes. La ejecución de calidad debe usar `.venv`, Docker
+puede utilizarse para motores SQL, y los commits deben ser semánticos con la
+identidad `williamjmorenor@gmail.com`.
+
+### Descubrimiento y hallazgos confirmados
+
+- El esquema fallaba al crear `FiscalYear.entity -> Entity.code` en MariaDB
+  11.4 porque `Entity.code` era nullable aunque fuera destino de una FK
+  única. Después de corregirlo, MariaDB reveló el mismo problema en
+  `LedgerMappingRule.source_book/target_book -> Book.code`; `Book.code` también
+  quedó obligatorio. El esquema completo pasó 214 pruebas en MariaDB.
+- Los datasets semánticos de ventas/compras y AR/AP expresaban devoluciones
+  posteadas como importes positivos y no exponían el valor base de línea. Se
+  normalizaron los signos y se agregó `base_amount` con fallback legacy.
+- El pronóstico de caja podía omitir documentos cuyo saldo solo existía en
+  `base_outstanding_amount`, no convertir correctamente el fallback legacy y
+  tratar notas de crédito abiertas como entradas positivas. Se corrigió la
+  selección, conversión histórica y signo.
+- La revaluación cambiaria de cuentas bancarias sumaba el saldo original de
+  todos los libros al construir una sola exposición, duplicando el saldo al
+  procesar varios books. Ahora usa el libro resumen como fuente de exposición.
+- Las notas de crédito abiertas se revaluaban con la naturaleza de una factura
+  normal. AR credit note ahora usa naturaleza credit y AP credit note naturaleza
+  debit.
+
+### Pruebas y evidencia
+
+- Regresión focal semántica, multi-ledger, reportes operativos y FX: **12
+  passed**; nueva prueba de cifras semánticas/caja: incluida en ese bloque.
+- Esquema MariaDB 11.4 en Docker mediante `mysql+pymysql`: **214 passed**.
+- Black, Ruff, Flake8 y Mypy focales: sin errores; Mypy solo emitió notas
+  informativas sobre cuerpos de funciones sin anotación.
+- La suite completa exigida se dejó ejecutando en
+  `test_results_audit_full_20260809.log`. La corrida final posterior a todos
+  los cambios terminó en `test_results_audit_final_20260809.log` con **1591
+  passed, 10 skipped y 242 warnings** en 26:26.
+
+### Entregable y estado
+
+- Se generó [`CACAO_ACCOUNTING_DEEP_AUDIT.md`](CACAO_ACCOUNTING_DEEP_AUDIT.md)
+  con arquitectura, modelo contable, hallazgos en el formato solicitado,
+  evidencia de pruebas, matriz de reconciliación, controles faltantes y
+  evaluación final.
+- La evaluación permanece **PARTIAL**: la suite está verde, pero faltan
+  migraciones versionadas, una matriz consolidada AR/AP/inventario/bancos/Tax
+  contra GL por dimensiones y evidencia completa de concurrencia, PostgreSQL,
+  cierres FX y todas las reversiones.
+- Se ejecutó una corrida focal consolidada de los flujos R2R/O2C/S2P,
+  inventario, caja, FX y cierre: **161 passed, 110 warnings** en 216.61 s,
+  registrada en `test_results_flow_focal_20260809.log`.
+- Se sustituyeron siete usos de `Query.get()` con bloqueo por
+  `Session.get(..., with_for_update=True)` en conciliación bancaria, pagos,
+  referencias e importación. La regresión afectada terminó **146 passed**;
+  los warnings focales bajaron a **56**, principalmente por fixtures JWT y
+  avisos externos/legacy.
+- La suite completa posterior a este cambio terminó en
+  `test_results_audit_final2_20260809.log` con **1591 passed, 10 skipped y
+  182 warnings** en 24:20. La regresión final de pagos y conciliaciones
+  después del octavo reemplazo ORM terminó **131 passed y 41 warnings** en
+  `test_results_payment_last_orm_20260809.log`.
+- La ejecución autoritativa sobre el árbol final, registrada en
+  `test_results_audit_authoritative_20260809.log`, terminó con **1591 passed,
+  10 skipped y 174 warnings** en 26:33.
+- La cobertura verificada incluye subledger/aging AR-AP, kardex histórico,
+  banco contra GL, anulaciones, posting de inventario, matching 3-way,
+  pagos/aplicaciones, cierre fiscal, doble posting y dos libros con monedas
+  distintas. El informe ahora incluye una matriz explícita de estas cadenas y
+  separa lo probado de lo que sigue pendiente.
+- Cambios realizados en commits semánticos `5b049bf` y `8cd297f`; la identidad
+  Git es `William Jose Moreno Reyes <williamjmorenor@gmail.com>`.
+
+### Continuidad
+
+La auditoría debe continuar con una matriz explícita de reconciliación
+AR/AP/inventario/bancos contra GL por compañía, libro, moneda y período, más
+la revisión de period close, impuestos, rounding, concurrencia, reversals y
+los escenarios end-to-end restantes. No declarar PASS sin evidencia de cada
+matriz.
+
+## 2026-08-09 — Pruebas full de cobros y compensación 3-way multimoneda
+
+### Petición
+
+Ampliar el test drive de un sistema contable con escenarios end-to-end para
+R2R, O2C, S2R, inventario y bancos. Se solicitó cubrir pagos parciales,
+pagos de más, anticipos, devoluciones, entradas, multimoneda, multilibro y la
+compensación de facturas contra reportes de recepción, usando pruebas marcadas
+para ejecutarse con `pytest --full`.
+
+### Implementación
+
+- Se agregó la opción `--full` y el marcador `full` en pytest.
+- Se agregó un ciclo integrado de cobro: factura de 1,000, cobro parcial de
+  600, rechazo de aplicación de 500 sobre el saldo 400 y anticipo de 300
+  aplicado después de su aprobación; el saldo manual esperado es 100.
+- Se agregó una conciliación 3-way en USD con recepción de 15 unidades a 12,
+  facturas de 9 y 4 unidades, y reporte pendiente de 2 unidades / USD 24.
+- Los valores base del segundo escenario se fijan manualmente a NIO 6,480 y
+  se conserva la trazabilidad de la recepción como fuente de compensación.
+- Se configuró la identidad Git local para commits semánticos de
+  `williamjmorenor@gmail.com`.
+
+### Verificación parcial
+
+- Prueba de cobro parcial/anticipo: **1 passed**.
+- Prueba 3-way multimoneda y reporte de recepción: **1 passed**.
+- Regresión focal previa de ciclos: **178 passed**.
+- Black, Ruff y Flake8 sobre los archivos modificados: sin errores.
+- Mypy del archivo legado de pagos conserva tres errores preexistentes no
+  introducidos por esta sesión; la suite `--full` quedó ejecutándose en
+  segundo plano para su resultado consolidado.
+
+## 2026-08-09 — Matriz de valoración y reconstrucción de inventario
+
+### Ampliación solicitada
+
+Se pidió elevar la cobertura a aproximadamente 50 pruebas por ciclo de
+negocio, con especial atención a que el sistema es contable y que inventario
+debe probarse con movimientos y valores calculados, no con asserts triviales.
+
+### Implementación y evidencia
+
+- Se agregaron **26 escenarios `full`** de reconstrucción de inventario.
+- Cada escenario persiste movimientos de recepción, salida, devolución,
+  conteo o ajuste con cantidades y valores independientes, reconstruye
+  `StockBin` y `StockValuationLayer`, y verifica cantidad, valor, tasa final,
+  capas generadas y reserva preservada.
+- La expectativa contable se calcula fuera del servicio como suma de
+  `qty_change` y `stock_value_difference`, con tasa `valor / cantidad`.
+- La matriz pasó **26 passed**. El primer ensayo detectó dos expectativas
+  manuales mal formuladas (redondeo y signo de una salida); se corrigieron y
+  se repitió el bloque completo.
+- Con las suites existentes, el inventario queda en aproximadamente 50 casos
+  identificables por nombre de archivo; R2R, O2C, S2R y bancos ya superan esa
+  magnitud según el inventario de pruebas de esta sesión.
+
+## 2026-08-09 — Matriz O2C y auditoría de checks de GitHub Actions
+
+### Implementación
+
+- Se agregaron **15 escenarios `full` O2C** de orden aprobada a factura
+  aprobada, con cantidades parciales y completas, tarifas decimales,
+  cantidades fraccionarias y saldos pendientes calculados manualmente.
+- Las pruebas verifican la relación documental, el consumo por cantidad y el
+  reporte pendiente (`orden - facturado` y `pendiente × tarifa`). El bloque
+  quedó en **15 passed**.
+- La cobertura por selección de workflows queda en aproximadamente R2R 270,
+  O2C 50, S2R 84, inventario 102 (incluye casos compartidos de reportes) y
+  bancos 153 pruebas recolectadas.
+
+### Auditoría local de workflows
+
+- `flake8 cacao_accounting/`: exit 0.
+- `ruff check cacao_accounting/`: exit 0.
+- `pydocstyle cacao_accounting/`: exit 0.
+- `mypy cacao_accounting/`: sin errores en 197 archivos.
+- `npm ci` + `npm test`: **33 passing**.
+- `python -m build` + `twine check`: ambos artefactos PASSED.
+- Bandit no es ejecutado actualmente por el workflow aunque se instala; una
+  ejecución informativa detecta hallazgos heredados (139 bajos, 1 medio), por
+  lo que no se presenta como check verde.
+- La suite pytest focal `--full` continúa en segundo plano; su resumen final
+  aún es requisito para cerrar la auditoría.
+
+### Ajuste del workflow
+
+- Los jobs `build`, `desktop` y `coverage` de `python-package.yml` ahora
+  ejecutan pytest con `--full`, haciendo explícita la matriz de escenarios.
+- `coverage` dejó de usar `continue-on-error`, de modo que una regresión de
+  pruebas o cobertura no pueda aparecer como check exitoso.
+- Ambos workflows locales cargan correctamente como YAML.
+
+### Resultado final de regresión actual
+
+- Después de los últimos cambios se ejecutó la batería afectada completa con
+  `pytest --full --slow=True` y salida persistida en
+  `test_results_current_full.log`: **286 passed, 129 warnings**, 7m22s.
+- La batería amplia anterior del baseline terminó en **562 passed, 129
+  warnings**; la regresión actual es la evidencia válida para los archivos
+  modificados.
+- El job de esquema SQLite del workflow se reprodujo en `.venv` con salida en
+  `test_results_schema.log`: **213 passed** en 2m34s. MySQL y PostgreSQL no se
+  ejecutaron localmente porque requieren servicios/servidores externos; sus
+  comandos permanecen en el workflow para CI.
+
 ## 2026-08-07 — Blindaje de devoluciones en analítica y dashboard R2R
 
 ### Petición
