@@ -12,11 +12,14 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user, login_required
 
 from cacao_accounting.database import (
+    CompanyParty,
     DeliveryNote,
     DeliveryNoteItem,
     DocumentRelation,
     Item,
+    ItemPrice,
     Party,
+    PriceList,
     SalesInvoice,
     SalesInvoiceItem,
     SalesMatchingConfig,
@@ -30,6 +33,7 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from ulid import ULID
 from cacao_accounting.database.helpers import get_active_naming_series
@@ -1409,6 +1413,7 @@ def _validate_single_item_price(
     tolerance_value: Decimal,
     allow_diff: bool,
     raise_on_violation: bool,
+    reference_label: str = "Orden de Venta",
 ) -> str | None:
     """Valida el precio de un item individual contra la orden de venta.
 
@@ -1426,7 +1431,7 @@ def _validate_single_item_price(
     unit = "%" if tolerance_type == "percentage" else ""
     msg = (
         f"El precio del item {si_item.item_code} (${si_rate}) "
-        f"difiere del precio en la Orden de Venta (${so_rate}) "
+        f"difiere del precio en {reference_label} (${so_rate}) "
         f"en {variance:.2f}{unit}. "
         f"Tolerancia permitida: {tolerance_value}{unit}."
     )
@@ -1455,16 +1460,76 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
     warnings: list[str] = []
     for si_item in invoice_items:
         so_rate = _resolve_source_item_rate(si_item, invoice.id)
+        reference_label = "Orden de Venta"
+        if so_rate is None:
+            so_rate = _resolve_catalog_sales_rate(invoice, si_item)
+            reference_label = "la Lista de Precios"
         if so_rate is None:
             continue
 
         warning = _validate_single_item_price(
-            si_item, so_rate, tolerance_type, tolerance_value, allow_diff, raise_on_violation
+            si_item,
+            so_rate,
+            tolerance_type,
+            tolerance_value,
+            allow_diff,
+            raise_on_violation,
+            reference_label=reference_label,
         )
         if warning:
             warnings.append(warning)
 
     return warnings
+
+
+def _resolve_sales_price_list(company: str, customer_id: str | None) -> PriceList | None:
+    """Obtiene la lista de venta del cliente o la predeterminada de la compañía."""
+    company_party = None
+    if customer_id:
+        company_party = database.session.execute(
+            database.select(CompanyParty).filter_by(company=company, party_id=customer_id, is_active=True)
+        ).scalar_one_or_none()
+    configured_id = getattr(company_party, "default_price_list_id", None)
+    if configured_id:
+        configured = database.session.get(PriceList, configured_id)
+        if configured and configured.is_active and configured.is_selling and configured.company in (None, company):
+            return configured
+    return (
+        database.session.execute(
+            database.select(PriceList)
+            .where(
+                PriceList.is_active.is_(True),
+                PriceList.is_default.is_(True),
+                PriceList.is_selling.is_(True),
+                or_(PriceList.company == company, PriceList.company.is_(None)),
+            )
+            .order_by(PriceList.company.is_(None), PriceList.name)
+        )
+        .scalars()
+        .first()
+    )
+
+
+def _resolve_catalog_sales_rate(invoice: SalesInvoice, item: SalesInvoiceItem) -> Decimal | None:
+    """Resuelve el precio vigente del catálogo para una línea sin documento fuente."""
+    price_list = _resolve_sales_price_list(invoice.company, invoice.customer_id)
+    if not price_list or not invoice.posting_date:
+        return None
+    query = (
+        database.select(ItemPrice)
+        .where(
+            ItemPrice.item_code == item.item_code,
+            ItemPrice.price_list_id == price_list.id,
+            (ItemPrice.valid_from.is_(None) | (ItemPrice.valid_from <= invoice.posting_date)),
+            (ItemPrice.valid_upto.is_(None) | (ItemPrice.valid_upto >= invoice.posting_date)),
+            (ItemPrice.min_qty.is_(None) | (ItemPrice.min_qty <= item.qty)),
+        )
+        .order_by(ItemPrice.min_qty.desc().nullslast(), ItemPrice.valid_from.desc().nullslast())
+    )
+    if item.uom:
+        query = query.where(or_(ItemPrice.uom.is_(None), ItemPrice.uom == item.uom))
+    catalog_price = database.session.execute(query).scalars().first()
+    return Decimal(str(catalog_price.price)) if catalog_price else None
 
 
 def _resolve_source_item_rate(si_item: SalesInvoiceItem, invoice_id: str) -> Decimal | None:
