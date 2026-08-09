@@ -1832,3 +1832,12 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - #346, #348 y #355 también fueron contrastados contra guards ya presentes:
   las notas de crédito se excluyen de exposición, el saldo base se convierte
   con FX y las filas bancarias con depósito y retiro se rechazan.
+
+## 2026-08-10 — Aislamiento de anticipos O2C
+
+- #302 confirmado: `_payment_order_allocated` sumaba referencias activas por
+  orden sin filtrar la compañía del pago.
+- Corrección local: el saldo de anticipos recibe la compañía del documento y
+  aplica `PaymentEntry.company` al query; sin compañía mantiene compatibilidad
+  para callers internos existentes.
+- El issue permanece abierto para verificación de aislamiento entre compañías.
