@@ -1270,3 +1270,11 @@ Ejecutar una auditoría READ-ONLY del flujo O2C (Cotización→OV→ND→Factura
 
 ### Controles verificados OK
 Aislamiento por compañía en `_document_payment_references`/`_payment_allocations`; `apply_payment_reconciliation` valida compañía/tercero/tipo de pago, moneda (CAS-03), tope contra saldo (`_validate_and_get_outstanding`), duplicados y consumo de caja; límite de crédito implementado (submit + re-chequeo en approval engine); sobre-entrega en ND; sobre-facturación en líneas con relación; `StockBin` con FOR UPDATE; signo de retornos en GL (`_signed_amount`) y subledger; revalidación en aprobación final.
+
+### 2026-08-09 — Corrección de aplicación de notas de crédito O2C
+
+Se reprodujo el cálculo con una factura de 100 y una nota de crédito de 25 enlazada mediante `DocumentRelation`. La relación usa `target_type="sales_invoice"` porque apunta al modelo físico, mientras que `SalesInvoice.document_type` contiene `sales_credit_note`. La consulta anterior filtraba el tipo lógico en la relación y devolvía saldo 100, ignorando la nota.
+
+La consulta AR/AP ahora identifica la naturaleza de la nota por `SalesInvoice.document_type` o `PurchaseInvoice.document_type`, manteniendo el aislamiento por documento, estado y fecha. Se añadió la regresión `test_compute_outstanding_amount_applies_credit_note_by_document_type`, que exige saldo 75.
+
+Validación: 2 pruebas de notas `passed`; batería focal de saldos, subledger, aging, maturity y notas `15 passed`; Black, Ruff, Flake8, Mypy y `git diff --check` pasan para los archivos tocados. El issue #280 continúa abierto para completar créditos, reversals y conciliación O2C ↔ GL.
