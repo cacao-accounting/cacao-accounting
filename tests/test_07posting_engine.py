@@ -3995,3 +3995,21 @@ def test_operational_posting_multimoneda_real(app_ctx):
         else:
             assert entry.credit == Decimal("365.00")
             assert entry.credit_in_account_currency == Decimal("10.00")
+
+    from cacao_accounting.contabilidad.posting import cancel_document
+
+    cancel_document(invoice)
+    database.session.flush()
+    reversals = (
+        database.session.execute(
+            database.select(GLEntry).filter_by(voucher_type="sales_invoice", voucher_id=invoice.id, is_reversal=True)
+        )
+        .scalars()
+        .all()
+    )
+    assert len(reversals) == len(entries)
+    for reversal in reversals:
+        original = database.session.get(GLEntry, reversal.reversal_of)
+        assert original is not None
+        assert reversal.debit_in_account_currency == original.credit_in_account_currency
+        assert reversal.credit_in_account_currency == original.debit_in_account_currency

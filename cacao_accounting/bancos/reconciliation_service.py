@@ -415,9 +415,20 @@ def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: s
         raise BankReconciliationError("La transaccion bancaria no existe.")
     if _bank_company(transaction) != company:
         raise BankReconciliationError("La transaccion bancaria pertenece a otra compania.")
+    _lock_reconciliation_target(match.target_type, match.target_id)
     if _target_company(match.target_type, match.target_id) != company:
         raise BankReconciliationError("El documento destino pertenece a otra compania.")
     return transaction
+
+
+def _lock_reconciliation_target(target_type: str, target_id: str) -> None:
+    """Bloquea el documento destino antes de leer su saldo conciliable."""
+    model = {"payment_entry": PaymentEntry, "gl_entry": GLEntry}.get(target_type)
+    if model is None:
+        raise BankReconciliationError("Tipo de destino no soportado para conciliacion bancaria.")
+    target = database.session.get(model, target_id, with_for_update=True)
+    if target is None:
+        raise BankReconciliationError("El documento destino no existe.")
 
 
 def _reconciliation_pending_amounts(

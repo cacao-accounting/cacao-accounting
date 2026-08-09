@@ -698,10 +698,13 @@ def _get_reference_document(flow_source_type: str, document_id: str, company: st
     return document
 
 
-def _validate_payment_currency_match(payment: Any, document: Any) -> None:
+def _validate_payment_currency_match(payment: Any, document: Any, *, infer_missing: bool = False) -> None:
     """CAS-03: Valida que la moneda del pago coincida con la moneda del documento referenciado."""
     payment_currency = getattr(payment, "currency", None)
     document_currency = getattr(document, "transaction_currency", None) or getattr(document, "currency", None)
+    if infer_missing and not payment_currency and document_currency:
+        payment.currency = document_currency
+        payment_currency = document_currency
     if payment_currency and document_currency and payment_currency != document_currency:
         raise _document_flow_error(
             "La moneda del pago ({0}) no coincide con la moneda del documento referenciado ({1}). "
@@ -1226,6 +1229,9 @@ def _build_payment_target_payment(company: str | None, posting_date: Any, payloa
         party_type=payload.get("party_type"),
         party_id=payload.get("party_id"),
         bank_account_id=payload.get("bank_account_id"),
+        currency=payload.get("currency"),
+        base_currency=payload.get("base_currency"),
+        exchange_rate=payload.get("exchange_rate"),
         remarks=payload.get("remarks"),
     )
     database.session.add(payment)
@@ -1285,6 +1291,7 @@ def _apply_payment_target_line(
         raise _document_flow_error("No se pueden mezclar companias incompatibles.", 409)
 
     allocated = decimal_or_zero(selected.get("qty") or selected.get("allocated_amount"))
+    _validate_payment_currency_match(payment, invoice, infer_missing=True)
     outstanding = compute_outstanding_amount(invoice)
     _validate_payment_target_allocation(allocated, outstanding)
     _persist_payment_target_allocation(payment, reference_type, reference_id, invoice, allocated, outstanding)
