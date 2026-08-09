@@ -1492,6 +1492,12 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - #315 confirmado: el adaptador activo detecta duplicados dentro del lote y contra la base; `BankTransaction` incorpora constraint único y una migración aborta si encuentra duplicados históricos, evitando consolidarlos silenciosamente.
 - La identidad se materializa en un hash no nulo para que la unicidad funcione también cuando depósito o retiro sean `NULL`; el listener la recalcula en inserts y updates.
 
+## 2026-08-10 — Relación AR de notas de crédito
+
+- #294 confirmado: la nota de crédito validaba el origen y el límite, pero no persistía una relación agregable para el saldo de la factura.
+- Corrección local: al contabilizar una nota de crédito/débito se persiste una relación auditable `sales_invoice -> sales_credit_note/sales_debit_note`; la cancelación revierte el target_type real y la función de saldo puede descontar la NC.
+- #300 revisado como cubierto por `_validate_reversal_of` y el cálculo de saldo actual; #296 revisado como mitigado por `preserve_reserved_qty` en entregas ligadas a OV.
+
 ## 2026-08-10 — Lectura de candidatos sin locks
 
 - #313 confirmado: la consulta GET de conciliación invocaba `FOR UPDATE` sobre cada transacción pendiente.
