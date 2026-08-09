@@ -2385,7 +2385,7 @@ def _create_stock_ledger_for_document(
             )
         except PostingError:
             if not item.allow_negative_stock:
-                raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
+                raise
             cost_rate = _consume_available_layers_for_negative_stock(
                 company=document.company,
                 item_code=line.item_code,
