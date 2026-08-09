@@ -41,6 +41,7 @@ from cacao_accounting.database import (
     BankAccountNumberingConfig,
     BankMatchingRule,
     BankTransaction,
+    Book,
     DocumentRelation,
     Entity,
     ExternalCounter,
@@ -57,7 +58,9 @@ from cacao_accounting.database import (
     User,
     database,
 )
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import get_active_naming_series
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
 from cacao_accounting.document_flow.service import apply_payment_reconciliation
@@ -363,6 +366,20 @@ def _warn_duplicate_payment(payment):
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
     """Pagina un listado aplicando los filtros GET comunes."""
     base_query = query if query is not None else database.select(model)
+    if hasattr(model, "company"):
+        company = request.args.get("company")
+        if company:
+            exige_acceso_compania("cash", company, "consultar")
+            base_query = base_query.filter(model.company == company)
+        elif not getattr(current_user, "classification", None) == "admin":
+            module_id = obtener_id_modulo_por_nombre("cash")
+            permissions = Permisos(modulo=module_id, usuario=current_user.id)
+            book_ids = permissions.obtener_libros_autorizados("can_read")
+            if not book_ids:
+                base_query = base_query.where(database.false())
+            else:
+                accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
+                base_query = base_query.where(model.company.in_(accessible_companies))
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     return database.paginate(
         filtered_query,
