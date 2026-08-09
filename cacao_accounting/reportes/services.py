@@ -485,6 +485,27 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         )
     )
 
+    bridge_account = str(defaults.bridge_account_id) if defaults and defaults.bridge_account_id else None
+    pending_receipts = get_purchase_reconciliation_pending(company=filters.company, as_of_date=as_of_date)
+    pending_grni = sum((pending.pending_amount for pending in pending_receipts), Decimal("0"))
+    rows.append(
+        _reconciliation_row(
+            "GRNI/AP 3-way",
+            [bridge_account] if bridge_account else [],
+            -pending_grni,
+            _reconciliation_gl_amount(
+                filters.company,
+                selected_ledger.id,
+                [bridge_account] if bridge_account else [],
+                date_to=as_of_date,
+                currency=filters.currency,
+            ),
+            basis="ending_balance",
+            currency=selected_ledger.currency,
+            note="Fuente: recepciones aprobadas pendientes de factura; el puente se expresa como crédito neto.",
+        )
+    )
+
     sales_tax_account = (
         str(defaults.default_sales_tax_account_id) if defaults and defaults.default_sales_tax_account_id else None
     )
