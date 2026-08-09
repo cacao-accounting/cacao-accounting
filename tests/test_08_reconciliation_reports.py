@@ -2845,6 +2845,43 @@ def test_bank_statement_import_preview_and_matching_rule(app_ctx):
     assert run.candidates_by_transaction
 
 
+def test_bank_statement_withdrawal_only_is_reconcilable(app_ctx):
+    """Un retiro importado debe conservar su lado monetario y ser conciliable."""
+    from cacao_accounting.bancos import _bank_reconciliation_allocated_amount
+    from cacao_accounting.bancos.reconciliation_service import _bank_amount
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, database
+    from cacao_accounting.imports.adapters.bank_statement import BankStatementAdapter
+
+    bank = Bank(name="Banco retiro")
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta retiro")
+    database.session.add(account)
+    database.session.flush()
+    row = {
+        "bank_account_id": account.id,
+        "posting_date": "2026-05-05",
+        "reference_number": "W-1",
+        "description": "Retiro",
+        "deposit": "",
+        "withdrawal": "25.00",
+    }
+    imported = BankStatementAdapter().build_document([row], {})[0]
+    assert imported["deposit"] is None
+    assert imported["withdrawal"] == Decimal("25.00")
+
+    transaction = BankTransaction(
+        bank_account_id=account.id,
+        posting_date=date(2026, 5, 5),
+        deposit=Decimal("0"),
+        withdrawal=Decimal("25.00"),
+    )
+    database.session.add(transaction)
+    database.session.commit()
+    assert _bank_amount(transaction) == Decimal("25.00")
+    assert _bank_reconciliation_allocated_amount(transaction) == Decimal("25.00")
+
+
 # ---------------------------------------------------------------------------
 # Criterios de aceptacion del Issue: Framework de Conciliacion de Compras
 # ---------------------------------------------------------------------------

@@ -600,7 +600,7 @@ def bancos_transaccion_reconciliar():
 
 def _bank_reconciliation_allocated_amount(transaction: BankTransaction) -> Decimal | None:
     """Get the amount allocated for a bank reconciliation match."""
-    if transaction.deposit is not None:
+    if transaction.deposit is not None and transaction.deposit > 0:
         return transaction.deposit
     return transaction.withdrawal
 

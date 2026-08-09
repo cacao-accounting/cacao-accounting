@@ -24,6 +24,14 @@ class BankStatementAdapter(BaseImportAdapter):
     ]
     required_columns = ["bank_account_id", "posting_date"]
 
+    @staticmethod
+    def _optional_amount(value: Any) -> Decimal | None:
+        """Convierte una columna vacía o cero en un lado bancario ausente."""
+        if value in (None, ""):
+            return None
+        amount = Decimal(str(value))
+        return amount if amount != 0 else None
+
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
         """Validate a single bank statement row."""
         errors = super().validate_row(row_data)
@@ -52,8 +60,8 @@ class BankStatementAdapter(BaseImportAdapter):
                     "posting_date": posting_date,
                     "reference_number": str(row.get("reference_number", "")),
                     "description": str(row.get("description", "")),
-                    "deposit": Decimal(str(row.get("deposit") or 0)),
-                    "withdrawal": Decimal(str(row.get("withdrawal") or 0)),
+                    "deposit": self._optional_amount(row.get("deposit")),
+                    "withdrawal": self._optional_amount(row.get("withdrawal")),
                 }
             )
         return transactions
@@ -66,7 +74,7 @@ class BankStatementAdapter(BaseImportAdapter):
                 posting_date=tx_data["posting_date"],
                 reference_number=tx_data.get("reference_number", ""),
                 description=tx_data.get("description", ""),
-                deposit=tx_data.get("deposit", Decimal("0")),
-                withdrawal=tx_data.get("withdrawal", Decimal("0")),
+                deposit=tx_data.get("deposit"),
+                withdrawal=tx_data.get("withdrawal"),
             )
             database.session.add(tx)
