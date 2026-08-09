@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 
 from cacao_accounting.database import (
     BankAccount,
@@ -74,8 +74,42 @@ def _bank_amount(transaction: BankTransaction) -> Decimal:
     return deposit if deposit > 0 else withdrawal
 
 
+def _bank_direction(transaction: BankTransaction) -> str | None:
+    """Devuelve la dirección económica de una transacción bancaria."""
+    if _decimal_value(transaction.deposit) > 0:
+        return "deposit"
+    if _decimal_value(transaction.withdrawal) > 0:
+        return "withdrawal"
+    return None
+
+
 def _payment_amount(payment: PaymentEntry) -> Decimal:
-    return _decimal_value(payment.paid_amount or payment.received_amount)
+    if payment.payment_type in ("pay", "debit_note"):
+        return _decimal_value(payment.paid_amount)
+    return _decimal_value(payment.received_amount or payment.paid_amount)
+
+
+def _payment_direction(payment: PaymentEntry, transaction: BankTransaction) -> str | None:
+    """Relaciona el tipo de pago con la dirección de la cuenta bancaria."""
+    if payment.payment_type in ("pay", "debit_note"):
+        return "withdrawal"
+    if payment.payment_type in ("receive", "credit_note"):
+        return "deposit"
+    if payment.payment_type == "internal_transfer":
+        if payment.bank_account_id == transaction.bank_account_id:
+            return "withdrawal"
+        if payment.target_bank_account_id == transaction.bank_account_id:
+            return "deposit"
+    return None
+
+
+def _gl_direction(entry: GLEntry) -> str | None:
+    """Interpreta débito bancario como depósito y crédito como retiro."""
+    if _decimal_value(entry.debit) > 0:
+        return "deposit"
+    if _decimal_value(entry.credit) > 0:
+        return "withdrawal"
+    return None
 
 
 def _gl_amount(entry: GLEntry) -> Decimal:
@@ -179,11 +213,12 @@ def _append_candidate(
     pending: Decimal,
 ) -> None:
     """Agrega un candidato con el score y estado derivados."""
+    allocated_amount = min(amount, pending, _bank_amount(bank_transaction))
     candidates.append(
         BankCandidate(
             reference_type=reference_type,
             reference_id=reference_id,
-            amount=min(amount, pending),
+            amount=allocated_amount,
             posting_date=posting_date,
             reference_no=reference_no,
             score=_candidate_score(
@@ -192,7 +227,7 @@ def _append_candidate(
                 posting_date=posting_date,
                 reference_no=reference_no,
             ),
-            status="exact" if pending == amount else "partial",
+            status="exact" if pending == amount == _bank_amount(bank_transaction) else "partial",
         )
     )
 
@@ -219,12 +254,13 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
             .where(PaymentEntry.posting_date >= date_from)
             .where(PaymentEntry.posting_date <= date_to)
             .where(PaymentEntry.docstatus == 1)
-            .where(or_(PaymentEntry.paid_amount <= amount, PaymentEntry.received_amount <= amount))
         )
         .scalars()
         .all()
     )
     for payment in payments:
+        if _payment_direction(payment, transaction) != _bank_direction(transaction):
+            continue
         payment_amount = _payment_amount(payment)
         pending = payment_amount - _allocated_for_target("payment_entry", payment.id)
         if pending <= 0:
@@ -250,14 +286,14 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str) -> list[BankCa
             gl_entries_query = gl_entries_query.where(GLEntry.ledger_id == ledger_id)
         gl_entries = (
             database.session.execute(
-                gl_entries_query.where(GLEntry.posting_date >= date_from)
-                .where(GLEntry.posting_date <= date_to)
-                .where(or_(GLEntry.debit <= amount, GLEntry.credit <= amount))
+                gl_entries_query.where(GLEntry.posting_date >= date_from).where(GLEntry.posting_date <= date_to)
             )
             .scalars()
             .all()
         )
         for entry in gl_entries:
+            if _gl_direction(entry) != _bank_direction(transaction):
+                continue
             entry_amount = _gl_amount(entry)
             pending = entry_amount - _allocated_for_target("gl_entry", entry.id)
             if pending <= 0:
