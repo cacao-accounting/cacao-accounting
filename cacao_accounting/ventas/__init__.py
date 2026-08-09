@@ -2218,7 +2218,9 @@ def ventas_orden_venta_submit(order_id: str):
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )
         if not getattr(registro, "is_return", False):
-            _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
+            _validate_credit_limit_and_overdue(
+                registro.company, registro.customer_id, registro.grand_total or Decimal("0"), current_document=registro
+            )
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Orden de venta"):
@@ -3042,7 +3044,9 @@ def ventas_factura_venta_submit(invoice_id: str):
             require_amount_nonzero=True,
         )
         if not getattr(registro, "is_return", False):
-            _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
+            _validate_credit_limit_and_overdue(
+                registro.company, registro.customer_id, registro.grand_total or Decimal("0"), current_document=registro
+            )
         _validate_sales_order_requirement(registro)
         _validate_sales_invoice_quantities(invoice_id)
         warnings = _validate_invoice_prices_against_source(registro)
@@ -3141,7 +3145,9 @@ def ventas_cliente_habilitar_proveedor(customer_id: str):
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
-def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, current_doc_total: Decimal) -> None:
+def _validate_credit_limit_and_overdue(
+    company: str, customer_id: str | None, current_doc_total: Decimal, current_document: Any | None = None
+) -> None:
     """Valida el límite de crédito y facturas vencidas de un cliente antes de submit."""
     if not customer_id or not company:
         return
@@ -3161,12 +3167,13 @@ def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, cu
         _reject_overdue_invoices(invoices, company_party.payment_terms_id, compute_outstanding_amount)
     if company_party.credit_limit is not None:
         outstanding = sum((compute_outstanding_amount(inv) for inv in invoices), Decimal("0"))
-        exposure = outstanding + current_doc_total
+        order_exposure = _approved_customer_order_exposure(company, customer_id, current_document)
+        exposure = outstanding + order_exposure + current_doc_total
         limit = Decimal(str(company_party.credit_limit))
         if exposure > limit:
             raise ValueError(
                 f"El límite de crédito para el cliente ha sido excedido. Límite: {limit}, "
-                f"Saldo actual: {outstanding}, Monto del documento: {current_doc_total}, "
+                f"Saldo actual: {outstanding + order_exposure}, Monto del documento: {current_doc_total}, "
                 f"Exposición total: {exposure}."
             )
 
@@ -3180,6 +3187,31 @@ def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInv
         is_return=False,
     )
     return list(database.session.execute(query).scalars().all())
+
+
+def _approved_customer_order_exposure(company: str, customer_id: str, current_document: Any | None = None) -> Decimal:
+    """Calculate approved sales-order value not yet covered by invoices."""
+    orders = database.session.execute(
+        database.select(SalesOrder).filter_by(company=company, customer_id=customer_id, docstatus=1)
+    ).scalars()
+    exposure = Decimal("0")
+    current_order_id = getattr(current_document, "sales_order_id", None)
+    for order in orders:
+        order_total = Decimal(str(order.grand_total or "0"))
+        billed_total = database.session.execute(
+            database.select(database.func.coalesce(database.func.sum(SalesInvoice.grand_total), 0)).filter_by(
+                company=company,
+                customer_id=customer_id,
+                sales_order_id=order.id,
+                docstatus=1,
+                is_return=False,
+            )
+        ).scalar_one()
+        pending = max(Decimal("0"), order_total - Decimal(str(billed_total or "0")))
+        if order.id == current_order_id:
+            pending = max(Decimal("0"), pending - Decimal(str(getattr(current_document, "grand_total", 0) or 0)))
+        exposure += pending
+    return exposure
 
 
 def _reject_overdue_invoices(invoices, payment_terms_id, outstanding_getter) -> None:
