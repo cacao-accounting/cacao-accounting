@@ -4280,3 +4280,149 @@ def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
 
     with pytest.raises(PurchaseReconciliationError, match="en la misma moneda"):
         reconcile_purchase_invoice(invoice.id)
+
+
+def test_post_bank_difference_adjustment_deposit_and_withdrawal(app_ctx):
+    """Verify that bank difference adjustments derive their sign based on deposit vs withdrawal."""
+    from cacao_accounting.bancos import _post_bank_difference_adjustment
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        BankTransaction,
+        Book,
+        CompanyDefaultAccount,
+        GLEntry,
+        Reconciliation,
+        ReconciliationItem,
+        database,
+    )
+
+    bank_gl = Accounts(entity="cacao", code="BANK-DEP", name="Bank Account", classification="asset", account_type="bank")
+    difference = Accounts(entity="cacao", code="BANK-DIFF-DEP", name="Bank difference", classification="expense")
+    bank = Bank(name="Banco DEP")
+    local_book = Book(entity="cacao", code="DEP-NIO", name="NIO", currency="NIO", status="activo", is_primary=True)
+    database.session.add_all(
+        [
+            bank_gl,
+            difference,
+            bank,
+            local_book,
+        ]
+    )
+    database.session.flush()
+
+    database.session.add(CompanyDefaultAccount(company="cacao", bank_difference_account_id=difference.id))
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="NIO account",
+        currency="NIO",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+
+    # 1. Test Deposit Case
+    deposit_txn = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        deposit=Decimal("10"),
+    )
+    reconciliation_dep = Reconciliation(company="cacao", recon_date=date(2026, 5, 5), recon_type="bank")
+    database.session.add_all([deposit_txn, reconciliation_dep])
+    database.session.flush()
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation_dep.id,
+            reference_type="bank_transaction",
+            reference_id=deposit_txn.id,
+            source_type="bank_transaction",
+            source_id=deposit_txn.id,
+            amount=Decimal("10"),
+        )
+    )
+    database.session.commit()
+
+    _post_bank_difference_adjustment(reconciliation_dep.id, deposit_txn, Decimal("10"))
+    database.session.commit()
+
+    # Find the GL entries for the deposit adjustment
+    # Since deposit, the bank should be DEBITED, and difference account should be CREDITED.
+    entries_dep = database.session.execute(
+        database.select(GLEntry).filter(
+            GLEntry.voucher_type == "journal_entry",
+            GLEntry.account_id.in_([bank_gl.id, difference.id]),
+        )
+    ).scalars().all()
+
+    # We expect 2 entries: 1 debiting bank, 1 crediting difference
+    assert len(entries_dep) == 2
+    bank_entry = next(e for e in entries_dep if e.account_id == bank_gl.id)
+    diff_entry = next(e for e in entries_dep if e.account_id == difference.id)
+    assert bank_entry.debit == Decimal("10")
+    assert bank_entry.credit == Decimal("0")
+    assert diff_entry.credit == Decimal("10")
+    assert diff_entry.debit == Decimal("0")
+    deposit_difference_item = database.session.execute(
+        database.select(ReconciliationItem).filter_by(
+            reconciliation_id=reconciliation_dep.id,
+            target_id=bank_entry.id,
+        )
+    ).scalar_one()
+    assert deposit_difference_item.amount == Decimal("10")
+    assert deposit_difference_item.allocated_amount == Decimal("10")
+
+    # Clear GL entries for next test
+    for entry in entries_dep:
+        database.session.delete(entry)
+    database.session.commit()
+
+    # 2. Test Withdrawal Case
+    withdrawal_txn = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        withdrawal=Decimal("15"),
+    )
+    reconciliation_with = Reconciliation(company="cacao", recon_date=date(2026, 5, 5), recon_type="bank")
+    database.session.add_all([withdrawal_txn, reconciliation_with])
+    database.session.flush()
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation_with.id,
+            reference_type="bank_transaction",
+            reference_id=withdrawal_txn.id,
+            source_type="bank_transaction",
+            source_id=withdrawal_txn.id,
+            amount=Decimal("15"),
+        )
+    )
+    database.session.commit()
+
+    _post_bank_difference_adjustment(reconciliation_with.id, withdrawal_txn, Decimal("15"))
+    database.session.commit()
+
+    # Find the GL entries for the withdrawal adjustment
+    # Since withdrawal, the bank should be CREDITED, and difference account should be DEBITED.
+    entries_with = database.session.execute(
+        database.select(GLEntry).filter(
+            GLEntry.voucher_type == "journal_entry",
+            GLEntry.account_id.in_([bank_gl.id, difference.id]),
+        )
+    ).scalars().all()
+
+    assert len(entries_with) == 2
+    bank_entry_w = next(e for e in entries_with if e.account_id == bank_gl.id)
+    diff_entry_w = next(e for e in entries_with if e.account_id == difference.id)
+    assert bank_entry_w.credit == Decimal("15")
+    assert bank_entry_w.debit == Decimal("0")
+    assert diff_entry_w.debit == Decimal("15")
+    assert diff_entry_w.credit == Decimal("0")
+    withdrawal_difference_item = database.session.execute(
+        database.select(ReconciliationItem).filter_by(
+            reconciliation_id=reconciliation_with.id,
+            target_id=bank_entry_w.id,
+        )
+    ).scalar_one()
+    assert withdrawal_difference_item.amount == Decimal("15")
+    assert withdrawal_difference_item.allocated_amount == Decimal("15")
