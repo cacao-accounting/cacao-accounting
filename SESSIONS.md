@@ -3,6 +3,26 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Refactor del workflow CI: lint en job separado
+
+### Petición
+
+Refactorizar `.github/workflows/python-package.yml` para separar las pruebas de
+lint en un job particular, de modo que los fallos de estilo (línea en blanco
+faltante, línea de 121 caracteres, etc.) no frenen la ejecución de las pruebas
+unitarias.
+
+### Implementación
+
+- Se creó el job `lint` (Python 3.13) que ejecuta `flake8`, `ruff`,
+  `pydocstyle` y `mypy` sobre `cacao_accounting/`.
+- Se eliminó el paso "Lint project code" del job `build`, que corría dentro de
+  cada elemento de la matriz (3.12/3.13/3.14) y abortaba el pytest del mismo job.
+- Decisión de diseño: los jobs de CI quedan sin dependencias entre sí
+  (`needs`), por lo que `build`, `databases`, `desktop` y `coverage` corren en
+  paralelo e independientemente del resultado del lint, que pasa a ser un
+  chequeo informativo por separado.
+
 ## 2026-08-10 — Triage de issues de auditoría contra el código vigente
 
 ### Petición
@@ -2069,6 +2089,29 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   la revisión `20260809_0001` y se eliminó el test de códigos legacy que
   validaba la migración 0002 ya borrada.
 
+## 2026-08-10 — Corrección de facturas futuras en compensación 2-way
+
+### Petición
+Limitar la detección de facturas 2-way precedentes a una recepción de compra en `_late_two_way_invoice_amounts` para que excluya facturas aprobadas con fecha de contabilización posterior a la de la recepción.
+
+### Implementación
+- Modificado `_late_two_way_invoice_amounts` en `cacao_accounting/accounting_engine/document_builders.py`.
+- Se agregó el filtro `PurchaseInvoice.posting_date <= document.posting_date` a la consulta de selección de facturas de compra.
+- Se agregó una prueba unitaria robusta `test_late_two_way_invoice_amounts_excludes_future_invoices` en `tests/test_07posting_engine.py` para asegurar que las facturas con fecha posterior sean correctamente excluidas y evitar regresiones.
+- Se verificaron Black, Ruff, mypy, compilación y git diff --check; todas las pruebas pasaron exitosamente.
+## 2026-08-10 — Retorno de registro existente para ejecuciones repetidas de revalorización cambiaria
+
+- Se corrigió un error en `ExchangeRevaluationService.run()` donde ejecuciones repetidas para la misma compañía, año y mes retornaban un objeto `ExchangeRevaluation` no persistido y transitorio, cuyo `id` de base de datos permanecía como `None`. Esto provocaba fallos de redirección, problemas en las rutas de detalle y errores en los controles de cierre mensual.
+- Se modificó la lógica para retornar directamente la ejecución persistida `existing_run`.
+- Se actualizaron las pruebas unitarias en `tests/test_exchange_revaluation.py` para asegurar la idempotencia del servicio mediante aserciones de identidad (`second is first`).
+- Se verificó la conformidad del código mediante formateo con `black` y chequeo estricto con `mypy`, `ruff` y `flake8`.
+## 2026-08-10 — Reverse FX adjustments for refund settlements
+
+- Implemented FX adjustment and payment discount reversal for refund settlements (`refund_confirmed`).
+- Modified `_build_exchange_difference_line`, `_build_unrealized_exchange_difference_line`, and `_build_unrealized_party_offset_line` to negate the `exchange_difference` when `context.event_type == "refund_confirmed"`.
+- Modified `_build_payment_discount_line` to reverse the debit/credit side when `context.event_type == "refund_confirmed"`.
+- Added unit test `test_supplier_refund_mapping_reverses_exchange` in `tests/engines/test_mapper.py` verifying a supplier refund with carrying value 3,600 and cash receipt of 3,700 properly balances and produces a 100 credit to exchange gain.
+- All code formatted with black, checked with ruff, flake8, and mypy, and verified using pytest.
 ## 2026-08-10 — Integración de origin/main en stabilization/inventory-audit
 
 - Se integró `origin/main` mediante merge no fast-forward. Los conflictos se
@@ -2089,3 +2132,9 @@ Reconstruir la valoración de inventario en la fecha de corte (`date_to`) a part
 - Se modificó `get_inventory_valuation` en `cacao_accounting/reportes/services.py` para reconstruir las cantidades y valores al corte a partir de los deltas (`layer.qty` y `layer.stock_value_difference`) de las capas correspondientes de `StockValuationLayer`.
 - Se agruparon los deltas por `(item_code, warehouse)` y se excluyeron de forma consistente aquellas filas con cantidad final igual a `0`, tal como se hace en la generación del Kardex y existencias.
 - Se verificaron la consistencia de tipos, formato, estilo y la compatibilidad con los tests existentes.
+## 2026-08-11 — Reverse the adjustment sign for deposit differences
+
+- Derived the signed adjustment from whether the transaction is a deposit or withdrawal.
+- Reconciling a deposit with a difference now correctly debits the bank account and credits the difference account, avoiding doubling the discrepancy.
+- Preserved positive difference values for the ReconciliationItem's `amount` and `allocated_amount` to prevent understated reconciliation reports and duplicate reconciliations.
+- Added comprehensive unit tests in `tests/test_08_reconciliation_reports.py` verifying both deposit and withdrawal cases, and confirmed all tests pass perfectly.

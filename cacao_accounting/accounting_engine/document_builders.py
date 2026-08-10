@@ -225,6 +225,7 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
             PurchaseInvoice.purchase_receipt_id.is_(None),
             PurchaseInvoice.docstatus == 1,
             PurchaseInvoice.is_return.is_(False),
+            PurchaseInvoice.posting_date <= document.posting_date,
         )
     ).scalars()
     amounts: dict[str, Decimal] = {}
