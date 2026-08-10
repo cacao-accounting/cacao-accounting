@@ -3,6 +3,26 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-10 — Sincronización de PR #372 con estabilización
+
+- Se integró `stabilization/inventory-audit` en la rama del PR #372 para
+  resolver sus conflictos y permitir su incorporación posterior.
+- Se preservaron el cálculo de reclasificaciones parciales del PR y las
+  protecciones de estabilización, incluida la exclusión de facturas futuras.
+
+## 2026-08-10 — Compensación de recepción posterior a factura 2-way en múltiples recepciones
+
+### Petición
+
+Cuando una factura de 2 vías cubre solo parte de una orden y la orden es recibida en múltiples documentos, deducir la cantidad ya reclasificada por las recepciones enviadas anteriormente antes de devolver el monto disponible de la factura de 2 vías.
+
+### Implementación
+
+- Se modificó `_late_two_way_invoice_amounts(document: PurchaseReceipt)` en `cacao_accounting/accounting_engine/document_builders.py`.
+- Ahora consulta todas las demás recepciones de compra ya confirmadas/enviadas (`docstatus == 1`, excluyendo devoluciones y el documento actual) asociadas al mismo `purchase_order_id`.
+- Simula la reclasificación secuencial/cronológica de cada recepción previa para deducir de forma precisa los importes ya consumidos de la factura de 2 vías.
+- Se agregó la prueba unitaria `test_late_two_way_reclassification_deducts_prior_receipts` en `tests/test_07posting_engine.py` para asegurar que las recepciones posteriores no sobre-clasifiquen los gastos y que el remanente correcto se asigne a la cuenta puente (GRNI).
+- Se ejecutaron Black, Ruff, Flake8, mypy y la suite de pruebas unitarias relevante, confirmando el cumplimiento de calidad al 100%.
 ## 2026-08-11 — Refactor del workflow CI: lint en job separado
 
 ### Petición
@@ -2121,6 +2141,14 @@ Limitar la detección de facturas 2-way precedentes a una recepción de compra e
 - El merge conserva los cambios entrantes de migraciones, dependencias y
   pruebas, sin descartar funcionalidad existente.
 
+## 2026-08-10 — Corrección de facturas PO-only y recepciones retroactivas
+
+- Se restauró el cálculo de facturas 2-way aprobadas posteriormente para que
+  una recepción retroactiva pueda liquidar el saldo pendiente de GRNI.
+- Las facturas pasan a usar la cuenta puente cuando existe una recepción
+  aprobada cronológicamente anterior, incluso sin `purchase_receipt_id`.
+- Se agregaron regresiones para facturas futuras y el reconocimiento de
+  recepciones aprobadas.
 ## 2026-08-11 — Reconstrucción de valuación de inventario al corte
 
 ### Petición
