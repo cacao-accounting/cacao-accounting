@@ -2190,3 +2190,6 @@ Reconstruir la valoración de inventario en la fecha de corte (`date_to`) a part
 - Se añadió una revalidación con bloqueo de la factura origen justo antes de
   contabilizar una nota de crédito de venta, evitando que un borrador stale
   exceda el saldo disponible por pagos o notas aprobadas entretanto.
+- Durante la verificación ampliada se corrigió un marcador `+` literal que
+  impedía compilar `tests/test_08_reconciliation_reports.py`; las pruebas de
+  conciliación bancaria y varianza parcial quedaron ejecutables y pasaron.

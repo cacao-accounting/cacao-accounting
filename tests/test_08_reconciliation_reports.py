@@ -4280,7 +4280,9 @@ def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
 
     with pytest.raises(PurchaseReconciliationError, match="en la misma moneda"):
         reconcile_purchase_invoice(invoice.id)
-+def test_partial_invoice_price_variance_scaling(app_ctx):
+
+
+def test_partial_invoice_price_variance_scaling(app_ctx):
     from cacao_accounting.compras.purchase_reconciliation_service import (
         reconcile_purchase_invoice,
         PurchaseMatchingConfig,
