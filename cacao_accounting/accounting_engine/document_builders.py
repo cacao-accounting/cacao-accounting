@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, cast
 
@@ -225,16 +225,81 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
             PurchaseInvoice.purchase_receipt_id.is_(None),
             PurchaseInvoice.docstatus == 1,
             PurchaseInvoice.is_return.is_(False),
-            PurchaseInvoice.posting_date <= document.posting_date,
         )
-    ).scalars()
+    ).scalars().all()
     amounts: dict[str, Decimal] = {}
+    invoice_posting_dates: dict[str, date] = {}
     for invoice in invoices:
         invoice_items = database.session.execute(
             select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)
         ).scalars()
         for item in invoice_items:
             amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
+            current_date = invoice_posting_dates.get(item.item_code)
+            if current_date is None or invoice.posting_date < current_date:
+                invoice_posting_dates[item.item_code] = invoice.posting_date
+
+    prior_receipts = (
+        database.session.execute(
+            select(PurchaseReceipt)
+            .where(
+                PurchaseReceipt.company == document.company,
+                PurchaseReceipt.supplier_id == document.supplier_id,
+                PurchaseReceipt.purchase_order_id == document.purchase_order_id,
+                PurchaseReceipt.docstatus == 1,
+                PurchaseReceipt.is_return.is_(False),
+                PurchaseReceipt.id != document.id,
+                PurchaseReceipt.posting_date <= document.posting_date,
+            )
+            .order_by(PurchaseReceipt.posting_date.asc(), PurchaseReceipt.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+    if prior_receipts and amounts:
+        from sqlalchemy import or_
+        from cacao_accounting.database import Book, GLEntry
+
+        prior_receipt_ids = [r.id for r in prior_receipts]
+
+        primary_book = (
+            database.session.execute(
+                select(Book)
+                .where(Book.entity == document.company, or_(Book.status == "activo", Book.status.is_(None)))
+                .order_by(Book.is_primary.desc(), Book.code)
+            )
+            .scalars()
+            .first()
+        )
+        primary_book_id = primary_book.id if primary_book else None
+
+        for item_code in list(amounts.keys()):
+            expense_account_id = _item_account_id(item_code, document.company, "expense")
+            if expense_account_id:
+                invoice_date = invoice_posting_dates[item_code]
+                eligible_receipt_ids = [
+                    receipt.id for receipt in prior_receipts if receipt.posting_date >= invoice_date
+                ]
+                if not eligible_receipt_ids:
+                    continue
+                query = select(GLEntry).where(
+                    GLEntry.voucher_type == "purchase_receipt",
+                    GLEntry.voucher_id.in_(eligible_receipt_ids),
+                    GLEntry.account_id == expense_account_id,
+                    GLEntry.credit > 0,
+                    GLEntry.is_cancelled.is_(False),
+                    GLEntry.is_reversal.is_(False),
+                )
+                if primary_book_id:
+                    query = query.where(GLEntry.ledger_id == primary_book_id)
+
+                entries = database.session.execute(query).scalars().all()
+                reclassified_sum = sum(
+                    (Decimal(str(entry.credit_in_account_currency or entry.credit)) for entry in entries), Decimal("0")
+                )
+                amounts[item_code] = max(Decimal("0"), amounts[item_code] - reclassified_sum)
+
     return amounts
 
 
@@ -899,7 +964,7 @@ def _purchase_invoice_account_lines(
     company: str,
 ) -> list[AccountLineSpec]:
     """Resolve the non-tax lines for purchase invoices and credit notes."""
-    use_bridge_account = bool(getattr(document, "purchase_receipt_id", None))
+    use_bridge_account = _purchase_invoice_has_receipt(document, company)
     side = "credit" if _is_purchase_credit_note(document) else "debit"
     account_type = "bridge" if use_bridge_account else "expense"
     specs: list[AccountLineSpec] = []
@@ -917,6 +982,29 @@ def _purchase_invoice_account_lines(
             )
         )
     return specs
+
+
+def _purchase_invoice_has_receipt(document: PurchaseInvoice, company: str) -> bool:
+    """Return whether the invoice has an approved receipt dated no later than it."""
+    if getattr(document, "purchase_receipt_id", None):
+        return True
+    if not getattr(document, "purchase_order_id", None):
+        return False
+    return (
+        database.session.execute(
+            select(PurchaseReceipt.id)
+            .where(
+                PurchaseReceipt.company == company,
+                PurchaseReceipt.supplier_id == document.supplier_id,
+                PurchaseReceipt.purchase_order_id == document.purchase_order_id,
+                PurchaseReceipt.docstatus == 1,
+                PurchaseReceipt.is_return.is_(False),
+                PurchaseReceipt.posting_date <= document.posting_date,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
 
 
 def _eligible_discount_amount(
