@@ -5,18 +5,21 @@
 
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, Sequence
 
 from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from cacao_accounting.database import (
+    CompanyParty,
     DeliveryNote,
     DeliveryNoteItem,
     DocumentRelation,
     Item,
+    ItemPrice,
     Party,
+    PriceList,
     SalesInvoice,
     SalesInvoiceItem,
     SalesMatchingConfig,
@@ -30,7 +33,8 @@ from cacao_accounting.database import (
     UOM,
     database,
 )
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from ulid import ULID
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
@@ -138,16 +142,28 @@ def _stock_bin_or_create(company: str, item_code: str, warehouse: str, for_updat
         query = query.with_for_update()
     bin_row = database.session.execute(query).scalar_one_or_none()
     if not bin_row:
-        bin_row = StockBin(
-            company=company,
-            item_code=item_code,
-            warehouse=warehouse,
-            actual_qty=Decimal("0"),
-            reserved_qty=Decimal("0"),
-            stock_value=Decimal("0"),
-        )
-        database.session.add(bin_row)
-        database.session.flush()
+        try:
+            with database.session.begin_nested():
+                bin_row = StockBin(
+                    company=company,
+                    item_code=item_code,
+                    warehouse=warehouse,
+                    actual_qty=Decimal("0"),
+                    reserved_qty=Decimal("0"),
+                    stock_value=Decimal("0"),
+                )
+                database.session.add(bin_row)
+                database.session.flush()
+        except IntegrityError:
+            # Another transaction may have inserted the unique bin between
+            # the SELECT and INSERT. The savepoint keeps the caller's outer
+            # transaction usable while the committed row is locked/read.
+            retry_query = database.select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
+            if for_update:
+                retry_query = retry_query.with_for_update()
+            bin_row = database.session.execute(retry_query).scalar_one_or_none()
+            if bin_row is None:
+                raise
     return bin_row
 
 
@@ -275,7 +291,7 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
         if not warehouse:
             continue
 
-        bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse)
+        bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
         new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item, item_obj))
         bin_row.reserved_qty = new_reserved
@@ -306,7 +322,7 @@ def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
         if not warehouse:
             continue
 
-        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse)
+        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
         new_reserved = max(Decimal("0"), reserved - _base_qty_for_sales_line(item, item_obj))
         bin_row.reserved_qty = new_reserved
@@ -333,7 +349,7 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
         if not warehouse:
             continue
 
-        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse)
+        bin_row = _stock_bin_or_create(company=dn.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
         bin_row.reserved_qty = reserved + _base_qty_for_sales_line(item, item_obj)
     dn.reservation_released = False
@@ -1397,6 +1413,7 @@ def _validate_single_item_price(
     tolerance_value: Decimal,
     allow_diff: bool,
     raise_on_violation: bool,
+    reference_label: str = "Orden de Venta",
 ) -> str | None:
     """Valida el precio de un item individual contra la orden de venta.
 
@@ -1414,7 +1431,7 @@ def _validate_single_item_price(
     unit = "%" if tolerance_type == "percentage" else ""
     msg = (
         f"El precio del item {si_item.item_code} (${si_rate}) "
-        f"difiere del precio en la Orden de Venta (${so_rate}) "
+        f"difiere del precio en {reference_label} (${so_rate}) "
         f"en {variance:.2f}{unit}. "
         f"Tolerancia permitida: {tolerance_value}{unit}."
     )
@@ -1443,11 +1460,21 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
     warnings: list[str] = []
     for si_item in invoice_items:
         so_rate = _resolve_source_item_rate(si_item, invoice.id)
+        reference_label = "Orden de Venta"
+        if so_rate is None:
+            so_rate = _resolve_catalog_sales_rate(invoice, si_item)
+            reference_label = "la Lista de Precios"
         if so_rate is None:
             continue
 
         warning = _validate_single_item_price(
-            si_item, so_rate, tolerance_type, tolerance_value, allow_diff, raise_on_violation
+            si_item,
+            so_rate,
+            tolerance_type,
+            tolerance_value,
+            allow_diff,
+            raise_on_violation,
+            reference_label=reference_label,
         )
         if warning:
             warnings.append(warning)
@@ -1455,8 +1482,58 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
     return warnings
 
 
+def _resolve_sales_price_list(company: str, customer_id: str | None) -> PriceList | None:
+    """Obtiene la lista de venta del cliente o la predeterminada de la compañía."""
+    company_party = None
+    if customer_id:
+        company_party = database.session.execute(
+            database.select(CompanyParty).filter_by(company=company, party_id=customer_id, is_active=True)
+        ).scalar_one_or_none()
+    configured_id = getattr(company_party, "default_price_list_id", None)
+    if configured_id:
+        configured = database.session.get(PriceList, configured_id)
+        if configured and configured.is_active and configured.is_selling and configured.company in (None, company):
+            return configured
+    return (
+        database.session.execute(
+            database.select(PriceList)
+            .where(
+                PriceList.is_active.is_(True),
+                PriceList.is_default.is_(True),
+                PriceList.is_selling.is_(True),
+                or_(PriceList.company == company, PriceList.company.is_(None)),
+            )
+            .order_by(PriceList.company.is_(None), PriceList.name)
+        )
+        .scalars()
+        .first()
+    )
+
+
+def _resolve_catalog_sales_rate(invoice: SalesInvoice, item: SalesInvoiceItem) -> Decimal | None:
+    """Resuelve el precio vigente del catálogo para una línea sin documento fuente."""
+    price_list = _resolve_sales_price_list(invoice.company, invoice.customer_id)
+    if not price_list or not invoice.posting_date:
+        return None
+    query = (
+        database.select(ItemPrice)
+        .where(
+            ItemPrice.item_code == item.item_code,
+            ItemPrice.price_list_id == price_list.id,
+            (ItemPrice.valid_from.is_(None) | (ItemPrice.valid_from <= invoice.posting_date)),
+            (ItemPrice.valid_upto.is_(None) | (ItemPrice.valid_upto >= invoice.posting_date)),
+            (ItemPrice.min_qty.is_(None) | (ItemPrice.min_qty <= item.qty)),
+        )
+        .order_by(ItemPrice.min_qty.desc().nullslast(), ItemPrice.valid_from.desc().nullslast())
+    )
+    if item.uom:
+        query = query.where(or_(ItemPrice.uom.is_(None), ItemPrice.uom == item.uom))
+    catalog_price = database.session.execute(query).scalars().first()
+    return Decimal(str(catalog_price.price)) if catalog_price else None
+
+
 def _resolve_source_item_rate(si_item: SalesInvoiceItem, invoice_id: str) -> Decimal | None:
-    """Resuelve la tasa del item fuente (Orden de Venta) para un item de factura."""
+    """Resuelve la tasa del item fuente para un item de factura."""
     relation = (
         database.session.execute(
             database.select(DocumentRelation).filter_by(
@@ -1471,14 +1548,16 @@ def _resolve_source_item_rate(si_item: SalesInvoiceItem, invoice_id: str) -> Dec
     )
     if not relation or not relation.source_item_id:
         return None
-    if relation.source_type != "sales_order":
+    source_models = {
+        "sales_order": SalesOrderItem,
+        "delivery_note": DeliveryNoteItem,
+        "sales_invoice": SalesInvoiceItem,
+    }
+    source_model = source_models.get(relation.source_type)
+    source_item: Any = database.session.get(source_model, relation.source_item_id) if source_model else None
+    if source_item is None:
         return None
-
-    so_item = database.session.get(SalesOrderItem, relation.source_item_id)
-    if not so_item:
-        return None
-
-    return Decimal(str(so_item.rate or 0))
+    return Decimal(str(source_item.rate or 0))
 
 
 def _validate_delivery_quantities_against_so(note_id: str) -> None:
@@ -1518,6 +1597,28 @@ def _validate_sales_invoice_quantities(invoice_id: str) -> None:
     for rel in relations:
         if rel.source_item_id:
             _validate_sales_invoice_relation(rel)
+
+
+def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[SalesInvoiceItem]) -> None:
+    """Reject inconsistent or negative amounts on ordinary sales invoices."""
+    if getattr(invoice, "is_return", False) or getattr(invoice, "document_type", "") in {
+        "sales_credit_note",
+        "sales_debit_note",
+    }:
+        return
+    tolerance = Decimal("0.01")
+    for item in items:
+        qty = Decimal(str(item.qty or 0))
+        rate = Decimal(str(item.rate or 0))
+        amount = Decimal(str(item.amount or 0))
+        expected = qty * rate
+        if amount <= 0:
+            raise ValueError(f"La línea {item.item_code} debe tener un monto positivo.")
+        if abs(amount - expected) > tolerance:
+            raise ValueError(
+                f"El monto de la línea {item.item_code} no coincide con cantidad por precio "
+                f"({amount} frente a {expected})."
+            )
 
 
 def _validate_sales_order_requirement(invoice: SalesInvoice) -> None:
@@ -2218,7 +2319,9 @@ def ventas_orden_venta_submit(order_id: str):
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )
         if not getattr(registro, "is_return", False):
-            _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
+            _validate_credit_limit_and_overdue(
+                registro.company, registro.customer_id, registro.grand_total or Decimal("0"), current_document=registro
+            )
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Orden de venta"):
@@ -2564,6 +2667,7 @@ def ventas_entrega_submit(note_id: str):
             require_rate_positive=True,
             require_amount_nonzero=True,
         )
+        _validate_sales_invoice_line_amounts(registro, items)
         _validate_delivery_quantities_against_so(note_id)
         from cacao_accounting.approval_engine import ApprovalEngine
 
@@ -2709,7 +2813,8 @@ def _create_sales_invoice_from_form():
             document_type=document_type,
             sales_order_id=request.form.get("from_order") or None,
             delivery_note_id=request.form.get("from_note") or None,
-            update_inventory=bool(request.form.get("update_inventory")),
+            update_inventory=bool(request.form.get("update_inventory"))
+            and document_type not in ("sales_credit_note", "sales_return"),
             is_return=document_type in ("sales_credit_note", "sales_return"),
             reversal_of=reversal_of,
             remarks=request.form.get("remarks"),
@@ -2750,6 +2855,59 @@ def _sales_reversal_source(document_type: str) -> str | None:
     if document_type not in ("sales_credit_note", "sales_debit_note"):
         return None
     return request.form.get("from_invoice") or request.form.get("from_return") or None
+
+
+def _persist_sales_reversal_relation(invoice: SalesInvoice) -> None:
+    """Persist the invoice-to-credit-note relation used by AR outstanding."""
+    if invoice.document_type not in {"sales_credit_note", "sales_debit_note"} or not invoice.reversal_of:
+        return
+    target_type = invoice.document_type
+    relation = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                source_type="sales_invoice",
+                source_id=invoice.reversal_of,
+                target_type=target_type,
+                target_id=invoice.id,
+                relation_type="invoice_reversal",
+            )
+        )
+        .scalars()
+        .first()
+    )
+    amount = Decimal(str(invoice.grand_total or "0"))
+    if relation:
+        relation.qty = Decimal("1")
+        relation.amount = amount
+        relation.status = "active"
+        from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+        source = database.session.get(SalesInvoice, invoice.reversal_of)
+        if source:
+            refresh_outstanding_amount_cache(source)
+        return
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=invoice.reversal_of,
+            source_item_id=None,
+            target_type=target_type,
+            target_id=invoice.id,
+            target_item_id=None,
+            company=invoice.company,
+            qty=Decimal("1"),
+            uom=None,
+            rate=amount,
+            amount=amount,
+            relation_type="invoice_reversal",
+            status="active",
+        )
+    )
+    from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+    source = database.session.get(SalesInvoice, invoice.reversal_of)
+    if source:
+        refresh_outstanding_amount_cache(source)
 
 
 @ventas.route("/sales-invoice/<invoice_id>")
@@ -2870,7 +3028,7 @@ def _handle_sales_invoice_edit_post(registro):
         registro.company = request.form.get("company") or None
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.remarks = request.form.get("remarks")
-        registro.update_inventory = bool(request.form.get("update_inventory"))
+        registro.update_inventory = bool(request.form.get("update_inventory")) and not registro.is_return
         if registro.reversal_of and (
             before_state.get("customer_id") != registro.customer_id or before_state.get("company") != registro.company
         ):
@@ -2988,17 +3146,31 @@ def ventas_factura_venta_submit(invoice_id: str):
             require_amount_nonzero=True,
         )
         if not getattr(registro, "is_return", False):
-            _validate_credit_limit_and_overdue(registro.company, registro.customer_id, registro.grand_total or Decimal("0"))
+            _validate_credit_limit_and_overdue(
+                registro.company, registro.customer_id, registro.grand_total or Decimal("0"), current_document=registro
+            )
         _validate_sales_order_requirement(registro)
         _validate_sales_invoice_quantities(invoice_id)
+        _validate_sales_invoice_line_amounts(registro, items)
         warnings = _validate_invoice_prices_against_source(registro)
+        if registro.document_type == "sales_credit_note":
+            _validate_reversal_of(
+                registro.reversal_of or "",
+                registro.customer_id,
+                registro.company,
+                note_amount=Decimal(str(registro.grand_total or "0")),
+                document_type=registro.document_type,
+                posting_date=registro.posting_date,
+                lock_source=True,
+            )
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Factura de venta"):
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
         submit_document(registro)
-        if registro.update_inventory and not registro.delivery_note_id:
+        _persist_sales_reversal_relation(registro)
+        if registro.update_inventory and not registro.is_return and not registro.delivery_note_id:
             dn = _create_delivery_note_from_invoice(registro)
             flash(
                 _("Se ha creado y aprobado la Nota de Entrega %s asociada a esta factura.") % (dn.document_no or dn.id),
@@ -3059,8 +3231,9 @@ def ventas_factura_venta_cancel(invoice_id: str):
         _cancel_linked_delivery_note(registro)
         cancel_document(registro)
         log_cancel(registro)
-        revert_relations_for_target("sales_invoice", invoice_id)
-        refresh_source_caches_for_target("sales_invoice", invoice_id)
+        target_type = registro.document_type or "sales_invoice"
+        revert_relations_for_target(target_type, invoice_id)
+        refresh_source_caches_for_target(target_type, invoice_id)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()
@@ -3085,7 +3258,9 @@ def ventas_cliente_habilitar_proveedor(customer_id: str):
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
-def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, current_doc_total: Decimal) -> None:
+def _validate_credit_limit_and_overdue(
+    company: str, customer_id: str | None, current_doc_total: Decimal, current_document: Any | None = None
+) -> None:
     """Valida el límite de crédito y facturas vencidas de un cliente antes de submit."""
     if not customer_id or not company:
         return
@@ -3105,20 +3280,51 @@ def _validate_credit_limit_and_overdue(company: str, customer_id: str | None, cu
         _reject_overdue_invoices(invoices, company_party.payment_terms_id, compute_outstanding_amount)
     if company_party.credit_limit is not None:
         outstanding = sum((compute_outstanding_amount(inv) for inv in invoices), Decimal("0"))
-        exposure = outstanding + current_doc_total
+        order_exposure = _approved_customer_order_exposure(company, customer_id, current_document)
+        exposure = outstanding + order_exposure + current_doc_total
         limit = Decimal(str(company_party.credit_limit))
         if exposure > limit:
             raise ValueError(
                 f"El límite de crédito para el cliente ha sido excedido. Límite: {limit}, "
-                f"Saldo actual: {outstanding}, Monto del documento: {current_doc_total}, "
+                f"Saldo actual: {outstanding + order_exposure}, Monto del documento: {current_doc_total}, "
                 f"Exposición total: {exposure}."
             )
 
 
 def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInvoice]:
     """Obtiene facturas aprobadas del cliente y compañía."""
-    query = database.select(SalesInvoice).filter_by(company=company, customer_id=customer_id, docstatus=1)
+    query = database.select(SalesInvoice).filter_by(
+        company=company,
+        customer_id=customer_id,
+        docstatus=1,
+        is_return=False,
+    )
     return list(database.session.execute(query).scalars().all())
+
+
+def _approved_customer_order_exposure(company: str, customer_id: str, current_document: Any | None = None) -> Decimal:
+    """Calculate approved sales-order value not yet covered by invoices."""
+    orders = database.session.execute(
+        database.select(SalesOrder).filter_by(company=company, customer_id=customer_id, docstatus=1)
+    ).scalars()
+    exposure = Decimal("0")
+    current_order_id = getattr(current_document, "sales_order_id", None)
+    for order in orders:
+        order_total = Decimal(str(order.grand_total or "0"))
+        billed_total = database.session.execute(
+            database.select(database.func.coalesce(database.func.sum(SalesInvoice.grand_total), 0)).filter_by(
+                company=company,
+                customer_id=customer_id,
+                sales_order_id=order.id,
+                docstatus=1,
+                is_return=False,
+            )
+        ).scalar_one()
+        pending = max(Decimal("0"), order_total - Decimal(str(billed_total or "0")))
+        if order.id == current_order_id:
+            pending = max(Decimal("0"), pending - Decimal(str(getattr(current_document, "grand_total", 0) or 0)))
+        exposure += pending
+    return exposure
 
 
 def _reject_overdue_invoices(invoices, payment_terms_id, outstanding_getter) -> None:
@@ -3148,6 +3354,7 @@ def _validate_reversal_of(
     note_amount: Decimal | None = None,
     document_type: str | None = None,
     posting_date: date | None = None,
+    lock_source: bool = False,
 ) -> None:
     """Valida origen y limite acumulado de una nota de credito.
 
@@ -3156,7 +3363,10 @@ def _validate_reversal_of(
     superar el saldo pendiente de la factura considerando notas y pagos ya
     aplicados.
     """
-    source = database.session.get(SalesInvoice, reversal_of)
+    source_query = database.select(SalesInvoice).where(SalesInvoice.id == reversal_of)
+    if lock_source:
+        source_query = source_query.with_for_update()
+    source = database.session.execute(source_query).scalar_one_or_none()
     if not source:
         raise ValueError(f"La factura origen '{reversal_of}' no existe.")
     if source.docstatus != 1:

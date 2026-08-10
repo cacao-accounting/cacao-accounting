@@ -32,6 +32,7 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
 )
 from cacao_accounting.database import (
     CompanyParty,
+    Book,
     DocumentRelation,
     ImportLandedCost,
     ImportLandedCostCharge,
@@ -63,6 +64,8 @@ from ulid import ULID
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.database.helpers import get_active_naming_series
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.decorators import (  # noqa: F401
     exige_acceso_compania,
     modulo_activo,
@@ -187,6 +190,20 @@ def _party_or_404(party_id: str) -> Party:
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
     """Pagina un listado aplicando los filtros GET comunes."""
     base_query = query if query is not None else database.select(model)
+    if hasattr(model, "company"):
+        company = request.args.get("company")
+        if company:
+            exige_acceso_compania("purchases", company, "consultar")
+            base_query = base_query.filter(model.company == company)
+        elif not getattr(current_user, "classification", None) == "admin":
+            module_id = obtener_id_modulo_por_nombre("purchases")
+            permissions = Permisos(modulo=module_id, usuario=current_user.id)
+            book_ids = permissions.obtener_libros_autorizados("can_read")
+            if not book_ids:
+                base_query = base_query.where(database.false())
+            else:
+                accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
+                base_query = base_query.where(model.company.in_(accessible_companies))
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     return database.paginate(
         filtered_query,
@@ -194,6 +211,21 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
         max_per_page=10,
         count=True,
     )
+
+
+def _require_purchase_document_access(document: Any, action: str = "consultar") -> None:
+    """Require company-scoped access before exposing a purchase document."""
+    company = getattr(document, "company", None)
+    if not company:
+        abort(404)
+    exige_acceso_compania("purchases", str(company), action)
+
+
+def _require_requested_purchase_company_access(document: Any, action: str = "editar") -> None:
+    """Validate access when an edit attempts to move a document to another company."""
+    requested_company = request.form.get("company")
+    if requested_company and requested_company != getattr(document, "company", None):
+        exige_acceso_compania("purchases", requested_company, action)
 
 
 @compras.route("/")
@@ -308,6 +340,7 @@ def compras_solicitud_compra(request_id: str):
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=request_id)).all()
     create_actions = get_create_actions("purchase_request", request_id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
@@ -334,6 +367,7 @@ def compras_solicitud_compra_editar(request_id: str):
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     if registro.docstatus != 0:
         abort(400)
 
@@ -348,6 +382,7 @@ def compras_solicitud_compra_editar(request_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         try:
             before_state = _capture_purchase_state(registro)
             registro.requested_by = request.form.get("requested_by")
@@ -418,6 +453,7 @@ def compras_solicitud_compra_duplicar(request_id: str):
     origen = database.session.get(PurchaseRequest, request_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     duplicada = PurchaseRequest(
         requested_by=origen.requested_by,
         department=origen.department,
@@ -648,6 +684,7 @@ def compras_cotizacion_proveedor(quotation_id: str):
     registro = database.session.get(SupplierQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(
         database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=quotation_id)
     ).all()
@@ -669,6 +706,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     registro = database.session.get(SupplierQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     if registro.docstatus != 0:
         abort(400)
 
@@ -680,6 +718,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         return _handle_supplier_quotation_update(registro, request.form, quotation_id)
 
     lineas = database.session.execute(
@@ -912,6 +951,7 @@ def compras_cotizacion_proveedor_duplicar(quotation_id: str):
     origen = database.session.get(SupplierQuotation, quotation_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -1047,6 +1087,7 @@ def compras_comparativo_ofertas(rfq_id: str):
     registro = database.session.get(PurchaseQuotation, rfq_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     offers = database.session.execute(database.select(SupplierQuotation).filter_by(purchase_quotation_id=rfq_id)).all()
     titulo = "Comparativo de Ofertas - " + (registro.document_no or rfq_id)
     return render_template("compras/comparativo_ofertas.html", registro=registro, offers=offers, titulo=titulo)
@@ -1210,6 +1251,7 @@ def compras_proveedor_lista():
 def compras_purchase_reconciliation():
     """Report pending purchase reconciliation lines."""
     company = request.args.get("company", "cacao")
+    exige_acceso_compania("purchases", company, "consultar")
     rows = get_purchase_reconciliation_pending(company=company)
     order_status_report = get_purchase_order_status_report(company=company)
     unlinked_invoices = get_unlinked_purchase_invoices(company=company)
@@ -1232,6 +1274,7 @@ def compras_purchase_reconciliation():
 def compras_reconciliation_panel():
     """Panel de conciliacion de compras agrupado por orden de compra."""
     company = request.args.get("company", "cacao")
+    exige_acceso_compania("purchases", company, "consultar")
     groups = get_purchase_reconciliation_panel_groups(company=company)
     titulo = _("Panel de Conciliacion de Compras") + " - " + APPNAME
     return render_template(
@@ -1762,6 +1805,7 @@ def compras_orden_compra(order_id):
     registro = database.session.get(PurchaseOrder, order_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=order_id)).all()
     titulo = (registro.document_no or order_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("purchase_order", registro.id)
@@ -1781,6 +1825,7 @@ def compras_orden_compra_editar(order_id: str):
     registro = database.session.get(PurchaseOrder, order_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
@@ -1798,6 +1843,7 @@ def compras_orden_compra_editar(order_id: str):
     items_disponibles, uoms_disponibles = _purchase_order_catalogs()
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         response = _update_purchase_order_from_request(registro)
         if response is not None:
             return response
@@ -1961,6 +2007,7 @@ def compras_orden_compra_duplicar(order_id: str):
     origen = database.session.get(PurchaseOrder, order_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -2001,7 +2048,7 @@ def compras_orden_compra_duplicar(order_id: str):
     duplicada.total = total
     duplicada.net_total = total
     duplicada.grand_total = total
-    duplicada.base_total = total
+    duplicada.base_total = (total * Decimal(str(duplicada.exchange_rate or 1))).quantize(Decimal("0.0001"))
     log_create(duplicada)
     database.session.commit()
     flash(_("Orden de compra duplicada como nuevo borrador."), "success")
@@ -2156,6 +2203,7 @@ def compras_solicitud_cotizacion(quotation_id: str):
     registro = database.session.get(PurchaseQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(
         database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=quotation_id)
     ).all()
@@ -2209,6 +2257,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     registro = database.session.get(PurchaseQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     if registro.docstatus != 0:
         abort(400)
 
@@ -2226,6 +2275,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         return _handle_purchase_quotation_edit_post(registro)
 
     lineas = database.session.execute(
@@ -2278,6 +2328,7 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
     origen = database.session.get(PurchaseQuotation, quotation_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -2583,6 +2634,7 @@ def compras_recepcion(receipt_id):
         ).scalar_one_or_none()
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)).all()
     create_actions = get_create_actions("purchase_receipt", receipt_id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
@@ -2609,6 +2661,7 @@ def compras_recepcion_editar(receipt_id: str):
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
@@ -2637,6 +2690,7 @@ def compras_recepcion_editar(receipt_id: str):
     ]
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         return _handle_purchase_receipt_edit_post(registro)
 
     lineas = database.session.execute(
@@ -2721,6 +2775,7 @@ def compras_recepcion_duplicar(receipt_id: str):
     origen = database.session.get(PurchaseReceipt, receipt_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -2766,6 +2821,11 @@ def compras_recepcion_duplicar(receipt_id: str):
 
 def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
     """Valida que las cantidades recibidas no excedan las ordenadas en la OC."""
+    receipt = database.session.get(PurchaseReceipt, receipt_id)
+    if receipt and receipt.purchase_order_id:
+        purchase_order = database.session.get(PurchaseOrder, receipt.purchase_order_id)
+        if purchase_order and purchase_order.supplier_id != receipt.supplier_id:
+            raise ValueError(_("El proveedor de la recepción no coincide con el proveedor de la orden de compra."))
     relations = database.session.execute(
         database.select(DocumentRelation).filter_by(
             target_type="purchase_receipt",
@@ -3171,6 +3231,10 @@ def _validate_duplicate_supplier_invoice(
     if not supplier_invoice_no_cleaned:
         return
 
+    supplier = database.session.get(Party, supplier_id, with_for_update=True)
+    if supplier is None:
+        raise ValueError("El proveedor indicado no existe.")
+
     stmt = database.select(PurchaseInvoice).filter(
         PurchaseInvoice.supplier_id == supplier_id,
         PurchaseInvoice.supplier_invoice_no == supplier_invoice_no_cleaned,
@@ -3256,6 +3320,7 @@ def compras_factura_compra(invoice_id):
     registro = database.session.get(PurchaseInvoice, invoice_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)).all()
     titulo = (registro.document_no or invoice_id) + " - " + APPNAME
     document_type_label = DOCUMENT_TYPE_LABELS.get(registro.document_type, FACTURA_DE_COMPRA)
@@ -3281,6 +3346,7 @@ def compras_factura_compra_editar(invoice_id: str):
     registro = database.session.get(PurchaseInvoice, invoice_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
@@ -3304,6 +3370,7 @@ def compras_factura_compra_editar(invoice_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
+        _require_requested_purchase_company_access(registro)
         return _handle_purchase_invoice_edit_post(registro)
 
     lineas = database.session.execute(
@@ -3364,11 +3431,13 @@ def _handle_purchase_invoice_edit_post(registro):
         before_state = _capture_purchase_state(registro)
         registro.supplier_id = request.form.get("supplier_id") or None
         registro.company = request.form.get("company") or None
+        purchase_order_id = request.form.get("from_order") or getattr(registro, "purchase_order_id", None)
+        purchase_receipt_id = request.form.get("from_receipt") or getattr(registro, "purchase_receipt_id", None)
         _validate_supplier_invoice_flags(
             registro.supplier_id,
             registro.company,
-            request.form.get("from_order") or None,
-            request.form.get("from_receipt") or None,
+            purchase_order_id,
+            purchase_receipt_id,
         )
         _validate_duplicate_supplier_invoice(
             registro.supplier_id,
@@ -3417,6 +3486,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
     origen = database.session.get(PurchaseInvoice, invoice_id)
     if not origen:
         abort(404)
+    _require_purchase_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -3457,11 +3527,13 @@ def compras_factura_compra_duplicar(invoice_id: str):
         database.session.add(linea)
         total += item.amount or Decimal("0")
     duplicada.total = total
-    duplicada.base_total = total
+    exchange_rate = Decimal(str(duplicada.exchange_rate or 1))
+    base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
+    duplicada.base_total = base_total
     duplicada.grand_total = total
-    duplicada.base_grand_total = total
+    duplicada.base_grand_total = base_total
     duplicada.outstanding_amount = total
-    duplicada.base_outstanding_amount = total
+    duplicada.base_outstanding_amount = base_total
     log_create(duplicada)
     database.session.commit()
     flash(_("Factura de compra duplicada como nuevo borrador."), "success")

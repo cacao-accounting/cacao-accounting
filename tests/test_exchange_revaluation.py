@@ -95,7 +95,7 @@ def _login(client, user_id: str) -> None:
 def _seed_accounts() -> dict[str, object]:
     from cacao_accounting.database import Accounts, database
 
-    accounts = {
+    accounts: dict[str, object] = {
         "ar": Accounts(
             entity="cacao",
             code="1105",
@@ -313,7 +313,7 @@ def test_service_uses_only_open_partial_balance(app_ctx):
     assert nio_line.exchange_difference == Decimal("40.0000")
 
 
-def test_service_does_not_duplicate_previous_revaluation(app_ctx):
+def test_service_recalculates_previous_revaluation(app_ctx):
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
 
     _create_sales_invoice()
@@ -321,14 +321,13 @@ def test_service_does_not_duplicate_previous_revaluation(app_ctx):
     first = service.run(company="cacao", year=2026, month=5, user_id="admin")
     second = service.run(company="cacao", year=2026, month=5, user_id="admin")
 
-    assert first.status == "posted"
-    assert second.status == "completed_no_changes"
-    assert second.generated_journal is False
-    assert second.affected_documents_count == 0
+    assert first.status == "voided"
+    assert second.id != first.id
+    assert second.status == "posted"
 
 
-def test_service_does_not_duplicate_partial_balance_revaluation(app_ctx):
-    """A repeated run must preserve an adjustment calculated on a partial balance."""
+def test_service_recalculates_partial_balance_revaluation(app_ctx):
+    """A repeated run voids the prior adjustment before recalculating it."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
 
     _create_sales_invoice(open_amount=Decimal("40.00"))
@@ -336,9 +335,9 @@ def test_service_does_not_duplicate_partial_balance_revaluation(app_ctx):
     first = service.run(company="cacao", year=2026, month=5, user_id="admin")
     second = service.run(company="cacao", year=2026, month=5, user_id="admin")
 
-    assert first.status == "posted"
-    assert second.status == "completed_no_changes"
-    assert second.affected_documents_count == 0
+    assert first.status == "voided"
+    assert second.id != first.id
+    assert second.status == "posted"
 
 
 def test_service_raises_controlled_error_when_closing_rate_is_missing(app_ctx):
@@ -376,11 +375,15 @@ def test_service_excludes_draft_invoices(app_ctx):
     )
     database.session.commit()
 
-    run = ExchangeRevaluationService().run(company="cacao", year=2026, month=5, user_id="admin")
+    service = ExchangeRevaluationService()
+    run = service.run(company="cacao", year=2026, month=5, user_id="admin")
+    second = service.run(company="cacao", year=2026, month=5, user_id="admin")
 
     assert run.processed_documents_count == 0
     assert run.status == "completed_no_changes"
     assert run.generated_journal is False
+    assert second.id != run.id
+    assert second.status == "completed_no_changes"
 
 
 def test_service_revalues_foreign_currency_bank_balance(app_ctx):

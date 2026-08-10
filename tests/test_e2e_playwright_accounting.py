@@ -62,6 +62,25 @@ def flask_server():
                     pass
         database.session.commit()
 
+        from cacao_accounting.database import Book, UserBookAccess
+        books = database.session.execute(database.select(Book)).scalars().all()
+        for username, _, _ in user_list:
+            user = database.session.execute(database.select(User).filter_by(user=username)).scalars().first()
+            if user:
+                for book in books:
+                    exists = database.session.execute(
+                        database.select(UserBookAccess).filter_by(user_id=user.id, book_id=book.id)
+                    ).first()
+                    if not exists:
+                        access = UserBookAccess(
+                            user_id=user.id,
+                            book_id=book.id,
+                            can_read=True,
+                            can_write=True,
+                        )
+                        database.session.add(access)
+        database.session.commit()
+
     server = make_server("127.0.0.1", 5006, app)
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True

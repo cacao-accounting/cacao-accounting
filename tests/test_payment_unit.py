@@ -619,6 +619,7 @@ class TestPaymentOrderAllocated:
 
         result = _payment_order_allocated("sales_order", so.id)
         assert result == Decimal("200")
+        assert _payment_order_allocated("sales_order", so.id, company="other") == Decimal("0")
 
 
 # ---------------------------------------------------------------------------
@@ -977,6 +978,51 @@ class TestCreatePaymentTarget:
         assert payment.received_amount == Decimal("500")
         assert payment.docstatus == 0
 
+    def test_create_payment_rejects_cross_currency_invoice(self, app_ctx):
+        """El target payment no descuenta nominales de monedas distintas."""
+        from cacao_accounting.document_flow.service import create_target_document
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        si = _make_customer_invoice(grand_total=Decimal("1000"))
+        si.transaction_currency = "EUR"
+        database.session.commit()
+
+        with pytest.raises(ValueError, match="moneda"):
+            create_target_document(
+                {
+                    "target_document_type": "payment_entry",
+                    "company": "cacao",
+                    "posting_date": date.today(),
+                    "payment_type": "receive",
+                    "party_type": "customer",
+                    "party_id": customer.id,
+                    "currency": "USD",
+                    "lines": [{"source_document_type": "sales_invoice", "source_document_id": si.id, "qty": 1000}],
+                }
+            )
+
+    def test_create_payment_infers_currency_from_first_invoice(self, app_ctx):
+        from cacao_accounting.document_flow.service import create_target_document
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        si = _make_customer_invoice(grand_total=Decimal("1000"))
+        si.transaction_currency = "EUR"
+        database.session.commit()
+
+        result = create_target_document(
+            {
+                "target_document_type": "payment_entry",
+                "company": "cacao",
+                "posting_date": date.today(),
+                "payment_type": "receive",
+                "party_type": "customer",
+                "party_id": customer.id,
+                "lines": [{"source_document_type": "sales_invoice", "source_document_id": si.id, "qty": 1000}],
+            }
+        )
+        payment = database.session.get(PaymentEntry, result["target_id"])
+        assert payment.currency == "EUR"
+
     def test_create_payment_from_purchase_invoice(self, app_ctx):
         from cacao_accounting.document_flow.service import create_target_document
 
@@ -1209,7 +1255,7 @@ class TestPaymentReconciliationCandidates:
         from cacao_accounting.document_flow.payment import payment_reconciliation_candidates
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-        si = _make_customer_invoice(grand_total=Decimal("500"))
+        _make_customer_invoice(grand_total=Decimal("500"))
         _make_open_payment(party=customer, payment_type="receive", amount=Decimal("300"))
 
         result = payment_reconciliation_candidates(
@@ -1302,9 +1348,7 @@ class TestApplyAdvancePartyTypeCasing:
 
         reference = apply_advance_to_invoice(payment.id, si.id, Decimal("100"), date.today())
 
-        assert reference.party_type == "customer", (
-            f"Expected lowercase 'customer', got '{reference.party_type}'"
-        )
+        assert reference.party_type == "customer", f"Expected lowercase 'customer', got '{reference.party_type}'"
 
     def test_purchase_advance_party_type_is_lowercase_supplier(self, app_ctx):
         """Applying an advance to a PurchaseInvoice stores party_type='supplier'."""
@@ -1319,6 +1363,4 @@ class TestApplyAdvancePartyTypeCasing:
 
         reference = apply_advance_to_invoice(payment.id, pi.id, Decimal("150"), date.today())
 
-        assert reference.party_type == "supplier", (
-            f"Expected lowercase 'supplier', got '{reference.party_type}'"
-        )
+        assert reference.party_type == "supplier", f"Expected lowercase 'supplier', got '{reference.party_type}'"

@@ -10,6 +10,7 @@ import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.database import (
+    CompanyParty,
     database,
     DocumentRelation,
     Party,
@@ -18,6 +19,8 @@ from cacao_accounting.database import (
     SalesMatchingConfig,
     SalesOrder,
     SalesOrderItem,
+    ItemPrice,
+    PriceList,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
 
@@ -194,4 +197,72 @@ def test_price_matching_default_rejects_any_difference(app_ctx):
     invoice = _create_invoice_from_so(so, so_item, rate=Decimal("101"))
 
     with pytest.raises(ValueError, match="difiere del precio"):
+        _validate_invoice_prices_against_source(invoice)
+
+
+def test_price_matching_manual_invoice_uses_customer_price_list(app_ctx):
+    """Una factura sin origen compara contra el precio vigente de venta."""
+    from cacao_accounting.ventas import _validate_invoice_prices_against_source
+
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    price_list = PriceList(
+        name="Lista manual de venta",
+        company="cacao",
+        currency="NIO",
+        is_default=False,
+        is_selling=True,
+        is_active=True,
+    )
+    database.session.add(price_list)
+    database.session.flush()
+    company_party = database.session.execute(
+        database.select(CompanyParty).filter_by(company="cacao", party_id=customer.id)
+    ).scalar_one_or_none()
+    if company_party is None:
+        company_party = CompanyParty(company="cacao", party_id=customer.id, is_active=True)
+        database.session.add(company_party)
+    company_party.default_price_list_id = price_list.id
+    database.session.add(
+        ItemPrice(
+            item_code="ART-001",
+            price_list_id=price_list.id,
+            uom="UND",
+            price=Decimal("100"),
+            min_qty=Decimal("1"),
+        )
+    )
+    database.session.commit()
+
+    invoice = SalesInvoice(
+        id="SI-PRICE-CATALOG",
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        document_type="sales_invoice",
+        docstatus=0,
+        grand_total=Decimal("1200"),
+    )
+    invoice_item = SalesInvoiceItem(
+        sales_invoice_id=invoice.id,
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("120"),
+        amount=Decimal("1200"),
+    )
+    database.session.add_all([invoice, invoice_item])
+    database.session.commit()
+    database.session.add(
+        SalesMatchingConfig(
+            company="cacao",
+            price_tolerance_type="percentage",
+            price_tolerance_value=Decimal("5"),
+            allow_price_difference=False,
+        )
+    )
+    database.session.commit()
+
+    with pytest.raises(ValueError, match="Lista de Precios"):
         _validate_invoice_prices_against_source(invoice)

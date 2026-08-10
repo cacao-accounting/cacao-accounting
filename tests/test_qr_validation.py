@@ -3,6 +3,7 @@
 
 import pytest
 import builtins
+from decimal import Decimal
 
 from cacao_accounting.printing.validation import (
     calculate_validation_hash,
@@ -34,6 +35,20 @@ def test_canonical_payload():
     assert "100.5" in payload
     assert "internal_note" not in payload
     assert "secret" not in payload
+
+
+def test_canonical_payload_preserves_decimal_precision():
+    """Decimal totals must remain exact at the validation hash boundary."""
+    payload = get_canonical_payload(
+        {
+            "company_code": "cacao",
+            "document_type": "sales_invoice",
+            "grand_total": Decimal("1.005"),
+        }
+    )
+
+    assert '"grand_total":"1.005"' in payload
+    assert "1.004999" not in payload
 
 
 def test_validation_hash():

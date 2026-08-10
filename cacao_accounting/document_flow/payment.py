@@ -114,23 +114,32 @@ def _payment_candidate_outstanding(document: Any, flow_source_type: str) -> Deci
     source_key = normalize_doctype(flow_source_type)
     total = decimal_or_zero(getattr(document, "grand_total", None))
     if source_key in {"purchase_order", "sales_order"}:
-        pending = total - _payment_order_allocated(source_key, str(getattr(document, "id", "")))
+        pending = total - _payment_order_allocated(
+            source_key,
+            str(getattr(document, "id", "")),
+            company=getattr(document, "company", None),
+        )
         return pending if pending > 0 else Decimal("0")
     return compute_outstanding_amount(document)
 
 
-def _payment_order_allocated(flow_source_type: str, source_id: str) -> Decimal:
+def _payment_order_allocated(flow_source_type: str, source_id: str, company: str | None = None) -> Decimal:
     """Calcula anticipos activos ya vinculados a una orden."""
-    rows = database.session.execute(
+    query = (
         select(PaymentReference.allocated_amount)
         .join(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
         .where(
             DocumentRelation.source_type == flow_source_type,
             DocumentRelation.source_id == source_id,
             DocumentRelation.target_type == "payment_entry",
             DocumentRelation.status == "active",
+            PaymentEntry.docstatus == 1,
         )
-    ).scalars()
+    )
+    if company:
+        query = query.where(PaymentEntry.company == company)
+    rows = database.session.execute(query).scalars()
     return sum((decimal_or_zero(amount) for amount in rows), Decimal("0"))
 
 
@@ -578,6 +587,20 @@ def apply_payment_reconciliation(
         )
     if not company or party_type not in {"supplier", "customer"} or not party_id:
         raise _document_flow_error("Debe indicar compania, tipo de tercero y tercero.")
+    latest_allocation = database.session.execute(
+        select(func.max(PaymentReference.allocation_date))
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .where(
+            PaymentEntry.company == company,
+            PaymentEntry.party_type == party_type,
+            PaymentEntry.party_id == party_id,
+            PaymentEntry.docstatus == 1,
+        )
+    ).scalar_one()
+    if latest_allocation and allocation_date < latest_allocation:
+        raise _document_flow_error(
+            "La fecha de conciliación no puede ser anterior a una aplicación existente " f"({latest_allocation})."
+        )
 
     reconciliation = Reconciliation(
         company=company,
@@ -698,10 +721,13 @@ def _get_reference_document(flow_source_type: str, document_id: str, company: st
     return document
 
 
-def _validate_payment_currency_match(payment: Any, document: Any) -> None:
+def _validate_payment_currency_match(payment: Any, document: Any, *, infer_missing: bool = False) -> None:
     """CAS-03: Valida que la moneda del pago coincida con la moneda del documento referenciado."""
     payment_currency = getattr(payment, "currency", None)
     document_currency = getattr(document, "transaction_currency", None) or getattr(document, "currency", None)
+    if infer_missing and not payment_currency and document_currency:
+        payment.currency = document_currency
+        payment_currency = document_currency
     if payment_currency and document_currency and payment_currency != document_currency:
         raise _document_flow_error(
             "La moneda del pago ({0}) no coincide con la moneda del documento referenciado ({1}). "
@@ -917,12 +943,17 @@ def _maybe_settle_advance_against_invoice(
     amount: Decimal,
     allocation_date: date,
 ) -> None:
-    """S2P-07: netea el anticipo contra la cuenta por pagar/cobrar."""
+    """Netea el anticipo contra la cuenta por pagar/cobrar en GL.
+
+    El neteo se genera siempre que el anticipo se aplique a la factura para que
+    el subledger (PaymentReference) no diverja de la cuenta control en GL. La
+    configuracion de cuentas por defecto solo habilita el neteo; no lo silencia.
+    """
     from cacao_accounting.contabilidad.default_accounts import get_company_default_accounts
 
     company = invoice.company
     defaults = get_company_default_accounts(company)
-    if not defaults or not defaults.apply_advances_automatically:
+    if not defaults:
         return
     if amount <= 0:
         return
@@ -1150,8 +1181,12 @@ def _create_advance_settlement_lines(
         raise _document_flow_error("Las cuentas de anticipo y del tercero no son válidas para la compañía.")
 
     for book in books:
-        party_value = _allocated_carrying_value(invoice, party_account_id, company, book, amount, allocation_date)
-        advance_value = _allocated_carrying_value(payment, advance_account_id, company, book, amount, allocation_date)
+        party_value = _allocated_carrying_value(invoice, party_account_id, company, book, amount, allocation_date).quantize(
+            Decimal("0.0001")
+        )
+        advance_value = _allocated_carrying_value(
+            payment, advance_account_id, company, book, amount, allocation_date
+        ).quantize(Decimal("0.0001"))
         debit_account, debit_value, credit_account, credit_value = (
             (party_account, party_value, advance_account, advance_value)
             if is_purchase
@@ -1226,6 +1261,9 @@ def _build_payment_target_payment(company: str | None, posting_date: Any, payloa
         party_type=payload.get("party_type"),
         party_id=payload.get("party_id"),
         bank_account_id=payload.get("bank_account_id"),
+        currency=payload.get("currency"),
+        base_currency=payload.get("base_currency"),
+        exchange_rate=payload.get("exchange_rate"),
         remarks=payload.get("remarks"),
     )
     database.session.add(payment)
@@ -1285,6 +1323,7 @@ def _apply_payment_target_line(
         raise _document_flow_error("No se pueden mezclar companias incompatibles.", 409)
 
     allocated = decimal_or_zero(selected.get("qty") or selected.get("allocated_amount"))
+    _validate_payment_currency_match(payment, invoice, infer_missing=True)
     outstanding = compute_outstanding_amount(invoice)
     _validate_payment_target_allocation(allocated, outstanding)
     _persist_payment_target_allocation(payment, reference_type, reference_id, invoice, allocated, outstanding)

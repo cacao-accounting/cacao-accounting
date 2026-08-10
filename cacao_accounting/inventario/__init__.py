@@ -15,6 +15,7 @@ from flask_login import current_user, login_required
 
 from cacao_accounting.database import (
     Accounts,
+    Book,
     CostCenter,
     DocumentRelation,
     Entity,
@@ -29,6 +30,8 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import get_active_naming_series
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target, validate_submit_prerequisites
 from cacao_accounting.document_flow.status import _
@@ -69,6 +72,20 @@ INVENTARIO_ENTRADA_LISTA_HTML = "inventario/entrada_lista.html"
 INVENTARIO_INVENTARIO_ENTRADA = "inventario.inventario_entrada"
 _INVENTORY_STOCK_ENTRY = "inventory.stock_entry"
 _LABEL_DOCUMENTO_ORIGEN = "documento origen"
+
+
+def _inventory_company_scoped_select(model: type[Any]):
+    """Build an inventory query restricted to companies in accessible books."""
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("inventory"),
+        usuario=current_user.id,
+    )
+    book_ids = permissions.obtener_libros_autorizados("can_read")
+    query = database.select(model)
+    if not book_ids:
+        return query.where(database.false())
+    accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
+    return query.where(model.company.in_(accessible_companies))
 
 
 def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:
@@ -133,7 +150,7 @@ def inventario_uom_lista():
 def inventario_bodega_lista():
     """Listado de bodegas."""
     consulta = database.paginate(
-        database.select(Warehouse),
+        _inventory_company_scoped_select(Warehouse),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -148,7 +165,7 @@ def inventario_bodega_lista():
 def inventario_entrada_lista():
     """Listado de entradas de almacen."""
     consulta = database.paginate(
-        database.select(StockEntry),
+        _inventory_company_scoped_select(StockEntry),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -170,7 +187,7 @@ def inventario_entrada_lista():
 def inventario_material_receipt_lista():
     """Listado de recepciones de material."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="material_receipt"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_receipt"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -192,7 +209,7 @@ def inventario_material_receipt_lista():
 def inventario_material_issue_lista():
     """Listado de salidas de material."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="material_issue"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_issue"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -214,7 +231,7 @@ def inventario_material_issue_lista():
 def inventario_material_transfer_lista():
     """Listado de transferencias de material."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="material_transfer"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_transfer"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -236,7 +253,7 @@ def inventario_material_transfer_lista():
 def inventario_ajuste_lista():
     """Listado de ajustes de inventario."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="stock_adjustment"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_adjustment"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -258,7 +275,7 @@ def inventario_ajuste_lista():
 def inventario_reconciliacion_lista():
     """Listado de conciliaciones físicas de inventario."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="stock_reconciliation"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_reconciliation"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -280,7 +297,7 @@ def inventario_reconciliacion_lista():
 def inventario_ajuste_positivo_lista():
     """Listado de ajustes positivos de inventario."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="adjustment_positive"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_positive"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -301,7 +318,7 @@ def inventario_ajuste_positivo_lista():
 def inventario_salida_inventario_lista():
     """Listado de salidas de inventario (incluyendo ajustes negativos)."""
     consulta = database.paginate(
-        database.select(StockEntry).filter_by(purpose="adjustment_negative"),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_negative"),
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
@@ -846,16 +863,18 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
-            uom = request.form.get(f"uom_{i}") or None
+            default_uom = _item_default_uom(item_code)
+            uom = request.form.get(f"uom_{i}") or default_uom
+            if not uom:
+                raise ValueError(f"La linea del item {item_code} requiere una unidad de medida.")
             # INV-05: Calcular qty_in_base_uom para consistencia con StockReconciliation
             # Este campo es requerido para reportes de inventario y cálculos de FIFO
-            default_uom = _item_default_uom(item_code)
             qty_in_base_uom = qty
             if uom and default_uom:
                 try:
                     qty_in_base_uom = convert_item_qty(item_code, qty, uom, default_uom)
-                except InventoryServiceError:
-                    qty_in_base_uom = qty
+                except InventoryServiceError as exc:
+                    raise ValueError(f"No se pudo convertir {qty} {uom} a {default_uom} para el item {item_code}.") from exc
             line = StockEntryItem(
                 stock_entry_id=entry.id,
                 item_code=item_code,
@@ -913,27 +932,25 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
         warehouse = request.form.get(f"warehouse_{i}") or entry.to_warehouse or entry.from_warehouse
         if item_code:
             current_qty, current_rate, current_value, _reserved_qty = _stock_bin_snapshot(entry.company, item_code, warehouse)
+            uom = request.form.get(f"uom_{i}") or _item_default_uom(item_code)
+            if not uom:
+                raise ValueError(f"La conciliacion del item {item_code} requiere una unidad de medida.")
+            default_uom = _item_default_uom(item_code)
+            if not default_uom:
+                raise ValueError(f"El item {item_code} requiere una UOM base configurada.")
             counted_qty = _form_decimal(f"counted_qty_{i}", str(current_qty))
+            if uom != default_uom:
+                try:
+                    counted_qty = convert_item_qty(item_code, counted_qty, uom, default_uom)
+                except InventoryServiceError as exc:
+                    raise ValueError(
+                        f"No se pudo convertir {counted_qty} {uom} a {default_uom} para el item {item_code}."
+                    ) from exc
             target_rate = _form_decimal(f"target_valuation_rate_{i}", str(current_rate))
             target_value = _form_decimal(f"target_stock_value_{i}", str(counted_qty * target_rate))
             qty_difference = counted_qty - current_qty
             value_difference = target_value - current_value
-            uom = request.form.get(f"uom_{i}") or _item_default_uom(item_code)
-            default_uom = _item_default_uom(item_code)
-            if uom and default_uom:
-                try:
-                    base_qty = convert_item_qty(item_code, abs(qty_difference), uom, default_uom)
-                except InventoryServiceError:
-                    logger.warning(
-                        "UOM conversion failed for item %s: qty=%s uom=%s default_uom=%s",
-                        item_code,
-                        qty_difference,
-                        uom,
-                        default_uom,
-                    )
-                    base_qty = abs(qty_difference)
-            else:
-                base_qty = abs(qty_difference)
+            base_qty = abs(qty_difference)
             line = StockEntryItem(
                 stock_entry_id=entry.id,
                 item_code=item_code,
@@ -1098,7 +1115,7 @@ def _handle_stock_entry_new_post(form_data):
         database.session.commit()
         flash("Entrada de almacén creada correctamente.", "success")
         return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
-    except IdentifierConfigurationError as exc:
+    except (IdentifierConfigurationError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
 
@@ -1209,6 +1226,8 @@ def inventario_entrada_editar(entry_id: str):
     if request.method == "POST":
         return _handle_stock_entry_edit_post(registro)
 
+    if registro.purpose == "stock_reconciliation":
+        return _render_stock_reconciliation_edit_form(registro, items_disponibles, uoms_disponibles)
     return _render_stock_entry_edit_form(registro, items_disponibles, uoms_disponibles)
 
 
@@ -1247,6 +1266,10 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.from_warehouse = request.form.get("from_warehouse") or None
     registro.to_warehouse = request.form.get("to_warehouse") or None
+    registro.adjustment_account_id = request.form.get("adjustment_account_id") or None
+    registro.cost_center_code = request.form.get("cost_center_code") or None
+    registro.unit_code = request.form.get("unit_code") or None
+    registro.project_code = request.form.get("project_code") or None
     registro.remarks = request.form.get("remarks")
 
 
@@ -1266,7 +1289,10 @@ def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:
         database.session.delete(rel)
     for item in database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars():
         database.session.delete(item)
-    registro.total_amount = _save_stock_entry_items(registro)
+    if registro.purpose == "stock_reconciliation":
+        registro.total_amount = _save_stock_reconciliation_items(registro)
+    else:
+        registro.total_amount = _save_stock_entry_items(registro)
 
 
 def _render_stock_entry_edit_form(
@@ -1321,6 +1347,53 @@ def _render_stock_entry_edit_form(
     )
 
 
+def _render_stock_reconciliation_edit_form(
+    registro: StockEntry,
+    items_disponibles: list,
+    uoms_disponibles: list,
+):
+    """Renderiza el formulario específico para editar una conciliación."""
+    from cacao_accounting.inventario.forms import FormularioEntradaAlmacen
+
+    formulario = FormularioEntradaAlmacen(obj=registro)
+    lineas = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars()
+    reconciliation_config = {
+        "header": {
+            "company": registro.company or "",
+            "posting_date": str(registro.posting_date or ""),
+            "adjustment_account_id": registro.adjustment_account_id or "",
+            "cost_center_code": registro.cost_center_code or "",
+            "unit_code": registro.unit_code or "",
+            "project_code": registro.project_code or "",
+            "remarks": registro.remarks or "",
+        },
+        "lines": [
+            {
+                "item_code": line.item_code,
+                "warehouse": line.target_warehouse or line.source_warehouse or "",
+                "uom": line.uom or "",
+                "current_qty": str(line.current_qty or 0),
+                "counted_qty": str(line.counted_qty or 0),
+                "current_valuation_rate": str(line.current_valuation_rate or 0),
+                "target_valuation_rate": str(line.target_valuation_rate or 0),
+                "current_stock_value": str(line.current_stock_value or 0),
+                "target_stock_value": str(line.target_stock_value or 0),
+            }
+            for line in lineas
+        ],
+    }
+    return render_template(
+        "inventario/stock_reconciliation_nuevo.html",
+        form=formulario,
+        titulo="Editar Conciliación de Inventario - " + APPNAME,
+        items_disponibles=items_disponibles,
+        uoms_disponibles=uoms_disponibles,
+        reconciliation_config=reconciliation_config,
+        edit=True,
+        registro=registro,
+    )
+
+
 @inventario.route("/stock-entry/<entry_id>/duplicate", methods=["POST"])
 @modulo_activo("inventory")
 @login_required
@@ -1360,6 +1433,16 @@ def inventario_entrada_duplicar(entry_id: str):
             uom=item.uom,
             basic_rate=item.basic_rate,
             amount=item.amount,
+            qty_in_base_uom=item.qty_in_base_uom,
+            valuation_rate=item.valuation_rate,
+            current_qty=item.current_qty,
+            counted_qty=item.counted_qty,
+            qty_difference=item.qty_difference,
+            current_valuation_rate=item.current_valuation_rate,
+            target_valuation_rate=item.target_valuation_rate,
+            current_stock_value=item.current_stock_value,
+            target_stock_value=item.target_stock_value,
+            stock_value_difference=item.stock_value_difference,
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")

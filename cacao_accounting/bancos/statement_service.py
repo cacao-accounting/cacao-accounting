@@ -9,7 +9,7 @@ import csv
 import json
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import StringIO
 from typing import Any
 
@@ -70,7 +70,23 @@ def _decimal_value(value: Any) -> Decimal:
         return Decimal("0")
     if isinstance(value, Decimal):
         return value
-    return Decimal(str(value).replace(",", ""))
+    normalized = str(value).strip().replace(" ", "")
+    if "," in normalized and "." in normalized:
+        if normalized.rfind(",") > normalized.rfind("."):
+            normalized = normalized.replace(".", "").replace(",", ".")
+        else:
+            normalized = normalized.replace(",", "")
+    elif "," in normalized:
+        decimal_part = normalized.rsplit(",", 1)[1]
+        if len(decimal_part) > 2:
+            raise InvalidOperation("Separador de miles ambiguo")
+        normalized = normalized.replace(",", ".")
+    elif normalized.count(".") > 1:
+        raise InvalidOperation("Separador de miles ambiguo")
+    try:
+        return Decimal(normalized)
+    except InvalidOperation as exc:
+        raise BankStatementError(f"El monto del extracto no es válido: {value}") from exc
 
 
 def _parse_date(value: str) -> date:
@@ -176,6 +192,8 @@ def _parse_bank_statement_row(source: dict[str, str], mapping: dict[str, str]) -
     withdrawal = withdrawal_value if withdrawal_value > 0 else None
     if not deposit and not withdrawal:
         raise BankStatementError("Cada fila debe tener deposito o retiro.")
+    if deposit and withdrawal:
+        raise BankStatementError("Cada fila debe tener deposito o retiro, no ambos.")
     return BankImportRow(posting_date, reference_number, description, deposit, withdrawal, False)
 
 
@@ -194,7 +212,10 @@ def _persist_bank_transaction(*, bank_account_id: str, row: BankImportRow) -> No
 
 
 def create_bank_difference_journal(
-    reconciliation_id: str, amount: Decimal, account_id: str | None = None
+    reconciliation_id: str,
+    amount: Decimal,
+    account_id: str | None = None,
+    transaction_id: str | None = None,
 ) -> ComprobanteContable:
     """Crea un comprobante de ajuste por diferencia bancaria."""
     reconciliation = database.session.get(Reconciliation, reconciliation_id)
@@ -206,15 +227,22 @@ def create_bank_difference_journal(
     difference_account_id = account_id or (defaults.bank_difference_account_id if defaults else None)
     if not difference_account_id:
         raise BankStatementError("Falta cuenta de diferencia bancaria configurada.")
-    reconciliation_item = database.session.execute(
-        select(ReconciliationItem).filter_by(reconciliation_id=reconciliation.id, source_type="bank_transaction")
-    ).scalar_one_or_none()
+    item_query = select(ReconciliationItem).filter_by(
+        reconciliation_id=reconciliation.id,
+        source_type="bank_transaction",
+    )
+    if transaction_id:
+        item_query = item_query.where(ReconciliationItem.source_id == transaction_id)
+    reconciliation_items = database.session.execute(item_query.limit(2)).scalars().all()
+    if len(reconciliation_items) != 1:
+        raise BankStatementError("La conciliacion no identifica una transaccion bancaria unica.")
+    reconciliation_item = reconciliation_items[0]
     bank_account = None
     if reconciliation_item:
         transaction = database.session.get(BankTransaction, reconciliation_item.source_id)
         bank_account = database.session.get(BankAccount, transaction.bank_account_id) if transaction else None
     bank_account_gl_id = bank_account.gl_account_id if bank_account else None
-    if not bank_account_gl_id:
+    if not bank_account or not bank_account_gl_id:
         raise BankStatementError("No se encontro cuenta bancaria GL para balancear el ajuste.")
     difference_account = database.session.get(Accounts, difference_account_id)
     bank_gl_account = database.session.get(Accounts, bank_account_gl_id)
@@ -253,6 +281,7 @@ def create_bank_difference_journal(
                 entity=reconciliation.company,
                 account=debit_account.code,
                 currency_id=transaction_currency,
+                bank_account_id=bank_account.id if debit_account.id == bank_gl_account.id else None,
                 value=abs(amount),
                 memo="Diferencia bancaria",
             ),
@@ -262,6 +291,7 @@ def create_bank_difference_journal(
                 entity=reconciliation.company,
                 account=credit_account.code,
                 currency_id=transaction_currency,
+                bank_account_id=bank_account.id if credit_account.id == bank_gl_account.id else None,
                 value=-abs(amount),
                 memo="Diferencia bancaria",
             ),

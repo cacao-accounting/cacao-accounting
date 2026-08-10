@@ -3995,3 +3995,428 @@ def test_operational_posting_multimoneda_real(app_ctx):
         else:
             assert entry.credit == Decimal("365.00")
             assert entry.credit_in_account_currency == Decimal("10.00")
+
+    from cacao_accounting.contabilidad.posting import cancel_document
+
+    cancel_document(invoice)
+    database.session.flush()
+    reversals = (
+        database.session.execute(
+            database.select(GLEntry).filter_by(voucher_type="sales_invoice", voucher_id=invoice.id, is_reversal=True)
+        )
+        .scalars()
+        .all()
+    )
+    assert len(reversals) == len(entries)
+    for reversal in reversals:
+        original = database.session.get(GLEntry, reversal.reversal_of)
+        assert original is not None
+        assert reversal.debit_in_account_currency == original.credit_in_account_currency
+        assert reversal.credit_in_account_currency == original.debit_in_account_currency
+
+
+def test_late_two_way_reclassification_deducts_prior_receipts(app_ctx):
+    from cacao_accounting.accounting_engine.document_builders import (
+        _late_two_way_invoice_amounts,
+        _purchase_invoice_account_lines,
+    )
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        Item,
+        ItemAccount,
+        Party,
+        CompanyParty,
+        PartyAccount,
+        PurchaseOrder,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        UOM,
+        Warehouse,
+        WarehouseCompanyAccount,
+        Book,
+        database,
+    )
+    from datetime import date
+    from decimal import Decimal
+
+    # Ensure a book exists for the company "cacao" so that ledger entries can be posted
+    existing_book = (
+        database.session.execute(database.select(Book).where(Book.entity == "cacao", Book.is_primary)).scalars().first()
+    )
+    if not existing_book:
+        fiscal_book = Book(
+            entity="cacao", code="FISC-2WR", name="Fiscal 2WR", is_primary=True, status="activo", currency="NIO"
+        )
+        database.session.add(fiscal_book)
+        database.session.flush()
+
+    suffix = "2WR"
+    inv_code = f"INV-{suffix}"
+    bridge_code = f"BRIDGE-{suffix}"
+    ap_code = f"AP-{suffix}"
+    uom_code = f"EA-{suffix}"
+    item_code = f"ITEM-{suffix}"
+    wh_code = f"WH-{suffix}"
+    supp_code = f"SUPP-{suffix}"
+    po_id = f"PO-{suffix}"
+
+    inventory_account = Accounts(
+        entity="cacao",
+        code=inv_code,
+        name="Inventario 2WR",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="inventory",
+    )
+    bridge_account = Accounts(
+        entity="cacao",
+        code=bridge_code,
+        name="Cuenta Puente 2WR",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="liability",
+    )
+    payable_account = Accounts(
+        entity="cacao",
+        code=ap_code,
+        name="Cuentas por pagar 2WR",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="payable",
+    )
+    expense_account = Accounts(
+        entity="cacao",
+        code=f"EXP-{suffix}",
+        name="Gasto 2WR",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    uom = UOM(code=uom_code, name="Each 2WR")
+    item = Item(code=item_code, name="Item 2WR", item_type="goods", is_stock_item=True, default_uom=uom_code)
+    warehouse = Warehouse(code=wh_code, name="Bodega 2WR", company="cacao")
+
+    database.session.add_all([inventory_account, bridge_account, payable_account, expense_account, uom, item, warehouse])
+    database.session.flush()
+
+    supplier = Party(
+        id=supp_code,
+        code=supp_code,
+        is_supplier=True,
+        name="Proveedor 2WR",
+        is_active=True,
+    )
+    database.session.add(supplier)
+    database.session.flush()
+
+    database.session.add_all(
+        [
+            ItemAccount(item_code=item_code, company="cacao", expense_account_id=expense_account.id),
+            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
+            WarehouseCompanyAccount(
+                warehouse_code=wh_code, company="cacao", inventory_account_id=inventory_account.id, is_active=True
+            ),
+            CompanyParty(company="cacao", party_id=supp_code, is_active=True),
+            PartyAccount(party_id=supp_code, company="cacao", payable_account_id=payable_account.id),
+        ]
+    )
+    database.session.flush()
+
+    po = PurchaseOrder(
+        id=po_id,
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        docstatus=1,
+    )
+    database.session.add(po)
+    database.session.flush()
+
+    # =========================================================================
+    # Case A: Receipt 1 and 2 are submitted after the 2-way invoice
+    # =========================================================================
+
+    # 2-way Invoice of 5 units (5 * 20 = 100 USD)
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        purchase_order_id=po_id,
+        purchase_receipt_id=None,
+        docstatus=1,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+
+    invoice_item = PurchaseInvoiceItem(
+        purchase_invoice_id=invoice.id,
+        item_code=item_code,
+        item_name="Item 2WR",
+        qty=Decimal("5"),
+        uom=uom_code,
+        rate=Decimal("20.00"),
+        amount=Decimal("100.00"),
+    )
+    database.session.add(invoice_item)
+    database.session.flush()
+
+    receipt1 = PurchaseReceipt(
+        id=f"PR-1-{suffix}",
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        purchase_order_id=po_id,
+        docstatus=0,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(receipt1)
+    database.session.flush()
+
+    receipt1_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt1.id,
+        item_code=item_code,
+        item_name="Item 2WR",
+        qty=Decimal("5"),
+        uom=uom_code,
+        qty_in_base_uom=Decimal("5"),
+        rate=Decimal("20.00"),
+        amount=Decimal("100.00"),
+        warehouse=wh_code,
+    )
+    database.session.add(receipt1_item)
+    database.session.flush()
+
+    receipt2 = PurchaseReceipt(
+        id=f"PR-2-{suffix}",
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        purchase_order_id=po_id,
+        docstatus=0,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(receipt2)
+    database.session.flush()
+
+    receipt2_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt2.id,
+        item_code=item_code,
+        item_name="Item 2WR",
+        qty=Decimal("5"),
+        uom=uom_code,
+        qty_in_base_uom=Decimal("5"),
+        rate=Decimal("20.00"),
+        amount=Decimal("100.00"),
+        warehouse=wh_code,
+    )
+    database.session.add(receipt2_item)
+    database.session.commit()
+
+    # Before submitting receipt1, both see the full 100.00 from 2-way invoice
+    assert _late_two_way_invoice_amounts(receipt1).get(item_code) == Decimal("100.00")
+    assert _late_two_way_invoice_amounts(receipt2).get(item_code) == Decimal("100.00")
+
+    # Now post receipt1 to the GL (submits it first)
+    receipt1.docstatus = 1
+    database.session.flush()
+    post_document_to_gl(receipt1)
+    database.session.commit()
+
+    # Now check again: receipt2 should see that receipt1 already reclassified the invoice
+    assert _late_two_way_invoice_amounts(receipt2).get(item_code, Decimal("0")) == Decimal("0")
+
+    # =========================================================================
+    # Case B: Receipt submitted BEFORE a 2-way invoice, and another receipt after
+    # =========================================================================
+    po_case_b = PurchaseOrder(
+        id="PO-B-CASE",
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        docstatus=1,
+    )
+    database.session.add(po_case_b)
+    database.session.flush()
+
+    # Receipt 3 is posted first (no invoice exists yet)
+    receipt3 = PurchaseReceipt(
+        id="PR-3-CASE-B",
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        purchase_order_id=po_case_b.id,
+        docstatus=1,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(receipt3)
+    database.session.flush()
+
+    receipt3_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt3.id,
+        item_code=item_code,
+        item_name="Item 2WR",
+        qty=Decimal("5"),
+        uom=uom_code,
+        qty_in_base_uom=Decimal("5"),
+        rate=Decimal("20.00"),
+        amount=Decimal("100.00"),
+        warehouse=wh_code,
+    )
+    database.session.add(receipt3_item)
+    database.session.flush()
+    post_document_to_gl(receipt3)
+    database.session.commit()
+
+    # Now we post a late 2-way invoice for Case B
+    invoice_b = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        purchase_order_id=po_case_b.id,
+        purchase_receipt_id=None,
+        docstatus=1,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(invoice_b)
+    database.session.flush()
+
+    invoice_b_item = PurchaseInvoiceItem(
+        purchase_invoice_id=invoice_b.id,
+        item_code=item_code,
+        item_name="Item 2WR",
+        qty=Decimal("5"),
+        uom=uom_code,
+        rate=Decimal("20.00"),
+        amount=Decimal("100.00"),
+    )
+    database.session.add(invoice_b_item)
+    database.session.flush()
+
+    invoice_b_lines = _purchase_invoice_account_lines(invoice_b, [invoice_b_item], "cacao")
+    assert invoice_b_lines[0].account_id == bridge_account.id
+
+    # Now we create Receipt 4 after the invoice
+    receipt4 = PurchaseReceipt(
+        id="PR-4-CASE-B",
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        purchase_order_id=po_case_b.id,
+        docstatus=0,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(receipt4)
+    database.session.flush()
+
+    receipt4_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt4.id,
+        item_code=item_code,
+        item_name="Item 2WR",
+        qty=Decimal("5"),
+        uom=uom_code,
+        qty_in_base_uom=Decimal("5"),
+        rate=Decimal("20.00"),
+        amount=Decimal("100.00"),
+        warehouse=wh_code,
+    )
+    database.session.add(receipt4_item)
+    database.session.commit()
+
+    # Query late 2-way amounts for receipt4. Since receipt3 did NOT reclassify any invoice
+    # (receipt3 was submitted before invoice_b existed and thus did not credit the expense account),
+    # invoice_b's full amount of 100.00 USD should be completely available for receipt4!
+    late_two_way_amounts_4 = _late_two_way_invoice_amounts(receipt4)
+    assert late_two_way_amounts_4.get(item_code) == Decimal("100.00")
+
+
+def test_late_two_way_invoice_amounts_excludes_future_invoices(app_ctx):
+    """A backdated receipt only reclassifies invoices posted by its cutoff date."""
+    from cacao_accounting.accounting_engine.document_builders import (
+        _late_two_way_invoice_amounts,
+        _purchase_invoice_has_receipt,
+    )
+    from cacao_accounting.database import (
+        PurchaseReceipt,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        database,
+    )
+
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date(2026, 5, 10),
+        supplier_id="SUPP-LTW",
+        purchase_order_id="PO-LTW",
+        docstatus=1,
+    )
+    database.session.add(receipt)
+    database.session.flush()
+
+    # Preceding invoice (on or before posting date of receipt)
+    invoice_preceding = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 10),
+        supplier_id="SUPP-LTW",
+        purchase_order_id="PO-LTW",
+        purchase_receipt_id=None,
+        docstatus=1,
+        is_return=False,
+    )
+    database.session.add(invoice_preceding)
+    database.session.flush()
+
+    invoice_preceding_item = PurchaseInvoiceItem(
+        purchase_invoice_id=invoice_preceding.id,
+        item_code="ITEM-A",
+        qty=Decimal("10"),
+        rate=Decimal("5.00"),
+        amount=Decimal("50.00"),
+    )
+    database.session.add(invoice_preceding_item)
+
+    # Future-dated/subsequent invoice (posted after receipt's posting date)
+    invoice_future = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 11),
+        supplier_id="SUPP-LTW",
+        purchase_order_id="PO-LTW",
+        purchase_receipt_id=None,
+        docstatus=1,
+        is_return=False,
+    )
+    database.session.add(invoice_future)
+    database.session.flush()
+
+    invoice_future_item = PurchaseInvoiceItem(
+        purchase_invoice_id=invoice_future.id,
+        item_code="ITEM-B",
+        qty=Decimal("5"),
+        rate=Decimal("10.00"),
+        amount=Decimal("50.00"),
+    )
+    database.session.add(invoice_future_item)
+    database.session.commit()
+
+    # Run the utility function
+    amounts = _late_two_way_invoice_amounts(receipt)
+
+    # Only the invoice posted by the receipt's cutoff date is eligible.
+    assert "ITEM-A" in amounts
+    assert amounts["ITEM-A"] == Decimal("50.00")
+    assert "ITEM-B" not in amounts
+    assert _purchase_invoice_has_receipt(invoice_future, "cacao") is True

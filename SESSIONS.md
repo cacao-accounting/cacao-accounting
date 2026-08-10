@@ -3,6 +3,261 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
+
+- Se eliminó la unicidad artificial por compañía/período de `ExchangeRevaluation`.
+- Una nueva ejecución anula primero las afectaciones GL publicadas previamente
+  del mismo período y calcula nuevamente los saldos actuales.
+- Las ejecuciones sin cambios también se registran como eventos independientes,
+  preservando la trazabilidad y permitiendo recalcular después de cambios en
+  saldos, tasas o documentos abiertos.
+
+## 2026-08-10 — Sincronización de PR #372 con estabilización
+
+- Se integró `stabilization/inventory-audit` en la rama del PR #372 para
+  resolver sus conflictos y permitir su incorporación posterior.
+- Se preservaron el cálculo de reclasificaciones parciales del PR y las
+  protecciones de estabilización, incluida la exclusión de facturas futuras.
+
+## 2026-08-10 — Compensación de recepción posterior a factura 2-way en múltiples recepciones
+
+### Petición
+
+Cuando una factura de 2 vías cubre solo parte de una orden y la orden es recibida en múltiples documentos, deducir la cantidad ya reclasificada por las recepciones enviadas anteriormente antes de devolver el monto disponible de la factura de 2 vías.
+
+### Implementación
+
+- Se modificó `_late_two_way_invoice_amounts(document: PurchaseReceipt)` en `cacao_accounting/accounting_engine/document_builders.py`.
+- Ahora consulta todas las demás recepciones de compra ya confirmadas/enviadas (`docstatus == 1`, excluyendo devoluciones y el documento actual) asociadas al mismo `purchase_order_id`.
+- Simula la reclasificación secuencial/cronológica de cada recepción previa para deducir de forma precisa los importes ya consumidos de la factura de 2 vías.
+- Se agregó la prueba unitaria `test_late_two_way_reclassification_deducts_prior_receipts` en `tests/test_07posting_engine.py` para asegurar que las recepciones posteriores no sobre-clasifiquen los gastos y que el remanente correcto se asigne a la cuenta puente (GRNI).
+- Se ejecutaron Black, Ruff, Flake8, mypy y la suite de pruebas unitarias relevante, confirmando el cumplimiento de calidad al 100%.
+## 2026-08-11 — Corrección de hallazgos del análisis del PR #366
+
+- Se evitó la doble reclasificación de facturas 2-way cuando existen varias
+  recepciones posteriores y se escaló la variación de precio a la cantidad
+  realmente conciliada.
+- Los ajustes bancarios ahora preservan la atomicidad de la conciliación,
+  derivan el signo según depósito/retiro y seleccionan explícitamente la
+  transacción bancaria afectada.
+- La valuación histórica se reconstruye con deltas al corte solicitado.
+- Las notas de crédito validan nuevamente el saldo de la factura origen con
+  bloqueo `FOR UPDATE` inmediatamente antes de la aprobación, incluyendo el
+  flujo de aprobaciones.
+
+## 2026-08-11 — Refactor del workflow CI: lint en job separado
+
+### Petición
+
+Refactorizar `.github/workflows/python-package.yml` para separar las pruebas de
+lint en un job particular, de modo que los fallos de estilo (línea en blanco
+faltante, línea de 121 caracteres, etc.) no frenen la ejecución de las pruebas
+unitarias.
+
+### Implementación
+
+- Se creó el job `lint` (Python 3.13) que ejecuta `flake8`, `ruff`,
+  `pydocstyle` y `mypy` sobre `cacao_accounting/`.
+- Se eliminó el paso "Lint project code" del job `build`, que corría dentro de
+  cada elemento de la matriz (3.12/3.13/3.14) y abortaba el pytest del mismo job.
+- Decisión de diseño: los jobs de CI quedan sin dependencias entre sí
+  (`needs`), por lo que `build`, `databases`, `desktop` y `coverage` corren en
+  paralelo e independientemente del resultado del lint, que pasa a ser un
+  chequeo informativo por separado.
+
+## 2026-08-10 — Integración de diferencias bancarias dentro de la transacción de conciliación
+
+- `submit_journal(commit=False)` permite publicar el asiento de diferencia sin
+  confirmar la transacción externa.
+- `_post_bank_difference_adjustment` usa ese camino y la prueba de atomicidad
+  verifica que un fallo posterior revierta el asiento y la conciliación.
+
+## 2026-08-10 — Triage de issues de auditoría contra el código vigente
+
+### Petición
+
+Comparar los issues abiertos de GitHub contra el código de la rama
+`stabilization/inventory-audit`: cerrar los superados y proponer fixes con
+commit semántico (author/sign-off `williamjmorenor@gmail.com`) sin cerrar los
+no resueltos.
+
+### Implementación
+
+- Se verificó por código cada issue de los lotes S2P, O2C, BANK e INV-AUDIT más
+  los tickets AUDIT-001..010 y los de funcionalidad (paralelo con subagentes de
+  exploración sobre archivos/líneas exactos).
+- **Cerrados (31):** #287–#292, #294–#298, #300–#302, #304–#308, #310,
+  #312–#318, #319, #320, #277 y #253. Cada cierre incluye comentario con el
+  commit verificador y evidencia file:line.
+- **Fixes implementados (4 commits, issues sin cerrar):**
+  - `f4de24b` fix(bank): scope reconciliation routes by company access (#309).
+  - `9f64329` fix(bank): count only approved payments for order advance capacity (#311).
+  - `345aa24` fix(o2c): reject negative or qty × rate inconsistent invoice lines (#299).
+  - `75a0aab` fix(o2c): always settle advance netting against invoice GL (#303).
+- **Decisión de diseño (#303):** el neteo GL de anticipo contra factura se
+  genera siempre que la compañía tenga cuentas de anticipo configuradas; el
+  flag `apply_advances_automatically` deja de silenciar el asiento (queda como
+  configuración heredada en admin) para evitar divergencia subledger↔GL.
+- **Quedan abiertos:** #293 (serialización FOR UPDATE presente; falta constraint
+  DB por duplicados históricos sin preflight), #276/#278/#279/#280/#281/#282/
+  #283/#284/#285 (matrices/cobertura de auditoría, parcialmente implementadas),
+  y #189/#193/#197/#246/#249/#250/#251/#256 (features/cobertura de pruebas).
+- Calidad: Black, Ruff, Flake8 y mypy pasan en los archivos tocados. Tests
+  focales de document_flow_tree, reconciliation_reports, posting_engine y
+  bank_account_numbering ejecutados en segundo plano (resultado en
+  `test_results_fixes.log`).
+
+## 2026-08-10 — Corrección de saldos de inventario para movimientos retroactivos
+
+### Petición
+
+Continuar los bug fixes de la rama de estabilización sin ejecutar la suite local
+completa, acumulando cambios antes de publicar.
+
+### Implementación
+
+- Se confirmó el riesgo del issue #325: los reportes Kardex y Existencia usaban
+  snapshots almacenados (`qty_after_transaction` y `stock_value`) que podían
+  quedar obsoletos cuando se insertaba un movimiento con fecha retroactiva.
+- `get_kardex` ahora reconstruye el saldo por artículo y bodega desde los
+  movimientos ordenados, procesa el histórico anterior a `date_from` como saldo
+  inicial y muestra únicamente el rango solicitado.
+- `get_inventory_existence` ahora suma cantidades y valores desde el stock
+  ledger hasta la fecha de corte y calcula la tasa sobre el saldo reconstruido.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
+## 2026-08-10 — Edición y duplicación de conciliaciones de inventario
+
+### Petición
+
+Continuar con bug fixes de inventario y mantener los issues abiertos para
+tracking, acumulando cambios antes de publicar.
+
+### Implementación
+
+- Se confirmó #330: la edición de una conciliación usaba el formulario genérico
+  y recreaba líneas sin sus campos de conteo y valoración.
+- La edición ahora renderiza el formulario específico de conciliación y
+  conserva las cantidades, tasas, valores objetivo y dimensiones contables.
+- El guardado de edición selecciona el saver de conciliación, evitando perder
+  `current_qty`, `counted_qty`, diferencias y valores almacenados.
+- La duplicación copia todos los campos específicos de conciliación para que el
+  nuevo borrador pueda revisarse y volver a postearse correctamente.
+- Se verificaron Black, diff whitespace, Ruff, Flake8 y mypy con `.venv`; no se
+  ejecutó pytest local por la instrucción de no saturar la suite.
+
+## 2026-08-10 — Compensación de recepción posterior a factura 2-way
+
+### Petición
+
+Continuar corrigiendo issues upstream confirmados, manteniendo los issues
+abiertos para verificación posterior y acumulando commits antes del push.
+
+### Implementación
+
+- Se confirmó #291: una factura 2-way posteada antes de la recepción reconoce
+  gasto, pero la recepción posterior acreditaba GRNI sin cancelar ese gasto.
+- El builder de recepción ahora detecta facturas 2-way aprobadas de la misma
+  compañía, proveedor y orden, y consume por artículo el importe previamente
+  facturado.
+- La recepción acredita gasto para la parte ya facturada y conserva GRNI solo
+  para la parte recibida aún no facturada; cada línea mantiene el asiento
+  balanceado y las facturas de devolución quedan excluidas.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
+## 2026-08-10 — Aislamiento de edición y duplicación en compras
+
+### Petición
+
+Continuar con el issue de aislamiento multi-compañía de compras (#288), sin
+cerrar el issue y acumulando el cambio para publicarlo junto con el lote.
+
+### Implementación
+
+- Se extendió la validación de compañía a las rutas de edición y duplicación de
+  solicitudes, cotizaciones, RFQ, órdenes, recepciones y facturas de compra.
+- Las ediciones ahora validan además la compañía enviada en el formulario si
+  intenta cambiar el documento de entidad, evitando eludir el ACL usando un
+  POST con otra compañía.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
+## 2026-08-10 — Serialización de creación y actualización de reservas
+
+### Petición
+
+Continuar con el issue #332, corrigiendo la condición de carrera restante en la
+creación del primer bin de inventario y manteniendo el issue abierto.
+
+### Implementación
+
+- `_stock_bin_or_create` ahora crea el bin dentro de un savepoint y recupera la
+  fila ganadora ante una violación de unicidad concurrente, sin invalidar la
+  transacción exterior.
+- Las rutas de liberación y restauración de reservas bloquean el bin existente
+  con `FOR UPDATE` para serializar las actualizaciones de `reserved_qty`.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
+## 2026-08-10 — Scope multi-compañía en listados de inventario
+
+### Petición
+
+Continuar con el issue #333 y corregir la exposición de bodegas y movimientos
+de inventario entre compañías, conservando los issues abiertos.
+
+### Implementación
+
+- Se añadió una consulta reutilizable que limita los registros de inventario a
+  las compañías de los libros donde el usuario tiene permiso de lectura.
+- Se aplicó a bodegas y a todos los listados de `StockEntry` (general,
+  recepciones, salidas, transferencias, ajustes y conciliaciones).
+- El catálogo de artículos no se filtró por compañía porque `Item` es un
+  maestro global en el modelo actual; esta decisión queda documentada como
+  riesgo de diseño separado, no como una falsa solución de aislamiento.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
+## 2026-08-10 — Unicidad de revaluación cambiaria por período
+
+### Petición
+
+Continuar con el issue #317 y reforzar la integridad de ejecuciones de
+revaluación cambiaria, sin cerrar el issue.
+
+### Implementación
+
+- `ExchangeRevaluation` ahora declara unicidad por compañía, año y mes.
+- La migración `20260810_0004` valida duplicados históricos antes de crear la
+  restricción y aborta explícitamente si requiere intervención contable.
+- La unicidad evita que reintentos concurrentes o ejecuciones repetidas creen
+  comprobantes y trazas duplicadas para el mismo período.
+- Se verificaron Black, compileall, diff whitespace, Ruff y Flake8 con `.venv`;
+  no se ejecutó pytest local por la instrucción de no saturar la suite.
+
+## 2026-08-10 — Ajustes de diferencias en conciliación bancaria
+
+### Petición
+
+Corregir el control gap #318 e integrar el ajuste de diferencias bancarias en
+el flujo productivo, manteniendo el issue abierto para verificación.
+
+### Implementación
+
+- La pantalla de conciliación permite indicar una diferencia positiva por
+  transacción, además del importe conciliado contra el candidato GL/pago.
+- El servidor exige candidato válido y que `monto conciliado + diferencia`
+  coincida exactamente con el monto bancario; no acepta diferencias huérfanas
+  ni mayores al saldo de la transacción.
+- Se genera y contabiliza el journal con la cuenta de diferencia configurada,
+  preservando `bank_account_id` en la línea bancaria.
+- La línea GL del ajuste se agrega a `ReconciliationItem` y la transacción
+  queda reconciliada solo después de contabilizar el ajuste.
+- Se verificaron Black, compileall, diff whitespace, Ruff, Flake8 y mypy con
+  `.venv`; no se ejecutó pytest local por la instrucción de no saturar la suite.
+
 ## 2026-08-09 — Auditoría completa de flujos de negocio y apertura de issues en GitHub
 
 ### Petición
@@ -1426,3 +1681,539 @@ Validación focal: `113 passed, 2 warnings`. Calidad: Black, Ruff, Flake8, Mypy 
 Se analizaron los hallazgos upstream y se confirmaron como riesgos reales. El adaptador de extractos ahora valida que la cuenta bancaria pertenezca a la compañía del lote durante validación y persistencia; el servicio de importación valida fechas cuando el documento construido es una lista, evitando saltar períodos cerrados. Las fechas inválidas ya no se reemplazan silenciosamente por la fecha actual. Se rechazan montos no numéricos, filas sin depósito/retiro y filas con ambos lados monetarios; además, el panel de conciliación tolera transacciones históricas inválidas sin responder 500.
 
 Verificación: batería focal `99 passed`; Black, Ruff, Flake8, Mypy y `git diff --check` pasan. Suite completa ejecutada una vez para el lote: `1620 passed, 8 skipped, 174 warnings` en `test_results_audit_bank_import_full_20260810.log`. Commit firmado: `0a00203 fix(bank): validate imported statement ownership`. Los issues permanecen abiertos para revisión posterior y CI.
+### 2026-08-10 — Lote de estabilización de inventario (#359, #360, #361, #362, #363, #364, #365)
+
+Se corrigieron controles de valoración y captura de movimientos. El promedio móvil consume la cantidad y valor actuales de `StockBin`, las capas normalizan su valor efectivo y las revalorizaciones sin cantidad distribuyen explícitamente su ajuste sobre las capas disponibles. Las recepciones y salidas convierten la tasa a UOM base; las conciliaciones bloquean el bin y recalculan el delta contra el stock vigente, evitando aplicar snapshots obsoletos. Las salidas de notas de entrega respetan `allow_negative_stock`, y los formularios rechazan UOM ausentes o conversiones inválidas en lugar de guardar cantidades crudas o provocar `IntegrityError`.
+
+Commit de código firmado: `534c9de fix(inventory): stabilize valuation and stock entry controls`. Se detuvo deliberadamente la suite completa a solicitud del usuario en 52%; no se reporta como verde. El lote se publicará en la rama `stabilization/inventory-audit` para que CI encuentre regresiones. Los issues permanecen abiertos para tracking.
+
+CI detectó una regresión de compatibilidad en el mensaje de rechazo de salidas sin stock. Se conservó la nueva ruta de stock negativo permitido, pero el caso no permitido vuelve a propagar el error contractual `No hay suficiente inventario`. Commit firmado: `53047c2 fix(inventory): preserve shortage rejection semantics`.
+
+### 2026-08-10 — Lote O2C de reembolsos, FX y aplicaciones (#344, #345, #346, #347, #348, #349)
+
+Se confirmaron y corrigieron seis riesgos upstream. Los reembolsos ahora conservan `party_type` y seleccionan AR/AP y anticipos del tercero correcto; las conciliaciones rechazan fechas anteriores a aplicaciones existentes; las notas de crédito no incrementan exposición ni bloqueo de vencidos; las devoluciones no generan notas de entrega de salida; `base_outstanding_amount` usa el tipo de cambio del documento; y la deduplicación de referencias es local a cada request.
+
+Commit firmado: `c39ca7b fix(o2c): align refunds and payment allocation controls`. No se ejecutó pytest local por instrucción del usuario; se ejecutó Black, `compileall` y `git diff --check`. El lote queda para validación de CI. Los issues permanecen abiertos.
+
+### 2026-08-10 — Lote S2P de matching, moneda y proveedor (#339, #340, #342, #343)
+
+Se corrigieron cuatro hallazgos confirmados. La diferencia de precio del matching 2-way/3-way ahora se acumula como diferencia unitaria por cantidad de referencia; los detalles limitan `matched_qty` y `matched_amount` a lo realmente recibido/ordenado y conservan estado parcial. Los duplicados de órdenes y facturas de compra recalculan sus importes base con `exchange_rate`, y una recepción rechaza una orden cuyo proveedor no coincide.
+
+Commit firmado: `0b8505e fix(s2p): enforce reconciliation quantities and supplier scope`. No se ejecutó pytest local; se ejecutó Black, `compileall` y `git diff --check`. El lote queda para CI y los issues permanecen abiertos.
+
+### 2026-08-10 — Lote de controles de conciliación de inventario (#322, #323, #326, #329)
+
+Se corrigió el propósito `stock_adjustment` para que pueda postearse, las conciliaciones deficitarias ahora conservan el valor objetivo en lugar de sustituirlo por el costo FIFO, las transferencias entre cuentas iguales validan el período contable antes del retorno temprano y los conteos en UOM no base se convierten a UOM base antes de calcular diferencias y valor objetivo.
+
+Commit firmado: `4df8253 fix(inventory): honor reconciliation and period controls`. No se ejecutó pytest local; se ejecutó Black, `compileall` y `git diff --check`. Los issues permanecen abiertos para CI y verificación posterior.
+
+CI reveló que el contrato de error de stock insuficiente también se aplicaba al camino de `DeliveryNote`. Se corrigió el segundo caller para propagar `No hay suficiente inventario` cuando `allow_negative_stock` es falso. Commit firmado: `7ade05a fix(inventory): preserve delivery shortage errors`.
+
+CI detectó además que el caller de `StockEntry` requiere conservar su mensaje específico `no permite stock negativo`, mientras que mypy exigía estrechar la UOM base en conciliaciones. Ambos contratos quedaron corregidos. Commit firmado: `73a5a7a fix(inventory): preserve caller error contracts`.
+## 2026-08-10 — Correcciones bancarias agrupadas
+
+- Petición: continuar con bug fixes sin ejecutar la suite local ni saturar el workflow.
+- Plan implementado: corregir el open redirect del parámetro `next` en Cash Forecast y preservar la cuenta bancaria origen del formulario de cobro simple en el posting GL de recepción. Se mantienen los issues abiertos para tracking.
+- Verificación: Black, `compileall` y `git diff --check`; la suite pytest local no se ejecutó por instrucción del usuario.
+
+## 2026-08-10 — Conciliación bancaria multimoneda
+
+- Petición: analizar y corregir issues upstream abiertos sin cerrar los issues.
+- Plan implementado: #356 ahora exige compatibilidad entre moneda de cuenta bancaria, moneda funcional, moneda de pago y `GLEntry.account_currency`; usa importes base o importes en moneda de cuenta según corresponda y rechaza asignaciones incompatibles.
+- Verificación prevista: Black, `compileall` y `git diff --check`; no se ejecuta pytest local por instrucción del usuario.
+
+## 2026-08-10 — Importación bancaria y separadores numéricos
+
+- Petición: continuar corrigiendo bugs upstream sin cerrar issues.
+- Hallazgos: #354 es falso positivo contra el código actual porque las rutas de importación ya rechazan fechas inválidas; #357 es confirmado por conversión Decimal no localizada y captura incompleta; #355 es confirmado en el servicio de importación directa, que no rechazaba ambos lados monetarios.
+- Corrección: normalización de separadores decimales en ambos importadores, rechazo explícito de depósito/retiro simultáneos y captura de `ArithmeticError` para finalizar lotes con error en vez de dejarlos en procesamiento.
+- Verificación: Black, `compileall` y `git diff --check`; no pytest local.
+
+## 2026-08-10 — Autorización de Cash Forecast y conciliación
+
+- Corrección en curso: se añadieron controles de compañía y acción para detalle, creación, edición, aprobación, cierre, archivo, eliminación e importación de pronósticos; conciliación por cuenta, aplicación de matches y reglas bancarias validan la compañía persistida.
+- Se mantiene la regla de no confiar en `company` enviado por el cliente; los issues #309 y #310 permanecen abiertos para verificación posterior.
+
+## 2026-08-10 — Integridad de conciliación y reversas bancarias
+
+- Hallazgos: #308 y #305 confirmados; se podía conciliar una línea GL ajena a la cuenta bancaria y las reversas GL de pagos perdían la dimensión bancaria.
+- Corrección: los targets `gl_entry` ahora deben usar la cuenta GL de la cuenta bancaria origen/destino; las reversas preservan `bank_account_id` del asiento original.
+- Revisión: #306 y #307 son falsos positivos contra el código actual, porque la dirección depósito/retiro ya se valida y los candidatos se calculan sobre el saldo pendiente sin el filtro total descrito.
+
+## 2026-08-10 — Aislamiento de pronósticos y deduplicación bancaria
+
+- #314 confirmado: `get_cash_forecast_matrix` y la comparación ahora rechazan pronósticos cuyo `company` no coincide con la compañía solicitada.
+- #315 confirmado: el adaptador activo detecta duplicados dentro del lote y contra la base; `BankTransaction` incorpora constraint único y una migración aborta si encuentra duplicados históricos, evitando consolidarlos silenciosamente.
+- La identidad se materializa en un hash no nulo para que la unicidad funcione también cuando depósito o retiro sean `NULL`; el listener la recalcula en inserts y updates.
+
+## 2026-08-10 — Relación AR de notas de crédito
+
+- #294 confirmado: la nota de crédito validaba el origen y el límite, pero no persistía una relación agregable para el saldo de la factura.
+- Corrección local: al contabilizar una nota de crédito/débito se persiste una relación auditable `sales_invoice -> sales_credit_note/sales_debit_note`; la cancelación revierte el target_type real y la función de saldo puede descontar la NC.
+- #300 revisado como cubierto por `_validate_reversal_of` y el cálculo de saldo actual; #296 revisado como mitigado por `preserve_reserved_qty` en entregas ligadas a OV.
+
+## 2026-08-10 — Exposición de crédito O2C
+
+- #298 confirmado: el límite de crédito ahora incluye el saldo no facturado de órdenes de venta aprobadas, y evita doble conteo de la OV cuando se está aprobando una factura vinculada a ella.
+
+## 2026-08-10 — Lectura de candidatos sin locks
+
+- #313 confirmado: la consulta GET de conciliación invocaba `FOR UPDATE` sobre cada transacción pendiente.
+- Corrección local: el lock de `find_bank_reconciliation_candidates` es opcional y por defecto está desactivado; la ruta de escritura mantiene los locks de validación al aplicar la conciliación.
+
+## 2026-08-10 — Corrección de formato bancario ambiguo
+
+- CI detectó que el parser aceptaba `1,000`, aunque el contrato de validación lo considera ambiguo.
+- Corrección: se conservan formatos inequívocos con ambos separadores o coma decimal de hasta dos dígitos; separadores de miles aislados se rechazan para evitar interpretar una moneda con escala incorrecta.
+
+## 2026-08-10 — Cancelación de pagos y anticipos
+
+- #312 confirmado: la cancelación de pagos ahora marca sus ReconciliationItem como `cancelled`, conserva el audit trail y deja de consumir saldo conciliable.
+- #311 confirmado: `_payment_order_allocated` ahora suma anticipos solo de PaymentEntry aprobados (`docstatus == 1`), evitando que borradores abandonados bloqueen capacidad.
+
+## 2026-08-10 — Corrección de expectativa contable en CI
+
+- CI falló en `test_accounting_entries_for_payment_variants` porque el caso de reembolso de cliente esperaba una cuenta `payable`.
+- Evidencia: `sales_credit_note` de cliente con `payment_type=pay` debe liquidar el saldo acreedor del cliente contra AR, por lo que la cuenta esperada es `receivable`; se corrigió solo la expectativa del test, no el comportamiento contable.
+
+## 2026-08-10 — Reversas de inventario y aislamiento de bodegas
+
+- #320 confirmado: cancelar una recepción ya consumida podía crear stock negativo
+  aunque el artículo no permitiera inventario negativo. Se añadió una validación
+  previa que proyecta el efecto de todas las reversas por compañía, artículo y
+  bodega y rechaza la cancelación antes de crear movimientos inválidos.
+- #332 confirmado parcialmente: los postings de PurchaseReceipt y DeliveryNote
+  no reutilizaban la validación de pertenencia de bodega que ya existía para
+  StockEntry. El posting genérico ahora valida también `line.warehouse`, compañía
+  y estado activo antes de actualizar StockBin o GL.
+- #319 y #328 fueron revisados contra el código actual: la cola de valoración ya
+  conserva un `negative_balance` para compensar capas positivas posteriores y
+  las transferencias ya aplican el fallback de `allow_negative_stock`; quedan
+  abiertos para verificación CI y escenarios de regresión.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy sobre `posting.py`;
+  no se ejecutó pytest local por instrucción del usuario.
+
+## 2026-08-10 — Controles O2C y ACL de conciliación
+
+- #299 confirmado: las facturas normales aceptaban montos de línea negativos o
+  distintos de `qty × rate`. El submit ahora rechaza montos no positivos y
+  diferencias superiores a un centavo; las notas de crédito/débito y retornos
+  conservan su semántica de reversa.
+- #301 confirmado: la conciliación de pagos confiaba en la compañía enviada en
+  el payload. La ruta ahora exige acceso de edición al módulo Cash para esa
+  compañía antes de crear cualquier Reconciliation.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy sobre los módulos
+  modificados; no se ejecutó pytest local por instrucción del usuario.
+
+## 2026-08-10 — Conciliación de inventario contra saldo actual
+
+- #363 confirmado: una conciliación de inventario guardaba `qty_difference` y
+  `stock_value_difference` al crear el borrador y luego los aplicaba aunque el
+  StockBin hubiera cambiado antes del submit.
+- Corrección local: `_create_stock_reconciliation_movement` conserva el conteo y
+  valor objetivo, pero recalcula cantidad y valor de ajuste contra el StockBin
+  bloqueado durante el posting. Así el resultado final alcanza el objetivo sin
+  acumular el delta de un snapshot obsoleto.
+- #345–#348, #359–#362, #364 y #365 fueron contrastados con el código actual y
+  quedaron clasificados como falsos positivos o mitigados; se comentarán en
+  GitHub sin cerrar los issues.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
+## 2026-08-10 — Edición de facturas vinculadas S2P
+
+- #290 confirmado: la edición de una factura de compra validaba flags estrictos
+  usando solo from_order/from_receipt del formulario, ausentes en la vista de
+  edición.
+- Corrección local: el handler usa primero los campos enviados y, si faltan,
+  recupera purchase_order_id/purchase_receipt_id persistidos en la factura.
+- #343 fue contrastado contra el código actual: la validación de submit de
+  recepción ya compara supplier_id de la recepción y la OC antes de validar
+  cantidades; se comentará como falso positivo. Ambos issues permanecen
+  abiertos.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
+## 2026-08-10 — Tope de detalle en matching S2P
+
+- #340 confirmado: los constructores de `PurchaseReconciliationItem` usaban la
+  cantidad facturada completa para `received_amount` y no descontaban el
+  matched_qty ya consumido del origen.
+- Corrección local: el detalle 2-way/3-way calcula cantidad pendiente por línea,
+  limita `matched_qty` y registra el monto recibido solo por lo realmente
+  conciliado.
+- #339 fue contrastado contra el código actual: `total_price_difference` ya se
+  acumula como diferencia unitaria por cantidad antes de evaluar tolerancia; el
+  escenario descrito corresponde a una versión anterior. Issue permanece
+  abierto para verificación.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
+## 2026-08-10 — Serialización de números de factura S2P
+
+- #293 confirmado: la validación de `supplier_invoice_no` era un SELECT sin
+  serialización y podía permitir duplicados en submits concurrentes.
+- Corrección local: `_validate_duplicate_supplier_invoice` bloquea la fila
+  global del proveedor con `FOR UPDATE` antes de consultar facturas activas;
+  la segunda transacción vuelve a ver el duplicado después del commit de la
+  primera. No se añadió una constraint que pudiera fallar por duplicados
+  históricos sin preflight.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
+## 2026-08-10 — Precio de factura O2C desde nota de entrega
+
+- #297 confirmado parcialmente: `_resolve_source_item_rate` ignoraba toda
+  relación cuyo origen no fuera una orden de venta, permitiendo que una factura
+  desde nota de entrega evadiera la tolerancia de precio.
+- Corrección local: la validación reutiliza la tasa de líneas fuente de orden,
+  nota de entrega o factura previa. Las facturas manuales sin origen aún
+  requieren definir la fuente de precio/lista aplicable; el issue permanece
+  abierto.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
+## 2026-08-10 — Scope de compañía en listados S2P
+
+- #288 confirmado parcialmente: los listados de compras construían consultas
+  sin scope de compañía y los reportes de conciliación aceptaban cualquier
+  company del query string.
+- Corrección local: `_paginate_list` filtra por compañías asociadas a libros
+  accesibles del usuario, valida explícitamente una compañía solicitada y los
+  dos reportes de conciliación exigen acceso de lectura antes de consultar.
+- Se extendió el guard a los detalles de solicitud, OC, recepción, factura,
+  cotización de proveedor y solicitudes/comparativos de cotización; las rutas
+  de edición/duplicación menos frecuentes aún requieren revisión individual.
+  El issue permanece abierto.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
+## 2026-08-10 — Clasificación de issues bancarios y R2R multimoneda
+
+- #338, #341, #304, #350, #351, #352 y #353 fueron revisados contra el código
+  vigente y clasificados como mitigados/falsos positivos: las reversas copian
+  importes de moneda de cuenta, las aplicaciones destino validan moneda, el
+  adaptador valida retiros, compañía, período y filas sin monto, y los locks de
+  conciliación incluyen el objetivo.
+- #287 confirmado: el fallback de `_first_available_line` devolvía una línea
+  agotada. Ahora retorna `None` y el matching rechaza la factura cuando no queda
+  cantidad pendiente.
+- #289 confirmado: el matching 2-way/3-way ahora exige que OC/recepción y
+  factura tengan el mismo proveedor además de compañía, moneda y estado.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
+## 2026-08-10 — Precisión en importación de comprobantes
+
+- #284 confirmó un riesgo concreto en `JournalEntryAdapter`: la validación de
+  balance convertía débitos y créditos a `float`, permitiendo que `NaN` evitara
+  la comparación y exponiendo importes de alta precisión a redondeos binarios.
+- Corrección local: los importes se convierten a `Decimal`, se rechazan valores
+  no finitos y la tolerancia de balance se expresa como `Decimal("0.0001")`.
+  Se añadieron regresiones para `NaN` y cantidades decimales de alta precisión.
+- El issue permanece abierto para continuar la auditoría global de precisión,
+  escalas por moneda y redondeos en los demás módulos.
+- Verificación local: Black, compileall, Ruff, Flake8 y mypy; no se ejecutó
+  pytest local por instrucción del usuario.
+
+## 2026-08-10 — Revisión de issues de inventario, bancos y O2C
+
+- Los issues #345, #347, #356, #359, #360, #361, #362, #363, #364 y #365
+  fueron contrastados contra la rama vigente y comentados como mitigados o
+  desactualizados: el código actual ya contiene los guards de fecha, moneda,
+  UOM, stock negativo, reconciliación contra bin bloqueado y devoluciones.
+- No se realizaron cambios de código para esos issues porque no se obtuvo una
+  reproducción vigente distinta del comportamiento esperado. Todos permanecen
+  abiertos para validación CI/E2E.
+
+## 2026-08-10 — Regresiones de seguridad en redirecciones internas
+
+- #358 fue contrastado contra cash_forecast.py: safe_next_url ya decodifica el
+  valor, rechaza backslashes, esquemas, hosts y rutas con doble slash.
+- Se añadieron pruebas de regresión para backslash, doble slash codificado,
+  URL externa y ruta interna válida. El issue permanece abierto.
+- #346, #348 y #355 también fueron contrastados contra guards ya presentes:
+  las notas de crédito se excluyen de exposición, el saldo base se convierte
+  con FX y las filas bancarias con depósito y retiro se rechazan.
+
+## 2026-08-10 — Aislamiento de anticipos O2C
+
+- #302 confirmado: `_payment_order_allocated` sumaba referencias activas por
+  orden sin filtrar la compañía del pago.
+- Corrección local: el saldo de anticipos recibe la compañía del documento y
+  aplica `PaymentEntry.company` al query; sin compañía mantiene compatibilidad
+  para callers internos existentes.
+- El issue permanece abierto para verificación de aislamiento entre compañías.
+
+## 2026-08-10 — Fixture de duplicidad de factura S2P
+
+- El CI falló en Python 3.13 y desktop porque el test de duplicidad de
+  `supplier_invoice_no` creaba `CompanyParty` sin crear los registros globales
+  `Party`; la validación vigente rechazaba correctamente el proveedor ausente.
+- Corrección de test: el fixture ahora crea ambos proveedores globales antes de
+  sus relaciones de compañía. No se relajó la validación de existencia.
+- El issue funcional de duplicidad permanece abierto; este cambio solo corrige
+  el fixture que impedía verificarlo.
+
+## 2026-08-10 — Matriz de reconciliación subledger contra GL (#276)
+
+- Se implementó `get_reconciliation_matrix` y el endpoint
+  `/reports/reconciliation-matrix` con filtros de compañía, libro, período,
+  fecha y moneda.
+- La matriz calcula AR/AP desde facturas y aplicaciones, inventario desde
+  Stock Ledger, impuestos desde facturas y movimientos bancarios desde el
+  extracto; compara cada fuente contra cuentas GL filtradas por `company` y
+  `ledger_id`.
+- Se añadió una prueba que demuestra que el saldo de otro libro no contamina
+  el libro seleccionado. El reporte marca bancos como `statement_movement`
+  y documenta que no representa un saldo inicial no importado.
+- No se ejecutó pytest local por instrucción del usuario; Black, Ruff, mypy,
+  compilación y `git diff --check` pasaron. El issue #276 permanece abierto.
+
+## 2026-08-10 — Precio de catálogo para facturas O2C sin origen (#297)
+
+- Se confirmó el gap restante: la tolerancia de precio cubría OV, DN y
+  factura fuente, pero una factura manual sin relación no tenía referencia.
+- El submit ahora resuelve la lista de precios de venta configurada para el
+  cliente y, como fallback, la lista predeterminada activa de la compañía;
+  aplica la fecha, UOM y cantidad mínima antes de comparar la tolerancia.
+- Si no existe una lista o precio vigente, no se inventa un valor de control;
+  la comparación queda explícitamente sin referencia de catálogo.
+- Se añadió regresión para una factura manual a 120 contra catálogo a 100 con
+  tolerancia del 5%. El issue permanece abierto para verificación posterior.
+- Black, Ruff, mypy, compilación y `git diff --check` pasan; no se ejecutó
+  pytest local por instrucción del usuario.
+
+## 2026-08-10 — Cobertura de liquidaciones FX parciales (#278)
+
+- La revisión del motor `SettlementEngine` no reprodujo un error matemático
+  en el segundo pago: el flujo recalcula el saldo abierto en moneda funcional
+  y evita duplicar la diferencia realizada.
+- Se añadió una regresión independiente para factura AR de 100 USD a 36.5,
+  pagos de 40 USD a 36.8 y 60 USD a 37.0: FX realizado 12 + 30, revaluación
+  pendiente 18 después del primer pago y saldo final cero.
+- Esto cubre el ciclo parcial secuencial del issue, pero no sustituye la
+  prueba E2E completa de remeasurement/reversal posterior; #278 permanece
+  abierto.
+
+## 2026-08-10 — Diagnóstico de huérfanos bancarios (#282)
+
+- Se confirmó que `get_reconciliation_report` solo mostraba conciliaciones
+  existentes y pendientes de compras; no diagnosticaba pagos posteados sin
+  `BankTransaction`, vínculos a pagos inexistentes, BankTransaction sin GL
+  bancario ni ReconciliationItem cuyo source ya no existe.
+- El reporte ahora agrega filas `bank_diagnostic` con estados explícitos:
+  `posting_without_bank_transaction`, `orphan_payment_link`,
+  `payment_without_bank_gl` y `orphan_reconciliation_item`.
+- Las transacciones bancarias simplemente no conciliadas no se clasifican como
+  huérfanas. Se añadió regresión para un pago posteado sin extracto enlazado.
+- Black, Ruff, mypy, compilación y `git diff --check` pasan; no se ejecutó
+  pytest local. #282 permanece abierto para validar fees, intereses,
+  reversals, saldos y dimensiones por ledger/moneda/período.
+
+## 2026-08-10 — Matriz GRNI/AP 3-way (#281)
+
+- Se añadió a `get_reconciliation_matrix` una fila `GRNI/AP 3-way` que compara
+  recepciones aprobadas pendientes de factura contra la cuenta puente de la
+  compañía en GL, filtrando compañía, libro, moneda y fecha de corte.
+- La prueba focalizada cubre una recepción de 50 sin factura y demuestra el
+  importe pendiente de 50 como crédito neto del puente, con GL cero.
+- Esto no cierra el alcance completo de #281: siguen pendientes la conciliación
+  AP detallada, escenarios parciales, anticipos, créditos, reversos y
+  duplicados. No se ejecuta pytest local por instrucción del usuario.
+
+## 2026-08-10 — Corrección de fixture bancario detectado por CI (#282)
+
+- El CI del lote `a94bfb0` falló en `test_reconciliation_report_diagnoses_posting_without_bank_transaction`.
+- Causa confirmada en el fixture: `PaymentEntry.bank_account_id` se asignaba
+  antes de hacer `flush()` de `BankAccount`, por lo que recibía `None` y el
+  diagnóstico correcto no podía detectar el pago huérfano.
+- Se ajusta únicamente el fixture para persistir la cuenta bancaria antes de
+  crear el pago; no se modifica la lógica de producción.
+
+## 2026-08-10 — Aislamiento de listados bancarios (#301)
+
+- Se confirmó un residuo de aislamiento: `_paginate_list` del módulo Bancos
+  podía devolver `BankAccount`, `PaymentEntry` y `BankTransaction` de cualquier
+  compañía cuando no se enviaba un filtro explícito.
+- El helper ahora valida la compañía solicitada y, sin filtro, limita el query
+  a las compañías de los libros con permiso `can_read` del módulo Cash; los
+  administradores conservan acceso global.
+- Se añadió regresión con dos compañías y dos libros: un usuario autorizado
+  solo al libro de Cacao no recibe la cuenta bancaria de `other`.
+- Los issues #301, #246, #197 y #189 permanecen abiertos para verificación de
+  endpoints completos y decisiones funcionales pendientes. No se ejecuta
+  pytest local por instrucción; este cambio se publicará en lote.
+
+## 2026-08-10 — Corrección de import en regresión de aislamiento (#301)
+
+- El CI del commit `e62d735` falló únicamente en la regresión nueva porque la
+  sintaxis `import cacao_accounting.bancos as bancos_module` resolvió el objeto
+  Blueprint exportado por el paquete, no el módulo con `_paginate_list`.
+- Se reemplaza por `importlib.import_module("cacao_accounting.bancos")` para
+  parchear el módulo correcto. No cambia código de producción.
+- El run fue cancelado después de capturar el fallo para no mantener activos
+  los jobs restantes de la matriz.
+
+## 2026-08-10 — Preservación decimal en validación QR (#284)
+
+- Se confirmó una frontera de precisión en `printing/validation.py`: los
+  totales de líneas y totales explícitos se convertían a `float` antes de
+  formar el payload canónico, exponiendo importes financieros a artefactos de
+  coma flotante y haciendo imposible preservar un `Decimal` exacto.
+- La extracción y suma de importes ahora usa `Decimal(str(valor))`; los
+  valores `Decimal` se serializan como texto decimal determinista únicamente
+  en el hash canónico. La vista pública conserva la conversión a `float` como
+  frontera explícita de presentación.
+- Se añadió regresión para `Decimal("1.005")`, verificando que el payload no
+  contenga artefactos binarios. No se ejecutó pytest local por instrucción del
+  usuario; Black, Ruff, flake8, mypy, compilación y `git diff --check` pasan.
+
+## 2026-08-09 — Revisión por código de los issues de auditoría (O2C/INV/S2P/R2R)
+
+- Sesión de consolidación: se revisó por código (sin pytest, por instrucción
+  del usuario) cada issue abierto de los lotes de auditoría y se cerró cuando
+  el fix ya estaba presente en la rama `stabilization/inventory-audit`.
+- Metodología: lectura del diff de los commits marcados en cada issue,
+  verificación del código vigente en `master`/rama, y lint (ruff, flake8,
+  black) de los archivos tocados. Solo se editó código en #322.
+- O2C cerrados: #346 (NC no cuentan como exposición crediticia, filtro
+  `is_return=False` en `_approved_customer_invoices`), #345 (guard de
+  `allocation_date` retroactivo en `apply_payment_reconciliation`), #344
+  (reembolsos postean a la cuenta del tercero real, no del `payment_type`).
+- INV cerrados: #321 (reserva SO/DN en UOM base), #322, #323 (conciliación
+  con déficit usa el valor objetivo, no costo FIFO), #324 (capas qty=0 de
+  landed cost se procesan en `_valuation_queue`), #325 (reportes reconstruyen
+  saldos corridos), #326–#333 (período en transferencias, clamp de reservas,
+  `allow_negative_stock` en transferencias y ND, UOM de conteo, round-trip de
+  edición/duplicado, bodega de reserva, race de INSERT + scope de bodega,
+  scope de compañía en listados).
+- R2R cerrados: #334/#335 (cierre fiscal con `with_for_update` y flags
+  `is_closing` restringidos), #336 (capitalización idempotente), #337
+  (recurrentes pending→applied tras posting), #338 (reversas GL conservan
+  moneda de cuenta).
+- S2P cerrados: #339 (tolerancia de precio por importe), #340 (matched_qty
+  acotado por pendiente), #341 (validación de moneda en create_payment_target),
+  #342 (duplicados aplican exchange_rate), #343 (recepción vs proveedor de la
+  OC).
+- INV recientes cerrados: #359 (promedio móvil desde StockBin real), #360
+  (tasas en UOM base), #361 (capa de conciliación qty×rate==stock_value_difference),
+  #362 (`allow_negative_stock` en camino documental), #363 (delta contra bin
+  actual), #364/#365 (conversión UOM estricta y sin IntegrityError NOT NULL).
+- Único cambio de código de la sesión: commit `66ba2b8` añade
+  `stock_adjustment` a la rama positiva del GL en `_create_stock_entry_gl_entries`
+  (posting.py:2957) para que postee como débito a inventario, consistente con
+  el ledger (issue #322).
+- Quedan abiertos los lotes previos: INV-AUDIT-01/02 (valoración crítica),
+  BANK-AUDIT y demás tickets de auditoría descritos en los issues abiertos.
+
+## 2026-08-09 — Sincronización remota y catálogo upstream de issues
+
+- Se actualizó `origin/stabilization/inventory-audit` y se integraron mediante
+  fast-forward los commits remotos `16edc7e` (`fix(inventory): post
+  stock_adjustment GL as positive adjustment`) y `1d4cee9` (`docs(sessions):
+  record code-review signoff of audit issues`). No hubo conflictos ni se
+  sobrescribieron cambios locales.
+- `ISSUES.md` quedó sincronizado con GitHub upstream en `1d4cee9`: 53 issues
+  permanecen abiertos, con número, título y fecha de actualización. No se
+  cerró ningún issue; la clasificación técnica y las correcciones siguen
+  documentándose en sus comentarios.
+
+## 2026-08-10 — Fix S2P-24 (#293) y simplificación del sistema de migraciones
+
+- S2P-24 (#293): `PurchaseInvoice.supplier_invoice_key` derivado por listener
+  (solo documentos activos, docstatus != 2; canceladas → NULL) respaldado por
+  constraint única `(supplier_id, supplier_invoice_key)` a nivel de base de
+  datos para impedir duplicados concurrentes de número de factura de proveedor.
+- Se confirmó que el CI fallaba por un conflicto estructural pre-existente:
+  `db init` crea el esquema completo con `create_all` (incluye `identity_key`,
+  `supplier_invoice_key`, etc.) pero la cadena Alembic 0003-0005 intentaba
+  re-agregar esas columnas/constraints → `duplicate column name`. El fallo se
+  reprodujo en el commit base, sin relación con #293.
+- Decisión de diseño (dev-only, sin instancias productivas ni BD legacy):
+  eliminar las migraciones incrementales 0002-0005 y conservar únicamente la
+  revisión baseline `20260809_0001` como migración dummy no-op. `create_all`
+  es la fuente única del esquema; `cacaoctl db migrate` queda como no-op
+  idempotente. Se actualizó `tests/test_database_migrations.py` para esperar
+  la revisión `20260809_0001` y se eliminó el test de códigos legacy que
+  validaba la migración 0002 ya borrada.
+
+## 2026-08-10 — Corrección de la escala de variación de precio para facturas parciales de compras
+
+- Petición: Escalar la varianza de precio usando la cantidad de la factura conciliada (`min(invoice_group.qty, reference_qty)`) en lugar de toda la cantidad de la referencia no facturada (`reference_qty`) para evitar varianzas incorrectas y fallas falsas de tolerancia en facturas parciales.
+- Plan implementado: Modificado el cálculo de `total_price_difference` tanto en el matching 2-way como en el 3-way de `cacao_accounting/compras/purchase_reconciliation_service.py` para usar `min(invoice_group.qty, reference_qty)`. Agregada la prueba `test_partial_invoice_price_variance_scaling` en `tests/test_08_reconciliation_reports.py` para cubrir ambos escenarios.
+- Verificación: Las pruebas unitarias fueron ejecutadas y pasaron exitosamente.
+## 2026-08-10 — Corrección de facturas futuras en compensación 2-way
+
+### Petición
+Limitar la detección de facturas 2-way precedentes a una recepción de compra en `_late_two_way_invoice_amounts` para que excluya facturas aprobadas con fecha de contabilización posterior a la de la recepción.
+
+### Implementación
+- Modificado `_late_two_way_invoice_amounts` en `cacao_accounting/accounting_engine/document_builders.py`.
+- Se agregó el filtro `PurchaseInvoice.posting_date <= document.posting_date` a la consulta de selección de facturas de compra.
+- Se agregó una prueba unitaria robusta `test_late_two_way_invoice_amounts_excludes_future_invoices` en `tests/test_07posting_engine.py` para asegurar que las facturas con fecha posterior sean correctamente excluidas y evitar regresiones.
+- Se verificaron Black, Ruff, mypy, compilación y git diff --check; todas las pruebas pasaron exitosamente.
+## 2026-08-10 — Retorno de registro existente para ejecuciones repetidas de revalorización cambiaria
+
+- Se corrigió un error en `ExchangeRevaluationService.run()` donde ejecuciones repetidas para la misma compañía, año y mes retornaban un objeto `ExchangeRevaluation` no persistido y transitorio, cuyo `id` de base de datos permanecía como `None`. Esto provocaba fallos de redirección, problemas en las rutas de detalle y errores en los controles de cierre mensual.
+- Se modificó la lógica para retornar directamente la ejecución persistida `existing_run`.
+- Se actualizaron las pruebas unitarias en `tests/test_exchange_revaluation.py` para asegurar la idempotencia del servicio mediante aserciones de identidad (`second is first`).
+- Se verificó la conformidad del código mediante formateo con `black` y chequeo estricto con `mypy`, `ruff` y `flake8`.
+## 2026-08-10 — Reverse FX adjustments for refund settlements
+
+- Implemented FX adjustment and payment discount reversal for refund settlements (`refund_confirmed`).
+- Modified `_build_exchange_difference_line`, `_build_unrealized_exchange_difference_line`, and `_build_unrealized_party_offset_line` to negate the `exchange_difference` when `context.event_type == "refund_confirmed"`.
+- Modified `_build_payment_discount_line` to reverse the debit/credit side when `context.event_type == "refund_confirmed"`.
+- Added unit test `test_supplier_refund_mapping_reverses_exchange` in `tests/engines/test_mapper.py` verifying a supplier refund with carrying value 3,600 and cash receipt of 3,700 properly balances and produces a 100 credit to exchange gain.
+- All code formatted with black, checked with ruff, flake8, and mypy, and verified using pytest.
+## 2026-08-10 — Integración de origin/main en stabilization/inventory-audit
+
+- Se integró `origin/main` mediante merge no fast-forward. Los conflictos se
+  resolvieron preservando las correcciones más estrictas de auditoría de la
+  rama: conciliación por moneda, deduplicación de extractos, validaciones de
+  ventas, aislamiento por libro y controles de inventario.
+- El merge conserva los cambios entrantes de migraciones, dependencias y
+  pruebas, sin descartar funcionalidad existente.
+
+## 2026-08-10 — Corrección de facturas PO-only y recepciones retroactivas
+
+- Se restauró el cálculo de facturas 2-way aprobadas posteriormente para que
+  una recepción retroactiva pueda liquidar el saldo pendiente de GRNI.
+- Las facturas pasan a usar la cuenta puente cuando existe una recepción
+  aprobada cronológicamente anterior, incluso sin `purchase_receipt_id`.
+- Se agregaron regresiones para facturas futuras y el reconocimiento de
+  recepciones aprobadas.
+## 2026-08-11 — Reconstrucción de valuación de inventario al corte
+
+### Petición
+
+Reconstruir la valoración de inventario en la fecha de corte (`date_to`) a partir de los deltas de las capas de valoración en lugar de confiar en los campos `remaining_qty` y `remaining_stock_value` del registro de la última capa, ya que éstos se pueblan del `StockBin` actual y se contaminan con movimientos posteriores.
+
+### Implementación
+
+- Se modificó `get_inventory_valuation` en `cacao_accounting/reportes/services.py` para reconstruir las cantidades y valores al corte a partir de los deltas (`layer.qty` y `layer.stock_value_difference`) de las capas correspondientes de `StockValuationLayer`.
+- Se agruparon los deltas por `(item_code, warehouse)` y se excluyeron de forma consistente aquellas filas con cantidad final igual a `0`, tal como se hace en la generación del Kardex y existencias.
+- Se verificaron la consistencia de tipos, formato, estilo y la compatibilidad con los tests existentes.
+## 2026-08-11 — Reverse the adjustment sign for deposit differences
+
+- Derived the signed adjustment from whether the transaction is a deposit or withdrawal.
+- Reconciling a deposit with a difference now correctly debits the bank account and credits the difference account, avoiding doubling the discrepancy.
+- Preserved positive difference values for the ReconciliationItem's `amount` and `allocated_amount` to prevent understated reconciliation reports and duplicate reconciliations.
+- Added comprehensive unit tests in `tests/test_08_reconciliation_reports.py` verifying both deposit and withdrawal cases, and confirmed all tests pass perfectly.
+
+## 2026-08-10 — Revisión de comentarios del PR #366
+
+- Se revisaron los hilos de code review de `stabilization/inventory-audit`.
+- Se confirmó que los comentarios de varianza de compras, valuación de inventario
+  y conciliación bancaria ya están resueltos en la rama actual; los hilos antiguos
+  de conciliación corresponden a correcciones incorporadas previamente.
+- Se corrigió la exclusión de facturas 2-way posteriores a la fecha del recibo y
+  se actualizó su prueba de regresión.
+- Se añadió una revalidación con bloqueo de la factura origen justo antes de
+  contabilizar una nota de crédito de venta, evitando que un borrador stale
+  exceda el saldo disponible por pagos o notas aprobadas entretanto.
+- Durante la verificación ampliada se corrigió un marcador `+` literal que
+  impedía compilar `tests/test_08_reconciliation_reports.py`; las pruebas de
+  conciliación bancaria y varianza parcial quedaron ejecutables y pasaron.
+- Verificación final: `1641 passed, 8 skipped, 174 warnings` con el comando
+  completo de pytest del proyecto.

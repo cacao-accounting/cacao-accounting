@@ -32,6 +32,7 @@ from cacao_accounting.bancos.reconciliation_service import (
 from cacao_accounting.bancos.statement_service import (
     BankStatementError,
     apply_bank_matching_rule,
+    create_bank_difference_journal,
 )
 from cacao_accounting.database import (
     Accounts,
@@ -40,6 +41,7 @@ from cacao_accounting.database import (
     BankAccountNumberingConfig,
     BankMatchingRule,
     BankTransaction,
+    Book,
     DocumentRelation,
     Entity,
     ExternalCounter,
@@ -56,7 +58,9 @@ from cacao_accounting.database import (
     User,
     database,
 )
+from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import get_active_naming_series
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate, cancel_document, submit_document
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
 from cacao_accounting.document_flow.service import apply_payment_reconciliation
@@ -71,6 +75,7 @@ from cacao_accounting.document_identifiers import (
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.list_filters import apply_list_filters
+from cacao_accounting.ledger_queries import primary_ledger_id
 from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
 
@@ -361,6 +366,20 @@ def _warn_duplicate_payment(payment):
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
     """Pagina un listado aplicando los filtros GET comunes."""
     base_query = query if query is not None else database.select(model)
+    if hasattr(model, "company"):
+        company = request.args.get("company")
+        if company:
+            exige_acceso_compania("cash", company, "consultar")
+            base_query = base_query.filter(model.company == company)
+        elif not getattr(current_user, "classification", None) == "admin":
+            module_id = obtener_id_modulo_por_nombre("cash")
+            permissions = Permisos(modulo=module_id, usuario=current_user.id)
+            book_ids = permissions.obtener_libros_autorizados("can_read")
+            if not book_ids:
+                base_query = base_query.where(database.false())
+            else:
+                accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
+                base_query = base_query.where(model.company.in_(accessible_companies))
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     return database.paginate(
         filtered_query,
@@ -434,9 +453,11 @@ def bancos_conciliacion_facturas_pagos():
     if request.method == "POST":
         try:
             payload = json.loads(request.form.get("payment_reconciliation_payload") or "{}")
+            company = str(payload.get("company") or "")
+            exige_acceso_compania("cash", company, "editar")
             allocation_date = date.fromisoformat(payload.get("allocation_date") or date.today().isoformat())
             reconciliation = apply_payment_reconciliation(
-                company=str(payload.get("company") or ""),
+                company=company,
                 party_type=str(payload.get("party_type") or ""),
                 party_id=str(payload.get("party_id") or ""),
                 allocation_date=allocation_date,
@@ -581,6 +602,10 @@ def bancos_transaccion_reconciliar():
         if duplicated_item:
             abort(409)
 
+    if company is None:
+        abort(404)
+    exige_acceso_compania("cash", company, "editar")
+
     try:
         reconcile_bank_items(
             BankReconciliationRequest(
@@ -615,6 +640,67 @@ def _bank_reconciliation_allocated_amount(transaction: BankTransaction) -> Decim
     return transaction.withdrawal
 
 
+def _post_bank_difference_adjustment(
+    reconciliation_id: str,
+    transaction: BankTransaction,
+    difference_amount: Decimal,
+) -> None:
+    """Post and attach a bank-difference journal to its reconciliation."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, submit_journal
+
+    signed_difference_amount = difference_amount
+    if transaction.deposit is not None and transaction.deposit > 0:
+        signed_difference_amount = -abs(difference_amount)
+    else:
+        signed_difference_amount = abs(difference_amount)
+
+    try:
+        journal = create_bank_difference_journal(
+            reconciliation_id,
+            signed_difference_amount,
+            transaction_id=transaction.id,
+        )
+        submit_journal(journal.id, commit=False)
+    except (BankStatementError, JournalValidationError) as exc:
+        raise BankReconciliationError(str(exc)) from exc
+
+    bank_account = database.session.get(BankAccount, transaction.bank_account_id)
+    if not bank_account or not bank_account.gl_account_id:
+        raise BankReconciliationError("La transaccion no tiene cuenta bancaria GL para registrar el ajuste.")
+    ledger_id = primary_ledger_id(str(bank_account.company))
+    bank_entry = database.session.execute(
+        database.select(GLEntry)
+        .filter_by(
+            company=bank_account.company,
+            voucher_type="journal_entry",
+            voucher_id=journal.id,
+            account_id=bank_account.gl_account_id,
+            ledger_id=ledger_id,
+            is_cancelled=False,
+            is_reversal=False,
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if bank_entry is None:
+        raise BankReconciliationError("No se encontró la línea bancaria del ajuste contabilizado.")
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation_id,
+            reference_type="bank_transaction",
+            reference_id=transaction.id,
+            amount=difference_amount,
+            allocated_amount=difference_amount,
+            reconciliation_date=date.today(),
+            status="reconciled",
+            source_type="bank_transaction",
+            source_id=transaction.id,
+            target_type="gl_entry",
+            target_id=bank_entry.id,
+        )
+    )
+    transaction.is_reconciled = True
+
+
 @bancos.route("/bank-reconciliation")
 @modulo_activo("cash")
 @login_required
@@ -623,9 +709,21 @@ def bancos_conciliacion_bancaria():
     company = request.args.get("company") or None
     query = database.select(BankTransaction).filter_by(is_reconciled=False)
     if company:
+        exige_acceso_compania("cash", company, "consultar")
         query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
             BankAccount.company == company
         )
+    elif not getattr(current_user, "classification", None) == "admin":
+        module_id = obtener_id_modulo_por_nombre("cash")
+        permissions = Permisos(modulo=module_id, usuario=current_user.id)
+        book_ids = permissions.obtener_libros_autorizados("can_read")
+        if not book_ids:
+            query = query.where(database.false())
+        else:
+            accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
+            query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
+                BankAccount.company.in_(accessible_companies)
+            )
     transactions = database.session.execute(query.order_by(BankTransaction.posting_date)).scalars().all()
     suggestions = {transaction.id: _safe_bank_reconciliation_candidates(transaction) for transaction in transactions}
     return render_template(
@@ -645,6 +743,7 @@ def bancos_conciliacion_bancaria_cuenta(bank_account_id: str):
     bank_account = database.session.get(BankAccount, bank_account_id)
     if not bank_account:
         abort(404)
+    exige_acceso_compania("cash", bank_account.company, "consultar")
     transactions = (
         database.session.execute(
             database.select(BankTransaction)
@@ -677,15 +776,38 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
             .scalars()
             .all()
         )
+        companies: set[str] = set()
+        for transaction in transactions:
+            bank_account = database.session.get(BankAccount, transaction.bank_account_id)
+            if bank_account:
+                companies.add(str(bank_account.company))
+        if len(companies) != 1 or company not in companies:
+            abort(403)
+        exige_acceso_compania("cash", company, "editar")
         if any(txn.is_reconciled for txn in transactions):
             flash(_("Una o mas transacciones ya estan reconciliadas."), "danger")
             return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
     matches: list[BankReconciliationMatch] = []
+    difference_requests: list[tuple[str, Decimal]] = []
     for transaction_id in transaction_ids:
         target = request.form.get(f"target_{transaction_id}") or ""
         amount = _form_decimal(f"amount_{transaction_id}")
+        difference = _form_decimal(f"difference_{transaction_id}")
         if not target or amount <= 0:
+            if difference > 0:
+                flash(_("Una diferencia bancaria requiere un candidato y un monto conciliado."), "danger")
+                return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
             continue
+        if difference < 0:
+            flash(_("La diferencia bancaria debe ser mayor o igual a cero."), "danger")
+            return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
+        if difference > 0:
+            transaction = database.session.get(BankTransaction, transaction_id)
+            bank_amount = _bank_reconciliation_allocated_amount(transaction) if transaction else None
+            if bank_amount is None or amount + difference != bank_amount:
+                flash(_("El monto conciliado más la diferencia debe coincidir con el monto bancario."), "danger")
+                return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
+            difference_requests.append((transaction_id, difference))
         target_type, target_id = target.split(":", 1)
         matches.append(
             BankReconciliationMatch(
@@ -696,9 +818,16 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
             )
         )
     try:
-        reconcile_bank_items(BankReconciliationRequest(company=company, reconciliation_date=date.today(), matches=matches))
+        reconciliation = reconcile_bank_items(
+            BankReconciliationRequest(company=company, reconciliation_date=date.today(), matches=matches)
+        )
+        for transaction_id, difference in difference_requests:
+            transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)
+            if transaction is None:
+                raise BankReconciliationError("La transaccion bancaria no existe.")
+            _post_bank_difference_adjustment(reconciliation.id, transaction, difference)
         database.session.commit()
-        flash(_("Conciliación bancaria aplicada correctamente."), "success")
+        flash(_("Conciliación bancaria y diferencia aplicadas correctamente."), "success")
     except BankReconciliationError as exc:
         database.session.rollback()
         flash(_(str(exc)), "danger")
@@ -728,8 +857,10 @@ def bancos_reglas_matching():
         .all()
     )
     if request.method == "POST":
+        company = request.form.get("company") or ""
+        exige_acceso_compania("cash", company, "editar")
         rule = BankMatchingRule(
-            company=request.form.get("company") or "",
+            company=company,
             bank_account_id=request.form.get("bank_account_id") or None,
             name=request.form.get("name") or "",
             days_tolerance=int(request.form.get("days_tolerance") or 7),
@@ -754,6 +885,10 @@ def bancos_reglas_matching():
 def bancos_regla_matching_ejecutar(rule_id: str):
     """Ejecuta una regla de matching para una cuenta y rango."""
     try:
+        rule = database.session.get(BankMatchingRule, rule_id)
+        if not rule:
+            raise BankStatementError("La regla de matching no existe.")
+        exige_acceso_compania("cash", rule.company, "editar")
         date_from = date.fromisoformat(request.form.get("date_from") or date.today().isoformat())
         date_to = date.fromisoformat(request.form.get("date_to") or date.today().isoformat())
         result = apply_bank_matching_rule(rule_id, request.form.get("bank_account_id") or "", (date_from, date_to))
@@ -1251,6 +1386,7 @@ def _validate_payment_reference_line(
     payment: PaymentEntry,
     line: dict,
     allow_order_references: bool,
+    processed_keys: set[tuple[str, str]],
 ) -> tuple[str, str, str, Decimal, Decimal]:
     """Valida una línea de referencia y devuelve sus valores normalizados."""
     reference_type = line.get("reference_type", "")
@@ -1258,11 +1394,11 @@ def _validate_payment_reference_line(
     allocated = Decimal(str(line.get("allocated_amount", "0")))
     requested_flow_source_type = str(line.get("flow_source_type") or reference_type)
     reference_key = (normalize_doctype(requested_flow_source_type), reference_id)
-    if reference_key in _validate_payment_reference_line.processed_keys:  # type: ignore[attr-defined]
+    if reference_key in processed_keys:
         from werkzeug.exceptions import Conflict
 
         raise Conflict(_("No se puede aplicar la misma factura dos veces en un pago."))
-    _validate_payment_reference_line.processed_keys.add(reference_key)  # type: ignore[attr-defined]
+    processed_keys.add(reference_key)
     if allocated <= 0:
         if allocated < 0:
             from werkzeug.exceptions import Conflict
@@ -1272,9 +1408,6 @@ def _validate_payment_reference_line(
     if normalize_doctype(requested_flow_source_type) in ("purchase_order", "sales_order") and not allow_order_references:
         raise ValueError(_("Las órdenes solo pueden referenciarse en flujo de anticipo."))
     return reference_type, reference_id, requested_flow_source_type, allocated, allocated
-
-
-_validate_payment_reference_line.processed_keys = set()  # type: ignore[attr-defined]
 
 
 def _append_payment_source_row(
@@ -1499,11 +1632,13 @@ def _order_outstanding(order: PurchaseOrder | SalesOrder, source_type: str) -> D
     rows = database.session.execute(
         database.select(PaymentReference.allocated_amount)
         .join(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
         .where(
             DocumentRelation.source_type == source_type,
             DocumentRelation.source_id == order.id,
             DocumentRelation.target_type == "payment_entry",
             DocumentRelation.status == "active",
+            PaymentEntry.docstatus == 1,
         )
     ).scalars()
     allocated = sum((Decimal(str(value or "0")) for value in rows), Decimal("0"))
@@ -1612,13 +1747,14 @@ def _save_payment_references(
         lines = _payment_reference_lines_from_form()
 
     totals = _payment_reference_totals()
-    _reset_payment_reference_line_cache()
+    processed_keys: set[tuple[str, str]] = set()
     for line in lines:
         totals = _process_payment_reference_line(
             payment=payment,
             line=line,
             totals=totals,
             allow_order_references=allow_order_references,
+            processed_keys=processed_keys,
         )
     return totals
 
@@ -1632,23 +1768,20 @@ def _payment_reference_totals() -> dict[str, Decimal]:
     }
 
 
-def _reset_payment_reference_line_cache() -> None:
-    """Reinicia el cache de validación de líneas de referencias de pago."""
-    _validate_payment_reference_line.processed_keys = set()  # type: ignore[attr-defined]
-
-
 def _process_payment_reference_line(
     *,
     payment: PaymentEntry,
     line: dict,
     totals: dict[str, Decimal],
     allow_order_references: bool,
+    processed_keys: set[tuple[str, str]],
 ) -> dict[str, Decimal]:
     """Valida una línea de referencia y la aplica cuando corresponde."""
     reference_type, reference_id, requested_flow_source_type, allocated, applied_amount = _validate_payment_reference_line(
         payment=payment,
         line=line,
         allow_order_references=allow_order_references,
+        processed_keys=processed_keys,
     )
     if applied_amount <= 0:
         return totals
@@ -1717,7 +1850,9 @@ def _apply_payment_reference_line(
     )
     if flow_source_type not in {"purchase_order", "sales_order"}:
         document.outstanding_amount = reference.outstanding_amount_after
-        document.base_outstanding_amount = document.outstanding_amount
+        document.base_outstanding_amount = document.outstanding_amount * (
+            Decimal(str(getattr(document, "exchange_rate", None) or 1))
+        )
     totals["allocated"] += allocated
     totals["discount"] += reference.discount_amount
     totals["gain_loss"] += reference.gain_loss_amount
@@ -2257,6 +2392,15 @@ def _apply_payment_cancellation_hooks(payment: PaymentEntry) -> None:
     for transaction in linked_transactions:
         transaction.is_reconciled = False
         transaction.payment_entry_id = None
+    database.session.execute(
+        database.update(ReconciliationItem)
+        .where(
+            ReconciliationItem.target_type == "payment_entry",
+            ReconciliationItem.target_id == payment.id,
+            ReconciliationItem.status != "cancelled",
+        )
+        .values(status="cancelled")
+    )
     references = database.session.execute(database.select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
     affected_docs = {
         (reference.flow_source_type or reference.reference_type, reference.reference_id)

@@ -105,7 +105,7 @@ class BusinessEventOrchestrator:
         )
 
     def _should_run_settlement(self, context: CalculationContext) -> bool:
-        if context.event_type in ("payment_confirmed", "collection_confirmed"):
+        if context.event_type in ("payment_confirmed", "collection_confirmed", "refund_confirmed"):
             return True
         return context.settlement_amount is not None and context.settlement_amount > 0
 
