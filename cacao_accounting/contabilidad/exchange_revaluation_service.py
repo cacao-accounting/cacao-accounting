@@ -113,24 +113,7 @@ class ExchangeRevaluationService:
             .first()
         )
         if existing_run:
-            return ExchangeRevaluation(
-                company=company,
-                posting_date=period.end,
-                document_date=period.end,
-                run_date=period.end,
-                year=year,
-                month=month,
-                status=EXCHANGE_REVALUATION_STATUS_NO_CHANGES,
-                docstatus=1,
-                created_by=user_id,
-                processed_documents_count=0,
-                affected_documents_count=0,
-                total_gain=Decimal("0"),
-                total_loss=Decimal("0"),
-                currency=summary_ledger.currency,
-                generated_journal=False,
-                voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
-            )
+            return existing_run
 
         candidates = self._open_candidates(company, period.end, summary_ledger.id)
 
