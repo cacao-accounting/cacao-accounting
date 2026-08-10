@@ -345,8 +345,10 @@ def test_semantic_reports_net_returns_and_expose_base_amount(app_ctx):
     receivables = get_receivables_analysis(company="r2r")
     payables = get_payables_analysis(company="r2r")
 
+    assert sum(row["quantity"] for row in sales) == Decimal("0")
     assert sum(row["amount"] for row in sales) == Decimal("8")
     assert sum(row["base_amount"] for row in sales) == Decimal("288")
+    assert sum(row["quantity"] for row in purchases) == Decimal("1")
     assert sum(row["amount"] for row in purchases) == Decimal("15")
     assert sum(row["base_amount"] for row in purchases) == Decimal("540")
     assert sum(row["outstanding_amount"] for row in receivables) == Decimal("8")

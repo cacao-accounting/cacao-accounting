@@ -2217,3 +2217,13 @@ Reconstruir la valoración de inventario en la fecha de corte (`date_to`) a part
   conciliación bancaria y varianza parcial quedaron ejecutables y pasaron.
 - Verificación final: `1641 passed, 8 skipped, 174 warnings` con el comando
   completo de pytest del proyecto.
+
+## 2026-08-11 — Dataset semántico de ventas y compras con signo en cantidad
+
+### Petición
+RPT-AUDIT-03 [MEDIO] — Datasets semánticos de ventas/compras no signan la quantity de devoluciones (solo el importe)
+
+### Implementación
+- Se modificó `cacao_accounting/reportes/semantic.py` para aplicar la función helper `_signed(line.qty, invoice)` en el campo `quantity` tanto para ventas (`get_sales_analysis`) como para compras (`get_purchase_analysis`).
+- Se amplió la prueba unitaria existente `test_semantic_reports_net_returns_and_expose_base_amount` en `tests/test_record_to_reports_multicurrency_multiledger.py` para verificar que la suma de las cantidades neteada con las devoluciones sea correcta (por ejemplo, esperado `0` para ventas y `1` para compras).
+- Calidad: Black, Ruff, Flake8 y mypy pasaron sin observaciones. Las pruebas unitarias fueron ejecutadas y pasaron exitosamente.

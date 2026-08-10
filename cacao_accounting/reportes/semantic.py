@@ -92,7 +92,7 @@ def get_sales_analysis(
             "company_code": invoice.company,
             "customer_code": invoice.customer_id,
             "item_code": line.item_code,
-            "quantity": _decimal(line.qty),
+            "quantity": _signed(line.qty, invoice),
             "amount": _signed(line.amount, invoice),
             "base_amount": _base_amount(line, invoice),
         }
@@ -130,7 +130,7 @@ def get_purchase_analysis(
             "company_code": invoice.company,
             "supplier_code": invoice.supplier_id,
             "item_code": line.item_code,
-            "quantity": _decimal(line.qty),
+            "quantity": _signed(line.qty, invoice),
             "amount": _signed(line.amount, invoice),
             "base_amount": _base_amount(line, invoice),
         }
