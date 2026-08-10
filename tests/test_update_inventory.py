@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     SalesInvoiceItem,
     StockValuationLayer,
     Warehouse,
+    StockBin,
     database,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -104,6 +105,15 @@ def _seed_valuation_layer(item, warehouse, company="cacao", qty=Decimal("100"), 
         posting_date=date(2026, 1, 1),
     )
     database.session.add(layer)
+
+    bin_record = StockBin(
+        item_code=item.code,
+        warehouse=warehouse.code,
+        company=company,
+        actual_qty=qty,
+        stock_value=qty * rate,
+    )
+    database.session.add(bin_record)
     database.session.flush()
 
 
