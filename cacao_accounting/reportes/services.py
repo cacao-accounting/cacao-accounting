@@ -2429,7 +2429,10 @@ def _should_skip_balance_sheet_entry(
 ) -> bool:
     """Determine whether a GL entry should be skipped for the balance sheet report."""
     if not filters.include_closing and entry.is_fiscal_year_closing:
-        if classification in _PL_CLASSIFICATIONS or (fiscal_year_start and entry.posting_date >= fiscal_year_start):
+        # Preserve the original closing-entry exclusion when no fiscal-year boundary exists
+        if fiscal_year_start is None:
+            return True
+        if classification in _PL_CLASSIFICATIONS or entry.posting_date >= fiscal_year_start:
             return True
     if classification in _PL_CLASSIFICATIONS and fiscal_year_start and entry.posting_date < fiscal_year_start:
         return True

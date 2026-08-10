@@ -278,3 +278,89 @@ def test_multiannual_balance_sheet_balanced(app, setup_data):
         assert report.totals["liabilities"] == Decimal("0.00")
         assert report.totals["equity"] == Decimal("500.00")
         assert report.totals["difference"] == Decimal("0.00")
+
+
+def test_balance_sheet_without_period_balanced(app, setup_data):
+    from cacao_accounting.reportes.services import get_balance_sheet_report, FinancialReportFilters
+
+    with app.app_context():
+        # Setup another equity/capital account
+        capital_acc = Accounts(
+            entity="CMP",
+            code="31.01",
+            name="Capital",
+            classification="equity",
+            group=False,
+            active=True,
+        )
+        database.session.add(capital_acc)
+
+        # Post transactions in 2024 (period 2024-12):
+        # 1. Income of 1000
+        payload1 = {
+            "company": "CMP",
+            "posting_date": "2024-12-15",
+            "transaction_currency": "USD",
+            "exchange_rate": "1",
+            "lines": [
+                {"account": setup_data["cash_acc_code"], "debit": "1000", "credit": "0"},
+                {"account": setup_data["income_acc_code"], "debit": "0", "credit": "1000"},
+            ],
+        }
+        j1 = create_journal_draft(payload1, setup_data["admin_user_id"])
+        submit_journal(j1.id)
+
+        # 2. Expense of 600
+        payload2 = {
+            "company": "CMP",
+            "posting_date": "2024-12-15",
+            "transaction_currency": "USD",
+            "exchange_rate": "1",
+            "lines": [
+                {"account": setup_data["expense_acc_code"], "debit": "600", "credit": "0"},
+                {"account": setup_data["cash_acc_code"], "debit": "0", "credit": "600"},
+            ],
+        }
+        j2 = create_journal_draft(payload2, setup_data["admin_user_id"])
+        submit_journal(j2.id)
+
+        # 3. Capital of 100
+        payload3 = {
+            "company": "CMP",
+            "posting_date": "2024-12-15",
+            "transaction_currency": "USD",
+            "exchange_rate": "1",
+            "lines": [
+                {"account": setup_data["cash_acc_code"], "debit": "100", "credit": "0"},
+                {"account": capital_acc.code, "debit": "0", "credit": "100"},
+            ],
+        }
+        j3 = create_journal_draft(payload3, setup_data["admin_user_id"])
+        submit_journal(j3.id)
+
+        # Close 2024 fiscal year
+        fy2024 = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
+        fy2024.is_closed = True
+        database.session.commit()
+
+        # Create Fiscal Year Closing for 2024
+        closing_journal = create_fiscal_year_closing_voucher("CMP", setup_data["fiscal_year_id"], setup_data["admin_user_id"])
+        assert closing_journal.status == "submitted"
+
+        # Get Balance Sheet Report without accounting_period (dynamic P&L from inception, no double-count)
+        report_filters = FinancialReportFilters(
+            company="CMP",
+            ledger="GEN",
+            accounting_period=None,
+        )
+        report = get_balance_sheet_report(report_filters)
+
+        # Expected:
+        # assets = 500 (1000 - 600 + 100)
+        # liabilities = 0
+        # equity = 500 (capital 100 + dynamic period profit of 400; closing entries are excluded)
+        # difference = 0
+        assert report.totals["assets"] == Decimal("500.00")
+        assert report.totals["liabilities"] == Decimal("0.00")
+        assert report.totals["equity"] == Decimal("500.00")
+        assert report.totals["difference"] == Decimal("0.00")
