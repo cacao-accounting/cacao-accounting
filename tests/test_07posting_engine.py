@@ -4013,3 +4013,194 @@ def test_operational_posting_multimoneda_real(app_ctx):
         assert original is not None
         assert reversal.debit_in_account_currency == original.credit_in_account_currency
         assert reversal.credit_in_account_currency == original.debit_in_account_currency
+
+
+def test_late_two_way_reclassification_deducts_prior_receipts(app_ctx):
+    from cacao_accounting.accounting_engine.document_builders import _late_two_way_invoice_amounts
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        Item,
+        ItemAccount,
+        Party,
+        CompanyParty,
+        PartyAccount,
+        PurchaseOrder,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        UOM,
+        Warehouse,
+        WarehouseCompanyAccount,
+        database,
+    )
+    from datetime import date
+    from decimal import Decimal
+
+    suffix = "2WR"
+    inv_code = f"INV-{suffix}"
+    bridge_code = f"BRIDGE-{suffix}"
+    ap_code = f"AP-{suffix}"
+    uom_code = f"EA-{suffix}"
+    item_code = f"ITEM-{suffix}"
+    wh_code = f"WH-{suffix}"
+    supp_code = f"SUPP-{suffix}"
+    po_id = f"PO-{suffix}"
+
+    inventory_account = Accounts(
+        entity="cacao",
+        code=inv_code,
+        name="Inventario 2WR",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="inventory",
+    )
+    bridge_account = Accounts(
+        entity="cacao",
+        code=bridge_code,
+        name="Cuenta Puente 2WR",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="liability",
+    )
+    payable_account = Accounts(
+        entity="cacao",
+        code=ap_code,
+        name="Cuentas por pagar 2WR",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="payable",
+    )
+    uom = UOM(code=uom_code, name="Each 2WR")
+    item = Item(code=item_code, name="Item 2WR", item_type="goods", is_stock_item=True, default_uom=uom_code)
+    warehouse = Warehouse(code=wh_code, name="Bodega 2WR", company="cacao")
+
+    database.session.add_all([inventory_account, bridge_account, payable_account, uom, item, warehouse])
+    database.session.flush()
+
+    supplier = Party(
+        id=supp_code,
+        code=supp_code,
+        is_supplier=True,
+        name="Proveedor 2WR",
+        is_active=True,
+    )
+    database.session.add(supplier)
+    database.session.flush()
+
+    database.session.add_all(
+        [
+            ItemAccount(item_code=item_code, company="cacao"),
+            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge_account.id),
+            WarehouseCompanyAccount(
+                warehouse_code=wh_code, company="cacao", inventory_account_id=inventory_account.id, is_active=True
+            ),
+            CompanyParty(company="cacao", party_id=supp_code, is_active=True),
+            PartyAccount(party_id=supp_code, company="cacao", payable_account_id=payable_account.id),
+        ]
+    )
+    database.session.flush()
+
+    po = PurchaseOrder(
+        id=po_id,
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        docstatus=1,
+    )
+    database.session.add(po)
+    database.session.flush()
+
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        purchase_order_id=po_id,
+        purchase_receipt_id=None,
+        docstatus=1,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+
+    invoice_item = PurchaseInvoiceItem(
+        purchase_invoice_id=invoice.id,
+        item_code=item_code,
+        item_name="Item 2WR",
+        qty=Decimal("5"),
+        uom=uom_code,
+        rate=Decimal("20.00"),
+        amount=Decimal("100.00"),
+    )
+    database.session.add(invoice_item)
+    database.session.flush()
+
+    receipt1 = PurchaseReceipt(
+        id=f"PR-1-{suffix}",
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        purchase_order_id=po_id,
+        docstatus=0,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(receipt1)
+    database.session.flush()
+
+    receipt1_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt1.id,
+        item_code=item_code,
+        item_name="Item 2WR",
+        qty=Decimal("5"),
+        uom=uom_code,
+        qty_in_base_uom=Decimal("5"),
+        rate=Decimal("20.00"),
+        amount=Decimal("100.00"),
+        warehouse=wh_code,
+    )
+    database.session.add(receipt1_item)
+    database.session.flush()
+
+    receipt2 = PurchaseReceipt(
+        id=f"PR-2-{suffix}",
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id=supp_code,
+        purchase_order_id=po_id,
+        docstatus=0,
+        total=Decimal("100.00"),
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(receipt2)
+    database.session.flush()
+
+    receipt2_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt2.id,
+        item_code=item_code,
+        item_name="Item 2WR",
+        qty=Decimal("5"),
+        uom=uom_code,
+        qty_in_base_uom=Decimal("5"),
+        rate=Decimal("20.00"),
+        amount=Decimal("100.00"),
+        warehouse=wh_code,
+    )
+    database.session.add(receipt2_item)
+    database.session.commit()
+
+    late_two_way_amounts_1 = _late_two_way_invoice_amounts(receipt1)
+    late_two_way_amounts_2 = _late_two_way_invoice_amounts(receipt2)
+    assert late_two_way_amounts_1.get(item_code) == Decimal("100.00")
+    assert late_two_way_amounts_2.get(item_code) == Decimal("100.00")
+
+    receipt1.docstatus = 1
+    database.session.commit()
+
+    late_two_way_amounts_2_after = _late_two_way_invoice_amounts(receipt2)
+    assert late_two_way_amounts_2_after.get(item_code, Decimal("0")) == Decimal("0")

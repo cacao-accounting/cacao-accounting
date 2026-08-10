@@ -234,6 +234,34 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
         ).scalars()
         for item in invoice_items:
             amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
+
+    prior_receipts = (
+        database.session.execute(
+            select(PurchaseReceipt)
+            .where(
+                PurchaseReceipt.company == document.company,
+                PurchaseReceipt.supplier_id == document.supplier_id,
+                PurchaseReceipt.purchase_order_id == document.purchase_order_id,
+                PurchaseReceipt.docstatus == 1,
+                PurchaseReceipt.is_return.is_(False),
+                PurchaseReceipt.id != document.id,
+            )
+            .order_by(PurchaseReceipt.posting_date.asc(), PurchaseReceipt.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+    for prior in prior_receipts:
+        prior_items = (
+            database.session.execute(select(PurchaseReceiptItem).filter_by(purchase_receipt_id=prior.id)).scalars().all()
+        )
+        for item in prior_items:
+            amount = _line_amount(item)
+            reclassified_amount = min(amounts.get(item.item_code, Decimal("0")), amount)
+            if reclassified_amount > 0:
+                amounts[item.item_code] -= reclassified_amount
+
     return amounts
 
 
