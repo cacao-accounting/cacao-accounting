@@ -3,6 +3,17 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-12 — El balance general conserva las utilidades retenidas de ejercicios cerrados
+
+### Petición
+El balance general de cualquier compañía que haya cerrado un ejercicio fiscal muestra `difference != 0` (descuadre del lado del patrimonio) en empresas multianuales, debido a que `get_balance_sheet_report` aplica `_apply_gl_filters` con `include_closing=False` por defecto, excluyendo todas las entradas `is_fiscal_year_closing=True`. Esto deja la pata de "utilidades retenidas" del cierre fuera del patrimonio pero el activo conserva su efecto de caja.
+
+### Implementación
+- Modificado `get_balance_sheet_report` en `cacao_accounting/reportes/services.py` para usar `dataclasses.replace(filters, include_closing=True)` al consultar las entradas del libro mayor, garantizando que el motor de base de datos recupere los asientos de cierre.
+- Dentro de la iteración de entradas en Python, si la configuración original tiene `include_closing=False`, se omiten selectivamente los asientos de cierre (`entry.is_fiscal_year_closing == True`) si son de tipo P&L (`classification in _PL_CLASSIFICATIONS`) o si pertenecen al año fiscal en curso (`fiscal_year_start and entry.posting_date >= fiscal_year_start`), permitiendo conservar de forma precisa los asientos de cierre de las utilidades retenidas acumuladas de años fiscales cerrados.
+- Se agregó el caso de prueba robusto `test_multiannual_balance_sheet_balanced` en `tests/test_fiscal_year_closing.py` que crea dos años fiscales, realiza transacciones en el primero, ejecuta el cierre de año fiscal y valida que el reporte para el año siguiente tenga un cuadre perfecto (`difference == 0`).
+- Se verificó que todos los linters (`black`, `flake8`, `ruff`, `mypy`) y la suite de pruebas unitarias (`pytest`) pasen de forma impecable sin regresiones.
+
 ## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
 
 - Se eliminó la unicidad artificial por compañía/período de `ExchangeRevaluation`.
