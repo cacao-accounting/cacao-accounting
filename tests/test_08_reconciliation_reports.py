@@ -4678,3 +4678,88 @@ def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
     ).scalar_one()
     assert withdrawal_difference_item.amount == Decimal("15")
     assert withdrawal_difference_item.allocated_amount == Decimal("15")
+
+
+def test_cancelled_reconciliation_item_excluded_from_reconciliation_report(app_ctx):
+    """Verifica que get_reconciliation_report no sume ReconciliationItem cancelados en bank_reconciled_amount."""
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        BankTransaction,
+        PaymentEntry,
+        Reconciliation,
+        ReconciliationItem,
+        database,
+    )
+    from cacao_accounting.bancos import _apply_payment_cancellation_hooks
+    from cacao_accounting.reportes.services import get_reconciliation_report
+
+    bank_gl = Accounts(entity="cacao", code="BANK-TEST", name="Test Bank", classification="asset")
+    bank = Bank(name="Banco Test")
+    database.session.add_all([bank_gl, bank])
+    database.session.flush()
+
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Test Bank Account",
+        currency="NIO",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+
+    transaction = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        deposit=Decimal("100.00"),
+    )
+    database.session.add(transaction)
+    database.session.flush()
+
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="receive",
+        bank_account_id=bank_account.id,
+        paid_amount=Decimal("100.00"),
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.flush()
+
+    reconciliation = Reconciliation(company="cacao", recon_date=date(2026, 5, 5), recon_type="bank")
+    database.session.add(reconciliation)
+    database.session.flush()
+
+    recon_item = ReconciliationItem(
+        reconciliation_id=reconciliation.id,
+        reference_type="bank_transaction",
+        reference_id=transaction.id,
+        source_type="bank_transaction",
+        source_id=transaction.id,
+        target_type="payment_entry",
+        target_id=payment.id,
+        amount=Decimal("100.00"),
+        allocated_amount=Decimal("100.00"),
+        status="reconciled",
+    )
+    database.session.add(recon_item)
+    database.session.commit()
+
+    # Before cancellation, the report should sum the 100.00 amount
+    report_before = get_reconciliation_report(company="cacao")
+    assert report_before.totals["bank_reconciled_amount"] == Decimal("100.00")
+
+    # Cancel the payment, which triggers marking status as 'cancelled'
+    _apply_payment_cancellation_hooks(payment)
+    database.session.commit()
+
+    # Verify that the ReconciliationItem status was updated to 'cancelled'
+    database.session.refresh(recon_item)
+    assert recon_item.status == "cancelled"
+
+    # After cancellation, the report should exclude the item, meaning bank_reconciled_amount is 0
+    report_after = get_reconciliation_report(company="cacao")
+    assert report_after.totals["bank_reconciled_amount"] == Decimal("0")
