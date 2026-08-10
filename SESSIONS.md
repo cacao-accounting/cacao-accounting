@@ -2069,6 +2069,12 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   la revisión `20260809_0001` y se eliminó el test de códigos legacy que
   validaba la migración 0002 ya borrada.
 
+## 2026-08-10 — Retorno de registro existente para ejecuciones repetidas de revalorización cambiaria
+
+- Se corrigió un error en `ExchangeRevaluationService.run()` donde ejecuciones repetidas para la misma compañía, año y mes retornaban un objeto `ExchangeRevaluation` no persistido y transitorio, cuyo `id` de base de datos permanecía como `None`. Esto provocaba fallos de redirección, problemas en las rutas de detalle y errores en los controles de cierre mensual.
+- Se modificó la lógica para retornar directamente la ejecución persistida `existing_run`.
+- Se actualizaron las pruebas unitarias en `tests/test_exchange_revaluation.py` para asegurar la idempotencia del servicio mediante aserciones de identidad (`second is first`).
+- Se verificó la conformidad del código mediante formateo con `black` y chequeo estricto con `mypy`, `ruff` y `flake8`.
 ## 2026-08-10 — Reverse FX adjustments for refund settlements
 
 - Implemented FX adjustment and payment discount reversal for refund settlements (`refund_confirmed`).
