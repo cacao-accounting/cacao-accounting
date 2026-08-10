@@ -2120,3 +2120,10 @@ Limitar la detección de facturas 2-way precedentes a una recepción de compra e
   ventas, aislamiento por libro y controles de inventario.
 - El merge conserva los cambios entrantes de migraciones, dependencias y
   pruebas, sin descartar funcionalidad existente.
+
+## 2026-08-11 — Reverse the adjustment sign for deposit differences
+
+- Derived the signed adjustment from whether the transaction is a deposit or withdrawal.
+- Reconciling a deposit with a difference now correctly debits the bank account and credits the difference account, avoiding doubling the discrepancy.
+- Preserved positive difference values for the ReconciliationItem's `amount` and `allocated_amount` to prevent understated reconciliation reports and duplicate reconciliations.
+- Added comprehensive unit tests in `tests/test_08_reconciliation_reports.py` verifying both deposit and withdrawal cases, and confirmed all tests pass perfectly.
