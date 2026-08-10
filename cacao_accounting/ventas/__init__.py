@@ -1619,8 +1619,6 @@ def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[
                 f"El monto de la línea {item.item_code} no coincide con cantidad por precio "
                 f"({amount} frente a {expected})."
             )
-
-
 def _validate_sales_order_requirement(invoice: SalesInvoice) -> None:
     """Rechaza facturas sin orden de venta cuando la compañía lo exige."""
     if invoice.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or invoice.is_return:
