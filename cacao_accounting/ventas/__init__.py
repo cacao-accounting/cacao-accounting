@@ -1601,7 +1601,10 @@ def _validate_sales_invoice_quantities(invoice_id: str) -> None:
 
 def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[SalesInvoiceItem]) -> None:
     """Reject inconsistent or negative amounts on ordinary sales invoices."""
-    if getattr(invoice, "is_return", False) or invoice.document_type in {"sales_credit_note", "sales_debit_note"}:
+    if getattr(invoice, "is_return", False) or getattr(invoice, "document_type", "") in {
+        "sales_credit_note",
+        "sales_debit_note",
+    }:
         return
     tolerance = Decimal("0.01")
     for item in items:
