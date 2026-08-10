@@ -3158,6 +3158,15 @@ def ventas_factura_venta_submit(invoice_id: str):
         if ApprovalEngine.handle_submission(registro, current_user, "Factura de venta"):
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
+        if registro.document_type == "sales_credit_note":
+            _validate_reversal_of(
+                registro.reversal_of or "",
+                registro.customer_id,
+                registro.company,
+                note_amount=registro.grand_total or Decimal("0"),
+                document_type=registro.document_type,
+                posting_date=registro.posting_date,
+            )
         submit_document(registro)
         _persist_sales_reversal_relation(registro)
         if registro.update_inventory and not registro.is_return and not registro.delivery_note_id:
@@ -3352,7 +3361,7 @@ def _validate_reversal_of(
     superar el saldo pendiente de la factura considerando notas y pagos ya
     aplicados.
     """
-    source = database.session.get(SalesInvoice, reversal_of)
+    source = database.session.get(SalesInvoice, reversal_of, with_for_update=True)
     if not source:
         raise ValueError(f"La factura origen '{reversal_of}' no existe.")
     if source.docstatus != 1:
