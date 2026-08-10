@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     CompanyParty,
     CostCenter,
     DocumentRelation,
+    Entity,
     FiscalYear,
     GLEntry,
     Item,
@@ -50,6 +51,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, exclude_cancelled_stock_entries, primary_ledger_id
 
 
@@ -275,7 +277,7 @@ def _document_sign(document: Any) -> Decimal:
     return Decimal("-1") if bool(getattr(document, "is_return", False)) else Decimal("1")
 
 
-def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
+def get_ar_ap_subledger(filters: SubledgerFilters, target_currency: str | None = None) -> PaginatedReport:
     """Devuelve subledger AR/AP basado en documentos y aplicaciones de pago."""
     if filters.party_type == "customer":
         document_type = "sales_invoice"
@@ -295,6 +297,11 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
     if filters.as_of_date is not None:
         query = query.where(document_model.posting_date <= filters.as_of_date)
 
+    company_currency = database.session.execute(
+        select(Entity.currency).where(Entity.code == filters.company)
+    ).scalar_one_or_none()
+    if not company_currency:
+        raise ValueError(f"La compañía '{filters.company}' no tiene moneda configurada.")
     rows: list[ReportRow] = []
     total_original = Decimal("0")
     total_paid = Decimal("0")
@@ -305,9 +312,16 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
         original_original_currency = _decimal_value(document.grand_total)
         paid_original_currency = _payment_allocations(document_type, document.id, filters.company, filters.as_of_date)
         outstanding_original_currency = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
-        original = sign * original_original_currency * base_factor
-        paid = sign * paid_original_currency * base_factor
-        outstanding = sign * outstanding_original_currency * base_factor
+        if target_currency and target_currency != company_currency:
+            source_currency = str(getattr(document, "transaction_currency", None) or company_currency)
+            conversion = _lookup_exchange_rate(source_currency, target_currency, document.posting_date)
+            original = sign * original_original_currency * conversion
+            paid = sign * paid_original_currency * conversion
+            outstanding = sign * outstanding_original_currency * conversion
+        else:
+            original = sign * original_original_currency * base_factor
+            paid = sign * paid_original_currency * base_factor
+            outstanding = sign * outstanding_original_currency * base_factor
         total_original += original
         total_paid += paid
         total_outstanding += outstanding
@@ -413,10 +427,12 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     ar_account = str(defaults.default_receivable) if defaults and defaults.default_receivable else None
     ap_account = str(defaults.default_payable) if defaults and defaults.default_payable else None
     ar_subledger = get_ar_ap_subledger(
-        SubledgerFilters(company=filters.company, party_type="customer", as_of_date=as_of_date)
+        SubledgerFilters(company=filters.company, party_type="customer", as_of_date=as_of_date),
+        target_currency=selected_ledger.currency,
     ).totals.get("outstanding_amount", Decimal("0"))
     ap_subledger = get_ar_ap_subledger(
-        SubledgerFilters(company=filters.company, party_type="supplier", as_of_date=as_of_date)
+        SubledgerFilters(company=filters.company, party_type="supplier", as_of_date=as_of_date),
+        target_currency=selected_ledger.currency,
     ).totals.get("outstanding_amount", Decimal("0"))
     rows.append(
         _reconciliation_row(
