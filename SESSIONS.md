@@ -3,6 +3,46 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-10 — Sincronización de PR #372 con estabilización
+
+- Se integró `stabilization/inventory-audit` en la rama del PR #372 para
+  resolver sus conflictos y permitir su incorporación posterior.
+- Se preservaron el cálculo de reclasificaciones parciales del PR y las
+  protecciones de estabilización, incluida la exclusión de facturas futuras.
+
+## 2026-08-10 — Compensación de recepción posterior a factura 2-way en múltiples recepciones
+
+### Petición
+
+Cuando una factura de 2 vías cubre solo parte de una orden y la orden es recibida en múltiples documentos, deducir la cantidad ya reclasificada por las recepciones enviadas anteriormente antes de devolver el monto disponible de la factura de 2 vías.
+
+### Implementación
+
+- Se modificó `_late_two_way_invoice_amounts(document: PurchaseReceipt)` en `cacao_accounting/accounting_engine/document_builders.py`.
+- Ahora consulta todas las demás recepciones de compra ya confirmadas/enviadas (`docstatus == 1`, excluyendo devoluciones y el documento actual) asociadas al mismo `purchase_order_id`.
+- Simula la reclasificación secuencial/cronológica de cada recepción previa para deducir de forma precisa los importes ya consumidos de la factura de 2 vías.
+- Se agregó la prueba unitaria `test_late_two_way_reclassification_deducts_prior_receipts` en `tests/test_07posting_engine.py` para asegurar que las recepciones posteriores no sobre-clasifiquen los gastos y que el remanente correcto se asigne a la cuenta puente (GRNI).
+- Se ejecutaron Black, Ruff, Flake8, mypy y la suite de pruebas unitarias relevante, confirmando el cumplimiento de calidad al 100%.
+## 2026-08-11 — Refactor del workflow CI: lint en job separado
+
+### Petición
+
+Refactorizar `.github/workflows/python-package.yml` para separar las pruebas de
+lint en un job particular, de modo que los fallos de estilo (línea en blanco
+faltante, línea de 121 caracteres, etc.) no frenen la ejecución de las pruebas
+unitarias.
+
+### Implementación
+
+- Se creó el job `lint` (Python 3.13) que ejecuta `flake8`, `ruff`,
+  `pydocstyle` y `mypy` sobre `cacao_accounting/`.
+- Se eliminó el paso "Lint project code" del job `build`, que corría dentro de
+  cada elemento de la matriz (3.12/3.13/3.14) y abortaba el pytest del mismo job.
+- Decisión de diseño: los jobs de CI quedan sin dependencias entre sí
+  (`needs`), por lo que `build`, `databases`, `desktop` y `coverage` corren en
+  paralelo e independientemente del resultado del lint, que pasa a ser un
+  chequeo informativo por separado.
+
 ## 2026-08-10 — Triage de issues de auditoría contra el código vigente
 
 ### Petición
