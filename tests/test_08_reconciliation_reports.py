@@ -4364,6 +4364,14 @@ def test_post_bank_difference_adjustment_deposit_and_withdrawal(app_ctx):
     assert bank_entry.credit == Decimal("0")
     assert diff_entry.credit == Decimal("10")
     assert diff_entry.debit == Decimal("0")
+    deposit_difference_item = database.session.execute(
+        database.select(ReconciliationItem).filter_by(
+            reconciliation_id=reconciliation_dep.id,
+            target_id=bank_entry.id,
+        )
+    ).scalar_one()
+    assert deposit_difference_item.amount == Decimal("10")
+    assert deposit_difference_item.allocated_amount == Decimal("10")
 
     # Clear GL entries for next test
     for entry in entries_dep:
@@ -4410,3 +4418,11 @@ def test_post_bank_difference_adjustment_deposit_and_withdrawal(app_ctx):
     assert bank_entry_w.debit == Decimal("0")
     assert diff_entry_w.debit == Decimal("15")
     assert diff_entry_w.credit == Decimal("0")
+    withdrawal_difference_item = database.session.execute(
+        database.select(ReconciliationItem).filter_by(
+            reconciliation_id=reconciliation_with.id,
+            target_id=bank_entry_w.id,
+        )
+    ).scalar_one()
+    assert withdrawal_difference_item.amount == Decimal("15")
+    assert withdrawal_difference_item.allocated_amount == Decimal("15")
