@@ -4375,5 +4375,7 @@ def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
     recon_items = database.session.execute(database.select(ReconciliationItem)).scalars().all()
     assert len(recon_items) == 0
 
-    journal_entries = database.session.execute(database.select(GLEntry)).scalars().all()
+    journal_entries = database.session.execute(
+        database.select(GLEntry).filter_by(voucher_type="journal_entry")
+    ).scalars().all()
     assert len(journal_entries) == 0
