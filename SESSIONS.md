@@ -2109,6 +2109,11 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   la revisión `20260809_0001` y se eliminó el test de códigos legacy que
   validaba la migración 0002 ya borrada.
 
+## 2026-08-10 — Corrección de la escala de variación de precio para facturas parciales de compras
+
+- Petición: Escalar la varianza de precio usando la cantidad de la factura conciliada (`min(invoice_group.qty, reference_qty)`) en lugar de toda la cantidad de la referencia no facturada (`reference_qty`) para evitar varianzas incorrectas y fallas falsas de tolerancia en facturas parciales.
+- Plan implementado: Modificado el cálculo de `total_price_difference` tanto en el matching 2-way como en el 3-way de `cacao_accounting/compras/purchase_reconciliation_service.py` para usar `min(invoice_group.qty, reference_qty)`. Agregada la prueba `test_partial_invoice_price_variance_scaling` en `tests/test_08_reconciliation_reports.py` para cubrir ambos escenarios.
+- Verificación: Las pruebas unitarias fueron ejecutadas y pasaron exitosamente.
 ## 2026-08-10 — Corrección de facturas futuras en compensación 2-way
 
 ### Petición
