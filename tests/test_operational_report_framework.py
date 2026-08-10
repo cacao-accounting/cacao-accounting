@@ -215,24 +215,50 @@ def test_operational_report_routes_render_without_breaking_financial_reports(app
     assert 'doctype: "bank_account"' not in accounting_html
 
 
-def test_get_inventory_turnover_with_backdated_transaction(app_ctx):
-    from cacao_accounting.database import Item, StockLedgerEntry, UOM, Warehouse, database
+def test_get_inventory_turnover_with_backdated_transaction_and_reconciliation(app_ctx):
+    from cacao_accounting.database import Item, StockLedgerEntry, UOM, Warehouse, StockEntry, StockEntryItem, database
     from cacao_accounting.reportes.services import OperationalReportFilters, get_inventory_turnover
 
     database.session.add_all(
         [
             UOM(code="EA", name="Each"),
-            Item(code="ITEM-TO", name="Item Turnover", item_type="goods", is_stock_item=True, default_uom="EA"),
-            Warehouse(code="WH-TO", name="Bodega Turnover", company="cacao"),
+            Item(code="ITEM-TOR", name="Item Turnover Recon", item_type="goods", is_stock_item=True, default_uom="EA"),
+            Warehouse(code="WH-TOR", name="Bodega Turnover Recon", company="cacao"),
         ]
     )
+    database.session.flush()
+
+    # Create a StockEntry representing the stock reconciliation
+    recon_entry = StockEntry(
+        id="RECON1",
+        company="cacao",
+        posting_date=date(2026, 5, 10),
+        purpose="stock_reconciliation",
+        docstatus=1,
+    )
+    database.session.add(recon_entry)
+    database.session.flush()
+
+    recon_item = StockEntryItem(
+        stock_entry_id="RECON1",
+        item_code="ITEM-TOR",
+        counted_qty=Decimal("12"),
+        target_stock_value=Decimal("120"),
+        qty_difference=Decimal("2"),
+        qty=Decimal("2"),
+        qty_in_base_uom=Decimal("2"),
+        uom="EA",
+    )
+    database.session.add(recon_item)
+    database.session.flush()
+
     database.session.add_all(
         [
             # May 1: Receipt of 10 units.
             StockLedgerEntry(
                 posting_date=date(2026, 5, 1),
-                item_code="ITEM-TO",
-                warehouse="WH-TO",
+                item_code="ITEM-TOR",
+                warehouse="WH-TOR",
                 company="cacao",
                 qty_change=Decimal("10"),
                 qty_after_transaction=Decimal("10"),
@@ -242,11 +268,12 @@ def test_get_inventory_turnover_with_backdated_transaction(app_ctx):
                 voucher_type="stock_entry",
                 voucher_id="STE-1",
             ),
-            # May 10: Sale of 6 units.
+            # May 15: Sale of 6 units. (This was posted before the retroactive reconciliation was inserted on May 10,
+            # so at posting time, current stock was 10. 10 - 6 = 4)
             StockLedgerEntry(
-                posting_date=date(2026, 5, 10),
-                item_code="ITEM-TO",
-                warehouse="WH-TO",
+                posting_date=date(2026, 5, 15),
+                item_code="ITEM-TOR",
+                warehouse="WH-TOR",
                 company="cacao",
                 qty_change=Decimal("-6"),
                 qty_after_transaction=Decimal("4"),
@@ -259,8 +286,8 @@ def test_get_inventory_turnover_with_backdated_transaction(app_ctx):
             # May 5 (inserted retroactive): Receipt of 5 units.
             StockLedgerEntry(
                 posting_date=date(2026, 5, 5),
-                item_code="ITEM-TO",
-                warehouse="WH-TO",
+                item_code="ITEM-TOR",
+                warehouse="WH-TOR",
                 company="cacao",
                 qty_change=Decimal("5"),
                 qty_after_transaction=Decimal("15"),
@@ -269,6 +296,23 @@ def test_get_inventory_turnover_with_backdated_transaction(app_ctx):
                 stock_value=Decimal("90"),
                 voucher_type="stock_entry",
                 voucher_id="STE-3",
+            ),
+            # May 10 (inserted retroactive stock reconciliation): counted_qty = 12.
+            # At posting time, StockBin actual_qty is 9 (after May 15 sale of 6 and retroactive May 5 receipt of 5:
+            # 10 + 5 - 6 = 9).
+            # So _create_stock_reconciliation_movement calculated qty_change as 12 - 9 = 3.
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 10),
+                item_code="ITEM-TOR",
+                warehouse="WH-TOR",
+                company="cacao",
+                qty_change=Decimal("3"),  # 12 - 9
+                qty_after_transaction=Decimal("12"),
+                valuation_rate=Decimal("10"),
+                stock_value_difference=Decimal("30"),
+                stock_value=Decimal("120"),
+                voucher_type="stock_entry",
+                voucher_id="RECON1",
             ),
         ]
     )
@@ -284,17 +328,21 @@ def test_get_inventory_turnover_with_backdated_transaction(app_ctx):
 
     assert len(report.rows) == 1
     row = report.rows[0].values
-    assert row["item_code"] == "ITEM-TO"
-    assert row["warehouse"] == "WH-TO"
-    assert row["outgoing_qty"] == Decimal("6")
+    assert row["item_code"] == "ITEM-TOR"
+    assert row["warehouse"] == "WH-TOR"
 
     # Chronological snapshots:
-    # Initial: 0
-    # May 1: 10
-    # May 5: 15
-    # May 10: 9
-    # Sum: 0 + 10 + 15 + 9 = 34
-    # Observations count: 4
-    # Expected average: 34 / 4 = 8.5
-    assert row["average_stock_qty"] == Decimal("8.5")
-    assert row["turnover_ratio"] == Decimal("6") / Decimal("8.5")
+    # 1. Initial: 0
+    # 2. May 1: 10
+    # 3. May 5: 15
+    # 4. May 10: absolute reconciliation target = 12 (counted_qty)
+    #    (The chronological qty_change is calculated as 12 - 15 = -3. Since it is negative, it counts as an outflow!)
+    # 5. May 15: sale of 6. Balance: 12 - 6 = 6. (Since qty_change is -6, another outflow!)
+    # Total outgoing_qty: 3 (from recon) + 6 (from sale) = 9
+    # Observations: [0, 10, 15, 12, 6]
+    # Sum: 43
+    # Count: 5
+    # Expected average: 43 / 5 = 8.6
+    assert row["outgoing_qty"] == Decimal("9")
+    assert row["average_stock_qty"] == Decimal("8.6")
+    assert row["turnover_ratio"] == Decimal("9") / Decimal("8.6")

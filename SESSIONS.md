@@ -13,7 +13,8 @@ La función `get_inventory_turnover` promedia los snapshots almacenados de `qty_
 
 - Se modificó `get_inventory_turnover` en `cacao_accounting/reportes/services.py` para reconstruir el stock promedio cronológicamente desde el stock ledger ordenado por `posting_date`, `created`, `id` (mismo criterio que `get_kardex`).
 - Se incluyó el stock inicial del período dentro del promedio, inicializando la secuencia de observaciones con el stock anterior a `date_from`.
-- Se añadió la prueba unitaria `test_get_inventory_turnover_with_backdated_transaction` en `tests/test_operational_report_framework.py` para verificar que el stock promedio y la tasa de rotación coincidan exactamente con la reconstrucción cronológica ante transacciones retroactivas.
+- Se adaptó la reconstrucción cronológica para tratar las entradas de conciliación de inventario (`stock_reconciliation`) como objetivos absolutos (`counted_qty`). De esta manera, si una conciliación fue posteada retroactivamente, el replay cronológico recalcula correctamente el delta de cantidad en ese momento, logrando un promedio de stock y una tasa de rotación sumamente precisos.
+- Se añadió la prueba unitaria `test_get_inventory_turnover_with_backdated_transaction_and_reconciliation` en `tests/test_operational_report_framework.py` para verificar que el stock promedio, la cantidad saliente y la tasa de rotación coincidan exactamente con la reconstrucción cronológica ante transacciones retroactivas y conciliaciones retroactivas.
 
 ## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
 

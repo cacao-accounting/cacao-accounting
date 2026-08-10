@@ -1037,11 +1037,33 @@ def get_inventory_turnover(filters: OperationalReportFilters) -> PaginatedReport
     outgoing_quantities: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
     initial_stock_recorded: dict[tuple[str, str], bool] = defaultdict(bool)
 
+    # Caches to optimize DB queries for stock reconciliation entries
+    stock_entry_purposes: dict[str, str | None] = {}
+    reconciliation_counted_qty: dict[tuple[str, str], Decimal] = {}
+
     for entry in database.session.execute(
         query.order_by(StockLedgerEntry.posting_date, StockLedgerEntry.created, StockLedgerEntry.id)
     ).scalars():
         key = (entry.item_code, entry.warehouse)
         qty_change = _decimal_value(entry.qty_change)
+
+        if entry.voucher_type == "stock_entry":
+            purpose = stock_entry_purposes.get(entry.voucher_id)
+            if purpose is None and entry.voucher_id not in stock_entry_purposes:
+                se = database.session.get(StockEntry, entry.voucher_id)
+                purpose = se.purpose if se else None
+                stock_entry_purposes[entry.voucher_id] = purpose
+            if purpose == "stock_reconciliation":
+                cache_key = (entry.voucher_id, entry.item_code)
+                if cache_key not in reconciliation_counted_qty:
+                    sei = database.session.execute(
+                        select(StockEntryItem.counted_qty).where(
+                            StockEntryItem.stock_entry_id == entry.voucher_id, StockEntryItem.item_code == entry.item_code
+                        )
+                    ).scalar_one_or_none()
+                    reconciliation_counted_qty[cache_key] = _decimal_value(sei) if sei is not None else Decimal("0")
+                counted_qty = reconciliation_counted_qty[cache_key]
+                qty_change = counted_qty - running_balances[key]
 
         if entry.posting_date < filters.date_from:
             running_balances[key] += qty_change
