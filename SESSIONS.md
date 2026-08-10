@@ -2121,6 +2121,17 @@ Limitar la detección de facturas 2-way precedentes a una recepción de compra e
 - El merge conserva los cambios entrantes de migraciones, dependencias y
   pruebas, sin descartar funcionalidad existente.
 
+## 2026-08-11 — Reconstrucción de valuación de inventario al corte
+
+### Petición
+
+Reconstruir la valoración de inventario en la fecha de corte (`date_to`) a partir de los deltas de las capas de valoración en lugar de confiar en los campos `remaining_qty` y `remaining_stock_value` del registro de la última capa, ya que éstos se pueblan del `StockBin` actual y se contaminan con movimientos posteriores.
+
+### Implementación
+
+- Se modificó `get_inventory_valuation` en `cacao_accounting/reportes/services.py` para reconstruir las cantidades y valores al corte a partir de los deltas (`layer.qty` y `layer.stock_value_difference`) de las capas correspondientes de `StockValuationLayer`.
+- Se agruparon los deltas por `(item_code, warehouse)` y se excluyeron de forma consistente aquellas filas con cantidad final igual a `0`, tal como se hace en la generación del Kardex y existencias.
+- Se verificaron la consistencia de tipos, formato, estilo y la compatibilidad con los tests existentes.
 ## 2026-08-11 — Reverse the adjustment sign for deposit differences
 
 - Derived the signed adjustment from whether the transaction is a deposit or withdrawal.
