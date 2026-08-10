@@ -213,3 +213,88 @@ def test_operational_report_routes_render_without_breaking_financial_reports(app
     assert accounting_response.status_code == 200
     assert 'doctype: "book"' in accounting_html
     assert 'doctype: "bank_account"' not in accounting_html
+
+
+def test_get_inventory_turnover_with_backdated_transaction(app_ctx):
+    from cacao_accounting.database import Item, StockLedgerEntry, UOM, Warehouse, database
+    from cacao_accounting.reportes.services import OperationalReportFilters, get_inventory_turnover
+
+    database.session.add_all(
+        [
+            UOM(code="EA", name="Each"),
+            Item(code="ITEM-TO", name="Item Turnover", item_type="goods", is_stock_item=True, default_uom="EA"),
+            Warehouse(code="WH-TO", name="Bodega Turnover", company="cacao"),
+        ]
+    )
+    database.session.add_all(
+        [
+            # May 1: Receipt of 10 units.
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-TO",
+                warehouse="WH-TO",
+                company="cacao",
+                qty_change=Decimal("10"),
+                qty_after_transaction=Decimal("10"),
+                valuation_rate=Decimal("10"),
+                stock_value_difference=Decimal("100"),
+                stock_value=Decimal("100"),
+                voucher_type="stock_entry",
+                voucher_id="STE-1",
+            ),
+            # May 10: Sale of 6 units.
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 10),
+                item_code="ITEM-TO",
+                warehouse="WH-TO",
+                company="cacao",
+                qty_change=Decimal("-6"),
+                qty_after_transaction=Decimal("4"),
+                valuation_rate=Decimal("10"),
+                stock_value_difference=Decimal("-60"),
+                stock_value=Decimal("40"),
+                voucher_type="stock_entry",
+                voucher_id="STE-2",
+            ),
+            # May 5 (inserted retroactive): Receipt of 5 units.
+            StockLedgerEntry(
+                posting_date=date(2026, 5, 5),
+                item_code="ITEM-TO",
+                warehouse="WH-TO",
+                company="cacao",
+                qty_change=Decimal("5"),
+                qty_after_transaction=Decimal("15"),
+                valuation_rate=Decimal("10"),
+                stock_value_difference=Decimal("50"),
+                stock_value=Decimal("90"),
+                voucher_type="stock_entry",
+                voucher_id="STE-3",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    report = get_inventory_turnover(
+        OperationalReportFilters(
+            company="cacao",
+            date_from=date(2026, 5, 1),
+            date_to=date(2026, 5, 31),
+        )
+    )
+
+    assert len(report.rows) == 1
+    row = report.rows[0].values
+    assert row["item_code"] == "ITEM-TO"
+    assert row["warehouse"] == "WH-TO"
+    assert row["outgoing_qty"] == Decimal("6")
+
+    # Chronological snapshots:
+    # Initial: 0
+    # May 1: 10
+    # May 5: 15
+    # May 10: 9
+    # Sum: 0 + 10 + 15 + 9 = 34
+    # Observations count: 4
+    # Expected average: 34 / 4 = 8.5
+    assert row["average_stock_qty"] == Decimal("8.5")
+    assert row["turnover_ratio"] == Decimal("6") / Decimal("8.5")

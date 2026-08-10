@@ -3,6 +3,18 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Corrección de Rotación de Inventario para Movimientos Retroactivos (RPT-AUDIT-02)
+
+### Petición
+
+La función `get_inventory_turnover` promedia los snapshots almacenados de `qty_after_transaction` para estimar el stock promedio. Este campo se volvía obsoleto con movimientos retroactivos y además el cálculo excluía el stock inicial del período.
+
+### Implementación
+
+- Se modificó `get_inventory_turnover` en `cacao_accounting/reportes/services.py` para reconstruir el stock promedio cronológicamente desde el stock ledger ordenado por `posting_date`, `created`, `id` (mismo criterio que `get_kardex`).
+- Se incluyó el stock inicial del período dentro del promedio, inicializando la secuencia de observaciones con el stock anterior a `date_from`.
+- Se añadió la prueba unitaria `test_get_inventory_turnover_with_backdated_transaction` en `tests/test_operational_report_framework.py` para verificar que el stock promedio y la tasa de rotación coincidan exactamente con la reconstrucción cronológica ante transacciones retroactivas.
+
 ## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
 
 - Se eliminó la unicidad artificial por compañía/período de `ExchangeRevaluation`.
