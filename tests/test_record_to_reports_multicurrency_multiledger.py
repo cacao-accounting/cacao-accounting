@@ -377,3 +377,125 @@ def test_cash_forecast_uses_base_legacy_balance_and_nets_returns():
     ]
 
     assert _sum_invoice_amount(invoices, date(2026, 8, 1), date(2026, 8, 31)) == Decimal("288")
+
+
+def test_semantic_reports_multicurrency(app_ctx):
+    """Verify that semantic AR/AP datasets correctly project currency, base_amount, and base_outstanding_amount."""
+    from cacao_accounting.database import (
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        SalesInvoice,
+        SalesInvoiceItem,
+        database,
+    )
+    from cacao_accounting.reportes.semantic import (
+        get_payables_analysis,
+        get_receivables_analysis,
+    )
+
+    def make_sales_invoice(amount, currency, rate):
+        invoice = SalesInvoice(
+            company="r2r",
+            posting_date=date(2026, 8, 1),
+            customer_id="CUSTOMER-SEMANTIC",
+            transaction_currency=currency,
+            base_currency="NIO",
+            exchange_rate=rate,
+            grand_total=amount,
+            base_grand_total=amount * rate,
+            outstanding_amount=amount,
+            base_outstanding_amount=amount * rate,
+            is_return=False,
+            docstatus=1,
+        )
+        database.session.add(invoice)
+        database.session.flush()
+        database.session.add(
+            SalesInvoiceItem(
+                sales_invoice_id=invoice.id,
+                item_code="ITEM-SEMANTIC",
+                qty=1,
+                amount=amount,
+                base_amount=amount * rate,
+            )
+        )
+        return invoice
+
+    def make_purchase_invoice(amount, currency, rate):
+        invoice = PurchaseInvoice(
+            company="r2r",
+            posting_date=date(2026, 8, 1),
+            supplier_id="SUPPLIER-SEMANTIC",
+            transaction_currency=currency,
+            base_currency="NIO",
+            exchange_rate=rate,
+            grand_total=amount,
+            base_grand_total=amount * rate,
+            outstanding_amount=amount,
+            base_outstanding_amount=amount * rate,
+            is_return=False,
+            docstatus=1,
+        )
+        database.session.add(invoice)
+        database.session.flush()
+        database.session.add(
+            PurchaseInvoiceItem(
+                purchase_invoice_id=invoice.id,
+                item_code="ITEM-SEMANTIC",
+                qty=1,
+                amount=amount,
+                base_amount=amount * rate,
+            )
+        )
+        return invoice
+
+    # Clear previous documents for clean assertion
+    database.session.execute(database.delete(SalesInvoiceItem))
+    database.session.execute(database.delete(SalesInvoice))
+    database.session.execute(database.delete(PurchaseInvoiceItem))
+    database.session.execute(database.delete(PurchaseInvoice))
+    database.session.commit()
+
+    # Sales Invoices: 10 USD (base NIO 360) and 100 NIO (base NIO 100)
+    make_sales_invoice(Decimal("10"), "USD", Decimal("36"))
+    make_sales_invoice(Decimal("100"), "NIO", Decimal("1"))
+    database.session.commit()
+
+    receivables = get_receivables_analysis(company="r2r")
+    assert len(receivables) == 2
+
+    # Check first invoice (USD 10)
+    row_usd = [r for r in receivables if r["currency"] == "USD"][0]
+    assert row_usd["amount"] == Decimal("10")
+    assert row_usd["outstanding_amount"] == Decimal("10")
+    assert row_usd["base_amount"] == Decimal("360")
+    assert row_usd["base_outstanding_amount"] == Decimal("360")
+
+    # Check second invoice (NIO 100)
+    row_nio = [r for r in receivables if r["currency"] == "NIO"][0]
+    assert row_nio["amount"] == Decimal("100")
+    assert row_nio["outstanding_amount"] == Decimal("100")
+    assert row_nio["base_amount"] == Decimal("100")
+    assert row_nio["base_outstanding_amount"] == Decimal("100")
+
+    # Purchase Invoices: 10 USD (base NIO 360) and 100 NIO (base NIO 100)
+    make_purchase_invoice(Decimal("10"), "USD", Decimal("36"))
+    make_purchase_invoice(Decimal("100"), "NIO", Decimal("1"))
+    database.session.commit()
+
+    payables = get_payables_analysis(company="r2r")
+    assert len(payables) == 2
+
+    # Check first invoice (USD 10)
+    row_p_usd = [r for r in payables if r["currency"] == "USD"][0]
+    assert row_p_usd["amount"] == Decimal("10")
+    assert row_p_usd["outstanding_amount"] == Decimal("10")
+    assert row_p_usd["base_amount"] == Decimal("360")
+    assert row_p_usd["base_outstanding_amount"] == Decimal("360")
+
+    # Check second invoice (NIO 100)
+    row_p_nio = [r for r in payables if r["currency"] == "NIO"][0]
+    assert row_p_nio["amount"] == Decimal("100")
+    assert row_p_nio["outstanding_amount"] == Decimal("100")
+    assert row_p_nio["base_amount"] == Decimal("100")
+    assert row_p_nio["base_outstanding_amount"] == Decimal("100")
