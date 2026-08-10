@@ -95,7 +95,7 @@ def _login(client, user_id: str) -> None:
 def _seed_accounts() -> dict[str, object]:
     from cacao_accounting.database import Accounts, database
 
-    accounts = {
+    accounts: dict[str, object] = {
         "ar": Accounts(
             entity="cacao",
             code="1105",
@@ -322,9 +322,8 @@ def test_service_does_not_duplicate_previous_revaluation(app_ctx):
     second = service.run(company="cacao", year=2026, month=5, user_id="admin")
 
     assert first.status == "posted"
-    assert second.status == "completed_no_changes"
-    assert second.generated_journal is False
-    assert second.affected_documents_count == 0
+    assert second.id == first.id
+    assert second is first
 
 
 def test_service_does_not_duplicate_partial_balance_revaluation(app_ctx):
@@ -337,8 +336,8 @@ def test_service_does_not_duplicate_partial_balance_revaluation(app_ctx):
     second = service.run(company="cacao", year=2026, month=5, user_id="admin")
 
     assert first.status == "posted"
-    assert second.status == "completed_no_changes"
-    assert second.affected_documents_count == 0
+    assert second.id == first.id
+    assert second is first
 
 
 def test_service_raises_controlled_error_when_closing_rate_is_missing(app_ctx):
