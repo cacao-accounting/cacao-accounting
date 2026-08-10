@@ -1177,36 +1177,60 @@ def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[Repo
 
 def get_reconciliation_report(company: str, as_of_date: date | None = None) -> PaginatedReport:
     """Devuelve reconciliaciones bancarias y conciliaciones de compras pendientes."""
+    from cacao_accounting.database import AuditTrail
+
     query = (
         select(Reconciliation, ReconciliationItem)
         .join(
             ReconciliationItem,
             ReconciliationItem.reconciliation_id == Reconciliation.id,
         )
-        .filter(
-            Reconciliation.company == company,
-            ReconciliationItem.status != "cancelled",
-        )
+        .filter(Reconciliation.company == company)
     )
     if as_of_date:
         query = query.where(Reconciliation.recon_date <= as_of_date)
 
-    rows = [
-        ReportRow(
-            values={
-                "reconciliation_id": reconciliation.id,
-                "recon_date": reconciliation.recon_date,
-                "recon_type": reconciliation.recon_type,
-                "source_type": item.source_type or item.reference_type,
-                "source_id": item.source_id or item.reference_id,
-                "target_type": item.target_type,
-                "target_id": item.target_id,
-                "amount": _decimal_value(item.allocated_amount or item.amount),
-                "status": item.status,
-            }
+    cancel_dates = {}
+    if as_of_date:
+        audit_records = database.session.execute(
+            select(AuditTrail.document_id, AuditTrail.timestamp).where(
+                AuditTrail.document_type == "payment_entry",
+                AuditTrail.action == "cancelled",
+            )
+        ).all()
+        for doc_id, timestamp in audit_records:
+            if timestamp:
+                cancel_dates[doc_id] = timestamp.date()
+
+    rows = []
+    for reconciliation, item in database.session.execute(query).all():
+        if item.status == "cancelled":
+            cancel_date = cancel_dates.get(item.target_id)
+            if as_of_date and cancel_date and cancel_date > as_of_date:
+                # Cancellation happened after the cutoff, so historically it was reconciled
+                status = "reconciled"
+            else:
+                # Cancelled on or before the cutoff (or no cutoff specified), so exclude it
+                continue
+        else:
+            status = item.status
+
+        rows.append(
+            ReportRow(
+                values={
+                    "reconciliation_id": reconciliation.id,
+                    "recon_date": reconciliation.recon_date,
+                    "recon_type": reconciliation.recon_type,
+                    "source_type": item.source_type or item.reference_type,
+                    "source_id": item.source_id or item.reference_id,
+                    "target_type": item.target_type,
+                    "target_id": item.target_id,
+                    "amount": _decimal_value(item.allocated_amount or item.amount),
+                    "status": status,
+                }
+            )
         )
-        for reconciliation, item in database.session.execute(query).all()
-    ]
+
     bank_total = sum((_decimal_value(row.values["amount"]) for row in rows), Decimal("0"))
     purchase_pending = get_purchase_reconciliation_pending(company=company, as_of_date=as_of_date)
     for pending in purchase_pending:
