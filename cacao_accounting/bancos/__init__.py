@@ -602,6 +602,10 @@ def bancos_transaccion_reconciliar():
         if duplicated_item:
             abort(409)
 
+    if company is None:
+        abort(404)
+    exige_acceso_compania("cash", company, "editar")
+
     try:
         reconcile_bank_items(
             BankReconciliationRequest(
@@ -693,13 +697,23 @@ def _post_bank_difference_adjustment(
 def bancos_conciliacion_bancaria():
     """Panel de conciliacion bancaria con transacciones pendientes."""
     company = request.args.get("company") or None
-    if company:
-        exige_acceso_compania("cash", company, "consultar")
     query = database.select(BankTransaction).filter_by(is_reconciled=False)
     if company:
+        exige_acceso_compania("cash", company, "consultar")
         query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
             BankAccount.company == company
         )
+    elif not getattr(current_user, "classification", None) == "admin":
+        module_id = obtener_id_modulo_por_nombre("cash")
+        permissions = Permisos(modulo=module_id, usuario=current_user.id)
+        book_ids = permissions.obtener_libros_autorizados("can_read")
+        if not book_ids:
+            query = query.where(database.false())
+        else:
+            accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
+            query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
+                BankAccount.company.in_(accessible_companies)
+            )
     transactions = database.session.execute(query.order_by(BankTransaction.posting_date)).scalars().all()
     suggestions = {transaction.id: _safe_bank_reconciliation_candidates(transaction) for transaction in transactions}
     return render_template(
