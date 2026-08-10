@@ -2178,3 +2178,15 @@ Reconstruir la valoración de inventario en la fecha de corte (`date_to`) a part
 - Reconciling a deposit with a difference now correctly debits the bank account and credits the difference account, avoiding doubling the discrepancy.
 - Preserved positive difference values for the ReconciliationItem's `amount` and `allocated_amount` to prevent understated reconciliation reports and duplicate reconciliations.
 - Added comprehensive unit tests in `tests/test_08_reconciliation_reports.py` verifying both deposit and withdrawal cases, and confirmed all tests pass perfectly.
+
+## 2026-08-10 — Revisión de comentarios del PR #366
+
+- Se revisaron los hilos de code review de `stabilization/inventory-audit`.
+- Se confirmó que los comentarios de varianza de compras, valuación de inventario
+  y conciliación bancaria ya están resueltos en la rama actual; los hilos antiguos
+  de conciliación corresponden a correcciones incorporadas previamente.
+- Se corrigió la exclusión de facturas 2-way posteriores a la fecha del recibo y
+  se actualizó su prueba de regresión.
+- Se añadió una revalidación con bloqueo de la factura origen justo antes de
+  contabilizar una nota de crédito de venta, evitando que un borrador stale
+  exceda el saldo disponible por pagos o notas aprobadas entretanto.

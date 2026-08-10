@@ -4045,9 +4045,7 @@ def test_late_two_way_reclassification_deducts_prior_receipts(app_ctx):
 
     # Ensure a book exists for the company "cacao" so that ledger entries can be posted
     existing_book = (
-        database.session.execute(database.select(Book).where(Book.entity == "cacao", Book.is_primary == True))
-        .scalars()
-        .first()
+        database.session.execute(database.select(Book).where(Book.entity == "cacao", Book.is_primary)).scalars().first()
     )
     if not existing_book:
         fiscal_book = Book(
@@ -4344,8 +4342,10 @@ def test_late_two_way_reclassification_deducts_prior_receipts(app_ctx):
     # invoice_b's full amount of 100.00 USD should be completely available for receipt4!
     late_two_way_amounts_4 = _late_two_way_invoice_amounts(receipt4)
     assert late_two_way_amounts_4.get(item_code) == Decimal("100.00")
-def test_late_two_way_invoice_amounts_includes_future_invoices(app_ctx):
-    """Test that a later-approved PO-only invoice settles a backdated receipt."""
+
+
+def test_late_two_way_invoice_amounts_excludes_future_invoices(app_ctx):
+    """A backdated receipt only reclassifies invoices posted by its cutoff date."""
     from cacao_accounting.accounting_engine.document_builders import (
         _late_two_way_invoice_amounts,
         _purchase_invoice_has_receipt,
@@ -4415,8 +4415,8 @@ def test_late_two_way_invoice_amounts_includes_future_invoices(app_ctx):
     # Run the utility function
     amounts = _late_two_way_invoice_amounts(receipt)
 
-    # A backdated receipt must be able to settle the later-approved invoice.
+    # Only the invoice posted by the receipt's cutoff date is eligible.
     assert "ITEM-A" in amounts
     assert amounts["ITEM-A"] == Decimal("50.00")
-    assert amounts["ITEM-B"] == Decimal("50.00")
+    assert "ITEM-B" not in amounts
     assert _purchase_invoice_has_receipt(invoice_future, "cacao") is True
