@@ -3,6 +3,19 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Corrección de RPT-AUDIT-04: get_settlement_analysis cuenta aplicaciones de pagos CANCELADOS y sus referencias
+
+### Petición
+get_settlement_analysis une PaymentReference con PaymentEntry por payment_id sin filtrar PaymentEntry.docstatus == 1 (semantic.py:207-227). La cancelación de pago es append-only: bancos_pago_cancel marca docstatus=2 y revierte relaciones, pero no elimina los PaymentReference (bancos/__init__.py:2340-2393). El resto de reportes sí filtra docstatus == 1.
+
+### Implementación
+- Se modificó `get_settlement_analysis` en `cacao_accounting/reportes/semantic.py`.
+- Se importó `and_` de `sqlalchemy`.
+- Se actualizó el query para filtrar por `PaymentEntry.docstatus == 1`.
+- Se unió el query con `DocumentRelation` mediante un `outerjoin` y se aseguró que el estado de la relación es nulo o activo (`or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active")`), lo que de forma limpia y robusta excluye aplicaciones de pago cuyas relaciones han sido canceladas o revertidas.
+- Se agregó el test unitario `test_settlement_analysis_ignores_cancelled_payments` en `tests/test_record_to_reports_multicurrency_multiledger.py` para verificar que, una vez cancelado el pago, `get_settlement_analysis` ya no devuelve la aplicación de pago cancelada.
+- Se ejecutaron las pruebas unitarias y análisis estático (Black, Ruff, Flake8, Mypy), asegurando cumplimiento de calidad al 100%.
+
 ## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
 
 - Se eliminó la unicidad artificial por compañía/período de `ExchangeRevaluation`.

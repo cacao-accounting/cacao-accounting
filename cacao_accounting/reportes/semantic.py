@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 
 from cacao_accounting.database import (
     AuditTrail,
@@ -204,7 +204,21 @@ def get_settlement_analysis(
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return payment applications at their allocation grain (N:N safe)."""
-    query = select(PaymentReference, PaymentEntry).join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+    query = (
+        select(PaymentReference, PaymentEntry)
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
+        .outerjoin(
+            DocumentRelation,
+            and_(
+                DocumentRelation.target_type == "payment_entry",
+                DocumentRelation.target_item_id == PaymentReference.id,
+            ),
+        )
+        .where(
+            PaymentEntry.docstatus == 1,
+            or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active"),
+        )
+    )
     if company:
         query = query.where(
             PaymentEntry.company == company,

@@ -377,3 +377,96 @@ def test_cash_forecast_uses_base_legacy_balance_and_nets_returns():
     ]
 
     assert _sum_invoice_amount(invoices, date(2026, 8, 1), date(2026, 8, 31)) == Decimal("288")
+
+
+def test_settlement_analysis_ignores_cancelled_payments(app_ctx):
+    """Test get_settlement_analysis filters out cancelled payments and reverted relations."""
+    from datetime import date
+    from decimal import Decimal
+    from cacao_accounting.database import (
+        PaymentEntry,
+        PaymentReference,
+        SalesInvoice,
+        database,
+    )
+    from cacao_accounting.reportes.semantic import get_settlement_analysis
+    from cacao_accounting.document_flow.service import create_document_relation, revert_relations_for_target
+
+    # Create a sales invoice
+    invoice = SalesInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 1),
+        customer_id="CUST-SEMANTIC-SETTLEMENT",
+        transaction_currency="USD",
+        exchange_rate=Decimal("36"),
+        grand_total=Decimal("100"),
+        base_grand_total=Decimal("3600"),
+        outstanding_amount=Decimal("100"),
+        base_outstanding_amount=Decimal("3600"),
+        docstatus=1,
+    )
+    database.session.add(invoice)
+    database.session.flush()
+
+    # Create a payment entry
+    payment = PaymentEntry(
+        company="r2r",
+        posting_date=date(2026, 8, 2),
+        payment_type="receive",
+        party_type="customer",
+        party_id="CUST-SEMANTIC-SETTLEMENT",
+        transaction_currency="USD",
+        exchange_rate=Decimal("36"),
+        received_amount=Decimal("100"),
+        base_received_amount=Decimal("3600"),
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.flush()
+
+    # Create a payment reference
+    reference = PaymentReference(
+        payment_id=payment.id,
+        party_type="customer",
+        party_id="CUST-SEMANTIC-SETTLEMENT",
+        reference_type="sales_invoice",
+        flow_source_type="sales_invoice",
+        reference_id=invoice.id,
+        reference_document_no=invoice.document_no or invoice.id,
+        total_amount=Decimal("100"),
+        outstanding_amount=Decimal("100"),
+        allocated_amount=Decimal("100"),
+        allocation_date=payment.posting_date,
+    )
+    database.session.add(reference)
+    database.session.flush()
+
+    # Create document relation
+    create_document_relation(
+        source_type="sales_invoice",
+        source_id=invoice.id,
+        source_item_id=None,
+        target_type="payment_entry",
+        target_id=payment.id,
+        target_item_id=reference.id,
+        qty=Decimal("1"),
+        uom=None,
+        rate=Decimal("100"),
+        amount=Decimal("100"),
+    )
+    database.session.commit()
+
+    # Query settlement analysis: should return the row
+    settlement = get_settlement_analysis(company="r2r")
+    assert len(settlement) == 1
+    assert settlement[0]["amount"] == Decimal("100")
+    assert settlement[0]["customer_code"] == "CUST-SEMANTIC-SETTLEMENT"
+
+    # Now cancel the payment: set docstatus to 2 and revert relations
+    payment.docstatus = 2
+    revert_relations_for_target("payment_entry", payment.id, reason="payment_cancelled")
+    database.session.commit()
+
+    # Query settlement analysis again: should be empty!
+    settlement_after_cancel = get_settlement_analysis(company="r2r")
+    assert len(settlement_after_cancel) == 0
