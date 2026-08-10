@@ -1,9 +1,9 @@
-"""Register the schema created by ``cacaoctl db init`` as the Alembic baseline.
+"""Migración dummy que nunca falla.
 
-The application currently creates its complete schema with SQLAlchemy's
-``create_all`` during first-time initialization. This revision deliberately
-does not alter existing data; it records the known schema state so subsequent
-schema changes can be delivered as real, ordered Alembic revisions.
+Cacao Accounting crea su esquema completo con ``create_all`` durante la
+inicialización (``cacaoctl db init``), por lo que no se aplican migraciones
+incrementales. Esta revisión no modifica ningún dato: solo existe para que
+el comando ``cacaoctl db migrate`` funcione como no-op idempotente.
 """
 
 from collections.abc import Sequence

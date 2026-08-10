@@ -2050,3 +2050,22 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   permanecen abiertos, con número, título y fecha de actualización. No se
   cerró ningún issue; la clasificación técnica y las correcciones siguen
   documentándose en sus comentarios.
+
+## 2026-08-10 — Fix S2P-24 (#293) y simplificación del sistema de migraciones
+
+- S2P-24 (#293): `PurchaseInvoice.supplier_invoice_key` derivado por listener
+  (solo documentos activos, docstatus != 2; canceladas → NULL) respaldado por
+  constraint única `(supplier_id, supplier_invoice_key)` a nivel de base de
+  datos para impedir duplicados concurrentes de número de factura de proveedor.
+- Se confirmó que el CI fallaba por un conflicto estructural pre-existente:
+  `db init` crea el esquema completo con `create_all` (incluye `identity_key`,
+  `supplier_invoice_key`, etc.) pero la cadena Alembic 0003-0005 intentaba
+  re-agregar esas columnas/constraints → `duplicate column name`. El fallo se
+  reprodujo en el commit base, sin relación con #293.
+- Decisión de diseño (dev-only, sin instancias productivas ni BD legacy):
+  eliminar las migraciones incrementales 0002-0005 y conservar únicamente la
+  revisión baseline `20260809_0001` como migración dummy no-op. `create_all`
+  es la fuente única del esquema; `cacaoctl db migrate` queda como no-op
+  idempotente. Se actualizó `tests/test_database_migrations.py` para esperar
+  la revisión `20260809_0001` y se eliminó el test de códigos legacy que
+  validaba la migración 0002 ya borrada.
