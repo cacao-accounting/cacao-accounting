@@ -4682,6 +4682,7 @@ def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
 
 def test_cancelled_reconciliation_item_excluded_from_reconciliation_report(app_ctx):
     """Verifica que get_reconciliation_report no sume ReconciliationItem cancelados en bank_reconciled_amount."""
+    from datetime import datetime, timezone
     from cacao_accounting.database import (
         Accounts,
         Bank,
@@ -4690,6 +4691,7 @@ def test_cancelled_reconciliation_item_excluded_from_reconciliation_report(app_c
         PaymentEntry,
         Reconciliation,
         ReconciliationItem,
+        AuditTrail,
         database,
     )
     from cacao_accounting.bancos import _apply_payment_cancellation_hooks
@@ -4754,12 +4756,33 @@ def test_cancelled_reconciliation_item_excluded_from_reconciliation_report(app_c
 
     # Cancel the payment, which triggers marking status as 'cancelled'
     _apply_payment_cancellation_hooks(payment)
+    # Manually add the AuditTrail entry for the cancellation on June 10, 2026
+    cancel_log = AuditTrail(
+        document_type="payment_entry",
+        document_id=payment.id,
+        action="cancelled",
+        timestamp=datetime(2026, 6, 10, 12, 0, 0, tzinfo=timezone.utc),
+        company="cacao",
+    )
+    database.session.add(cancel_log)
     database.session.commit()
 
     # Verify that the ReconciliationItem status was updated to 'cancelled'
     database.session.refresh(recon_item)
     assert recon_item.status == "cancelled"
 
-    # After cancellation, the report should exclude the item, meaning bank_reconciled_amount is 0
-    report_after = get_reconciliation_report(company="cacao")
-    assert report_after.totals["bank_reconciled_amount"] == Decimal("0")
+    # Test as_of_date BEFORE the cancellation date (e.g. May 31, 2026) -> should PRESERVE the reconciled item!
+    report_cutoff_before = get_reconciliation_report(company="cacao", as_of_date=date(2026, 5, 31))
+    assert report_cutoff_before.totals["bank_reconciled_amount"] == Decimal("100.00")
+    # Verify status is displayed as "reconciled" in the report as of that date
+    matching_rows = [row for row in report_cutoff_before.rows if row.values["target_id"] == payment.id]
+    assert len(matching_rows) == 1
+    assert matching_rows[0].values["status"] == "reconciled"
+
+    # Test as_of_date AFTER the cancellation date (e.g. June 15, 2026) -> should EXCLUDE the cancelled item!
+    report_cutoff_after = get_reconciliation_report(company="cacao", as_of_date=date(2026, 6, 15))
+    assert report_cutoff_after.totals["bank_reconciled_amount"] == Decimal("0")
+
+    # Test current report (no as_of_date specified) -> should EXCLUDE the cancelled item!
+    report_current = get_reconciliation_report(company="cacao")
+    assert report_current.totals["bank_reconciled_amount"] == Decimal("0")
