@@ -107,9 +107,11 @@ class ExchangeRevaluationService:
         ledgers = self._active_ledgers(company)
         summary_ledger = self._summary_ledger(company, ledgers)
 
-        existing_run = database.session.execute(
-            select(ExchangeRevaluation).filter_by(company=company, year=year, month=month)
-        ).scalars().first()
+        existing_run = (
+            database.session.execute(select(ExchangeRevaluation).filter_by(company=company, year=year, month=month))
+            .scalars()
+            .first()
+        )
         if existing_run:
             return ExchangeRevaluation(
                 company=company,

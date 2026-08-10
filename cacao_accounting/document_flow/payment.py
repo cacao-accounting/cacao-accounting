@@ -1181,8 +1181,12 @@ def _create_advance_settlement_lines(
         raise _document_flow_error("Las cuentas de anticipo y del tercero no son válidas para la compañía.")
 
     for book in books:
-        party_value = _allocated_carrying_value(invoice, party_account_id, company, book, amount, allocation_date).quantize(Decimal("0.0001"))
-        advance_value = _allocated_carrying_value(payment, advance_account_id, company, book, amount, allocation_date).quantize(Decimal("0.0001"))
+        party_value = _allocated_carrying_value(invoice, party_account_id, company, book, amount, allocation_date).quantize(
+            Decimal("0.0001")
+        )
+        advance_value = _allocated_carrying_value(
+            payment, advance_account_id, company, book, amount, allocation_date
+        ).quantize(Decimal("0.0001"))
         debit_account, debit_value, credit_account, credit_value = (
             (party_account, party_value, advance_account, advance_value)
             if is_purchase
