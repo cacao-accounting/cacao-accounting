@@ -4280,6 +4280,149 @@ def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
 
     with pytest.raises(PurchaseReconciliationError, match="en la misma moneda"):
         reconcile_purchase_invoice(invoice.id)
++def test_partial_invoice_price_variance_scaling(app_ctx):
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        reconcile_purchase_invoice,
+        PurchaseMatchingConfig,
+        MatchingType,
+        seed_matching_config_for_company,
+    )
+    from cacao_accounting.database import (
+        UOM,
+        Item,
+        Warehouse,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseOrder,
+        PurchaseOrderItem,
+        database,
+    )
+
+    seed_matching_config_for_company("cacao")
+
+    # 1. Test 3-way price difference scaling
+    database.session.add_all(
+        [
+            UOM(code="EA-SCALE", name="Each SCALE"),
+            Item(code="ITEM-SCALE", name="Item SCALE", item_type="goods", is_stock_item=True, default_uom="EA-SCALE"),
+            Warehouse(code="WH-SCALE", name="Bodega SCALE", company="cacao"),
+        ]
+    )
+    database.session.flush()
+
+    # Ensure matching config is 3-way
+    cfg = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company="cacao")).scalar_one()
+    cfg.matching_type = MatchingType.THREE_WAY
+    database.session.commit()
+
+    # 100-unit receipt at rate 10 (amount = 1000)
+    receipt = PurchaseReceipt(
+        company="cacao", posting_date=date(2026, 5, 1), supplier_id="SUPP-SCALE", transaction_currency="USD", docstatus=1
+    )
+    database.session.add(receipt)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ITEM-SCALE",
+            qty=Decimal("100"),
+            qty_in_base_uom=Decimal("100"),
+            uom="EA-SCALE",
+            rate=Decimal("10.00"),
+            amount=Decimal("1000.00"),
+            warehouse="WH-SCALE",
+        )
+    )
+
+    # Partial invoice of 10 units at rate 12 (amount = 120)
+    # Price difference is 12 - 10 = 2 per unit
+    # Expected price variance for 10 units should be 10 * 2 = 20, not 100 * 2 = 200 (if reference_qty was used)
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        supplier_id="SUPP-SCALE",
+        purchase_receipt_id=receipt.id,
+        transaction_currency="USD",
+        docstatus=1,
+    )
+    database.session.add(invoice)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-SCALE",
+            qty=Decimal("10"),
+            uom="EA-SCALE",
+            rate=Decimal("12.00"),
+            amount=Decimal("120.00"),
+            warehouse="WH-SCALE",
+        )
+    )
+    database.session.commit()
+
+    result_3w = reconcile_purchase_invoice(invoice.id)
+    assert result_3w.price_difference == Decimal("20.00")
+
+    # 2. Test 2-way price difference scaling
+    # Switch matching config to 2-way
+    cfg.matching_type = MatchingType.TWO_WAY
+    database.session.commit()
+
+    order = PurchaseOrder(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        supplier_id="SUPP-SCALE2",
+        transaction_currency="USD",
+        docstatus=1,
+    )
+    database.session.add(order)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseOrderItem(
+            purchase_order_id=order.id,
+            item_code="ITEM-SCALE",
+            qty=Decimal("100"),
+            qty_in_base_uom=Decimal("100"),
+            uom="EA-SCALE",
+            rate=Decimal("10.00"),
+            amount=Decimal("1000.00"),
+        )
+    )
+
+    invoice_2w = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        supplier_id="SUPP-SCALE2",
+        purchase_order_id=order.id,
+        transaction_currency="USD",
+        docstatus=1,
+    )
+    database.session.add(invoice_2w)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice_2w.id,
+            item_code="ITEM-SCALE",
+            qty=Decimal("10"),
+            uom="EA-SCALE",
+            rate=Decimal("12.00"),
+            amount=Decimal("120.00"),
+        )
+    )
+    database.session.commit()
+
+    result_2w = reconcile_purchase_invoice(invoice_2w.id)
+    assert result_2w.price_difference == Decimal("20.00")
+
+    # Restore matching config back to 3-way
+    cfg.matching_type = MatchingType.THREE_WAY
+    database.session.commit()
 
 
 def test_post_bank_difference_adjustment_deposit_and_withdrawal(app_ctx):
