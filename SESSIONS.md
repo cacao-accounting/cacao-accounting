@@ -2075,6 +2075,13 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Se modificó la lógica para retornar directamente la ejecución persistida `existing_run`.
 - Se actualizaron las pruebas unitarias en `tests/test_exchange_revaluation.py` para asegurar la idempotencia del servicio mediante aserciones de identidad (`second is first`).
 - Se verificó la conformidad del código mediante formateo con `black` y chequeo estricto con `mypy`, `ruff` y `flake8`.
+## 2026-08-10 — Reverse FX adjustments for refund settlements
+
+- Implemented FX adjustment and payment discount reversal for refund settlements (`refund_confirmed`).
+- Modified `_build_exchange_difference_line`, `_build_unrealized_exchange_difference_line`, and `_build_unrealized_party_offset_line` to negate the `exchange_difference` when `context.event_type == "refund_confirmed"`.
+- Modified `_build_payment_discount_line` to reverse the debit/credit side when `context.event_type == "refund_confirmed"`.
+- Added unit test `test_supplier_refund_mapping_reverses_exchange` in `tests/engines/test_mapper.py` verifying a supplier refund with carrying value 3,600 and cash receipt of 3,700 properly balances and produces a 100 credit to exchange gain.
+- All code formatted with black, checked with ruff, flake8, and mypy, and verified using pytest.
 ## 2026-08-10 — Integración de origin/main en stabilization/inventory-audit
 
 - Se integró `origin/main` mediante merge no fast-forward. Los conflictos se
