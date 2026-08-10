@@ -1622,11 +1622,13 @@ def _order_outstanding(order: PurchaseOrder | SalesOrder, source_type: str) -> D
     rows = database.session.execute(
         database.select(PaymentReference.allocated_amount)
         .join(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+        .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
         .where(
             DocumentRelation.source_type == source_type,
             DocumentRelation.source_id == order.id,
             DocumentRelation.target_type == "payment_entry",
             DocumentRelation.status == "active",
+            PaymentEntry.docstatus == 1,
         )
     ).scalars()
     allocated = sum((Decimal(str(value or "0")) for value in rows), Decimal("0"))
