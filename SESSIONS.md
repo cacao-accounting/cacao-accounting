@@ -43,6 +43,13 @@ unitarias.
   paralelo e independientemente del resultado del lint, que pasa a ser un
   chequeo informativo por separado.
 
+## 2026-08-10 — Integración de diferencias bancarias dentro de la transacción de conciliación
+
+- `submit_journal(commit=False)` permite publicar el asiento de diferencia sin
+  confirmar la transacción externa.
+- `_post_bank_difference_adjustment` usa ese camino y la prueba de atomicidad
+  verifica que un fallo posterior revierta el asiento y la conciliación.
+
 ## 2026-08-10 — Triage de issues de auditoría contra el código vigente
 
 ### Petición

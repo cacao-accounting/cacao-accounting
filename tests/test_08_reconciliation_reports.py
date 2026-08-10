@@ -4425,7 +4425,106 @@ def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
     database.session.commit()
 
 
-def test_post_bank_difference_adjustment_deposit_and_withdrawal(app_ctx):
+def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
+    """Test that a bank reconciliation difference posting is atomic and commits only at the end."""
+    from cacao_accounting.bancos.reconciliation_service import (
+        BankReconciliationMatch,
+        BankReconciliationRequest,
+        reconcile_bank_items,
+    )
+    from cacao_accounting.database import (
+        Bank,
+        BankAccount,
+        BankTransaction,
+        GLEntry,
+        ReconciliationItem,
+        CompanyDefaultAccount,
+        Accounts,
+        database,
+    )
+
+    bank_gl = Accounts(entity="cacao", code="BANK-ATOM", name="Bank atom", classification="asset", account_type="bank")
+    difference = Accounts(entity="cacao", code="BANK-ATOM-DIFF", name="Bank diff atom", classification="expense")
+    bank = Bank(name="Banco Atom")
+    database.session.add_all([bank_gl, difference, bank])
+    database.session.flush()
+
+    database.session.add(CompanyDefaultAccount(company="cacao", bank_difference_account_id=difference.id))
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Atom account",
+        currency="NIO",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+
+    transaction = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        deposit=Decimal("100.00"),
+    )
+    database.session.add(transaction)
+    target_entry = GLEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        account_id=bank_gl.id,
+        debit=Decimal("100.00"),
+        credit=Decimal("0"),
+        voucher_type="manual_test",
+        voucher_id="TARGET-ATOM",
+        is_cancelled=False,
+        is_reversal=False,
+    )
+    database.session.add(target_entry)
+    database.session.commit()
+
+    # Simulate final commit failure or outer rollback
+    # We will trigger a mock apply block that fails after journal is attached but before the outer transaction commits.
+    # In cacao_accounting/bancos/__init__.py:bancos_conciliacion_bancaria_aplicar,
+    # the outer transaction commits via `database.session.commit()` only at the end.
+    # Let's perform a simulated route run manually.
+
+    # 1. Start a transaction
+    database.session.begin_nested()
+
+    reconciliation = reconcile_bank_items(
+        BankReconciliationRequest(
+            company="cacao",
+            reconciliation_date=date.today(),
+            matches=[
+                BankReconciliationMatch(
+                    bank_transaction_id=transaction.id,
+                    target_type="gl_entry",
+                    target_id=target_entry.id,
+                    allocated_amount=Decimal("95.00"),
+                )
+            ],
+        )
+    )
+    from cacao_accounting.bancos import _post_bank_difference_adjustment
+
+    _post_bank_difference_adjustment(reconciliation.id, transaction, Decimal("5.00"))
+
+    # The failure happens after the adjustment journal and reconciliation item exist.
+    try:
+        raise ValueError("Simulated lookup or route final commit failure")
+    except ValueError:
+        database.session.rollback()
+
+    # Verify that nothing was committed/persisted to database because of rollback!
+    # If the journal had committed internally, it would have persisted even after outer rollback.
+    recon_items = database.session.execute(database.select(ReconciliationItem)).scalars().all()
+    assert len(recon_items) == 0
+
+    journal_entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="journal_entry")).scalars().all()
+    )
+    assert len(journal_entries) == 0
+
+
+def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
     """Verify that bank difference adjustments derive their sign based on deposit vs withdrawal."""
     from cacao_accounting.bancos import _post_bank_difference_adjustment
     from cacao_accounting.database import (
@@ -4492,12 +4591,16 @@ def test_post_bank_difference_adjustment_deposit_and_withdrawal(app_ctx):
 
     # Find the GL entries for the deposit adjustment
     # Since deposit, the bank should be DEBITED, and difference account should be CREDITED.
-    entries_dep = database.session.execute(
-        database.select(GLEntry).filter(
-            GLEntry.voucher_type == "journal_entry",
-            GLEntry.account_id.in_([bank_gl.id, difference.id]),
+    entries_dep = (
+        database.session.execute(
+            database.select(GLEntry).filter(
+                GLEntry.voucher_type == "journal_entry",
+                GLEntry.account_id.in_([bank_gl.id, difference.id]),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # We expect 2 entries: 1 debiting bank, 1 crediting difference
     assert len(entries_dep) == 2
@@ -4547,12 +4650,16 @@ def test_post_bank_difference_adjustment_deposit_and_withdrawal(app_ctx):
 
     # Find the GL entries for the withdrawal adjustment
     # Since withdrawal, the bank should be CREDITED, and difference account should be DEBITED.
-    entries_with = database.session.execute(
-        database.select(GLEntry).filter(
-            GLEntry.voucher_type == "journal_entry",
-            GLEntry.account_id.in_([bank_gl.id, difference.id]),
+    entries_with = (
+        database.session.execute(
+            database.select(GLEntry).filter(
+                GLEntry.voucher_type == "journal_entry",
+                GLEntry.account_id.in_([bank_gl.id, difference.id]),
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     assert len(entries_with) == 2
     bank_entry_w = next(e for e in entries_with if e.account_id == bank_gl.id)
