@@ -1257,9 +1257,7 @@ def _create_payment_pay_entries(
         party_id=document.party_id,
         credit_bank_account_id=document.bank_account_id,
         debit_remarks=(
-            "Reembolso a cliente"
-            if receivable
-            else "Pago a proveedor" if party_account_id else "Reembolso a cliente" if receivable else "Anticipo a proveedor"
+            "Reembolso a cliente" if receivable else "Pago a proveedor" if party_account_id else "Anticipo a proveedor"
         ),
         credit_remarks="Cuenta bancaria de pago",
     )
@@ -2249,7 +2247,7 @@ def _create_stock_movements_for_items(document: StockEntry, items: Sequence[Any]
     return movements
 
 
-def _validate_stock_entry_warehouses(document: Any, line: Any) -> None:
+def _validate_stock_entry_warehouses(document: StockEntry, line: StockEntryItem) -> None:
     """Valida que las bodegas usadas por un movimiento pertenezcan a la compañía."""
     warehouse_codes = {
         getattr(document, "from_warehouse", None),

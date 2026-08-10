@@ -270,6 +270,8 @@ class AccountingMapper:
         exchange_difference: Decimal,
     ) -> JournalEntryLineProforma:
         """Build the realized exchange gain/loss line in company currency."""
+        if context.event_type == "refund_confirmed":
+            exchange_difference = -exchange_difference
         side = "credit" if exchange_difference > 0 else "debit"
         account_id = (
             context.references.get("exchange_gain_account_id")
@@ -294,6 +296,8 @@ class AccountingMapper:
         exchange_difference: Decimal,
     ) -> JournalEntryLineProforma:
         """Build the unrealized exchange revaluation line in company currency."""
+        if context.event_type == "refund_confirmed":
+            exchange_difference = -exchange_difference
         side = "credit" if exchange_difference > 0 else "debit"
         account_id = (
             context.references.get("unrealized_exchange_gain_account_id")
@@ -318,6 +322,8 @@ class AccountingMapper:
         exchange_difference: Decimal,
     ) -> JournalEntryLineProforma:
         """Build the control-account offset required for unrealized revaluation."""
+        if context.event_type == "refund_confirmed":
+            exchange_difference = -exchange_difference
         side = "debit" if exchange_difference > 0 else "credit"
         return self._build_line(
             context,
@@ -338,7 +344,11 @@ class AccountingMapper:
         payment_discount_amount: Decimal,
     ) -> JournalEntryLineProforma:
         """Build the payment discount line in company currency."""
-        side = "credit" if context.transaction_direction == "purchase" else "debit"
+        is_refund = context.event_type == "refund_confirmed"
+        if is_refund:
+            side = "debit" if context.transaction_direction == "purchase" else "credit"
+        else:
+            side = "credit" if context.transaction_direction == "purchase" else "debit"
         account_id = context.references.get("payment_discount_account_id")
         return self._build_line(
             context,
