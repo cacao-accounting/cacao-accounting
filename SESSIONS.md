@@ -3,20 +3,32 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
-## 2026-08-10 — Integración de diferencias bancarias dentro de la transacción de conciliación
+## 2026-08-11 — Refactor del workflow CI: lint en job separado
 
 ### Petición
 
-Mantener la contabilización de diferencias bancarias dentro de la transacción de la conciliación bancaria.
-`submit_journal()` hace commit internamente de la sesión de SQLAlchemy, por lo que confirmaba la conciliación parcial y el diario de ajuste antes de asociar el ReconciliationItem de diferencia y antes del commit final de la ruta. Si la búsqueda subsiguiente falla o el commit final de la ruta falla, el rollback externo no puede deshacer esos registros y el usuario recibe un error con una conciliación parcialmente aplicada. Usar un camino de posteo de diario que no confirme o diferir todos los commits hasta que la ruta finalice.
+Refactorizar `.github/workflows/python-package.yml` para separar las pruebas de
+lint en un job particular, de modo que los fallos de estilo (línea en blanco
+faltante, línea de 121 caracteres, etc.) no frenen la ejecución de las pruebas
+unitarias.
 
 ### Implementación
 
-- Se modificó `submit_journal` en `cacao_accounting/contabilidad/journal_service.py` para aceptar un parámetro `commit` (predeterminado a `True`). Cuando es `False`, la sesión de SQLAlchemy no se confirma (ni se revierte) internamente, sino que se ejecuta `database.session.flush()` para registrar los cambios en la transacción activa sin consolidarlos.
-- Se refactorizó la función `submit_journal` para extraer tres funciones auxiliares privadas (`_validate_fiscal_year_closing`, `_post_and_sync_journal`, y `_process_recurrent_application`) con el fin de reducir la complejidad cognitiva por debajo de los límites exigidos por la Quality Gate de SonarCloud.
-- Se actualizó `_post_bank_difference_adjustment` en `cacao_accounting/bancos/__init__.py` para pasar `commit=False` al llamar a `submit_journal()`. De esta manera, el asiento de diario de ajuste de diferencia bancaria se publica dentro de la transacción activa de la conciliación y no se confirma hasta que el commit final de la ruta de la API se complete con éxito.
-- Se agregó una prueba de regresión unitaria y de integración `test_bank_reconciliation_atomicity_with_difference` en `tests/test_08_reconciliation_reports.py` que simula la ejecución atómica de la conciliación con diferencia bancaria y verifica que si ocurre un fallo posterior en la ruta, todos los registros (incluyendo el diario de diferencias y los ReconciliationItems) se revierten en cascada correctamente sin dejar rastro en la base de datos.
-- Se verificaron con éxito todos los linters (`black`, `ruff`, `mypy`) y se ejecutó la suite de pruebas enfocada.
+- Se creó el job `lint` (Python 3.13) que ejecuta `flake8`, `ruff`,
+  `pydocstyle` y `mypy` sobre `cacao_accounting/`.
+- Se eliminó el paso "Lint project code" del job `build`, que corría dentro de
+  cada elemento de la matriz (3.12/3.13/3.14) y abortaba el pytest del mismo job.
+- Decisión de diseño: los jobs de CI quedan sin dependencias entre sí
+  (`needs`), por lo que `build`, `databases`, `desktop` y `coverage` corren en
+  paralelo e independientemente del resultado del lint, que pasa a ser un
+  chequeo informativo por separado.
+
+## 2026-08-10 — Integración de diferencias bancarias dentro de la transacción de conciliación
+
+- `submit_journal(commit=False)` permite publicar el asiento de diferencia sin
+  confirmar la transacción externa.
+- `_post_bank_difference_adjustment` usa ese camino y la prueba de atomicidad
+  verifica que un fallo posterior revierta el asiento y la conciliación.
 
 ## 2026-08-10 — Triage de issues de auditoría contra el código vigente
 
@@ -2084,6 +2096,29 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   la revisión `20260809_0001` y se eliminó el test de códigos legacy que
   validaba la migración 0002 ya borrada.
 
+## 2026-08-10 — Corrección de facturas futuras en compensación 2-way
+
+### Petición
+Limitar la detección de facturas 2-way precedentes a una recepción de compra en `_late_two_way_invoice_amounts` para que excluya facturas aprobadas con fecha de contabilización posterior a la de la recepción.
+
+### Implementación
+- Modificado `_late_two_way_invoice_amounts` en `cacao_accounting/accounting_engine/document_builders.py`.
+- Se agregó el filtro `PurchaseInvoice.posting_date <= document.posting_date` a la consulta de selección de facturas de compra.
+- Se agregó una prueba unitaria robusta `test_late_two_way_invoice_amounts_excludes_future_invoices` en `tests/test_07posting_engine.py` para asegurar que las facturas con fecha posterior sean correctamente excluidas y evitar regresiones.
+- Se verificaron Black, Ruff, mypy, compilación y git diff --check; todas las pruebas pasaron exitosamente.
+## 2026-08-10 — Retorno de registro existente para ejecuciones repetidas de revalorización cambiaria
+
+- Se corrigió un error en `ExchangeRevaluationService.run()` donde ejecuciones repetidas para la misma compañía, año y mes retornaban un objeto `ExchangeRevaluation` no persistido y transitorio, cuyo `id` de base de datos permanecía como `None`. Esto provocaba fallos de redirección, problemas en las rutas de detalle y errores en los controles de cierre mensual.
+- Se modificó la lógica para retornar directamente la ejecución persistida `existing_run`.
+- Se actualizaron las pruebas unitarias en `tests/test_exchange_revaluation.py` para asegurar la idempotencia del servicio mediante aserciones de identidad (`second is first`).
+- Se verificó la conformidad del código mediante formateo con `black` y chequeo estricto con `mypy`, `ruff` y `flake8`.
+## 2026-08-10 — Reverse FX adjustments for refund settlements
+
+- Implemented FX adjustment and payment discount reversal for refund settlements (`refund_confirmed`).
+- Modified `_build_exchange_difference_line`, `_build_unrealized_exchange_difference_line`, and `_build_unrealized_party_offset_line` to negate the `exchange_difference` when `context.event_type == "refund_confirmed"`.
+- Modified `_build_payment_discount_line` to reverse the debit/credit side when `context.event_type == "refund_confirmed"`.
+- Added unit test `test_supplier_refund_mapping_reverses_exchange` in `tests/engines/test_mapper.py` verifying a supplier refund with carrying value 3,600 and cash receipt of 3,700 properly balances and produces a 100 credit to exchange gain.
+- All code formatted with black, checked with ruff, flake8, and mypy, and verified using pytest.
 ## 2026-08-10 — Integración de origin/main en stabilization/inventory-audit
 
 - Se integró `origin/main` mediante merge no fast-forward. Los conflictos se

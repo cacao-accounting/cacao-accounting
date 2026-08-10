@@ -1257,9 +1257,7 @@ def _create_payment_pay_entries(
         party_id=document.party_id,
         credit_bank_account_id=document.bank_account_id,
         debit_remarks=(
-            "Reembolso a cliente"
-            if receivable
-            else "Pago a proveedor" if party_account_id else "Anticipo a proveedor"
+            "Reembolso a cliente" if receivable else "Pago a proveedor" if party_account_id else "Anticipo a proveedor"
         ),
         credit_remarks="Cuenta bancaria de pago",
     )

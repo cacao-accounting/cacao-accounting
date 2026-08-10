@@ -4323,6 +4323,18 @@ def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
         deposit=Decimal("100.00"),
     )
     database.session.add(transaction)
+    target_entry = GLEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        account_id=bank_gl.id,
+        debit=Decimal("100.00"),
+        credit=Decimal("0"),
+        voucher_type="manual_test",
+        voucher_id="TARGET-ATOM",
+        is_cancelled=False,
+        is_reversal=False,
+    )
+    database.session.add(target_entry)
     database.session.commit()
 
     # Simulate final commit failure or outer rollback
@@ -4334,28 +4346,28 @@ def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
     # 1. Start a transaction
     database.session.begin_nested()
 
-    try:
-        reconciliation = reconcile_bank_items(
-            BankReconciliationRequest(
-                company="cacao",
-                reconciliation_date=date.today(),
-                matches=[
-                    BankReconciliationMatch(
-                        bank_transaction_id=transaction.id,
-                        target_type="gl_entry",
-                        target_id="MOCK_TARGET_ID",  # Dummy target ID
-                        allocated_amount=Decimal("95.00"),
-                    )
-                ],
-            )
+    reconciliation = reconcile_bank_items(
+        BankReconciliationRequest(
+            company="cacao",
+            reconciliation_date=date.today(),
+            matches=[
+                BankReconciliationMatch(
+                    bank_transaction_id=transaction.id,
+                    target_type="gl_entry",
+                    target_id=target_entry.id,
+                    allocated_amount=Decimal("95.00"),
+                )
+            ],
         )
-        from cacao_accounting.bancos import _post_bank_difference_adjustment
+    )
+    from cacao_accounting.bancos import _post_bank_difference_adjustment
 
-        _post_bank_difference_adjustment(reconciliation.id, transaction, Decimal("5.00"))
+    _post_bank_difference_adjustment(reconciliation.id, transaction, Decimal("5.00"))
 
-        # Simulate failure in the subsequent steps (e.g., database integrity or lookup error)
+    # The failure happens after the adjustment journal and reconciliation item exist.
+    try:
         raise ValueError("Simulated lookup or route final commit failure")
-    except Exception:
+    except ValueError:
         database.session.rollback()
 
     # Verify that nothing was committed/persisted to database because of rollback!
