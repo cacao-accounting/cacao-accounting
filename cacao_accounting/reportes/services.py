@@ -2418,6 +2418,16 @@ def _fiscal_year_start_for_period(period: AccountingPeriod | None) -> date | Non
     return fy.year_start_date if fy else None
 
 
+def _current_fiscal_year_start(company: str) -> date | None:
+    """Obtiene el inicio del año fiscal vigente cuando no se selecciona período."""
+    return database.session.execute(
+        select(FiscalYear.year_start_date)
+        .where(FiscalYear.entity == company, FiscalYear.year_start_date <= date.today())
+        .order_by(FiscalYear.year_start_date.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
 _PL_CLASSIFICATIONS = frozenset({"ingreso", "income", "costo", "cost", "gasto", "expense"})
 
 
@@ -2442,7 +2452,7 @@ def _should_skip_balance_sheet_entry(
 def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Balance general por clasificación Activo/Pasivo/Patrimonio."""
     _, period_end, period_obj = _period_bounds(filters.company, filters.accounting_period)
-    fiscal_year_start = _fiscal_year_start_for_period(period_obj)
+    fiscal_year_start = _fiscal_year_start_for_period(period_obj) or _current_fiscal_year_start(filters.company)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
