@@ -3,6 +3,15 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
+
+- Se eliminó la unicidad artificial por compañía/período de `ExchangeRevaluation`.
+- Una nueva ejecución anula primero las afectaciones GL publicadas previamente
+  del mismo período y calcula nuevamente los saldos actuales.
+- Las ejecuciones sin cambios también se registran como eventos independientes,
+  preservando la trazabilidad y permitiendo recalcular después de cambios en
+  saldos, tasas o documentos abiertos.
+
 ## 2026-08-10 — Sincronización de PR #372 con estabilización
 
 - Se integró `stabilization/inventory-audit` en la rama del PR #372 para

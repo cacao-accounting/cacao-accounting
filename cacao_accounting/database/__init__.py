@@ -3855,14 +3855,7 @@ class ExchangeRevaluation(database.Model, DocBase):  # type: ignore[name-defined
     """Revalorizacion de moneda extranjera."""
 
     __tablename__ = "exchange_revaluation"
-    __table_args__ = (
-        database.UniqueConstraint(
-            "company",
-            "year",
-            "month",
-            name="uq_exchange_revaluation_company_period",
-        ),
-    )
+    __table_args__ = ()
     year = database.Column(database.Integer(), nullable=True, index=True)
     month = database.Column(database.Integer(), nullable=True, index=True)
     run_date = database.Column(database.Date(), nullable=True, index=True)
