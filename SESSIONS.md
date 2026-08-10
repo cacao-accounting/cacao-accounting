@@ -2193,3 +2193,5 @@ Reconstruir la valoración de inventario en la fecha de corte (`date_to`) a part
 - Durante la verificación ampliada se corrigió un marcador `+` literal que
   impedía compilar `tests/test_08_reconciliation_reports.py`; las pruebas de
   conciliación bancaria y varianza parcial quedaron ejecutables y pasaron.
+- Verificación final: `1641 passed, 8 skipped, 174 warnings` con el comando
+  completo de pytest del proyecto.
