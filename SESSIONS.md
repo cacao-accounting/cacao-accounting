@@ -1612,7 +1612,6 @@ Validación focal: `113 passed, 2 warnings`. Calidad: Black, Ruff, Flake8, Mypy 
 Se analizaron los hallazgos upstream y se confirmaron como riesgos reales. El adaptador de extractos ahora valida que la cuenta bancaria pertenezca a la compañía del lote durante validación y persistencia; el servicio de importación valida fechas cuando el documento construido es una lista, evitando saltar períodos cerrados. Las fechas inválidas ya no se reemplazan silenciosamente por la fecha actual. Se rechazan montos no numéricos, filas sin depósito/retiro y filas con ambos lados monetarios; además, el panel de conciliación tolera transacciones históricas inválidas sin responder 500.
 
 Verificación: batería focal `99 passed`; Black, Ruff, Flake8, Mypy y `git diff --check` pasan. Suite completa ejecutada una vez para el lote: `1620 passed, 8 skipped, 174 warnings` en `test_results_audit_bank_import_full_20260810.log`. Commit firmado: `0a00203 fix(bank): validate imported statement ownership`. Los issues permanecen abiertos para revisión posterior y CI.
-
 ### 2026-08-10 — Lote de estabilización de inventario (#359, #360, #361, #362, #363, #364, #365)
 
 Se corrigieron controles de valoración y captura de movimientos. El promedio móvil consume la cantidad y valor actuales de `StockBin`, las capas normalizan su valor efectivo y las revalorizaciones sin cantidad distribuyen explícitamente su ajuste sobre las capas disponibles. Las recepciones y salidas convierten la tasa a UOM base; las conciliaciones bloquean el bin y recalculan el delta contra el stock vigente, evitando aplicar snapshots obsoletos. Las salidas de notas de entrega respetan `allow_negative_stock`, y los formularios rechazan UOM ausentes o conversiones inválidas en lugar de guardar cantidades crudas o provocar `IntegrityError`.
@@ -2076,3 +2075,11 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
 - Se modificó la lógica para retornar directamente la ejecución persistida `existing_run`.
 - Se actualizaron las pruebas unitarias en `tests/test_exchange_revaluation.py` para asegurar la idempotencia del servicio mediante aserciones de identidad (`second is first`).
 - Se verificó la conformidad del código mediante formateo con `black` y chequeo estricto con `mypy`, `ruff` y `flake8`.
+## 2026-08-10 — Integración de origin/main en stabilization/inventory-audit
+
+- Se integró `origin/main` mediante merge no fast-forward. Los conflictos se
+  resolvieron preservando las correcciones más estrictas de auditoría de la
+  rama: conciliación por moneda, deduplicación de extractos, validaciones de
+  ventas, aislamiento por libro y controles de inventario.
+- El merge conserva los cambios entrantes de migraciones, dependencias y
+  pruebas, sin descartar funcionalidad existente.
