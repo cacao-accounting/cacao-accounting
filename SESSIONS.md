@@ -3,6 +3,17 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Cobertura ampliada para Record-to-Reports (R2R) Multimoneda y Multilibros
+
+### Petición
+Agregar pruebas adicionales que cubran el flujo de Record-to-Reports (record a reportes), enfocándose en multi moneda y multilibros.
+
+### Implementación
+- Se agregaron pruebas unitarias exhaustivas en `tests/test_record_to_reports_multicurrency_multiledger.py`.
+- **Comprobación Contable Multimoneda:** `test_r2r_multi_currency_journal_entry_all_reports` valida la contabilización manual de comprobantes en moneda extranjera (GBP) a través de tres libros activos con distintas monedas funcionales (NIO, EUR, USD). Verifica que las tasas de cambio de cada libro se resuelvan correctamente y que la reportería financiera core (Trial Balance, Income Statement, Balance Sheet, y Account Summary) muestre importes exactos en la moneda de cada libro.
+- **Flujo de Compras y Conciliación Multimoneda:** `test_r2r_purchase_flow_reconciliation_multicurrency` registra una factura de compra en USD y su respectiva devolución (Credit Note), afectando múltiples libros. Verifica que el saldo pendiente en el submayor de proveedores (AP Subledger) y los reportes operativos de compras por proveedor y artículo se neteen correctamente. Además, valida que la matriz de conciliación (Reconciliation Matrix) equilibre perfectamente y exponga con precisión las diferencias de traducción entre submayores en moneda base y mayor en moneda extranjera por cada libro.
+- Se formateó el código mediante Black y se verificó con Ruff, Flake8, mypy y pytest.
+
 ## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
 
 - Se eliminó la unicidad artificial por compañía/período de `ExchangeRevaluation`.
