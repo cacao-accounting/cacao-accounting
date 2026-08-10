@@ -3,6 +3,13 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-10 — Sincronización de PR #372 con estabilización
+
+- Se integró `stabilization/inventory-audit` en la rama del PR #372 para
+  resolver sus conflictos y permitir su incorporación posterior.
+- Se preservaron el cálculo de reclasificaciones parciales del PR y las
+  protecciones de estabilización, incluida la exclusión de facturas futuras.
+
 ## 2026-08-10 — Compensación de recepción posterior a factura 2-way en múltiples recepciones
 
 ### Petición
@@ -16,6 +23,25 @@ Cuando una factura de 2 vías cubre solo parte de una orden y la orden es recibi
 - Simula la reclasificación secuencial/cronológica de cada recepción previa para deducir de forma precisa los importes ya consumidos de la factura de 2 vías.
 - Se agregó la prueba unitaria `test_late_two_way_reclassification_deducts_prior_receipts` en `tests/test_07posting_engine.py` para asegurar que las recepciones posteriores no sobre-clasifiquen los gastos y que el remanente correcto se asigne a la cuenta puente (GRNI).
 - Se ejecutaron Black, Ruff, Flake8, mypy y la suite de pruebas unitarias relevante, confirmando el cumplimiento de calidad al 100%.
+## 2026-08-11 — Refactor del workflow CI: lint en job separado
+
+### Petición
+
+Refactorizar `.github/workflows/python-package.yml` para separar las pruebas de
+lint en un job particular, de modo que los fallos de estilo (línea en blanco
+faltante, línea de 121 caracteres, etc.) no frenen la ejecución de las pruebas
+unitarias.
+
+### Implementación
+
+- Se creó el job `lint` (Python 3.13) que ejecuta `flake8`, `ruff`,
+  `pydocstyle` y `mypy` sobre `cacao_accounting/`.
+- Se eliminó el paso "Lint project code" del job `build`, que corría dentro de
+  cada elemento de la matriz (3.12/3.13/3.14) y abortaba el pytest del mismo job.
+- Decisión de diseño: los jobs de CI quedan sin dependencias entre sí
+  (`needs`), por lo que `build`, `databases`, `desktop` y `coverage` corren en
+  paralelo e independientemente del resultado del lint, que pasa a ser un
+  chequeo informativo por separado.
 
 ## 2026-08-10 — Triage de issues de auditoría contra el código vigente
 
@@ -1626,7 +1652,6 @@ Validación focal: `113 passed, 2 warnings`. Calidad: Black, Ruff, Flake8, Mypy 
 Se analizaron los hallazgos upstream y se confirmaron como riesgos reales. El adaptador de extractos ahora valida que la cuenta bancaria pertenezca a la compañía del lote durante validación y persistencia; el servicio de importación valida fechas cuando el documento construido es una lista, evitando saltar períodos cerrados. Las fechas inválidas ya no se reemplazan silenciosamente por la fecha actual. Se rechazan montos no numéricos, filas sin depósito/retiro y filas con ambos lados monetarios; además, el panel de conciliación tolera transacciones históricas inválidas sin responder 500.
 
 Verificación: batería focal `99 passed`; Black, Ruff, Flake8, Mypy y `git diff --check` pasan. Suite completa ejecutada una vez para el lote: `1620 passed, 8 skipped, 174 warnings` en `test_results_audit_bank_import_full_20260810.log`. Commit firmado: `0a00203 fix(bank): validate imported statement ownership`. Los issues permanecen abiertos para revisión posterior y CI.
-
 ### 2026-08-10 — Lote de estabilización de inventario (#359, #360, #361, #362, #363, #364, #365)
 
 Se corrigieron controles de valoración y captura de movimientos. El promedio móvil consume la cantidad y valor actuales de `StockBin`, las capas normalizan su valor efectivo y las revalorizaciones sin cantidad distribuyen explícitamente su ajuste sobre las capas disponibles. Las recepciones y salidas convierten la tasa a UOM base; las conciliaciones bloquean el bin y recalculan el delta contra el stock vigente, evitando aplicar snapshots obsoletos. Las salidas de notas de entrega respetan `allow_negative_stock`, y los formularios rechazan UOM ausentes o conversiones inválidas en lugar de guardar cantidades crudas o provocar `IntegrityError`.
@@ -2083,3 +2108,35 @@ CI detectó además que el caller de `StockEntry` requiere conservar su mensaje 
   idempotente. Se actualizó `tests/test_database_migrations.py` para esperar
   la revisión `20260809_0001` y se eliminó el test de códigos legacy que
   validaba la migración 0002 ya borrada.
+
+## 2026-08-10 — Corrección de facturas futuras en compensación 2-way
+
+### Petición
+Limitar la detección de facturas 2-way precedentes a una recepción de compra en `_late_two_way_invoice_amounts` para que excluya facturas aprobadas con fecha de contabilización posterior a la de la recepción.
+
+### Implementación
+- Modificado `_late_two_way_invoice_amounts` en `cacao_accounting/accounting_engine/document_builders.py`.
+- Se agregó el filtro `PurchaseInvoice.posting_date <= document.posting_date` a la consulta de selección de facturas de compra.
+- Se agregó una prueba unitaria robusta `test_late_two_way_invoice_amounts_excludes_future_invoices` en `tests/test_07posting_engine.py` para asegurar que las facturas con fecha posterior sean correctamente excluidas y evitar regresiones.
+- Se verificaron Black, Ruff, mypy, compilación y git diff --check; todas las pruebas pasaron exitosamente.
+## 2026-08-10 — Retorno de registro existente para ejecuciones repetidas de revalorización cambiaria
+
+- Se corrigió un error en `ExchangeRevaluationService.run()` donde ejecuciones repetidas para la misma compañía, año y mes retornaban un objeto `ExchangeRevaluation` no persistido y transitorio, cuyo `id` de base de datos permanecía como `None`. Esto provocaba fallos de redirección, problemas en las rutas de detalle y errores en los controles de cierre mensual.
+- Se modificó la lógica para retornar directamente la ejecución persistida `existing_run`.
+- Se actualizaron las pruebas unitarias en `tests/test_exchange_revaluation.py` para asegurar la idempotencia del servicio mediante aserciones de identidad (`second is first`).
+- Se verificó la conformidad del código mediante formateo con `black` y chequeo estricto con `mypy`, `ruff` y `flake8`.
+## 2026-08-10 — Reverse FX adjustments for refund settlements
+
+- Implemented FX adjustment and payment discount reversal for refund settlements (`refund_confirmed`).
+- Modified `_build_exchange_difference_line`, `_build_unrealized_exchange_difference_line`, and `_build_unrealized_party_offset_line` to negate the `exchange_difference` when `context.event_type == "refund_confirmed"`.
+- Modified `_build_payment_discount_line` to reverse the debit/credit side when `context.event_type == "refund_confirmed"`.
+- Added unit test `test_supplier_refund_mapping_reverses_exchange` in `tests/engines/test_mapper.py` verifying a supplier refund with carrying value 3,600 and cash receipt of 3,700 properly balances and produces a 100 credit to exchange gain.
+- All code formatted with black, checked with ruff, flake8, and mypy, and verified using pytest.
+## 2026-08-10 — Integración de origin/main en stabilization/inventory-audit
+
+- Se integró `origin/main` mediante merge no fast-forward. Los conflictos se
+  resolvieron preservando las correcciones más estrictas de auditoría de la
+  rama: conciliación por moneda, deduplicación de extractos, validaciones de
+  ventas, aislamiento por libro y controles de inventario.
+- El merge conserva los cambios entrantes de migraciones, dependencias y
+  pruebas, sin descartar funcionalidad existente.
