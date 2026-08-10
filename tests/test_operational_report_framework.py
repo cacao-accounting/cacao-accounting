@@ -216,11 +216,29 @@ def test_operational_report_routes_render_without_breaking_financial_reports(app
 
 
 def test_multicurrency_bank_reports(app_ctx):
-    from cacao_accounting.database import Bank, BankAccount, PaymentEntry, database
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        Book,
+        GLEntry,
+        PaymentEntry,
+        database,
+    )
     from cacao_accounting.reportes.services import BankingFilters, get_bank_movement_detail, get_bank_balance_summary
 
     bank = Bank(name="Banco Multicurrency")
     database.session.add(bank)
+    database.session.flush()
+
+    bank_gl = Accounts(
+        entity="cacao",
+        code="1101-USD",
+        name="USD Bank GL",
+        classification="asset",
+        active=True,
+    )
+    database.session.add(bank_gl)
     database.session.flush()
 
     # Configure NIO account
@@ -229,7 +247,12 @@ def test_multicurrency_bank_reports(app_ctx):
     )
     # Configure USD account
     account_usd = BankAccount(
-        bank_id=bank.id, company="cacao", account_name="USD Account", currency="USD", account_no="USD-123"
+        bank_id=bank.id,
+        company="cacao",
+        account_name="USD Account",
+        currency="USD",
+        account_no="USD-123",
+        gl_account_id=bank_gl.id,
     )
     database.session.add_all([account_nio, account_usd])
     database.session.flush()
@@ -270,6 +293,25 @@ def test_multicurrency_bank_reports(app_ctx):
     )
     database.session.commit()
 
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 5, 3),
+            company="cacao",
+            ledger_id=database.session.execute(database.select(Book.id).filter_by(entity="cacao", code="FISC")).scalar_one(),
+            account_id=bank_gl.id,
+            debit=Decimal("3600.00"),
+            credit=Decimal("0.00"),
+            debit_in_account_currency=Decimal("100.00"),
+            credit_in_account_currency=Decimal("0.00"),
+            account_currency="USD",
+            company_currency="NIO",
+            bank_account_id=account_usd.id,
+            voucher_type="test",
+            voucher_id="bank-balance-test",
+        )
+    )
+    database.session.commit()
+
     # 1. Test get_bank_movement_detail
     # Call without account filter, so it includes both NIO and USD
     movement_report = get_bank_movement_detail(
@@ -299,4 +341,4 @@ def test_multicurrency_bank_reports(app_ctx):
     assert balance_report.totals["payments_amount"]["NIO"] == Decimal("0.00")
     assert balance_report.totals["payments_amount"]["USD"] == Decimal("100.00")
     assert balance_report.totals["ending_balance"]["NIO"] == Decimal("0.00")
-    assert balance_report.totals["ending_balance"]["USD"] == Decimal("0.00")
+    assert balance_report.totals["ending_balance"]["USD"] == Decimal("100.00")

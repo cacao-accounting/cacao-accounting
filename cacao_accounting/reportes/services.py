@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Sequence, cast
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 
 from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
 from cacao_accounting.database import (
@@ -1620,8 +1620,14 @@ def _transfer_payment_amount(payment: PaymentEntry, bank_account_id: str) -> Dec
     return _decimal_value(payment.paid_amount)
 
 
-def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | None) -> Decimal:
-    gl_balance_query = exclude_cancelled_gl_entries(select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0))).where(
+def _compute_gl_balance(company: str, bank_account_id: str, bank_currency: str | None, as_of_date: date | None) -> Decimal:
+    account_debit = func.coalesce(GLEntry.debit_in_account_currency, GLEntry.debit)
+    account_credit = func.coalesce(GLEntry.credit_in_account_currency, GLEntry.credit)
+    balance_expression = case(
+        (GLEntry.account_currency == bank_currency, account_debit - account_credit),
+        else_=GLEntry.debit - GLEntry.credit,
+    )
+    gl_balance_query = exclude_cancelled_gl_entries(select(func.coalesce(func.sum(balance_expression), 0))).where(
         GLEntry.company == company,
         GLEntry.bank_account_id == bank_account_id,
     )
@@ -1642,7 +1648,7 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
 
     rows: list[ReportRow] = []
     for bank_account in bank_accounts:
-        balance = _compute_gl_balance(filters.company, bank_account.id, filters.as_of_date)
+        balance = _compute_gl_balance(filters.company, bank_account.id, bank_account.currency, filters.as_of_date)
         receipts, payments = _compute_account_receipts_and_payments(bank_account.id, filters.company, filters.as_of_date)
 
         rows.append(
