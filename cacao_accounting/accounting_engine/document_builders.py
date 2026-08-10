@@ -217,16 +217,21 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
     """
     if not document.purchase_order_id:
         return {}
-    invoices = database.session.execute(
-        select(PurchaseInvoice).where(
-            PurchaseInvoice.company == document.company,
-            PurchaseInvoice.supplier_id == document.supplier_id,
-            PurchaseInvoice.purchase_order_id == document.purchase_order_id,
-            PurchaseInvoice.purchase_receipt_id.is_(None),
-            PurchaseInvoice.docstatus == 1,
-            PurchaseInvoice.is_return.is_(False),
+    invoices = (
+        database.session.execute(
+            select(PurchaseInvoice).where(
+                PurchaseInvoice.company == document.company,
+                PurchaseInvoice.supplier_id == document.supplier_id,
+                PurchaseInvoice.purchase_order_id == document.purchase_order_id,
+                PurchaseInvoice.purchase_receipt_id.is_(None),
+                PurchaseInvoice.docstatus == 1,
+                PurchaseInvoice.is_return.is_(False),
+                PurchaseInvoice.posting_date <= document.posting_date,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     amounts: dict[str, Decimal] = {}
     invoice_posting_dates: dict[str, date] = {}
     for invoice in invoices:
@@ -261,8 +266,6 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
         from sqlalchemy import or_
         from cacao_accounting.database import Book, GLEntry
 
-        prior_receipt_ids = [r.id for r in prior_receipts]
-
         primary_book = (
             database.session.execute(
                 select(Book)
@@ -278,9 +281,7 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
             expense_account_id = _item_account_id(item_code, document.company, "expense")
             if expense_account_id:
                 invoice_date = invoice_posting_dates[item_code]
-                eligible_receipt_ids = [
-                    receipt.id for receipt in prior_receipts if receipt.posting_date >= invoice_date
-                ]
+                eligible_receipt_ids = [receipt.id for receipt in prior_receipts if receipt.posting_date >= invoice_date]
                 if not eligible_receipt_ids:
                     continue
                 query = select(GLEntry).where(
