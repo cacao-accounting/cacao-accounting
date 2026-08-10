@@ -54,6 +54,34 @@ def _base_amount(line: Any, document: Any) -> Decimal:
     return _signed(amount, document)
 
 
+def _document_base_factor(document: Any) -> Decimal:
+    """Get the historical exchange rate factor for the document."""
+    original = _decimal(getattr(document, "grand_total", None) or getattr(document, "total", None))
+    base_value = getattr(document, "base_grand_total", None)
+    if base_value is None:
+        base_value = getattr(document, "base_total", None)
+    if base_value is not None and original != 0:
+        return _decimal(base_value) / original
+    rate = _decimal(getattr(document, "exchange_rate", None))
+    return rate if rate > 0 else Decimal("1")
+
+
+def _document_base_amount(document: Any) -> Decimal:
+    """Resolve the document amount in base currency with legacy fallbacks."""
+    amount = getattr(document, "base_grand_total", None) or getattr(document, "base_total", None)
+    if amount is None:
+        amount = _decimal(getattr(document, "grand_total", None) or getattr(document, "total", None)) * _decimal(
+            getattr(document, "exchange_rate", None) or 1
+        )
+    return _signed(amount, document)
+
+
+def _document_base_outstanding_amount(document: Any) -> Decimal:
+    """Resolve the live outstanding document amount in base currency."""
+    outstanding = compute_outstanding_amount(document)
+    return _signed(outstanding * _document_base_factor(document), document)
+
+
 def _bounded(query: Any, limit: int | None, offset: int | None) -> Any:
     if offset is not None:
         query = query.offset(max(offset, 0))
@@ -162,6 +190,9 @@ def get_receivables_analysis(
             "customer_code": invoice.customer_id,
             "amount": _signed(invoice.grand_total or invoice.total, invoice),
             "outstanding_amount": _signed(compute_outstanding_amount(invoice), invoice),
+            "currency": invoice.transaction_currency or invoice.base_currency,
+            "base_amount": _document_base_amount(invoice),
+            "base_outstanding_amount": _document_base_outstanding_amount(invoice),
         }
         for invoice in database.session.execute(query).scalars().all()
     ]
@@ -191,6 +222,9 @@ def get_payables_analysis(
             "supplier_code": invoice.supplier_id,
             "amount": _signed(invoice.grand_total or invoice.total, invoice),
             "outstanding_amount": _signed(compute_outstanding_amount(invoice), invoice),
+            "currency": invoice.transaction_currency or invoice.base_currency,
+            "base_amount": _document_base_amount(invoice),
+            "base_outstanding_amount": _document_base_outstanding_amount(invoice),
         }
         for invoice in database.session.execute(query).scalars().all()
     ]
