@@ -648,8 +648,14 @@ def _post_bank_difference_adjustment(
     """Post and attach a bank-difference journal to its reconciliation."""
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, submit_journal
 
+    signed_difference_amount = difference_amount
+    if transaction.deposit is not None and transaction.deposit > 0:
+        signed_difference_amount = -abs(difference_amount)
+    else:
+        signed_difference_amount = abs(difference_amount)
+
     try:
-        journal = create_bank_difference_journal(reconciliation_id, difference_amount)
+        journal = create_bank_difference_journal(reconciliation_id, signed_difference_amount)
         submit_journal(journal.id, commit=False)
     except (BankStatementError, JournalValidationError) as exc:
         raise BankReconciliationError(str(exc)) from exc
