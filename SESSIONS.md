@@ -23,6 +23,19 @@ Cuando una factura de 2 vías cubre solo parte de una orden y la orden es recibi
 - Simula la reclasificación secuencial/cronológica de cada recepción previa para deducir de forma precisa los importes ya consumidos de la factura de 2 vías.
 - Se agregó la prueba unitaria `test_late_two_way_reclassification_deducts_prior_receipts` en `tests/test_07posting_engine.py` para asegurar que las recepciones posteriores no sobre-clasifiquen los gastos y que el remanente correcto se asigne a la cuenta puente (GRNI).
 - Se ejecutaron Black, Ruff, Flake8, mypy y la suite de pruebas unitarias relevante, confirmando el cumplimiento de calidad al 100%.
+## 2026-08-11 — Corrección de hallazgos del análisis del PR #366
+
+- Se evitó la doble reclasificación de facturas 2-way cuando existen varias
+  recepciones posteriores y se escaló la variación de precio a la cantidad
+  realmente conciliada.
+- Los ajustes bancarios ahora preservan la atomicidad de la conciliación,
+  derivan el signo según depósito/retiro y seleccionan explícitamente la
+  transacción bancaria afectada.
+- La valuación histórica se reconstruye con deltas al corte solicitado.
+- Las notas de crédito validan nuevamente el saldo de la factura origen con
+  bloqueo `FOR UPDATE` inmediatamente antes de la aprobación, incluyendo el
+  flujo de aprobaciones.
+
 ## 2026-08-11 — Refactor del workflow CI: lint en job separado
 
 ### Petición

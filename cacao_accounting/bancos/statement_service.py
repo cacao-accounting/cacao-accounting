@@ -212,7 +212,10 @@ def _persist_bank_transaction(*, bank_account_id: str, row: BankImportRow) -> No
 
 
 def create_bank_difference_journal(
-    reconciliation_id: str, amount: Decimal, account_id: str | None = None
+    reconciliation_id: str,
+    amount: Decimal,
+    account_id: str | None = None,
+    transaction_id: str | None = None,
 ) -> ComprobanteContable:
     """Crea un comprobante de ajuste por diferencia bancaria."""
     reconciliation = database.session.get(Reconciliation, reconciliation_id)
@@ -224,9 +227,16 @@ def create_bank_difference_journal(
     difference_account_id = account_id or (defaults.bank_difference_account_id if defaults else None)
     if not difference_account_id:
         raise BankStatementError("Falta cuenta de diferencia bancaria configurada.")
-    reconciliation_item = database.session.execute(
-        select(ReconciliationItem).filter_by(reconciliation_id=reconciliation.id, source_type="bank_transaction")
-    ).scalar_one_or_none()
+    item_query = select(ReconciliationItem).filter_by(
+        reconciliation_id=reconciliation.id,
+        source_type="bank_transaction",
+    )
+    if transaction_id:
+        item_query = item_query.where(ReconciliationItem.source_id == transaction_id)
+    reconciliation_items = database.session.execute(item_query.limit(2)).scalars().all()
+    if len(reconciliation_items) != 1:
+        raise BankStatementError("La conciliacion no identifica una transaccion bancaria unica.")
+    reconciliation_item = reconciliation_items[0]
     bank_account = None
     if reconciliation_item:
         transaction = database.session.get(BankTransaction, reconciliation_item.source_id)
