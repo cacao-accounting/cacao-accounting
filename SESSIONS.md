@@ -3,6 +3,41 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-10 — Triage de issues de auditoría contra el código vigente
+
+### Petición
+
+Comparar los issues abiertos de GitHub contra el código de la rama
+`stabilization/inventory-audit`: cerrar los superados y proponer fixes con
+commit semántico (author/sign-off `williamjmorenor@gmail.com`) sin cerrar los
+no resueltos.
+
+### Implementación
+
+- Se verificó por código cada issue de los lotes S2P, O2C, BANK e INV-AUDIT más
+  los tickets AUDIT-001..010 y los de funcionalidad (paralelo con subagentes de
+  exploración sobre archivos/líneas exactos).
+- **Cerrados (31):** #287–#292, #294–#298, #300–#302, #304–#308, #310,
+  #312–#318, #319, #320, #277 y #253. Cada cierre incluye comentario con el
+  commit verificador y evidencia file:line.
+- **Fixes implementados (4 commits, issues sin cerrar):**
+  - `f4de24b` fix(bank): scope reconciliation routes by company access (#309).
+  - `9f64329` fix(bank): count only approved payments for order advance capacity (#311).
+  - `345aa24` fix(o2c): reject negative or qty × rate inconsistent invoice lines (#299).
+  - `75a0aab` fix(o2c): always settle advance netting against invoice GL (#303).
+- **Decisión de diseño (#303):** el neteo GL de anticipo contra factura se
+  genera siempre que la compañía tenga cuentas de anticipo configuradas; el
+  flag `apply_advances_automatically` deja de silenciar el asiento (queda como
+  configuración heredada en admin) para evitar divergencia subledger↔GL.
+- **Quedan abiertos:** #293 (serialización FOR UPDATE presente; falta constraint
+  DB por duplicados históricos sin preflight), #276/#278/#279/#280/#281/#282/
+  #283/#284/#285 (matrices/cobertura de auditoría, parcialmente implementadas),
+  y #189/#193/#197/#246/#249/#250/#251/#256 (features/cobertura de pruebas).
+- Calidad: Black, Ruff, Flake8 y mypy pasan en los archivos tocados. Tests
+  focales de document_flow_tree, reconciliation_reports, posting_engine y
+  bank_account_numbering ejecutados en segundo plano (resultado en
+  `test_results_fixes.log`).
+
 ## 2026-08-10 — Corrección de saldos de inventario para movimientos retroactivos
 
 ### Petición
