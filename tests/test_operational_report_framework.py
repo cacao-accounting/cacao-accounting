@@ -224,9 +224,13 @@ def test_multicurrency_bank_reports(app_ctx):
     database.session.flush()
 
     # Configure NIO account
-    account_nio = BankAccount(bank_id=bank.id, company="cacao", account_name="NIO Account", currency="NIO", account_no="NIO-123")
+    account_nio = BankAccount(
+        bank_id=bank.id, company="cacao", account_name="NIO Account", currency="NIO", account_no="NIO-123"
+    )
     # Configure USD account
-    account_usd = BankAccount(bank_id=bank.id, company="cacao", account_name="USD Account", currency="USD", account_no="USD-123")
+    account_usd = BankAccount(
+        bank_id=bank.id, company="cacao", account_name="USD Account", currency="USD", account_no="USD-123"
+    )
     database.session.add_all([account_nio, account_usd])
     database.session.flush()
 
@@ -251,6 +255,17 @@ def test_multicurrency_bank_reports(app_ctx):
                 currency="USD",
                 docstatus=1,
             ),
+            PaymentEntry(
+                company="cacao",
+                posting_date=date(2026, 5, 4),
+                payment_type="internal_transfer",
+                bank_account_id=account_usd.id,
+                target_bank_account_id=account_nio.id,
+                paid_amount=Decimal("100.00"),
+                received_amount=Decimal("3600.00"),
+                currency="USD",
+                docstatus=1,
+            ),
         ]
     )
     database.session.commit()
@@ -263,27 +278,25 @@ def test_multicurrency_bank_reports(app_ctx):
 
     # Verify totals are dictionaries grouped by currency
     assert isinstance(movement_report.totals["incoming_amount"], dict)
-    assert movement_report.totals["incoming_amount"]["NIO"] == Decimal("3600.00")
+    assert movement_report.totals["incoming_amount"]["NIO"] == Decimal("7200.00")
     assert movement_report.totals["incoming_amount"]["USD"] == Decimal("100.00")
     assert movement_report.totals["outgoing_amount"]["NIO"] == Decimal("0.00")
-    assert movement_report.totals["outgoing_amount"]["USD"] == Decimal("0.00")
-    assert movement_report.totals["running_balance"]["NIO"] == Decimal("3600.00")
-    assert movement_report.totals["running_balance"]["USD"] == Decimal("100.00")
+    assert movement_report.totals["outgoing_amount"]["USD"] == Decimal("100.00")
+    assert movement_report.totals["running_balance"]["NIO"] == Decimal("7200.00")
+    assert movement_report.totals["running_balance"]["USD"] == Decimal("0.00")
 
     # Verify that row-level running_balance is None for all rows since there are multiple currencies
     for row in movement_report.rows:
         assert row.values["running_balance"] is None
 
     # 2. Test get_bank_balance_summary
-    balance_report = get_bank_balance_summary(
-        BankingFilters(company="cacao", as_of_date=date(2026, 5, 31))
-    )
+    balance_report = get_bank_balance_summary(BankingFilters(company="cacao", as_of_date=date(2026, 5, 31)))
 
     # Verify totals are dictionaries grouped by currency
     assert isinstance(balance_report.totals["ending_balance"], dict)
-    assert balance_report.totals["receipts_amount"]["NIO"] == Decimal("3600.00")
+    assert balance_report.totals["receipts_amount"]["NIO"] == Decimal("7200.00")
     assert balance_report.totals["receipts_amount"]["USD"] == Decimal("100.00")
     assert balance_report.totals["payments_amount"]["NIO"] == Decimal("0.00")
-    assert balance_report.totals["payments_amount"]["USD"] == Decimal("0.00")
+    assert balance_report.totals["payments_amount"]["USD"] == Decimal("100.00")
     assert balance_report.totals["ending_balance"]["NIO"] == Decimal("0.00")
     assert balance_report.totals["ending_balance"]["USD"] == Decimal("0.00")

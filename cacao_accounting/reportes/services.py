@@ -1243,6 +1243,7 @@ def _build_payment_row_values(
     party_names: dict[str, str],
 ) -> dict[str, object]:
     bank_account = bank_accounts.get(bank_account_id) if bank_account_id else None
+    currency = bank_account.currency if bank_account and bank_account.currency else payment.currency
     return {
         "posting_date": payment.posting_date,
         "document_no": payment.document_no or payment.id,
@@ -1253,7 +1254,7 @@ def _build_payment_row_values(
         "reference_no": payment.reference_no,
         "incoming_amount": incoming,
         "outgoing_amount": outgoing,
-        "currency": payment.currency,
+        "currency": currency,
         "status": "cancelled" if payment.docstatus == 2 else "submitted",
         "remarks": payment.remarks,
     }
