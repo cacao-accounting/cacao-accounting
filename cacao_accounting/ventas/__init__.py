@@ -3148,6 +3148,7 @@ def ventas_factura_venta_submit(invoice_id: str):
             )
         _validate_sales_order_requirement(registro)
         _validate_sales_invoice_quantities(invoice_id)
+        _validate_sales_invoice_line_amounts(registro, items)
         warnings = _validate_invoice_prices_against_source(registro)
         from cacao_accounting.approval_engine import ApprovalEngine
 
