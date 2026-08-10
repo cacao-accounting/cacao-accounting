@@ -152,7 +152,7 @@ def create_journal_draft(
     return journal
 
 
-def submit_journal(journal_id: str) -> list[Any]:
+def submit_journal(journal_id: str, commit: bool = True) -> list[Any]:
     """Contabiliza un comprobante manual en borrador."""
     journal = get_journal(journal_id)
     if journal is None:
@@ -174,7 +174,8 @@ def submit_journal(journal_id: str) -> list[Any]:
         entries = post_comprobante_contable(journal, ledger_code=_selected_books_for_journal(journal))
         sync_journal_document_relations(journal)
     except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
-        database.session.rollback()
+        if commit:
+            database.session.rollback()
         raise JournalValidationError(str(exc)) from exc
     journal.status = JOURNAL_STATUS_SUBMITTED
 
@@ -187,7 +188,8 @@ def submit_journal(journal_id: str) -> list[Any]:
     if journal.recurrent_application_id:
         application = database.session.get(RecurringJournalApplication, journal.recurrent_application_id, with_for_update=True)
         if not application or application.journal_id != journal.id:
-            database.session.rollback()
+            if commit:
+                database.session.rollback()
             raise JournalValidationError("La aplicación recurrente del comprobante no es válida.")
         application.status = "applied"
         template = database.session.get(RecurringJournalTemplate, application.template_id)
@@ -206,7 +208,10 @@ def submit_journal(journal_id: str) -> list[Any]:
     from cacao_accounting.printing.validation import ValidationService
 
     ValidationService().update_validation_from_document(journal)
-    database.session.commit()
+    if commit:
+        database.session.commit()
+    else:
+        database.session.flush()
     return entries
 
 

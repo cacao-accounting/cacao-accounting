@@ -650,7 +650,7 @@ def _post_bank_difference_adjustment(
 
     try:
         journal = create_bank_difference_journal(reconciliation_id, difference_amount)
-        submit_journal(journal.id)
+        submit_journal(journal.id, commit=False)
     except (BankStatementError, JournalValidationError) as exc:
         raise BankReconciliationError(str(exc)) from exc
 

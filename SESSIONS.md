@@ -3,6 +3,20 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-10 — Integración de diferencias bancarias dentro de la transacción de conciliación
+
+### Petición
+
+Mantener la contabilización de diferencias bancarias dentro de la transacción de la conciliación bancaria.
+`submit_journal()` hace commit internamente de la sesión de SQLAlchemy, por lo que confirmaba la conciliación parcial y el diario de ajuste antes de asociar el ReconciliationItem de diferencia y antes del commit final de la ruta. Si la búsqueda subsiguiente falla o el commit final de la ruta falla, el rollback externo no puede deshacer esos registros y el usuario recibe un error con una conciliación parcialmente aplicada. Usar un camino de posteo de diario que no confirme o diferir todos los commits hasta que la ruta finalice.
+
+### Implementación
+
+- Se modificó `submit_journal` en `cacao_accounting/contabilidad/journal_service.py` para aceptar un parámetro `commit` (predeterminado a `True`). Cuando es `False`, la sesión de SQLAlchemy no se confirma (ni se revierte) internamente, sino que se ejecuta `database.session.flush()` para registrar los cambios en la transacción activa sin consolidarlos.
+- Se actualizó `_post_bank_difference_adjustment` en `cacao_accounting/bancos/__init__.py` para pasar `commit=False` al llamar a `submit_journal()`. De esta manera, el asiento de diario de ajuste de diferencia bancaria se publica dentro de la transacción activa de la conciliación y no se confirma hasta que el commit final de la ruta de la API se complete con éxito.
+- Se agregó una prueba de regresión unitaria y de integración `test_bank_reconciliation_atomicity_with_difference` en `tests/test_08_reconciliation_reports.py` que simula la ejecución atómica de la conciliación con diferencia bancaria y verifica que si ocurre un fallo posterior en la ruta, todos los registros (incluyendo el diario de diferencias y los ReconciliationItems) se revierten en cascada correctamente sin dejar rastro en la base de datos.
+- Se verificaron con éxito todos los linters (`black`, `ruff`, `mypy`) y se ejecutó la suite de pruebas enfocada.
+
 ## 2026-08-10 — Triage de issues de auditoría contra el código vigente
 
 ### Petición

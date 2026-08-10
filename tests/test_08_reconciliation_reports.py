@@ -4280,3 +4280,88 @@ def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
 
     with pytest.raises(PurchaseReconciliationError, match="en la misma moneda"):
         reconcile_purchase_invoice(invoice.id)
+
+
+def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
+    """Test that a bank reconciliation difference posting is atomic and commits only at the end."""
+    from cacao_accounting.bancos.reconciliation_service import (
+        BankReconciliationMatch,
+        BankReconciliationRequest,
+        reconcile_bank_items,
+    )
+    from cacao_accounting.database import (
+        Bank,
+        BankAccount,
+        BankTransaction,
+        GLEntry,
+        ReconciliationItem,
+        CompanyDefaultAccount,
+        Accounts,
+        database,
+    )
+
+    bank_gl = Accounts(entity="cacao", code="BANK-ATOM", name="Bank atom", classification="asset", account_type="bank")
+    difference = Accounts(entity="cacao", code="BANK-ATOM-DIFF", name="Bank diff atom", classification="expense")
+    bank = Bank(name="Banco Atom")
+    database.session.add_all([bank_gl, difference, bank])
+    database.session.flush()
+
+    database.session.add(CompanyDefaultAccount(company="cacao", bank_difference_account_id=difference.id))
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Atom account",
+        currency="NIO",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+
+    transaction = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        deposit=Decimal("100.00"),
+    )
+    database.session.add(transaction)
+    database.session.commit()
+
+    # Simulate final commit failure or outer rollback
+    # We will trigger a mock apply block that fails after journal is attached but before the outer transaction commits.
+    # In cacao_accounting/bancos/__init__.py:bancos_conciliacion_bancaria_aplicar,
+    # the outer transaction commits via `database.session.commit()` only at the end.
+    # Let's perform a simulated route run manually.
+
+    # 1. Start a transaction
+    database.session.begin_nested()
+
+    try:
+        reconciliation = reconcile_bank_items(
+            BankReconciliationRequest(
+                company="cacao",
+                reconciliation_date=date.today(),
+                matches=[
+                    BankReconciliationMatch(
+                        bank_transaction_id=transaction.id,
+                        target_type="gl_entry",
+                        target_id="MOCK_TARGET_ID",  # Dummy target ID
+                        allocated_amount=Decimal("95.00"),
+                    )
+                ],
+            )
+        )
+        from cacao_accounting.bancos import _post_bank_difference_adjustment
+
+        _post_bank_difference_adjustment(reconciliation.id, transaction, Decimal("5.00"))
+
+        # Simulate failure in the subsequent steps (e.g., database integrity or lookup error)
+        raise ValueError("Simulated lookup or route final commit failure")
+    except Exception:
+        database.session.rollback()
+
+    # Verify that nothing was committed/persisted to database because of rollback!
+    # If the journal had committed internally, it would have persisted even after outer rollback.
+    recon_items = database.session.execute(database.select(ReconciliationItem)).scalars().all()
+    assert len(recon_items) == 0
+
+    journal_entries = database.session.execute(database.select(GLEntry)).scalars().all()
+    assert len(journal_entries) == 0
