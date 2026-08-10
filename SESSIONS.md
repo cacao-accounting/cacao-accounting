@@ -2100,3 +2100,12 @@ Limitar la detección de facturas 2-way precedentes a una recepción de compra e
   ventas, aislamiento por libro y controles de inventario.
 - El merge conserva los cambios entrantes de migraciones, dependencias y
   pruebas, sin descartar funcionalidad existente.
+
+## 2026-08-10 — Corrección de facturas PO-only y recepciones retroactivas
+
+- Se restauró el cálculo de facturas 2-way aprobadas posteriormente para que
+  una recepción retroactiva pueda liquidar el saldo pendiente de GRNI.
+- Las facturas pasan a usar la cuenta puente cuando existe una recepción
+  aprobada cronológicamente anterior, incluso sin `purchase_receipt_id`.
+- Se agregaron regresiones para facturas futuras y el reconocimiento de
+  recepciones aprobadas.

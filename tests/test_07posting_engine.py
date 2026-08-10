@@ -4015,9 +4015,12 @@ def test_operational_posting_multimoneda_real(app_ctx):
         assert reversal.credit_in_account_currency == original.debit_in_account_currency
 
 
-def test_late_two_way_invoice_amounts_excludes_future_invoices(app_ctx):
-    """Test that _late_two_way_invoice_amounts excludes future dated invoices."""
-    from cacao_accounting.accounting_engine.document_builders import _late_two_way_invoice_amounts
+def test_late_two_way_invoice_amounts_includes_future_invoices(app_ctx):
+    """Test that a later-approved PO-only invoice is available for a backdated receipt."""
+    from cacao_accounting.accounting_engine.document_builders import (
+        _late_two_way_invoice_amounts,
+        _purchase_invoice_has_receipt,
+    )
     from cacao_accounting.database import (
         PurchaseReceipt,
         PurchaseInvoice,
@@ -4030,6 +4033,7 @@ def test_late_two_way_invoice_amounts_excludes_future_invoices(app_ctx):
         posting_date=date(2026, 5, 10),
         supplier_id="SUPP-LTW",
         purchase_order_id="PO-LTW",
+        docstatus=1,
     )
     database.session.add(receipt)
     database.session.flush()
@@ -4082,7 +4086,9 @@ def test_late_two_way_invoice_amounts_excludes_future_invoices(app_ctx):
     # Run the utility function
     amounts = _late_two_way_invoice_amounts(receipt)
 
-    # Check results
+    # A receipt that was backdated before the invoice was approved must still
+    # account for the invoice so the GRNI balance can be settled.
     assert "ITEM-A" in amounts
     assert amounts["ITEM-A"] == Decimal("50.00")
-    assert "ITEM-B" not in amounts
+    assert amounts["ITEM-B"] == Decimal("50.00")
+    assert _purchase_invoice_has_receipt(invoice_future, "cacao") is True

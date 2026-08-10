@@ -225,7 +225,6 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
             PurchaseInvoice.purchase_receipt_id.is_(None),
             PurchaseInvoice.docstatus == 1,
             PurchaseInvoice.is_return.is_(False),
-            PurchaseInvoice.posting_date <= document.posting_date,
         )
     ).scalars()
     amounts: dict[str, Decimal] = {}
@@ -899,7 +898,7 @@ def _purchase_invoice_account_lines(
     company: str,
 ) -> list[AccountLineSpec]:
     """Resolve the non-tax lines for purchase invoices and credit notes."""
-    use_bridge_account = bool(getattr(document, "purchase_receipt_id", None))
+    use_bridge_account = _purchase_invoice_has_receipt(document, company)
     side = "credit" if _is_purchase_credit_note(document) else "debit"
     account_type = "bridge" if use_bridge_account else "expense"
     specs: list[AccountLineSpec] = []
@@ -917,6 +916,29 @@ def _purchase_invoice_account_lines(
             )
         )
     return specs
+
+
+def _purchase_invoice_has_receipt(document: PurchaseInvoice, company: str) -> bool:
+    """Return whether the invoice has an approved receipt dated no later than it."""
+    if getattr(document, "purchase_receipt_id", None):
+        return True
+    if not getattr(document, "purchase_order_id", None):
+        return False
+    return (
+        database.session.execute(
+            select(PurchaseReceipt.id)
+            .where(
+                PurchaseReceipt.company == company,
+                PurchaseReceipt.supplier_id == document.supplier_id,
+                PurchaseReceipt.purchase_order_id == document.purchase_order_id,
+                PurchaseReceipt.docstatus == 1,
+                PurchaseReceipt.is_return.is_(False),
+                PurchaseReceipt.posting_date <= document.posting_date,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
 
 
 def _eligible_discount_amount(
