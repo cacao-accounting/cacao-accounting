@@ -224,6 +224,8 @@ def _column_label(column: str, ledger_currency: str | None) -> str:
 def _format_cell(column: str, value: object, ledger_currency: str | None) -> str:
     if value is None or value == "":
         return _EMPTY_CELL_VALUE
+    if isinstance(value, dict):
+        return " / ".join(f"{curr} {_format_number(val)}" for curr, val in value.items())
     if column in _MONEY_COLUMNS:
         return _format_number(value)
     if column == "posting_date" and isinstance(value, date):
