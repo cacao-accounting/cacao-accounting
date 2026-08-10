@@ -2662,21 +2662,31 @@ def get_inventory_valuation(filters: OperationalReportFilters) -> PaginatedRepor
         query = query.filter_by(warehouse=filters.warehouse)
     if filters.date_to:
         query = query.where(StockValuationLayer.posting_date <= filters.date_to)
-    latest_layers: dict[tuple[str, str], StockValuationLayer] = {}
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
     for layer in database.session.execute(
         query.order_by(StockValuationLayer.posting_date, StockValuationLayer.created, StockValuationLayer.id)
     ).scalars():
-        latest_layers[(layer.item_code, layer.warehouse)] = layer
+        key = (layer.item_code, layer.warehouse)
+        if key not in grouped:
+            grouped[key] = {
+                "item_code": layer.item_code,
+                "warehouse": layer.warehouse,
+                "remaining_qty": Decimal("0"),
+                "remaining_stock_value": Decimal("0"),
+            }
+        grouped[key]["remaining_qty"] += _decimal_value(layer.qty)
+        grouped[key]["remaining_stock_value"] += _decimal_value(layer.stock_value_difference)
     rows = [
         ReportRow(
             {
-                "item_code": layer.item_code,
-                "warehouse": layer.warehouse,
-                "remaining_qty": _decimal_value(layer.remaining_qty),
-                "remaining_stock_value": _decimal_value(layer.remaining_stock_value),
+                "item_code": val["item_code"],
+                "warehouse": val["warehouse"],
+                "remaining_qty": _decimal_value(val["remaining_qty"]),
+                "remaining_stock_value": _decimal_value(val["remaining_stock_value"]),
             }
         )
-        for layer in latest_layers.values()
+        for val in grouped.values()
+        if _decimal_value(val["remaining_qty"]) != Decimal("0")
     ]
     rows.sort(key=lambda row: (str(row.values["item_code"]), str(row.values["warehouse"])))
     return PaginatedReport(
