@@ -1183,7 +1183,7 @@ def get_reconciliation_report(company: str, as_of_date: date | None = None) -> P
             ReconciliationItem,
             ReconciliationItem.reconciliation_id == Reconciliation.id,
         )
-        .filter(Reconciliation.company == company)
+        .filter(Reconciliation.company == company, ReconciliationItem.status != "cancelled")
     )
     if as_of_date:
         query = query.where(Reconciliation.recon_date <= as_of_date)

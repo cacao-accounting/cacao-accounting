@@ -3,6 +3,19 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Exclusión de ítems cancelados del total conciliado de bancos
+
+### Petición
+
+`get_reconciliation_report` sumaba ítems de conciliación cancelados (`status == "cancelled"`) en `bank_reconciled_amount`. Al cancelar un pago, `_apply_payment_cancellation_hooks` marca con `status="cancelled"` los ítems de conciliación correspondientes, pero persisten en la base de datos, lo que generaba una sobreestimación del monto conciliado y diferencias contradictorias con los reportes.
+
+### Implementación
+
+- Se modificó `get_reconciliation_report` en `cacao_accounting/reportes/services.py`.
+- Se agregó el filtro `ReconciliationItem.status != "cancelled"` a la consulta principal de `ReconciliationItem` de conciliaciones bancarias. Esto los excluye de las filas devueltas y por ende de la sumatoria total del monto conciliado.
+- Se añadió la prueba unitaria `test_get_reconciliation_report_excludes_cancelled_items` en `tests/test_08_reconciliation_reports.py` para verificar que la cancelación de un pago marque correctamente el ítem como cancelado y que éste ya no se sume en el total reportado.
+- Se verificó que todas las pruebas pasen al 100%.
+
 ## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
 
 - Se eliminó la unicidad artificial por compañía/período de `ExchangeRevaluation`.

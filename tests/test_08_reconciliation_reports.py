@@ -4678,3 +4678,60 @@ def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
     ).scalar_one()
     assert withdrawal_difference_item.amount == Decimal("15")
     assert withdrawal_difference_item.allocated_amount == Decimal("15")
+
+
+def test_get_reconciliation_report_excludes_cancelled_items(app_ctx):
+    from cacao_accounting.bancos import _apply_payment_cancellation_hooks
+    from cacao_accounting.bancos.reconciliation_service import (
+        BankReconciliationMatch,
+        BankReconciliationRequest,
+        reconcile_bank_items,
+    )
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, PaymentEntry, database
+    from cacao_accounting.reportes.services import get_reconciliation_report
+
+    bank = Bank(name="Banco Report Test")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta Report Test")
+    database.session.add(bank_account)
+    database.session.flush()
+
+    transaction = BankTransaction(bank_account_id=bank_account.id, posting_date=date(2026, 5, 5), deposit=Decimal("100.00"))
+    payment = PaymentEntry(
+        company="cacao", posting_date=date(2026, 5, 5), payment_type="receive", received_amount=Decimal("100.00"), docstatus=1
+    )
+    database.session.add_all([transaction, payment])
+    database.session.commit()
+
+    # Reconcile payment against transaction
+    reconcile_bank_items(
+        BankReconciliationRequest(
+            company="cacao",
+            reconciliation_date=date(2026, 5, 5),
+            matches=[
+                BankReconciliationMatch(transaction.id, "payment_entry", payment.id, Decimal("100.00")),
+            ],
+        )
+    )
+    database.session.commit()
+
+    # Verify reconciliation report lists 100 bank reconciled amount
+    report_before = get_reconciliation_report(company="cacao")
+    assert report_before.totals["bank_reconciled_amount"] == Decimal("100.00")
+    assert len(report_before.rows) >= 1
+    # Check that there is a row with status == "reconciled"
+    assert any(
+        row.values["reconciliation_id"] is not None and row.values["status"] == "reconciled" for row in report_before.rows
+    )
+
+    # Cancel payment, which calls the cancellation hooks and sets ReconciliationItem status to cancelled
+    _apply_payment_cancellation_hooks(payment)
+    database.session.commit()
+
+    # Verify reconciliation report now lists 0 bank reconciled amount and the cancelled items are excluded from rows
+    report_after = get_reconciliation_report(company="cacao")
+    assert report_after.totals["bank_reconciled_amount"] == Decimal("0.00")
+    # All rows with that reconciliation_id must NOT have status as "cancelled", because they are excluded from the main query
+    cancelled_report_rows = [row for row in report_after.rows if row.values["status"] == "cancelled"]
+    assert len(cancelled_report_rows) == 0
