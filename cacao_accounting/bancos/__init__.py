@@ -655,7 +655,11 @@ def _post_bank_difference_adjustment(
         signed_difference_amount = abs(difference_amount)
 
     try:
-        journal = create_bank_difference_journal(reconciliation_id, signed_difference_amount)
+        journal = create_bank_difference_journal(
+            reconciliation_id,
+            signed_difference_amount,
+            transaction_id=transaction.id,
+        )
         submit_journal(journal.id, commit=False)
     except (BankStatementError, JournalValidationError) as exc:
         raise BankReconciliationError(str(exc)) from exc

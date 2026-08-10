@@ -3153,20 +3153,21 @@ def ventas_factura_venta_submit(invoice_id: str):
         _validate_sales_invoice_quantities(invoice_id)
         _validate_sales_invoice_line_amounts(registro, items)
         warnings = _validate_invoice_prices_against_source(registro)
-        from cacao_accounting.approval_engine import ApprovalEngine
-
-        if ApprovalEngine.handle_submission(registro, current_user, "Factura de venta"):
-            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
-
         if registro.document_type == "sales_credit_note":
             _validate_reversal_of(
                 registro.reversal_of or "",
                 registro.customer_id,
                 registro.company,
-                note_amount=registro.grand_total or Decimal("0"),
+                note_amount=Decimal(str(registro.grand_total or "0")),
                 document_type=registro.document_type,
                 posting_date=registro.posting_date,
+                lock_source=True,
             )
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        if ApprovalEngine.handle_submission(registro, current_user, "Factura de venta"):
+            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
+
         submit_document(registro)
         _persist_sales_reversal_relation(registro)
         if registro.update_inventory and not registro.is_return and not registro.delivery_note_id:
@@ -3353,6 +3354,7 @@ def _validate_reversal_of(
     note_amount: Decimal | None = None,
     document_type: str | None = None,
     posting_date: date | None = None,
+    lock_source: bool = False,
 ) -> None:
     """Valida origen y limite acumulado de una nota de credito.
 
@@ -3361,7 +3363,10 @@ def _validate_reversal_of(
     superar el saldo pendiente de la factura considerando notas y pagos ya
     aplicados.
     """
-    source = database.session.get(SalesInvoice, reversal_of, with_for_update=True)
+    source_query = database.select(SalesInvoice).where(SalesInvoice.id == reversal_of)
+    if lock_source:
+        source_query = source_query.with_for_update()
+    source = database.session.execute(source_query).scalar_one_or_none()
     if not source:
         raise ValueError(f"La factura origen '{reversal_of}' no existe.")
     if source.docstatus != 1:

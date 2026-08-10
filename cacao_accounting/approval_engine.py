@@ -420,6 +420,18 @@ class ApprovalEngine:
                 )
             _validate_sales_invoice_quantities(document.id)
             _validate_invoice_prices_against_source(document)
+            if getattr(document, "document_type", None) == "sales_credit_note":
+                from cacao_accounting.ventas import _validate_reversal_of
+
+                _validate_reversal_of(
+                    document.reversal_of or "",
+                    document.customer_id,
+                    document.company,
+                    note_amount=Decimal(str(document.grand_total or "0")),
+                    document_type=document.document_type,
+                    posting_date=document.posting_date,
+                    lock_source=True,
+                )
         elif doctype == "purchase_invoice":
             from cacao_accounting.compras import (
                 _validate_duplicate_supplier_invoice,
