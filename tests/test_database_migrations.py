@@ -59,6 +59,13 @@ def test_db_init_and_migrate_record_a_real_revision(tmp_path: Path) -> None:
     assert next(column[3] for column in entity_code if column[1] == "code") == 1
     assert next(column[3] for column in book_code if column[1] == "code") == 1
 
+    with sqlite3.connect(database_path) as connection:
+        entity_code = connection.execute("PRAGMA table_info(entity)").fetchall()
+        book_code = connection.execute("PRAGMA table_info(book)").fetchall()
+
+    assert next(column[3] for column in entity_code if column[1] == "code") == 1
+    assert next(column[3] for column in book_code if column[1] == "code") == 1
+
 
 def test_db_migrate_rejects_an_uninitialized_database(tmp_path: Path) -> None:
     """Migration must not report success when there is no application schema."""

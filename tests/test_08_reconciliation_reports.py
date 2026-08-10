@@ -469,6 +469,39 @@ def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
         )
 
 
+def test_bank_reconciliation_locks_shared_target(app_ctx, monkeypatch):
+    """El destino compartido se lee con FOR UPDATE antes de calcular pendiente."""
+    from cacao_accounting.bancos import reconciliation_service
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, PaymentEntry, database
+
+    bank = Bank(name="Banco lock target")
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta lock target")
+    database.session.add(account)
+    database.session.flush()
+    transaction = BankTransaction(bank_account_id=account.id, posting_date=date(2026, 5, 5), deposit=Decimal("100"))
+    payment = PaymentEntry(
+        company="cacao", posting_date=date(2026, 5, 5), payment_type="receive", received_amount=Decimal("100"), docstatus=1
+    )
+    database.session.add_all([transaction, payment])
+    database.session.commit()
+
+    calls = []
+    original_get = database.session.get
+
+    def recording_get(model, ident, **kwargs):
+        calls.append((model, ident, kwargs.get("with_for_update")))
+        return original_get(model, ident, **kwargs)
+
+    monkeypatch.setattr(database.session, "get", recording_get)
+    reconciliation_service._validate_reconciliation_match(
+        match=reconciliation_service.BankReconciliationMatch(transaction.id, "payment_entry", payment.id, Decimal("100")),
+        company="cacao",
+    )
+    assert (PaymentEntry, payment.id, True) in calls
+
+
 def test_bank_candidates_match_direction_and_allow_partial_payment(app_ctx):
     from cacao_accounting.bancos.reconciliation_service import find_bank_reconciliation_candidates
     from cacao_accounting.database import Bank, BankAccount, BankTransaction, PaymentEntry, database
@@ -592,6 +625,151 @@ def test_posted_payment_bank_dimension_reconciles_with_bank_summary(app_ctx):
 
     assert bank_line.bank_account_id == bank_account.id
     assert report.totals["ending_balance"] == Decimal("-100.0000")
+
+
+def test_reconciliation_matrix_isolates_selected_ledger(app_ctx):
+    """La matriz no debe mezclar el saldo de otro libro contable."""
+    from cacao_accounting.database import Accounts, Book, CompanyDefaultAccount, GLEntry, database
+    from cacao_accounting.reportes.services import ReconciliationFilters, get_reconciliation_matrix
+
+    receivable = Accounts(
+        entity="cacao",
+        code="AR-MATRIX",
+        name="Cuentas por cobrar matriz",
+        active=True,
+        enabled=True,
+        classification="Activo",
+        account_type="receivable",
+    )
+    primary = Book(code="MATRIX-P", name="Matriz primaria", entity="cacao", currency="NIO", is_primary=True)
+    secondary = Book(code="MATRIX-S", name="Matriz secundaria", entity="cacao", currency="NIO")
+    database.session.add_all([receivable, primary, secondary])
+    database.session.flush()
+    database.session.add(CompanyDefaultAccount(company="cacao", default_receivable=receivable.id))
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                ledger_id=primary.id,
+                account_id=receivable.id,
+                account_code=receivable.code,
+                debit=Decimal("100.00"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="MATRIX-P-1",
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                ledger_id=secondary.id,
+                account_id=receivable.id,
+                account_code=receivable.code,
+                debit=Decimal("900.00"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="MATRIX-S-1",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    report = get_reconciliation_matrix(ReconciliationFilters(company="cacao", ledger=primary.code))
+    ar_row = next(row.values for row in report.rows if row.values["area"] == "AR")
+    assert ar_row["gl_control_amount"] == Decimal("100.00")
+    assert ar_row["difference"] == Decimal("-100.00")
+
+
+def test_reconciliation_report_diagnoses_posting_without_bank_transaction(app_ctx):
+    """El reporte identifica pagos posteados sin extracto bancario enlazado."""
+    from cacao_accounting.database import Bank, BankAccount, PaymentEntry, database
+    from cacao_accounting.reportes.services import get_reconciliation_report
+
+    bank = Bank(name="Banco diagnóstico")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta diagnóstico",
+        account_no="DIAG-001",
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 20),
+        payment_type="pay",
+        bank_account_id=bank_account.id,
+        paid_amount=Decimal("25.00"),
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.commit()
+
+    report = get_reconciliation_report(company="cacao", as_of_date=date(2026, 5, 31))
+
+    diagnostics = [row.values for row in report.rows if row.values["recon_type"] == "bank_diagnostic"]
+    assert any(
+        row["status"] == "posting_without_bank_transaction"
+        and row["source_id"] == payment.id
+        and row["amount"] == Decimal("25.00")
+        for row in diagnostics
+    )
+    assert report.totals["bank_orphan_count"] == Decimal("1")
+
+
+def test_reconciliation_matrix_exposes_uninvoiced_receipts_against_grni(app_ctx):
+    """La matriz muestra recepciones pendientes contra la cuenta puente GRNI."""
+    from cacao_accounting.database import (
+        Accounts,
+        Book,
+        CompanyDefaultAccount,
+        Item,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        UOM,
+        database,
+    )
+    from cacao_accounting.reportes.services import ReconciliationFilters, get_reconciliation_matrix
+
+    bridge = Accounts(
+        entity="cacao",
+        code="GRNI-MATRIX",
+        name="GRNI matriz",
+        active=True,
+        enabled=True,
+        classification="Pasivo",
+        account_type="liability",
+    )
+    book = Book(code="GRNI-MATRIX-BOOK", name="GRNI matrix book", entity="cacao", currency="NIO", is_primary=True)
+    uom = UOM(code="EA", name="Each")
+    item = Item(code="ITEM-GRNI-MATRIX", name="Item GRNI", item_type="goods", is_stock_item=True, default_uom="EA")
+    receipt = PurchaseReceipt(company="cacao", posting_date=date(2026, 5, 15), docstatus=1, grand_total=Decimal("50"))
+    database.session.add_all([bridge, book, uom, item, receipt])
+    database.session.flush()
+    database.session.add_all(
+        [
+            CompanyDefaultAccount(company="cacao", bridge_account_id=bridge.id),
+            PurchaseReceiptItem(
+                purchase_receipt_id=receipt.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("10"),
+                qty_in_base_uom=Decimal("10"),
+                uom=uom.code,
+                rate=Decimal("5"),
+                amount=Decimal("50"),
+                base_amount=Decimal("50"),
+            ),
+        ]
+    )
+    database.session.commit()
+
+    report = get_reconciliation_matrix(ReconciliationFilters(company="cacao", ledger=None))
+    grni_row = next(row.values for row in report.rows if row.values["area"] == "GRNI/AP 3-way")
+    assert grni_row["subledger_amount"] == Decimal("-50")
+    assert grni_row["gl_control_amount"] == Decimal("0")
 
 
 def test_inventory_valuation_uses_latest_layer_at_cutoff(app_ctx):
@@ -2973,6 +3151,43 @@ def test_bank_statement_adapter_rejects_empty_movement(app_ctx):
     assert any("depósito o un retiro" in error for error in errors)
 
 
+def test_bank_company_lists_use_authorized_book_scope(app_ctx, monkeypatch):
+    """Los listados bancarios no exponen compañías fuera de los libros autorizados."""
+    import importlib
+    from types import SimpleNamespace
+
+    bancos_module = importlib.import_module("cacao_accounting.bancos")
+    from cacao_accounting.database import Bank, BankAccount, Book, Entity, database
+
+    other = Entity(code="other", name="Other", company_name="Other", tax_id="J0002", currency="NIO")
+    allowed_book = Book(code="CASH-SCOPE", name="Cash scope", entity="cacao", currency="NIO", is_primary=True)
+    other_book = Book(code="CASH-OTHER", name="Cash other", entity="other", currency="NIO", is_primary=True)
+    bank = Bank(name="Banco scope")
+    database.session.add_all([other, allowed_book, other_book, bank])
+    database.session.flush()
+    allowed = BankAccount(bank_id=bank.id, company="cacao", account_name="Permitida", account_no="SCOPE-1")
+    hidden = BankAccount(bank_id=bank.id, company="other", account_name="Oculta", account_no="SCOPE-2")
+    database.session.add_all([allowed, hidden])
+    database.session.commit()
+
+    monkeypatch.setattr(bancos_module, "current_user", SimpleNamespace(id="user-1", classification="user"))
+    monkeypatch.setattr(
+        bancos_module,
+        "Permisos",
+        lambda **_: SimpleNamespace(obtener_libros_autorizados=lambda *_args, **_kwargs: [allowed_book.id]),
+    )
+
+    with app_ctx.test_request_context("/bank-account/list"):
+        page = bancos_module._paginate_list(
+            BankAccount,
+            (BankAccount.account_name,),
+            database.select(BankAccount),
+            include_status=False,
+        )
+
+    assert [account.id for account in page.items] == [allowed.id]
+
+
 def test_bank_reconciliation_panel_ignores_invalid_historical_transaction(app_ctx, monkeypatch):
     import importlib
 
@@ -4065,3 +4280,401 @@ def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
 
     with pytest.raises(PurchaseReconciliationError, match="en la misma moneda"):
         reconcile_purchase_invoice(invoice.id)
+
+
+def test_partial_invoice_price_variance_scaling(app_ctx):
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        reconcile_purchase_invoice,
+        PurchaseMatchingConfig,
+        MatchingType,
+        seed_matching_config_for_company,
+    )
+    from cacao_accounting.database import (
+        UOM,
+        Item,
+        Warehouse,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseOrder,
+        PurchaseOrderItem,
+        database,
+    )
+
+    seed_matching_config_for_company("cacao")
+
+    # 1. Test 3-way price difference scaling
+    database.session.add_all(
+        [
+            UOM(code="EA-SCALE", name="Each SCALE"),
+            Item(code="ITEM-SCALE", name="Item SCALE", item_type="goods", is_stock_item=True, default_uom="EA-SCALE"),
+            Warehouse(code="WH-SCALE", name="Bodega SCALE", company="cacao"),
+        ]
+    )
+    database.session.flush()
+
+    # Ensure matching config is 3-way
+    cfg = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company="cacao")).scalar_one()
+    cfg.matching_type = MatchingType.THREE_WAY
+    database.session.commit()
+
+    # 100-unit receipt at rate 10 (amount = 1000)
+    receipt = PurchaseReceipt(
+        company="cacao", posting_date=date(2026, 5, 1), supplier_id="SUPP-SCALE", transaction_currency="USD", docstatus=1
+    )
+    database.session.add(receipt)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ITEM-SCALE",
+            qty=Decimal("100"),
+            qty_in_base_uom=Decimal("100"),
+            uom="EA-SCALE",
+            rate=Decimal("10.00"),
+            amount=Decimal("1000.00"),
+            warehouse="WH-SCALE",
+        )
+    )
+
+    # Partial invoice of 10 units at rate 12 (amount = 120)
+    # Price difference is 12 - 10 = 2 per unit
+    # Expected price variance for 10 units should be 10 * 2 = 20, not 100 * 2 = 200 (if reference_qty was used)
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        supplier_id="SUPP-SCALE",
+        purchase_receipt_id=receipt.id,
+        transaction_currency="USD",
+        docstatus=1,
+    )
+    database.session.add(invoice)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-SCALE",
+            qty=Decimal("10"),
+            uom="EA-SCALE",
+            rate=Decimal("12.00"),
+            amount=Decimal("120.00"),
+            warehouse="WH-SCALE",
+        )
+    )
+    database.session.commit()
+
+    result_3w = reconcile_purchase_invoice(invoice.id)
+    assert result_3w.price_difference == Decimal("20.00")
+
+    # 2. Test 2-way price difference scaling
+    # Switch matching config to 2-way
+    cfg.matching_type = MatchingType.TWO_WAY
+    database.session.commit()
+
+    order = PurchaseOrder(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        supplier_id="SUPP-SCALE2",
+        transaction_currency="USD",
+        docstatus=1,
+    )
+    database.session.add(order)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseOrderItem(
+            purchase_order_id=order.id,
+            item_code="ITEM-SCALE",
+            qty=Decimal("100"),
+            qty_in_base_uom=Decimal("100"),
+            uom="EA-SCALE",
+            rate=Decimal("10.00"),
+            amount=Decimal("1000.00"),
+        )
+    )
+
+    invoice_2w = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        supplier_id="SUPP-SCALE2",
+        purchase_order_id=order.id,
+        transaction_currency="USD",
+        docstatus=1,
+    )
+    database.session.add(invoice_2w)
+    database.session.flush()
+
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice_2w.id,
+            item_code="ITEM-SCALE",
+            qty=Decimal("10"),
+            uom="EA-SCALE",
+            rate=Decimal("12.00"),
+            amount=Decimal("120.00"),
+        )
+    )
+    database.session.commit()
+
+    result_2w = reconcile_purchase_invoice(invoice_2w.id)
+    assert result_2w.price_difference == Decimal("20.00")
+
+    # Restore matching config back to 3-way
+    cfg.matching_type = MatchingType.THREE_WAY
+    database.session.commit()
+
+
+def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
+    """Test that a bank reconciliation difference posting is atomic and commits only at the end."""
+    from cacao_accounting.bancos.reconciliation_service import (
+        BankReconciliationMatch,
+        BankReconciliationRequest,
+        reconcile_bank_items,
+    )
+    from cacao_accounting.database import (
+        Bank,
+        BankAccount,
+        BankTransaction,
+        GLEntry,
+        ReconciliationItem,
+        CompanyDefaultAccount,
+        Accounts,
+        database,
+    )
+
+    bank_gl = Accounts(entity="cacao", code="BANK-ATOM", name="Bank atom", classification="asset", account_type="bank")
+    difference = Accounts(entity="cacao", code="BANK-ATOM-DIFF", name="Bank diff atom", classification="expense")
+    bank = Bank(name="Banco Atom")
+    database.session.add_all([bank_gl, difference, bank])
+    database.session.flush()
+
+    database.session.add(CompanyDefaultAccount(company="cacao", bank_difference_account_id=difference.id))
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Atom account",
+        currency="NIO",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+
+    transaction = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        deposit=Decimal("100.00"),
+    )
+    database.session.add(transaction)
+    target_entry = GLEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        account_id=bank_gl.id,
+        debit=Decimal("100.00"),
+        credit=Decimal("0"),
+        voucher_type="manual_test",
+        voucher_id="TARGET-ATOM",
+        is_cancelled=False,
+        is_reversal=False,
+    )
+    database.session.add(target_entry)
+    database.session.commit()
+
+    # Simulate final commit failure or outer rollback
+    # We will trigger a mock apply block that fails after journal is attached but before the outer transaction commits.
+    # In cacao_accounting/bancos/__init__.py:bancos_conciliacion_bancaria_aplicar,
+    # the outer transaction commits via `database.session.commit()` only at the end.
+    # Let's perform a simulated route run manually.
+
+    # 1. Start a transaction
+    database.session.begin_nested()
+
+    reconciliation = reconcile_bank_items(
+        BankReconciliationRequest(
+            company="cacao",
+            reconciliation_date=date.today(),
+            matches=[
+                BankReconciliationMatch(
+                    bank_transaction_id=transaction.id,
+                    target_type="gl_entry",
+                    target_id=target_entry.id,
+                    allocated_amount=Decimal("95.00"),
+                )
+            ],
+        )
+    )
+    from cacao_accounting.bancos import _post_bank_difference_adjustment
+
+    _post_bank_difference_adjustment(reconciliation.id, transaction, Decimal("5.00"))
+
+    # The failure happens after the adjustment journal and reconciliation item exist.
+    try:
+        raise ValueError("Simulated lookup or route final commit failure")
+    except ValueError:
+        database.session.rollback()
+
+    # Verify that nothing was committed/persisted to database because of rollback!
+    # If the journal had committed internally, it would have persisted even after outer rollback.
+    recon_items = database.session.execute(database.select(ReconciliationItem)).scalars().all()
+    assert len(recon_items) == 0
+
+    journal_entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="journal_entry")).scalars().all()
+    )
+    assert len(journal_entries) == 0
+
+
+def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
+    """Verify that bank difference adjustments derive their sign based on deposit vs withdrawal."""
+    from cacao_accounting.bancos import _post_bank_difference_adjustment
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        BankTransaction,
+        Book,
+        CompanyDefaultAccount,
+        GLEntry,
+        Reconciliation,
+        ReconciliationItem,
+        database,
+    )
+
+    bank_gl = Accounts(entity="cacao", code="BANK-DEP", name="Bank Account", classification="asset", account_type="bank")
+    difference = Accounts(entity="cacao", code="BANK-DIFF-DEP", name="Bank difference", classification="expense")
+    bank = Bank(name="Banco DEP")
+    local_book = Book(entity="cacao", code="DEP-NIO", name="NIO", currency="NIO", status="activo", is_primary=True)
+    database.session.add_all(
+        [
+            bank_gl,
+            difference,
+            bank,
+            local_book,
+        ]
+    )
+    database.session.flush()
+
+    database.session.add(CompanyDefaultAccount(company="cacao", bank_difference_account_id=difference.id))
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="NIO account",
+        currency="NIO",
+        gl_account_id=bank_gl.id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+
+    # 1. Test Deposit Case
+    deposit_txn = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        deposit=Decimal("10"),
+    )
+    reconciliation_dep = Reconciliation(company="cacao", recon_date=date(2026, 5, 5), recon_type="bank")
+    database.session.add_all([deposit_txn, reconciliation_dep])
+    database.session.flush()
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation_dep.id,
+            reference_type="bank_transaction",
+            reference_id=deposit_txn.id,
+            source_type="bank_transaction",
+            source_id=deposit_txn.id,
+            amount=Decimal("10"),
+        )
+    )
+    database.session.commit()
+
+    _post_bank_difference_adjustment(reconciliation_dep.id, deposit_txn, Decimal("10"))
+    database.session.commit()
+
+    # Find the GL entries for the deposit adjustment
+    # Since deposit, the bank should be DEBITED, and difference account should be CREDITED.
+    entries_dep = (
+        database.session.execute(
+            database.select(GLEntry).filter(
+                GLEntry.voucher_type == "journal_entry",
+                GLEntry.account_id.in_([bank_gl.id, difference.id]),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    # We expect 2 entries: 1 debiting bank, 1 crediting difference
+    assert len(entries_dep) == 2
+    bank_entry = next(e for e in entries_dep if e.account_id == bank_gl.id)
+    diff_entry = next(e for e in entries_dep if e.account_id == difference.id)
+    assert bank_entry.debit == Decimal("10")
+    assert bank_entry.credit == Decimal("0")
+    assert diff_entry.credit == Decimal("10")
+    assert diff_entry.debit == Decimal("0")
+    deposit_difference_item = database.session.execute(
+        database.select(ReconciliationItem).filter_by(
+            reconciliation_id=reconciliation_dep.id,
+            target_id=bank_entry.id,
+        )
+    ).scalar_one()
+    assert deposit_difference_item.amount == Decimal("10")
+    assert deposit_difference_item.allocated_amount == Decimal("10")
+
+    # Clear GL entries for next test
+    for entry in entries_dep:
+        database.session.delete(entry)
+    database.session.commit()
+
+    # 2. Test Withdrawal Case
+    withdrawal_txn = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        withdrawal=Decimal("15"),
+    )
+    reconciliation_with = Reconciliation(company="cacao", recon_date=date(2026, 5, 5), recon_type="bank")
+    database.session.add_all([withdrawal_txn, reconciliation_with])
+    database.session.flush()
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation_with.id,
+            reference_type="bank_transaction",
+            reference_id=withdrawal_txn.id,
+            source_type="bank_transaction",
+            source_id=withdrawal_txn.id,
+            amount=Decimal("15"),
+        )
+    )
+    database.session.commit()
+
+    _post_bank_difference_adjustment(reconciliation_with.id, withdrawal_txn, Decimal("15"))
+    database.session.commit()
+
+    # Find the GL entries for the withdrawal adjustment
+    # Since withdrawal, the bank should be CREDITED, and difference account should be DEBITED.
+    entries_with = (
+        database.session.execute(
+            database.select(GLEntry).filter(
+                GLEntry.voucher_type == "journal_entry",
+                GLEntry.account_id.in_([bank_gl.id, difference.id]),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    assert len(entries_with) == 2
+    bank_entry_w = next(e for e in entries_with if e.account_id == bank_gl.id)
+    diff_entry_w = next(e for e in entries_with if e.account_id == difference.id)
+    assert bank_entry_w.credit == Decimal("15")
+    assert bank_entry_w.debit == Decimal("0")
+    assert diff_entry_w.debit == Decimal("15")
+    assert diff_entry_w.credit == Decimal("0")
+    withdrawal_difference_item = database.session.execute(
+        database.select(ReconciliationItem).filter_by(
+            reconciliation_id=reconciliation_with.id,
+            target_id=bank_entry_w.id,
+        )
+    ).scalar_one()
+    assert withdrawal_difference_item.amount == Decimal("15")
+    assert withdrawal_difference_item.allocated_amount == Decimal("15")

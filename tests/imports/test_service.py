@@ -158,3 +158,29 @@ def test_journal_import_with_book_uses_only_selected_book():
         )
 
         assert payload["books"] == ["FISC"]
+
+
+def test_journal_import_rejects_non_finite_amounts(monkeypatch):
+    monkeypatch.setattr(journal_entry_adapter, "is_period_open", lambda _company, _date: True)
+    errors = JournalEntryAdapter().validate_document(
+        [
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "debito": "NaN", "credito": "0"},
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "debito": "0", "credito": "0"},
+        ],
+        context={},
+    )
+
+    assert any("Monto inválido" in error for error in errors)
+
+
+def test_journal_import_balances_high_precision_amounts_without_float_rounding(monkeypatch):
+    monkeypatch.setattr(journal_entry_adapter, "is_period_open", lambda _company, _date: True)
+    errors = JournalEntryAdapter().validate_document(
+        [
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "debito": "0.123456789", "credito": "0"},
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "debito": "0", "credito": "0.123456789"},
+        ],
+        context={},
+    )
+
+    assert not any("no está balanceado" in error for error in errors)

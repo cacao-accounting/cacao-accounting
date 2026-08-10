@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -881,7 +882,7 @@ def test_invoice_submit_validates_against_receipt(app_ctx):
     from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
     from cacao_accounting.compras import _validate_invoice_quantities_against_receipt
 
-    order_item = _seed_purchase_order(app_ctx)
+    _seed_purchase_order(app_ctx)
     receipt = PurchaseReceipt(id="PR-INV-01", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     receipt_item = PurchaseReceiptItem(
         purchase_receipt_id="PR-INV-01",
@@ -962,7 +963,7 @@ def test_invoice_edit_cleans_old_relations(app_ctx):
     from cacao_accounting.document_flow.repository import consumed_qty_for_source
     from cacao_accounting.document_flow.service import get_source_items
 
-    order_item = _seed_purchase_order(app_ctx)
+    _seed_purchase_order(app_ctx)
     receipt = PurchaseReceipt(id="PR-INV-EDIT", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     receipt_item = PurchaseReceiptItem(
         purchase_receipt_id="PR-INV-EDIT",
@@ -1056,7 +1057,7 @@ def test_invoice_submit_rejects_over_invoice(app_ctx):
     )
     from cacao_accounting.compras import _validate_invoice_quantities_against_receipt
 
-    order_item = _seed_purchase_order(app_ctx)
+    _seed_purchase_order(app_ctx)
     receipt = PurchaseReceipt(id="PR-OVR-INV", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     receipt_item = PurchaseReceiptItem(
         purchase_receipt_id="PR-OVR-INV",
@@ -1104,10 +1105,16 @@ def test_invoice_submit_rejects_over_invoice(app_ctx):
 
 def test_supplier_invoice_no_duplication_validation(app_ctx):
     """S2P-24: Valida la duplicidad de supplier_invoice_no para un mismo proveedor."""
-    from cacao_accounting.database import PurchaseInvoice, CompanyParty, database
+    from cacao_accounting.database import Party, PurchaseInvoice, CompanyParty, database
     from cacao_accounting.compras import _validate_duplicate_supplier_invoice
 
-    # Setup suppliers in company party
+    # Setup suppliers in company party and global party master.
+    database.session.add_all(
+        [
+            Party(id="SUPLR-00001", code="SUPLR-00001", name="Proveedor 1", is_supplier=True),
+            Party(id="SUPLR-00002", code="SUPLR-00002", name="Proveedor 2", is_supplier=True),
+        ]
+    )
     cp1 = CompanyParty(
         party_id="SUPLR-00001",
         company="cacao",
@@ -1176,9 +1183,11 @@ def test_supplier_invoice_no_duplication_validation(app_ctx):
     )
 
     # Submitting/approving second invoice with duplicate number should fail
-    # Let's set its invoice number to FAC-2026-001 (simulating direct mutation without validation on save)
+    # The DB-level constraint now rejects the direct mutation without validation.
     invoice2.supplier_invoice_no = "FAC-2026-001"
-    database.session.commit()
+    with pytest.raises(IntegrityError):
+        database.session.commit()
+    database.session.rollback()
     with pytest.raises(ValueError, match="ya está registrado"):
         _validate_duplicate_supplier_invoice(
             supplier_id="SUPLR-00001",
@@ -1186,18 +1195,59 @@ def test_supplier_invoice_no_duplication_validation(app_ctx):
             exclude_id=invoice2.id,
         )
 
-    # Revert invoice2's number to free up FAC-2026-001
-    invoice2.supplier_invoice_no = "FAC-2026-002"
+
+def test_supplier_invoice_no_db_constraint_reuse_after_cancel(app_ctx):
+    """S2P-24: la constraint DB rechaza duplicados activos y permite reutilizar el número tras cancelar."""
+    from cacao_accounting.database import CompanyParty, Party, PurchaseInvoice, database
+    from sqlalchemy.exc import IntegrityError
+
+    database.session.add_all(
+        [
+            Party(id="SUPLR-C-001", code="SUPLR-C-001", name="Proveedor C", is_supplier=True),
+            CompanyParty(
+                party_id="SUPLR-C-001",
+                company="cacao",
+                allow_purchase_invoice_without_order=True,
+                allow_purchase_invoice_without_receipt=True,
+            ),
+        ]
+    )
     database.session.commit()
 
-    # Case 3: Cancel invoice1 (docstatus=2)
+    invoice1 = PurchaseInvoice(
+        id="INV-C-001",
+        supplier_id="SUPLR-C-001",
+        company="cacao",
+        supplier_invoice_no="FAC-DB-001",
+        docstatus=1,
+    )
+    database.session.add(invoice1)
+    database.session.commit()
+    assert invoice1.supplier_invoice_key == "FAC-DB-001"
+
+    invoice2 = PurchaseInvoice(
+        id="INV-C-002",
+        supplier_id="SUPLR-C-001",
+        company="cacao",
+        supplier_invoice_no="FAC-DB-001",
+        docstatus=1,
+    )
+    database.session.add(invoice2)
+    with pytest.raises(IntegrityError):
+        database.session.commit()
+    database.session.rollback()
+
     invoice1.docstatus = 2
     database.session.commit()
+    assert invoice1.supplier_invoice_key is None
 
-    # Now we can use "FAC-2026-001" since the other is cancelled
-    _validate_duplicate_supplier_invoice(supplier_id="SUPLR-00001", supplier_invoice_no="FAC-2026-001")
-    _validate_duplicate_supplier_invoice(
-        supplier_id="SUPLR-00001",
-        supplier_invoice_no="FAC-2026-001",
-        exclude_id=invoice2.id,
+    invoice3 = PurchaseInvoice(
+        id="INV-C-003",
+        supplier_id="SUPLR-C-001",
+        company="cacao",
+        supplier_invoice_no="FAC-DB-001",
+        docstatus=1,
     )
+    database.session.add(invoice3)
+    database.session.commit()
+    assert invoice3.supplier_invoice_key == "FAC-DB-001"
