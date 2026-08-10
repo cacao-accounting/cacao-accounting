@@ -747,8 +747,8 @@ def test_accounting_entries_for_customer_collection(app_ctx):
     "party_type,payment_type,reference_type,document_type,expected_party_account_type",
     [
         ("supplier", "pay", "purchase_invoice", "purchase_invoice", "payable"),
-        ("customer", "pay", "sales_credit_note", "sales_credit_note", "payable"),
-        ("supplier", "receive", "purchase_credit_note", "purchase_credit_note", "receivable"),
+        ("customer", "pay", "sales_credit_note", "sales_credit_note", "receivable"),
+        ("supplier", "receive", "purchase_credit_note", "purchase_credit_note", "payable"),
         ("supplier", "pay", "purchase_debit_note", "purchase_debit_note", "payable"),
         ("customer", "receive", "sales_debit_note", "sales_debit_note", "receivable"),
     ],

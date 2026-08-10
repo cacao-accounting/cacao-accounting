@@ -1198,8 +1198,12 @@ def _create_payment_pay_entries(
 ) -> list[GLEntry]:
     """Crea entradas GL para pagos a proveedores."""
     defaults = _company_defaults(company)
-    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=False)
-    advance_account_id = defaults.supplier_advance_account_id if defaults else None
+    party_type = (getattr(document, "party_type", None) or "supplier").lower()
+    receivable = party_type == "customer"
+    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=receivable)
+    advance_account_id = (
+        (defaults.customer_advance_account_id if receivable else defaults.supplier_advance_account_id) if defaults else None
+    )
     bank_account_id = _require_account(
         _resolve_bank_gl_account_id(document, destination=False),
         "El pago no tiene una cuenta bancaria de origen configurada.",
@@ -1215,7 +1219,7 @@ def _create_payment_pay_entries(
                 debit_account_id=party_account_id,
                 credit_account_id=bank_account_id,
                 amount=allocated,
-                party_type="supplier",
+                party_type=party_type,
                 party_id=document.party_id,
                 credit_bank_account_id=document.bank_account_id,
                 debit_remarks="Pago a proveedor",
@@ -1230,7 +1234,7 @@ def _create_payment_pay_entries(
                     debit_account_id=advance_account_id,
                     credit_account_id=bank_account_id,
                     amount=excess,
-                    party_type="supplier",
+                    party_type=party_type,
                     party_id=document.party_id,
                     credit_bank_account_id=document.bank_account_id,
                     debit_remarks="Anticipo a proveedor",
@@ -1249,10 +1253,12 @@ def _create_payment_pay_entries(
         debit_account_id=payable_account_id,
         credit_account_id=bank_account_id,
         amount=amount,
-        party_type="supplier",
+        party_type=party_type,
         party_id=document.party_id,
         credit_bank_account_id=document.bank_account_id,
-        debit_remarks="Pago a proveedor" if party_account_id else "Anticipo a proveedor",
+        debit_remarks=(
+            "Reembolso a cliente" if receivable else "Pago a proveedor" if party_account_id else "Anticipo a proveedor"
+        ),
         credit_remarks="Cuenta bancaria de pago",
     )
 
@@ -1265,8 +1271,12 @@ def _create_payment_receive_entries(
 ) -> list[GLEntry]:
     """Crea entradas GL para cobros de clientes."""
     defaults = _company_defaults(company)
-    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=True)
-    advance_account_id = defaults.customer_advance_account_id if defaults else None
+    party_type = (getattr(document, "party_type", None) or "customer").lower()
+    receivable = party_type == "customer"
+    party_account_id = _resolve_party_account_id(document.party_id, company, receivable=receivable)
+    advance_account_id = (
+        (defaults.customer_advance_account_id if receivable else defaults.supplier_advance_account_id) if defaults else None
+    )
     account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
     receivable_account_id = _require_account(
         account_id,
@@ -1283,7 +1293,7 @@ def _create_payment_receive_entries(
                 account_id=bank_account_id,
                 debit=amount,
                 credit=Decimal("0"),
-                bank_account_id=document.target_bank_account_id,
+                bank_account_id=document.bank_account_id,
                 entry_remarks="Cuenta bancaria receptora",
             ),
         ),
@@ -1293,9 +1303,13 @@ def _create_payment_receive_entries(
                 account_id=receivable_account_id,
                 debit=Decimal("0"),
                 credit=amount,
-                party_type="customer",
+                party_type=party_type,
                 party_id=document.party_id,
-                entry_remarks="Cobro de cliente" if party_account_id else "Anticipo de cliente",
+                entry_remarks=(
+                    ("Cobro de cliente" if receivable else "Reembolso de proveedor")
+                    if party_account_id
+                    else ("Anticipo de cliente" if receivable else "Reembolso de proveedor")
+                ),
             ),
         ),
     ]
@@ -1488,11 +1502,16 @@ def _line_rate(line: StockEntryItem) -> Decimal:
     cuando hay múltiples líneas de inventario en un documento.
     """
     rate = _decimal_value(line.valuation_rate or line.basic_rate)
+    qty_in_base_uom = _line_qty(line)
+    raw_qty = _decimal_value(line.qty)
+    amount = _decimal_value(line.amount)
+    if rate > 0 and raw_qty > 0 and raw_qty != qty_in_base_uom:
+        rate = rate * raw_qty / qty_in_base_uom
+    if amount > 0 and qty_in_base_uom > 0:
+        rate = amount / qty_in_base_uom
     if rate <= 0:
-        amount = _decimal_value(line.amount)
-        qty = _line_qty(line)
-        if amount > 0 and qty > 0:
-            rate = amount / qty
+        if amount > 0 and qty_in_base_uom > 0:
+            rate = amount / qty_in_base_uom
     if rate <= 0:
         raise PostingError(f"La linea de inventario {line.item_code} requiere tasa de valuacion.")
     return rate
@@ -1527,11 +1546,16 @@ def _line_rate_generic(line: Any) -> Decimal:
     cuando hay múltiples líneas de inventario en un documento.
     """
     rate = _decimal_value(getattr(line, "valuation_rate", None) or getattr(line, "rate", None))
+    qty_in_base_uom = _line_qty_generic(line)
+    raw_qty = _decimal_value(getattr(line, "qty", None))
+    amount = _decimal_value(getattr(line, "amount", None))
+    if rate > 0 and raw_qty > 0 and raw_qty != qty_in_base_uom:
+        rate = rate * raw_qty / qty_in_base_uom
+    if amount > 0 and qty_in_base_uom > 0:
+        rate = amount / qty_in_base_uom
     if rate <= 0:
-        amount = _decimal_value(getattr(line, "amount", None))
-        qty = _line_qty_generic(line)
-        if amount > 0 and qty > 0:
-            rate = amount / qty
+        if amount > 0 and qty_in_base_uom > 0:
+            rate = amount / qty_in_base_uom
     if rate <= 0:
         item_code = getattr(line, "item_code", "desconocido")
         raise PostingError(f"La linea de inventario {item_code} requiere tasa de valuacion.")
@@ -1575,6 +1599,15 @@ def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[tuple
     for layer in layers:
         qty = _decimal_value(layer.qty)
         rate = _decimal_value(layer.rate)
+        layer_value = _decimal_value(layer.stock_value_difference)
+        if qty != 0 and layer_value != 0:
+            rate = layer_value / qty
+        elif qty == 0 and layer_value != 0 and queue:
+            total_qty = sum((available_qty for available_qty, _ in queue), Decimal("0"))
+            if total_qty > 0:
+                adjustment_rate = layer_value / total_qty
+                queue = [(available_qty, available_rate + adjustment_rate) for available_qty, available_rate in queue]
+            continue
         if qty > 0:
             if negative_balance > 0:
                 offset = min(qty, negative_balance)
@@ -1633,6 +1666,12 @@ def _consume_stock_valuation_layers(
 
     valuation_method = _valuation_method_for_company(company)
     if valuation_method == "moving_average":
+        bin_row = _stock_bin_for(company, item_code, warehouse)
+        bin_qty = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
+        bin_value = _decimal_value(bin_row.stock_value) if bin_row else Decimal("0")
+        if bin_qty >= quantity and bin_qty > 0:
+            average_rate = bin_value / bin_qty
+            return quantity * average_rate, average_rate
         return _moving_average_valuation(available, total_available, quantity)
 
     return _fifo_valuation(available, quantity)
@@ -2071,16 +2110,21 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
     warehouse = line.target_warehouse or line.source_warehouse or document.to_warehouse or document.from_warehouse
     if not warehouse:
         raise PostingError("La conciliación requiere bodega.")
-    current_qty = _decimal_value(line.current_qty)
+    current_bin = (
+        database.session.query(StockBin)
+        .with_for_update()
+        .filter_by(company=document.company, item_code=line.item_code, warehouse=warehouse)
+        .first()
+    )
+    current_qty = _decimal_value(current_bin.actual_qty) if current_bin else Decimal("0")
     counted_qty = _decimal_value(line.counted_qty)
-    qty_change = _decimal_value(line.qty_difference)
-    if line.qty_difference is None:
-        qty_change = counted_qty - current_qty
-    current_value = _decimal_value(line.current_stock_value)
+    # A reconciliation draft stores a snapshot for display only. Recompute the
+    # delta against the locked bin so movements posted after draft creation do
+    # not compound a stale quantity difference.
+    qty_change = counted_qty - current_qty
+    current_value = _decimal_value(current_bin.stock_value) if current_bin else Decimal("0")
     target_value = _decimal_value(line.target_stock_value)
-    value_change = _decimal_value(line.stock_value_difference)
-    if line.stock_value_difference is None:
-        value_change = target_value - current_value
+    value_change = target_value - current_value
     if qty_change == 0 and value_change == 0:
         return None
     if counted_qty < 0 or target_value < 0:
@@ -2089,11 +2133,13 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
         raise PostingError("No se puede ajustar valor sin stock positivo o cantidad contada positiva.")
 
     if qty_change < 0:
-        valuation_rate, value_change = _consume_reconciliation_stock(
+        valuation_rate, _fifo_value_change = _consume_reconciliation_stock(
             document, line, warehouse, qty_change, target_value, counted_qty
         )
+        valuation_rate = abs(value_change) / abs(qty_change) if qty_change else Decimal("0")
+        line._inventory_cost_amount = abs(value_change)
     else:
-        valuation_rate = target_value / counted_qty if counted_qty > 0 else Decimal("0")
+        valuation_rate = value_change / qty_change if qty_change != 0 else Decimal("0")
     line.current_qty = current_qty
     line.counted_qty = counted_qty
     line.qty_difference = qty_change
@@ -2120,7 +2166,7 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
             warehouse=warehouse,
             company=document.company,
             qty=qty_change,
-            rate=valuation_rate_after,
+            rate=valuation_rate,
             stock_value_difference=value_change,
             remaining_qty=max(qty_after, Decimal("0")),
             remaining_stock_value=max(stock_value_after, Decimal("0")),
@@ -2208,6 +2254,7 @@ def _validate_stock_entry_warehouses(document: StockEntry, line: StockEntryItem)
         getattr(document, "to_warehouse", None),
         getattr(line, "source_warehouse", None),
         getattr(line, "target_warehouse", None),
+        getattr(line, "warehouse", None),
     }
     for warehouse_code in filter(None, warehouse_codes):
         warehouse = database.session.execute(select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
@@ -2223,7 +2270,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
     valuation_rate = _line_rate(line)
     value = _decimal_value(line.amount) or (qty * valuation_rate)
 
-    if purpose in ("material_receipt", "adjustment_positive"):
+    if purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
         return [
             _create_stock_movement(
                 document=document,
@@ -2319,7 +2366,8 @@ def _create_stock_ledger_for_document(
 ) -> StockLedgerEntry:
     from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
 
-    _stock_item_for(line)
+    _validate_stock_entry_warehouses(document, line)
+    item = _stock_item_for(line)
     if qty_change < 0:
         if not warehouse:
             raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
@@ -2327,12 +2375,24 @@ def _create_stock_ledger_for_document(
             validate_batch_serial(line, outgoing=True)
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc
-        cost_amount, cost_rate = _consume_stock_valuation_layers(
-            company=document.company,
-            item_code=line.item_code,
-            warehouse=warehouse,
-            quantity=abs(qty_change),
-        )
+        try:
+            cost_amount, cost_rate = _consume_stock_valuation_layers(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=warehouse,
+                quantity=abs(qty_change),
+            )
+        except PostingError:
+            if not item.allow_negative_stock:
+                raise
+            cost_rate = _consume_available_layers_for_negative_stock(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=warehouse,
+                total_qty=abs(qty_change),
+                fallback_rate=_line_rate_generic(line),
+            )
+            cost_amount = cost_rate * abs(qty_change)
         valuation_rate = cost_rate
         value_change = -cost_amount
         line._inventory_cost_amount = cost_amount
@@ -2359,6 +2419,8 @@ def _create_stock_ledger_for_document(
         value_change=value_change,
         preserve_reserved_qty=isinstance(document, DeliveryNote) and bool(document.sales_order_id),
     )
+    if qty_after < 0 and not item.allow_negative_stock:
+        raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
     stock_layer = StockValuationLayer(
         item_code=line.item_code,
         warehouse=warehouse,
@@ -2539,6 +2601,29 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
         batch_id=movement.batch_id,
         serial_no=movement.serial_no,
     )
+
+
+def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> None:
+    """Reject reversals that would create forbidden negative stock."""
+    projected: dict[tuple[str, str, str], Decimal] = {}
+    items: dict[tuple[str, str, str], Any] = {}
+    for movement in movements:
+        key = (str(movement.company), str(movement.item_code), str(movement.warehouse))
+        if key not in projected:
+            bin_row = _stock_bin_for(movement.company, movement.item_code, movement.warehouse)
+            projected[key] = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
+            item = database.session.get(Item, movement.item_code)
+            if item is None:
+                item = database.session.execute(select(Item).filter_by(code=movement.item_code)).scalar_one_or_none()
+            if item is None:
+                raise PostingError(f"El artículo {movement.item_code} no existe.")
+            items[key] = item
+        projected[key] -= _decimal_value(movement.qty_change)
+        if projected[key] < 0 and not items[key].allow_negative_stock:
+            raise PostingError(
+                f"No se puede cancelar el movimiento de {items[key].name}: "
+                f"la bodega {movement.warehouse} quedaría con stock negativo."
+            )
 
 
 def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id, ledger_code):
@@ -2784,6 +2869,7 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
     # In Material Transfer, we only generate GL if source and target warehouses
     # use different GL accounts. Otherwise, it's just a stock movement.
     if purpose == "material_transfer" and not _is_cross_account_transfer(document, company):
+        _document_contexts(document, ledger_code=ledger_code)
         return []
 
     entries = _create_stock_entry_gl_entries(document, company, purpose, ledger_code)
@@ -2866,7 +2952,7 @@ def _add_stock_entry_line_gl_entries(
 
     if purpose == "stock_reconciliation":
         _add_reconciliation_entries(entries, context, inventory_account_id, offset_account_id, amount, line, dimension_kwargs)
-    elif purpose in ("material_receipt", "adjustment_positive"):
+    elif purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
         entries.extend(
             _normal_entries_for_amount(
                 context=context,
@@ -3123,11 +3209,14 @@ def _create_gl_reversals(
                     account_id=entry.account_id,
                     debit=_decimal_value(entry.credit),
                     credit=_decimal_value(entry.debit),
+                    debit_in_account_currency=entry.credit_in_account_currency,
+                    credit_in_account_currency=entry.debit_in_account_currency,
                     party_type=entry.party_type,
                     party_id=entry.party_id,
                     cost_center_code=entry.cost_center_code,
                     unit_code=entry.unit_code,
                     project_code=entry.project_code,
+                    bank_account_id=entry.bank_account_id,
                     entry_remarks="Reversion " + (entry.remarks or ""),
                     is_reversal=True,
                     reversal_of=entry.id,
@@ -3159,6 +3248,7 @@ def _cancel_stock_movements_if_needed(document: Any, company: str, voucher_type:
     if not original_movements:
         raise PostingError("El documento no tiene movimientos de inventario para reversar.")
 
+    _validate_stock_reversal_capacity(original_movements)
     stock_reversals: list[StockLedgerEntry] = []
     for movement in original_movements:
         stock_reversals.append(_create_stock_reversal(document, movement))

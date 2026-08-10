@@ -29,7 +29,20 @@ class BankStatementAdapter(BaseImportAdapter):
         """Convierte una columna vacía o cero en un lado bancario ausente."""
         if value in (None, ""):
             return None
-        amount = Decimal(str(value))
+        normalized = str(value).strip().replace(" ", "")
+        if "," in normalized and "." in normalized:
+            if normalized.rfind(",") > normalized.rfind("."):
+                normalized = normalized.replace(".", "").replace(",", ".")
+            else:
+                normalized = normalized.replace(",", "")
+        elif "," in normalized:
+            decimal_part = normalized.rsplit(",", 1)[1]
+            if len(decimal_part) > 2:
+                raise InvalidOperation("Separador de miles ambiguo")
+            normalized = normalized.replace(",", ".")
+        elif normalized.count(".") > 1:
+            raise InvalidOperation("Separador de miles ambiguo")
+        amount = Decimal(normalized)
         return amount if amount != 0 else None
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
@@ -109,10 +122,13 @@ class BankStatementAdapter(BaseImportAdapter):
                     "withdrawal": self._optional_amount(row.get("withdrawal")),
                 }
             )
+            if transactions[-1]["deposit"] is not None and transactions[-1]["withdrawal"] is not None:
+                raise ValueError("Una fila bancaria no puede contener depósito y retiro simultáneamente.")
         return transactions
 
     def persist_document(self, document: Any) -> None:
         """Persist bank transactions to the database."""
+        seen: set[tuple[Any, ...]] = set()
         for tx_data in document:
             bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
             if bank_account is None:
@@ -123,6 +139,29 @@ class BankStatementAdapter(BaseImportAdapter):
                     f"La cuenta bancaria {bank_account.id} pertenece a la compañía {bank_account.company}, "
                     f"no a {company_id}."
                 )
+            identity = (
+                tx_data["bank_account_id"],
+                tx_data["posting_date"],
+                tx_data.get("reference_number", ""),
+                tx_data.get("deposit"),
+                tx_data.get("withdrawal"),
+            )
+            existing = (
+                database.session.execute(
+                    database.select(BankTransaction).filter_by(
+                        bank_account_id=identity[0],
+                        posting_date=identity[1],
+                        reference_number=identity[2],
+                        deposit=identity[3],
+                        withdrawal=identity[4],
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if identity in seen or existing:
+                raise ValueError("La transacción bancaria ya existe en el extracto o en la base de datos.")
+            seen.add(identity)
             tx = BankTransaction(
                 bank_account_id=tx_data["bank_account_id"],
                 posting_date=tx_data["posting_date"],

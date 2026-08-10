@@ -30,7 +30,7 @@ class AccountingMapper:
     ) -> JournalEntryProforma:
         """Create a pro-forma journal entry from engine results."""
         del landed
-        if settlement and context.event_type in {"payment_confirmed", "collection_confirmed"}:
+        if settlement and context.event_type in {"payment_confirmed", "collection_confirmed", "refund_confirmed"}:
             lines = self._map_settlement_event(context, settlement)
         else:
             lines = self._map_document_event(context, fiscal, settlement)
@@ -176,27 +176,30 @@ class AccountingMapper:
 
     def _settlement_balance_side(self, context: CalculationContext) -> str:
         """Return the side used to clear the party or advance balance."""
+        is_refund = context.event_type == "refund_confirmed"
         match context.transaction_direction:
             case "purchase":
-                return "debit"
+                return "credit" if is_refund else "debit"
             case _:
-                return "credit"
+                return "debit" if is_refund else "credit"
 
     def _settlement_cash_side(self, context: CalculationContext) -> str:
         """Return the side used by the cash or bank movement."""
+        is_refund = context.event_type == "refund_confirmed"
         match context.transaction_direction:
             case "purchase":
-                return "credit"
+                return "debit" if is_refund else "credit"
             case _:
-                return "debit"
+                return "credit" if is_refund else "debit"
 
     def _settlement_tax_side(self, context: CalculationContext) -> str:
         """Return the side used by settlement tax or withholding lines."""
+        is_refund = context.event_type == "refund_confirmed"
         match context.transaction_direction:
             case "purchase":
-                return "credit"
+                return "debit" if is_refund else "credit"
             case _:
-                return "debit"
+                return "credit" if is_refund else "debit"
 
     def _map_fiscal_lines(
         self,
@@ -267,6 +270,8 @@ class AccountingMapper:
         exchange_difference: Decimal,
     ) -> JournalEntryLineProforma:
         """Build the realized exchange gain/loss line in company currency."""
+        if context.event_type == "refund_confirmed":
+            exchange_difference = -exchange_difference
         side = "credit" if exchange_difference > 0 else "debit"
         account_id = (
             context.references.get("exchange_gain_account_id")
@@ -291,6 +296,8 @@ class AccountingMapper:
         exchange_difference: Decimal,
     ) -> JournalEntryLineProforma:
         """Build the unrealized exchange revaluation line in company currency."""
+        if context.event_type == "refund_confirmed":
+            exchange_difference = -exchange_difference
         side = "credit" if exchange_difference > 0 else "debit"
         account_id = (
             context.references.get("unrealized_exchange_gain_account_id")
@@ -315,6 +322,8 @@ class AccountingMapper:
         exchange_difference: Decimal,
     ) -> JournalEntryLineProforma:
         """Build the control-account offset required for unrealized revaluation."""
+        if context.event_type == "refund_confirmed":
+            exchange_difference = -exchange_difference
         side = "debit" if exchange_difference > 0 else "credit"
         return self._build_line(
             context,
@@ -335,7 +344,11 @@ class AccountingMapper:
         payment_discount_amount: Decimal,
     ) -> JournalEntryLineProforma:
         """Build the payment discount line in company currency."""
-        side = "credit" if context.transaction_direction == "purchase" else "debit"
+        is_refund = context.event_type == "refund_confirmed"
+        if is_refund:
+            side = "debit" if context.transaction_direction == "purchase" else "credit"
+        else:
+            side = "credit" if context.transaction_direction == "purchase" else "debit"
         account_id = context.references.get("payment_discount_account_id")
         return self._build_line(
             context,

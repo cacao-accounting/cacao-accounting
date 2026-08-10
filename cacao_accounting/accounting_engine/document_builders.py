@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, cast
 
@@ -137,6 +137,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         getattr(defaults, "bridge_account_id", None),
         "Falta la cuenta puente configurada para la compañía.",
     )
+    late_two_way_amounts = _late_two_way_invoice_amounts(document)
     account_lines: list[AccountLineSpec] = []
     item_contexts: list[ItemContext] = []
     for item in items:
@@ -154,15 +155,33 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
                 description=f"{description} - {_event_label('purchase_receipt_confirmed')}",
             )
         )
-        account_lines.append(
-            AccountLineSpec(
-                account_id=bridge_account_id,
-                amount=amount,
-                side="credit",
-                description=f"{description} - {_('Cuenta puente compras')}",
-                party_id=document.supplier_id,
+        reclassified_amount = min(late_two_way_amounts.get(item.item_code, Decimal("0")), amount)
+        if reclassified_amount > 0:
+            expense_account_id = _require_account_id(
+                _item_account_for_line(item, company, "expense"),
+                "Falta la cuenta de gasto para compensar una factura 2-way contabilizada.",
             )
-        )
+            account_lines.append(
+                AccountLineSpec(
+                    account_id=expense_account_id,
+                    amount=reclassified_amount,
+                    side="credit",
+                    description=f"{description} - {_('Recepción posterior a factura 2-way')}",
+                    party_id=document.supplier_id,
+                )
+            )
+            late_two_way_amounts[item.item_code] -= reclassified_amount
+        bridge_amount = amount - reclassified_amount
+        if bridge_amount > 0:
+            account_lines.append(
+                AccountLineSpec(
+                    account_id=bridge_account_id,
+                    amount=bridge_amount,
+                    side="credit",
+                    description=f"{description} - {_('Cuenta puente compras')}",
+                    party_id=document.supplier_id,
+                )
+            )
         item_contexts.append(_item_context_from_purchase_receipt_item(item))
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="purchase", event_type=event_type)
     return CalculationContext(
@@ -186,6 +205,103 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
             account_lines=account_lines,
         ),
     )
+
+
+def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decimal]:
+    """Return active 2-way invoice amounts that precede a purchase receipt.
+
+    A 2-way invoice records the item in expense before goods are received. A
+    later receipt must reclassify that amount to inventory instead of creating
+    an orphan credit in GRNI. Unmatched receipt value remains in the bridge
+    account until a future invoice is posted.
+    """
+    if not document.purchase_order_id:
+        return {}
+    invoices = (
+        database.session.execute(
+            select(PurchaseInvoice).where(
+                PurchaseInvoice.company == document.company,
+                PurchaseInvoice.supplier_id == document.supplier_id,
+                PurchaseInvoice.purchase_order_id == document.purchase_order_id,
+                PurchaseInvoice.purchase_receipt_id.is_(None),
+                PurchaseInvoice.docstatus == 1,
+                PurchaseInvoice.is_return.is_(False),
+                PurchaseInvoice.posting_date <= document.posting_date,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    amounts: dict[str, Decimal] = {}
+    invoice_posting_dates: dict[str, date] = {}
+    for invoice in invoices:
+        invoice_items = database.session.execute(
+            select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)
+        ).scalars()
+        for item in invoice_items:
+            amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
+            current_date = invoice_posting_dates.get(item.item_code)
+            if current_date is None or invoice.posting_date < current_date:
+                invoice_posting_dates[item.item_code] = invoice.posting_date
+
+    prior_receipts = (
+        database.session.execute(
+            select(PurchaseReceipt)
+            .where(
+                PurchaseReceipt.company == document.company,
+                PurchaseReceipt.supplier_id == document.supplier_id,
+                PurchaseReceipt.purchase_order_id == document.purchase_order_id,
+                PurchaseReceipt.docstatus == 1,
+                PurchaseReceipt.is_return.is_(False),
+                PurchaseReceipt.id != document.id,
+                PurchaseReceipt.posting_date <= document.posting_date,
+            )
+            .order_by(PurchaseReceipt.posting_date.asc(), PurchaseReceipt.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+
+    if prior_receipts and amounts:
+        from sqlalchemy import or_
+        from cacao_accounting.database import Book, GLEntry
+
+        primary_book = (
+            database.session.execute(
+                select(Book)
+                .where(Book.entity == document.company, or_(Book.status == "activo", Book.status.is_(None)))
+                .order_by(Book.is_primary.desc(), Book.code)
+            )
+            .scalars()
+            .first()
+        )
+        primary_book_id = primary_book.id if primary_book else None
+
+        for item_code in list(amounts.keys()):
+            expense_account_id = _item_account_id(item_code, document.company, "expense")
+            if expense_account_id:
+                invoice_date = invoice_posting_dates[item_code]
+                eligible_receipt_ids = [receipt.id for receipt in prior_receipts if receipt.posting_date >= invoice_date]
+                if not eligible_receipt_ids:
+                    continue
+                query = select(GLEntry).where(
+                    GLEntry.voucher_type == "purchase_receipt",
+                    GLEntry.voucher_id.in_(eligible_receipt_ids),
+                    GLEntry.account_id == expense_account_id,
+                    GLEntry.credit > 0,
+                    GLEntry.is_cancelled.is_(False),
+                    GLEntry.is_reversal.is_(False),
+                )
+                if primary_book_id:
+                    query = query.where(GLEntry.ledger_id == primary_book_id)
+
+                entries = database.session.execute(query).scalars().all()
+                reclassified_sum = sum(
+                    (Decimal(str(entry.credit_in_account_currency or entry.credit)) for entry in entries), Decimal("0")
+                )
+                amounts[item_code] = max(Decimal("0"), amounts[item_code] - reclassified_sum)
+
+    return amounts
 
 
 def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationContext:
@@ -437,23 +553,21 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
 def _payment_build_spec(document: PaymentEntry) -> PaymentBuildSpec | None:
     """Resolve directional behavior for supported payment types."""
     payment_type = (document.payment_type or "").lower()
-    if payment_type == "pay":
+    party_type = (getattr(document, "party_type", None) or "").lower()
+    if party_type not in {"customer", "supplier"}:
+        party_type = "supplier" if payment_type == "pay" else "customer"
+    if payment_type in {"pay", "receive"}:
         return PaymentBuildSpec(
             payment_type=payment_type,
-            direction="purchase",
-            event_type="payment_confirmed",
-            amount_field="paid_amount",
-            base_amount_field="base_paid_amount",
-            party_type="supplier",
-        )
-    if payment_type == "receive":
-        return PaymentBuildSpec(
-            payment_type=payment_type,
-            direction="sales",
-            event_type="collection_confirmed",
-            amount_field="received_amount",
-            base_amount_field="base_received_amount",
-            party_type="customer",
+            direction="sales" if party_type == "customer" else "purchase",
+            event_type=(
+                "payment_confirmed"
+                if payment_type == "pay" and party_type == "supplier"
+                else "collection_confirmed" if payment_type == "receive" and party_type == "customer" else "refund_confirmed"
+            ),
+            amount_field="paid_amount" if payment_type == "pay" else "received_amount",
+            base_amount_field="base_paid_amount" if payment_type == "pay" else "base_received_amount",
+            party_type=party_type,
         )
     return None
 
@@ -851,7 +965,7 @@ def _purchase_invoice_account_lines(
     company: str,
 ) -> list[AccountLineSpec]:
     """Resolve the non-tax lines for purchase invoices and credit notes."""
-    use_bridge_account = bool(getattr(document, "purchase_receipt_id", None))
+    use_bridge_account = _purchase_invoice_has_receipt(document, company)
     side = "credit" if _is_purchase_credit_note(document) else "debit"
     account_type = "bridge" if use_bridge_account else "expense"
     specs: list[AccountLineSpec] = []
@@ -869,6 +983,29 @@ def _purchase_invoice_account_lines(
             )
         )
     return specs
+
+
+def _purchase_invoice_has_receipt(document: PurchaseInvoice, company: str) -> bool:
+    """Return whether the invoice has an approved receipt dated no later than it."""
+    if getattr(document, "purchase_receipt_id", None):
+        return True
+    if not getattr(document, "purchase_order_id", None):
+        return False
+    return (
+        database.session.execute(
+            select(PurchaseReceipt.id)
+            .where(
+                PurchaseReceipt.company == company,
+                PurchaseReceipt.supplier_id == document.supplier_id,
+                PurchaseReceipt.purchase_order_id == document.purchase_order_id,
+                PurchaseReceipt.docstatus == 1,
+                PurchaseReceipt.is_return.is_(False),
+                PurchaseReceipt.posting_date <= document.posting_date,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        is not None
+    )
 
 
 def _eligible_discount_amount(

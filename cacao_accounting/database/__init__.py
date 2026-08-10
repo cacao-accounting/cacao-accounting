@@ -7,6 +7,7 @@
 # ---------------------------------------------------------------------------------------
 from decimal import Decimal
 from dataclasses import dataclass
+import hashlib
 
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
@@ -1927,7 +1928,10 @@ class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     """
 
     __tablename__ = "purchase_invoice"
-    __table_args__ = (database.Index("ix_purchase_invoice_company_docstatus", "company", "docstatus"),)
+    __table_args__ = (
+        database.Index("ix_purchase_invoice_company_docstatus", "company", "docstatus"),
+        database.UniqueConstraint("supplier_id", "supplier_invoice_key", name="uq_purchase_invoice_supplier_number"),
+    )
     supplier_id = database.Column(
         database.String(26),
         database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -1936,6 +1940,7 @@ class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     )
     supplier_name = database.Column(database.String(200), nullable=True)
     supplier_invoice_no = database.Column(database.String(50), nullable=True)  # Validado contra duplicados
+    supplier_invoice_key = database.Column(database.String(50), nullable=True, index=True)
     document_type = database.Column(database.String(50), nullable=False, default="purchase_invoice")
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
     purchase_order_id = database.Column(
@@ -1967,6 +1972,29 @@ class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
         database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     remarks = database.Column(database.Text(), nullable=True)
+
+
+def _purchase_invoice_supplier_key(invoice: PurchaseInvoice) -> str | None:
+    """S2P-24: clave de duplicidad de factura de proveedor para la base de datos.
+
+    Devuelve el número de factura del proveedor normalizado (sin espacios) cuando
+    la factura no está cancelada; las canceladas y las que no declaran número
+    quedan con ``None`` para no bloquear la reutilización del número.
+    """
+    if getattr(invoice, "docstatus", None) == 2:
+        return None
+    number = getattr(invoice, "supplier_invoice_no", None)
+    if not number:
+        return None
+    cleaned = str(number).strip()
+    return cleaned or None
+
+
+@event.listens_for(PurchaseInvoice, "before_insert")
+@event.listens_for(PurchaseInvoice, "before_update")
+def _set_purchase_invoice_supplier_key(mapper, connection, target: PurchaseInvoice) -> None:
+    """Mantiene sincronizada la clave de duplicidad en escrituras."""
+    target.supplier_invoice_key = _purchase_invoice_supplier_key(target)
 
 
 class PurchaseInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2724,6 +2752,8 @@ class BankTransaction(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Transaccion bancaria importada o ingresada manualmente."""
 
     __tablename__ = "bank_transaction"
+    __table_args__ = (UniqueConstraint("identity_key", name="uq_bank_transaction_identity"),)
+    identity_key = database.Column(database.String(64), nullable=False, index=True)
     bank_account_id = database.Column(
         database.String(26),
         database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -2742,6 +2772,25 @@ class BankTransaction(database.Model, BaseTabla):  # type: ignore[name-defined]
         nullable=True,
         index=True,
     )
+
+
+def _bank_transaction_identity(transaction: BankTransaction) -> str:
+    """Build a deterministic identity independent of nullable amount columns."""
+    values = (
+        str(transaction.bank_account_id or ""),
+        transaction.posting_date.isoformat() if transaction.posting_date else "",
+        str(transaction.reference_number or ""),
+        str(transaction.deposit if transaction.deposit is not None else ""),
+        str(transaction.withdrawal if transaction.withdrawal is not None else ""),
+    )
+    return hashlib.sha256("|".join(values).encode("utf-8")).hexdigest()
+
+
+@event.listens_for(BankTransaction, "before_insert")
+@event.listens_for(BankTransaction, "before_update")
+def _set_bank_transaction_identity(mapper, connection, target: BankTransaction) -> None:
+    """Keep the database-enforced import identity synchronized on writes."""
+    target.identity_key = _bank_transaction_identity(target)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -3806,6 +3855,7 @@ class ExchangeRevaluation(database.Model, DocBase):  # type: ignore[name-defined
     """Revalorizacion de moneda extranjera."""
 
     __tablename__ = "exchange_revaluation"
+    __table_args__ = ()
     year = database.Column(database.Integer(), nullable=True, index=True)
     month = database.Column(database.Integer(), nullable=True, index=True)
     run_date = database.Column(database.Date(), nullable=True, index=True)
