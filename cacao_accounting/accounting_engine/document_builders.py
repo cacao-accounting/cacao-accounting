@@ -252,15 +252,42 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
         .all()
     )
 
-    for prior in prior_receipts:
-        prior_items = (
-            database.session.execute(select(PurchaseReceiptItem).filter_by(purchase_receipt_id=prior.id)).scalars().all()
+    if prior_receipts and amounts:
+        from sqlalchemy import or_
+        from cacao_accounting.database import Book, GLEntry
+
+        prior_receipt_ids = [r.id for r in prior_receipts]
+
+        primary_book = (
+            database.session.execute(
+                select(Book)
+                .where(Book.entity == document.company, or_(Book.status == "activo", Book.status.is_(None)))
+                .order_by(Book.is_primary.desc(), Book.code)
+            )
+            .scalars()
+            .first()
         )
-        for item in prior_items:
-            amount = _line_amount(item)
-            reclassified_amount = min(amounts.get(item.item_code, Decimal("0")), amount)
-            if reclassified_amount > 0:
-                amounts[item.item_code] -= reclassified_amount
+        primary_book_id = primary_book.id if primary_book else None
+
+        for item_code in list(amounts.keys()):
+            expense_account_id = _item_account_id(item_code, document.company, "expense")
+            if expense_account_id:
+                query = select(GLEntry).where(
+                    GLEntry.voucher_type == "purchase_receipt",
+                    GLEntry.voucher_id.in_(prior_receipt_ids),
+                    GLEntry.account_id == expense_account_id,
+                    GLEntry.credit > 0,
+                    GLEntry.is_cancelled.is_(False),
+                    GLEntry.is_reversal.is_(False),
+                )
+                if primary_book_id:
+                    query = query.where(GLEntry.ledger_id == primary_book_id)
+
+                entries = database.session.execute(query).scalars().all()
+                reclassified_sum = sum(
+                    (Decimal(str(entry.credit_in_account_currency or entry.credit)) for entry in entries), Decimal("0")
+                )
+                amounts[item_code] = max(Decimal("0"), amounts[item_code] - reclassified_sum)
 
     return amounts
 
