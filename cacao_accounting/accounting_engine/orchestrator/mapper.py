@@ -30,7 +30,7 @@ class AccountingMapper:
     ) -> JournalEntryProforma:
         """Create a pro-forma journal entry from engine results."""
         del landed
-        if settlement and context.event_type in {"payment_confirmed", "collection_confirmed"}:
+        if settlement and context.event_type in {"payment_confirmed", "collection_confirmed", "refund_confirmed"}:
             lines = self._map_settlement_event(context, settlement)
         else:
             lines = self._map_document_event(context, fiscal, settlement)
@@ -176,27 +176,30 @@ class AccountingMapper:
 
     def _settlement_balance_side(self, context: CalculationContext) -> str:
         """Return the side used to clear the party or advance balance."""
+        is_refund = context.event_type == "refund_confirmed"
         match context.transaction_direction:
             case "purchase":
-                return "debit"
+                return "credit" if is_refund else "debit"
             case _:
-                return "credit"
+                return "debit" if is_refund else "credit"
 
     def _settlement_cash_side(self, context: CalculationContext) -> str:
         """Return the side used by the cash or bank movement."""
+        is_refund = context.event_type == "refund_confirmed"
         match context.transaction_direction:
             case "purchase":
-                return "credit"
+                return "debit" if is_refund else "credit"
             case _:
-                return "debit"
+                return "credit" if is_refund else "debit"
 
     def _settlement_tax_side(self, context: CalculationContext) -> str:
         """Return the side used by settlement tax or withholding lines."""
+        is_refund = context.event_type == "refund_confirmed"
         match context.transaction_direction:
             case "purchase":
-                return "credit"
+                return "debit" if is_refund else "credit"
             case _:
-                return "debit"
+                return "credit" if is_refund else "debit"
 
     def _map_fiscal_lines(
         self,
