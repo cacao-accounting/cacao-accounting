@@ -560,7 +560,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
         amount_difference = invoice_group.amount - reference_amount
 
         total_amount += matched_amount
-        total_price_difference += price_difference * reference_qty
+        total_price_difference += price_difference * min(invoice_group.qty, reference_qty)
         total_amount_difference += amount_difference
         total_invoiced_qty += invoice_group.qty
         total_received_qty += reference_qty
@@ -642,7 +642,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
         amount_difference = invoice_group.amount - reference_amount
 
         total_amount += matched_amount
-        total_price_difference += price_difference * reference_qty
+        total_price_difference += price_difference * min(invoice_group.qty, reference_qty)
         total_amount_difference += amount_difference
         total_invoiced_qty += invoice_group.qty
         total_ordered_qty += reference_qty
