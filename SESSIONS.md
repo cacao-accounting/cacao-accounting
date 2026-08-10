@@ -3,6 +3,26 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Refactor del workflow CI: lint en job separado
+
+### Petición
+
+Refactorizar `.github/workflows/python-package.yml` para separar las pruebas de
+lint en un job particular, de modo que los fallos de estilo (línea en blanco
+faltante, línea de 121 caracteres, etc.) no frenen la ejecución de las pruebas
+unitarias.
+
+### Implementación
+
+- Se creó el job `lint` (Python 3.13) que ejecuta `flake8`, `ruff`,
+  `pydocstyle` y `mypy` sobre `cacao_accounting/`.
+- Se eliminó el paso "Lint project code" del job `build`, que corría dentro de
+  cada elemento de la matriz (3.12/3.13/3.14) y abortaba el pytest del mismo job.
+- Decisión de diseño: los jobs de CI quedan sin dependencias entre sí
+  (`needs`), por lo que `build`, `databases`, `desktop` y `coverage` corren en
+  paralelo e independientemente del resultado del lint, que pasa a ser un
+  chequeo informativo por separado.
+
 ## 2026-08-10 — Triage de issues de auditoría contra el código vigente
 
 ### Petición
