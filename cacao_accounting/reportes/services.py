@@ -2421,6 +2421,21 @@ def _fiscal_year_start_for_period(period: AccountingPeriod | None) -> date | Non
 _PL_CLASSIFICATIONS = frozenset({"ingreso", "income", "costo", "cost", "gasto", "expense"})
 
 
+def _should_skip_balance_sheet_entry(
+    entry: GLEntry,
+    classification: str,
+    filters: FinancialReportFilters,
+    fiscal_year_start: date | None,
+) -> bool:
+    """Determine whether a GL entry should be skipped for the balance sheet report."""
+    if not filters.include_closing and entry.is_fiscal_year_closing:
+        if classification in _PL_CLASSIFICATIONS or (fiscal_year_start and entry.posting_date >= fiscal_year_start):
+            return True
+    if classification in _PL_CLASSIFICATIONS and fiscal_year_start and entry.posting_date < fiscal_year_start:
+        return True
+    return False
+
+
 def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Balance general por clasificación Activo/Pasivo/Patrimonio."""
     _, period_end, period_obj = _period_bounds(filters.company, filters.accounting_period)
@@ -2446,12 +2461,7 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         if account is None:
             continue
         classification = _normalize_account_classification(account)
-        # Skip closing entries if include_closing is False and they are P&L or current FY
-        if not filters.include_closing and entry.is_fiscal_year_closing:
-            if classification in _PL_CLASSIFICATIONS or (fiscal_year_start and entry.posting_date >= fiscal_year_start):
-                continue
-        # Limitar cuentas de P&L al año fiscal para no acumular ejercicios cerrados
-        if classification in _PL_CLASSIFICATIONS and fiscal_year_start and entry.posting_date < fiscal_year_start:
+        if _should_skip_balance_sheet_entry(entry, classification, filters, fiscal_year_start):
             continue
         debit = _decimal_value(entry.debit)
         credit = _decimal_value(entry.credit)
