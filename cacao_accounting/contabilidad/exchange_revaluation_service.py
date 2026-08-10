@@ -107,13 +107,22 @@ class ExchangeRevaluationService:
         ledgers = self._active_ledgers(company)
         summary_ledger = self._summary_ledger(company, ledgers)
 
-        existing_run = (
-            database.session.execute(select(ExchangeRevaluation).filter_by(company=company, year=year, month=month))
+        previous_runs = (
+            database.session.execute(
+                select(ExchangeRevaluation)
+                .filter_by(company=company, year=year, month=month)
+                .where(ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED)
+                .order_by(ExchangeRevaluation.run_date.desc(), ExchangeRevaluation.created.desc())
+            )
             .scalars()
-            .first()
+            .all()
         )
-        if existing_run:
-            return existing_run
+        for previous_run in previous_runs:
+            self.void(
+                run_id=str(previous_run.id),
+                user_id=user_id,
+                reason="Reejecucion de revalorizacion del periodo",
+            )
 
         candidates = self._open_candidates(company, period.end, summary_ledger.id)
 
