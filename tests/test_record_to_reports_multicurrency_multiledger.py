@@ -399,12 +399,12 @@ def test_semantic_reports_multicurrency(app_ctx):
             posting_date=date(2026, 8, 1),
             customer_id="CUSTOMER-SEMANTIC",
             transaction_currency=currency,
-            base_currency="NIO",
+            base_currency="NIO" if currency else None,
             exchange_rate=rate,
             grand_total=amount,
-            base_grand_total=amount * rate,
+            base_grand_total=amount * rate if rate else None,
             outstanding_amount=amount,
-            base_outstanding_amount=amount * rate,
+            base_outstanding_amount=amount * rate if rate else None,
             is_return=False,
             docstatus=1,
         )
@@ -416,7 +416,7 @@ def test_semantic_reports_multicurrency(app_ctx):
                 item_code="ITEM-SEMANTIC",
                 qty=1,
                 amount=amount,
-                base_amount=amount * rate,
+                base_amount=amount * rate if rate else amount,
             )
         )
         return invoice
@@ -427,12 +427,12 @@ def test_semantic_reports_multicurrency(app_ctx):
             posting_date=date(2026, 8, 1),
             supplier_id="SUPPLIER-SEMANTIC",
             transaction_currency=currency,
-            base_currency="NIO",
+            base_currency="NIO" if currency else None,
             exchange_rate=rate,
             grand_total=amount,
-            base_grand_total=amount * rate,
+            base_grand_total=amount * rate if rate else None,
             outstanding_amount=amount,
-            base_outstanding_amount=amount * rate,
+            base_outstanding_amount=amount * rate if rate else None,
             is_return=False,
             docstatus=1,
         )
@@ -444,7 +444,7 @@ def test_semantic_reports_multicurrency(app_ctx):
                 item_code="ITEM-SEMANTIC",
                 qty=1,
                 amount=amount,
-                base_amount=amount * rate,
+                base_amount=amount * rate if rate else amount,
             )
         )
         return invoice
@@ -456,13 +456,14 @@ def test_semantic_reports_multicurrency(app_ctx):
     database.session.execute(database.delete(PurchaseInvoice))
     database.session.commit()
 
-    # Sales Invoices: 10 USD (base NIO 360) and 100 NIO (base NIO 100)
+    # Sales Invoices: 10 USD (base NIO 360), 100 NIO (base NIO 100) and 50 Untagged (no currencies set, company currency is NIO)
     make_sales_invoice(Decimal("10"), "USD", Decimal("36"))
     make_sales_invoice(Decimal("100"), "NIO", Decimal("1"))
+    make_sales_invoice(Decimal("50"), None, None)
     database.session.commit()
 
     receivables = get_receivables_analysis(company="r2r")
-    assert len(receivables) == 2
+    assert len(receivables) == 3
 
     # Check first invoice (USD 10)
     row_usd = [r for r in receivables if r["currency"] == "USD"][0]
@@ -472,19 +473,27 @@ def test_semantic_reports_multicurrency(app_ctx):
     assert row_usd["base_outstanding_amount"] == Decimal("360")
 
     # Check second invoice (NIO 100)
-    row_nio = [r for r in receivables if r["currency"] == "NIO"][0]
+    row_nio = [r for r in receivables if r["currency"] == "NIO" and r["amount"] == Decimal("100")][0]
     assert row_nio["amount"] == Decimal("100")
     assert row_nio["outstanding_amount"] == Decimal("100")
     assert row_nio["base_amount"] == Decimal("100")
     assert row_nio["base_outstanding_amount"] == Decimal("100")
 
-    # Purchase Invoices: 10 USD (base NIO 360) and 100 NIO (base NIO 100)
+    # Check untagged invoice (50) - should fall back to company currency (NIO)
+    row_untagged = [r for r in receivables if r["amount"] == Decimal("50")][0]
+    assert row_untagged["currency"] == "NIO"
+    assert row_untagged["outstanding_amount"] == Decimal("50")
+    assert row_untagged["base_amount"] == Decimal("50")
+    assert row_untagged["base_outstanding_amount"] == Decimal("50")
+
+    # Purchase Invoices: 10 USD (base NIO 360), 100 NIO (base NIO 100) and 50 Untagged (no currencies set, company currency is NIO)
     make_purchase_invoice(Decimal("10"), "USD", Decimal("36"))
     make_purchase_invoice(Decimal("100"), "NIO", Decimal("1"))
+    make_purchase_invoice(Decimal("50"), None, None)
     database.session.commit()
 
     payables = get_payables_analysis(company="r2r")
-    assert len(payables) == 2
+    assert len(payables) == 3
 
     # Check first invoice (USD 10)
     row_p_usd = [r for r in payables if r["currency"] == "USD"][0]
@@ -494,8 +503,15 @@ def test_semantic_reports_multicurrency(app_ctx):
     assert row_p_usd["base_outstanding_amount"] == Decimal("360")
 
     # Check second invoice (NIO 100)
-    row_p_nio = [r for r in payables if r["currency"] == "NIO"][0]
+    row_p_nio = [r for r in payables if r["currency"] == "NIO" and r["amount"] == Decimal("100")][0]
     assert row_p_nio["amount"] == Decimal("100")
     assert row_p_nio["outstanding_amount"] == Decimal("100")
     assert row_p_nio["base_amount"] == Decimal("100")
     assert row_p_nio["base_outstanding_amount"] == Decimal("100")
+
+    # Check untagged invoice (50) - should fall back to company currency (NIO)
+    row_p_untagged = [r for r in payables if r["amount"] == Decimal("50")][0]
+    assert row_p_untagged["currency"] == "NIO"
+    assert row_p_untagged["outstanding_amount"] == Decimal("50")
+    assert row_p_untagged["base_amount"] == Decimal("50")
+    assert row_p_untagged["base_outstanding_amount"] == Decimal("50")

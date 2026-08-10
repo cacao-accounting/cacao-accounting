@@ -174,6 +174,11 @@ def get_receivables_analysis(
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return one row per posted customer invoice with live outstanding value."""
+    from cacao_accounting.database import Entity
+
+    entities = database.session.execute(select(Entity)).scalars().all()
+    company_currencies = {e.code: e.currency for e in entities}
+
     query = select(SalesInvoice).where(SalesInvoice.docstatus == 1)
     if company:
         query = query.where(SalesInvoice.company == company)
@@ -190,7 +195,7 @@ def get_receivables_analysis(
             "customer_code": invoice.customer_id,
             "amount": _signed(invoice.grand_total or invoice.total, invoice),
             "outstanding_amount": _signed(compute_outstanding_amount(invoice), invoice),
-            "currency": invoice.transaction_currency or invoice.base_currency,
+            "currency": invoice.transaction_currency or invoice.base_currency or company_currencies.get(invoice.company),
             "base_amount": _document_base_amount(invoice),
             "base_outstanding_amount": _document_base_outstanding_amount(invoice),
         }
@@ -206,6 +211,11 @@ def get_payables_analysis(
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return one row per posted supplier invoice with live outstanding value."""
+    from cacao_accounting.database import Entity
+
+    entities = database.session.execute(select(Entity)).scalars().all()
+    company_currencies = {e.code: e.currency for e in entities}
+
     query = select(PurchaseInvoice).where(PurchaseInvoice.docstatus == 1)
     if company:
         query = query.where(PurchaseInvoice.company == company)
@@ -222,7 +232,7 @@ def get_payables_analysis(
             "supplier_code": invoice.supplier_id,
             "amount": _signed(invoice.grand_total or invoice.total, invoice),
             "outstanding_amount": _signed(compute_outstanding_amount(invoice), invoice),
-            "currency": invoice.transaction_currency or invoice.base_currency,
+            "currency": invoice.transaction_currency or invoice.base_currency or company_currencies.get(invoice.company),
             "base_amount": _document_base_amount(invoice),
             "base_outstanding_amount": _document_base_outstanding_amount(invoice),
         }
