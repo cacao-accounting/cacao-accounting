@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, cast
 
@@ -227,14 +227,18 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
             PurchaseInvoice.is_return.is_(False),
             PurchaseInvoice.posting_date <= document.posting_date,
         )
-    ).scalars()
+    ).scalars().all()
     amounts: dict[str, Decimal] = {}
+    invoice_posting_dates: dict[str, date] = {}
     for invoice in invoices:
         invoice_items = database.session.execute(
             select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)
         ).scalars()
         for item in invoice_items:
             amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
+            current_date = invoice_posting_dates.get(item.item_code)
+            if current_date is None or invoice.posting_date < current_date:
+                invoice_posting_dates[item.item_code] = invoice.posting_date
 
     prior_receipts = (
         database.session.execute(
@@ -246,6 +250,7 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
                 PurchaseReceipt.docstatus == 1,
                 PurchaseReceipt.is_return.is_(False),
                 PurchaseReceipt.id != document.id,
+                PurchaseReceipt.posting_date <= document.posting_date,
             )
             .order_by(PurchaseReceipt.posting_date.asc(), PurchaseReceipt.id.asc())
         )
@@ -273,9 +278,15 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
         for item_code in list(amounts.keys()):
             expense_account_id = _item_account_id(item_code, document.company, "expense")
             if expense_account_id:
+                invoice_date = invoice_posting_dates[item_code]
+                eligible_receipt_ids = [
+                    receipt.id for receipt in prior_receipts if receipt.posting_date >= invoice_date
+                ]
+                if not eligible_receipt_ids:
+                    continue
                 query = select(GLEntry).where(
                     GLEntry.voucher_type == "purchase_receipt",
-                    GLEntry.voucher_id.in_(prior_receipt_ids),
+                    GLEntry.voucher_id.in_(eligible_receipt_ids),
                     GLEntry.account_id == expense_account_id,
                     GLEntry.credit > 0,
                     GLEntry.is_cancelled.is_(False),
