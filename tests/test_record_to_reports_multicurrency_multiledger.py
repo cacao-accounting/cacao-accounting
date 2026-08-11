@@ -346,8 +346,10 @@ def test_semantic_reports_net_returns_and_expose_base_amount(app_ctx):
     payables = get_payables_analysis(company="r2r")
 
     assert sum(row["amount"] for row in sales) == Decimal("8")
+    assert sum(row["quantity"] for row in sales) == Decimal("0")
     assert sum(row["base_amount"] for row in sales) == Decimal("288")
     assert sum(row["amount"] for row in purchases) == Decimal("15")
+    assert sum(row["quantity"] for row in purchases) == Decimal("1")
     assert sum(row["base_amount"] for row in purchases) == Decimal("540")
     assert sum(row["outstanding_amount"] for row in receivables) == Decimal("8")
     assert sum(row["outstanding_amount"] for row in payables) == Decimal("15")
@@ -854,3 +856,51 @@ def test_semantic_reports_fallback_to_company_currency(app_ctx):
     assert receivable["base_amount"] == Decimal("50")
     assert payable["currency"] == "NIO"
     assert payable["base_amount"] == Decimal("75")
+
+
+def test_settlement_analysis_excludes_cancelled_payments(app_ctx):
+    """Cancelled payments must not remain in the settlement semantic dataset."""
+    from cacao_accounting.database import PaymentEntry, PaymentReference, database
+    from cacao_accounting.reportes.semantic import get_settlement_analysis
+
+    active_payment = PaymentEntry(
+        company="r2r",
+        posting_date=date(2026, 8, 1),
+        payment_type="receive",
+        received_amount=Decimal("100"),
+        docstatus=1,
+    )
+    cancelled_payment = PaymentEntry(
+        company="r2r",
+        posting_date=date(2026, 8, 2),
+        payment_type="receive",
+        received_amount=Decimal("200"),
+        docstatus=2,
+    )
+    database.session.add_all([active_payment, cancelled_payment])
+    database.session.flush()
+    database.session.add_all(
+        [
+            PaymentReference(
+                payment_id=active_payment.id,
+                reference_type="sales_invoice",
+                reference_id="INV-ACTIVE",
+                company="r2r",
+                allocated_amount=Decimal("100"),
+                allocation_date=active_payment.posting_date,
+            ),
+            PaymentReference(
+                payment_id=cancelled_payment.id,
+                reference_type="sales_invoice",
+                reference_id="INV-CANCELLED",
+                company="r2r",
+                allocated_amount=Decimal("200"),
+                allocation_date=cancelled_payment.posting_date,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    rows = get_settlement_analysis(company="r2r")
+
+    assert [row["amount"] for row in rows] == [Decimal("100")]
