@@ -17,6 +17,7 @@ from sqlalchemy import or_, select
 from cacao_accounting.database import (
     AuditTrail,
     DocumentRelation,
+    Entity,
     PaymentEntry,
     PaymentReference,
     PurchaseInvoice,
@@ -80,6 +81,15 @@ def _document_base_outstanding_amount(document: Any) -> Decimal:
     """Resolve the live outstanding document amount in base currency."""
     outstanding = compute_outstanding_amount(document)
     return _signed(outstanding * _document_base_factor(document), document)
+
+
+def _company_currency_map(invoices: list[Any]) -> dict[str, str]:
+    """Resolve configured currencies for the companies represented by invoices."""
+    company_codes = {invoice.company for invoice in invoices if invoice.company}
+    if not company_codes:
+        return {}
+    rows = database.session.execute(select(Entity.code, Entity.currency).where(Entity.code.in_(company_codes))).all()
+    return {code: currency for code, currency in rows if currency}
 
 
 def _bounded(query: Any, limit: int | None, offset: int | None) -> Any:
@@ -182,6 +192,8 @@ def get_receivables_analysis(
     if date_to:
         query = query.where(SalesInvoice.posting_date <= date_to)
     query = _bounded(query.order_by(SalesInvoice.posting_date, SalesInvoice.id), limit, offset)
+    invoices = database.session.execute(query).scalars().all()
+    currency_by_company = _company_currency_map(invoices)
     return [
         {
             "document_number": invoice.document_no or invoice.id,
@@ -190,11 +202,11 @@ def get_receivables_analysis(
             "customer_code": invoice.customer_id,
             "amount": _signed(invoice.grand_total or invoice.total, invoice),
             "outstanding_amount": _signed(compute_outstanding_amount(invoice), invoice),
-            "currency": invoice.transaction_currency or invoice.base_currency,
+            "currency": invoice.transaction_currency or invoice.base_currency or currency_by_company.get(invoice.company),
             "base_amount": _document_base_amount(invoice),
             "base_outstanding_amount": _document_base_outstanding_amount(invoice),
         }
-        for invoice in database.session.execute(query).scalars().all()
+        for invoice in invoices
     ]
 
 
@@ -214,6 +226,8 @@ def get_payables_analysis(
     if date_to:
         query = query.where(PurchaseInvoice.posting_date <= date_to)
     query = _bounded(query.order_by(PurchaseInvoice.posting_date, PurchaseInvoice.id), limit, offset)
+    invoices = database.session.execute(query).scalars().all()
+    currency_by_company = _company_currency_map(invoices)
     return [
         {
             "document_number": invoice.document_no or invoice.id,
@@ -222,11 +236,11 @@ def get_payables_analysis(
             "supplier_code": invoice.supplier_id,
             "amount": _signed(invoice.grand_total or invoice.total, invoice),
             "outstanding_amount": _signed(compute_outstanding_amount(invoice), invoice),
-            "currency": invoice.transaction_currency or invoice.base_currency,
+            "currency": invoice.transaction_currency or invoice.base_currency or currency_by_company.get(invoice.company),
             "base_amount": _document_base_amount(invoice),
             "base_outstanding_amount": _document_base_outstanding_amount(invoice),
         }
-        for invoice in database.session.execute(query).scalars().all()
+        for invoice in invoices
     ]
 
 

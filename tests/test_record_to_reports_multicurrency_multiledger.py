@@ -499,6 +499,8 @@ def test_semantic_reports_multicurrency(app_ctx):
     assert row_p_nio["outstanding_amount"] == Decimal("100")
     assert row_p_nio["base_amount"] == Decimal("100")
     assert row_p_nio["base_outstanding_amount"] == Decimal("100")
+
+
 def test_r2r_multi_currency_journal_entry_all_reports(app_ctx):
     """Post manual journal entries in GBP to NIO/EUR/USD books and verify reports."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
@@ -816,3 +818,39 @@ def test_r2r_purchase_flow_reconciliation_multicurrency(app_ctx):
         assert ap_row.values["gl_control_amount"] == expected_gl_amount
         assert ap_row.values["difference"] == expected_diff
         assert ap_row.values["status"] == expected_status
+
+
+def test_semantic_reports_fallback_to_company_currency(app_ctx):
+    """Use the entity currency when local invoices omit currency fields."""
+    from cacao_accounting.database import PurchaseInvoice, SalesInvoice, database
+    from cacao_accounting.reportes.semantic import get_payables_analysis, get_receivables_analysis
+
+    database.session.add_all(
+        [
+            SalesInvoice(
+                company="r2r",
+                posting_date=date(2026, 8, 1),
+                customer_id="CUSTOMER-LOCAL",
+                grand_total=Decimal("50"),
+                outstanding_amount=Decimal("50"),
+                docstatus=1,
+            ),
+            PurchaseInvoice(
+                company="r2r",
+                posting_date=date(2026, 8, 1),
+                supplier_id="SUPPLIER-LOCAL",
+                grand_total=Decimal("75"),
+                outstanding_amount=Decimal("75"),
+                docstatus=1,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    receivable = get_receivables_analysis(company="r2r")[0]
+    payable = get_payables_analysis(company="r2r")[0]
+
+    assert receivable["currency"] == "NIO"
+    assert receivable["base_amount"] == Decimal("50")
+    assert payable["currency"] == "NIO"
+    assert payable["base_amount"] == Decimal("75")
