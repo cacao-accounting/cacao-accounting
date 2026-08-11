@@ -84,6 +84,11 @@ def test_voucher_type_catalog_includes_system_registry_and_accepts_book_code(app
     payload = search_select("voucher_type", "journal", {"company": ["cacao"], "ledger": [book.code]}, limit=50)
 
     assert any(option["value"] == "journal_entry" for option in payload["results"])
+    full_catalog = search_select("voucher_type", "", {"company": ["cacao"], "ledger": [book.code]}, limit=50)
+    values = {option["value"] for option in full_catalog["results"]}
+    assert "sales_invoice" in values
+    assert "sales_order" not in values
+    assert "purchase_order" not in values
 
 
 def test_gl_entry_rejects_missing_voucher_type():
