@@ -8,6 +8,7 @@ schema.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
@@ -83,7 +84,7 @@ def _document_base_outstanding_amount(document: Any) -> Decimal:
     return _signed(outstanding * _document_base_factor(document), document)
 
 
-def _company_currency_map(invoices: list[Any]) -> dict[str, str]:
+def _company_currency_map(invoices: Sequence[Any]) -> dict[str, str]:
     """Resolve configured currencies for the companies represented by invoices."""
     company_codes = {invoice.company for invoice in invoices if invoice.company}
     if not company_codes:
