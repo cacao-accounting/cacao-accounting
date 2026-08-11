@@ -187,13 +187,7 @@ def _document_no_label(entry: GLEntry) -> str:
 
 
 def _voucher_type_catalog(query: str, filters: dict[str, list[str]], limit: int | None) -> dict[str, Any]:
-    """Publica el catálogo de tipos documentales que pueden llegar al GL.
-
-    El catálogo no debe depender de que ya exista un movimiento en el libro
-    seleccionado: los filtros de reportes deben poder elegirse antes de que
-    haya datos para ese tipo. Se agregan también tipos históricos encontrados
-    en ``GLEntry`` para mantener compatibilidad con instalaciones existentes.
-    """
+    """Publica únicamente tipos documentales que pueden generar entradas GL."""
     allowed_filters = {"company", "ledger"}
     rejected = sorted(set(filters) - allowed_filters)
     if rejected:
@@ -201,7 +195,20 @@ def _voucher_type_catalog(query: str, filters: dict[str, list[str]], limit: int 
 
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
 
-    catalog = {key: (document_type.label or key) for key, document_type in DOCUMENT_TYPES.items()}
+    ledger_types = {
+        "sales_invoice",
+        "purchase_invoice",
+        "purchase_receipt",
+        "delivery_note",
+        "payment_entry",
+        "stock_entry",
+        "bank_transaction",
+        "journal_entry",
+        "import_landed_cost",
+        "exchange_revaluation",
+        "Capitalización Automática de Proyecto",
+    }
+    catalog = {key: (DOCUMENT_TYPES[key].label or key) for key in ledger_types if key in DOCUMENT_TYPES}
     catalog.update(
         {
             "exchange_revaluation": "Revalorización cambiaria",
@@ -209,20 +216,6 @@ def _voucher_type_catalog(query: str, filters: dict[str, list[str]], limit: int 
             "bank_transaction": "Transacción bancaria",
         }
     )
-
-    statement = select(GLEntry.voucher_type).where(GLEntry.voucher_type.is_not(None))
-    company_values = [value for value in filters.get("company", []) if value]
-    if company_values:
-        statement = statement.where(GLEntry.company.in_(company_values))
-    ledger_values = [value for value in filters.get("ledger", []) if value]
-    if ledger_values:
-        statement = statement.where(
-            GLEntry.ledger_id.in_(select(Book.id).where(or_(Book.id.in_(ledger_values), Book.code.in_(ledger_values))))
-        )
-    for value in database.session.execute(statement.distinct()).scalars():
-        normalized = str(value or "")
-        if normalized:
-            catalog.setdefault(normalized, normalized)
 
     normalized_query = query.strip().lower()
     options = [

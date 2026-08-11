@@ -2380,9 +2380,13 @@ todo movimiento GL tenga un tipo documental.
   El usuario no debe buscar por `naming_series_id`, ULID o `voucher_id`, que son
   identificadores internos técnicos.
 - El tipo de comprobante continúa usando Smart Select, pero sus opciones se
-  obtienen del catálogo `DOCUMENT_TYPES` del sistema y se complementan con
-  tipos históricos presentes en GL. El filtro de libro acepta código visible o
-  UUID interno.
+  obtienen de un catálogo contable derivado de los únicos orígenes que pueden
+  generar `GLEntry` (`sales_invoice`, `purchase_invoice`, `purchase_receipt`,
+  `delivery_note`, `payment_entry`, `stock_entry`, `bank_transaction`,
+  `journal_entry`, `import_landed_cost`, `exchange_revaluation` y
+  capitalización de proyectos). Documentos como `sales_order`, `purchase_order`,
+  solicitudes y cotizaciones quedan fuera porque nunca tocan el ledger. El
+  filtro de libro acepta código visible o UUID interno.
 - El motor de posting rechaza una entrada GL si no tiene `voucher_type`.
 
 ### Implementación y verificación
