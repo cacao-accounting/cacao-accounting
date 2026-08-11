@@ -74,6 +74,11 @@ from cacao_accounting.inventario.valuation_settings import (
     valuation_method_choices,
     valuation_method_label,
 )
+from cacao_accounting.compras.purchase_sourcing_service import (
+    PurchaseSourcingError,
+    get_purchase_sourcing_config,
+    set_purchase_sourcing_config,
+)
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.tax_rule_service import (
     TaxRuleServiceError,
@@ -571,6 +576,29 @@ def config_conciliacion_compras():
         configs=configs,
         companies=companies,
         titulo=_("Configuracion de Conciliacion de Compras"),
+    )
+
+
+@admin.route("/settings/purchase-sourcing", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def config_abastecimiento_compras():
+    """Administra las reglas globales del comparativo de ofertas."""
+    _require_system_admin()
+    if request.method == "POST":
+        try:
+            minimum = int(request.form.get("minimum_offers") or "2")
+            set_purchase_sourcing_config(bool(request.form.get("require_comparison")), minimum)
+            database.session.commit()
+            flash(_("Configuración de abastecimiento guardada correctamente."), "success")
+        except (PurchaseSourcingError, ValueError) as exc:
+            database.session.rollback()
+            flash(_(str(exc)), "danger")
+        return redirect(url_for("admin.config_abastecimiento_compras"))
+    return render_template(
+        "admin/purchase_sourcing_config.html",
+        config=get_purchase_sourcing_config(),
+        titulo=_("Configuración de Abastecimiento"),
     )
 
 

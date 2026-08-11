@@ -3,6 +3,51 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Comparativo de ofertas y colocación separada de órdenes
+
+### Petición
+
+Convertir el comparativo de ofertas en una adjudicación por línea, exigirlo de
+forma configurable y separar la confirmación del comparativo de la colocación
+de Órdenes de Compra.
+
+### Implementación
+
+- Se agregaron las configuraciones globales `Requerir Comparativo de Ofertas` y
+  `Mínimo de Ofertas Requeridas`, con valores predeterminados `False` y `2`.
+- El comparativo permite seleccionar proveedor por línea, aceptar cobertura
+  parcial y generar una adjudicación finalizada.
+- Una oferta única o una selección distinta de la recomendación exige al rol
+  `Gerente de Compras` y una justificación obligatoria.
+- La adjudicación finalizada no crea órdenes inmediatamente. El usuario debe
+  ejecutar el helper `Colocar Órdenes de Compra`, que genera una orden por
+  proveedor y cambia el comparativo a `used`.
+- Las Órdenes de Compra creadas desde adjudicación conservan la referencia al
+  comparativo y a las cotizaciones de proveedor mediante relaciones documentales.
+- Se agregaron modelos, migración, interfaz administrativa y pruebas unitarias
+  para mínimo de ofertas, oferta única, override y cobertura parcial.
+- Se incorporaron rondas opcionales de negociación: una ronda abierta es la
+  fuente activa de ofertas, cada nueva ronda cierra la anterior y no se pueden
+  abrir rondas después de finalizar el comparativo.
+
+### Revisión por pares aplicada
+
+- La justificación de gerente ahora se solicita también cuando se selecciona
+  una oferta no recomendada con el mínimo de ofertas cumplido.
+- `manual_override`, `override_reason` y `authorized_by` se registran por línea
+  y no contaminan las líneas adjudicadas sin override.
+- Se validan las rondas recibidas desde formularios y se correlacionan líneas
+  repetidas del RFQ por ocurrencia, evitando reutilizar una línea de proveedor.
+- La colocación de órdenes reclama atómicamente el comparativo antes de crear
+  documentos, cerrando la posibilidad de doble colocación concurrente.
+- La ronda activa se cierra al finalizar; se eliminó el hook sin generador de
+  `from_award` y el detalle post-adjudicación permanece visible.
+- Se añadieron pruebas para overrides por línea y códigos de artículo repetidos.
+- La revisión adicional confirmó que `from_award_id` no tiene referencias
+  restantes; la colocación conserva una única transacción y ahora revierte
+  explícitamente ante errores conocidos. Se separaron los mensajes de ronda y
+  se agregó logging para cotizaciones con cobertura insuficiente.
+
 ## 2026-08-11 — RBAC para operaciones físicas y nomenclatura de remisiones
 
 ### Hallazgo
