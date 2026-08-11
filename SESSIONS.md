@@ -24,6 +24,8 @@ presenta funcionalmente como “Remisión de Mercadería Vendida”.
 - La interfaz reemplaza “Nota de Entrega” por “Remisión de Mercadería Vendida”.
 - Inventario incorpora el acceso de consulta a “Remisiones de Mercadería
   Vendida” dentro de “Registros del Módulo”.
+- Inventario no muestra “Órdenes de Compra” en sus registros; la orden se
+  consulta desde Compras y sirve como origen al crear una recepción.
 - Se agregaron pruebas del contrato de propiedad RBAC y se conserva la suite
   focalizada como evidencia de regresión.
 
