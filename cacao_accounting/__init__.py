@@ -243,6 +243,9 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(current_user_open_task_count=current_user_open_task_count)
             app.jinja_env.globals.update(pending_approval_count=pending_approval_count)
             app.jinja_env.globals.update(audit_action_label=audit_action_label)
+            from cacao_accounting.document_flow.tracing import get_create_actions
+
+            app.jinja_env.globals.update(get_document_create_actions=get_create_actions)
             from cacao_accounting.document_flow.status import calculate_document_status
 
             app.jinja_env.globals.update(document_status_info=calculate_document_status)

@@ -38,6 +38,7 @@
 {{ macros.detail_nav_buttons(
             url_for('ventas.ventas_cotizacion_lista'),
             url_for('ventas.ventas_cotizacion_nueva')) }}
+{{ macros.document_create_actions("sales_quotation", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}
 {{ dv_macros.detail_header(

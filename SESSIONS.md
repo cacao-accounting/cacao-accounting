@@ -3,6 +3,25 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Atajos de creación en barra principal para flujos documentales
+
+### Petición
+
+Corregir la usabilidad de las acciones disponibles en la trazabilidad y
+revisar el mismo problema en los formularios de O2C, S2P e Inventario. Las
+acciones downstream deben funcionar como atajos visibles junto a “Nuevo”.
+
+### Implementación
+
+- Se creó el menú reutilizable “Crear” en la barra principal de 12 vistas de
+  detalle de ventas, compras e inventario.
+- El menú aparece como última acción a la derecha, después de “Nuevo”, con
+  azul institucional; “Nuevo” conserva su estilo verde.
+- Se eliminaron los botones duplicados del panel de flujo documental, que
+  queda enfocado en trazabilidad y relaciones.
+- Las opciones se siguen resolviendo desde `DOCUMENT_TYPES` y conservan sus
+  URLs y parámetros de origen.
+
 ## 2026-08-11 — Fallback de moneda local en datasets semánticos (#386)
 
 ### Petición
