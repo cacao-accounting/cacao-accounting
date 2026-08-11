@@ -26,6 +26,7 @@
     <caption style="display: none;">Listado de solicitudes de compra.</caption>
     <thead>
       <tr>
+        <th scope="col">Número</th>
         <th scope="col">Solicitado por</th>
         <th scope="col">Estado</th>
         <th scope="col">Departamento</th>
@@ -36,6 +37,11 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
+        <td>
+          <a href="{{ url_for('compras.compras_solicitud_compra', request_id=item.id) }}">
+            {{ item.document_no or item.id }}
+          </a>
+        </td>
         <td>{{ item.requested_by or "" }}</td>
         <td>{{ macros.document_status_for("purchase_request", item) }}</td>
         <td>{{ item.department or "" }}</td>

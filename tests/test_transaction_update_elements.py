@@ -59,6 +59,15 @@ def test_purchase_request_shortcuts_include_company_and_autofill_lines():
     assert '"&company=" ~ supplier_quotation_origen.company' in purchase_order
 
 
+def test_purchase_request_list_displays_generated_document_number():
+    """El listado de solicitudes debe mostrar y enlazar el número generado."""
+    template = _read("cacao_accounting/compras/templates/compras/solicitud_compra_lista.html")
+
+    assert '<th scope="col">Número</th>' in template
+    assert "item.document_no or item.id" in template
+    assert "compras.compras_solicitud_compra" in template
+
+
 def test_derived_document_pending_line_urls_are_company_scoped():
     """Todos los prellenados documentales deben enviar la compañía al API."""
     template_paths = [
