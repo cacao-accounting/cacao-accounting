@@ -805,6 +805,14 @@ def _apply_request_filters(
             statement = _apply_role_filter(statement, clean_values)
             continue
         column = _column_for(spec.model, spec.allowed_filters[filter_name])
+        if spec.model is Accounts and filter_name in {"classification", "account_type"}:
+            # Historical catalogs contain both Spanish labels (e.g. ``Activo``)
+            # and canonical lowercase values (e.g. ``asset``).  The account
+            # form sends the canonical value, so these semantic filters must
+            # not be case-sensitive.
+            conditions = [func.lower(column) == str(value).strip().lower() for value in clean_values]
+            statement = statement.where(or_(*conditions))
+            continue
         statement = statement.where(_condition_for(column, clean_values))
     return statement
 
