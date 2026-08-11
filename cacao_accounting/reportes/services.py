@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Sequence, cast
@@ -2488,8 +2488,10 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
+    # For balance sheet, query with include_closing=True to retrieve the closing entries (e.g. for retained earnings)
+    query_filters = replace(filters, include_closing=True)
     base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-    base_query = _apply_gl_filters(base_query, filters, None, period_end).where(GLEntry.ledger_id == selected_ledger.id)
+    base_query = _apply_gl_filters(base_query, query_filters, None, period_end).where(GLEntry.ledger_id == selected_ledger.id)
 
     by_account: dict[str, dict[str, Any]] = {}
     totals: dict[str, Decimal] = {
@@ -2504,6 +2506,10 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         if account is None:
             continue
         classification = _normalize_account_classification(account)
+        # Skip closing entries if include_closing is False and they are P&L or current FY
+        if not filters.include_closing and entry.is_fiscal_year_closing:
+            if classification in _PL_CLASSIFICATIONS or (fiscal_year_start and entry.posting_date >= fiscal_year_start):
+                continue
         # Limitar cuentas de P&L al año fiscal para no acumular ejercicios cerrados
         if classification in _PL_CLASSIFICATIONS and fiscal_year_start and entry.posting_date < fiscal_year_start:
             continue
