@@ -61,11 +61,11 @@
 
   {% if from_request_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_request&target_type=supplier_quotation&source_id=" ~ from_request_id,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_request&target_type=supplier_quotation&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company,
          source_label="Solicitud de Compra") }}
   {% elif from_rfq_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_quotation&target_type=supplier_quotation&source_id=" ~ from_rfq_id,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_quotation&target_type=supplier_quotation&source_id=" ~ from_rfq_id ~ "&company=" ~ rfq_origen.company,
          source_label="Solicitud de Cotización") }}
   {% else %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}

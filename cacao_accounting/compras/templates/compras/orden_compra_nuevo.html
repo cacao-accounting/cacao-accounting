@@ -54,13 +54,13 @@
     </div>
   </div>
   {% if from_request_id %}
-    {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_request&target_type=purchase_order&source_id=" ~ from_request_id %}
+    {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_request&target_type=purchase_order&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company %}
     {% set source_label = "Solicitud de Compra" %}
   {% elif from_rfq_id %}
-    {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_quotation&target_type=purchase_order&source_id=" ~ from_rfq_id %}
+    {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_quotation&target_type=purchase_order&source_id=" ~ from_rfq_id ~ "&company=" ~ rfq_origen.company %}
     {% set source_label = "Solicitud de Cotización" %}
   {% elif from_supplier_quotation_id %}
-    {% set source_api_url = "/api/document-flow/pending-lines?source_type=supplier_quotation&target_type=purchase_order&source_id=" ~ from_supplier_quotation_id %}
+    {% set source_api_url = "/api/document-flow/pending-lines?source_type=supplier_quotation&target_type=purchase_order&source_id=" ~ from_supplier_quotation_id ~ "&company=" ~ supplier_quotation_origen.company %}
     {% set source_label = "Cotización de Proveedor" %}
   {% else %}
     {% set source_api_url = None %}

@@ -43,6 +43,36 @@ def test_supplier_quotation_updates_from_purchase_quotation_doctype():
     assert "request_for_quotation" not in template
 
 
+def test_purchase_request_shortcuts_include_company_and_autofill_lines():
+    """Los atajos S2P deben cargar y aplicar las líneas de la solicitud origen."""
+    macro = _read("cacao_accounting/templates/transaction_form_macros.html")
+    supplier_quotation = _read("cacao_accounting/compras/templates/compras/cotizacion_proveedor_nueva.html")
+    purchase_order = _read("cacao_accounting/compras/templates/compras/orden_compra_nuevo.html")
+
+    assert "x-init='loadSourceFromUrl(" in macro
+    assert ").then(() => applySource())'" in macro
+    assert "target_type=supplier_quotation&source_id=" in supplier_quotation
+    assert '"&company=" ~ solicitud_origen.company' in supplier_quotation
+    assert '"&company=" ~ rfq_origen.company' in supplier_quotation
+    assert '"&company=" ~ solicitud_origen.company' in purchase_order
+    assert '"&company=" ~ rfq_origen.company' in purchase_order
+    assert '"&company=" ~ supplier_quotation_origen.company' in purchase_order
+
+
+def test_derived_document_pending_line_urls_are_company_scoped():
+    """Todos los prellenados documentales deben enviar la compañía al API."""
+    template_paths = [
+        *((ROOT / "cacao_accounting/ventas/templates/ventas").glob("*_nuevo.html")),
+        *((ROOT / "cacao_accounting/compras/templates/compras").glob("*_nuevo.html")),
+        ROOT / "cacao_accounting/inventario/templates/inventario/entrada_nuevo.html",
+    ]
+    for path in template_paths:
+        content = path.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            if "pending-lines?" in line:
+                assert "company" in line, path
+
+
 def test_update_elements_sources_are_configured_for_derived_documents():
     """Documentos derivados deben ofrecer Actualizar Elementos desde su origen real."""
     purchases = _read("cacao_accounting/compras/__init__.py")
