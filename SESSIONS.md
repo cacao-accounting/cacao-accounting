@@ -3,6 +3,19 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — Fallback de moneda local en datasets semánticos (#386)
+
+### Petición
+
+Corregir el issue P1 que dejaba sin moneda a facturas locales creadas sin `transaction_currency` ni `base_currency`.
+
+### Implementación
+
+- `get_receivables_analysis` y `get_payables_analysis` ahora resuelven la moneda configurada en `Entity` como fallback.
+- La consulta se realiza una vez por conjunto de resultados, evitando consultas repetidas por factura.
+- Se agregó `test_semantic_reports_fallback_to_company_currency`.
+- Prueba focalizada: 7 casos exitosos.
+
 ## 2026-08-11 — Cobertura ampliada para Record-to-Reports (R2R) Multimoneda y Multilibros
 
 ### Petición
