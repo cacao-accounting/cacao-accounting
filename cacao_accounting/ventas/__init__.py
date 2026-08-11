@@ -12,6 +12,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user, login_required
 
 from cacao_accounting.database import (
+    Book,
     CompanyParty,
     DeliveryNote,
     DeliveryNoteItem,
@@ -50,10 +51,13 @@ from cacao_accounting.document_flow.repository import consumed_qty_for_source, h
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.decorators import (  # noqa: F401
     exige_acceso_compania,
+    exige_acceso_compania_cualquiera,
     modulo_activo,
     verifica_acceso as verifica_acceso,
     verifica_permiso,
 )
+from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
 from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
 from cacao_accounting.list_filters import apply_list_filters
@@ -401,9 +405,25 @@ def _capture_sales_state(registro: Any) -> dict[str, Any]:
     return state
 
 
-def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
+def _paginate_list(model, search_fields, query=None, *, include_status: bool = True, access_modules=("sales",)):
     """Pagina un listado aplicando los filtros GET comunes."""
     base_query = query if query is not None else database.select(model)
+    if hasattr(model, "company"):
+        company = request.args.get("company")
+        if company:
+            exige_acceso_compania_cualquiera(access_modules, company, "consultar")
+            base_query = base_query.filter(model.company == company)
+        elif getattr(current_user, "classification", None) != "admin":
+            book_ids = set()
+            for module in access_modules:
+                module_id = obtener_id_modulo_por_nombre(module)
+                permissions = Permisos(modulo=module_id, usuario=current_user.id)
+                book_ids.update(permissions.obtener_libros_autorizados("can_read"))
+            if not book_ids:
+                base_query = base_query.where(database.false())
+            else:
+                accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
+                base_query = base_query.where(model.company.in_(accessible_companies))
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     return database.paginate(
         filtered_query,
@@ -411,6 +431,23 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
         max_per_page=10,
         count=True,
     )
+
+
+def _require_delivery_note_access(document: DeliveryNote, action: str = "consultar") -> None:
+    """Require Sales read access or Inventory write access for a delivery note."""
+    if not document.company:
+        abort(404)
+    if action == "consultar":
+        exige_acceso_compania_cualquiera(("sales", "inventory"), str(document.company), action)
+        return
+    exige_acceso_compania("inventory", str(document.company), action)
+
+
+def _can_manage_delivery_notes() -> bool:
+    """Return whether the current user has Inventory write permission."""
+    module_id = obtener_id_modulo_por_nombre("inventory")
+    permissions = Permisos(modulo=module_id, usuario=current_user.id)
+    return bool(permissions.administrador or permissions.can_write)
 
 
 @ventas.route("/")
@@ -729,16 +766,22 @@ def ventas_pedido_venta_cancel(request_id: str):
 
 
 @ventas.route("/delivery-note/list")
-@modulo_activo("sales")
+@modulo_activo(("sales", "inventory"))
 @login_required
 def ventas_entrega_lista():
     """Listado de notas de entrega."""
     consulta = _paginate_list(
         DeliveryNote,
         (DeliveryNote.document_no, DeliveryNote.customer_name, DeliveryNote.remarks),
+        access_modules=("sales", "inventory"),
     )
-    titulo = "Listado de Notas de Entrega - " + APPNAME
-    return render_template("ventas/entrega_lista.html", consulta=consulta, titulo=titulo)
+    titulo = "Listado de Remisiones de Mercadería Vendida - " + APPNAME
+    return render_template(
+        "ventas/entrega_lista.html",
+        consulta=consulta,
+        titulo=titulo,
+        can_manage_delivery_notes=_can_manage_delivery_notes(),
+    )
 
 
 @ventas.route("/sales-invoice/list")
@@ -2378,8 +2421,9 @@ def ventas_orden_venta_cancel(order_id: str):
 
 
 @ventas.route("/delivery-note/new", methods=["GET", "POST"])
-@modulo_activo("sales")
+@modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "crear")
 def ventas_entrega_nuevo():
     """Formulario para crear una nota de entrega."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
@@ -2464,13 +2508,14 @@ def ventas_entrega_nuevo():
 
 
 @ventas.route("/delivery-note/<note_id>")
-@modulo_activo("sales")
+@modulo_activo(("sales", "inventory"))
 @login_required
 def ventas_entrega(note_id):
     """Detalle de nota de entrega."""
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
+    _require_delivery_note_access(registro)
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=note_id)).all()
     titulo = (registro.document_no or note_id) + " - " + APPNAME
     return render_template(
@@ -2483,7 +2528,7 @@ def ventas_entrega(note_id):
 
 
 @ventas.route("/delivery-note/<note_id>/edit", methods=["GET", "POST"])
-@modulo_activo("sales")
+@modulo_activo("inventory")
 @login_required
 def ventas_entrega_editar(note_id: str):
     """Edita una nota de entrega en borrador."""
@@ -2494,6 +2539,7 @@ def ventas_entrega_editar(note_id: str):
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
+    _require_delivery_note_access(registro, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
@@ -2590,13 +2636,15 @@ def _handle_delivery_note_edit_post(registro):
 
 
 @ventas.route("/delivery-note/<note_id>/duplicate", methods=["POST"])
-@modulo_activo("sales")
+@modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "crear")
 def ventas_entrega_duplicar(note_id: str):
     """Duplica una nota de entrega como borrador nuevo."""
     origen = database.session.get(DeliveryNote, note_id)
     if not origen:
         abort(404)
+    _require_delivery_note_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -2638,9 +2686,9 @@ def ventas_entrega_duplicar(note_id: str):
 
 
 @ventas.route("/delivery-note/<note_id>/submit", methods=["POST"])
-@modulo_activo("sales")
+@modulo_activo("inventory")
 @login_required
-@verifica_permiso("sales", "autorizar")
+@verifica_permiso("inventory", "autorizar")
 def ventas_entrega_submit(note_id: str):
     """Aprueba una nota de entrega y libera la reserva de inventario.
 
@@ -2652,7 +2700,7 @@ def ventas_entrega_submit(note_id: str):
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
-    exige_acceso_compania("sales", registro.company, "autorizar")
+    exige_acceso_compania("inventory", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2696,15 +2744,15 @@ def _execute_delivery_note_cancellation(registro: DeliveryNote, note_id: str) ->
 
 
 @ventas.route("/delivery-note/<note_id>/cancel", methods=["POST"])
-@modulo_activo("sales")
+@modulo_activo("inventory")
 @login_required
-@verifica_permiso("sales", "anular")
+@verifica_permiso("inventory", "anular")
 def ventas_entrega_cancel(note_id: str):
     """Cancela una nota de entrega y restaura la reserva de inventario."""
     registro = database.session.get(DeliveryNote, note_id)
     if not registro:
         abort(404)
-    exige_acceso_compania("sales", registro.company, "anular")
+    exige_acceso_compania("inventory", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("delivery_note", note_id):

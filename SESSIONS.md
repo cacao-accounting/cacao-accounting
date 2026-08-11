@@ -3,6 +3,30 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-11 — RBAC para operaciones físicas y nomenclatura de remisiones
+
+### Hallazgo
+
+Compras y Ventas necesitan consultar recepciones y remisiones, pero Inventario
+debe administrar las operaciones físicas. La entrega de productos vendidos se
+presenta funcionalmente como “Remisión de Mercadería Vendida”.
+
+### Implementación
+
+- Compras conserva lectura de recepciones y Ventas conserva lectura de
+  remisiones mediante acceso por compañía en cualquiera de sus módulos.
+- Crear, editar, duplicar, aprobar y anular recepción/remisión se valida con
+  permisos RBAC del módulo Inventario.
+- Se retiró la creación de un `stock_entry` downstream desde una recepción de
+  compra para evitar doble movimiento y doble contabilización.
+- El registro documental usa Inventario para ambos documentos físicos, sin
+  cambiar sus identificadores técnicos (`purchase_receipt` y `delivery_note`).
+- La interfaz reemplaza “Nota de Entrega” por “Remisión de Mercadería Vendida”.
+- Inventario incorpora el acceso de consulta a “Remisiones de Mercadería
+  Vendida” dentro de “Registros del Módulo”.
+- Se agregaron pruebas del contrato de propiedad RBAC y se conserva la suite
+  focalizada como evidencia de regresión.
+
 ## 2026-08-11 — Atajos de creación en barra principal para flujos documentales
 
 ### Petición
@@ -2526,3 +2550,37 @@ series de cada solicitud de compra.
   compartida ahora presentan `Observaciones` como un `input` de una sola línea.
 - Se eliminaron los campos duplicados de observaciones en las tarjetas
   específicas de cada formulario.
+
+## 2026-08-11 — Recepción de Orden de Compra ubicada en Almacén
+
+### Decisión
+
+La recepción contra una Orden de Compra permanece como `purchase_receipt`,
+porque ya controla cantidades recibidas, bodega, Stock Ledger, contabilidad y
+conciliación 3-way. No se fusionará con `stock_entry` en esta etapa.
+
+### Implementación
+
+- El acceso principal de `purchase_receipt` se trasladó al módulo Inventario,
+  incluyendo listado, alta, detalle, edición, duplicación, aprobación y
+  cancelación.
+- La validación de compañía de la recepción ahora usa permisos de Inventario.
+- El menú de Compras dejó de mostrar Recepciones; Almacén muestra
+  “Recepciones de Órdenes de Compra”.
+- `stock_entry/material_receipt` se conserva para recepciones manuales sin
+  Orden de Compra.
+- Se eliminó la acción “Crear Entrada de Almacén” desde una recepción y el
+  flujo `purchase_receipt → stock_entry`, evitando doble movimiento de stock y
+  doble contabilización.
+- Los endpoints de líneas e importación de `purchase_receipt` quedaron
+  asociados al módulo Inventario.
+
+### Acceso cruzado de lectura
+
+- Inventario puede consultar Órdenes de Compra para iniciar una recepción.
+- Compras/Cuentas por Pagar puede consultar Recepciones de Órdenes de Compra.
+- La creación, edición, aprobación y cancelación permanecen separadas:
+  Inventario opera la recepción y Compras opera la Orden de Compra.
+- Los endpoints de lectura de líneas aplican la misma regla cruzada para que
+  el formulario de recepción pueda precargar los artículos de la Orden de
+  Compra.

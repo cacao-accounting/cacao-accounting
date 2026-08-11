@@ -17,9 +17,9 @@
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
     <h5 class="ca-card-title"><i class="bi bi-box-seam"></i> Listado de Recepciones de Compra.</h5>
-    <a href="{{ url_for('compras.compras_recepcion_nuevo') }}" class="btn btn-sm btn-primary">
+    {% if can_manage_receipts %}<a href="{{ url_for('compras.compras_recepcion_nuevo') }}" class="btn btn-sm btn-primary">
       <i class="bi bi-plus-circle me-1"></i>Nuevo
-    </a>
+    </a>{% endif %}
   </div>
   {{ macros.list_filters(show_status=True) }}
   <table class="ca-table">

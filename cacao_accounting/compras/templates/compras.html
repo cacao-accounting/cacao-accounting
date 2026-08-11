@@ -86,7 +86,7 @@
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('compras.compras_recepcion_lista') }}">Recepciones de Mercancía</a>
+        <a href="{{ url_for('compras.compras_recepcion_lista') }}">Recepciones de Órdenes de Compra</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
@@ -96,10 +96,6 @@
       {% else %}
       <li class="ca-no-access">
         <span>Órdenes de Compra</span>
-        {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
-      </li>
-      <li class="ca-no-access">
-        <span>Recepciones de Mercancía</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       <li class="ca-no-access">

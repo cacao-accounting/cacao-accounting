@@ -1022,7 +1022,7 @@ def inventario_entrada_nuevo():
         "uoms": uoms_disponibles,
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
-            {"value": "delivery_note", "label": _("Nota de Entrega")},
+            {"value": "delivery_note", "label": _("Remisión de Mercadería Vendida")},
         ],
     }
     if request.method == "POST":
@@ -1159,7 +1159,7 @@ def _source_context(source_type: str | None, source_id: str | None) -> tuple[str
     if source_type == "purchase_receipt":
         return f"/api/buying/purchase-receipt/{source_id}/items", "recepción de compra"
     if source_type == "delivery_note":
-        return f"/api/sales/delivery-note/{source_id}/items", "nota de entrega"
+        return f"/api/sales/delivery-note/{source_id}/items", "remisión de mercadería vendida"
     if source_type == "stock_entry":
         return f"/api/inventory/stock-entry/{source_id}/items", "movimiento de inventario"
     return None, _LABEL_DOCUMENTO_ORIGEN
@@ -1313,7 +1313,7 @@ def _render_stock_entry_edit_form(
         "uoms": uoms_disponibles,
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
-            {"value": "delivery_note", "label": _("Nota de Entrega")},
+            {"value": "delivery_note", "label": _("Remisión de Mercadería Vendida")},
         ],
         "initialHeader": {
             "company": registro.company or "",
