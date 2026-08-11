@@ -420,7 +420,12 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         total_field="grand_total",
         filter_fields=("document_no", "company", "customer_id", "customer_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
-            DocumentAction("Crear Remisión de Mercadería Vendida", "delivery_note", "ventas.ventas_entrega_nuevo", "from_order"),
+            DocumentAction(
+                "Crear Remisión de Mercadería Vendida",
+                "delivery_note",
+                "ventas.ventas_entrega_nuevo",
+                "from_order",
+            ),
             DocumentAction(CREAR_FACTURA, "sales_invoice", VENTAS_VENTAS_FACTURA_VENTA_NUEVO, "from_order"),
             DocumentAction(_ACTION_CREAR_PAGO, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_order"),
         ),

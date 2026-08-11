@@ -2099,6 +2099,8 @@ def compras_orden_compra_editar(order_id: str):
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+        sourcing_config=get_purchase_sourcing_config(),
+        is_purchase_manager=is_purchase_manager(current_user.id),
     )
 
 
