@@ -25,6 +25,19 @@ Corregir el issue P1 que dejaba sin moneda a facturas locales creadas sin `trans
 - Permanecen abiertos #376 y #377 porque el código aún no firma las cantidades de devoluciones y todavía no filtra pagos cancelados en `get_settlement_analysis`.
 - No se cerró #284: continúa requiriendo un contrato integral de precisión y redondeo, y su referencia documental fue eliminada por petición explícita, no por resolución funcional.
 
+## 2026-08-11 — Corrección de datasets semánticos para devoluciones y pagos cancelados
+
+### Petición
+
+Completar los fixes pendientes de los issues #376 y #377 para poder cerrarlos.
+
+### Implementación
+
+- `get_sales_analysis` y `get_purchase_analysis` ahora firman las cantidades de devoluciones igual que los importes.
+- `get_settlement_analysis` excluye pagos cancelados mediante `PaymentEntry.docstatus == 1`.
+- Se añadieron pruebas de cantidades netas y de exclusión de pagos cancelados.
+- Pruebas focalizadas: `2 passed`.
+
 ## 2026-08-11 — Cobertura ampliada para Record-to-Reports (R2R) Multimoneda y Multilibros
 
 ### Petición
