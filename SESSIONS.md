@@ -2479,3 +2479,17 @@ Source to Pay, Order to Cash e Inventory.
 - Suite focalizada de flujos documentales: 121 pruebas exitosas, 27 warnings.
 - `ruff`, `flake8`, `black --check`, `mypy`, `compileall` y `git diff --check`
   sin errores.
+
+## 2026-08-11 — Número documental visible en solicitudes de compra
+
+### Petición
+
+Mostrar en `/buying/purchase-request/list` el número generado por la naming
+series de cada solicitud de compra.
+
+### Implementación
+
+- Se agregó la columna `Número` al listado.
+- El valor usa `document_no` y conserva el `id` como respaldo para registros
+  históricos sin identificador visible.
+- El número enlaza directamente con el detalle de la solicitud.
