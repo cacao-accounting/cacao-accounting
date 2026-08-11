@@ -26,6 +26,7 @@
     <caption style="display: none;">Listado de cotizaciones de proveedor.</caption>
     <thead>
       <tr>
+        <th scope="col">Número</th>
         <th scope="col">Proveedor</th>
         <th scope="col">Estado</th>
         <th scope="col">Fecha</th>
@@ -35,6 +36,7 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
+        <td><a href="{{ url_for('compras.compras_cotizacion_proveedor', quotation_id=item.id) }}">{{ item.document_no or item.id }}</a></td>
         <td>{{ item.supplier_name or item.supplier_id }}</td>
         <td>{{ macros.document_status_for("supplier_quotation", item) }}</td>
         <td>{{ item.posting_date or "" }}</td>

@@ -28,6 +28,7 @@
     <caption style="display: none;">Listado de costos de importacion.</caption>
     <thead>
       <tr>
+        <th scope="col">Número</th>
         <th scope="col">Proveedor</th>
         <th scope="col">Estado</th>
         <th scope="col">Fecha</th>
@@ -37,6 +38,7 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
+        <td>{{ item.document_no or item.id }}</td>
         <td>{{ item.supplier_name or "" }}</td>
         <td>{{ macros.document_status_for("import_landed_cost", item) }}</td>
         <td>{{ item.posting_date or "" }}</td>

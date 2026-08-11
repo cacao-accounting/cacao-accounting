@@ -32,6 +32,7 @@
     <caption style="display: none;">Listado de pagos.</caption>
     <thead>
       <tr>
+        <th scope="col">Número</th>
         <th scope="col">Tipo</th>
         <th scope="col">Estado</th>
         <th scope="col">Tercero</th>
@@ -41,6 +42,7 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
+        <td><a href="{{ url_for('bancos.bancos_pago', payment_id=item.id) }}">{{ item.document_no or item.id }}</a></td>
         <td>{{ item.payment_type }}</td>
         <td>{{ macros.document_status_for("payment_entry", item) }}</td>
         <td>{{ item.party_name or "" }}</td>

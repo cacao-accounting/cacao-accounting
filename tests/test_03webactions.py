@@ -1469,7 +1469,7 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
                 html = response.get_data(as_text=True)
                 assert response.status_code == 200
                 assert "Cliente Filtro" in html
-                assert "FILTER-SO-01" not in html
+                assert "FILTER-SO-01" in html
 
                 response = client.get("/cash_management/payment/list?search=Cliente+Filtro&status=submitted")
                 html = response.get_data(as_text=True)

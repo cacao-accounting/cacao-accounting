@@ -35,7 +35,7 @@ class FormularioProveedor(FlaskForm):
     primary_address_line1 = StringField("Dirección principal")
     primary_address_line2 = StringField("Dirección principal línea 2")
     primary_address_city = StringField("Ciudad")
-    primary_address_state = StringField("Estado / Departamento")
+    primary_address_state = StringField("Estado / Provincia")
     primary_address_country = StringField("País")
     primary_address_postal_code = StringField("Código postal")
     company = StringField(COMPANIA)
@@ -94,8 +94,6 @@ class FormularioFacturaCompra(FlaskForm):
 class FormularioSolicitudCompra(FlaskForm):
     """Formulario para crear una solicitud de compra interna."""
 
-    requested_by = StringField("Solicitado por")
-    department = StringField("Departamento")
     company = SelectField(COMPANIA, choices=[])
     naming_series = SelectField("Serie", choices=[])
     posting_date = StringField(FECHA_DE_PUBLICACION)
