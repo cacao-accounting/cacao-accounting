@@ -38,6 +38,7 @@
 {{ macros.detail_nav_buttons(
             url_for('inventario.inventario_entrada_lista'),
             url_for('inventario.inventario_entrada_nuevo')) }}
+{{ macros.document_create_actions("stock_entry", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}
 {{ dv_macros.detail_header(

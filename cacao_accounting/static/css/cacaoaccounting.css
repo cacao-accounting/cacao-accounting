@@ -715,6 +715,21 @@ nav[aria-label="breadcrumb"] {
   border-color: #9ecc1e !important;
 }
 
+.ca-document-create-button,
+.ca-document-create-button:focus {
+  background-color: var(--ca-info) !important;
+  border-color: var(--ca-info) !important;
+  color: #fff !important;
+  font-weight: 500;
+}
+
+.ca-document-create-button:hover,
+.ca-document-create-button:active {
+  background-color: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
+  color: #fff !important;
+}
+
 .btn-danger, .btn-danger:focus {
   background-color: var(--ca-error) !important;
   border-color: var(--ca-error) !important;

@@ -496,19 +496,6 @@
               <div x-html="renderCurrentNode()"></div>
             </div>
 
-            <template x-if="createActions.length > 0">
-              <div class="ca-document-flow__section">
-                <p class="ca-document-flow__section-title mb-1">{{ _('Acciones disponibles') }}</p>
-                <div class="d-flex flex-wrap gap-2">
-                  <template x-for="action in createActions" :key="action.endpoint + '-' + action.target_type">
-                    <a :href="action.create_url" class="btn btn-sm btn-outline-primary" x-show="action.create_url">
-                      <i class="bi bi-plus-lg me-1"></i><span x-text="action.label"></span>
-                    </a>
-                  </template>
-                </div>
-              </div>
-            </template>
-
             <template x-if="upstream.length > 0">
               <div class="ca-document-flow__section">
                 <p class="ca-document-flow__section-title mb-1">{{ _('Origen / Documentos aplicados') }}</p>
@@ -541,6 +528,28 @@
     </template>
   </div>
 </div>
+{% endmacro %}
+
+{# ─── Primary document shortcuts ─────────────────────────────── #}
+{% macro document_create_actions(document_type, document) %}
+{% set actions = get_document_create_actions(document_type, document.id) %}
+{% set visible_actions = actions | selectattr('create_url') | list %}
+{% if visible_actions %}
+  <div class="dropdown d-inline-block">
+    <button class="btn btn-sm ca-document-create-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+      <i class="bi bi-plus-lg me-1"></i>{{ _('Crear') }}
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+      {% for action in visible_actions %}
+        <li>
+          <a class="dropdown-item" href="{{ action.create_url }}">
+            <i class="bi bi-arrow-right-circle me-2"></i>{{ _(action.label) }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
 {% endmacro %}
 
 {# ─── Workflow Buttons (Submit / Cancel) ──────────────────────── #}

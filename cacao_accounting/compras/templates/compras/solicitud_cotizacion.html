@@ -38,6 +38,7 @@
 {{ macros.detail_nav_buttons(
             url_for('compras.compras_solicitud_cotizacion_lista'),
             url_for('compras.compras_solicitud_cotizacion_nueva')) }}
+{{ macros.document_create_actions("purchase_quotation", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}
 {{ dv_macros.detail_header(
