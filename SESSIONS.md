@@ -14,6 +14,18 @@ Agregar pruebas adicionales que cubran el flujo de Record-to-Reports (record a r
 - **Flujo de Compras y Conciliación Multimoneda:** `test_r2r_purchase_flow_reconciliation_multicurrency` registra una factura de compra en USD y su respectiva devolución (Credit Note), afectando múltiples libros. Verifica que el saldo pendiente en el submayor de proveedores (AP Subledger) y los reportes operativos de compras por proveedor y artículo se neteen correctamente. Además, valida que la matriz de conciliación (Reconciliation Matrix) equilibre perfectamente y exponga con precisión las diferencias de traducción entre submayores en moneda base y mayor en moneda extranjera por cada libro.
 - Se formateó el código mediante Black y se verificó con Ruff, Flake8, mypy y pytest.
 
+## 2026-08-11 — Corrección de Rotación de Inventario para Movimientos Retroactivos (RPT-AUDIT-02)
+
+### Petición
+
+Corregir el cálculo de rotación de inventario cuando existen movimientos retroactivos y asegurar que el stock inicial del período participe en el promedio.
+
+### Implementación
+
+- `get_inventory_turnover` reconstruye el stock cronológicamente desde el ledger ordenado por fecha, creación e identificador.
+- Se incluyó el saldo inicial del período dentro del promedio.
+- Se agregó `test_get_inventory_turnover_with_backdated_transaction` para cubrir la reconstrucción ante transacciones retroactivas.
+
 ## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
 
 - Se eliminó la unicidad artificial por compañía/período de `ExchangeRevaluation`.
