@@ -8,6 +8,7 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import Book, GLEntry, database
+from cacao_accounting.reportes import _build_hierarchical_financial_rows
 from cacao_accounting.reportes.services import FinancialReportFilters, get_account_movement_detail
 from cacao_accounting.search_select import search_select
 
@@ -114,3 +115,17 @@ def test_gl_entry_rejects_missing_voucher_type():
 
     with pytest.raises(PostingError, match="tipo de comprobante"):
         _create_gl_entry(context=context, params=GLEntryParams(account_id="missing", debit=Decimal("1"), credit=Decimal("0")))
+
+
+def test_balance_sheet_period_result_is_after_equity_accounts(app_ctx):
+    """El resultado del período queda como última línea de la sección patrimonio."""
+    rows = _build_hierarchical_financial_rows(
+        "balance-sheet",
+        [
+            {"section": "equity", "account_code": "31", "account_name": "Capital", "amount": Decimal("2010")},
+            {"section": "equity", "account_code": None, "account_name": "period_profit_summary", "amount": Decimal("0")},
+        ],
+        "cacao",
+    )
+
+    assert [row.get("account_name") for row in rows] == ["Capital", "period_profit_summary"]
