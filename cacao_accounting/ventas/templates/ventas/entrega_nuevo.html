@@ -17,14 +17,14 @@
     <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_entrega_lista') }}" class="link-dark">Notas de
         Entrega</a></li>
     <li class="breadcrumb-item active" aria-current="page">
-      {{ (registro.document_no or registro.id) if edit else 'Nueva Nota de Entrega' }}</li>
+      {{ (registro.document_no or registro.id) if edit else 'Nueva Remisión de Mercadería Vendida' }}</li>
   </ol>
 </nav>
 
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
-  {{ tf_macros.transaction_form_header("Editar Nota de Entrega" if edit else "Nota de Entrega", cancel_url=url_for('ventas.ventas_entrega_lista')) }}
+  {{ tf_macros.transaction_form_header("Editar Remisión de Mercadería Vendida" if edit else "Remisión de Mercadería Vendida", cancel_url=url_for('ventas.ventas_entrega_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">

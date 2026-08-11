@@ -1300,7 +1300,8 @@ def test_inventory_stock_entry_routes(request):
 
                 response = client.get("/buying/purchase-receipt/REC-DEMO-0000001")
                 assert response.status_code == 200
-                assert "Entrada de Almacén" in response.get_data(as_text=True)
+                assert "Recepción de Compra" in response.get_data(as_text=True)
+                assert "Entrada de Almacén" not in response.get_data(as_text=True)
 
 
 def test_sales_quotation_routes(request):

@@ -13,6 +13,7 @@ from functools import wraps
 # ---------------------------------------------------------------------------------------
 from flask import abort, flash, request
 from flask_login import current_user
+from werkzeug.exceptions import HTTPException
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -118,6 +119,20 @@ def exige_acceso_compania(
     }.get(accion, "can_read")
     if permisos.autorizado and permisos.obtener_libros_autorizados(granular_action, company=company):
         return
+    abort(403)
+
+
+def exige_acceso_compania_cualquiera(
+    modulos: tuple[str, ...], company: str | None, accion: str = "consultar"
+) -> None:
+    """Require company access in at least one of several operational modules."""
+    for modulo in modulos:
+        try:
+            exige_acceso_compania(modulo, company, accion)
+            return
+        except HTTPException as exc:
+            if exc.code != 403:
+                raise
     abort(403)
 
 

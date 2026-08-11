@@ -45,7 +45,7 @@ from cacao_accounting.collaboration_service import (
     update_task_status,
 )
 from cacao_accounting.database import Entity, StockBin, database
-from cacao_accounting.decorators import exige_acceso_compania
+from cacao_accounting.decorators import exige_acceso_compania, exige_acceso_compania_cualquiera
 from cacao_accounting.api.dashboard import user_can_access_company
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
@@ -78,7 +78,11 @@ def _require_flow_company_access(payload: dict[str, Any], action: str = "crear")
         abort(404)
     module = _module_for_document_type(source_type)
     if module:
-        exige_acceso_compania(module, getattr(source, "company", None), action)
+        if source_type in {"purchase_order", "purchase_receipt", "delivery_note"} and action == "consultar":
+            access_modules = ("sales", "inventory") if source_type == "delivery_note" else ("purchases", "inventory")
+            exige_acceso_compania_cualquiera(access_modules, getattr(source, "company", None), action)
+        else:
+            exige_acceso_compania(module, getattr(source, "company", None), action)
 
 
 def _module_for_document_type(document_type: str) -> str | None:
@@ -87,13 +91,13 @@ def _module_for_document_type(document_type: str) -> str | None:
         "sales_request": "sales",
         "sales_quotation": "sales",
         "sales_order": "sales",
-        "delivery_note": "sales",
+        "delivery_note": "inventory",
         "sales_invoice": "sales",
         "purchase_request": "purchases",
         "purchase_quotation": "purchases",
         "supplier_quotation": "purchases",
         "purchase_order": "purchases",
-        "purchase_receipt": "purchases",
+        "purchase_receipt": "inventory",
         "purchase_invoice": "purchases",
         "stock_entry": "inventory",
         "journal_entry": "accounting",
@@ -112,7 +116,11 @@ def _require_document_read_access(document_type: str, document_id: str) -> Any:
         abort(404)
     module = _module_for_document_type(normalized_type)
     if module:
-        exige_acceso_compania(module, getattr(document, "company", None), "consultar")
+        if normalized_type in {"purchase_order", "purchase_receipt", "delivery_note"}:
+            access_modules = ("sales", "inventory") if normalized_type == "delivery_note" else ("purchases", "inventory")
+            exige_acceso_compania_cualquiera(access_modules, getattr(document, "company", None), "consultar")
+        else:
+            exige_acceso_compania(module, getattr(document, "company", None), "consultar")
     return document
 
 

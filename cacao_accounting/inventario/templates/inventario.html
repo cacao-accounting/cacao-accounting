@@ -70,6 +70,18 @@
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
+        <a href="{{ url_for('compras.compras_recepcion_lista') }}">Recepciones de Órdenes de Compra</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_entrega_lista') }}">Remisiones de Mercadería Vendida</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_orden_compra_lista') }}">Órdenes de Compra</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
         <a href="{{ url_for('inventario.inventario_material_issue_lista') }}">Salidas de Material</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>

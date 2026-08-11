@@ -470,10 +470,7 @@ def test_get_create_actions_builds_urls_with_query_params(app_ctx):
     assert "from_receipt=PREC-ACT-001" in (purchase_receipt_debit["create_url"] or "")
     assert "document_type=purchase_debit_note" in (purchase_receipt_debit["create_url"] or "")
 
-    purchase_receipt_stock = _find_action(purchase_receipt_actions, "Crear Entrada de Almacén")
-    assert purchase_receipt_stock["query_params"]["source_type"] == "purchase_receipt"
-    assert "source_id=PREC-ACT-001" in (purchase_receipt_stock["create_url"] or "")
-    assert "source_type=purchase_receipt" in (purchase_receipt_stock["create_url"] or "")
+    assert not any(action["label"] == "Crear Entrada de Almacén" for action in purchase_receipt_actions)
 
     sales_credit = _find_action(sales_invoice_actions, "Crear Nota de Crédito")
     assert sales_credit["query_params"]["document_type"] == "sales_credit_note"
@@ -608,11 +605,22 @@ def test_allowed_flows_include_order_advances_and_receipt_notes():
     assert is_allowed_flow("purchase_request", "supplier_quotation")
     assert is_allowed_flow("purchase_receipt", "purchase_credit_note")
     assert is_allowed_flow("purchase_receipt", "purchase_debit_note")
-    assert is_allowed_flow("purchase_receipt", "stock_entry")
+    assert not is_allowed_flow("purchase_receipt", "stock_entry")
     assert is_allowed_flow("purchase_credit_note", "payment_entry")
     assert is_allowed_flow("purchase_debit_note", "payment_entry")
     assert is_allowed_flow("sales_credit_note", "payment_entry")
     assert is_allowed_flow("sales_debit_note", "payment_entry")
+
+
+def test_inventory_owns_physical_receipt_and_delivery_documents():
+    """Verifica la separación RBAC entre consulta comercial y operación física."""
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    assert DOCUMENT_TYPES["purchase_order"].permission_module == "purchases"
+    assert DOCUMENT_TYPES["purchase_receipt"].permission_module == "inventory"
+    assert DOCUMENT_TYPES["delivery_note"].permission_module == "inventory"
+    assert DOCUMENT_TYPES["purchase_receipt"].label == "Recepción de Compra"
+    assert DOCUMENT_TYPES["delivery_note"].label == "Remisión de Mercadería Vendida"
 
 
 def test_purchase_return_document_type_registered():

@@ -68,6 +68,7 @@ from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.decorators import (  # noqa: F401
     exige_acceso_compania,
+    exige_acceso_compania_cualquiera,
     modulo_activo,
     verifica_acceso as verifica_acceso,
     verifica_permiso,
@@ -187,18 +188,20 @@ def _party_or_404(party_id: str) -> Party:
     return party
 
 
-def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
+def _paginate_list(model, search_fields, query=None, *, include_status: bool = True, access_modules=("purchases",)):
     """Pagina un listado aplicando los filtros GET comunes."""
     base_query = query if query is not None else database.select(model)
     if hasattr(model, "company"):
         company = request.args.get("company")
         if company:
-            exige_acceso_compania("purchases", company, "consultar")
+            exige_acceso_compania_cualquiera(access_modules, company, "consultar")
             base_query = base_query.filter(model.company == company)
         elif not getattr(current_user, "classification", None) == "admin":
-            module_id = obtener_id_modulo_por_nombre("purchases")
-            permissions = Permisos(modulo=module_id, usuario=current_user.id)
-            book_ids = permissions.obtener_libros_autorizados("can_read")
+            book_ids = set()
+            for module in access_modules:
+                module_id = obtener_id_modulo_por_nombre(module)
+                permissions = Permisos(modulo=module_id, usuario=current_user.id)
+                book_ids.update(permissions.obtener_libros_autorizados("can_read"))
             if not book_ids:
                 base_query = base_query.where(database.false())
             else:
@@ -218,14 +221,26 @@ def _require_purchase_document_access(document: Any, action: str = "consultar") 
     company = getattr(document, "company", None)
     if not company:
         abort(404)
-    exige_acceso_compania("purchases", str(company), action)
+    if action == "consultar" and isinstance(document, (PurchaseOrder, PurchaseReceipt)):
+        exige_acceso_compania_cualquiera(("purchases", "inventory"), str(company), action)
+        return
+    module = "inventory" if isinstance(document, PurchaseReceipt) else "purchases"
+    exige_acceso_compania(module, str(company), action)
 
 
 def _require_requested_purchase_company_access(document: Any, action: str = "editar") -> None:
     """Validate access when an edit attempts to move a document to another company."""
     requested_company = request.form.get("company")
     if requested_company and requested_company != getattr(document, "company", None):
-        exige_acceso_compania("purchases", requested_company, action)
+        module = "inventory" if isinstance(document, PurchaseReceipt) else "purchases"
+        exige_acceso_compania(module, requested_company, action)
+
+
+def _can_manage_purchase_receipts() -> bool:
+    """Return whether the current user has Inventory write permission."""
+    module_id = obtener_id_modulo_por_nombre("inventory")
+    permissions = Permisos(modulo=module_id, usuario=current_user.id)
+    return bool(permissions.administrador or permissions.can_write)
 
 
 @compras.route("/")
@@ -239,13 +254,14 @@ def compras_():
 
 
 @compras.route("/purchase-order/list")
-@modulo_activo("purchases")
+@modulo_activo(("purchases", "inventory"))
 @login_required
 def compras_orden_compra_lista():
     """Listado de ordenes de compra."""
     consulta = _paginate_list(
         PurchaseOrder,
         (PurchaseOrder.document_no, PurchaseOrder.supplier_name, PurchaseOrder.supplier_invoice_no, PurchaseOrder.remarks),
+        access_modules=("purchases", "inventory"),
     )
     titulo = "Listado de Ordenes de Compra - " + APPNAME
     return render_template("compras/orden_compra_lista.html", consulta=consulta, titulo=titulo)
@@ -1093,16 +1109,22 @@ def compras_comparativo_ofertas(rfq_id: str):
 
 
 @compras.route("/purchase-receipt/list")
-@modulo_activo("purchases")
+@modulo_activo(("purchases", "inventory"))
 @login_required
 def compras_recepcion_lista():
     """Listado de recepciones de compra."""
     consulta = _paginate_list(
         PurchaseReceipt,
         (PurchaseReceipt.document_no, PurchaseReceipt.supplier_name, PurchaseReceipt.remarks),
+        access_modules=("purchases", "inventory"),
     )
     titulo = "Listado de Recepciones de Compra - " + APPNAME
-    return render_template("compras/recepcion_lista.html", consulta=consulta, titulo=titulo)
+    return render_template(
+        "compras/recepcion_lista.html",
+        consulta=consulta,
+        titulo=titulo,
+        can_manage_receipts=_can_manage_purchase_receipts(),
+    )
 
 
 @compras.route("/purchase-invoice/list")
@@ -1797,7 +1819,7 @@ def _purchase_order_source_type(request_id: str | None, rfq_id: str | None, quot
 
 
 @compras.route("/purchase-order/<order_id>")
-@modulo_activo("purchases")
+@modulo_activo(("purchases", "inventory"))
 @login_required
 def compras_orden_compra(order_id):
     """Detalle de orden de compra."""
@@ -2525,8 +2547,9 @@ def compras_orden_compra_cancel(order_id: str):
 
 
 @compras.route("/purchase-receipt/new", methods=["GET", "POST"])
-@modulo_activo("purchases")
+@modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "crear")
 def compras_recepcion_nuevo():
     """Formulario para crear una recepción de compra."""
     from cacao_accounting.compras.forms import FormularioRecepcionCompra
@@ -2622,7 +2645,7 @@ def _create_purchase_receipt_from_form():
 
 
 @compras.route("/purchase-receipt/<receipt_id>")
-@modulo_activo("purchases")
+@modulo_activo(("purchases", "inventory"))
 @login_required
 def compras_recepcion(receipt_id):
     """Detalle de recepción de compra."""
@@ -2649,7 +2672,7 @@ def compras_recepcion(receipt_id):
 
 
 @compras.route("/purchase-receipt/<receipt_id>/edit", methods=["GET", "POST"])
-@modulo_activo("purchases")
+@modulo_activo("inventory")
 @login_required
 def compras_recepcion_editar(receipt_id: str):
     """Edita una recepcion de compra en borrador."""
@@ -2767,7 +2790,7 @@ def _handle_purchase_receipt_edit_post(registro):
 
 
 @compras.route("/purchase-receipt/<receipt_id>/duplicate", methods=["POST"])
-@modulo_activo("purchases")
+@modulo_activo("inventory")
 @login_required
 def compras_recepcion_duplicar(receipt_id: str):
     """Duplica una recepcion de compra como borrador nuevo."""
@@ -2918,15 +2941,15 @@ def _validate_invoice_requires_supplier_link(invoice_id: str) -> None:
 
 
 @compras.route("/purchase-receipt/<receipt_id>/submit", methods=["POST"])
-@modulo_activo("purchases")
+@modulo_activo("inventory")
 @login_required
-@verifica_permiso("purchases", "autorizar")
+@verifica_permiso("inventory", "autorizar")
 def compras_recepcion_submit(receipt_id: str):
     """Aprueba una recepción de compra."""
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
         abort(404)
-    exige_acceso_compania("purchases", registro.company, "autorizar")
+    exige_acceso_compania("inventory", registro.company, "autorizar")
     if registro.docstatus != 0:
         abort(400)
     try:
@@ -2953,15 +2976,15 @@ def compras_recepcion_submit(receipt_id: str):
 
 
 @compras.route("/purchase-receipt/<receipt_id>/cancel", methods=["POST"])
-@modulo_activo("purchases")
+@modulo_activo("inventory")
 @login_required
-@verifica_permiso("purchases", "anular")
+@verifica_permiso("inventory", "anular")
 def compras_recepcion_cancel(receipt_id: str):
     """Cancela una recepción de compra."""
     registro = database.session.get(PurchaseReceipt, receipt_id)
     if not registro:
         abort(404)
-    exige_acceso_compania("purchases", registro.company, "anular")
+    exige_acceso_compania("inventory", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("purchase_receipt", receipt_id):
