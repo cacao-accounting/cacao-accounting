@@ -37,6 +37,45 @@ Corregir el descuadre del balance general al consultar períodos que abarcan var
 - Se preservan e incluyen los asientos de cierre de años anteriores como utilidades retenidas.
 - Se continúan excluyendo los asientos de cierre del período actual cuando `include_closing=False`.
 - Se agregó cobertura en `tests/test_fiscal_year_closing.py`.
+## 2026-08-10 — Revisión de pull requests abiertos y comentarios de code review
+
+### Petición
+
+Revisar los pull requests abiertos del repositorio y sus comentarios de revisión
+de código, distinguiendo los hilos pendientes de los informativos o ya obsoletos.
+
+### Revisión realizada
+
+- Se inspeccionaron los PR abiertos #384–#392, sus conversaciones, reviews y
+  hilos inline con estado de resolución.
+- Se identificaron hallazgos pendientes en #385, #386, #388, #389, #391 y
+  #392. Los PR #384, #387 y #390 no tienen comentarios inline accionables.
+- Los hallazgos prioritarios se concentran en preservación histórica de
+  conciliaciones, fallback de moneda local, replay de conciliaciones de
+  inventario, cálculo de utilidades retenidas, conciliación por moneda del
+  ledger y reportes bancarios multi-moneda.
+- No se publicaron respuestas, reacciones, resoluciones de hilos ni cambios de
+  código; quedan como siguiente etapa para aprobación explícita de fixes.
+
+## 2026-08-10 — Corrección y publicación de hallazgos de code review
+
+### Petición
+
+Verificar si los hallazgos de los PR abiertos habían sido corregidos y publicar
+los fixes faltantes en sus ramas correspondientes.
+
+### Implementación
+
+- Se confirmó que los hallazgos de #385, #386 y #388 ya estaban corregidos en
+  las ramas actuales.
+- Se publicó en #389 el fallback al año fiscal vigente para evitar doble conteo
+  de resultados históricos cuando no se selecciona período.
+- Se publicó en #391 la conversión de los saldos AR/AP a la moneda del ledger
+  seleccionado, junto con expectativas de reconciliación multi-moneda.
+- Se publicó en #392 el cálculo del saldo GL bancario usando importes en moneda
+  de cuenta cuando coinciden con la moneda de la cuenta bancaria.
+- Las pruebas focalizadas pasaron: #389 (3), #391 (5) y #392 (1); Ruff,
+  Flake8, Mypy, Black y `git diff --check` pasaron sobre los archivos tocados.
 
 ## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
 
