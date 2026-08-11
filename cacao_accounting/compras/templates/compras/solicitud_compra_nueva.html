@@ -13,16 +13,6 @@
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {{ tf_macros.transaction_form_header("Editar Solicitud de Compra" if edit else "Solicitud de Compra") }}
-  <div class="ca-card p-3 mb-3">
-    <div class="row g-3">
-      <div class="col-md-6">
-      </div>
-      <div class="col-md-6">
-        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
-        <textarea class="form-control" id="remarks" name="remarks" rows="3" x-model="header.remarks"></textarea>
-      </div>
-    </div>
-  </div>
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
 </form>
 {% endblock %}

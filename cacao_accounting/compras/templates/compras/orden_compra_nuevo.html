@@ -38,10 +38,6 @@
         ) }}
       </div>
       <div class="col-md-6">
-        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
-        <textarea class="form-control" id="remarks" name="remarks" rows="3" x-model="header.remarks"></textarea>
-      </div>
-      <div class="col-md-6">
         <label class="form-label" for="transaction_currency">{{ _('Moneda de la transacción') }}</label>
         {{ tf_macros.smart_select(
             doctype="currency",
