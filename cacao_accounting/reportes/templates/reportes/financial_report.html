@@ -53,7 +53,12 @@
           <span data-advanced-label="hide" {% if request.args.get('advanced') != '1' %}hidden{% endif %}>{{ _("Ocultar filtros avanzados") }}</span>
         </button>
         <div class="ca-report-advanced-filters d-grid gap-2{% if request.args.get('advanced') != '1' %} is-hidden{% endif %}" id="financial-advanced-filters">
-          {{ smart_select_field("Comprobante", "voucher_number", "document_no", report_filters.voucher_number or '', "report-voucher-number", 0, {"company": {"selector": "#report-company"}, "ledger": {"selector": "#report-ledger"}}, ["#report-company", "#report-ledger"], ["company"]) }}
+          <label class="form-label mb-0 w-100">
+            {{ _("Comprobante") }}
+            <input class="form-control" type="text" name="voucher_number" id="report-voucher-number"
+              value="{{ report_filters.voucher_number or '' }}"
+              placeholder="{{ _('Número visible del comprobante') }}">
+          </label>
           {{ smart_select_field("Rango cuenta desde", "account_from", "account_code", report_filters.account_from or '', "report-account-from", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
           {{ smart_select_field("Rango cuenta hasta", "account_to", "account_code", report_filters.account_to or '', "report-account-to", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
           {{ smart_select_field("Centro de costos", "cost_center_code", "cost_center", report_filters.cost_center_code or '', "report-cost-center", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}

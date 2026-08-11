@@ -1821,7 +1821,7 @@ def _apply_party_filters(query: Any, filters: FinancialReportFilters) -> Any:
     if filters.party_id:
         query = query.where(GLEntry.party_id == filters.party_id)
     if filters.voucher_type:
-        query = query.where(GLEntry.voucher_type == filters.voucher_type)
+        query = query.where(func.lower(GLEntry.voucher_type) == filters.voucher_type.strip().lower())
     return query
 
 

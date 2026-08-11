@@ -2326,3 +2326,73 @@ Reconstruir la valoración de inventario en la fecha de corte (`date_to`) a part
   conciliación bancaria y varianza parcial quedaron ejecutables y pasaron.
 - Verificación final: `1641 passed, 8 skipped, 174 warnings` con el comando
   completo de pytest del proyecto.
+
+## 2026-08-11 — Auditoría S2P, O2C, R2R, inventario y bancos con cálculo independiente
+
+### Petición
+
+Revisar el código actual de los flujos S2P, O2C, R2R, inventario y bancos,
+validar manualmente los cálculos multilibro y multimoneda, y documentar los
+hallazgos en GitHub sin duplicar issues existentes.
+
+### Verificación
+
+- O2C: `3 × 12.50 - 1 × 12.50 = 25.00`; las pruebas de reportes semánticos
+  cubren cantidades y signos de devoluciones/notas.
+- S2P: con 10 unidades recibidas, 8 facturadas a 25.00, el matching correcto
+  es `min(10, 8) × 25.00 = 200.00`; se revisaron los caminos 2-way y 3-way.
+- R2R multimoneda: `100.00 - 40.00` a factor histórico `1.10` produce
+  `66.00` en moneda funcional. El cierre manual de ingresos 1,000 y gastos
+  400 produce utilidades retenidas netas de 600.
+- Inventario: 10 unidades recibidas a 20.00 menos 4 unidades salidas a 20.00
+  deja 6 unidades y valor final 120.00; se revisó la reconstrucción por deltas
+  al corte.
+- Bancos: un depósito de 100.00 contra débito GL de 100.00 produce diferencia
+  cero; se revisaron dirección, compañía, libro y docstatus.
+- Pruebas focalizadas: `tests/test_record_to_reports_multicurrency_multiledger.py`
+  pasó 8 pruebas y el conjunto ampliado de conciliación, cierre, O2C, pagos e
+  inventario terminó correctamente.
+
+### Hallazgo nuevo
+
+Se abrió GitHub issue [#393](https://github.com/cacao-accounting/cacao-accounting/issues/393):
+la conciliación bancaria descarta entradas GL cuya `account_currency` difiere
+de la moneda bancaria aunque exista un importe funcional equivalente. Caso
+independiente: EUR 100 × 1.10 = USD 110, banco USD 110, diferencia esperada
+USD 0.00; el filtro actual no ofrece la entrada como candidata.
+
+Los demás hallazgos confirmados pertenecen a issues remotos existentes
+(`#278`–`#282`, `#284`, `#285`, `#293` y los issues específicos de inventario,
+O2C y bancos), por lo que no se crearon duplicados.
+
+## 2026-08-11 — Corrección de filtros del mayor y catálogo de tipos documentales
+
+### Petición
+
+Corregir los filtros de reportes para buscar un comprobante específico y por
+tipo de comprobante, publicar los tipos mediante Smart Select y garantizar que
+todo movimiento GL tenga un tipo documental.
+
+### Decisiones de diseño
+
+- La búsqueda de un comprobante usa únicamente el valor visible generado por
+  la naming series (`GLEntry.document_no`), mediante un campo de texto libre.
+  El usuario no debe buscar por `naming_series_id`, ULID o `voucher_id`, que son
+  identificadores internos técnicos.
+- El tipo de comprobante continúa usando Smart Select, pero sus opciones se
+  obtienen del catálogo `DOCUMENT_TYPES` del sistema y se complementan con
+  tipos históricos presentes en GL. El filtro de libro acepta código visible o
+  UUID interno.
+- El motor de posting rechaza una entrada GL si no tiene `voucher_type`.
+
+### Implementación y verificación
+
+- Se corrigieron los filtros de número y tipo en
+  `cacao_accounting/reportes/services.py`.
+- Se reemplazó el Smart Select del número por un campo de texto en
+  `cacao_accounting/reportes/templates/reportes/financial_report.html`.
+- Se agregó el catálogo de tipos en `cacao_accounting/search_select.py`.
+- Se agregó validación defensiva en `cacao_accounting/contabilidad/posting.py`.
+- Se agregaron tres regresiones en
+  `tests/test_report_filter_regressions.py`: búsqueda por número visible,
+  catálogo por libro y rechazo de GL sin tipo.

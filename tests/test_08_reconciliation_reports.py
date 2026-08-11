@@ -1652,7 +1652,7 @@ def test_financial_reports_framework_uses_gl_and_supports_export(app_ctx):
     assert 'doctype: "company"' in html
     assert 'doctype: "book"' in html
     assert 'doctype: "accounting_period"' in html
-    assert 'doctype: "document_no"' in html
+    assert 'name="voucher_number"' in html
     response_xlsx = client.get("/reports/account-movement?company=cacao&ledger=FISC&accounting_period=2026-05&export=xlsx")
     assert response_xlsx.status_code == 200
     assert response_xlsx.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
