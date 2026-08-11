@@ -75,15 +75,15 @@
 
   {% if from_invoice_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_invoice&target_type=purchase_invoice&source_id=" ~ from_invoice_id,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_invoice&target_type=purchase_invoice&source_id=" ~ from_invoice_id ~ "&company=" ~ factura_origen.company,
          source_label="Factura de Compra") }}
   {% elif from_receipt_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=purchase_invoice&source_id=" ~ from_receipt_id,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=purchase_invoice&source_id=" ~ from_receipt_id ~ "&company=" ~ recepcion_origen.company,
          source_label="Recepción de Compra") }}
   {% elif from_order_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_order&target_type=purchase_invoice&source_id=" ~ from_order_id,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_order&target_type=purchase_invoice&source_id=" ~ from_order_id ~ "&company=" ~ orden_origen.company,
          source_label="Orden de Compra") }}
   {% else %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}

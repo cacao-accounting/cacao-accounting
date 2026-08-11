@@ -2453,3 +2453,29 @@ todo movimiento GL tenga un tipo documental.
   flujos de alta, consulta, edición y eliminación/desactivación de Entidades,
   Catálogo de Cuentas, Centros de Costos, Unidades de Negocio, Libros,
   Proyectos, Monedas, Tasas de Cambio, Períodos Contables y Años Fiscales.
+
+## 2026-08-11 — Precarga de líneas en documentos derivados de S2P, O2C e Inventario
+
+### Petición
+
+Corregir los formularios derivados abiertos desde una transacción para que
+conserven sus artículos y cantidades, y revisar el mismo problema de UX en
+Source to Pay, Order to Cash e Inventory.
+
+### Implementación
+
+- Los formularios derivados ahora envían la compañía de la transacción origen
+  al endpoint de líneas pendientes, evitando respuestas vacías o inválidas por
+  falta de contexto multiempresa.
+- La grilla transaccional carga y aplica automáticamente las líneas recibidas
+  desde `from_request` u otros documentos origen, por lo que los artículos
+  aparecen al abrir cotizaciones, órdenes, recepciones, facturas y documentos
+  equivalentes.
+- Se agregaron regresiones para cubrir los enlaces de S2P/O2C/Inventory y la
+  aplicación automática de las líneas origen.
+
+### Verificación
+
+- Suite focalizada de flujos documentales: 121 pruebas exitosas, 27 warnings.
+- `ruff`, `flake8`, `black --check`, `mypy`, `compileall` y `git diff --check`
+  sin errores.
