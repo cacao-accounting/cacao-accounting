@@ -545,12 +545,15 @@ def _flatten_section(
     non_account_rows: list[dict[str, object]],
 ) -> list[dict[str, object]]:
     """Flattenea una seccion individual."""
-    result = list(non_account_rows)
+    result: list[dict[str, object]] = []
     if not nodes:
-        return result
+        return list(non_account_rows)
     ordered_children_map = _build_children_map(set(nodes.keys()))
     root_codes = _find_root_codes(nodes)
     result.extend(_flatten_nodes_by_root(nodes, ordered_children_map, root_codes))
+    # Los resúmenes de sección (por ejemplo, utilidad del período) se muestran
+    # después del detalle para no interrumpir la jerarquía de cuentas.
+    result.extend(non_account_rows)
     return result
 
 

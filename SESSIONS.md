@@ -2400,3 +2400,15 @@ todo movimiento GL tenga un tipo documental.
 - Se agregaron tres regresiones en
   `tests/test_report_filter_regressions.py`: búsqueda por número visible,
   catálogo por libro y rechazo de GL sin tipo.
+
+## 2026-08-11 — Orden del resultado del período en el balance general
+
+- Se confirmó mediante cálculo independiente que `Assets 2,010.00`,
+  `Equity 2,010.00`, `Period Profit 0.00` y `Difference 0.00` es consistente
+  cuando el activo está financiado por capital y no hubo resultado del período.
+- Se corrigió la presentación jerárquica en `reportes/__init__.py` para que los
+  resúmenes no contables, incluido `period_profit_summary`, se agreguen después
+  de las cuentas de la sección. Así el resultado del período queda como última
+  línea del reporte, después de las cuentas de patrimonio.
+- Se agregó una regresión que verifica el orden `Capital` →
+  `period_profit_summary`; la validación focalizada pasó 24 pruebas.
