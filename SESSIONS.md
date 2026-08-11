@@ -26,6 +26,18 @@ Corregir el cálculo de rotación de inventario cuando existen movimientos retro
 - Se incluyó el saldo inicial del período dentro del promedio.
 - Se agregó `test_get_inventory_turnover_with_backdated_transaction` para cubrir la reconstrucción ante transacciones retroactivas.
 
+## 2026-08-11 — Corrección del Balance General Multianual y Utilidades Retenidas
+
+### Petición
+
+Corregir el descuadre del balance general al consultar períodos que abarcan varios años fiscales cerrados.
+
+### Implementación
+
+- Se preservan e incluyen los asientos de cierre de años anteriores como utilidades retenidas.
+- Se continúan excluyendo los asientos de cierre del período actual cuando `include_closing=False`.
+- Se agregó cobertura en `tests/test_fiscal_year_closing.py`.
+
 ## 2026-08-11 — Reejecución de revalorización cambiaria en pre-release
 
 - Se eliminó la unicidad artificial por compañía/período de `ExchangeRevaluation`.
