@@ -16,6 +16,15 @@ Corregir el issue P1 que dejaba sin moneda a facturas locales creadas sin `trans
 - Se agregó `test_semantic_reports_fallback_to_company_currency`.
 - Prueba focalizada: 7 casos exitosos.
 
+## 2026-08-11 — Verificación y cierre selectivo de issues
+
+### Implementación
+
+- Se ejecutaron las pruebas de los módulos relacionados con los fixes: `228 passed`.
+- Se cerraron con evidencia los issues #374, #375, #378, #379, #380, #299, #303, #309 y #311.
+- Permanecen abiertos #376 y #377 porque el código aún no firma las cantidades de devoluciones y todavía no filtra pagos cancelados en `get_settlement_analysis`.
+- No se cerró #284: continúa requiriendo un contrato integral de precisión y redondeo, y su referencia documental fue eliminada por petición explícita, no por resolución funcional.
+
 ## 2026-08-11 — Cobertura ampliada para Record-to-Reports (R2R) Multimoneda y Multilibros
 
 ### Petición
