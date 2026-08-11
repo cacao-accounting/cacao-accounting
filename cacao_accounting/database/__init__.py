@@ -1757,7 +1757,6 @@ class PurchaseRequest(database.Model, DocBase):  # type: ignore[name-defined]
 
     __tablename__ = "purchase_request"
     requested_by = database.Column(database.String(100), nullable=True)
-    department = database.Column(database.String(100), nullable=True)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)

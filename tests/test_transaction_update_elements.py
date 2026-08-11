@@ -68,6 +68,35 @@ def test_purchase_request_list_displays_generated_document_number():
     assert "compras.compras_solicitud_compra" in template
 
 
+def test_purchase_request_does_not_expose_department_concept():
+    """La solicitud de compra no debe presentar Departamento como atributo."""
+    form = _read("cacao_accounting/compras/forms.py")
+    new_template = _read("cacao_accounting/compras/templates/compras/solicitud_compra_nueva.html")
+    detail_template = _read("cacao_accounting/compras/templates/compras/solicitud_compra.html")
+
+    assert 'department = StringField("Departamento")' not in form
+    assert 'requested_by = StringField("Solicitado por")' not in form
+    assert "form.department" not in new_template
+    assert "form.requested_by" not in new_template
+    assert "Departamento" not in detail_template
+
+
+def test_transaction_lists_show_document_number():
+    """Los listados transaccionales deben mostrar el identificador visible."""
+    template_paths = [
+        *((ROOT / "cacao_accounting/compras/templates/compras").glob("*_lista.html")),
+        *((ROOT / "cacao_accounting/ventas/templates/ventas").glob("*_lista.html")),
+        ROOT / "cacao_accounting/inventario/templates/inventario/entrada_lista.html",
+        ROOT / "cacao_accounting/bancos/templates/bancos/pago_lista.html",
+    ]
+    excluded = {"comparativo_ofertas_lista.html", "proveedor_lista.html", "cliente_lista.html"}
+    for path in template_paths:
+        if path.name in excluded:
+            continue
+        content = path.read_text(encoding="utf-8")
+        assert "document_no or item.id" in content, path
+
+
 def test_derived_document_pending_line_urls_are_company_scoped():
     """Todos los prellenados documentales deben enviar la compañía al API."""
     template_paths = [

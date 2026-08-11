@@ -25,6 +25,7 @@
     <caption style="display: none;">Listado de entradas de almacen.</caption>
     <thead>
       <tr>
+        <th scope="col">Número</th>
         <th scope="col">Propósito</th>
         <th scope="col">Estado</th>
         <th scope="col">Fecha</th>
@@ -34,6 +35,7 @@
     <tbody>
       {% for item in consulta.items -%}
       <tr>
+        <td><a href="{{ url_for('inventario.inventario_entrada', entry_id=item.id) }}">{{ item.document_no or item.id }}</a></td>
         <td>{{ item.purpose }}</td>
         <td>{{ macros.document_status_for("stock_entry", item) }}</td>
         <td>{{ item.posting_date or "" }}</td>

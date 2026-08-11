@@ -36,7 +36,7 @@ class FormularioCliente(FlaskForm):
     primary_address_line1 = StringField("Dirección principal")
     primary_address_line2 = StringField("Dirección principal línea 2")
     primary_address_city = StringField("Ciudad")
-    primary_address_state = StringField("Estado / Departamento")
+    primary_address_state = StringField("Estado / Provincia")
     primary_address_country = StringField("País")
     primary_address_postal_code = StringField("Código postal")
     receivable_account_id = StringField("Cuenta por cobrar")

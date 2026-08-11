@@ -258,7 +258,7 @@ def compras_solicitud_compra_lista():
     """Listado de solicitudes de compra internas."""
     consulta = _paginate_list(
         PurchaseRequest,
-        (PurchaseRequest.document_no, PurchaseRequest.requested_by, PurchaseRequest.department, PurchaseRequest.remarks),
+        (PurchaseRequest.document_no, PurchaseRequest.requested_by, PurchaseRequest.remarks),
     )
     titulo = "Listado de Solicitudes de Compra - " + APPNAME
     return render_template("compras/solicitud_compra_lista.html", consulta=consulta, titulo=titulo)
@@ -296,12 +296,12 @@ def compras_solicitud_compra_nueva():
         try:
             posting_date = _parse_date(request.form.get("posting_date"))
             solicitud = PurchaseRequest(
-                requested_by=request.form.get("requested_by"),
-                department=request.form.get("department"),
+                requested_by=getattr(current_user, "user", None) or str(current_user.id),
                 company=request.form.get("company") or None,
                 posting_date=posting_date,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
+                created_by=str(current_user.id),
             )
             database.session.add(solicitud)
             database.session.flush()
@@ -386,7 +386,6 @@ def compras_solicitud_compra_editar(request_id: str):
         try:
             before_state = _capture_purchase_state(registro)
             registro.requested_by = request.form.get("requested_by")
-            registro.department = request.form.get("department")
             registro.company = request.form.get("company") or None
             registro.posting_date = _parse_date(request.form.get("posting_date"))
             registro.remarks = request.form.get("remarks")
@@ -455,12 +454,12 @@ def compras_solicitud_compra_duplicar(request_id: str):
         abort(404)
     _require_purchase_document_access(origen, "crear")
     duplicada = PurchaseRequest(
-        requested_by=origen.requested_by,
-        department=origen.department,
+        requested_by=getattr(current_user, "user", None) or str(current_user.id),
         company=origen.company,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         docstatus=0,
+        created_by=str(current_user.id),
     )
     database.session.add(duplicada)
     database.session.flush()

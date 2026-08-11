@@ -151,7 +151,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         detail_endpoint="compras.compras_solicitud_compra",
         detail_arg="request_id",
         total_field="grand_total",
-        filter_fields=("document_no", "company", "requested_by", "department", "posting_date", "grand_total", "docstatus"),
+        filter_fields=("document_no", "company", "requested_by", "posting_date", "grand_total", "docstatus"),
         create_actions=(
             DocumentAction(
                 "Crear Solicitud de Cotización",

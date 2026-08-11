@@ -2493,3 +2493,21 @@ series de cada solicitud de compra.
 - El valor usa `document_no` y conserva el `id` como respaldo para registros
   históricos sin identificador visible.
 - El número enlaza directamente con el detalle de la solicitud.
+
+## 2026-08-11 — Eliminación del concepto Departamento en solicitudes de compra
+
+- Se retiró `Departamento` del formulario nuevo/edición, detalle y listado de
+  solicitudes de compra, junto con su filtro documental y asignaciones de
+  backend.
+- Se eliminó el atributo ORM funcional; la columna física histórica no se
+  elimina para evitar una migración destructiva.
+- Las etiquetas de dirección ahora usan `Estado / Provincia`, que describe un
+  dato geográfico y no un clasificador organizacional.
+
+## 2026-08-11 — Solicitante derivado del usuario creador
+
+- Se retiró `Solicitado por` del formulario de solicitud de compra.
+- Al crear o duplicar una solicitud, `requested_by` se asigna al usuario
+  autenticado y `created_by` conserva su identificador interno.
+- La información continúa visible únicamente en el listado y detalle para
+  consulta, sin permitir inconsistencias editables.
