@@ -499,3 +499,320 @@ def test_semantic_reports_multicurrency(app_ctx):
     assert row_p_nio["outstanding_amount"] == Decimal("100")
     assert row_p_nio["base_amount"] == Decimal("100")
     assert row_p_nio["base_outstanding_amount"] == Decimal("100")
+def test_r2r_multi_currency_journal_entry_all_reports(app_ctx):
+    """Post manual journal entries in GBP to NIO/EUR/USD books and verify reports."""
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        Book,
+        Currency,
+        ExchangeRate,
+        ComprobanteContable,
+        ComprobanteContableDetalle,
+        GLEntry,
+        database,
+    )
+    from cacao_accounting.reportes.services import (
+        FinancialReportFilters,
+        get_balance_sheet_report,
+        get_income_statement_report,
+        get_trial_balance_report,
+        get_account_summary_report,
+    )
+
+    currencies = [Currency(code=code, name=code, decimals=2, active=True) for code in ("NIO", "USD", "EUR", "GBP")]
+    local_book = Book(entity="r2r", code="R2RLOC", name="Local", currency="NIO", status="activo", is_primary=True)
+    ifrs_book = Book(entity="r2r", code="R2REUR", name="IFRS", currency="EUR", status="activo")
+    us_gaap_book = Book(entity="r2r", code="R2RUSD", name="USGAAP", currency="USD", status="activo")
+
+    receivable = Accounts(entity="r2r", code="AR-JE", name="Receivable JE", active=True, enabled=True, classification="asset")
+    income = Accounts(
+        entity="r2r",
+        code="INC-JE",
+        name="Income JE",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+
+    database.session.add_all([*currencies, local_book, ifrs_book, us_gaap_book, receivable, income])
+    database.session.flush()
+
+    database.session.add_all(
+        [
+            ExchangeRate(origin="GBP", destination="NIO", rate=Decimal("50"), date=date(2026, 8, 7)),
+            ExchangeRate(origin="GBP", destination="EUR", rate=Decimal("1.2"), date=date(2026, 8, 7)),
+            ExchangeRate(origin="GBP", destination="USD", rate=Decimal("1.3"), date=date(2026, 8, 7)),
+        ]
+    )
+    database.session.flush()
+
+    journal = ComprobanteContable(
+        entity="r2r",
+        date=date(2026, 8, 7),
+        transaction_currency="GBP",
+        memo="Manual multi-currency JE",
+    )
+    database.session.add(journal)
+    database.session.flush()
+
+    database.session.add_all(
+        [
+            ComprobanteContableDetalle(
+                entity="r2r",
+                account=receivable.code,
+                date=journal.date,
+                transaction="journal_entry",
+                transaction_id=journal.id,
+                value=Decimal("10.00"),
+                memo="Dr Receivable",
+                third_type="customer",
+                third_code="CUST-JE",
+            ),
+            ComprobanteContableDetalle(
+                entity="r2r",
+                account=income.code,
+                date=journal.date,
+                transaction="journal_entry",
+                transaction_id=journal.id,
+                value=Decimal("-10.00"),
+                memo="Cr Income",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    post_document_to_gl(journal)
+    database.session.commit()
+
+    entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
+    assert len(entries) == 6
+
+    expected_rates = {
+        local_book.id: ("NIO", Decimal("50"), Decimal("500")),
+        ifrs_book.id: ("EUR", Decimal("1.2"), Decimal("12")),
+        us_gaap_book.id: ("USD", Decimal("1.3"), Decimal("13")),
+    }
+
+    for ledger_id, (currency, rate, amount) in expected_rates.items():
+        book_entries = [entry for entry in entries if entry.ledger_id == ledger_id]
+        assert len(book_entries) == 2
+        assert {entry.company_currency for entry in book_entries} == {currency}
+        assert {entry.account_currency for entry in book_entries} == {"GBP"}
+        assert {entry.exchange_rate for entry in book_entries} == {rate}
+        assert sum(entry.debit for entry in book_entries) == amount
+        assert sum(entry.credit for entry in book_entries) == amount
+        assert sum(entry.debit_in_account_currency or 0 for entry in book_entries) == Decimal("10")
+        assert sum(entry.credit_in_account_currency or 0 for entry in book_entries) == Decimal("10")
+
+    report_checks = [
+        ("R2RLOC", "NIO", Decimal("500")),
+        ("R2REUR", "EUR", Decimal("12")),
+        ("R2RUSD", "USD", Decimal("13")),
+    ]
+
+    for ledger_code, currency, expected_amount in report_checks:
+        filters = FinancialReportFilters(company="r2r", ledger=ledger_code)
+
+        tb = get_trial_balance_report(filters)
+        assert tb.ledger_currency == currency
+        assert tb.totals["debit"] == expected_amount
+        assert tb.totals["credit"] == expected_amount
+        assert tb.totals["difference"] == 0
+
+        income_stmt = get_income_statement_report(filters)
+        assert income_stmt.totals["income"] == expected_amount
+        assert income_stmt.totals["net_profit"] == expected_amount
+
+        bs = get_balance_sheet_report(filters)
+        assert bs.totals["assets"] == expected_amount
+        assert bs.totals["period_profit"] == expected_amount
+        assert bs.totals["difference"] == 0
+
+        summary_rpt = get_account_summary_report(filters)
+        assert summary_rpt.ledger_currency == currency
+        assert summary_rpt.totals["debit"] == expected_amount
+        assert summary_rpt.totals["credit"] == expected_amount
+        assert summary_rpt.totals["difference"] == 0
+
+
+def test_r2r_purchase_flow_reconciliation_multicurrency(app_ctx):
+    """Post USD purchase invoice & returns into NIO/EUR/USD books.
+
+    Verify reconciliation & operational reports.
+    """
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        Book,
+        CompanyDefaultAccount,
+        Currency,
+        ExchangeRate,
+        PartyAccount,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        database,
+    )
+    from cacao_accounting.reportes.services import (
+        OperationalReportFilters,
+        ReconciliationFilters,
+        get_reconciliation_matrix,
+        get_purchases_by_supplier,
+        get_purchases_by_item,
+        get_ar_ap_subledger,
+        SubledgerFilters,
+    )
+
+    currencies = [Currency(code=code, name=code, decimals=2, active=True) for code in ("NIO", "USD", "EUR")]
+    local_book = Book(entity="r2r", code="R2RLOC", name="Local", currency="NIO", status="activo", is_primary=True)
+    ifrs_book = Book(entity="r2r", code="R2REUR", name="IFRS", currency="EUR", status="activo")
+    us_gaap_book = Book(entity="r2r", code="R2RUSD", name="USGAAP", currency="USD", status="activo")
+
+    payable = Accounts(entity="r2r", code="AP-R2R", name="Payable", active=True, enabled=True, classification="liability")
+    expense = Accounts(
+        entity="r2r",
+        code="EXP-R2R",
+        name="Expense",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    bank_account_gl = Accounts(
+        entity="r2r", code="BANK-R2R-P", name="Bank P", active=True, enabled=True, classification="asset", account_type="bank"
+    )
+    exchange_gain = Accounts(
+        entity="r2r",
+        code="FXG-R2R-P",
+        name="Exchange gain P",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    bank = Bank(name="R2R Bank P")
+    database.session.add_all(
+        [*currencies, local_book, ifrs_book, us_gaap_book, payable, expense, bank_account_gl, exchange_gain, bank]
+    )
+    database.session.flush()
+
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="r2r",
+        account_name="USD account P",
+        currency="USD",
+        gl_account_id=bank_account_gl.id,
+    )
+    database.session.add_all(
+        [
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 8, 7)),
+            ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.9"), date=date(2026, 8, 7)),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("37"), date=date(2026, 8, 8)),
+            ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.95"), date=date(2026, 8, 8)),
+            PartyAccount(party_id="SUPP-R2R", company="r2r", payable_account_id=payable.id),
+            CompanyDefaultAccount(
+                company="r2r",
+                default_payable=payable.id,
+                default_bank=bank_account_gl.id,
+                default_expense=expense.id,
+                exchange_gain_account_id=exchange_gain.id,
+            ),
+            bank_account,
+        ]
+    )
+    database.session.flush()
+
+    invoice = PurchaseInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 7),
+        supplier_id="SUPP-R2R",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+        total=Decimal("100"),
+        grand_total=Decimal("100"),
+        base_total=Decimal("3600"),
+        base_grand_total=Decimal("3600"),
+        outstanding_amount=Decimal("100"),
+        base_outstanding_amount=Decimal("3600"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-P",
+            item_name="Purchased Item",
+            qty=Decimal("1"),
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+            base_amount=Decimal("3600"),
+            expense_account_id=expense.id,
+        )
+    )
+
+    return_invoice = PurchaseInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 7),
+        supplier_id="SUPP-R2R",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+        is_return=True,
+        total=Decimal("20"),
+        grand_total=Decimal("20"),
+        base_total=Decimal("720"),
+        base_grand_total=Decimal("720"),
+        outstanding_amount=Decimal("20"),
+        base_outstanding_amount=Decimal("720"),
+    )
+    database.session.add(return_invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=return_invoice.id,
+            item_code="ITEM-P",
+            item_name="Purchased Item",
+            qty=Decimal("0.2"),
+            rate=Decimal("100"),
+            amount=Decimal("20"),
+            base_amount=Decimal("720"),
+            expense_account_id=expense.id,
+        )
+    )
+    database.session.commit()
+
+    post_document_to_gl(invoice)
+    post_document_to_gl(return_invoice)
+    database.session.commit()
+
+    sub_filters = SubledgerFilters(company="r2r", party_type="supplier", as_of_date=date(2026, 8, 7))
+    subledger = get_ar_ap_subledger(sub_filters)
+    assert subledger.totals["outstanding_amount"] == Decimal("2880")
+
+    op_filters = OperationalReportFilters(company="r2r", date_from=date(2026, 8, 7), date_to=date(2026, 8, 7))
+    by_supp = get_purchases_by_supplier(op_filters)
+    by_item = get_purchases_by_item(op_filters)
+
+    assert by_supp.totals["amount"] == Decimal("2880")
+    assert by_item.totals["qty"] == Decimal("0.8")
+    assert by_item.totals["amount"] == Decimal("2880")
+
+    for ledger_code, currency, expected_sub_amount, expected_gl_amount, expected_diff, expected_status in (
+        ("R2RLOC", "NIO", Decimal("-2880"), Decimal("-2880"), Decimal("0"), "reconciled"),
+        ("R2REUR", "EUR", Decimal("-2880"), Decimal("-72"), Decimal("-2808"), "difference"),
+        ("R2RUSD", "USD", Decimal("-2880"), Decimal("-80"), Decimal("-2800"), "difference"),
+    ):
+        recon_filters = ReconciliationFilters(company="r2r", ledger=ledger_code, as_of_date=date(2026, 8, 7))
+        matrix = get_reconciliation_matrix(recon_filters)
+
+        ap_row = next(row for row in matrix.rows if row.values["area"] == "AP")
+        assert ap_row.values["subledger_amount"] == expected_sub_amount
+        assert ap_row.values["gl_control_amount"] == expected_gl_amount
+        assert ap_row.values["difference"] == expected_diff
+        assert ap_row.values["status"] == expected_status
