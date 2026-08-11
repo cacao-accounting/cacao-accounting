@@ -84,10 +84,12 @@
             initialLabel: {{ (parent_initial_label|default(""))|tojson }},
             filters: {
                 company: { selector: "#entidad_hidden" },
-                is_group: 1,
-                classification: { selector: "#clasificacion" }
+                is_group: 1
             },
-            filterSources: ["#entidad_hidden", "#clasificacion"],
+            filterSources: ["#entidad_hidden"],
+            requiredFilters: ["company"],
+            preloadOnFocus: true,
+            loadOnFilterChange: true,
             messages: {
               placeholder: {{ _("Buscar cuenta de grupo")|tojson }},
               loading: {{ _("Cargando...")|tojson }},

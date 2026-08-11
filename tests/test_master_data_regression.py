@@ -147,6 +147,65 @@ def test_account_parent_roundtrip_and_cross_entity_rejection(app_ctx):
     assert b"cuenta padre indicada no existe para la entidad seleccionada" in rejected.data.lower()
 
 
+def test_new_account_parent_select_preloads_group_accounts(app_ctx):
+    """The new-account parent selector loads group accounts after company selection."""
+    from cacao_accounting.database import Accounts, User, database
+
+    parent = Accounts(entity="cacao", code="11", name="Activo", active=True, enabled=True, group=True)
+    database.session.add(parent)
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+
+    response = client.get("/api/search-select?doctype=account_id&q=&limit=20&company=cacao&is_group=1")
+    assert response.status_code == 200
+    values = {item["value"] for item in response.get_json()["results"]}
+    assert str(parent.id) in values
+
+    parent.classification = "Activo"
+    database.session.commit()
+    filtered = client.get("/api/search-select?doctype=account_id&q=&limit=20&company=cacao&is_group=1&classification=activo")
+    assert filtered.status_code == 200
+    assert str(parent.id) in {item["value"] for item in filtered.get_json()["results"]}
+
+    page = client.get("/accounting/account/new")
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert 'requiredFilters: ["company"]' in html
+    assert "preloadOnFocus: true" in html
+    assert 'filterSources: ["#entidad_hidden"]' in html
+
+
+def test_parent_catalogs_are_scoped_only_by_company(app_ctx):
+    """Account and cost-center parent catalogs never cross the selected company."""
+    from cacao_accounting.database import Accounts, CostCenter, Entity, User, database
+
+    database.session.add(
+        Entity(code="other", name="Other", company_name="Other SA", tax_id="J009", currency="NIO", enabled=True)
+    )
+    database.session.add_all(
+        [
+            Accounts(entity="cacao", code="1", name="Local assets", active=True, enabled=True, group=True),
+            Accounts(entity="other", code="1", name="Other assets", active=True, enabled=True, group=True),
+            CostCenter(entity="cacao", code="CC1", name="Local costs", active=True, enabled=True, group=True),
+            CostCenter(entity="other", code="CC1", name="Other costs", active=True, enabled=True, group=True),
+        ]
+    )
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+
+    account_response = client.get("/api/search-select?doctype=account_id&q=&company=cacao&is_group=1")
+    account_names = {item["name"] for item in account_response.get_json()["results"]}
+    assert account_names == {"Local assets"}
+
+    cost_center_response = client.get("/api/search-select?doctype=cost_center_id&q=&company=cacao&is_group=1")
+    cost_center_names = {item["name"] for item in cost_center_response.get_json()["results"]}
+    assert cost_center_names == {"Local costs"}
+
+
 # 3) Cost center parent accepts parent_id and rejects cross-entity
 def test_cost_center_parent_roundtrip_and_cross_entity_rejection(app_ctx):
     from cacao_accounting.database import CostCenter, Entity, User, database

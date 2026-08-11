@@ -2412,3 +2412,25 @@ todo movimiento GL tenga un tipo documental.
   línea del reporte, después de las cuentas de patrimonio.
 - Se agregó una regresión que verifica el orden `Capital` →
   `period_profit_summary`; la validación focalizada pasó 24 pruebas.
+
+## 2026-08-11 — Selector de cuenta padre en nueva cuenta
+
+- Se reprodujo que `/accounting/account/new` no mostraba las cuentas padre
+  aunque el catálogo `/api/search-select` sí devolvía las cuentas de grupo.
+- El selector ahora exige la entidad seleccionada, precarga al enfocarse y
+  vuelve a cargar al cambiar la entidad. La cuenta padre se
+  consulta por compañía y queda limitada a cuentas de grupo.
+- Se agregó una regresión de plantilla y API para verificar la precarga del
+  catálogo de cuentas padre.
+- Las pruebas también verifican que los catálogos de cuentas y centros de
+  costos no devuelvan registros de otra compañía.
+- Se decidió que Clasificación y Tipo de Cuenta no son filtros de la cuenta
+  padre: el único filtro contextual es la compañía seleccionada, porque el
+  padre es una cuenta de grupo y no necesariamente comparte esos atributos.
+
+## 2026-08-11 — Verificación CRUD de master data contable
+
+- Se verificó mediante la cobertura exhaustiva existente el acceso y los
+  flujos de alta, consulta, edición y eliminación/desactivación de Entidades,
+  Catálogo de Cuentas, Centros de Costos, Unidades de Negocio, Libros,
+  Proyectos, Monedas, Tasas de Cambio, Períodos Contables y Años Fiscales.
