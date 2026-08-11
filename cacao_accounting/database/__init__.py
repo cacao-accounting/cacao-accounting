@@ -1657,6 +1657,12 @@ class PurchaseOrder(database.Model, DocBase):  # type: ignore[name-defined]
         database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     remarks = database.Column(database.Text(), nullable=True)
+    purchase_award_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_quotation_award.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
 
 
 class PurchaseOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1796,6 +1802,23 @@ class PurchaseRequestItem(database.Model, BaseTabla):  # type: ignore[name-defin
     )
 
 
+class PurchaseNegotiationRound(database.Model):  # type: ignore[name-defined]
+    """Ronda de negociación asociada a una solicitud de cotización."""
+
+    __tablename__ = "purchase_negotiation_round"
+    id = database.Column(database.String(26), primary_key=True, default=obtiene_texto_unico)
+    purchase_quotation_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    round_number = database.Column(database.Integer, nullable=False)
+    status = database.Column(database.String(20), nullable=False, default="open", index=True)
+    created_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL), nullable=True)
+    created = database.Column(database.DateTime(timezone=True), nullable=False, server_default=database.func.now())
+
+
 class SupplierQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     """Cotización de proveedor derivada de una solicitud de cotización."""
 
@@ -1810,6 +1833,12 @@ class SupplierQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     purchase_quotation_id = database.Column(
         database.String(26),
         database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    negotiation_round_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_negotiation_round.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
@@ -1854,6 +1883,67 @@ class SupplierQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
     warehouse = database.Column(
         database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+
+
+class PurchaseQuotationAward(database.Model):  # type: ignore[name-defined]
+    """Adjudicación por línea de una solicitud de cotización."""
+
+    __tablename__ = "purchase_quotation_award"
+    id = database.Column(database.String(26), primary_key=True, default=obtiene_texto_unico)
+    purchase_quotation_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    negotiation_round_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_negotiation_round.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    status = database.Column(database.String(20), nullable=False, default="finalized", index=True)
+    created_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL), nullable=True)
+    authorized_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL), nullable=True)
+    authorization_reason = database.Column(database.Text(), nullable=True)
+    created = database.Column(database.DateTime(timezone=True), nullable=False, server_default=database.func.now())
+
+
+class PurchaseQuotationAwardItem(database.Model):  # type: ignore[name-defined]
+    """Línea adjudicada a una cotización de proveedor."""
+
+    __tablename__ = "purchase_quotation_award_item"
+    id = database.Column(database.String(26), primary_key=True, default=obtiene_texto_unico)
+    award_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_quotation_award.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    purchase_quotation_item_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_quotation_item.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+    )
+    supplier_quotation_id = database.Column(
+        database.String(26),
+        database.ForeignKey("supplier_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+    )
+    supplier_quotation_item_id = database.Column(
+        database.String(26),
+        database.ForeignKey("supplier_quotation_item.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+    )
+    item_code = database.Column(database.String(50), nullable=False, index=True)
+    qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    rate = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    manual_override = database.Column(database.Boolean(), nullable=False, default=False)
+    override_reason = database.Column(database.Text(), nullable=True)
 
 
 class PurchaseReceipt(database.Model, DocBase):  # type: ignore[name-defined]

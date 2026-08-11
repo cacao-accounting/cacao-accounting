@@ -63,5 +63,11 @@
     {% set source_label = "" %}
   {% endif %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label=source_label) }}
+  {% if sourcing_config.require_comparison and is_purchase_manager %}
+  <div class="alert alert-warning mt-3">
+    <label class="form-label fw-semibold" for="comparison_exception_reason">Excepción al comparativo</label>
+    <textarea class="form-control" id="comparison_exception_reason" name="comparison_exception_reason" placeholder="Justificación obligatoria"></textarea>
+  </div>
+  {% endif %}
 </form>
 {% endblock %}

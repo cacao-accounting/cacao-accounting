@@ -74,6 +74,16 @@
   </div>
 
   <div class="ca-module-card">
+    <h5><i class="bi bi-bar-chart-line"></i> {{ _("Abastecimiento") }}</h5>
+    <ul class="ca-module-links">
+      <li>
+        <a href="{{ url_for('admin.config_abastecimiento_compras') }}">{{ _("Comparativo de Ofertas") }}</a>
+        {{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}
+      </li>
+    </ul>
+  </div>
+
+  <div class="ca-module-card">
     <h5><i class="bi bi-sliders"></i> {{ _("Control Presupuestario") }}</h5>
     <ul class="ca-module-links">
       <li>

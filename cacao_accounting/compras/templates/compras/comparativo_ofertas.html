@@ -18,6 +18,7 @@
 <div class="ca-card" style="max-width:860px;">
   <div class="ca-card-header">
     <h5 class="ca-card-title"><i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas</h5>
+    <span class="badge text-bg-secondary">{% if award and award.status == 'finalized' %}Finalizado{% elif award and award.status == 'used' %}Utilizado{% else %}Borrador{% endif %}</span>
   </div>
   <div class="row g-3 p-3">
     <div class="col-md-6">
@@ -33,6 +34,47 @@
   </div>
 </div>
 
+{% if negotiation_round %}
+<div class="mt-3 d-flex align-items-center justify-content-between alert alert-info">
+  <span><strong>Ronda {{ negotiation_round.round_number }}</strong> · {{ 'Abierta' if negotiation_round.status == 'open' else 'Cerrada' }}</span>
+  {% if not award and negotiation_round.status == 'open' %}
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=registro.id) }}">Agregar oferta a esta ronda</a>
+  {% endif %}
+</div>
+{% elif not award %}
+<div class="mt-3 d-flex justify-content-end">
+  <form method="post" action="{{ url_for('compras.compras_comparativo_abrir_ronda', rfq_id=registro.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Abrir ronda de negociación</button>
+  </form>
+</div>
+{% endif %}
+
+{% if award and award.status == 'finalized' %}
+<div class="mt-3 d-flex justify-content-end">
+  <form method="post" action="{{ url_for('compras.compras_comparativo_colocar_ordenes', rfq_id=registro.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-success" type="submit">
+      <i class="bi bi-cart-check me-1"></i>Colocar Órdenes de Compra
+    </button>
+  </form>
+</div>
+{% endif %}
+
+{% if award and award_lines %}
+<div class="mt-3 ca-card">
+  <div class="ca-card-header"><h6 class="ca-card-title">Líneas adjudicadas</h6></div>
+  <table class="ca-table">
+    <caption style="display: none;">Detalle de líneas adjudicadas.</caption>
+    <thead><tr><th>Artículo</th><th>Proveedor</th><th>Cantidad</th><th>Tarifa</th><th>Total</th></tr></thead>
+    <tbody>{% for line in award_lines %}
+      <tr><td>{{ line.item_code }}</td><td>{{ line.supplier_quotation_id }}</td><td>{{ line.qty }}</td><td>{{ line.rate }}</td><td>{{ line.amount }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if not award %}
 <div class="mt-3 ca-card">
   <div class="ca-card-header">
     <h6 class="ca-card-title">Ofertas Recibidas</h6>
@@ -61,5 +103,72 @@
     </tbody>
   </table>
 </div>
+
+<div class="mt-3 ca-card">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">Adjudicación por línea</h6>
+    <div class="small text-muted">Ofertas aprobadas: {{ offers|length }} · Mínimo requerido: {{ sourcing_config.minimum_offers }}</div>
+  </div>
+  <form method="post" action="{{ url_for('compras.compras_comparativo_ofertas_adjudicar', rfq_id=registro.id) }}" class="p-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="table-responsive">
+      <table class="ca-table">
+        <thead><tr><th>Artículo</th><th>Cantidad</th>{% for offer in offers %}<th>{{ offer.supplier_name or offer.id }}</th>{% endfor %}</tr></thead>
+        <tbody>
+        {% for item in rfq_items %}
+          <tr>
+            <td>{{ item.item_name or item.item_code }}<small class="d-block text-muted">{{ item.item_code }}</small></td>
+            <td>{{ item.qty }} {{ item.uom or '' }}</td>
+            {% for offer in offers %}
+              <td>
+                {% set line = offer_lines[offer.id][item.id] %}
+                {% if line %}
+                  <label class="d-flex gap-2 align-items-center">
+                    <input type="radio" name="award_item_{{ item.id }}" value="{{ offer.id }}" data-rate="{{ line.rate or 0 }}">
+                    <span>{{ line.rate or 0 }} / {{ line.qty }}</span>
+                  </label>
+                {% else %}<span class="text-muted">Sin cobertura</span>{% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if offers|length < sourcing_config.minimum_offers and not is_purchase_manager %}
+      <div class="alert alert-warning mt-3">No se puede adjudicar: se requieren {{ sourcing_config.minimum_offers }} ofertas.</div>
+    {% elif is_purchase_manager %}
+      <div class="alert alert-warning mt-3">La justificación será obligatoria para una excepción de ofertas o una selección no recomendada.</div>
+      <label class="form-label" for="authorization_reason">Justificación de autorización</label>
+      <textarea class="form-control" id="authorization_reason" name="authorization_reason"></textarea>
+    {% endif %}
+    <button class="btn btn-primary mt-3" id="award-submit" type="submit" {% if offers|length < sourcing_config.minimum_offers and not is_purchase_manager %}disabled{% endif %}>Adjudicar y finalizar comparativo</button>
+  </form>
+</div>
+{% endif %}
+
+{% if is_purchase_manager and not award %}
+<script>
+  (() => {
+    const form = document.querySelector('form[action*="/award"]');
+    const reason = document.getElementById('authorization_reason');
+    if (!form || !reason) return;
+    const updateReasonRequirement = () => {
+      let override = false;
+      const groups = [...new Set([...form.querySelectorAll('input[type="radio"][name^="award_item_"]')].map((input) => input.name))];
+      groups.forEach((name) => {
+        const inputs = [...form.querySelectorAll(`input[name="${name}"]`)];
+        const rates = inputs.map((input) => Number(input.dataset.rate)).filter((rate) => !Number.isNaN(rate));
+        const selected = inputs.find((input) => input.checked);
+        if (selected && rates.length && Number(selected.dataset.rate) > Math.min(...rates)) override = true;
+      });
+      const insufficient = {{ 'true' if offers|length < sourcing_config.minimum_offers else 'false' }};
+      reason.required = insufficient || override;
+    };
+    form.addEventListener('change', updateReasonRequirement);
+    updateReasonRequirement();
+  })();
+</script>
+{% endif %}
 
 {% endblock %}

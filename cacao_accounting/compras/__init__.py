@@ -12,6 +12,8 @@ from decimal import Decimal
 from logging import getLogger
 from typing import Any
 
+from sqlalchemy import update
+
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
@@ -30,6 +32,16 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
     get_unlinked_purchase_invoices,
     get_unlinked_purchase_receipts_summary,
 )
+from cacao_accounting.compras.purchase_sourcing_service import (
+    PurchaseSourcingError,
+    create_purchase_quotation_award,
+    current_negotiation_round,
+    get_purchase_sourcing_config,
+    is_purchase_manager,
+    open_negotiation_round,
+    offer_line_for_item,
+    submitted_supplier_quotations,
+)
 from cacao_accounting.database import (
     CompanyParty,
     Book,
@@ -44,6 +56,9 @@ from cacao_accounting.database import (
     PurchaseOrder,
     PurchaseOrderItem,
     PurchaseQuotation,
+    PurchaseQuotationAward,
+    PurchaseQuotationAwardItem,
+    PurchaseNegotiationRound,
     PurchaseQuotationItem,
     PurchaseReceipt,
     PurchaseReceiptItem,
@@ -240,7 +255,7 @@ def _can_manage_purchase_receipts() -> bool:
     """Return whether the current user has Inventory write permission."""
     module_id = obtener_id_modulo_por_nombre("inventory")
     permissions = Permisos(modulo=module_id, usuario=current_user.id)
-    return bool(permissions.administrador or permissions.can_write)
+    return bool(permissions.administrador or permissions.crear)
 
 
 @compras.route("/")
@@ -623,6 +638,7 @@ def compras_cotizacion_proveedor_nueva():
         if response is not None:
             return response
     from_request_id, from_rfq_id = _supplier_quotation_origin_ids()
+    negotiation_round = current_negotiation_round(from_rfq_id) if from_rfq_id else None
     solicitud_origen, rfq_origen = _supplier_quotation_sources(from_request_id, from_rfq_id)
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
     titulo = "Nueva Cotización de Proveedor - " + APPNAME
@@ -640,6 +656,7 @@ def compras_cotizacion_proveedor_nueva():
         from_request_id=from_request_id,
         rfq_origen=rfq_origen,
         from_rfq_id=from_rfq_id,
+        negotiation_round_id=negotiation_round.id if negotiation_round else None,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
@@ -657,6 +674,15 @@ def _create_supplier_quotation_from_request():
     """Crea una cotizacion de proveedor a partir del formulario enviado."""
     try:
         _, from_rfq_id = _supplier_quotation_origin_ids()
+        negotiation_round_id = request.form.get("negotiation_round_id") or None
+        if negotiation_round_id:
+            negotiation_round = database.session.get(PurchaseNegotiationRound, negotiation_round_id)
+            if not negotiation_round:
+                raise PurchaseSourcingError("La ronda de negociación no existe.")
+            if negotiation_round.purchase_quotation_id != from_rfq_id:
+                raise PurchaseSourcingError("La ronda de negociación no pertenece a la solicitud de cotización.")
+            if negotiation_round.status != "open":
+                raise PurchaseSourcingError("La ronda de negociación ya está cerrada.")
         supplier_id = request.form.get("supplier_id") or None
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
@@ -664,6 +690,7 @@ def _create_supplier_quotation_from_request():
             supplier_id=supplier_id,
             supplier_name=supplier.name if supplier else None,
             purchase_quotation_id=from_rfq_id or None,
+            negotiation_round_id=negotiation_round_id,
             company=request.form.get("company") or None,
             posting_date=posting_date,
             remarks=request.form.get("remarks"),
@@ -1103,9 +1130,194 @@ def compras_comparativo_ofertas(rfq_id: str):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro)
-    offers = database.session.execute(database.select(SupplierQuotation).filter_by(purchase_quotation_id=rfq_id)).all()
+    offers = submitted_supplier_quotations(rfq_id)
+    rfq_items = (
+        database.session.execute(database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=rfq_id))
+        .scalars()
+        .all()
+    )
+    offer_lines = {
+        offer.id: {item.id: offer_line_for_item(offer.id, item, rfq_items) for item in rfq_items} for offer in offers
+    }
+    award = database.session.execute(
+        database.select(PurchaseQuotationAward)
+        .filter_by(purchase_quotation_id=rfq_id)
+        .order_by(PurchaseQuotationAward.created.desc())
+    ).scalar_one_or_none()
+    award_lines = (
+        database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalars().all()
+        if award
+        else []
+    )
     titulo = "Comparativo de Ofertas - " + (registro.document_no or rfq_id)
-    return render_template("compras/comparativo_ofertas.html", registro=registro, offers=offers, titulo=titulo)
+    return render_template(
+        "compras/comparativo_ofertas.html",
+        registro=registro,
+        offers=offers,
+        rfq_items=rfq_items,
+        offer_lines=offer_lines,
+        sourcing_config=get_purchase_sourcing_config(),
+        is_purchase_manager=is_purchase_manager(current_user.id),
+        award=award,
+        award_lines=award_lines,
+        negotiation_round=current_negotiation_round(rfq_id),
+        titulo=titulo,
+    )
+
+
+@compras.route("/request-for-quotation/<rfq_id>/negotiation-round", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+@verifica_permiso("purchases", "crear")
+def compras_comparativo_abrir_ronda(rfq_id: str):
+    """Open the next supplier negotiation round for an RFQ."""
+    registro = database.session.get(PurchaseQuotation, rfq_id)
+    if not registro:
+        abort(404)
+    _require_purchase_document_access(registro, "crear")
+    try:
+        open_negotiation_round(rfq_id, current_user.id)
+        database.session.commit()
+        flash("Nueva ronda de negociación abierta.", "success")
+    except PurchaseSourcingError as exc:
+        database.session.rollback()
+        flash_error(exc)
+    return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+
+
+@compras.route("/request-for-quotation/<rfq_id>/award", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+@verifica_permiso("purchases", "autorizar")
+def compras_comparativo_ofertas_adjudicar(rfq_id: str):
+    """Adjudica líneas del comparativo y registra excepciones autorizadas."""
+    registro = database.session.get(PurchaseQuotation, rfq_id)
+    if not registro:
+        abort(404)
+    _require_purchase_document_access(registro, "autorizar")
+    selections = {
+        key.removeprefix("award_item_"): value
+        for key, value in request.form.items()
+        if key.startswith("award_item_") and value
+    }
+    reason = request.form.get("authorization_reason") or None
+    try:
+        create_purchase_quotation_award(registro, selections, current_user.id, reason)
+        database.session.commit()
+        flash(_("Comparativo confirmado y finalizado correctamente."), "success")
+        return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+    except PurchaseSourcingError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+
+
+@compras.route("/request-for-quotation/<rfq_id>/place-purchase-orders", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+@verifica_permiso("purchases", "crear")
+def compras_comparativo_colocar_ordenes(rfq_id: str):
+    """Place all purchase orders from a finalized quotation award."""
+    registro = database.session.get(PurchaseQuotation, rfq_id)
+    if not registro:
+        abort(404)
+    _require_purchase_document_access(registro, "crear")
+    award = database.session.execute(
+        database.select(PurchaseQuotationAward)
+        .filter_by(purchase_quotation_id=rfq_id)
+        .order_by(PurchaseQuotationAward.created.desc())
+    ).scalar_one_or_none()
+    if not award or award.status != "finalized":
+        flash_error(PurchaseSourcingError("El comparativo debe estar finalizado antes de colocar las órdenes."))
+        return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+    try:
+        orders = _create_purchase_orders_from_award(award)
+        database.session.commit()
+        flash(_("Se colocaron {} Órdenes de Compra correctamente.").format(len(orders)), "success")
+    except (PurchaseSourcingError, SQLAlchemyError, DocumentFlowError, IdentifierConfigurationError) as exc:
+        database.session.rollback()
+        flash_error(exc)
+    return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+
+
+def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[PurchaseOrder]:
+    """Create one draft purchase order per supplier from an award."""
+    claimed = database.session.execute(
+        update(PurchaseQuotationAward)
+        .where(PurchaseQuotationAward.id == award.id, PurchaseQuotationAward.status == "finalized")
+        .values(status="used")
+    )
+    if getattr(claimed, "rowcount", 0) != 1:
+        raise PurchaseSourcingError("Solo un comparativo finalizado puede colocar Órdenes de Compra.")
+    award_lines = (
+        database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalars().all()
+    )
+    if not award_lines:
+        raise PurchaseSourcingError("La adjudicación no contiene líneas.")
+    groups: dict[str, list[PurchaseQuotationAwardItem]] = {}
+    for line in award_lines:
+        groups.setdefault(line.supplier_quotation_id, []).append(line)
+    orders: list[PurchaseOrder] = []
+    rfq = database.session.get(PurchaseQuotation, award.purchase_quotation_id)
+    for supplier_quotation_id, lines in groups.items():
+        quotation = database.session.get(SupplierQuotation, supplier_quotation_id)
+        if not quotation:
+            raise PurchaseSourcingError("La cotización adjudicada ya no existe.")
+        order = PurchaseOrder(
+            supplier_id=quotation.supplier_id,
+            supplier_name=quotation.supplier_name,
+            company=award.company,
+            posting_date=rfq.posting_date if rfq else None,
+            purchase_award_id=award.id,
+            transaction_currency=quotation.transaction_currency,
+            docstatus=0,
+        )
+        database.session.add(order)
+        database.session.flush()
+        assign_document_identifier(
+            document=order,
+            entity_type="purchase_order",
+            posting_date_raw=order.posting_date,
+            naming_series_id=None,
+        )
+        total_qty = Decimal("0")
+        total = Decimal("0")
+        for award_line in lines:
+            source = database.session.get(PurchaseQuotationItem, award_line.purchase_quotation_item_id)
+            line = PurchaseOrderItem(
+                purchase_order_id=order.id,
+                item_code=award_line.item_code,
+                item_name=source.item_name if source else award_line.item_code,
+                qty=award_line.qty,
+                uom=source.uom if source else None,
+                rate=award_line.rate,
+                amount=award_line.amount,
+            )
+            database.session.add(line)
+            database.session.flush()
+            create_document_relation(
+                source_type="supplier_quotation",
+                source_id=award_line.supplier_quotation_id,
+                source_item_id=award_line.supplier_quotation_item_id,
+                target_type="purchase_order",
+                target_id=order.id,
+                target_item_id=line.id,
+                qty=award_line.qty,
+                uom=line.uom,
+                rate=award_line.rate,
+                amount=award_line.amount,
+            )
+            total_qty += award_line.qty
+            total += award_line.amount
+        order.total_qty = total_qty
+        order.total = total
+        order.net_total = total
+        order.grand_total = total
+        order.exchange_rate = _purchase_exchange_rate(order.company, order.posting_date, order.transaction_currency)
+        order.base_total = (total * order.exchange_rate).quantize(Decimal("0.0001"))
+        log_create(order)
+        orders.append(order)
+    return orders
 
 
 @compras.route("/purchase-receipt/list")
@@ -1804,6 +2016,8 @@ def compras_orden_compra_nuevo():
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+        sourcing_config=get_purchase_sourcing_config(),
+        is_purchase_manager=is_purchase_manager(current_user.id),
     )
 
 
@@ -1952,7 +2166,25 @@ def _purchase_order_transaction_config(
 
 def _create_purchase_order_from_request(form: dict):
     """Crea una orden de compra desde el formulario enviado."""
+    award_id = form.get("purchase_award_id") or None
+    exception_reason = form.get("comparison_exception_reason") or None
+    sourcing_config = get_purchase_sourcing_config()
+    if sourcing_config.require_comparison and not award_id:
+        if not (is_purchase_manager(current_user.id) and exception_reason):
+            flash_error(
+                PurchaseSourcingError(
+                    "La Orden de Compra debe originarse en un comparativo o incluir una excepción autorizada."
+                )
+            )
+            return None
+    award = database.session.get(PurchaseQuotationAward, award_id) if award_id else None
+    if award_id and (not award or award.status != "finalized"):
+        flash_error(PurchaseSourcingError("La adjudicación seleccionada no es válida."))
+        return None
     supplier_id = form.get("supplier_id") or None
+    if award and award.company != (form.get("company") or None):
+        flash_error(PurchaseSourcingError("La adjudicación no pertenece a la compañía seleccionada."))
+        return None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     posting_date = _parse_date(form.get("posting_date"))
     transaction_currency = form.get("transaction_currency") or None
@@ -1963,6 +2195,7 @@ def _create_purchase_order_from_request(form: dict):
         posting_date=posting_date,
         remarks=form.get("remarks"),
         transaction_currency=transaction_currency,
+        purchase_award_id=award_id,
         docstatus=0,
     )
     try:
