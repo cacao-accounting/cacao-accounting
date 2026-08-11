@@ -447,7 +447,7 @@ def _can_manage_delivery_notes() -> bool:
     """Return whether the current user has Inventory write permission."""
     module_id = obtener_id_modulo_por_nombre("inventory")
     permissions = Permisos(modulo=module_id, usuario=current_user.id)
-    return bool(permissions.administrador or permissions.can_write)
+    return bool(permissions.administrador or permissions.crear)
 
 
 @ventas.route("/")
