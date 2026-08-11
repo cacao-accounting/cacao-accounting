@@ -2511,3 +2511,18 @@ series de cada solicitud de compra.
   autenticado y `created_by` conserva su identificador interno.
 - La información continúa visible únicamente en el listado y detalle para
   consulta, sin permitir inconsistencias editables.
+
+## 2026-08-11 — Ajuste de layout para Observaciones
+
+- Se eliminó la columna vacía que quedaba tras retirar los campos de usuario y
+  departamento del formulario de solicitud de compra.
+- `Observaciones` ahora ocupa todo el ancho disponible, evitando una tarjeta
+  visualmente desequilibrada.
+- El campo se presenta como un `input` de una sola línea para esta solicitud.
+
+## 2026-08-11 — Observaciones compactas en cabeceras transaccionales
+
+- Los formularios de S2P, O2C e Inventory que usan la cabecera transaccional
+  compartida ahora presentan `Observaciones` como un `input` de una sola línea.
+- Se eliminaron los campos duplicados de observaciones en las tarjetas
+  específicas de cada formulario.

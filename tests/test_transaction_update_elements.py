@@ -79,6 +79,7 @@ def test_purchase_request_does_not_expose_department_concept():
     assert "form.department" not in new_template
     assert "form.requested_by" not in new_template
     assert "Departamento" not in detail_template
+    assert "<textarea" not in new_template
 
 
 def test_transaction_lists_show_document_number():
@@ -95,6 +96,22 @@ def test_transaction_lists_show_document_number():
             continue
         content = path.read_text(encoding="utf-8")
         assert "document_no or item.id" in content, path
+
+
+def test_transaction_forms_use_one_line_header_observations():
+    """Los formularios S2P, O2C e Inventory usan Observaciones en la cabecera."""
+    macro = _read("cacao_accounting/templates/transaction_form_macros.html")
+    assert 'id="remarks" name="remarks" type="text"' in macro
+
+    form_paths = [
+        *((ROOT / "cacao_accounting/compras/templates/compras").glob("*_nuevo.html")),
+        *((ROOT / "cacao_accounting/ventas/templates/ventas").glob("*_nuevo.html")),
+        *((ROOT / "cacao_accounting/inventario/templates/inventario").glob("*_nuevo.html")),
+    ]
+    for path in form_paths:
+        content = path.read_text(encoding="utf-8")
+        if "transaction_form_header" in content:
+            assert 'id="remarks"' not in content, path
 
 
 def test_derived_document_pending_line_urls_are_company_scoped():

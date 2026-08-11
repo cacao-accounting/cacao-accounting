@@ -175,6 +175,10 @@
       <label class="form-label" for="posting_date">{{ _('Fecha') }} <span class="text-danger">*</span></label>
       <input type="date" class="form-control" id="posting_date" name="posting_date" x-model="header.posting_date" required>
     </div>
+    <div class="col-12">
+      <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+      <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
+    </div>
   </div>
 </div>
 {% endmacro %}
