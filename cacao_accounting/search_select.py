@@ -186,6 +186,59 @@ def _document_no_label(entry: GLEntry) -> str:
     return str(getattr(entry, "document_no", "") or getattr(entry, "voucher_id", "") or "")
 
 
+def _voucher_type_catalog(query: str, filters: dict[str, list[str]], limit: int | None) -> dict[str, Any]:
+    """Publica el catálogo de tipos documentales que pueden llegar al GL.
+
+    El catálogo no debe depender de que ya exista un movimiento en el libro
+    seleccionado: los filtros de reportes deben poder elegirse antes de que
+    haya datos para ese tipo. Se agregan también tipos históricos encontrados
+    en ``GLEntry`` para mantener compatibilidad con instalaciones existentes.
+    """
+    allowed_filters = {"company", "ledger"}
+    rejected = sorted(set(filters) - allowed_filters)
+    if rejected:
+        raise SearchSelectError("Filtros no permitidos: " + ", ".join(rejected))
+
+    from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
+
+    catalog = {key: (document_type.label or key) for key, document_type in DOCUMENT_TYPES.items()}
+    catalog.update(
+        {
+            "exchange_revaluation": "Revalorización cambiaria",
+            "Capitalización Automática de Proyecto": "Capitalización Automática de Proyecto",
+            "bank_transaction": "Transacción bancaria",
+        }
+    )
+
+    statement = select(GLEntry.voucher_type).where(GLEntry.voucher_type.is_not(None))
+    company_values = [value for value in filters.get("company", []) if value]
+    if company_values:
+        statement = statement.where(GLEntry.company.in_(company_values))
+    ledger_values = [value for value in filters.get("ledger", []) if value]
+    if ledger_values:
+        statement = statement.where(
+            GLEntry.ledger_id.in_(select(Book.id).where(or_(Book.id.in_(ledger_values), Book.code.in_(ledger_values))))
+        )
+    for value in database.session.execute(statement.distinct()).scalars():
+        normalized = str(value or "")
+        if normalized:
+            catalog.setdefault(normalized, normalized)
+
+    normalized_query = query.strip().lower()
+    options = [
+        {"id": value, "value": value, "label": label, "display_name": label}
+        for value, label in sorted(catalog.items(), key=lambda item: item[1].lower())
+        if not normalized_query or normalized_query in value.lower() or normalized_query in label.lower()
+    ]
+    max_results = _normalize_limit(limit, default_limit=20)
+    return {
+        "doctype": "voucher_type",
+        "query": query.strip(),
+        "results": options[:max_results],
+        "has_more": len(options) > max_results,
+    }
+
+
 _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
     "company": SearchSelectSpec(
         doctype="company",
@@ -621,6 +674,8 @@ def search_select(
     company_scope: set[str] | None = None,
 ) -> dict[str, Any]:
     """Busca opciones para un doctype registrado y devuelve un payload uniforme."""
+    if doctype == "voucher_type":
+        return _voucher_type_catalog(query, filters, limit)
     if doctype in _STATIC_SEARCH_SELECT_OPTIONS:
         if filters:
             raise SearchSelectError("Filtros no permitidos para este tipo de seleccion.")

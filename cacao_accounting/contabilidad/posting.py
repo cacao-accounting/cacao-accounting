@@ -412,6 +412,8 @@ def _create_gl_entry(
     context: LedgerContext,
     params: GLEntryParams,
 ) -> GLEntry:
+    if not context.voucher_type or not context.voucher_type.strip():
+        raise PostingError("Toda entrada GL requiere un tipo de comprobante.")
     _validate_single_sided_amount(params.debit, params.credit)
 
     debit = params.debit
