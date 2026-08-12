@@ -490,7 +490,12 @@ def _accounting_monthly_result(
     rows = query.group_by("month", Accounts.classification).order_by("month").all()
     months: dict[int, dict[str, float | int]] = {}
     for row in rows:
-        month = int(row.month)
+        if row.month is None:
+            continue
+        try:
+            month = int(float(row.month))
+        except (ValueError, TypeError):
+            continue
         payload = months.setdefault(month, {"month": month, "income": 0.0, "expenses": 0.0})
         balance = float(row.balance or 0)
         classification = (row.classification or "").lower()
@@ -544,7 +549,7 @@ def _recent_bank_movements(
     rows = _bank_transactions_query(account_ids, start_date, end_date).order_by(BankTransaction.posting_date.desc()).limit(5)
     return [
         {
-            "date": row.posting_date.isoformat(),
+            "date": row.posting_date.isoformat() if row.posting_date else "",
             "description": row.description or row.reference_number or "Movimiento bancario",
             "amount": float((row.deposit or 0) - (row.withdrawal or 0)),
             "currency": currency,
@@ -626,7 +631,7 @@ def _recent_stock_movements(
     rows = _stock_movements_query(company, start_date, end_date).order_by(StockLedgerEntry.posting_date.desc()).limit(5)
     return [
         {
-            "date": row.posting_date.isoformat(),
+            "date": row.posting_date.isoformat() if row.posting_date else "",
             "item_code": row.item_code,
             "warehouse": row.warehouse,
             "qty_change": _numeric(row.qty_change),
@@ -652,7 +657,16 @@ def _sales_trend(
         .group_by("month")
         .order_by("month")
     )
-    return [{"month": int(row.month), "total": _numeric(row.total)} for row in query]
+    results = []
+    for row in query:
+        if row.month is None:
+            continue
+        try:
+            month = int(float(row.month))
+        except (ValueError, TypeError):
+            continue
+        results.append({"month": month, "total": _numeric(row.total)})
+    return results
 
 
 def _top_customers(
