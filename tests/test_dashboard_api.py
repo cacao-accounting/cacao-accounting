@@ -290,6 +290,31 @@ def test_app_renders_dashboard_shell(client):
     assert "dashboard-section:nth-child" not in html
 
 
+def test_dashboard_handles_null_month_and_posting_dates(app, client):
+    """Verifica que el dashboard maneje robustamente nulos y conversiones de mes."""
+    with app.app_context():
+        # Agrega SalesInvoice con posting_date nulo
+        si_null = SalesInvoice(
+            id="SI-NULL",
+            company="COMP",
+            posting_date=None,
+            docstatus=1,
+            customer_id="CUST-1",
+            customer_name="Cliente Demo",
+            document_no="SI-002",
+            base_grand_total=Decimal("100.00"),
+            base_outstanding_amount=Decimal("100.00"),
+        )
+        database.session.add(si_null)
+        database.session.commit()
+
+    _login(client, "admin")
+    response = client.get("/api/dashboard/data?company=COMP-ID")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert "sections" in data
+
+
 def _seed_dashboard_data() -> None:
     """Inserta datos mínimos para métricas y permisos del dashboard."""
     _seed_modules()
