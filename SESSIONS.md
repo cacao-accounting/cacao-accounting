@@ -2707,3 +2707,15 @@ conciliación 3-way. No se fusionará con `stock_entry` en esta etapa.
 - Los endpoints de lectura de líneas aplican la misma regla cruzada para que
   el formulario de recepción pueda precargar los artículos de la Orden de
   Compra.
+
+## 2026-08-12 — Correcciones mecánicas de SonarCloud
+
+- Se corrigieron los issues abiertos de bajo riesgo que no requieren
+  refactorización: literales duplicados, variables sin uso, imports obsoletos y
+  excepciones redundantes.
+- Se agregaron captions accesibles al comparativo de ofertas y se conservaron
+  las etiquetas `script` balanceadas del template.
+- Se corrigió la concatenación implícita de strings y el contraste del estado
+  de error en tema oscuro.
+- Se dejaron pendientes los issues de complejidad cognitiva y tipado porque
+  requieren refactorización funcional y revisión separada.

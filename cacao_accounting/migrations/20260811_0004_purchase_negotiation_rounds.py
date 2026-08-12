@@ -10,6 +10,8 @@ down_revision = "20260811_0003"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+FK_SET_NULL = "SET NULL"
+
 
 def _table_exists(table_name: str) -> bool:
     """Check if a table already exists in the database."""
@@ -36,7 +38,7 @@ def upgrade() -> None:
             sa.Column("created_by", sa.String(length=26), nullable=True),
             sa.Column("created", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.ForeignKeyConstraint(["purchase_quotation_id"], ["purchase_quotation.id"], ondelete="RESTRICT"),
-            sa.ForeignKeyConstraint(["created_by"], ["user.id"], ondelete="SET NULL"),
+            sa.ForeignKeyConstraint(["created_by"], ["user.id"], ondelete=FK_SET_NULL),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("purchase_quotation_id", "round_number", name="uq_purchase_negotiation_round_number"),
         )
@@ -56,7 +58,7 @@ def upgrade() -> None:
                 "purchase_negotiation_round",
                 ["negotiation_round_id"],
                 ["id"],
-                ondelete="SET NULL",
+                ondelete=FK_SET_NULL,
             )
 
     if not _column_exists("purchase_quotation_award", "negotiation_round_id"):
@@ -68,7 +70,7 @@ def upgrade() -> None:
                 "purchase_negotiation_round",
                 ["negotiation_round_id"],
                 ["id"],
-                ondelete="SET NULL",
+                ondelete=FK_SET_NULL,
             )
 
 

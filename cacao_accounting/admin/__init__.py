@@ -75,7 +75,6 @@ from cacao_accounting.inventario.valuation_settings import (
     valuation_method_label,
 )
 from cacao_accounting.compras.purchase_sourcing_service import (
-    PurchaseSourcingError,
     get_purchase_sourcing_config,
     set_purchase_sourcing_config,
 )
@@ -591,7 +590,7 @@ def config_abastecimiento_compras():
             set_purchase_sourcing_config(bool(request.form.get("require_comparison")), minimum)
             database.session.commit()
             flash(_("Configuración de abastecimiento guardada correctamente."), "success")
-        except (PurchaseSourcingError, ValueError) as exc:
+        except ValueError as exc:
             database.session.rollback()
             flash(_(str(exc)), "danger")
         return redirect(url_for("admin.config_abastecimiento_compras"))

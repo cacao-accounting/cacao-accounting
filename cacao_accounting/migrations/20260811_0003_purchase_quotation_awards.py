@@ -10,6 +10,8 @@ down_revision = "20260809_0002"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+FK_SET_NULL = "SET NULL"
+
 
 def _table_exists(table_name: str) -> bool:
     """Check if a table already exists in the database."""
@@ -46,8 +48,8 @@ def upgrade() -> None:
             sa.Column("created", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
             sa.ForeignKeyConstraint(["purchase_quotation_id"], ["purchase_quotation.id"], ondelete="RESTRICT"),
             sa.ForeignKeyConstraint(["company"], ["entity.code"], ondelete="RESTRICT"),
-            sa.ForeignKeyConstraint(["created_by"], ["user.id"], ondelete="SET NULL"),
-            sa.ForeignKeyConstraint(["authorized_by"], ["user.id"], ondelete="SET NULL"),
+            sa.ForeignKeyConstraint(["created_by"], ["user.id"], ondelete=FK_SET_NULL),
+            sa.ForeignKeyConstraint(["authorized_by"], ["user.id"], ondelete=FK_SET_NULL),
             sa.PrimaryKeyConstraint("id"),
         )
         op.create_index(
@@ -90,7 +92,7 @@ def upgrade() -> None:
                 "purchase_quotation_award",
                 ["purchase_award_id"],
                 ["id"],
-                ondelete="SET NULL",
+                ondelete=FK_SET_NULL,
             )
 
 

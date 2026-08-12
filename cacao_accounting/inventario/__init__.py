@@ -40,7 +40,7 @@ from cacao_accounting.document_flow import (
     validate_submit_prerequisites,
 )
 from cacao_accounting.document_flow.status import _
-from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+from cacao_accounting.document_identifiers import assign_document_identifier
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
@@ -1129,7 +1129,7 @@ def _handle_stock_entry_new_post(form_data):
         database.session.commit()
         flash("Entrada de almacén creada correctamente.", "success")
         return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
-    except (IdentifierConfigurationError, ValueError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
 
