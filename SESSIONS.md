@@ -2719,3 +2719,8 @@ conciliación 3-way. No se fusionará con `stock_entry` en esta etapa.
   de error en tema oscuro.
 - Se dejaron pendientes los issues de complejidad cognitiva y tipado porque
   requieren refactorización funcional y revisión separada.
+
+## 2026-08-12 — Ajustes puntuales reportados por SonarCloud
+
+- `_calculation_context_for_ledger` conserva su retorno como `CalculationContext`
+  mediante un `cast` explícito alrededor de `dataclasses.replace`.
