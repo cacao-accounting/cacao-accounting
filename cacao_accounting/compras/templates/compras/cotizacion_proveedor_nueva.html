@@ -23,7 +23,7 @@
 
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
-  {{ tf_macros.transaction_form_header("Editar Cotización de Proveedor" if edit else "Cotización de Proveedor", cancel_url=url_for('compras.compras_cotizacion_proveedor_lista'), include_remarks=False) }}
+  {{ tf_macros.transaction_form_header("Editar Cotización de Proveedor" if edit else "Cotización de Proveedor", cancel_url=url_for('compras.compras_cotizacion_proveedor_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -56,10 +56,6 @@
         <input type="hidden" name="from_rfq" value="{{ from_rfq_id }}" />
         <input type="hidden" name="negotiation_round_id" value="{{ negotiation_round_id }}" />
         {% endif %}
-      </div>
-      <div class="col-12">
-        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
-        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>
