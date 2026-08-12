@@ -109,7 +109,7 @@
     <h6 class="ca-card-title">Adjudicación por línea</h6>
     <div class="small text-muted">Ofertas aprobadas: {{ offers|length }} · Mínimo requerido: {{ sourcing_config.minimum_offers }}</div>
   </div>
-  <form method="post" action="{{ url_for('compras.compras_comparativo_ofertas_adjudicar', rfq_id=registro.id) }}" class="p-3">
+  <form method="post" action="{{ url_for('compras.compras_comparativo_ofertas_adjudicar', rfq_id=registro.id) }}" class="p-3" data-offers-insufficient="{{ 'true' if offers|length < sourcing_config.minimum_offers else 'false' }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="table-responsive">
       <table class="ca-table">
@@ -148,28 +148,6 @@
 </div>
 {% endif %}
 
-{% if is_purchase_manager and not award %}
-<script>
-  (() => {
-    const form = document.querySelector('form[action*="/award"]');
-    const reason = document.getElementById('authorization_reason');
-    if (!form || !reason) return;
-    const updateReasonRequirement = () => {
-      let override = false;
-      const groups = [...new Set([...form.querySelectorAll('input[type="radio"][name^="award_item_"]')].map((input) => input.name))];
-      groups.forEach((name) => {
-        const inputs = [...form.querySelectorAll(`input[name="${name}"]`)];
-        const rates = inputs.map((input) => Number(input.dataset.rate)).filter((rate) => !Number.isNaN(rate));
-        const selected = inputs.find((input) => input.checked);
-        if (selected && rates.length && Number(selected.dataset.rate) > Math.min(...rates)) override = true;
-      });
-      const insufficient = {{ 'true' if offers|length < sourcing_config.minimum_offers else 'false' }};
-      reason.required = insufficient || override;
-    };
-    form.addEventListener('change', updateReasonRequirement);
-    updateReasonRequirement();
-  })();
-</script>
-{% endif %}
+<script src="{{ url_for('static', filename='js/purchase-sourcing.js') }}" defer></script>
 
 {% endblock %}

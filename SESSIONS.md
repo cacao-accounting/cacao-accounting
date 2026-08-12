@@ -2724,3 +2724,6 @@ conciliación 3-way. No se fusionará con `stock_entry` en esta etapa.
 
 - `_calculation_context_for_ledger` conserva su retorno como `CalculationContext`
   mediante un `cast` explícito alrededor de `dataclasses.replace`.
+- La lógica de adjudicación del comparativo de ofertas se trasladó a
+  `purchase-sourcing.js`; la plantilla conserva solo la carga del recurso y un
+  atributo de datos, evitando falsos positivos de etiquetas `script` anidadas.
