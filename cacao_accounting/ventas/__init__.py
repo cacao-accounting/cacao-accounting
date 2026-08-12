@@ -2905,6 +2905,7 @@ def ventas_factura_venta_nuevo():
         or request.args.get("company")
         or selected_company
     )
+    source_origen = src["orden_origen"] or src["entrega_origen"] or src["factura_origen"]
 
     transaction_config = {
         "formKey": _FORMKEY_SALES_INVOICE,
@@ -2912,7 +2913,13 @@ def ventas_factura_venta_nuevo():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "initialSourceType": (
-            "sales_order" if from_order_id else "delivery_note" if from_note_id else "sales_invoice" if from_invoice_id else ""
+            "sales_order"
+            if src["from_order_id"]
+            else "delivery_note"
+            if src["from_note_id"]
+            else "sales_invoice"
+            if src["from_invoice_id"]
+            else ""
         ),
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
@@ -2921,7 +2928,6 @@ def ventas_factura_venta_nuevo():
         ],
         "initialHeader": {"company": company_id or "", "posting_date": str(date.today())},
     }
-    source_origen = orden_origen or entrega_origen or factura_origen
     if source_origen:
         transaction_config["initialHeader"] = {
             "company": source_origen.company or "",
