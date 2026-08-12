@@ -468,15 +468,7 @@
         <i class="bi bi-arrow-clockwise"></i>
       </button>
     </div>
-    <template x-if="isDraft">
-      <div class="ca-document-flow__empty">
-        <i class="bi bi-info-circle me-1"></i>
-        {{ _('El flujo documental estará disponible cuando el documento sea aprobado.') }}
-      </div>
-    </template>
-
-    <template x-if="!isDraft">
-      <div>
+    <div>
         <div x-show="loading" class="ca-document-flow__loading">
           <span class="spinner-border spinner-border-sm me-1"></span>{{ _('Cargando flujo documental…') }}
         </div>
@@ -524,8 +516,7 @@
             </template>
           </div>
         </template>
-      </div>
-    </template>
+    </div>
   </div>
 </div>
 {% endmacro %}

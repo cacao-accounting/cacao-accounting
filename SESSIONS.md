@@ -3,6 +3,82 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-12 — Plan transversal para document flow y cobertura de pruebas
+
+### Hallazgo
+
+La RFQ `01KZVMT9H6KVVXJWM5EVARB6T7`, creada desde la solicitud
+`01KZVMJP10S2JSEZ5FRTMGT4S4` en `cacaoaccounting.db`, se guardó sin líneas
+aunque el formulario las mostraba. El origen pertenece a la compañía `cacao`,
+usa `NIO` como moneda efectiva por configuración de compañía y la RFQ quedó
+con total cero.
+
+### Decisiones para la implementación
+
+- En cualquier document flow, compañía y moneda se heredan del origen y no se
+  pueden editar.
+- `naming_series` permanece editable; si sigue vacío, se consulta y aplica la
+  serie predeterminada después de una espera diferida de aproximadamente 1.5
+  segundos, sin sobrescribir una selección manual.
+- La carga asíncrona de líneas debe finalizar antes de permitir guardar y el
+  backend debe rechazar documentos requeridos sin líneas.
+- La revisión cubre S2P, O2C, Inventario y pagos de Bancos derivados de
+  facturas, notas y órdenes.
+- La moneda efectiva usa `transaction_currency` y, cuando está vacía, la
+  moneda configurada en la compañía.
+- Se agregará cobertura unitaria e integración para persistencia de líneas,
+  bloqueo de compañía/moneda, naming series, monedas incompatibles y pagos
+  documentales.
+
+### Implementación aplicada
+
+- Smart Select admite selección bloqueada y carga diferida de la serie default;
+  la serie sigue siendo editable y nunca sobrescribe una selección manual.
+- Los formularios transaccionales bloquean compañía/moneda cuando tienen
+  `initialSourceType`, sincronizan las líneas Alpine con sus inputs hidden antes
+  del POST y esperan la hidratación AJAX del origen.
+- Compras, Ventas e Inventario rechazan persistir documentos sin líneas.
+- RFQ y órdenes de compra heredan/validan compañía y moneda efectiva del
+  documento origen; Bancos usa la moneda efectiva también para pagos
+  documentales y bloquea visualmente la compañía prefijada.
+- El árbol de flujo documental se puede consultar en borradores; las acciones
+  para crear downstream continúan restringidas a documentos aprobados.
+- Cobertura focalizada agregada para Smart Select, formulario transaccional,
+  RFQ sin líneas, moneda heredada y compañía manipulada.
+
+### Revisión transversal de formularios
+
+Se revisaron los formularios basados en `transactionForm` de compras, ventas e
+inventario. Se corrigió el mismo riesgo en Smart Select personalizados: el
+`header` podía tener valores iniciales, pero el control no recibía
+`initialValue`/`initialLabel`. Proveedor, cliente y moneda ahora se hidratan
+desde el documento origen; compañía y moneda quedan bloqueadas cuando existe
+flujo documental, mientras `naming_series` permanece editable.
+
+Para documentos que afectan inventario, el almacén se modela como dato global:
+las recepciones de compra usan `to_warehouse` (bodega destino) y las
+remisiones usan `from_warehouse` (bodega origen), siguiendo el patrón de
+`stock_entry`. Las líneas usan ese valor al persistir y la cuenta de inventario
+se resuelve desde la configuración contable de esa bodega y compañía.
+
+La revisión visual de S2P/O2C también consolidó `Observaciones` dentro de la
+misma tarjeta de cabecera que proveedor/cliente y almacén cuando el formulario
+tiene campos adicionales. La cabecera compartida deja de renderizar un bloque
+duplicado de observaciones en esos casos.
+
+### Correcciones del feedback de revisión
+
+- La moneda base ahora se resuelve por `Entity.code`, no mediante la clave
+  primaria interna, por lo que funciona también cuando el origen no declara
+  `transaction_currency` y debe heredar la moneda de la compañía.
+- Se eliminó la moneda duplicada de la Orden de Compra y se corrigió
+  `base_currency` para usar la moneda base de la compañía.
+- Recepciones y remisiones validan compañía y moneda también en el backend.
+- Los errores de hidratación y de documento sin líneas se muestran en el
+  formulario; la sincronización contempla inputs y selects.
+- Inventario unificó el error de documento sin líneas en `DocumentFlowError` y
+  las remisiones usan el mensaje correcto de bodega de origen.
+
 ## 2026-08-11 — Comparativo de ofertas y colocación separada de órdenes
 
 ### Petición

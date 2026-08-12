@@ -1003,3 +1003,133 @@ def test_receipt_edit_updates_supplier_name(app_ctx):
     database.session.refresh(receipt)
     assert receipt.supplier_id == supplier_b.id
     assert receipt.supplier_name == supplier_b.name
+
+
+def test_purchase_quotation_flow_requires_lines_and_inherits_currency(app_ctx):
+    """A flow RFQ must preserve immutable headers and reject an empty payload."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    source = PurchaseRequest(company="cacao", posting_date=date.today(), transaction_currency="NIO", docstatus=1)
+    database.session.add(source)
+    database.session.flush()
+    database.session.add(
+        PurchaseRequestItem(
+            purchase_request_id=source.id,
+            item_code="ART-001",
+            item_name="Chocolate 100g",
+            qty=Decimal("2"),
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("20"),
+        )
+    )
+    database.session.commit()
+
+    response = client.get(f"/buying/request-for-quotation/new?from_request={source.id}")
+    assert response.status_code == 200
+    assert b"NIO" in response.data
+
+    before = database.session.execute(database.select(PurchaseQuotation)).scalars().all()
+    response = client.post(
+        "/buying/request-for-quotation/new",
+        data={"from_request": source.id, "company": "cacao", "posting_date": date.today().isoformat()},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    after = database.session.execute(database.select(PurchaseQuotation)).scalars().all()
+    assert len(after) == len(before)
+
+
+def test_purchase_quotation_flow_rejects_company_mismatch(app_ctx):
+    """A downstream RFQ cannot be moved to another company by changing POST data."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    source = PurchaseRequest(company="cacao", posting_date=date.today(), docstatus=1)
+    database.session.add(source)
+    database.session.commit()
+    before = database.session.execute(database.select(PurchaseQuotation)).scalars().all()
+
+    response = client.post(
+        "/buying/request-for-quotation/new",
+        data={
+            "from_request": source.id,
+            "company": "otra",
+            "posting_date": date.today().isoformat(),
+            "item_code_0": "ART-001",
+            "qty_0": "1",
+            "uom_0": "UND",
+            "rate_0": "1",
+            "amount_0": "1",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    after = database.session.execute(database.select(PurchaseQuotation)).scalars().all()
+    assert len(after) == len(before)
+
+
+def test_purchase_invoice_from_order_hydrates_immutable_header(app_ctx):
+    """A purchase invoice form inherits PO company, supplier, and effective currency."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    supplier = database.session.execute(database.select(Party).filter_by(is_supplier=True)).scalars().first()
+    order = PurchaseOrder(
+        company="cacao",
+        supplier_id=supplier.id,
+        supplier_name=supplier.name,
+        posting_date=date.today(),
+        transaction_currency=None,
+        docstatus=1,
+    )
+    database.session.add(order)
+    database.session.flush()
+    database.session.add(
+        PurchaseOrderItem(
+            purchase_order_id=order.id,
+            item_code="ART-001",
+            item_name="Chocolate 100g",
+            qty=Decimal("2"),
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("20"),
+        )
+    )
+    database.session.commit()
+
+    response = client.get(f"/buying/purchase-invoice/new?from_order={order.id}")
+
+    assert response.status_code == 200
+    assert b'"company": "cacao"' in response.data
+    assert b"NIO" in response.data
+    assert supplier.name.encode() in response.data
+    assert b'name="transaction_currency"' in response.data
+    assert b'name="currency"' not in response.data
+
+
+def test_purchase_receipt_from_order_exposes_warehouse_selector(app_ctx):
+    """A purchase receipt flow must expose the warehouse used for inventory posting."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    order = PurchaseOrder(company="cacao", posting_date=date.today(), docstatus=1)
+    database.session.add(order)
+    database.session.flush()
+    database.session.add(
+        PurchaseOrderItem(
+            purchase_order_id=order.id,
+            item_code="ART-001",
+            item_name="Chocolate 100g",
+            qty=Decimal("1"),
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+        )
+    )
+    database.session.commit()
+
+    response = client.get(f"/buying/purchase-receipt/new?from_order={order.id}")
+
+    assert response.status_code == 200
+    assert "Seleccione almacén".encode() in response.data
+    assert b'name="to_warehouse"' in response.data

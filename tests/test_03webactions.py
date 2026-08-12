@@ -704,10 +704,12 @@ def test_transaccional_edit_duplicate_actions_routes(request):
                 PurchaseOrder,
                 PurchaseQuotation,
                 PurchaseReceipt,
+                PurchaseReceiptItem,
                 SalesInvoice,
                 SalesOrder,
                 SalesQuotation,
                 StockEntry,
+                StockBin,
                 SupplierQuotation,
                 database,
             )
@@ -804,6 +806,29 @@ def test_transaccional_edit_duplicate_actions_routes(request):
                         sales_invoice,
                         stock_entry,
                     ]
+                )
+                database.session.flush()
+                database.session.add(
+                    PurchaseReceiptItem(
+                        purchase_receipt_id=purchase_receipt.id,
+                        item_code="ART-001",
+                        item_name="Chocolate 100g",
+                        qty=1,
+                        uom="UND",
+                        rate=0,
+                        amount=0,
+                        warehouse="PRINCIPAL",
+                    )
+                )
+                database.session.add(
+                    StockBin(
+                        item_code="ART-001",
+                        warehouse="PRINCIPAL",
+                        company="cacao",
+                        actual_qty=10,
+                        valuation_rate=1,
+                        stock_value=10,
+                    )
                 )
                 database.session.commit()
 
@@ -1032,19 +1057,59 @@ def test_transaccional_full_transition_routes_get_post(request):
                 edit_posts = [
                     (
                         f"/buying/request-for-quotation/{purchase_quotation.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit"},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "remarks": "edit",
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                        },
                     ),
                     (
                         f"/buying/supplier-quotation/{supplier_quotation.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "supplier_id": supplier.id},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "remarks": "edit",
+                            "supplier_id": supplier.id,
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                        },
                     ),
                     (
                         f"/buying/purchase-order/{purchase_order.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "supplier_id": supplier.id},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "remarks": "edit",
+                            "supplier_id": supplier.id,
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                        },
                     ),
                     (
                         f"/buying/purchase-receipt/{purchase_receipt.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "supplier_id": supplier.id},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "remarks": "edit",
+                            "supplier_id": supplier.id,
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                            "warehouse_0": "PRINCIPAL",
+                        },
                     ),
                     (
                         f"/buying/purchase-invoice/{purchase_invoice.id}/edit",
@@ -1054,31 +1119,98 @@ def test_transaccional_full_transition_routes_get_post(request):
                             "remarks": "edit",
                             "supplier_invoice_no": "SUP-001",
                             "supplier_id": supplier.id,
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
                         },
                     ),
                     (
                         f"/sales/sales-request/{sales_request.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "remarks": "edit",
+                            "customer_id": customer.id,
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                        },
                     ),
                     (
                         f"/sales/sales-quotation/{sales_quotation.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "remarks": "edit",
+                            "customer_id": customer.id,
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                        },
                     ),
                     (
                         f"/sales/sales-order/{sales_order.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "remarks": "edit",
+                            "customer_id": customer.id,
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                            "warehouse_0": "PRINCIPAL",
+                        },
                     ),
                     (
                         f"/sales/delivery-note/{delivery_note.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "remarks": "edit",
+                            "customer_id": customer.id,
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                            "warehouse_0": "PRINCIPAL",
+                        },
                     ),
                     (
                         f"/sales/sales-invoice/{sales_invoice.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "remarks": "edit", "customer_id": customer.id},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "remarks": "edit",
+                            "customer_id": customer.id,
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                        },
                     ),
                     (
                         f"/inventory/stock-entry/{stock_entry.id}/edit",
-                        {"company": "cacao", "posting_date": "2026-05-16", "purpose": "material_receipt", "remarks": "edit"},
+                        {
+                            "company": "cacao",
+                            "posting_date": "2026-05-16",
+                            "purpose": "material_receipt",
+                            "remarks": "edit",
+                            "item_code_0": "ART-001",
+                            "qty_0": "1",
+                            "uom_0": "UND",
+                            "rate_0": "1",
+                            "amount_0": "1",
+                        },
                     ),
                 ]
                 for url, payload in edit_posts:

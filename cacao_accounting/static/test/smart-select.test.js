@@ -212,6 +212,44 @@ describe('smart-select', function () {
     assert.strictEqual(component.options.length, 1);
   });
 
+  it('loads the default naming series after the deferred initial wait', async function () {
+    let fetchCalls = 0;
+    const companyElement = { value: 'cacao', addEventListener() {} };
+    const create = loadSmartSelect({
+      elements: { '#company': companyElement },
+      fetch: () => {
+        fetchCalls += 1;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ results: [{ value: 'SER-DEFAULT', is_default: true }] }) });
+      },
+    });
+    const component = create({
+      doctype: 'naming_series',
+      name: 'naming_series',
+      filters: { company: { selector: '#company' } },
+      requiredFilters: ['company'],
+      autoSelectDefault: true,
+      defaultAfterMs: 1,
+    });
+
+    component.init();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await flushPromises();
+
+    assert.strictEqual(fetchCalls, 1);
+    assert.strictEqual(component.selectedValue, 'SER-DEFAULT');
+  });
+
+  it('does not allow changes to a locked smart select', function () {
+    const create = loadSmartSelect();
+    const component = create({ doctype: 'company', name: 'company', locked: true, initialValue: 'cacao' });
+
+    component.selectOption({ value: 'otra', display_name: 'Otra' });
+    component.clearSelection();
+    component.onInput({ target: { value: 'otra' } });
+
+    assert.strictEqual(component.selectedValue, 'cacao');
+  });
+
   it('selectOption updates hidden input and dispatches input/change events', function () {
     const create = loadSmartSelect();
     const component = create({

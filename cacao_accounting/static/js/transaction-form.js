@@ -272,6 +272,9 @@
       return {
         formKey: config.formKey || '',
         viewKey: config.viewKey || 'draft',
+        flowLockedFields: Array.isArray(config.flowLockedFields)
+          ? [...config.flowLockedFields]
+          : (config.initialSourceType ? ['company', 'currency'] : []),
         messages,
         preferences: {
           columns: columnsList
@@ -287,6 +290,9 @@
           party_type: '',
           party: '',
           party_label: '',
+          warehouse: '',
+          from_warehouse: '',
+          to_warehouse: '',
           source_id: '',
           ...config.initialHeader
         },
@@ -302,6 +308,9 @@
         lines: [],
         sourceItems: [],
         loadingSource: false,
+        sourceHydrationPending: false,
+        sourceLoadError: '',
+        submitError: '',
         activeIndex: null,
         modalLine: null,
         payload: '',
@@ -328,6 +337,9 @@
         },
 
         init() {
+          if (this.$root?.addEventListener) {
+            this.$root.addEventListener('submit', this.prepareSubmit.bind(this));
+          }
           if (!this.header.party_type) {
             if (this.formKey.startsWith('sales.')) this.header.party_type = 'customer';
             if (this.formKey.startsWith('purchases.')) this.header.party_type = 'supplier';
@@ -335,6 +347,42 @@
           this.lines = (config.initialLines || []).map(normalizeLineWithCb(this));
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
           this.queueTaxPreview();
+        },
+
+        isFlowFieldLocked(field) {
+          return this.flowLockedFields.includes(field);
+        },
+
+        prepareSubmit(event) {
+          this.submitError = '';
+          this.syncLineInputs();
+          if (this.sourceHydrationPending || this.loadingSource) {
+            this.submitError = 'Espere a que termine la carga del documento origen.';
+            event.preventDefault();
+            return;
+          }
+          const requiresLines = Boolean(config.sourceApiUrl || config.requiresLines || config.initialSourceType);
+          if (requiresLines && !this.lines.some((line) => String(line.item_code || '').trim())) {
+            this.submitError = 'El documento requiere al menos una línea.';
+            event.preventDefault();
+          }
+        },
+
+        syncLineInputs() {
+          const root = this.$root || document;
+          const fields = ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount', 'warehouse', 'account',
+            'cost_center', 'unit', 'project', 'remarks', 'source_type', 'source_id', 'source_item_id'];
+          this.lines.forEach((line, index) => {
+            fields.forEach((field) => {
+              const input = root.querySelector(`[name="${field}_${index}"]`);
+              if (!input) return;
+              const globalWarehouse = this.header.warehouse || this.header.from_warehouse || this.header.to_warehouse;
+              const value = field === 'warehouse' && !line[field] ? globalWarehouse : line[field];
+              input.value = value === undefined || value === null ? '' : String(value);
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+          });
         },
 
         get defaultColumns() {
@@ -834,15 +882,18 @@
 
         async loadSourceFromUrl(apiUrl) {
           this.loadingSource = true;
+          this.sourceLoadError = '';
           this.autofillStep = 2;
           try {
             const response = await fetch(apiUrl, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error(response.statusText || 'source request failed');
             const data = await response.json();
             this.sourceItems = this.mapSourceItems(data.items);
             this.loadingSource = false;
           } catch (err) {
             console.warn('Error al obtener source lines:', err);
             this.loadingSource = false;
+            this.sourceLoadError = 'No se pudieron cargar las líneas del documento origen.';
           }
         },
 

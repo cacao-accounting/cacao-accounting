@@ -13,7 +13,7 @@
 </nav>
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
-  {{ tf_macros.transaction_form_header("Editar Pedido de Venta" if edit else "Pedido de Venta") }}
+  {{ tf_macros.transaction_form_header("Editar Pedido de Venta" if edit else "Pedido de Venta", include_remarks=False) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -26,8 +26,14 @@
         filter_sources=["#company"],
         required_filters=["company"],
         x_model="header.party",
+        initial_value_expr="header.party",
+        initial_label_expr="header.party_label",
         on_select="function(opt){ header.party_label = opt.display_name; }"
         ) }}
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>

@@ -33,7 +33,12 @@ from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
-from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target, validate_submit_prerequisites
+from cacao_accounting.document_flow import (
+    DocumentFlowError,
+    create_document_relation,
+    revert_relations_for_target,
+    validate_submit_prerequisites,
+)
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
@@ -857,6 +862,7 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de un movimiento de inventario."""
     i = 0
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -890,7 +896,10 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
             database.session.flush()
             _create_line_relation(i, "stock_entry", entry.id, line.id, qty, uom, rate, amount)
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total
 
 
@@ -927,6 +936,7 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de conciliacion con snapshot de cantidad y valuacion."""
     i = 0
     total_difference = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "").strip()
         warehouse = request.form.get(f"warehouse_{i}") or entry.to_warehouse or entry.from_warehouse
@@ -974,7 +984,10 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
             database.session.add(line)
             database.session.flush()
             total_difference += abs(value_difference)
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_difference
 
 
@@ -1020,6 +1033,7 @@ def inventario_entrada_nuevo():
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "initialSourceType": request.args.get("source_type") or "",
         "availableSourceTypes": [
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Remisión de Mercadería Vendida")},

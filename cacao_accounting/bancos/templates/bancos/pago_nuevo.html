@@ -134,6 +134,7 @@
         posting_date: config.initial.posting_date || new Date().toISOString().slice(0, 10),
         mode_of_payment: config.initial.mode_of_payment || 'transfer',
         company: config.initial.company || '',
+        company_locked: Boolean(config.initial.flow_locked),
         company_label: '',
         naming_series_id: '',
         party_type: config.initial.party_type || 'customer',
@@ -555,10 +556,11 @@
             initialValue: "{{ initial_payment.company if initial_payment else "" }}",
             preload: true,
             preloadOnFocus: true,
-            onSelect: function(opt) { header.company = opt.value; header.company_label = opt.display_name; }
+            locked: {{ "true" if initial_payment and initial_payment.flow_locked else "false" }},
+            onSelect: function(opt) { if (!header.company_locked) { header.company = opt.value; header.company_label = opt.display_name; } }
           })'>
           <input type="hidden" id="company_val" x-model="selectedValue" x-effect="header.company = selectedValue">
-          <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required>
+          <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Buscar compañía...') }}" required :readonly="header.company_locked">
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
               <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>

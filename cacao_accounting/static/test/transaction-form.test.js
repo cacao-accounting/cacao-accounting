@@ -88,6 +88,46 @@ describe('transaction-form', function () {
     assert.strictEqual(component.lines.length, 1);
   });
 
+  it('locks company and currency for document flow forms', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_quotation',
+      initialSourceType: 'purchase_request',
+      initialHeader: { company: 'cacao', currency: 'NIO' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+
+    component.init();
+
+    assert.strictEqual(component.isFlowFieldLocked('company'), true);
+    assert.strictEqual(component.isFlowFieldLocked('currency'), true);
+    assert.strictEqual(component.isFlowFieldLocked('naming_series'), false);
+  });
+
+  it('prevents submit while source lines are loading or missing', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_quotation',
+      initialSourceType: 'purchase_request',
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+
+    const loadingEvent = { prevented: false, preventDefault() { this.prevented = true; } };
+    component.sourceHydrationPending = true;
+    component.prepareSubmit(loadingEvent);
+    assert.strictEqual(loadingEvent.prevented, true);
+
+    const emptyEvent = { prevented: false, preventDefault() { this.prevented = true; } };
+    component.sourceHydrationPending = false;
+    component.prepareSubmit(emptyEvent);
+    assert.strictEqual(emptyEvent.prevented, true);
+  });
+
   it('always returns all default columns regardless of config', function () {
     const create = loadTransactionForm();
     const component = create({

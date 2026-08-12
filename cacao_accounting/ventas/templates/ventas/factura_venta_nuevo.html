@@ -38,7 +38,8 @@
       or document_type == 'sales_credit_note' and 'Nota de Crédito de Venta'
       or document_type == 'sales_debit_note' and 'Nota de Débito de Venta'
       or 'Factura de Venta',
-      cancel_url=url_for('ventas.ventas_factura_venta_lista')
+      cancel_url=url_for('ventas.ventas_factura_venta_lista'),
+      include_remarks=False
     ) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
@@ -52,6 +53,8 @@
         filter_sources=["#company"],
         required_filters=["company"],
         x_model="header.party",
+        initial_value_expr="header.party",
+        initial_label_expr="header.party_label",
         on_select="function(opt){ header.party_label = opt.display_name; }"
         ) }}
       </div>
@@ -63,6 +66,10 @@
         </div>
       </div>
       {% endif %}
+      <div class="col-12">
+        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
+      </div>
     </div>
   </div>
 

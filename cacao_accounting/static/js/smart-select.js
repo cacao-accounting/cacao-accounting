@@ -78,6 +78,8 @@
         loadOnFilterChange: config.loadOnFilterChange || false,
         preloadOnFocus: config.preloadOnFocus || false,
         autoSelectDefault: config.autoSelectDefault || false,
+        defaultAfterMs: config.defaultAfterMs || 0,
+        locked: Boolean(config.locked),
         messages: {
           placeholder: '',
           loading: '...',
@@ -99,6 +101,7 @@
         lastFilterSignature: '',
         onSelect: config.onSelect || null,
         _positionHandler: null,
+        _defaultTimer: null,
 
         init() {
           this.lastFilterSignature = this.filterSignature();
@@ -110,6 +113,13 @@
           }
           if (this.preload && this.requiredFiltersPresent() && !this.selectedValue) {
             this.preloadOptions();
+          }
+          if (this.autoSelectDefault && this.defaultAfterMs > 0) {
+            this._defaultTimer = setTimeout(() => {
+              if (!this.selectedValue && this.requiredFiltersPresent() && !this.loading) {
+                this.preloadOptions();
+              }
+            }, this.defaultAfterMs);
           }
 
           if (typeof this.$watch === 'function') {
@@ -171,6 +181,7 @@
         },
 
         onInput(event) {
+          if (this.locked) return;
           if (event?.target) {
             this.search = event.target.value || '';
           }
@@ -183,6 +194,7 @@
         },
 
         onFocus() {
+          if (this.locked) return;
           if (this.preloadOnFocus) {
             this.handlePreloadOnFocus();
           } else if (this.options.length > 0) {
@@ -344,6 +356,7 @@
         },
 
         selectOptionValue(value, label) {
+          if (this.locked) return;
           this.selectedValue = normalizeValue(value) || '';
           this.selectedLabel = label || '';
           this.search = this.selectedLabel;
@@ -365,6 +378,7 @@
         },
 
         selectOption(option) {
+          if (this.locked) return;
           const optionValue = option.value ?? option.id;
           this.selectedValue = normalizeValue(optionValue) || '';
           this.selectedLabel = option.display_name || option.label || '';
@@ -400,6 +414,7 @@
         },
 
         clearSelection() {
+          if (this.locked) return;
           this.selectedValue = '';
           this.selectedLabel = '';
           this.search = '';

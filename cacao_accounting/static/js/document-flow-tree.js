@@ -203,7 +203,7 @@
 
       toggle() {
         this.open = !this.open;
-        if (this.open && !this.loaded && !this.isDraft) this.load();
+        if (this.open && !this.loaded) this.load();
       },
       expandAll() { this.expandAllNodes = true; },
       collapseAll() { this.expandAllNodes = false; },

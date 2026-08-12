@@ -35,7 +35,9 @@
       or document_type == 'purchase_debit_note' and 'Nota de Débito de Compra'
       or document_type == 'purchase_return' and 'Devolución de Compra'
       or 'Factura de Compra',
-      cancel_url=url_for('compras.compras_factura_compra_lista')
+      cancel_url=url_for('compras.compras_factura_compra_lista'),
+      include_currency=False,
+      include_remarks=False
     ) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
@@ -49,6 +51,8 @@
         filter_sources=["#company"],
         required_filters=["company"],
         x_model="header.party",
+        initial_value_expr="header.party",
+        initial_label_expr="header.party_label",
         on_select="function(opt){ header.party_label = opt.display_name; }"
         ) }}
         <div class="mt-3">
@@ -62,9 +66,16 @@
             doctype="currency",
             name="transaction_currency",
             label=_("Moneda"),
+            initial_value_expr="header.transaction_currency",
+            initial_label_expr="header.transaction_currency",
+            locked_expr="typeof isFlowFieldLocked === 'function' && isFlowFieldLocked('currency')",
             x_model="header.transaction_currency",
             on_select="function(opt){ header.transaction_currency_label = opt.display_name; }"
             ) }}
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>
