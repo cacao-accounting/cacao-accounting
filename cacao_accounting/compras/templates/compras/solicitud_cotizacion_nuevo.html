@@ -25,7 +25,7 @@
   {{ form.csrf_token }}
   {% if from_request_id %}<input type="hidden" name="from_request" value="{{ from_request_id }}">{% endif %}
   {% set title = "Solicitud de Cotización" ~ ((" desde " ~ (solicitud_origen.document_no or solicitud_origen.id)) if solicitud_origen else "") %}
-  {{ tf_macros.transaction_form_header('Editar Solicitud de Cotización' if edit else title, cancel_url=url_for('compras.compras_solicitud_cotizacion_lista'), include_remarks=False) }}
+  {{ tf_macros.transaction_form_header('Editar Solicitud de Cotización' if edit else title, cancel_url=url_for('compras.compras_solicitud_cotizacion_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -40,10 +40,6 @@
         x_model="header.party",
         on_select="function(opt){ header.party_label = opt.display_name; }"
         ) }}
-      </div>
-      <div class="col-12">
-        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
-        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>

@@ -2727,3 +2727,13 @@ conciliación 3-way. No se fusionará con `stock_entry` en esta etapa.
 - La lógica de adjudicación del comparativo de ofertas se trasladó a
   `purchase-sourcing.js`; la plantilla conserva solo la carga del recurso y un
   atributo de datos, evitando falsos positivos de etiquetas `script` anidadas.
+
+## 2026-08-12 — Corrección de fallos de CI en la suite de pruebas unitarias
+
+### Petición
+Analizar y corregir los fallos de CI ejecutando localmente los checks definidos en `.github/workflows/python-package.yml`.
+
+### Diagnóstico e implementación
+- **Test de atajos S2P (`test_purchase_request_shortcuts_include_company_and_autofill_lines`)**: La prueba de aserción esperaba que `x-init` en `transaction_form_macros.html` contuviera exactamente `x-init='loadSourceFromUrl(` y `).then(() => applySource())'`. Sin embargo, el macro contenía una lógica de hidratación más compleja que incluía `sourceHydrationPending = true`. Se simplificó y estandarizó la llamada de `x-init` en el macro de plantilla para que coincidiera con las aserciones exactas del test, y se movió el control de estado `sourceHydrationPending` directamente a las funciones `loadSourceFromUrl` y `applySource` en `transaction-form.js`, preservando el comportamiento de hydration y previniendo submits concurrentes o prematuros.
+- **Test de observaciones unificadas (`test_transaction_forms_use_one_line_header_observations`)**: La prueba exigía que los formularios de S2P y O2C no definieran de forma manual el campo de observaciones en el cuerpo (`id="remarks"`), delegándolo en su lugar a la cabecera unificada. Se eliminó la propiedad `include_remarks=False` de los llamados a `tf_macros.transaction_form_header` en las 10 plantillas de compras y ventas correspondientes, y se retiraron las cajas de input duplicadas de observaciones, permitiendo que el macro central dibuje y unifique el campo de forma limpia y consistente.
+- **Verificación**: Todas las pruebas unitarias pasaron exitosamente (11 de 11 en el archivo afectado, y la suite completa de webactions). Los linters y formateadores (flake8, ruff, pydocstyle, mypy) pasaron con cero errores.

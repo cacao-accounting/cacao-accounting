@@ -36,8 +36,7 @@
       or document_type == 'purchase_return' and 'Devolución de Compra'
       or 'Factura de Compra',
       cancel_url=url_for('compras.compras_factura_compra_lista'),
-      include_currency=False,
-      include_remarks=False
+      include_currency=False
     ) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
@@ -72,10 +71,6 @@
             x_model="header.transaction_currency",
             on_select="function(opt){ header.transaction_currency_label = opt.display_name; }"
             ) }}
-      </div>
-      <div class="col-12">
-        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
-        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>

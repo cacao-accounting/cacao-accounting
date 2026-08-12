@@ -24,7 +24,7 @@
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
-  {{ tf_macros.transaction_form_header("Editar Remisión de Mercadería Vendida" if edit else "Remisión de Mercadería Vendida", cancel_url=url_for('ventas.ventas_entrega_lista'), include_remarks=False) }}
+  {{ tf_macros.transaction_form_header("Editar Remisión de Mercadería Vendida" if edit else "Remisión de Mercadería Vendida", cancel_url=url_for('ventas.ventas_entrega_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -60,10 +60,6 @@
           {{ form.is_return(class="form-check-input", id="is_return") }}
           <label class="form-check-label" for="is_return">{{ _('Es devolución (entrada de mercancía devuelta por el cliente)') }}</label>
         </div>
-      </div>
-      <div class="col-12">
-        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
-        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>
