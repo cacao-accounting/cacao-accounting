@@ -122,9 +122,7 @@ def exige_acceso_compania(
     abort(403)
 
 
-def exige_acceso_compania_cualquiera(
-    modulos: tuple[str, ...], company: str | None, accion: str = "consultar"
-) -> None:
+def exige_acceso_compania_cualquiera(modulos: tuple[str, ...], company: str | None, accion: str = "consultar") -> None:
     """Require company access in at least one of several operational modules."""
     for modulo in modulos:
         try:
