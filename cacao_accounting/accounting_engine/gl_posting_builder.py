@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 
@@ -141,12 +141,15 @@ def _calculation_context_for_ledger(
         custom_references = {**references.custom_references, "settlement_exchange_rate": transaction_rate}
         references = replace(references, open_balance=open_balance, custom_references=custom_references)
         transaction_rate = document_rate
-    return replace(
-        context,
-        company_currency=ledger_currency,
-        exchange_rate=transaction_rate,
-        fiscal_exchange_rate=transaction_rate,
-        references=references,
+    return cast(
+        CalculationContext,
+        replace(
+            context,
+            company_currency=ledger_currency,
+            exchange_rate=transaction_rate,
+            fiscal_exchange_rate=transaction_rate,
+            references=references,
+        ),
     )
 
 
