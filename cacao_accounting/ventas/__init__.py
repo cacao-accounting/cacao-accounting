@@ -2915,11 +2915,7 @@ def ventas_factura_venta_nuevo():
         "initialSourceType": (
             "sales_order"
             if src["from_order_id"]
-            else "delivery_note"
-            if src["from_note_id"]
-            else "sales_invoice"
-            if src["from_invoice_id"]
-            else ""
+            else "delivery_note" if src["from_note_id"] else "sales_invoice" if src["from_invoice_id"] else ""
         ),
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
