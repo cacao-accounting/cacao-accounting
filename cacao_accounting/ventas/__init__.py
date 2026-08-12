@@ -2813,6 +2813,13 @@ def ventas_factura_venta_nuevo():
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     titulo = "Nueva Factura de Venta - " + APPNAME
+    company_id = (
+        (orden_origen.company if orden_origen else None)
+        or (entrega_origen.company if entrega_origen else None)
+        or (factura_origen.company if factura_origen else None)
+        or request.args.get("company")
+        or selected_company
+    )
     transaction_config = {
         "formKey": _FORMKEY_SALES_INVOICE,
         "viewKey": "draft",
@@ -2823,6 +2830,10 @@ def ventas_factura_venta_nuevo():
             {"value": "delivery_note", "label": _("Nota de Entrega")},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
+        "initialHeader": {
+            "company": company_id or "",
+            "posting_date": str(date.today()),
+        },
     }
     if request.method == "POST":
         return _create_sales_invoice_from_form()

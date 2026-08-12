@@ -2794,15 +2794,18 @@ def compras_recepcion_nuevo():
     formulario = FormularioRecepcionCompra()
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
 
-    selected_company = request.values.get("company") or (
-        formulario.company.choices[0][0] if formulario.company.choices else None
+    from_order_id = request.args.get("from_order") or request.form.get("from_order")
+    orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
+
+    selected_company = (
+        (orden_origen.company if orden_origen else None)
+        or request.values.get("company")
+        or (formulario.company.choices[0][0] if formulario.company.choices else None)
     )
     formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
     formulario.supplier_id.choices = [("", "")] + [
         (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
-    from_order_id = request.args.get("from_order") or request.form.get("from_order")
-    orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
@@ -2814,6 +2817,7 @@ def compras_recepcion_nuevo():
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
     titulo = "Nueva Recepción de Compra - " + APPNAME
+    company_id = (orden_origen.company if orden_origen else None) or request.args.get("company") or selected_company
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_RECEIPT,
         "viewKey": "draft",
@@ -2821,6 +2825,10 @@ def compras_recepcion_nuevo():
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
         "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
+        "initialHeader": {
+            "company": company_id or "",
+            "posting_date": str(date.today()),
+        },
     }
     if request.method == "POST":
         response = _create_purchase_receipt_from_form()
@@ -3273,9 +3281,17 @@ def compras_factura_compra_nuevo():
     document_title = DOCUMENT_TYPE_LABELS.get(document_type, FACTURA_DE_COMPRA)
     items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
     titulo = f"Nueva {document_title} - {APPNAME}"
+    company_id = (
+        (orden_origen.company if orden_origen else None)
+        or (recepcion_origen.company if recepcion_origen else None)
+        or (factura_origen.company if factura_origen else None)
+        or request.args.get("company")
+        or selected_company
+    )
     transaction_config = _purchase_invoice_transaction_config(
         items=items_disponibles,
         uoms=uoms_disponibles,
+        company_id=company_id,
     )
     if request.method == "POST":
         response = _create_purchase_invoice_from_request()
@@ -3362,6 +3378,7 @@ def _purchase_invoice_transaction_config(
     *,
     items: list[dict[str, str | None]],
     uoms: list[dict[str, str]],
+    company_id: str | None = None,
 ) -> dict[str, object]:
     """Build the transaction configuration for purchase invoices."""
     return {
@@ -3374,6 +3391,10 @@ def _purchase_invoice_transaction_config(
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "purchase_invoice", "label": _(LABEL_FACTURA_COMPRA_LONG)},
         ],
+        "initialHeader": {
+            "company": company_id or "",
+            "posting_date": str(date.today()),
+        },
     }
 
 
@@ -3518,6 +3539,10 @@ def _create_purchase_invoice_from_request():
         company = request.form.get("company") or None
         from_order = request.form.get("from_order") or None
         from_receipt = request.form.get("from_receipt") or None
+        if from_receipt and not from_order:
+            receipt = database.session.get(PurchaseReceipt, from_receipt)
+            if receipt:
+                from_order = receipt.purchase_order_id
         _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt)
         _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
         factura = PurchaseInvoice(
