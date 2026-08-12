@@ -60,6 +60,15 @@ def get_document_node(document_type: str, document_id: str) -> dict[str, Any]:
     return node
 
 
+def _base_relation_type(doctype: str) -> str:
+    """Mapea tipos de documento específicos al tipo técnico base usado en relaciones."""
+    if doctype in ("purchase_return", "purchase_credit_note", "purchase_debit_note"):
+        return "purchase_invoice"
+    if doctype in ("sales_return", "sales_credit_note", "sales_debit_note"):
+        return "sales_invoice"
+    return doctype
+
+
 # ---------------------------------------------------------------------------
 # Árbol recursivo
 # ---------------------------------------------------------------------------
@@ -96,10 +105,11 @@ def get_upstream_tree(
         return [{"cycle_detected": True, "document_type": doctype, "document_id": document_id}]
     visited.add(key)
 
+    rel_types = {doctype, _base_relation_type(doctype)}
     rows: list[DocumentRelation] = list(
         database.session.execute(
             database.select(DocumentRelation)
-            .filter_by(target_type=doctype, target_id=document_id)
+            .filter(DocumentRelation.target_type.in_(rel_types), DocumentRelation.target_id == document_id)
             .order_by(DocumentRelation.created)
         )
         .scalars()
@@ -171,10 +181,11 @@ def get_downstream_tree(
         return [{"cycle_detected": True, "document_type": doctype, "document_id": document_id}]
     visited.add(key)
 
+    rel_types = {doctype, _base_relation_type(doctype)}
     rows: list[DocumentRelation] = list(
         database.session.execute(
             database.select(DocumentRelation)
-            .filter_by(source_type=doctype, source_id=document_id)
+            .filter(DocumentRelation.source_type.in_(rel_types), DocumentRelation.source_id == document_id)
             .order_by(DocumentRelation.created)
         )
         .scalars()
@@ -441,10 +452,11 @@ def _has_cycle_flag(nodes: list[dict[str, Any]]) -> bool:
 
 def _payment_reference_documents(doctype: str, document_id: str) -> list[PaymentReference]:
     """Devuelve referencias de pago relacionadas con un documento."""
+    ref_types = {doctype, _base_relation_type(doctype)}
     return list(
         database.session.execute(
             database.select(PaymentReference)
-            .filter_by(reference_type=doctype, reference_id=document_id)
+            .filter(PaymentReference.reference_type.in_(ref_types), PaymentReference.reference_id == document_id)
             .order_by(PaymentReference.created)
         )
         .scalars()
