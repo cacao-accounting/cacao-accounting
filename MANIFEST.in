@@ -20,7 +20,6 @@ recursive-exclude cacao_accounting/query_tools/tests *
 recursive-exclude cacao_accounting/static/media/Linux *
 recursive-exclude cacao_accounting/static/media/Windows *
 recursive-exclude cacao_accounting/static/media/Web *
-exclude cacao_accounting/static/media/brand.svg
 exclude cacao_accounting/static/media/cacao_accounting _logo.png
 exclude cacao_accounting/static/media/cacao_logo.svg
 exclude cacao_accounting/static/media/Cacao Accounting SVG.svg
