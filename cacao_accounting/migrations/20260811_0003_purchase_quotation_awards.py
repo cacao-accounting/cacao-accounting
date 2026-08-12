@@ -50,7 +50,11 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(["authorized_by"], ["user.id"], ondelete="SET NULL"),
             sa.PrimaryKeyConstraint("id"),
         )
-        op.create_index("ix_purchase_quotation_award_purchase_quotation_id", "purchase_quotation_award", ["purchase_quotation_id"])
+        op.create_index(
+            "ix_purchase_quotation_award_purchase_quotation_id",
+            "purchase_quotation_award",
+            ["purchase_quotation_id"],
+        )
         op.create_index("ix_purchase_quotation_award_company", "purchase_quotation_award", ["company"])
         op.create_index("ix_purchase_quotation_award_status", "purchase_quotation_award", ["status"])
 
