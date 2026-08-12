@@ -96,6 +96,7 @@ from cacao_accounting.document_flow import (
     revert_relations_for_target,
     validate_submit_prerequisites,
 )
+from cacao_accounting.document_flow.context import company_currency, effective_currency, validate_immutable_header
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, has_active_source_relations
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
@@ -648,6 +649,13 @@ def compras_cotizacion_proveedor_nueva():
         uoms=uoms_disponibles,
         initial_source_type=_supplier_quotation_initial_source_type(from_request_id, from_rfq_id),
     )
+    source = solicitud_origen or rfq_origen
+    if source:
+        transaction_config["initialHeader"] = {
+            "company": source.company or "",
+            "currency": effective_currency(source) or "",
+            "posting_date": str(date.today()),
+        }
     return render_template(
         "compras/cotizacion_proveedor_nueva.html",
         form=formulario,
@@ -1728,6 +1736,7 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1751,7 +1760,10 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             _create_line_relation(i, "purchase_order", order_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1760,6 +1772,7 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1783,7 +1796,10 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
             _create_line_relation(i, "purchase_quotation", quotation_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1792,6 +1808,7 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1812,7 +1829,10 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             database.session.add(linea)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1821,6 +1841,7 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1844,7 +1865,10 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
             _create_line_relation(i, "supplier_quotation", quotation_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1853,6 +1877,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1862,7 +1887,9 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
-            warehouse_code = request.form.get(f"warehouse_{i}") or None
+            warehouse_code = (
+                request.form.get(f"warehouse_{i}") or request.form.get("to_warehouse") or request.form.get("warehouse") or None
+            )
             _validate_receipt_warehouse(warehouse_code)
             linea = PurchaseReceiptItem(
                 purchase_receipt_id=receipt_id,
@@ -1879,7 +1906,10 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             _create_line_relation(i, "purchase_receipt", receipt_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1901,6 +1931,7 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1924,7 +1955,10 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             _create_line_relation(i, "purchase_invoice", invoice_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1954,8 +1988,13 @@ def _build_purchase_order_transaction_config(items_disponibles, uoms_disponibles
         "initialSourceType": initial_source_type,
     }
     if source_origen:
+        source_currency = effective_currency(source_origen)
         transaction_config["initialHeader"] = {
             "company": source_origen.company or "",
+            "currency": source_currency or "",
+            "transaction_currency": source_currency or "",
+            "party": getattr(source_origen, "supplier_id", None) or "",
+            "party_label": getattr(source_origen, "supplier_name", None) or "",
             "posting_date": str(date.today()),
         }
     return transaction_config
@@ -2189,14 +2228,26 @@ def _create_purchase_order_from_request(form: dict):
         return None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     posting_date = _parse_date(form.get("posting_date"))
-    transaction_currency = form.get("transaction_currency") or None
+    source = None
+    for model, key in (
+        (PurchaseRequest, "from_request"),
+        (PurchaseQuotation, "from_rfq"),
+        (SupplierQuotation, "from_supplier_quotation"),
+    ):
+        source_id = form.get(key)
+        if source_id:
+            source = database.session.get(model, source_id)
+            break
+    company, transaction_currency = _validate_purchase_flow_header(source, form)
+    transaction_currency = transaction_currency or form.get("transaction_currency") or form.get("currency") or None
     orden = PurchaseOrder(
         supplier_id=supplier_id,
         supplier_name=supplier.name if supplier else None,
-        company=form.get("company") or None,
+        company=company,
         posting_date=posting_date,
         remarks=form.get("remarks"),
         transaction_currency=transaction_currency,
+        base_currency=company_currency(company),
         purchase_award_id=award_id,
         docstatus=0,
     )
@@ -2214,7 +2265,7 @@ def _create_purchase_order_from_request(form: dict):
         orden.total = total
         orden.net_total = total
         orden.grand_total = total
-        orden.exchange_rate = _purchase_exchange_rate(form.get("company"), posting_date, transaction_currency)
+        orden.exchange_rate = _purchase_exchange_rate(company, posting_date, transaction_currency)
         orden.base_total = (total * orden.exchange_rate).quantize(Decimal("0.0001"))
         log_create(orden)
         database.session.commit()
@@ -2339,6 +2390,7 @@ def compras_solicitud_cotizacion_nueva():
     formulario.supplier_id.choices = _purchase_quotation_supplier_choices()
     from_request_id = _purchase_quotation_origin_id()
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
+    source_currency = effective_currency(solicitud_origen) if solicitud_origen else None
     items_disponibles, uoms_disponibles = _purchase_quotation_catalogs()
     titulo = "Nueva Solicitud de Cotización - " + APPNAME
     transaction_config = _purchase_quotation_transaction_config(
@@ -2348,6 +2400,7 @@ def compras_solicitud_cotizacion_nueva():
         initial_header=(
             {
                 "company": solicitud_origen.company or "",
+                "currency": source_currency or "",
                 "posting_date": str(date.today()),
             }
             if solicitud_origen
@@ -2368,6 +2421,14 @@ def compras_solicitud_cotizacion_nueva():
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
     )
+
+
+def _validate_purchase_flow_header(source: object | None, form_data: Any | None = None) -> tuple[str | None, str | None]:
+    """Validate immutable company/currency values for a downstream purchase document."""
+    values = form_data or request.form
+    company = values.get("company") or None
+    currency = values.get("currency") or values.get("transaction_currency") or None
+    return validate_immutable_header(source, company, currency)
 
 
 def _purchase_quotation_origin_id() -> str | None:
@@ -2421,10 +2482,15 @@ def _create_purchase_quotation_from_request():
         supplier_id = request.form.get("supplier_id") or None
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
+        from_request_id = _purchase_quotation_origin_id()
+        source = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
+        company, transaction_currency = _validate_purchase_flow_header(source)
         cotizacion = PurchaseQuotation(
             supplier_id=supplier_id,
             supplier_name=supplier.name if supplier else None,
-            company=request.form.get("company") or None,
+            company=company,
+            transaction_currency=transaction_currency,
+            base_currency=company_currency(company),
             posting_date=posting_date,
             remarks=request.form.get("remarks"),
             docstatus=0,
@@ -2824,12 +2890,23 @@ def compras_recepcion_nuevo():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
+        "initialSourceType": "purchase_order" if from_order_id else "",
         "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
         "initialHeader": {
             "company": company_id or "",
             "posting_date": str(date.today()),
         },
     }
+    if orden_origen:
+        source_currency = effective_currency(orden_origen)
+        transaction_config["initialHeader"] = {
+            "company": orden_origen.company or "",
+            "currency": source_currency or "",
+            "transaction_currency": source_currency or "",
+            "party": orden_origen.supplier_id or "",
+            "party_label": orden_origen.supplier_name or "",
+            "posting_date": str(date.today()),
+        }
     if request.method == "POST":
         response = _create_purchase_receipt_from_form()
         if response is not None:
@@ -2852,15 +2929,19 @@ def _create_purchase_receipt_from_form():
     try:
         posting_date = _parse_date(request.form.get("posting_date"))
         supplier_id = request.form.get("supplier_id") or None
+        from_order = request.form.get("from_order") or None
+        source = database.session.get(PurchaseOrder, from_order) if from_order else None
+        company, transaction_currency = _validate_purchase_flow_header(source)
+        supplier_id = supplier_id or getattr(source, "supplier_id", None)
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         receipt = PurchaseReceipt(
             supplier_id=supplier_id,
             supplier_name=supplier.name if supplier else None,
-            company=request.form.get("company") or None,
+            company=company,
             posting_date=posting_date,
-            purchase_order_id=request.form.get("from_order") or None,
+            purchase_order_id=from_order,
             remarks=request.form.get("remarks"),
-            transaction_currency=request.form.get("transaction_currency") or None,
+            transaction_currency=transaction_currency,
             docstatus=0,
         )
         database.session.add(receipt)
@@ -2873,9 +2954,7 @@ def _create_purchase_receipt_from_form():
         )
         _total_qty, total = _save_purchase_receipt_items(receipt.id)
         receipt.total = receipt.grand_total = total
-        receipt.exchange_rate = _purchase_exchange_rate(
-            request.form.get("company"), posting_date, request.form.get("transaction_currency")
-        )
+        receipt.exchange_rate = _purchase_exchange_rate(company, posting_date, receipt.transaction_currency)
         receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
         log_create(receipt)
         database.session.commit()
@@ -3293,6 +3372,20 @@ def compras_factura_compra_nuevo():
         uoms=uoms_disponibles,
         company_id=company_id,
     )
+    if from_order_id or from_receipt_id or from_invoice_id:
+        transaction_config["initialSourceType"] = (
+            "purchase_order" if from_order_id else "purchase_receipt" if from_receipt_id else "purchase_invoice"
+        )
+        source = orden_origen or recepcion_origen or factura_origen
+        source_currency = effective_currency(source)
+        transaction_config["initialHeader"] = {
+            "company": getattr(source, "company", None) or "",
+            "currency": source_currency or "",
+            "transaction_currency": source_currency or "",
+            "posting_date": str(date.today()),
+            "party": getattr(source, "supplier_id", None) or "",
+            "party_label": getattr(source, "supplier_name", None) or "",
+        }
     if request.method == "POST":
         response = _create_purchase_invoice_from_request()
         if response is not None:
@@ -3543,10 +3636,24 @@ def _create_purchase_invoice_from_request():
             receipt = database.session.get(PurchaseReceipt, from_receipt)
             if receipt:
                 from_order = receipt.purchase_order_id
+        from_invoice = request.form.get("from_invoice") or request.form.get("from_return") or None
+        source_order, source_receipt, source_invoice = _purchase_invoice_sources(
+            {
+                "from_order_id": from_order,
+                "from_receipt_id": from_receipt,
+                "from_invoice_id": from_invoice,
+            }
+        )
+        source = source_order or source_receipt or source_invoice
+        company, transaction_currency = _validate_purchase_flow_header(source)
+        supplier_id = supplier_id or getattr(source, "supplier_id", None)
+        supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        transaction_currency = transaction_currency or request.form.get("transaction_currency") or None
         _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt)
         _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
         factura = PurchaseInvoice(
             supplier_id=supplier_id,
+            supplier_name=supplier.name if supplier else getattr(source, "supplier_name", None),
             company=company,
             posting_date=posting_date,
             supplier_invoice_no=request.form.get("supplier_invoice_no"),
@@ -3560,7 +3667,8 @@ def _create_purchase_invoice_from_request():
                 else None
             ),
             remarks=request.form.get("remarks"),
-            transaction_currency=request.form.get("transaction_currency") or None,
+            transaction_currency=transaction_currency,
+            base_currency=company_currency(company),
             docstatus=0,
         )
         database.session.add(factura)
@@ -3574,7 +3682,7 @@ def _create_purchase_invoice_from_request():
         _total_qty, total = _save_purchase_invoice_items(factura.id)
         factura.total = total
         # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
-        fx_rate = _purchase_exchange_rate(company, posting_date, request.form.get("transaction_currency"))
+        fx_rate = _purchase_exchange_rate(company, posting_date, transaction_currency)
         factura.exchange_rate = fx_rate
         base_total, _base = _compute_base_amounts(total, fx_rate)
         base_grand_total, _base2 = _compute_base_amounts(total, fx_rate)

@@ -65,6 +65,7 @@ from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
 from cacao_accounting.document_flow.service import apply_payment_reconciliation
 from cacao_accounting.document_flow.registry import normalize_doctype
+from cacao_accounting.document_flow.context import effective_currency
 from cacao_accounting.document_flow.service import compute_outstanding_amount, refresh_outstanding_amount_cache
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import (
@@ -1912,7 +1913,7 @@ def bancos_pago_nuevo():
                     "reference_id": document.id,
                     "document_no": document.document_no or document.id,
                     "reference_date": reference_date_value.isoformat() if reference_date_value else "",
-                    "currency": getattr(document, "currency", None) or "",
+                    "currency": effective_currency(document) or "",
                     "reference_label": row.get("label", ""),
                     "total_amount": float(document.grand_total or 0),
                     "outstanding_amount": float(outstanding),
@@ -1922,10 +1923,11 @@ def bancos_pago_nuevo():
 
         initial_payment = {
             "company": first.company,
+            "flow_locked": True,
             "party_id": getattr(first, "supplier_id", None) or getattr(first, "customer_id", None),
             "party_type": party_type,
             "payment_type": payment_type,
-            "currency": getattr(first, "currency", None) or "",
+            "currency": effective_currency(first) or "",
             "paid_amount": float(initial_amount),
             "lines": lines,
             "advance_mode": any(row["reference_type"] in ("purchase_order", "sales_order") for row in source_rows),

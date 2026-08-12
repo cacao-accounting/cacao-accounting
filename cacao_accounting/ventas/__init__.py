@@ -47,6 +47,7 @@ from cacao_accounting.document_flow import (
     revert_relations_for_target,
     validate_submit_prerequisites,
 )
+from cacao_accounting.document_flow.context import company_currency, effective_currency, validate_immutable_header
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, has_active_source_relations
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.decorators import (  # noqa: F401
@@ -1209,6 +1210,7 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1236,7 +1238,10 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             _create_line_relation(i, "sales_order", order_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1245,6 +1250,7 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1266,7 +1272,10 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             _create_line_relation(i, "sales_request", request_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1275,6 +1284,7 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1296,7 +1306,10 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
             _create_line_relation(i, "sales_quotation", quotation_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1305,6 +1318,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1312,6 +1326,14 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
+            warehouse = (
+                request.form.get(f"warehouse_{i}")
+                or request.form.get("from_warehouse")
+                or request.form.get("warehouse")
+                or None
+            )
+            if not warehouse:
+                raise DocumentFlowError(f"El item {item_code} requiere un almacén de origen.", 400)
             linea = DeliveryNoteItem(
                 delivery_note_id=note_id,
                 item_code=item_code,
@@ -1320,14 +1342,17 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
-                warehouse=request.form.get(f"warehouse_{i}") or None,
+                warehouse=warehouse,
             )
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "delivery_note", note_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1336,6 +1361,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
+    line_count = 0
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
@@ -1358,7 +1384,10 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             _create_line_relation(i, "sales_invoice", invoice_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
+            line_count += 1
         i += 1
+    if line_count == 0:
+        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
     return total_qty, total
 
 
@@ -1754,6 +1783,9 @@ def _build_sales_order_transaction_config(
     if source_origen:
         transaction_config["initialHeader"] = {
             "company": source_origen.company or "",
+            "currency": effective_currency(source_origen) or "",
+            "party": getattr(source_origen, "customer_id", None) or "",
+            "party_label": getattr(source_origen, "customer_name", None) or "",
             "posting_date": str(date.today()),
         }
     return transaction_config
@@ -2064,18 +2096,35 @@ def ventas_cotizacion_nueva():
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "initialSourceType": "sales_request" if from_request_id else "",
         "availableSourceTypes": [{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}],
     }
+    if solicitud_origen:
+        transaction_config["initialHeader"] = {
+            "company": solicitud_origen.company or "",
+            "currency": effective_currency(solicitud_origen) or "",
+            "party": getattr(solicitud_origen, "customer_id", None) or "",
+            "party_label": getattr(solicitud_origen, "customer_name", None) or "",
+            "posting_date": str(date.today()),
+        }
     if request.method == "POST":
         try:
             customer_id = request.form.get("customer_id") or None
             customer = database.session.get(Party, customer_id) if customer_id else None
             posting_date = _parse_date(request.form.get("posting_date"))
+            source = solicitud_origen
+            company, transaction_currency = validate_immutable_header(
+                source,
+                request.form.get("company") or None,
+                request.form.get("currency") or request.form.get("transaction_currency") or None,
+            )
             cotizacion = SalesQuotation(
                 customer_id=customer_id,
                 customer_name=customer.name if customer else None,
                 sales_request_id=from_request_id or None,
-                company=request.form.get("company") or None,
+                company=company,
+                transaction_currency=transaction_currency,
+                base_currency=company_currency(company),
                 posting_date=posting_date,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
@@ -2442,6 +2491,9 @@ def ventas_entrega_nuevo():
     ]
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
     orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
+    if orden_origen:
+        selected_company = orden_origen.company
+        formulario.naming_series.choices = _series_choices("delivery_note", selected_company)
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
@@ -2459,19 +2511,36 @@ def ventas_entrega_nuevo():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
+        "initialSourceType": "sales_order" if from_order_id else "",
         "availableSourceTypes": [{"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)}],
     }
+    if orden_origen:
+        transaction_config["initialHeader"] = {
+            "company": orden_origen.company or "",
+            "currency": effective_currency(orden_origen) or "",
+            "party": orden_origen.customer_id or "",
+            "party_label": orden_origen.customer_name or "",
+            "posting_date": str(date.today()),
+        }
     if request.method == "POST":
         try:
             posting_date = _parse_date(request.form.get("posting_date"))
             customer_id = request.form.get("customer_id") or None
+            from_order = request.form.get("from_order") or None
+            source = database.session.get(SalesOrder, from_order) if from_order else None
+            company, _source_currency = validate_immutable_header(
+                source,
+                request.form.get("company") or None,
+                request.form.get("currency") or request.form.get("transaction_currency") or None,
+            )
+            customer_id = customer_id or getattr(source, "customer_id", None)
             customer = database.session.get(Party, customer_id) if customer_id else None
             entrega = DeliveryNote(
                 customer_id=customer_id,
                 customer_name=customer.name if customer else None,
-                company=request.form.get("company") or None,
+                company=company,
                 posting_date=posting_date,
-                sales_order_id=request.form.get("from_order") or None,
+                sales_order_id=from_order,
                 is_return=bool(request.form.get("is_return")),
                 remarks=request.form.get("remarks"),
                 docstatus=0,
@@ -2842,6 +2911,9 @@ def ventas_factura_venta_nuevo():
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "initialSourceType": (
+            "sales_order" if from_order_id else "delivery_note" if from_note_id else "sales_invoice" if from_invoice_id else ""
+        ),
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
@@ -2849,6 +2921,15 @@ def ventas_factura_venta_nuevo():
         ],
         "initialHeader": {"company": company_id or "", "posting_date": str(date.today())},
     }
+    source_origen = orden_origen or entrega_origen or factura_origen
+    if source_origen:
+        transaction_config["initialHeader"] = {
+            "company": source_origen.company or "",
+            "currency": effective_currency(source_origen) or "",
+            "party": getattr(source_origen, "customer_id", None) or "",
+            "party_label": getattr(source_origen, "customer_name", None) or "",
+            "posting_date": str(date.today()),
+        }
     if request.method == "POST":
         return _create_sales_invoice_from_form()
     return render_template(

@@ -26,7 +26,7 @@
   {% if from_request_id %}
   <input type="hidden" name="from_request" value="{{ from_request_id }}">
   {% endif %}
-  {{ tf_macros.transaction_form_header("Editar Cotización" if edit else "Cotización", cancel_url=url_for('ventas.ventas_cotizacion_lista')) }}
+  {{ tf_macros.transaction_form_header("Editar Cotización" if edit else "Cotización", cancel_url=url_for('ventas.ventas_cotizacion_lista'), include_remarks=False) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -39,8 +39,14 @@
         filter_sources=["#company"],
         required_filters=["company"],
         x_model="header.party",
+        initial_value_expr="header.party",
+        initial_label_expr="header.party_label",
         on_select="function(opt){ header.party_label = opt.display_name; }"
         ) }}
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>

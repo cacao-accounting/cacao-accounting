@@ -21,7 +21,7 @@
   {% if from_supplier_quotation_id %}<input type="hidden" name="from_supplier_quotation" value="{{ from_supplier_quotation_id }}">{% endif %}
   {% set source_origin = solicitud_origen or rfq_origen or supplier_quotation_origen %}
   {% set title = "Orden de Compra" ~ ((" desde " ~ (source_origin.document_no or source_origin.id)) if source_origin else "") %}
-  {{ tf_macros.transaction_form_header('Editar Orden de Compra' if edit else title) }}
+  {{ tf_macros.transaction_form_header('Editar Orden de Compra' if edit else title, include_currency=False, include_remarks=False) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -34,6 +34,8 @@
         filter_sources=["#company"],
         required_filters=["company"],
         x_model="header.party",
+        initial_value_expr="header.party",
+        initial_label_expr="header.party_label",
         on_select="function(opt){ header.party_label = opt.display_name; }"
         ) }}
       </div>
@@ -43,9 +45,16 @@
             doctype="currency",
             name="transaction_currency",
             label=_("Moneda"),
+            initial_value_expr="header.transaction_currency",
+            initial_label_expr="header.transaction_currency",
+            locked_expr="typeof isFlowFieldLocked === 'function' && isFlowFieldLocked('currency')",
             x_model="header.transaction_currency",
             on_select="function(opt){ header.transaction_currency_label = opt.display_name; }"
             ) }}
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
+        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>
