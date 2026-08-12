@@ -403,7 +403,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
-    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
     as_of_date = filters.as_of_date or period_end or date.today()
     defaults = database.session.execute(
         select(CompanyDefaultAccount).where(CompanyDefaultAccount.company == filters.company)

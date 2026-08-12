@@ -113,6 +113,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="table-responsive">
       <table class="ca-table">
+        <caption style="display: none;">Selección de ofertas por artículo.</caption>
         <thead><tr><th>Artículo</th><th>Cantidad</th>{% for offer in offers %}<th>{{ offer.supplier_name or offer.id }}</th>{% endfor %}</tr></thead>
         <tbody>
         {% for item in rfq_items %}

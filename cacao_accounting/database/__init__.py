@@ -52,6 +52,7 @@ BATCH_ID = "batch.id"
 PURCHASE_ORDER_ID = "purchase_order.id"
 PURCHASE_RECEIPT_ID = "purchase_receipt.id"
 PURCHASE_INVOICE_ID = "purchase_invoice.id"
+PURCHASE_QUOTATION_ID = "purchase_quotation.id"
 SALES_ORDER_ID = "sales_order.id"
 GL_ENTRY_ID = "gl_entry.id"
 BANK_ACCOUNT_ID = "bank_account.id"
@@ -1732,7 +1733,7 @@ class PurchaseQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
     )
     purchase_quotation_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_QUOTATION_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -1809,7 +1810,7 @@ class PurchaseNegotiationRound(database.Model):  # type: ignore[name-defined]
     id = database.Column(database.String(26), primary_key=True, default=obtiene_texto_unico)
     purchase_quotation_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_QUOTATION_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -1832,7 +1833,7 @@ class SupplierQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     supplier_name = database.Column(database.String(200), nullable=True)
     purchase_quotation_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_QUOTATION_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
@@ -1892,7 +1893,7 @@ class PurchaseQuotationAward(database.Model):  # type: ignore[name-defined]
     id = database.Column(database.String(26), primary_key=True, default=obtiene_texto_unico)
     purchase_quotation_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_QUOTATION_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )

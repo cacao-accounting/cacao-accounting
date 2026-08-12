@@ -195,6 +195,7 @@ def _voucher_type_catalog(query: str, filters: dict[str, list[str]], limit: int 
 
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
 
+    automatic_project_capitalization = "Capitalización Automática de Proyecto"
     ledger_types = {
         "sales_invoice",
         "purchase_invoice",
@@ -206,13 +207,13 @@ def _voucher_type_catalog(query: str, filters: dict[str, list[str]], limit: int 
         "journal_entry",
         "import_landed_cost",
         "exchange_revaluation",
-        "Capitalización Automática de Proyecto",
+        automatic_project_capitalization,
     }
     catalog = {key: (DOCUMENT_TYPES[key].label or key) for key in ledger_types if key in DOCUMENT_TYPES}
     catalog.update(
         {
             "exchange_revaluation": "Revalorización cambiaria",
-            "Capitalización Automática de Proyecto": "Capitalización Automática de Proyecto",
+            automatic_project_capitalization: automatic_project_capitalization,
             "bank_transaction": "Transacción bancaria",
         }
     )

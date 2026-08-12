@@ -1025,9 +1025,6 @@ def _post_advance_settlement_journal(
         )
     except IdentifierConfigurationError:
         journal.document_no = f"{company}-ADV-{journal.id[-8:]}"
-    debit_account, credit_account = (
-        (party_account_id, advance_account_id) if is_purchase else (advance_account_id, party_account_id)
-    )
     _create_advance_settlement_lines(
         company=company,
         journal=journal,

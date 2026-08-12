@@ -103,6 +103,7 @@ _FORMKEY_SALES_INVOICE = "sales.sales_invoice"
 _FORMKEY_DELIVERY_NOTE = "sales.delivery_note"
 _LABEL_PEDIDO_VENTA = "Pedido de Venta"
 _LABEL_ORDEN_VENTA = "Orden de Venta"
+DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
 SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
 
 
@@ -1241,7 +1242,7 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1275,7 +1276,7 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1309,7 +1310,7 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1352,7 +1353,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1387,7 +1388,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1485,7 +1486,7 @@ def _validate_single_item_price(
     tolerance_value: Decimal,
     allow_diff: bool,
     raise_on_violation: bool,
-    reference_label: str = "Orden de Venta",
+    reference_label: str = _LABEL_ORDEN_VENTA,
 ) -> str | None:
     """Valida el precio de un item individual contra la orden de venta.
 
@@ -1532,7 +1533,7 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
     warnings: list[str] = []
     for si_item in invoice_items:
         so_rate = _resolve_source_item_rate(si_item, invoice.id)
-        reference_label = "Orden de Venta"
+        reference_label = _LABEL_ORDEN_VENTA
         if so_rate is None:
             so_rate = _resolve_catalog_sales_rate(invoice, si_item)
             reference_label = "la Lista de Precios"
@@ -3537,7 +3538,7 @@ def _validate_reversal_of(
         outstanding = compute_outstanding_amount(source, as_of_date=posting_date)
         if note_amount > outstanding:
             raise ValueError(
-                f"La nota de credito ({note_amount}) excede el saldo pendiente " f"de la factura origen ({outstanding})."
+                f"La nota de credito ({note_amount}) excede el saldo pendiente de la factura origen ({outstanding})."
             )
 
 

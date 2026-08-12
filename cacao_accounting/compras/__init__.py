@@ -138,6 +138,8 @@ PURCHASE_RETURN = "purchase_return"
 FACTURA_COMPRA_LABEL = "Factura de Compra"
 COMPRAS_IMPORT_LANDED_COST_ENDPOINT = "compras.compras_import_landed_cost"
 COMPRAS_PROVEEDOR_ENDPOINT = "compras.compras_proveedor"
+COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT = "compras.compras_comparativo_ofertas"
+DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
 SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
 
 FACTURA_DE_COMPRA = FACTURA_COMPRA_LABEL
@@ -1190,7 +1192,7 @@ def compras_comparativo_abrir_ronda(rfq_id: str):
     except PurchaseSourcingError as exc:
         database.session.rollback()
         flash_error(exc)
-    return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+    return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
 
 
 @compras.route("/request-for-quotation/<rfq_id>/award", methods=["POST"])
@@ -1213,11 +1215,11 @@ def compras_comparativo_ofertas_adjudicar(rfq_id: str):
         create_purchase_quotation_award(registro, selections, current_user.id, reason)
         database.session.commit()
         flash(_("Comparativo confirmado y finalizado correctamente."), "success")
-        return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+        return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
     except PurchaseSourcingError as exc:
         database.session.rollback()
         flash_error(exc)
-        return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+        return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
 
 
 @compras.route("/request-for-quotation/<rfq_id>/place-purchase-orders", methods=["POST"])
@@ -1237,7 +1239,7 @@ def compras_comparativo_colocar_ordenes(rfq_id: str):
     ).scalar_one_or_none()
     if not award or award.status != "finalized":
         flash_error(PurchaseSourcingError("El comparativo debe estar finalizado antes de colocar las órdenes."))
-        return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+        return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
     try:
         orders = _create_purchase_orders_from_award(award)
         database.session.commit()
@@ -1245,7 +1247,7 @@ def compras_comparativo_colocar_ordenes(rfq_id: str):
     except (PurchaseSourcingError, SQLAlchemyError, DocumentFlowError, IdentifierConfigurationError) as exc:
         database.session.rollback()
         flash_error(exc)
-    return redirect(url_for("compras.compras_comparativo_ofertas", rfq_id=rfq_id))
+    return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
 
 
 def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[PurchaseOrder]:
@@ -1763,7 +1765,7 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1799,7 +1801,7 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1832,7 +1834,7 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1868,7 +1870,7 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1909,7 +1911,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
@@ -1958,7 +1960,7 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(DOCUMENT_REQUIRES_LINE_MSG, 400)
     return total_qty, total
 
 
