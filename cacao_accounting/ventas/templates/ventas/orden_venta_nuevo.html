@@ -29,7 +29,7 @@
   {% if from_quotation_id %}
   <input type="hidden" name="from_quotation" value="{{ from_quotation_id }}">
   {% endif %}
-  {{ tf_macros.transaction_form_header("Editar Orden de Venta" if edit else "Orden de Venta", cancel_url=url_for('ventas.ventas_orden_venta_lista'), include_remarks=False) }}
+  {{ tf_macros.transaction_form_header("Editar Orden de Venta" if edit else "Orden de Venta", cancel_url=url_for('ventas.ventas_orden_venta_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -46,10 +46,6 @@
         initial_label_expr="header.party_label",
         on_select="function(opt){ header.party_label = opt.display_name; }"
         ) }}
-      </div>
-      <div class="col-12">
-        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
-        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>

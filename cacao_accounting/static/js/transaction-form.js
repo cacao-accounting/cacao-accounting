@@ -881,6 +881,7 @@
         },
 
         async loadSourceFromUrl(apiUrl) {
+          this.sourceHydrationPending = true;
           this.loadingSource = true;
           this.sourceLoadError = '';
           this.autofillStep = 2;
@@ -894,6 +895,8 @@
             console.warn('Error al obtener source lines:', err);
             this.loadingSource = false;
             this.sourceLoadError = 'No se pudieron cargar las líneas del documento origen.';
+          } finally {
+            this.sourceHydrationPending = false;
           }
         },
 

@@ -21,7 +21,7 @@
   {% if from_supplier_quotation_id %}<input type="hidden" name="from_supplier_quotation" value="{{ from_supplier_quotation_id }}">{% endif %}
   {% set source_origin = solicitud_origen or rfq_origen or supplier_quotation_origen %}
   {% set title = "Orden de Compra" ~ ((" desde " ~ (source_origin.document_no or source_origin.id)) if source_origin else "") %}
-  {{ tf_macros.transaction_form_header('Editar Orden de Compra' if edit else title, include_currency=False, include_remarks=False) }}
+  {{ tf_macros.transaction_form_header('Editar Orden de Compra' if edit else title, include_currency=False) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -51,10 +51,6 @@
             x_model="header.transaction_currency",
             on_select="function(opt){ header.transaction_currency_label = opt.display_name; }"
             ) }}
-      </div>
-      <div class="col-12">
-        <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>
-        <input class="form-control" id="remarks" name="remarks" type="text" x-model="header.remarks">
       </div>
     </div>
   </div>

@@ -194,7 +194,7 @@
 
 {% macro transaction_grid(items_disponibles, uoms_disponibles, source_api_url=None, source_label='', warehouses_disponibles=None, title='Líneas de detalle') %}
 <section class="border rounded-2 p-3 mt-3"
-         {% if source_api_url %}x-init='sourceHydrationPending = true; loadSourceFromUrl({{ source_api_url | tojson }}).then(() => { applySource(); sourceHydrationPending = false; })'{% endif %}>
+         {% if source_api_url %}x-init='loadSourceFromUrl({{ source_api_url | tojson }}).then(() => applySource())'{% endif %}>
   <div class="alert alert-danger" role="alert" x-show="sourceLoadError || submitError" x-text="sourceLoadError || submitError" x-cloak></div>
   <div class="ca-journal-toolbar mb-3">
     <h5 class="mb-0">{{ _(title) }}</h5>
