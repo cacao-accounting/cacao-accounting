@@ -2775,6 +2775,39 @@ def ventas_entrega_cancel(note_id: str):
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
 
+def _sales_invoice_sources_and_type(formulario) -> dict[str, Any]:
+    f_order = request.args.get("from_order") or request.form.get("from_order")
+    f_note = request.args.get("from_note") or request.form.get("from_note")
+    f_invoice = request.args.get("from_invoice") or request.form.get("from_invoice")
+    f_return = request.args.get("from_return") or request.form.get("from_return")
+    f_invoice_id = f_invoice or f_return
+    doc_type = (
+        request.args.get("document_type")
+        or request.form.get("document_type")
+        or ("sales_invoice" if not f_invoice_id else "sales_credit_note")
+    )
+    formulario.is_return.data = doc_type in ("sales_credit_note", "sales_return")
+    return {
+        "from_order_id": f_order,
+        "from_note_id": f_note,
+        "from_invoice_id": f_invoice_id,
+        "from_return_id": f_return,
+        "document_type": doc_type,
+        "orden_origen": database.session.get(SalesOrder, f_order) if f_order else None,
+        "entrega_origen": database.session.get(DeliveryNote, f_note) if f_note else None,
+        "factura_origen": database.session.get(SalesInvoice, f_invoice_id) if f_invoice_id else None,
+    }
+
+
+def _sales_invoice_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
+    items = [
+        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
+        for i in database.session.execute(database.select(Item)).all()
+    ]
+    uoms = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    return items, uoms
+
+
 @ventas.route("/sales-invoice/new", methods=["GET", "POST"])
 @modulo_activo("sales")
 @login_required
@@ -2793,26 +2826,17 @@ def ventas_factura_venta_nuevo():
         (str(p[0].id), p[0].name)
         for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
-    from_order_id = request.args.get("from_order") or request.form.get("from_order")
-    from_note_id = request.args.get("from_note") or request.form.get("from_note")
-    from_invoice = request.args.get("from_invoice") or request.form.get("from_invoice")
-    from_return_id = request.args.get("from_return") or request.form.get("from_return")
-    from_invoice_id = from_invoice or from_return_id
-    document_type = (
-        request.args.get("document_type")
-        or request.form.get("document_type")
-        or ("sales_invoice" if not from_invoice_id else "sales_credit_note")
-    )
-    formulario.is_return.data = document_type in ("sales_credit_note", "sales_return")
-    orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
-    entrega_origen = database.session.get(DeliveryNote, from_note_id) if from_note_id else None
-    factura_origen = database.session.get(SalesInvoice, from_invoice_id) if from_invoice_id else None
-    items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
-    ]
-    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+
+    src = _sales_invoice_sources_and_type(formulario)
+    items_disponibles, uoms_disponibles = _sales_invoice_catalogs()
     titulo = "Nueva Factura de Venta - " + APPNAME
+
+    company_id = (
+        next((o.company for o in (src["orden_origen"], src["entrega_origen"], src["factura_origen"]) if o), None)
+        or request.args.get("company")
+        or selected_company
+    )
+
     transaction_config = {
         "formKey": _FORMKEY_SALES_INVOICE,
         "viewKey": "draft",
@@ -2823,6 +2847,7 @@ def ventas_factura_venta_nuevo():
             {"value": "delivery_note", "label": _("Nota de Entrega")},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
+        "initialHeader": {"company": company_id or "", "posting_date": str(date.today())},
     }
     if request.method == "POST":
         return _create_sales_invoice_from_form()
@@ -2830,14 +2855,14 @@ def ventas_factura_venta_nuevo():
         "ventas/factura_venta_nuevo.html",
         form=formulario,
         titulo=titulo,
-        orden_origen=orden_origen,
-        entrega_origen=entrega_origen,
-        factura_origen=factura_origen,
-        from_order_id=from_order_id,
-        from_note_id=from_note_id,
-        from_invoice_id=from_invoice_id,
-        from_return_id=from_return_id,
-        document_type=document_type,
+        orden_origen=src["orden_origen"],
+        entrega_origen=src["entrega_origen"],
+        factura_origen=src["factura_origen"],
+        from_order_id=src["from_order_id"],
+        from_note_id=src["from_note_id"],
+        from_invoice_id=src["from_invoice_id"],
+        from_return_id=src["from_return_id"],
+        document_type=src["document_type"],
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
