@@ -8,6 +8,7 @@ import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import Any
 from flask import has_app_context
 
 from cacao_accounting.database import CacaoConfig, database
@@ -74,10 +75,10 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
         raise EmailError("La capacidad de envío de correos electrónicos no está disponible en modo DESKTOP.")
 
     server_host = get_smtp_setting("smtp_server")
-    port_str = get_smtp_setting("smtp_port", "587")
+    port_str = get_smtp_setting("smtp_port") or "587"
     user = get_smtp_setting("smtp_user")
     password = get_smtp_setting("smtp_password")
-    use_tls_str = get_smtp_setting("smtp_use_tls", "true")
+    use_tls_str = get_smtp_setting("smtp_use_tls") or "true"
     from_email = get_smtp_setting("smtp_from_email")
 
     if not server_host:
@@ -92,9 +93,11 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
 
     use_tls = use_tls_str.lower() in ("true", "1", "yes", "y", "on")
 
+    msg: MIMEMultipart | MIMEText
     if is_html:
-        msg = MIMEMultipart("alternative")
-        msg.attach(MIMEText(body, "html", "utf-8"))
+        html_msg = MIMEMultipart("alternative")
+        html_msg.attach(MIMEText(body, "html", "utf-8"))
+        msg = html_msg
     else:
         msg = MIMEText(body, "plain", "utf-8")
 
@@ -103,6 +106,7 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     msg["To"] = to_email
 
     try:
+        smtp: Any
         if port == 465:
             smtp = smtplib.SMTP_SSL(server_host, port, timeout=10)
         else:
