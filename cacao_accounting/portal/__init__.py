@@ -3,7 +3,6 @@
 
 """Módulo de Portal para Clientes y Proveedores (Cloud Mode únicamente)."""
 
-from functools import wraps
 from flask import Blueprint, abort, render_template, flash
 from flask_login import current_user, login_required
 from cacao_accounting.runtime_mode import is_desktop_mode
@@ -39,44 +38,36 @@ def _is_user_admin() -> bool:
     return tiene_rol(current_user.id, "admin")
 
 
-def requires_portal_role(role_name):
+def check_portal_access(role_name: str) -> None:
     """Verifica que el usuario tenga el rol del portal correspondiente o sea administrador."""
+    if is_desktop_mode():
+        abort(403)
+    if _is_user_admin():
+        return
 
-    def decorator(f):
-        @wraps(f)
-        @login_required
-        def decorated_function(*args, **kwargs):
-            if is_desktop_mode():
-                abort(403)
-            if _is_user_admin():
-                return f(*args, **kwargs)
+    if role_name == "customer" and current_user.is_portal_customer:
+        if current_user.party_id:
+            return
+        flash("Usuario de portal sin cliente asignado.", "danger")
+        abort(403)
 
-            if role_name == "customer" and current_user.is_portal_customer:
-                if current_user.party_id:
-                    return f(*args, **kwargs)
-                flash("Usuario de portal sin cliente asignado.", "danger")
-                abort(403)
+    if role_name == "supplier" and current_user.is_portal_supplier:
+        if current_user.party_id:
+            return
+        flash("Usuario de portal sin proveedor asignado.", "danger")
+        abort(403)
 
-            if role_name == "supplier" and current_user.is_portal_supplier:
-                if current_user.party_id:
-                    return f(*args, **kwargs)
-                flash("Usuario de portal sin proveedor asignado.", "danger")
-                abort(403)
-
-            abort(403)
-
-        return decorated_function
-
-    return decorator
+    abort(403)
 
 
 # ─── PORTAL DE CLIENTES ───────────────────────────────────────────────────────
 
 
 @portal.route("/customer")
-@requires_portal_role("customer")
+@login_required
 def customer_dashboard():
     """Dashboard principal del portal de clientes."""
+    check_portal_access("customer")
     pid = current_user.party_id
     is_admin = getattr(current_user, "classification", None) == "admin" or (
         not current_user.is_portal_customer and not current_user.is_portal_supplier
@@ -109,9 +100,10 @@ def customer_dashboard():
 
 
 @portal.route("/customer/invoice/<invoice_id>")
-@requires_portal_role("customer")
+@login_required
 def customer_invoice(invoice_id):
     """Detalle de factura de venta para el cliente."""
+    check_portal_access("customer")
     invoice = database.session.get(SalesInvoice, invoice_id)
     if not invoice:
         abort(404)
@@ -127,9 +119,10 @@ def customer_invoice(invoice_id):
 
 
 @portal.route("/customer/order/<order_id>")
-@requires_portal_role("customer")
+@login_required
 def customer_order(order_id):
     """Detalle de orden de venta para el cliente."""
+    check_portal_access("customer")
     order = database.session.get(SalesOrder, order_id)
     if not order:
         abort(404)
@@ -145,9 +138,10 @@ def customer_order(order_id):
 
 
 @portal.route("/customer/quotation/<quotation_id>")
-@requires_portal_role("customer")
+@login_required
 def customer_quotation(quotation_id):
     """Detalle de cotización de venta para el cliente."""
+    check_portal_access("customer")
     quotation = database.session.get(SalesQuotation, quotation_id)
     if not quotation:
         abort(404)
@@ -163,9 +157,10 @@ def customer_quotation(quotation_id):
 
 
 @portal.route("/customer/delivery/<delivery_id>")
-@requires_portal_role("customer")
+@login_required
 def customer_delivery(delivery_id):
     """Detalle de nota de entrega para el cliente."""
+    check_portal_access("customer")
     delivery = database.session.get(DeliveryNote, delivery_id)
     if not delivery:
         abort(404)
@@ -184,9 +179,10 @@ def customer_delivery(delivery_id):
 
 
 @portal.route("/supplier")
-@requires_portal_role("supplier")
+@login_required
 def supplier_dashboard():
     """Dashboard principal del portal de proveedores."""
+    check_portal_access("supplier")
     pid = current_user.party_id
     is_admin = getattr(current_user, "classification", None) == "admin" or (
         not current_user.is_portal_customer and not current_user.is_portal_supplier
@@ -219,9 +215,10 @@ def supplier_dashboard():
 
 
 @portal.route("/supplier/invoice/<invoice_id>")
-@requires_portal_role("supplier")
+@login_required
 def supplier_invoice(invoice_id):
     """Detalle de factura de compra para el proveedor."""
+    check_portal_access("supplier")
     invoice = database.session.get(PurchaseInvoice, invoice_id)
     if not invoice:
         abort(404)
@@ -237,9 +234,10 @@ def supplier_invoice(invoice_id):
 
 
 @portal.route("/supplier/order/<order_id>")
-@requires_portal_role("supplier")
+@login_required
 def supplier_order(order_id):
     """Detalle de orden de compra para el proveedor."""
+    check_portal_access("supplier")
     order = database.session.get(PurchaseOrder, order_id)
     if not order:
         abort(404)
@@ -255,9 +253,10 @@ def supplier_order(order_id):
 
 
 @portal.route("/supplier/quotation/<quotation_id>")
-@requires_portal_role("supplier")
+@login_required
 def supplier_quotation(quotation_id):
     """Detalle de solicitud de cotización para el proveedor."""
+    check_portal_access("supplier")
     quotation = database.session.get(PurchaseQuotation, quotation_id)
     if not quotation:
         abort(404)
@@ -275,9 +274,10 @@ def supplier_quotation(quotation_id):
 
 
 @portal.route("/supplier/receipt/<receipt_id>")
-@requires_portal_role("supplier")
+@login_required
 def supplier_receipt(receipt_id):
     """Detalle de recepción de compra para el proveedor."""
+    check_portal_access("supplier")
     receipt = database.session.get(PurchaseReceipt, receipt_id)
     if not receipt:
         abort(404)
