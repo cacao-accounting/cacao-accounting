@@ -4,12 +4,16 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
+import ssl
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
-from flask import has_app_context
+from cryptography.fernet import Fernet
+from flask import current_app, has_app_context
 
 from cacao_accounting.database import CacaoConfig, database
 from cacao_accounting.runtime_mode import is_desktop_mode
@@ -19,13 +23,52 @@ class EmailError(Exception):
     """Excepción para errores relacionados con el envío de correos electrónicos."""
 
 
+def _get_encryption_key() -> bytes:
+    """Deriva una clave Fernet válida de 32 bytes a partir de la variable SECRET_KEY."""
+    secret = ""
+    if has_app_context():
+        secret = current_app.config.get("SECRET_KEY", "")
+    if not secret:
+        secret = os.environ.get("CACAO_SECRET_KEY") or os.environ.get("SECRET_KEY") or "default_fallback_secret_key"
+
+    # Derivar una clave segura de 32 bytes usando SHA256
+    key_hash = hashlib.sha256(secret.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(key_hash)
+
+
+def encrypt_password(plaintext: str) -> str:
+    """Cifra la contraseña utilizando Fernet."""
+    if not plaintext:
+        return ""
+    try:
+        f = Fernet(_get_encryption_key())
+        return f.encrypt(plaintext.encode("utf-8")).decode("utf-8")
+    except Exception as e:
+        raise EmailError(f"Error al cifrar contraseña: {e}")
+
+
+def decrypt_password(ciphertext: str) -> str:
+    """Descifra la contraseña utilizando Fernet."""
+    if not ciphertext:
+        return ""
+    try:
+        f = Fernet(_get_encryption_key())
+        return f.decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+    except Exception:
+        # Retornar vacío si falla el descifrado (por ejemplo, si cambia la clave secreta)
+        return ""
+
+
 def _get_db_value(key: str) -> str | None:
     if not has_app_context():
         return None
     try:
         record = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).scalar_one_or_none()
         if record and record.value:
-            return str(record.value).strip()
+            val = str(record.value).strip()
+            if key == "smtp_password":
+                return decrypt_password(val)
+            return val
     except Exception:
         # Evitar fallos si la base de datos no está inicializada o las tablas no existen
         pass
@@ -61,7 +104,9 @@ def get_smtp_setting(key: str, default: str | None = None) -> str | None:
 
 
 def set_smtp_setting(key: str, value: str) -> None:
-    """Guarda un parámetro de configuración SMTP en la base de datos."""
+    """Guarda un parámetro de configuración SMTP en la base de datos (con cifrado para la contraseña)."""
+    if key == "smtp_password":
+        value = encrypt_password(value)
     record = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).scalar_one_or_none()
     if record is None:
         database.session.add(CacaoConfig(key=key, value=value))
@@ -106,14 +151,15 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     msg["To"] = to_email
 
     try:
+        context = ssl.create_default_context()
         smtp: Any
         if port == 465:
-            smtp = smtplib.SMTP_SSL(server_host, port, timeout=10)
+            smtp = smtplib.SMTP_SSL(server_host, port, context=context, timeout=10)
         else:
             smtp = smtplib.SMTP(server_host, port, timeout=10)
             if use_tls:
                 smtp.ehlo()
-                smtp.starttls()
+                smtp.starttls(context=context)
                 smtp.ehlo()
 
         if user and password:

@@ -3,6 +3,18 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-13 — Servicio central de correo electrónico SMTP y seguridad SMTP
+
+### Hallazgo e Introducción
+Se requería agregar la capacidad de envío de correos electrónicos SMTP al sistema como una característica exclusiva del modo Cloud (no disponible en modo Desktop), configurada en base de datos global (`CacaoConfig`) con fallback a variables de entorno.
+
+### Decisiones de diseño y seguridad
+- **Aislamiento Cloud-Only:** El servicio `send_email` y el panel de configuración administrativo `/settings/email` se deshabilitan explícitamente en modo Escritorio (`is_desktop_mode()`), arrojando `EmailError` y `403 Forbidden` respectivamente.
+- **Cifrado de Credenciales en base de datos:** Para evitar almacenar la contraseña SMTP en texto plano en la tabla `CacaoConfig` (una base de datos normal o sus respaldos), se implementó un cifrado simétrico reversible con `cryptography.fernet` utilizando una clave Fernet de 32 bytes derivada del `SECRET_KEY` de la aplicación (fuera de la base de datos).
+- **Validación de Certificados SSL/TLS:** Se configuró el servicio SMTP para usar `ssl.create_default_context()` al conectarse de manera segura por SSL (puerto 465) o al iniciar el canal cifrado con `starttls` (puerto 587). Esto mitiga ataques Man-in-the-Middle y garantiza que el host remoto y sus certificados sean verificados rigurosamente antes de transmitir las credenciales de inicio de sesión.
+- **Formularios con Protección CSRF:** Ambos formularios de la vista de configuración (ajustes de guardado de SMTP y envío de correo de prueba) declaran la entrada oculta `csrf_token` para ser admitidos de forma segura por el middleware CSRFProtect de la aplicación.
+- **Pruebas Unitarias:** Se creó un conjunto de pruebas rigurosas en `tests/test_email_service.py` simulando la base de datos, los modos de ejecución (Cloud vs. Desktop), el fallback a variables del entorno, y el envío cifrado y seguro mockeando las clases `smtplib.SMTP` y `smtplib.SMTP_SSL`.
+
 ## 2026-08-12 — Plan transversal para document flow y cobertura de pruebas
 
 ### Hallazgo

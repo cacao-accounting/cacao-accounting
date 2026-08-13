@@ -91,6 +91,21 @@ def test_get_smtp_setting_db_priority(app_instance):
             assert get_smtp_setting("smtp_server") == "smtp.db.test"
 
 
+def test_smtp_password_encryption_decryption(app_instance):
+    """Prueba que la contraseña de SMTP se guarda cifrada en base de datos y se descifra al recuperarse."""
+    with app_instance.app_context():
+        database.session.execute(database.delete(CacaoConfig))
+        set_smtp_setting("smtp_password", "SuperSecretSMTPPassword123")
+        database.session.commit()
+
+        # Verificar que el valor real guardado en la base de datos está cifrado (y no es el texto plano)
+        record = database.session.execute(database.select(CacaoConfig).filter_by(key="smtp_password")).scalar_one()
+        assert record.value != "SuperSecretSMTPPassword123"
+
+        # Verificar que se descifra correctamente al recuperarse
+        assert get_smtp_setting("smtp_password") == "SuperSecretSMTPPassword123"
+
+
 def test_send_email_desktop_mode_error(app_instance, monkeypatch):
     """Prueba que en modo Escritorio el envío de correos levanta un error."""
     with app_instance.app_context():
@@ -149,7 +164,7 @@ def test_send_email_success_standard_port(mock_smtp, app_instance):
 
 @mock.patch("smtplib.SMTP_SSL")
 def test_send_email_success_ssl_port(mock_smtp_ssl, app_instance):
-    """Prueba el envío exitoso de correo con puerto SSL (465)."""
+    """Prueba el envío exitoso de correo con puerto SSL (465) y validación de contexto SSL."""
     with app_instance.app_context():
         database.session.execute(database.delete(CacaoConfig))
         set_smtp_setting("smtp_server", "smtp.test.com")
@@ -162,7 +177,13 @@ def test_send_email_success_ssl_port(mock_smtp_ssl, app_instance):
 
         send_email("recipient@example.com", "Test Subject", "Test Body")
 
-        mock_smtp_ssl.assert_called_once_with("smtp.test.com", 465, timeout=10)
+        # Asegurarse de que se pasó un objeto de contexto SSL
+        called_args, called_kwargs = mock_smtp_ssl.call_args
+        assert called_args[0] == "smtp.test.com"
+        assert called_args[1] == 465
+        assert "context" in called_kwargs
+        assert called_kwargs["timeout"] == 10
+
         instance.login.assert_called_once_with("myuser", "mypass")
         instance.sendmail.assert_called_once()
         instance.quit.assert_called_once()
