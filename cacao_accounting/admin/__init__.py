@@ -843,7 +843,10 @@ def _validate_portal_fields(form: UserCreateForm | UserEditForm) -> bool:
     if not valid:
         return False
     party = database.session.get(Party, form.party_id.data)
-    matches_type = party and ((form.classification.data == "customer" and party.is_customer) or (form.classification.data == "supplier" and party.is_supplier))
+    matches_type = party and (
+        (form.classification.data == "customer" and party.is_customer)
+        or (form.classification.data == "supplier" and party.is_supplier)
+    )
     if not matches_type:
         form.party_id.errors.append("El tercero no corresponde a la clasificación del portal.")
         return False
@@ -1033,9 +1036,10 @@ def editar_usuario(user_id: str):
                 form.party_id.errors.append("Los usuarios de portal requieren un tercero asociado.")
             elif new_classification in {"customer", "supplier"} and not form.company.data:
                 form.company.errors.append("Los usuarios de portal requieren una compañía asociada.")
-            elif new_classification in {"customer", "supplier"} and database.session.execute(
-                database.select(RolesUser).filter_by(user_id=usuario.id)
-            ).first():
+            elif (
+                new_classification in {"customer", "supplier"}
+                and database.session.execute(database.select(RolesUser).filter_by(user_id=usuario.id)).first()
+            ):
                 form.classification.errors.append("Retire los roles antes de convertir el usuario en portal.")
             else:
                 usuario.classification = new_classification

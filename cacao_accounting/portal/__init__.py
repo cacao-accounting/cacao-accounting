@@ -73,7 +73,9 @@ def customer_dashboard():
         not current_user.is_portal_customer and not current_user.is_portal_supplier
     )
 
-    q_invoices = database.select(SalesInvoice).filter_by(document_type="sales_invoice", company=current_user.company, docstatus=1)
+    q_invoices = database.select(SalesInvoice).filter_by(
+        document_type="sales_invoice", company=current_user.company, docstatus=1
+    )
     q_orders = database.select(SalesOrder).filter_by(company=current_user.company, docstatus=1)
     q_quotations = database.select(SalesQuotation).filter_by(company=current_user.company, docstatus=1)
     q_deliveries = database.select(DeliveryNote).filter_by(company=current_user.company, docstatus=1)
@@ -104,7 +106,9 @@ def customer_dashboard():
 def customer_invoice(invoice_id):
     """Detalle de factura de venta para el cliente."""
     check_portal_access("customer")
-    invoice = database.session.execute(database.select(SalesInvoice).filter_by(id=invoice_id, company=current_user.company, docstatus=1)).scalar_one_or_none()
+    invoice = database.session.execute(
+        database.select(SalesInvoice).filter_by(id=invoice_id, company=current_user.company, docstatus=1)
+    ).scalar_one_or_none()
     if not invoice:
         abort(404)
 
@@ -123,7 +127,9 @@ def customer_invoice(invoice_id):
 def customer_order(order_id):
     """Detalle de orden de venta para el cliente."""
     check_portal_access("customer")
-    order = database.session.execute(database.select(SalesOrder).filter_by(id=order_id, company=current_user.company, docstatus=1)).scalar_one_or_none()
+    order = database.session.execute(
+        database.select(SalesOrder).filter_by(id=order_id, company=current_user.company, docstatus=1)
+    ).scalar_one_or_none()
     if not order:
         abort(404)
 
@@ -142,7 +148,9 @@ def customer_order(order_id):
 def customer_quotation(quotation_id):
     """Detalle de cotización de venta para el cliente."""
     check_portal_access("customer")
-    quotation = database.session.execute(database.select(SalesQuotation).filter_by(id=quotation_id, company=current_user.company, docstatus=1)).scalar_one_or_none()
+    quotation = database.session.execute(
+        database.select(SalesQuotation).filter_by(id=quotation_id, company=current_user.company, docstatus=1)
+    ).scalar_one_or_none()
     if not quotation:
         abort(404)
 
@@ -161,7 +169,9 @@ def customer_quotation(quotation_id):
 def customer_delivery(delivery_id):
     """Detalle de nota de entrega para el cliente."""
     check_portal_access("customer")
-    delivery = database.session.execute(database.select(DeliveryNote).filter_by(id=delivery_id, company=current_user.company, docstatus=1)).scalar_one_or_none()
+    delivery = database.session.execute(
+        database.select(DeliveryNote).filter_by(id=delivery_id, company=current_user.company, docstatus=1)
+    ).scalar_one_or_none()
     if not delivery:
         abort(404)
 
@@ -188,7 +198,9 @@ def supplier_dashboard():
         not current_user.is_portal_customer and not current_user.is_portal_supplier
     )
 
-    q_invoices = database.select(PurchaseInvoice).filter_by(document_type="purchase_invoice", company=current_user.company, docstatus=1)
+    q_invoices = database.select(PurchaseInvoice).filter_by(
+        document_type="purchase_invoice", company=current_user.company, docstatus=1
+    )
     q_orders = database.select(PurchaseOrder).filter_by(company=current_user.company, docstatus=1)
     q_quotations = database.select(PurchaseQuotation).filter_by(company=current_user.company, docstatus=1)
     q_receipts = database.select(PurchaseReceipt).filter_by(company=current_user.company, docstatus=1)
@@ -219,7 +231,9 @@ def supplier_dashboard():
 def supplier_invoice(invoice_id):
     """Detalle de factura de compra para el proveedor."""
     check_portal_access("supplier")
-    invoice = database.session.execute(database.select(PurchaseInvoice).filter_by(id=invoice_id, company=current_user.company, docstatus=1)).scalar_one_or_none()
+    invoice = database.session.execute(
+        database.select(PurchaseInvoice).filter_by(id=invoice_id, company=current_user.company, docstatus=1)
+    ).scalar_one_or_none()
     if not invoice:
         abort(404)
 
@@ -238,7 +252,9 @@ def supplier_invoice(invoice_id):
 def supplier_order(order_id):
     """Detalle de orden de compra para el proveedor."""
     check_portal_access("supplier")
-    order = database.session.execute(database.select(PurchaseOrder).filter_by(id=order_id, company=current_user.company, docstatus=1)).scalar_one_or_none()
+    order = database.session.execute(
+        database.select(PurchaseOrder).filter_by(id=order_id, company=current_user.company, docstatus=1)
+    ).scalar_one_or_none()
     if not order:
         abort(404)
 
@@ -257,7 +273,9 @@ def supplier_order(order_id):
 def supplier_quotation(quotation_id):
     """Detalle de solicitud de cotización para el proveedor."""
     check_portal_access("supplier")
-    quotation = database.session.execute(database.select(PurchaseQuotation).filter_by(id=quotation_id, company=current_user.company, docstatus=1)).scalar_one_or_none()
+    quotation = database.session.execute(
+        database.select(PurchaseQuotation).filter_by(id=quotation_id, company=current_user.company, docstatus=1)
+    ).scalar_one_or_none()
     if not quotation:
         abort(404)
 
@@ -278,7 +296,9 @@ def supplier_quotation(quotation_id):
 def supplier_receipt(receipt_id):
     """Detalle de recepción de compra para el proveedor."""
     check_portal_access("supplier")
-    receipt = database.session.execute(database.select(PurchaseReceipt).filter_by(id=receipt_id, company=current_user.company, docstatus=1)).scalar_one_or_none()
+    receipt = database.session.execute(
+        database.select(PurchaseReceipt).filter_by(id=receipt_id, company=current_user.company, docstatus=1)
+    ).scalar_one_or_none()
     if not receipt:
         abort(404)
 
