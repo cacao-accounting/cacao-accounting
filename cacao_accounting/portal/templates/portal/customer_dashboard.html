@@ -1,0 +1,164 @@
+{% extends "portal/base_portal.html" %}
+
+{% block contenido %}
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="p-4 bg-light border rounded-3 shadow-sm">
+      <h2><i class="bi bi-house-door-fill text-primary"></i> {{ _('Portal del Cliente') }}</h2>
+      <p class="lead mb-0">{{ _('Bienvenido a su portal de servicios de lectura. Aquí puede consultar sus cotizaciones, pedidos, remisiones y facturas.') }}</p>
+    </div>
+  </div>
+</div>
+
+<!-- Cotizaciones de Venta -->
+<div class="portal-section-header d-flex justify-content-between align-items-center">
+  <h4><i class="bi bi-file-earmark-text text-secondary me-2"></i>{{ _('Cotizaciones de Venta') }}</h4>
+  <span class="badge bg-secondary">{{ quotations|length }}</span>
+</div>
+<div class="table-responsive bg-white border rounded shadow-sm mb-4">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th scope="col">{{ _('Número') }}</th>
+        <th scope="col">{{ _('Fecha') }}</th>
+        <th scope="col" class="text-end">{{ _('Total') }}</th>
+        <th scope="col">{{ _('Estado') }}</th>
+        <th scope="col" class="text-center" style="width: 10%;">{{ _('Acción') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in quotations %}
+      <tr>
+        <td><strong>{{ item.document_no or item.id }}</strong></td>
+        <td>{{ item.posting_date }}</td>
+        <td class="text-end">{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
+        <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
+        <td class="text-center">
+          <a href="{{ url_for('portal.customer_quotation', quotation_id=item.id) }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-eye"></i> {{ _('Ver') }}
+          </a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="text-center text-muted py-3">{{ _('No se encontraron cotizaciones.') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Órdenes de Venta -->
+<div class="portal-section-header d-flex justify-content-between align-items-center">
+  <h4><i class="bi bi-cart-fill text-success me-2"></i>{{ _('Órdenes de Venta') }}</h4>
+  <span class="badge bg-secondary">{{ orders|length }}</span>
+</div>
+<div class="table-responsive bg-white border rounded shadow-sm mb-4">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th scope="col">{{ _('Número') }}</th>
+        <th scope="col">{{ _('Fecha') }}</th>
+        <th scope="col" class="text-end">{{ _('Total') }}</th>
+        <th scope="col">{{ _('Estado') }}</th>
+        <th scope="col" class="text-center" style="width: 10%;">{{ _('Acción') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in orders %}
+      <tr>
+        <td><strong>{{ item.document_no or item.id }}</strong></td>
+        <td>{{ item.posting_date }}</td>
+        <td class="text-end">{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
+        <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
+        <td class="text-center">
+          <a href="{{ url_for('portal.customer_order', order_id=item.id) }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-eye"></i> {{ _('Ver') }}
+          </a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="text-center text-muted py-3">{{ _('No se encontraron órdenes de venta.') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Notas de Entrega / Remisiones -->
+<div class="portal-section-header d-flex justify-content-between align-items-center">
+  <h4><i class="bi bi-truck text-warning me-2"></i>{{ _('Notas de Entrega / Remisiones') }}</h4>
+  <span class="badge bg-secondary">{{ deliveries|length }}</span>
+</div>
+<div class="table-responsive bg-white border rounded shadow-sm mb-4">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th scope="col">{{ _('Número') }}</th>
+        <th scope="col">{{ _('Fecha') }}</th>
+        <th scope="col" class="text-end">{{ _('Total') }}</th>
+        <th scope="col">{{ _('Estado') }}</th>
+        <th scope="col" class="text-center" style="width: 10%;">{{ _('Acción') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in deliveries %}
+      <tr>
+        <td><strong>{{ item.document_no or item.id }}</strong></td>
+        <td>{{ item.posting_date }}</td>
+        <td class="text-end">{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
+        <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
+        <td class="text-center">
+          <a href="{{ url_for('portal.customer_delivery', delivery_id=item.id) }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-eye"></i> {{ _('Ver') }}
+          </a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="text-center text-muted py-3">{{ _('No se encontraron notas de entrega.') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Facturas de Venta -->
+<div class="portal-section-header d-flex justify-content-between align-items-center">
+  <h4><i class="bi bi-receipt text-danger me-2"></i>{{ _('Facturas de Venta') }}</h4>
+  <span class="badge bg-secondary">{{ invoices|length }}</span>
+</div>
+<div class="table-responsive bg-white border rounded shadow-sm mb-4">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light">
+      <tr>
+        <th scope="col">{{ _('Número') }}</th>
+        <th scope="col">{{ _('Fecha') }}</th>
+        <th scope="col" class="text-end">{{ _('Total') }}</th>
+        <th scope="col">{{ _('Estado') }}</th>
+        <th scope="col" class="text-center" style="width: 10%;">{{ _('Acción') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in invoices %}
+      <tr>
+        <td><strong>{{ item.document_no or item.id }}</strong></td>
+        <td>{{ item.posting_date }}</td>
+        <td class="text-end">{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
+        <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
+        <td class="text-center">
+          <a href="{{ url_for('portal.customer_invoice', invoice_id=item.id) }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-eye"></i> {{ _('Ver') }}
+          </a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="text-center text-muted py-3">{{ _('No se encontraron facturas.') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

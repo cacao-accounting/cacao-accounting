@@ -63,6 +63,7 @@ from cacao_accounting.reportes import reportes
 from cacao_accounting.runtime_mode import force_single_entity, is_cloud_mode, is_desktop_mode
 from cacao_accounting.setup import setup_ as setup_wizard
 from cacao_accounting.ventas import ventas
+from cacao_accounting.portal import portal as portal_blueprint
 from cacao_accounting.version import PRERELEASE
 from flask_babel import Babel
 
@@ -180,6 +181,7 @@ def registrar_blueprints(app: Flask | None = None) -> None:
             app.register_blueprint(imports, url_prefix="/imports")
             app.register_blueprint(printing_public)
             app.register_blueprint(printing_admin)
+            app.register_blueprint(portal_blueprint, url_prefix="/portal")
             init_printing()
 
     else:

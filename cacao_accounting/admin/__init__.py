@@ -959,6 +959,10 @@ def usuario_roles(user_id: str):
         flash(USUARIO_NO_ENCONTRADO, "danger")
         return redirect(url_for(LISTA_USUARIOS))
 
+    if usuario.classification in ("customer", "supplier"):
+        flash("Solo los usuarios de tipo 'system' pueden tener roles de acceso.", "warning")
+        return redirect(url_for(LISTA_USUARIOS))
+
     roles = _obtener_roles_disponibles()
     form = UserRoleForm()
     form.roles.choices = [(rol.id, rol.name) for rol in roles]
