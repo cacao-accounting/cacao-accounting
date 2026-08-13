@@ -7,30 +7,11 @@
 <head>
   {{ macros.headertags() }}
   <title>{{ title }}</title>
-  <style>
-    /* Full-width content override because there is no sidebar */
-    .ca-content {
-      margin-left: 0 !important;
-      padding-top: 5rem !important;
-      padding-left: 1.5rem !important;
-      padding-right: 1.5rem !important;
-      width: 100% !important;
-      max-width: 1200px !important;
-      margin-left: auto !important;
-      margin-right: auto !important;
-    }
-    .portal-section-header {
-      margin-top: 2rem;
-      margin-bottom: 1rem;
-      border-bottom: 2px solid var(--ca-border);
-      padding-bottom: 0.5rem;
-    }
-  </style>
 </head>
 
 <body>
   {{ macros.cabecera() }}
-  <main class="ca-content">
+  <main class="ca-content ca-content-full">
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
     <div class="container-fluid px-0 pt-0 pb-3">

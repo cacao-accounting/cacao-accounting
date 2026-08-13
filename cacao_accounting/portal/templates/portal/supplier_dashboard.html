@@ -4,7 +4,7 @@
 <div class="row mb-4">
   <div class="col-12">
     <div class="p-4 bg-light border rounded-3 shadow-sm">
-      <h2><i class="bi bi-house-door-fill text-primary"></i> {{ _('Portal del Proveedor') }}</h2>
+      <h2><span class="bi bi-house-door-fill text-primary"></span> {{ _('Portal del Proveedor') }}</h2>
       <p class="lead mb-0">{{ _('Bienvenido a su portal de servicios de lectura. Aquí puede consultar sus solicitudes de cotización, órdenes de compra, recepciones de almacén y facturas de compra.') }}</p>
     </div>
   </div>
@@ -12,7 +12,7 @@
 
 <!-- Solicitudes de Cotización -->
 <div class="portal-section-header d-flex justify-content-between align-items-center">
-  <h4><i class="bi bi-file-earmark-text text-secondary me-2" aria-hidden="true"></i>{{ _('Solicitudes de Cotización de Compra') }}</h4>
+  <h4><span class="bi bi-file-earmark-text text-secondary me-2" aria-hidden="true"></span>{{ _('Solicitudes de Cotización de Compra') }}</h4>
   <span class="badge bg-secondary">{{ quotations|length }}</span>
 </div>
 <div class="table-responsive bg-white border rounded shadow-sm mb-4">
@@ -35,7 +35,7 @@
         <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
         <td class="text-center">
           <a href="{{ url_for('portal.supplier_quotation', quotation_id=item.id) }}" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-eye"></i> {{ _('Ver') }}
+            <span class="bi bi-eye"></span> {{ _('Ver') }}
           </a>
         </td>
       </tr>
@@ -50,7 +50,7 @@
 
 <!-- Órdenes de Compra -->
 <div class="portal-section-header d-flex justify-content-between align-items-center">
-  <h4><i class="bi bi-cart-fill text-success me-2" aria-hidden="true"></i>{{ _('Órdenes de Compra') }}</h4>
+  <h4><span class="bi bi-cart-fill text-success me-2" aria-hidden="true"></span>{{ _('Órdenes de Compra') }}</h4>
   <span class="badge bg-secondary">{{ orders|length }}</span>
 </div>
 <div class="table-responsive bg-white border rounded shadow-sm mb-4">
@@ -73,7 +73,7 @@
         <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
         <td class="text-center">
           <a href="{{ url_for('portal.supplier_order', order_id=item.id) }}" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-eye"></i> {{ _('Ver') }}
+            <span class="bi bi-eye"></span> {{ _('Ver') }}
           </a>
         </td>
       </tr>
@@ -88,7 +88,7 @@
 
 <!-- Recepciones de Compra -->
 <div class="portal-section-header d-flex justify-content-between align-items-center">
-  <h4><i class="bi bi-truck text-warning me-2" aria-hidden="true"></i>{{ _('Recepciones de Compra') }}</h4>
+  <h4><span class="bi bi-truck text-warning me-2" aria-hidden="true"></span>{{ _('Recepciones de Compra') }}</h4>
   <span class="badge bg-secondary">{{ receipts|length }}</span>
 </div>
 <div class="table-responsive bg-white border rounded shadow-sm mb-4">
@@ -111,7 +111,7 @@
         <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
         <td class="text-center">
           <a href="{{ url_for('portal.supplier_receipt', receipt_id=item.id) }}" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-eye"></i> {{ _('Ver') }}
+            <span class="bi bi-eye"></span> {{ _('Ver') }}
           </a>
         </td>
       </tr>
@@ -126,7 +126,7 @@
 
 <!-- Facturas de Compra -->
 <div class="portal-section-header d-flex justify-content-between align-items-center">
-  <h4><i class="bi bi-receipt text-danger me-2" aria-hidden="true"></i>{{ _('Facturas de Compra') }}</h4>
+  <h4><span class="bi bi-receipt text-danger me-2" aria-hidden="true"></span>{{ _('Facturas de Compra') }}</h4>
   <span class="badge bg-secondary">{{ invoices|length }}</span>
 </div>
 <div class="table-responsive bg-white border rounded shadow-sm mb-4">
@@ -149,7 +149,7 @@
         <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
         <td class="text-center">
           <a href="{{ url_for('portal.supplier_invoice', invoice_id=item.id) }}" class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-eye"></i> {{ _('Ver') }}
+            <span class="bi bi-eye"></span> {{ _('Ver') }}
           </a>
         </td>
       </tr>
