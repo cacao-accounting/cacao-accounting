@@ -51,9 +51,33 @@ def test_portal_security_and_access():
 
         # 2. Crear Usuarios asociados a los terceros
         pwd = proteger_passwd("password123")
-        u_cust1 = User(user="cliente1", name="Cliente Uno", password=pwd, active=True, party_id=c1.id, classification="customer", company="cacao")
-        u_cust2 = User(user="cliente2", name="Cliente Dos", password=pwd, active=True, party_id=c2.id, classification="customer", company="cacao")
-        u_supp1 = User(user="proveedor1", name="Proveedor Uno", password=pwd, active=True, party_id=p1.id, classification="supplier", company="cacao")
+        u_cust1 = User(
+            user="cliente1",
+            name="Cliente Uno",
+            password=pwd,
+            active=True,
+            party_id=c1.id,
+            classification="customer",
+            company="cacao",
+        )
+        u_cust2 = User(
+            user="cliente2",
+            name="Cliente Dos",
+            password=pwd,
+            active=True,
+            party_id=c2.id,
+            classification="customer",
+            company="cacao",
+        )
+        u_supp1 = User(
+            user="proveedor1",
+            name="Proveedor Uno",
+            password=pwd,
+            active=True,
+            party_id=p1.id,
+            classification="supplier",
+            company="cacao",
+        )
         database.session.add_all([u_cust1, u_cust2, u_supp1])
         database.session.flush()
 
@@ -175,7 +199,9 @@ def test_user_classification_and_roles_restriction():
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
 
         with app.app_context():
-            portal_party = database.session.execute(database.select(Party).where(Party.is_customer.is_(True))).scalars().first()
+            portal_party = (
+                database.session.execute(database.select(Party).where(Party.is_customer.is_(True))).scalars().first()
+            )
             portal_company = database.session.execute(database.select(Entity)).scalars().first().code
 
         # 1. Crear un usuario de tipo customer
