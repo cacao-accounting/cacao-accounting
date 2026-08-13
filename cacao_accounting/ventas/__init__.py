@@ -3391,6 +3391,12 @@ def ventas_factura_venta_cancel(invoice_id: str):
         target_type = registro.document_type or "sales_invoice"
         revert_relations_for_target(target_type, invoice_id)
         refresh_source_caches_for_target(target_type, invoice_id)
+        if registro.reversal_of:
+            from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+            source = database.session.get(SalesInvoice, registro.reversal_of)
+            if source:
+                refresh_outstanding_amount_cache(source)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()
