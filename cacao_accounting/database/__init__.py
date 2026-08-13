@@ -296,6 +296,34 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     genre = database.Column(database.String(10))
     birthday = database.Column(database.Date())
     phone = database.Column(database.String(50))
+    party_id = database.Column(
+        database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
+
+    @property
+    def is_portal_customer(self) -> bool:
+        """Retorna verdadero si el usuario es de tipo cliente."""
+        if self.classification == "customer":
+            return True
+        if not self.id:
+            return False
+        from cacao_accounting.auth.roles import tiene_rol
+
+        return tiene_rol(self.id, "customer")
+
+    @property
+    def is_portal_supplier(self) -> bool:
+        """Retorna verdadero si el usuario es de tipo proveedor."""
+        if self.classification == "supplier":
+            return True
+        if not self.id:
+            return False
+        from cacao_accounting.auth.roles import tiene_rol
+
+        return tiene_rol(self.id, "supplier")
 
     @property
     def token(self) -> str | None:

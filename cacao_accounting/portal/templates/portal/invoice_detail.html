@@ -1,0 +1,36 @@
+{% extends "portal/base_portal.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+{% import "detail_view_macros.html" as dv_macros %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      {% if role == 'customer' %}
+      <a href="{{ url_for('portal.customer_dashboard') }}" class="link-dark"><span class="bi bi-house"></span> {{ _('Portal de Clientes') }}</a>
+      {% else %}
+      <a href="{{ url_for('portal.supplier_dashboard') }}" class="link-dark"><span class="bi bi-house"></span> {{ _('Portal de Proveedores') }}</a>
+      {% endif %}
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
+  </ol>
+</nav>
+
+{% set currency_code = document_currency_code(registro) %}
+{{ dv_macros.detail_header(
+    registro.document_no or registro.id,
+    _('Factura de Venta') if role == 'customer' else _('Factura de Compra'),
+    registro.docstatus,
+    "",
+    [
+      (_('Número'), registro.document_no),
+      (_('Cliente') if role == 'customer' else _('Proveedor'), registro.customer_name if role == 'customer' else registro.supplier_name),
+      (_('Fecha'), registro.posting_date),
+      (_('Total'), format_money_with_currency(registro.grand_total, currency_code)),
+      (_('Moneda'), currency_code),
+      (_('Observaciones'), registro.remarks)
+    ],
+    'bi-receipt'
+) }}
+{{ macros.lineas_tabla_lectura(items, currency_code) }}
+{% endblock %}

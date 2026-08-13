@@ -99,6 +99,17 @@
         {% endfor %}
       </div>
 
+      <div class="col-md-6">
+        <label class="form-label">{{ form.party_id.label.text }}</label>
+        {{ form.party_id(class="form-control") }}
+        {% for error in form.party_id.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">{{ form.company.label.text }}</label>
+        {{ form.company(class="form-control") }}
+        {% for error in form.company.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+
       <div class="col-md-12">
         <div class="form-check">
           {{ form.active(class="form-check-input") }}

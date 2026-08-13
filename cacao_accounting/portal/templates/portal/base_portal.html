@@ -1,0 +1,40 @@
+{% import "macros.html" as macros %}
+{% set title = titulo|default("Portal de Servicios - Cacao Accounting") %}
+
+<!doctype html>
+<html lang="es">
+
+<head>
+  {{ macros.headertags() }}
+  <title>{{ title }}</title>
+</head>
+
+<body>
+  {{ macros.cabecera() }}
+  <main class="ca-content ca-content-full">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="container-fluid px-0 pt-0 pb-3">
+      <div class="d-grid gap-2">
+        {% for category, message in messages %}
+        {% set alert_class = 'alert-info' %}
+        {% if category == 'success' %}
+        {% set alert_class = 'alert-success' %}
+        {% elif category == 'warning' %}
+        {% set alert_class = 'alert-warning' %}
+        {% elif category == 'danger' %}
+        {% set alert_class = 'alert-danger' %}
+        {% endif %}
+        <div class="alert {{ alert_class }} mb-0" role="alert">{{ message }}</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% block contenido %}
+    {% endblock %}
+  </main>
+</body>
+
+</html>

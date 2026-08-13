@@ -11,7 +11,7 @@
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask_wtf import FlaskForm
-from wtforms import BooleanField, PasswordField, SelectMultipleField, StringField, SubmitField
+from wtforms import BooleanField, PasswordField, SelectField, SelectMultipleField, StringField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
 
@@ -65,7 +65,14 @@ class UserCreateForm(FlaskForm):
     last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
     e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
     phone = StringField(TELEFONO, validators=[Optional()])
-    classification = StringField("Clasificación", validators=[Optional()])
+    classification = SelectField(
+        "Clasificación",
+        choices=[("system", "Sistema (System)"), ("customer", "Cliente (Customer)"), ("supplier", "Proveedor (Supplier)")],
+        validators=[DataRequired()],
+        default="system",
+    )
+    party_id = SelectField("Tercero del portal", choices=[], validators=[Optional()])
+    company = SelectField("Compañía del portal", choices=[], validators=[Optional()])
     active = BooleanField("Habilitado", default=True)
     password = PasswordField("Contraseña", validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
@@ -85,7 +92,19 @@ class UserEditForm(FlaskForm):
     last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
     e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
     phone = StringField(TELEFONO, validators=[Optional()])
-    classification = StringField("Clasificación", validators=[Optional()])
+    classification = SelectField(
+        "Clasificación",
+        choices=[
+            ("system", "Sistema (System)"),
+            ("customer", "Cliente (Customer)"),
+            ("supplier", "Proveedor (Supplier)"),
+            ("admin", "Administrador (Admin)"),
+        ],
+        validators=[DataRequired()],
+        default="system",
+    )
+    party_id = SelectField("Tercero del portal", choices=[], validators=[Optional()])
+    company = SelectField("Compañía del portal", choices=[], validators=[Optional()])
     active = BooleanField("Habilitado")
     guardar_usuario = SubmitField("Guardar usuario")
 

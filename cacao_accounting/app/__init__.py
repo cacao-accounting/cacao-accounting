@@ -32,6 +32,14 @@ cacao_app = Blueprint("cacao_app", __name__, template_folder="templates")
 @login_required
 def pagina_inicio():
     """Esta es la primer pagina mostrada al usuario luego de iniciar sesion."""
+    from flask import redirect
+    from flask_login import current_user
+
+    if current_user.is_portal_customer:
+        return redirect("/portal/customer")
+    if current_user.is_portal_supplier:
+        return redirect("/portal/supplier")
+
     entidades = database.session.query(Entity).order_by(Entity.name).all()
     periodos = database.session.query(AccountingPeriod).order_by(AccountingPeriod.start.desc()).all()
     dashboard_entities = [
