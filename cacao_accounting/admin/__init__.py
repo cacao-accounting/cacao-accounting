@@ -220,6 +220,67 @@ def external_document_validation_settings():
     )
 
 
+@admin.route("/settings/email", methods=["GET", "POST"])  # NOSONAR
+@login_required
+@modulo_activo("admin")
+def email_settings():  # NOSONAR
+    """Administra la configuración del servidor de correo electrónico SMTP (Cloud-Only)."""
+    _require_system_admin()
+    if is_desktop_mode():
+        abort(403)
+
+    from cacao_accounting.messaging.email import get_smtp_setting, set_smtp_setting, send_email, EmailError
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "test_email":
+            test_recipient = request.form.get("test_recipient")
+            if not test_recipient:
+                flash(_("Debe especificar un correo destinatario para la prueba."), "danger")
+            else:
+                try:
+                    send_email(
+                        to_email=test_recipient.strip(),
+                        subject=_("Correo de prueba de Cacao Accounting"),
+                        body=_("Este es un correo de prueba para verificar la configuración de SMTP en Cacao Accounting."),
+                        is_html=False,
+                    )
+                    flash(_("Correo de prueba enviado correctamente."), "success")
+                except EmailError as exc:
+                    flash(_(str(exc)), "danger")
+            return redirect(url_for("admin.email_settings"))
+
+        # Guardar configuración
+        set_smtp_setting("smtp_server", (request.form.get("smtp_server") or "").strip())
+        set_smtp_setting("smtp_port", (request.form.get("smtp_port") or "587").strip())
+        set_smtp_setting("smtp_user", (request.form.get("smtp_user") or "").strip())
+        new_pwd = request.form.get("smtp_password")  # NOSONAR
+        if new_pwd:
+            set_smtp_setting("smtp_password", new_pwd.strip())
+        set_smtp_setting("smtp_use_tls", "true" if request.form.get("smtp_use_tls") == "on" else "false")
+        set_smtp_setting("smtp_from_email", (request.form.get("smtp_from_email") or "").strip())
+        database.session.commit()
+
+        flash(_("Configuración de correo electrónico guardada correctamente."), "success")
+        return redirect(url_for("admin.email_settings"))
+
+    smtp_server = get_smtp_setting("smtp_server") or ""
+    smtp_port = get_smtp_setting("smtp_port") or "587"
+    smtp_user = get_smtp_setting("smtp_user") or ""
+    smtp_use_tls = get_smtp_setting("smtp_use_tls") or "true"
+    smtp_from_email = get_smtp_setting("smtp_from_email") or ""
+
+    return render_template(
+        "admin/email_settings.html",
+        smtp_server=smtp_server,
+        smtp_port=smtp_port,
+        smtp_user=smtp_user,
+        smtp_use_tls=smtp_use_tls.lower() in ("true", "1", "yes", "y", "on"),
+        smtp_from_email=smtp_from_email,
+        titulo=_("Configuración de Correo Electrónico"),
+    )
+
+
 @admin.route("/settings/inventory-valuation", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
