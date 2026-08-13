@@ -5,6 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 import pytest
 
 from cacao_accounting import create_app
@@ -13,12 +14,15 @@ from cacao_accounting.database import (
     Party,
     CompanyParty,
     PurchaseInvoice,
+    PurchaseInvoiceItem,
+    User,
 )
 from cacao_accounting.document_flow.payment import compute_outstanding_amount, refresh_outstanding_amount_cache
 from cacao_accounting.compras import (
     _validate_purchase_reversal_of,
     _persist_purchase_reversal_relation,
 )
+from cacao_accounting.approval_engine import ApprovalEngine
 
 
 @pytest.fixture
@@ -38,7 +42,15 @@ def _ensure_supplier(code, name):
     if not supplier:
         supplier = Party(id=code, code=code, name=name, is_supplier=True, is_active=True)
         database.session.add(supplier)
-        database.session.add(CompanyParty(company="cacao", party_id=code, is_active=True))
+        database.session.add(
+            CompanyParty(
+                company="cacao",
+                party_id=code,
+                is_active=True,
+                allow_purchase_invoice_without_receipt=True,
+                allow_purchase_invoice_without_order=True,
+            )
+        )
         database.session.commit()
     return supplier
 
@@ -194,3 +206,83 @@ def test_cancel_purchase_credit_note_restores_outstanding(app_ctx):
     # Outstanding should be restored to 800.00
     assert compute_outstanding_amount(source_invoice) == Decimal("800.00")
     assert source_invoice.outstanding_amount == Decimal("800.00")
+
+
+def test_approval_engine_execute_submit_and_cancel_purchase_credit_note(app_ctx):
+    """Verifies that ApprovalEngine execute submit and cancel successfully trigger S2P note workflows."""
+    supplier = _ensure_supplier("SUPLR-AP-NOTE-AE", "Proveedor AP Note AE")
+    user = User(id="user-ae", user="user-ae", name="User AE", password=b"x", classification="admin", active=True)
+    database.session.add(user)
+    database.session.commit()
+
+    source_invoice = PurchaseInvoice(
+        id="PINV-ORIG-AE",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="purchase_invoice",
+        grand_total=Decimal("600.00"),
+        outstanding_amount=Decimal("600.00"),
+        base_outstanding_amount=Decimal("600.00"),
+    )
+    credit_note = PurchaseInvoice(
+        id="PINV-CN-AE",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=0,
+        document_type="purchase_credit_note",
+        grand_total=Decimal("200.00"),
+        outstanding_amount=Decimal("200.00"),
+        reversal_of="PINV-ORIG-AE",
+        is_return=True,
+    )
+    database.session.add_all([source_invoice, credit_note])
+    database.session.flush()
+
+    item_src = PurchaseInvoiceItem(
+        purchase_invoice_id=source_invoice.id,
+        item_code="ITEM-AE-1",
+        qty=Decimal("1"),
+        rate=Decimal("600.00"),
+        amount=Decimal("600.00"),
+    )
+    item_cn = PurchaseInvoiceItem(
+        purchase_invoice_id=credit_note.id,
+        item_code="ITEM-AE-2",
+        qty=Decimal("1"),
+        rate=Decimal("200.00"),
+        amount=Decimal("200.00"),
+    )
+    database.session.add_all([item_src, item_cn])
+    database.session.commit()
+
+    def fake_submit(doc):
+        doc.docstatus = 1
+
+    def fake_cancel(doc):
+        doc.docstatus = 2
+
+    with (
+        patch("cacao_accounting.contabilidad.posting.submit_document", side_effect=fake_submit) as mock_submit,
+        patch("cacao_accounting.contabilidad.posting.cancel_document", side_effect=fake_cancel) as mock_cancel,
+    ):
+
+        # ApprovalEngine._execute_submit
+        ApprovalEngine._execute_submit("purchase_invoice", credit_note, user)
+        mock_submit.assert_called_once_with(credit_note)
+        database.session.commit()
+
+        # Verify relation persisted and outstanding reduced
+        assert compute_outstanding_amount(source_invoice) == Decimal("400.00")
+        assert source_invoice.outstanding_amount == Decimal("400.00")
+
+        # ApprovalEngine._execute_cancel
+        ApprovalEngine._execute_cancel("purchase_invoice", credit_note, user)
+        mock_cancel.assert_called_once_with(credit_note)
+        database.session.commit()
+
+        # Verify relation reverted and outstanding restored
+        assert compute_outstanding_amount(source_invoice) == Decimal("600.00")
+        assert source_invoice.outstanding_amount == Decimal("600.00")

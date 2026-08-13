@@ -281,12 +281,14 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
         document_type = "sales_invoice"
         document_model = SalesInvoice
         query = select(SalesInvoice).filter_by(company=filters.company, docstatus=1)
+        query = query.where(or_(SalesInvoice.reversal_of.is_(None), SalesInvoice.reversal_of == ""))
         if filters.party_id:
             query = query.filter_by(customer_id=filters.party_id)
     elif filters.party_type == "supplier":
         document_type = "purchase_invoice"
         document_model = PurchaseInvoice
         query = select(PurchaseInvoice).filter_by(company=filters.company, docstatus=1)
+        query = query.where(or_(PurchaseInvoice.reversal_of.is_(None), PurchaseInvoice.reversal_of == ""))
         if filters.party_id:
             query = query.filter_by(supplier_id=filters.party_id)
     else:
