@@ -221,10 +221,10 @@ def external_document_validation_settings():
     )
 
 
-@admin.route("/settings/email", methods=["GET", "POST"])  # NOSONAR
+@admin.route("/settings/email", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
-def email_settings():  # NOSONAR
+def email_settings():
     """Administra la configuración del servidor de correo electrónico SMTP (Cloud-Only)."""
     _require_system_admin()
     if is_desktop_mode():
@@ -255,7 +255,7 @@ def email_settings():  # NOSONAR
         set_smtp_setting("smtp_server", (request.form.get("smtp_server") or "").strip())
         set_smtp_setting("smtp_port", (request.form.get("smtp_port") or "587").strip())
         set_smtp_setting("smtp_user", (request.form.get("smtp_user") or "").strip())
-        new_pwd = request.form.get("smtp_password")  # NOSONAR
+        new_pwd = request.form.get("smtp_password")
         if new_pwd:
             set_smtp_setting("smtp_password", new_pwd.strip())
         set_smtp_setting("smtp_use_tls", "true" if request.form.get("smtp_use_tls") == "on" else "false")
