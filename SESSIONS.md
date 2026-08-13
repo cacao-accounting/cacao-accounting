@@ -3,6 +3,18 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-12 — Auditoría de flujos de landed costos e impuestos en S2P y O2C
+
+### Petición
+Realizar una auditoría profunda sobre la lógica, modelado e integridad de los flujos de Landed Costs e Impuestos dentro de los módulos Source to Pay (S2P) y Order to Cash (O2C).
+
+### Implementación
+- Se realizó una auditoría detallada de solo lectura a los motores `LandedCostEngine` y `FiscalEngine`, los orquestadores de negocio y procesos de posting contable.
+- Se documentó la arquitectura de cuatro capas (Operativa, Traducción, Motores Puros, Integración y Posting) utilizada para la segregación de responsabilidades de cálculo.
+- Se analizó el flujo de Landed Costs en compras (S2P), incluyendo el uso del Doctype `ImportLandedCost` (ILC), los métodos de prorrateo deterministas, el control de inventario existente con `StockBin` y el manejo de residuos de redondeo.
+- Se analizó el flujo impositivo (Taxes & Withholdings) en S2P y O2C, documentando el algoritmo del `FiscalEngine`, la ordenación topológica por grafos (DAG) para cálculos en cascada libre de dependencias circulares, y la descomposición fiscal integrada para impuestos incluidos en el precio.
+- Se generó el informe técnico y funcional exhaustivo `docs/tax-cost-engines/CACAO_LANDED_COST_AND_TAXES_AUDIT.md`.
+
 ## 2026-08-12 — Plan transversal para document flow y cobertura de pruebas
 
 ### Hallazgo
