@@ -30,6 +30,15 @@ from cacao_accounting.database import (
 portal = Blueprint("portal", __name__, template_folder="templates")
 
 
+def _is_user_admin() -> bool:
+    """Retorna verdadero si el usuario actual es administrador."""
+    if getattr(current_user, "classification", None) == "admin":
+        return True
+    from cacao_accounting.auth.roles import tiene_rol
+
+    return tiene_rol(current_user.id, "admin")
+
+
 def requires_portal_role(role_name):
     """Verifica que el usuario tenga el rol del portal correspondiente o sea administrador."""
 
@@ -39,30 +48,20 @@ def requires_portal_role(role_name):
         def decorated_function(*args, **kwargs):
             if is_desktop_mode():
                 abort(403)
-            # Bypass para administradores
-            is_admin = False
-            if getattr(current_user, "classification", None) == "admin":
-                is_admin = True
-            else:
-                from cacao_accounting.auth.roles import tiene_rol
-
-                if tiene_rol(current_user.id, "admin"):
-                    is_admin = True
-
-            if is_admin:
+            if _is_user_admin():
                 return f(*args, **kwargs)
 
             if role_name == "customer" and current_user.is_portal_customer:
-                if not current_user.party_id:
-                    flash("Usuario de portal sin cliente asignado.", "danger")
-                    abort(403)
-                return f(*args, **kwargs)
+                if current_user.party_id:
+                    return f(*args, **kwargs)
+                flash("Usuario de portal sin cliente asignado.", "danger")
+                abort(403)
 
             if role_name == "supplier" and current_user.is_portal_supplier:
-                if not current_user.party_id:
-                    flash("Usuario de portal sin proveedor asignado.", "danger")
-                    abort(403)
-                return f(*args, **kwargs)
+                if current_user.party_id:
+                    return f(*args, **kwargs)
+                flash("Usuario de portal sin proveedor asignado.", "danger")
+                abort(403)
 
             abort(403)
 

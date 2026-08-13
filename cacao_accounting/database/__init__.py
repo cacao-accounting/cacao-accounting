@@ -302,6 +302,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @property
     def is_portal_customer(self) -> bool:
+        """Retorna verdadero si el usuario es de tipo cliente."""
         if self.classification == "customer":
             return True
         if not self.id:
@@ -312,6 +313,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
 
     @property
     def is_portal_supplier(self) -> bool:
+        """Retorna verdadero si el usuario es de tipo proveedor."""
         if self.classification == "supplier":
             return True
         if not self.id:
