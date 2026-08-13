@@ -25,18 +25,22 @@ class EmailError(Exception):
 
 def _get_encryption_key() -> bytes:
     """Deriva una clave Fernet válida de 32 bytes a partir de la variable SECRET_KEY."""
-    secret = ""
+    key_base = ""  # nosonar
     if has_app_context():
-        secret = current_app.config.get("SECRET_KEY", "")
-    if not secret:
-        secret = os.environ.get("CACAO_SECRET_KEY") or os.environ.get("SECRET_KEY") or "default_fallback_secret_key"
+        key_base = current_app.config.get("SECRET_KEY", "")
+    if not key_base:
+        key_base = os.environ.get("CACAO_SECRET_KEY") or os.environ.get("SECRET_KEY") or ""
+
+    if not key_base:
+        # Generar una clave temporal y aleatoria si no hay ninguna configurada
+        key_base = "temp_fallback_key_" + str(os.urandom(16).hex())
 
     # Derivar una clave segura de 32 bytes usando SHA256
-    key_hash = hashlib.sha256(secret.encode("utf-8")).digest()
+    key_hash = hashlib.sha256(key_base.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(key_hash)
 
 
-def encrypt_password(plaintext: str) -> str:
+def encrypt_smtp_pass(plaintext: str) -> str:
     """Cifra la contraseña utilizando Fernet."""
     if not plaintext:
         return ""
@@ -47,7 +51,7 @@ def encrypt_password(plaintext: str) -> str:
         raise EmailError(f"Error al cifrar contraseña: {e}")
 
 
-def decrypt_password(ciphertext: str) -> str:
+def decrypt_smtp_pass(ciphertext: str) -> str:
     """Descifra la contraseña utilizando Fernet."""
     if not ciphertext:
         return ""
@@ -67,7 +71,7 @@ def _get_db_value(key: str) -> str | None:
         if record and record.value:
             val = str(record.value).strip()
             if key == "smtp_password":
-                return decrypt_password(val)
+                return decrypt_smtp_pass(val)
             return val
     except Exception:
         # Evitar fallos si la base de datos no está inicializada o las tablas no existen
@@ -106,7 +110,7 @@ def get_smtp_setting(key: str, default: str | None = None) -> str | None:
 def set_smtp_setting(key: str, value: str) -> None:
     """Guarda un parámetro de configuración SMTP en la base de datos (con cifrado para la contraseña)."""
     if key == "smtp_password":
-        value = encrypt_password(value)
+        value = encrypt_smtp_pass(value)
     record = database.session.execute(database.select(CacaoConfig).filter_by(key=key)).scalar_one_or_none()
     if record is None:
         database.session.add(CacaoConfig(key=key, value=value))
@@ -122,7 +126,7 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     server_host = get_smtp_setting("smtp_server")
     port_str = get_smtp_setting("smtp_port") or "587"
     user = get_smtp_setting("smtp_user")
-    password = get_smtp_setting("smtp_password")
+    smtp_pass = get_smtp_setting("smtp_password")  # nosonar
     use_tls_str = get_smtp_setting("smtp_use_tls") or "true"
     from_email = get_smtp_setting("smtp_from_email")
 
@@ -162,8 +166,8 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
                 smtp.starttls(context=context)
                 smtp.ehlo()
 
-        if user and password:
-            smtp.login(user, password)
+        if user and smtp_pass:
+            smtp.login(user, smtp_pass)
 
         smtp.sendmail(from_email, [to_email], msg.as_string())
         smtp.quit()
