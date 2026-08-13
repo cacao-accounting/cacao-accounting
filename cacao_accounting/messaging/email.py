@@ -145,6 +145,40 @@ def set_smtp_setting(key: str, value: str) -> None:
         record.value = value
 
 
+def _build_message(to_email: str, subject: str, body: str, from_email: str, is_html: bool) -> str:
+    """Build and serialize an email message for SMTP delivery."""
+    if is_html:
+        message: MIMEMultipart | MIMEText = MIMEMultipart("alternative")
+        message.attach(MIMEText(body, "html", "utf-8"))
+    else:
+        message = MIMEText(body, "plain", "utf-8")
+    message["Subject"] = subject
+    message["From"] = from_email
+    message["To"] = to_email
+    return message.as_string()
+
+
+def _send_smtp_message(
+    smtp_config: dict[str, Any],
+    message: str,
+) -> None:
+    """Open an SMTP connection and send one serialized message."""
+    context = ssl.create_default_context()
+    smtp: Any
+    if smtp_config["port"] == 465:
+        smtp = smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], context=context, timeout=10)
+    else:
+        smtp = smtplib.SMTP(smtp_config["host"], smtp_config["port"], timeout=10)
+        if smtp_config["use_tls"]:
+            smtp.ehlo()
+            smtp.starttls(context=context)
+            smtp.ehlo()
+    if smtp_config["user"] and smtp_config["password"]:
+        smtp.login(smtp_config["user"], smtp_config["password"])
+    smtp.sendmail(smtp_config["from_email"], [smtp_config["to_email"]], message)
+    smtp.quit()
+
+
 def send_email(to_email: str, subject: str, body: str, is_html: bool = False) -> None:
     """Envía un correo electrónico utilizando la configuración SMTP activa (Cloud-Only)."""
     if is_desktop_mode():
@@ -164,39 +198,23 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
 
     try:
         port = int(port_str)
-    except ValueError:
-        raise EmailError(f"Puerto SMTP no válido: {port_str}")
+    except ValueError as exc:
+        raise EmailError(f"Puerto SMTP no válido: {port_str}") from exc
 
     use_tls = use_tls_str.lower() in ("true", "1", "yes", "y", "on")
 
-    msg: MIMEMultipart | MIMEText
-    if is_html:
-        html_msg = MIMEMultipart("alternative")
-        html_msg.attach(MIMEText(body, "html", "utf-8"))
-        msg = html_msg
-    else:
-        msg = MIMEText(body, "plain", "utf-8")
-
-    msg["Subject"] = subject
-    msg["From"] = from_email
-    msg["To"] = to_email
+    message = _build_message(to_email, subject, body, from_email, is_html)
+    smtp_config = {
+        "host": server_host,
+        "port": port,
+        "user": user,
+        "password": smtp_pass,
+        "use_tls": use_tls,
+        "from_email": from_email,
+        "to_email": to_email,
+    }
 
     try:
-        context = ssl.create_default_context()
-        smtp: Any
-        if port == 465:
-            smtp = smtplib.SMTP_SSL(server_host, port, context=context, timeout=10)
-        else:
-            smtp = smtplib.SMTP(server_host, port, timeout=10)
-            if use_tls:
-                smtp.ehlo()
-                smtp.starttls(context=context)
-                smtp.ehlo()
-
-        if user and smtp_pass:
-            smtp.login(user, smtp_pass)
-
-        smtp.sendmail(from_email, [to_email], msg.as_string())
-        smtp.quit()
+        _send_smtp_message(smtp_config, message)
     except (OSError, smtplib.SMTPException, ValueError) as exc:
         raise EmailError(f"Error al enviar correo electrónico: {exc}") from exc
