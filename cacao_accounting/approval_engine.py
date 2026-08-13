@@ -664,15 +664,24 @@ class ApprovalEngine:
             return
 
         if doctype == "sales_invoice":
-            from cacao_accounting.ventas import _create_delivery_note_from_invoice
+            from cacao_accounting.ventas import _create_delivery_note_from_invoice, _persist_sales_reversal_relation
 
             submit_document(document)
+            _persist_sales_reversal_relation(document)
             if document.update_inventory and not document.delivery_note_id:
                 _create_delivery_note_from_invoice(document)
             log_submit(document)
             return
 
-        if doctype in {"purchase_receipt", "purchase_invoice", "payment_entry", "stock_entry"}:
+        if doctype == "purchase_invoice":
+            from cacao_accounting.compras import _persist_purchase_reversal_relation
+
+            submit_document(document)
+            _persist_purchase_reversal_relation(document)
+            log_submit(document)
+            return
+
+        if doctype in {"purchase_receipt", "payment_entry", "stock_entry"}:
             submit_document(document)
             log_submit(document)
 
@@ -719,8 +728,16 @@ class ApprovalEngine:
                 _cancel_linked_delivery_note(document)
             cancel_document(document)
             log_cancel(document)
-            revert_relations_for_target(doctype, document.id)
-            refresh_source_caches_for_target(doctype, document.id)
+            target_type = getattr(document, "document_type", None) or doctype
+            revert_relations_for_target(target_type, document.id)
+            refresh_source_caches_for_target(target_type, document.id)
+            if getattr(document, "reversal_of", None):
+                from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+                source_class = get_model_class(target_type)
+                source = database.session.get(source_class, document.reversal_of)
+                if source:
+                    refresh_outstanding_amount_cache(source)
             return
 
         if doctype in {"payment_entry", "stock_entry"}:

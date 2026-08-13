@@ -3310,12 +3310,13 @@ def ventas_factura_venta_submit(invoice_id: str):
         _validate_sales_invoice_quantities(invoice_id)
         _validate_sales_invoice_line_amounts(registro, items)
         warnings = _validate_invoice_prices_against_source(registro)
-        if registro.document_type == "sales_credit_note":
+        if registro.document_type in ("sales_credit_note", "sales_debit_note") and registro.reversal_of:
+            note_amount = Decimal(str(registro.grand_total or "0")) if registro.document_type == "sales_credit_note" else None
             _validate_reversal_of(
-                registro.reversal_of or "",
+                registro.reversal_of,
                 registro.customer_id,
                 registro.company,
-                note_amount=Decimal(str(registro.grand_total or "0")),
+                note_amount=note_amount,
                 document_type=registro.document_type,
                 posting_date=registro.posting_date,
                 lock_source=True,
@@ -3391,6 +3392,12 @@ def ventas_factura_venta_cancel(invoice_id: str):
         target_type = registro.document_type or "sales_invoice"
         revert_relations_for_target(target_type, invoice_id)
         refresh_source_caches_for_target(target_type, invoice_id)
+        if registro.reversal_of:
+            from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+            source = database.session.get(SalesInvoice, registro.reversal_of)
+            if source:
+                refresh_outstanding_amount_cache(source)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()
