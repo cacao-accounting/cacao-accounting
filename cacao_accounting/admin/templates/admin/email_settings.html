@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Configuración de Correo Electrónico") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-envelope me-2" style="color:#78BF30"></i>{{ _("Configuración de Correo Electrónico") }}</h4>
+</div>
+
+<div class="row">
+  <div class="col-md-8">
+    <div class="ca-card p-3 mb-4">
+      <h5 class="mb-3">{{ _("Ajustes del Servidor SMTP") }}</h5>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="mb-3">
+          <label for="smtp_server" class="form-label">{{ _("Servidor SMTP (Host)") }}</label>
+          <input type="text" class="form-control form-control-sm" id="smtp_server" name="smtp_server" value="{{ smtp_server }}" required placeholder="e.g. smtp.example.com">
+        </div>
+
+        <div class="mb-3">
+          <label for="smtp_port" class="form-label">{{ _("Puerto SMTP") }}</label>
+          <input type="text" class="form-control form-control-sm" id="smtp_port" name="smtp_port" value="{{ smtp_port }}" required placeholder="e.g. 587 o 465">
+        </div>
+
+        <div class="mb-3">
+          <label for="smtp_user" class="form-label">{{ _("Usuario SMTP") }}</label>
+          <input type="text" class="form-control form-control-sm" id="smtp_user" name="smtp_user" value="{{ smtp_user }}" placeholder="e.g. user@example.com">
+        </div>
+
+        <div class="mb-3">
+          <label for="smtp_password" class="form-label">{{ _("Contraseña SMTP") }}</label>
+          <input type="password" class="form-control form-control-sm" id="smtp_password" name="smtp_password" placeholder="••••••••" autocomplete="new-password">
+          <div class="form-text text-muted">{{ _("Deje en blanco para mantener la contraseña actual.") }}</div>
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="smtp_use_tls" name="smtp_use_tls" {% if smtp_use_tls %}checked{% endif %}>
+          <label class="form-check-label" for="smtp_use_tls">{{ _("Usar TLS (STARTTLS)") }}</label>
+        </div>
+
+        <div class="mb-4">
+          <label for="smtp_from_email" class="form-label">{{ _("Remitente predeterminado (From Email)") }}</label>
+          <input type="email" class="form-control form-control-sm" id="smtp_from_email" name="smtp_from_email" value="{{ smtp_from_email }}" placeholder="e.g. noreply@example.com">
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary btn-sm">{{ _("Guardar Ajustes") }}</button>
+          <a href="{{ url_for('admin.admin_') }}" class="btn btn-outline-secondary btn-sm">{{ _("Cancelar") }}</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="ca-card p-3">
+      <h5 class="mb-3">{{ _("Prueba de Configuración") }}</h5>
+      <p class="text-muted small">{{ _("Una vez guardados los ajustes, puede enviar un correo de prueba para verificar la conexión.") }}</p>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="test_email">
+        <div class="mb-3">
+          <label for="test_recipient" class="form-label">{{ _("Correo Destinatario") }}</label>
+          <input type="email" class="form-control form-control-sm" id="test_recipient" name="test_recipient" required placeholder="e.g. test@example.com">
+        </div>
+        <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi bi-send me-1"></i>{{ _("Enviar Correo de Prueba") }}</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
