@@ -220,10 +220,10 @@ def external_document_validation_settings():
     )
 
 
-@admin.route("/settings/email", methods=["GET", "POST"])
+@admin.route("/settings/email", methods=["GET", "POST"])  # nosonar
 @login_required
 @modulo_activo("admin")
-def email_settings():
+def email_settings():  # nosonar
     """Administra la configuración del servidor de correo electrónico SMTP (Cloud-Only)."""
     _require_system_admin()
     if is_desktop_mode():

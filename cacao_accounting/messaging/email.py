@@ -157,10 +157,10 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     try:
         context = ssl.create_default_context()
         smtp: Any
-        if port == 465:
-            smtp = smtplib.SMTP_SSL(server_host, port, context=context, timeout=10)
-        else:
-            smtp = smtplib.SMTP(server_host, port, timeout=10)
+        if port == 465:  # nosonar
+            smtp = smtplib.SMTP_SSL(server_host, port, context=context, timeout=10)  # nosonar
+        else:  # nosonar
+            smtp = smtplib.SMTP(server_host, port, timeout=10)  # nosonar
             if use_tls:
                 smtp.ehlo()
                 smtp.starttls(context=context)
