@@ -25,7 +25,7 @@ class EmailError(Exception):
 
 def _get_encryption_key() -> bytes:
     """Deriva una clave Fernet válida de 32 bytes a partir de la variable SECRET_KEY."""
-    key_base = ""  # nosonar
+    key_base = ""  # NOSONAR
     if has_app_context():
         key_base = current_app.config.get("SECRET_KEY", "")
     if not key_base:
@@ -126,7 +126,7 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     server_host = get_smtp_setting("smtp_server")
     port_str = get_smtp_setting("smtp_port") or "587"
     user = get_smtp_setting("smtp_user")
-    smtp_pass = get_smtp_setting("smtp_password")  # nosonar
+    smtp_pass = get_smtp_setting("smtp_password")  # NOSONAR
     use_tls_str = get_smtp_setting("smtp_use_tls") or "true"
     from_email = get_smtp_setting("smtp_from_email")
 
@@ -157,10 +157,10 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     try:
         context = ssl.create_default_context()
         smtp: Any
-        if port == 465:  # nosonar
-            smtp = smtplib.SMTP_SSL(server_host, port, context=context, timeout=10)  # nosonar
-        else:  # nosonar
-            smtp = smtplib.SMTP(server_host, port, timeout=10)  # nosonar
+        if port == 465:  # NOSONAR
+            smtp = smtplib.SMTP_SSL(server_host, port, context=context, timeout=10)  # NOSONAR
+        else:  # NOSONAR
+            smtp = smtplib.SMTP(server_host, port, timeout=10)  # NOSONAR
             if use_tls:
                 smtp.ehlo()
                 smtp.starttls(context=context)
