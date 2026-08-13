@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import base64
-import hashlib
+import logging
 import os
 import ssl
 import smtplib
@@ -14,6 +14,8 @@ from email.mime.text import MIMEText
 from typing import Any
 from cryptography.fernet import Fernet
 from cryptography.fernet import InvalidToken
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from flask import current_app, has_app_context
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -25,9 +27,13 @@ class EmailError(Exception):
     """Excepción para errores relacionados con el envío de correos electrónicos."""
 
 
-def _get_encryption_key() -> bytes:
-    """Deriva una clave Fernet válida de 32 bytes a partir de la variable SECRET_KEY."""
-    key_base = ""  # NOSONAR
+LOGGER = logging.getLogger(__name__)
+SMTP_PASSWORD_SALT_KEY = "smtp_password_salt"
+
+
+def _get_encryption_key(salt: bytes) -> bytes:
+    """Derive a Fernet key from the application secret using PBKDF2-HMAC."""
+    key_base = ""
     if has_app_context():
         key_base = current_app.config.get("SECRET_KEY", "")
     if not key_base:
@@ -36,9 +42,29 @@ def _get_encryption_key() -> bytes:
     if not key_base:
         raise EmailError("Configure SECRET_KEY o CACAO_SECRET_KEY para proteger la contraseña SMTP.")
 
-    # Derivar una clave segura de 32 bytes usando SHA256
-    key_hash = hashlib.sha256(key_base.encode("utf-8")).digest()
-    return base64.urlsafe_b64encode(key_hash)
+    key_derivation = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=210_000,
+    )
+    return base64.urlsafe_b64encode(key_derivation.derive(key_base.encode("utf-8")))
+
+
+def _get_or_create_password_salt() -> bytes:
+    """Load the persistent SMTP-password salt, creating it on first use."""
+    if not has_app_context():
+        raise EmailError("La contraseña SMTP requiere un contexto de aplicación para cifrarse.")
+    record = database.session.execute(database.select(CacaoConfig).filter_by(key=SMTP_PASSWORD_SALT_KEY)).scalar_one_or_none()
+    if record and record.value:
+        try:
+            return base64.urlsafe_b64decode(record.value.encode("ascii"))
+        except (ValueError, UnicodeError) as exc:
+            raise EmailError("La sal de cifrado SMTP almacenada no es válida.") from exc
+    salt = os.urandom(16)
+    database.session.add(CacaoConfig(key=SMTP_PASSWORD_SALT_KEY, value=base64.urlsafe_b64encode(salt).decode("ascii")))
+    database.session.flush()
+    return salt
 
 
 def encrypt_smtp_pass(plaintext: str) -> str:
@@ -46,7 +72,7 @@ def encrypt_smtp_pass(plaintext: str) -> str:
     if not plaintext:
         return ""
     try:
-        return Fernet(_get_encryption_key()).encrypt(plaintext.encode("utf-8")).decode("utf-8")
+        return Fernet(_get_encryption_key(_get_or_create_password_salt())).encrypt(plaintext.encode("utf-8")).decode("utf-8")
     except (TypeError, ValueError) as exc:
         raise EmailError(f"Error al cifrar contraseña: {exc}") from exc
 
@@ -56,10 +82,12 @@ def decrypt_smtp_pass(ciphertext: str) -> str:
     if not ciphertext:
         return ""
     try:
-        return Fernet(_get_encryption_key()).decrypt(ciphertext.encode("utf-8")).decode("utf-8")
-    except (InvalidToken, TypeError, ValueError):
-        # Retornar vacío si falla el descifrado (por ejemplo, si cambia la clave secreta)
-        return ""
+        return Fernet(_get_encryption_key(_get_or_create_password_salt())).decrypt(ciphertext.encode("utf-8")).decode("utf-8")
+    except InvalidToken as exc:
+        LOGGER.error("No se pudo descifrar la contraseña SMTP; revise SECRET_KEY y su rotación.")
+        raise EmailError("No se pudo descifrar la contraseña SMTP configurada.") from exc
+    except (TypeError, ValueError) as exc:
+        raise EmailError("La contraseña SMTP almacenada no es válida.") from exc
 
 
 def _get_db_value(key: str) -> str | None:
@@ -125,7 +153,7 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     server_host = get_smtp_setting("smtp_server")
     port_str = get_smtp_setting("smtp_port") or "587"
     user = get_smtp_setting("smtp_user")
-    smtp_pass = get_smtp_setting("smtp_password")  # NOSONAR
+    smtp_pass = get_smtp_setting("smtp_password")
     use_tls_str = get_smtp_setting("smtp_use_tls") or "true"
     from_email = get_smtp_setting("smtp_from_email")
 
@@ -156,10 +184,10 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     try:
         context = ssl.create_default_context()
         smtp: Any
-        if port == 465:  # NOSONAR
-            smtp = smtplib.SMTP_SSL(server_host, port, context=context, timeout=10)  # NOSONAR
-        else:  # NOSONAR
-            smtp = smtplib.SMTP(server_host, port, timeout=10)  # NOSONAR
+        if port == 465:
+            smtp = smtplib.SMTP_SSL(server_host, port, context=context, timeout=10)
+        else:
+            smtp = smtplib.SMTP(server_host, port, timeout=10)
             if use_tls:
                 smtp.ehlo()
                 smtp.starttls(context=context)

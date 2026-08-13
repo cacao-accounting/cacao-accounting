@@ -106,6 +106,21 @@ def test_smtp_password_encryption_decryption(app_instance):
         assert get_smtp_setting("smtp_password") == "SuperSecretSMTPPassword123"
 
 
+def test_smtp_password_secret_rotation_fails_explicitly(app_instance):
+    """A rotated application secret must not silently erase the SMTP password."""
+    with app_instance.app_context():
+        database.session.execute(database.delete(CacaoConfig))
+        set_smtp_setting("smtp_password", "SuperSecretSMTPPassword123")
+        database.session.commit()
+        original_secret = app_instance.config["SECRET_KEY"]
+        app_instance.config["SECRET_KEY"] = "rotated-secret"
+        try:
+            with pytest.raises(EmailError, match="descifrar"):
+                get_smtp_setting("smtp_password")
+        finally:
+            app_instance.config["SECRET_KEY"] = original_secret
+
+
 def test_send_email_desktop_mode_error(app_instance, monkeypatch):
     """Prueba que en modo Escritorio el envío de correos levanta un error."""
     with app_instance.app_context():

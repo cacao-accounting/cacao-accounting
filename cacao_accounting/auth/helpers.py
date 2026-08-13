@@ -66,7 +66,7 @@ def validar_clave_segura(clave: str) -> bool:
 def puede_iniciar_en_escritorio(identidad: User) -> bool:
     """Determina si el usuario puede iniciar sesión en modo escritorio."""
     if is_desktop_mode():
-        if identidad.is_portal_customer or identidad.is_portal_supplier:
+        if identidad.classification in {"customer", "supplier"}:
             return False
         return identidad.classification == "admin"
     return True

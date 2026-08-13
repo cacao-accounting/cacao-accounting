@@ -69,9 +69,7 @@ def customer_dashboard():
     """Dashboard principal del portal de clientes."""
     check_portal_access("customer")
     pid = current_user.party_id
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
 
     q_invoices = database.select(SalesInvoice).filter_by(
         document_type="sales_invoice", company=current_user.company, docstatus=1
@@ -112,9 +110,7 @@ def customer_invoice(invoice_id):
     if not invoice:
         abort(404)
 
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
     if not is_admin and invoice.customer_id != current_user.party_id:
         abort(403)
 
@@ -133,9 +129,7 @@ def customer_order(order_id):
     if not order:
         abort(404)
 
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
     if not is_admin and order.customer_id != current_user.party_id:
         abort(403)
 
@@ -154,9 +148,7 @@ def customer_quotation(quotation_id):
     if not quotation:
         abort(404)
 
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
     if not is_admin and quotation.customer_id != current_user.party_id:
         abort(403)
 
@@ -175,9 +167,7 @@ def customer_delivery(delivery_id):
     if not delivery:
         abort(404)
 
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
     if not is_admin and delivery.customer_id != current_user.party_id:
         abort(403)
 
@@ -194,9 +184,7 @@ def supplier_dashboard():
     """Dashboard principal del portal de proveedores."""
     check_portal_access("supplier")
     pid = current_user.party_id
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
 
     q_invoices = database.select(PurchaseInvoice).filter_by(
         document_type="purchase_invoice", company=current_user.company, docstatus=1
@@ -237,9 +225,7 @@ def supplier_invoice(invoice_id):
     if not invoice:
         abort(404)
 
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
     if not is_admin and invoice.supplier_id != current_user.party_id:
         abort(403)
 
@@ -258,9 +244,7 @@ def supplier_order(order_id):
     if not order:
         abort(404)
 
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
     if not is_admin and order.supplier_id != current_user.party_id:
         abort(403)
 
@@ -279,9 +263,7 @@ def supplier_quotation(quotation_id):
     if not quotation:
         abort(404)
 
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
     if not is_admin and quotation.supplier_id != current_user.party_id:
         abort(403)
 
@@ -302,9 +284,7 @@ def supplier_receipt(receipt_id):
     if not receipt:
         abort(404)
 
-    is_admin = getattr(current_user, "classification", None) == "admin" or (
-        not current_user.is_portal_customer and not current_user.is_portal_supplier
-    )
+    is_admin = _is_user_admin()
     if not is_admin and receipt.supplier_id != current_user.party_id:
         abort(403)
 
