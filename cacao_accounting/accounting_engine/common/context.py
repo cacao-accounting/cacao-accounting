@@ -157,6 +157,7 @@ class FiscalResult:
     """Result from the Fiscal Engine."""
 
     engine: str = "fiscal"
+    net_goods_total: Decimal = Decimal("0")
     document_tax_total: Decimal = Decimal("0")
     capitalizable_tax_total: Decimal = Decimal("0")
     separate_tax_total: Decimal = Decimal("0")

@@ -47,7 +47,11 @@ class AccountingMapper:
         lines = list(explicit_lines)
         lines.extend(self._map_fiscal_lines(context, fiscal))
         if not explicit_lines:
-            total_goods = sum((item.net_amount for item in context.items), Decimal("0"))
+            total_goods = (
+                fiscal.net_goods_total
+                if fiscal and fiscal.tax_lines and any(line.included_in_price for line in fiscal.tax_lines)
+                else sum((item.net_amount for item in context.items), Decimal("0"))
+            )
             goods_account = self._resolve_goods_account(context)
             if total_goods > 0 and goods_account:
                 side = "debit" if context.transaction_direction == "purchase" else "credit"

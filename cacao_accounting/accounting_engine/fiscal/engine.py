@@ -112,8 +112,13 @@ class FiscalEngine:
             Decimal("0"),
         )
         withholding_total = sum((line_item.amount for line_item in tax_lines if line_item.type == "withholding"), Decimal("0"))
+        net_goods_total = goods_total - sum(
+            (line_item.amount for line_item in tax_lines if line_item.included_in_price),
+            Decimal("0"),
+        )
 
         return FiscalResult(
+            net_goods_total=net_goods_total,
             document_tax_total=doc_tax_total,
             capitalizable_tax_total=capitalizable_total,
             separate_tax_total=separate_tax_total,
