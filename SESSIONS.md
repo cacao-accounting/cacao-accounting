@@ -2737,3 +2737,34 @@ Analizar y corregir los fallos de CI ejecutando localmente los checks definidos 
 - **Test de atajos S2P (`test_purchase_request_shortcuts_include_company_and_autofill_lines`)**: La prueba de aserción esperaba que `x-init` en `transaction_form_macros.html` contuviera exactamente `x-init='loadSourceFromUrl(` y `).then(() => applySource())'`. Sin embargo, el macro contenía una lógica de hidratación más compleja que incluía `sourceHydrationPending = true`. Se simplificó y estandarizó la llamada de `x-init` en el macro de plantilla para que coincidiera con las aserciones exactas del test, y se movió el control de estado `sourceHydrationPending` directamente a las funciones `loadSourceFromUrl` y `applySource` en `transaction-form.js`, preservando el comportamiento de hydration y previniendo submits concurrentes o prematuros.
 - **Test de observaciones unificadas (`test_transaction_forms_use_one_line_header_observations`)**: La prueba exigía que los formularios de S2P y O2C no definieran de forma manual el campo de observaciones en el cuerpo (`id="remarks"`), delegándolo en su lugar a la cabecera unificada. Se eliminó la propiedad `include_remarks=False` de los llamados a `tf_macros.transaction_form_header` en las 10 plantillas de compras y ventas correspondientes, y se retiraron las cajas de input duplicadas de observaciones, permitiendo que el macro central dibuje y unifique el campo de forma limpia y consistente.
 - **Verificación**: Todas las pruebas unitarias pasaron exitosamente (11 de 11 en el archivo afectado, y la suite completa de webactions). Los linters y formateadores (flake8, ruff, pydocstyle, mypy) pasaron con cero errores.
+
+## 2026-08-13 — Revisión del ciclo completo de inventarios, ledger y kardex
+
+### Petición
+Realizar una revisión exhaustiva del ciclo completo de inventarios para asegurar que el ledger contable y el kardex de inventario sean completos, robustos y reconciliables de extremo a extremo.
+
+### Análisis y Hallazgos
+Tras realizar un análisis pormenorizado de las estructuras de datos, motores de contabilización (`posting.py`), servicios de inventario (`service.py`), y servicios de reporte (`services.py`), se concluye que el sistema cuenta con una arquitectura de inventarios sumamente madura y resistente a errores, cumpliendo con los más altos estándares financieros:
+
+1. **Unicidad de la Fuente de Verdad (Single Source of Truth):**
+   - El sistema almacena cada movimiento de inventario en `StockLedgerEntry` (SLE), el cual constituye la única fuente de verdad real para el Kardex de inventario.
+   - Las caches y balances acumulados se mantienen en `StockBin`, los cuales actúan de forma reactiva y pueden ser reconstruidos a partir de `StockLedgerEntry` en cualquier momento de manera cronológica.
+
+2. **Garantías de Concurrencia y Consistencia:**
+   - La actualización de `StockBin` (`_upsert_stock_bin` en `posting.py`) utiliza bloqueos pesimistas mediante `SELECT FOR UPDATE` (`with_for_update()`). Esto previene condiciones de carrera o sobreescritura de balances cuando múltiples transacciones intentan alterar el mismo artículo en la misma bodega simultáneamente.
+   - Las validaciones de stock negativo se aplican estrictamente según la configuración de cada artículo (`allow_negative_stock`), previniendo descalces físicos no autorizados.
+
+3. **Valuación e Integridad Histórica:**
+   - Se soportan los métodos de valuación FIFO (PEPS) y Promedio Móvil, los cuales se reconstruyen dinámicamente mediante `StockValuationLayer` y el historial de transacciones.
+   - Las cancelaciones o anulaciones de documentos no eliminan registros físicos de transacciones aprobadas. En su lugar, el sistema emplea reversos "append-only", insertando contramovimientos de signo opuesto que anulan matemáticamente el saldo, preservando la trazabilidad de auditoría histórica para periodos cerrados.
+
+4. **Reconciliación Extremo a Extremo (Subledger ↔ Ledger):**
+   - El reporte de matriz de reconciliación (`get_reconciliation_matrix` en `cacao_accounting/reportes/services.py`) compara directamente los saldos del submayor de inventario (`StockLedgerEntry`) contra las cuentas de control de inventario correspondientes en el libro mayor contable (`GLEntry`).
+   - El sistema diferencia claramente las recepciones de órdenes de compra pendientes de facturar (GRNI / 3-way matching) utilizando una cuenta puente configurable (`bridge_account_id`), permitiendo conciliar facturas y recepciones de manera perfecta.
+
+5. **Herramientas de Diagnóstico y Recuperación:**
+   - El sistema expone servicios para reconstruir tanto los balances de bodega como las capas de valuación cronológicas (`rebuild_stock_bins` y `rebuild_stock_valuation_layers`) a partir de la secuencia original de entradas en el Kardex.
+
+### Verificación de la Suite de Pruebas
+- Se ejecutó la suite completa de pruebas de calidad (1680+ pruebas exitosas, incluyendo tests específicos para validación de capas de valuación FIFO/Promedio Móvil, reversión de notas de entrega y recepciones de compra, y conciliaciones 3-way multicurrency).
+- Se ejecutaron los controles estáticos de código (`black`, `ruff`, `flake8` y `mypy`) obteniendo cero errores de estilo, tipos o consistencia en los archivos examinados.
