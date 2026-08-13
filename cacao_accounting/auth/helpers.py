@@ -65,9 +65,11 @@ def validar_clave_segura(clave: str) -> bool:
 
 def puede_iniciar_en_escritorio(identidad: User) -> bool:
     """Determina si el usuario puede iniciar sesión en modo escritorio."""
-    if not is_desktop_mode():
-        return True
-    return identidad.classification == "admin"
+    if is_desktop_mode():
+        if identidad.is_portal_customer or identidad.is_portal_supplier:
+            return False
+        return identidad.classification == "admin"
+    return True
 
 
 def asignar_token_para_usuario(identidad: User) -> None:
@@ -100,5 +102,13 @@ def redireccion_despues_de_login():
     if setup_wizard and setup_wizard[0].value == "False":
         session["setup_step"] = 1
         return redirect(url_for("setup.setup"))
+
+    from flask_login import current_user
+
+    if current_user.is_authenticated:
+        if current_user.is_portal_customer:
+            return redirect("/portal/customer")
+        if current_user.is_portal_supplier:
+            return redirect("/portal/supplier")
 
     return redirect(url_for("cacao_app.pagina_inicio"))

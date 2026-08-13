@@ -37,6 +37,7 @@ from cacao_accounting.database import (
     ItemPrice,
     Modules,
     PartyGroup,
+    Party,
     PriceList,
     PurchaseMatchingConfig,
     Roles,
@@ -820,6 +821,35 @@ def _obtener_usuario(usuario_id: str) -> User | None:
     return database.session.get(User, usuario_id)
 
 
+def _populate_portal_choices(form: UserCreateForm | UserEditForm) -> None:
+    """Populate company and party choices used by portal user forms."""
+    companies = database.session.execute(database.select(Entity).where(Entity.enabled.is_(True))).scalars().all()
+    form.company.choices = [(company.code, company.company_name) for company in companies]
+    parties = database.session.execute(database.select(Party).where(Party.is_active.is_(True))).scalars().all()
+    form.party_id.choices = [(party.id, party.name) for party in parties]
+
+
+def _validate_portal_fields(form: UserCreateForm | UserEditForm) -> bool:
+    """Validate party, company and party classification for portal identities."""
+    if form.classification.data not in {"customer", "supplier"}:
+        return True
+    valid = True
+    if not form.party_id.data:
+        form.party_id.errors.append("Los usuarios de portal requieren un tercero asociado.")
+        valid = False
+    if not form.company.data:
+        form.company.errors.append("Los usuarios de portal requieren una compañía asociada.")
+        valid = False
+    if not valid:
+        return False
+    party = database.session.get(Party, form.party_id.data)
+    matches_type = party and ((form.classification.data == "customer" and party.is_customer) or (form.classification.data == "supplier" and party.is_supplier))
+    if not matches_type:
+        form.party_id.errors.append("El tercero no corresponde a la clasificación del portal.")
+        return False
+    return True
+
+
 def _user_count() -> int:
     """Return the number of users currently stored."""
     return int(database.session.execute(database.select(database.func.count(User.id))).scalar() or 0)
@@ -872,6 +902,8 @@ def _crear_usuario_desde_form(form: UserCreateForm) -> User:
         e_mail=form.e_mail.data or None,
         phone=form.phone.data or None,
         classification=form.classification.data or None,
+        party_id=form.party_id.data or None,
+        company=form.company.data or None,
         active=bool(form.active.data),
         password=proteger_passwd(form.password.data),
     )
@@ -945,7 +977,8 @@ def crear_usuario():
         return redirect(url_for(LISTA_USUARIOS))
 
     form = UserCreateForm()
-    if form.validate_on_submit() and _validar_creacion_usuario(form):
+    _populate_portal_choices(form)
+    if form.validate_on_submit() and _validate_portal_fields(form) and _validar_creacion_usuario(form):
         nuevo_usuario = _crear_usuario_desde_form(form)
         database.session.add(nuevo_usuario)
         database.session.commit()
@@ -972,7 +1005,8 @@ def editar_usuario(user_id: str):
         return redirect(url_for(LISTA_USUARIOS))
 
     form = UserEditForm(obj=usuario)
-    if form.validate_on_submit():
+    _populate_portal_choices(form)
+    if form.validate_on_submit() and _validate_portal_fields(form):
         existe_usuario = database.session.execute(
             database.select(User).filter(User.user == form.usuario.data).filter(User.id != usuario.id)
         ).scalar_one_or_none()
@@ -994,11 +1028,23 @@ def editar_usuario(user_id: str):
             usuario.last_name2 = form.last_name2.data or None
             usuario.e_mail = form.e_mail.data or None
             usuario.phone = form.phone.data or None
-            usuario.classification = form.classification.data or None
-            usuario.active = bool(form.active.data)
-            database.session.commit()
-            flash("Usuario actualizado correctamente.", "success")
-            return redirect(url_for(LISTA_USUARIOS))
+            new_classification = form.classification.data or None
+            if new_classification in {"customer", "supplier"} and not form.party_id.data:
+                form.party_id.errors.append("Los usuarios de portal requieren un tercero asociado.")
+            elif new_classification in {"customer", "supplier"} and not form.company.data:
+                form.company.errors.append("Los usuarios de portal requieren una compañía asociada.")
+            elif new_classification in {"customer", "supplier"} and database.session.execute(
+                database.select(RolesUser).filter_by(user_id=usuario.id)
+            ).first():
+                form.classification.errors.append("Retire los roles antes de convertir el usuario en portal.")
+            else:
+                usuario.classification = new_classification
+                usuario.party_id = form.party_id.data or None
+                usuario.company = form.company.data or None
+                usuario.active = bool(form.active.data)
+                database.session.commit()
+                flash("Usuario actualizado correctamente.", "success")
+                return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_form.html",
@@ -1018,6 +1064,10 @@ def usuario_roles(user_id: str):
     usuario = _obtener_usuario(user_id)
     if usuario is None:
         flash(USUARIO_NO_ENCONTRADO, "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+
+    if usuario.classification in ("customer", "supplier"):
+        flash("Solo los usuarios de tipo 'system' pueden tener roles de acceso.", "warning")
         return redirect(url_for(LISTA_USUARIOS))
 
     roles = _obtener_roles_disponibles()

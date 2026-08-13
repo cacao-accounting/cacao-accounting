@@ -116,6 +116,16 @@ BUSINESS_ANALYST = {
     "detalle": "Analista de Negocios",
 }
 
+CUSTOMER = {
+    "name": "customer",
+    "detalle": "Portal de Cliente",
+}
+
+SUPPLIER = {
+    "name": "supplier",
+    "detalle": "Portal de Proveedor",
+}
+
 
 ROLES_PREDETERMINADOS = [
     ADMINISTRADOR,
@@ -136,7 +146,21 @@ ROLES_PREDETERMINADOS = [
     VENTAS_USER,
     COMPTROLLER,
     BUSINESS_ANALYST,
+    CUSTOMER,
+    SUPPLIER,
 ]
+
+
+def tiene_rol(user_id: str, role_name: str) -> bool:
+    """Verifica si un usuario tiene un rol determinado."""
+    from cacao_accounting.database import Roles, RolesUser, database
+
+    res = database.session.execute(
+        database.select(RolesUser.id)
+        .join(Roles, Roles.id == RolesUser.role_id)
+        .filter(RolesUser.user_id == user_id, Roles.name == role_name)
+    ).scalar_one_or_none()
+    return res is not None
 
 
 def crea_roles_predeterminados() -> None:
