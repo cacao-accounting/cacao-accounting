@@ -3625,6 +3625,92 @@ def _validate_duplicate_supplier_invoice(
         )
 
 
+def _validate_purchase_reversal_of(
+    reversal_of: str,
+    supplier_id: str | None,
+    company: str | None,
+    *,
+    note_amount: Decimal | None = None,
+    document_type: str | None = None,
+    posting_date: date | None = None,
+    lock_source: bool = False,
+) -> None:
+    """Valida origen y limite acumulado de una nota de credito de compra."""
+    source_query = database.select(PurchaseInvoice).where(PurchaseInvoice.id == reversal_of)
+    if lock_source:
+        source_query = source_query.with_for_update()
+    source = database.session.execute(source_query).scalar_one_or_none()
+    if not source:
+        raise ValueError(f"La factura origen '{reversal_of}' no existe.")
+    if source.docstatus != 1:
+        raise ValueError(f"La factura origen '{reversal_of}' no esta aprobada.")
+    if supplier_id and source.supplier_id != supplier_id:
+        raise ValueError(f"La factura origen '{reversal_of}' no pertenece al mismo proveedor.")
+    if company and source.company != company:
+        raise ValueError(f"La factura origen '{reversal_of}' no pertenece a la misma compañía.")
+    if document_type == "purchase_credit_note" and note_amount is not None:
+        from cacao_accounting.document_flow.payment import compute_outstanding_amount
+
+        outstanding = compute_outstanding_amount(source, as_of_date=posting_date)
+        if note_amount > outstanding:
+            raise ValueError(
+                f"La nota de credito ({note_amount}) excede el saldo pendiente de la factura origen ({outstanding})."
+            )
+
+
+def _persist_purchase_reversal_relation(invoice: PurchaseInvoice) -> None:
+    """Persist the invoice-to-credit-note relation used by AP outstanding."""
+    if invoice.document_type not in {"purchase_credit_note", "purchase_debit_note"} or not invoice.reversal_of:
+        return
+    target_type = invoice.document_type
+    relation = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                source_type="purchase_invoice",
+                source_id=invoice.reversal_of,
+                target_type=target_type,
+                target_id=invoice.id,
+                relation_type="invoice_reversal",
+            )
+        )
+        .scalars()
+        .first()
+    )
+    amount = Decimal(str(invoice.grand_total or "0"))
+    if relation:
+        relation.qty = Decimal("1")
+        relation.amount = amount
+        relation.status = "active"
+        from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+        source = database.session.get(PurchaseInvoice, invoice.reversal_of)
+        if source:
+            refresh_outstanding_amount_cache(source)
+        return
+    database.session.add(
+        DocumentRelation(
+            source_type="purchase_invoice",
+            source_id=invoice.reversal_of,
+            source_item_id=None,
+            target_type=target_type,
+            target_id=invoice.id,
+            target_item_id=None,
+            company=invoice.company,
+            qty=Decimal("1"),
+            uom=None,
+            rate=amount,
+            amount=amount,
+            relation_type="invoice_reversal",
+            status="active",
+        )
+    )
+    from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+    source = database.session.get(PurchaseInvoice, invoice.reversal_of)
+    if source:
+        refresh_outstanding_amount_cache(source)
+
+
 def _create_purchase_invoice_from_request():
     """Create a purchase invoice from the submitted form."""
     try:
@@ -3653,6 +3739,13 @@ def _create_purchase_invoice_from_request():
         transaction_currency = transaction_currency or request.form.get("transaction_currency") or None
         _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt)
         _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
+        reversal_of = (
+            (request.form.get("from_invoice") or request.form.get("from_return"))
+            if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE)
+            else None
+        )
+        if reversal_of:
+            _validate_purchase_reversal_of(reversal_of, supplier_id, company)
         factura = PurchaseInvoice(
             supplier_id=supplier_id,
             supplier_name=supplier.name if supplier else getattr(source, "supplier_name", None),
@@ -3663,11 +3756,7 @@ def _create_purchase_invoice_from_request():
             purchase_order_id=from_order,
             purchase_receipt_id=from_receipt,
             is_return=document_type in (PURCHASE_RETURN, PURCHASE_CREDIT_NOTE),
-            reversal_of=(
-                (request.form.get("from_invoice") or request.form.get("from_return"))
-                if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE)
-                else None
-            ),
+            reversal_of=reversal_of,
             remarks=request.form.get("remarks"),
             transaction_currency=transaction_currency,
             base_currency=company_currency(company),
@@ -3683,6 +3772,15 @@ def _create_purchase_invoice_from_request():
         )
         _total_qty, total = _save_purchase_invoice_items(factura.id)
         factura.total = total
+        if reversal_of:
+            _validate_purchase_reversal_of(
+                reversal_of,
+                factura.supplier_id,
+                factura.company,
+                note_amount=total,
+                document_type=document_type,
+                posting_date=factura.posting_date,
+            )
         # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
         fx_rate = _purchase_exchange_rate(company, posting_date, transaction_currency)
         factura.exchange_rate = fx_rate
@@ -3964,12 +4062,23 @@ def compras_factura_compra_submit(invoice_id: str):
             getattr(registro, "supplier_invoice_no", None),
             exclude_id=registro.id,
         )
+        if registro.document_type in {"purchase_credit_note", "purchase_debit_note"}:
+            _validate_purchase_reversal_of(
+                registro.reversal_of or "",
+                registro.supplier_id,
+                registro.company,
+                note_amount=Decimal(str(registro.grand_total or "0")),
+                document_type=registro.document_type,
+                posting_date=registro.posting_date,
+                lock_source=True,
+            )
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Factura de compra"):
             return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
 
         submit_document(registro)
+        _persist_purchase_reversal_relation(registro)
         log_submit(registro)
         database.session.commit()
     except ValueError as exc:
@@ -4024,8 +4133,15 @@ def compras_factura_compra_cancel(invoice_id: str):
     try:
         cancel_document(registro)
         log_cancel(registro)
-        revert_relations_for_target("purchase_invoice", invoice_id)
-        refresh_source_caches_for_target("purchase_invoice", invoice_id)
+        target_type = registro.document_type or "purchase_invoice"
+        revert_relations_for_target(target_type, invoice_id)
+        refresh_source_caches_for_target(target_type, invoice_id)
+        if registro.reversal_of:
+            from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+            source = database.session.get(PurchaseInvoice, registro.reversal_of)
+            if source:
+                refresh_outstanding_amount_cache(source)
         database.session.commit()
     except PostingError as exc:
         database.session.rollback()

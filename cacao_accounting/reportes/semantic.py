@@ -186,6 +186,7 @@ def get_receivables_analysis(
 ) -> list[dict[str, Any]]:
     """Return one row per posted customer invoice with live outstanding value."""
     query = select(SalesInvoice).where(SalesInvoice.docstatus == 1)
+    query = query.where(or_(SalesInvoice.reversal_of.is_(None), SalesInvoice.reversal_of == ""))
     if company:
         query = query.where(SalesInvoice.company == company)
     if date_from:
@@ -220,6 +221,7 @@ def get_payables_analysis(
 ) -> list[dict[str, Any]]:
     """Return one row per posted supplier invoice with live outstanding value."""
     query = select(PurchaseInvoice).where(PurchaseInvoice.docstatus == 1)
+    query = query.where(or_(PurchaseInvoice.reversal_of.is_(None), PurchaseInvoice.reversal_of == ""))
     if company:
         query = query.where(PurchaseInvoice.company == company)
     if date_from:
