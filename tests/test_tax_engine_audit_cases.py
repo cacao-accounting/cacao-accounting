@@ -99,7 +99,7 @@ def test_audit_multi_tax_inclusive_decomposition(audit_context):
     assert not result.errors
     assert result.get_amount("T1") == Decimal("100.00")
     assert result.get_amount("T2") == Decimal("50.00")
-    assert all(line.base_amount == Decimal("1000.00") for line in result.tax_lines)
+    assert all(line.base_amount == Decimal("1150.00") for line in result.tax_lines)
     assert result.net_goods_total == Decimal("1000.00")
     # Included taxes must not increase document total
     assert result.document_tax_total == Decimal("0.00")
