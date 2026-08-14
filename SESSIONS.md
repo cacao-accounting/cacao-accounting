@@ -38,6 +38,11 @@ JavaScript `S2004`, `S3358` y `S3776`.
   conciliación bancaria.
 - `6c4e63fb`: se aisló la conversión multimoneda de líneas GL del constructor
   de entradas contables.
+- `c188fc40`: se unificaron los parámetros de débito/crédito de comprobantes
+  manuales para eliminar ramas duplicadas al construir líneas GL.
+- Trabajo actual: `balance_confirmation.py` separa la construcción de partidas
+  de facturas y pagos en helpers reutilizables, conservando el corte, las
+  anulaciones y los signos de notas de crédito.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en

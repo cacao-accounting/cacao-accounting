@@ -156,84 +156,81 @@ def compute_applied_credit_document_amount(document: Any, as_of_date: date) -> D
     return applied
 
 
-def get_open_documents_at_cutoff(
+def _document_type_label(document: Any, default_label: str) -> str:
+    """Return the display label for an invoice or return document."""
+    labels = {
+        "sales_credit_note": "Nota de Crédito",
+        "purchase_credit_note": "Nota de Crédito",
+        "sales_debit_note": "Nota de Débito",
+        "purchase_debit_note": "Nota de Débito",
+        "sales_return": "Devolución",
+        "purchase_return": "Devolución de Compra",
+    }
+    return labels.get(document.document_type, default_label)
+
+
+def _invoice_open_items(
     company_id: str,
     party_id: str,
     party_type: str,
     cutoff_date: date,
 ) -> list[dict[str, Any]]:
-    """Obtiene y calcula todas las partidas abiertas a una fecha de corte determinada."""
-    items = []
-    cancelled_map = build_cancellation_map(("sales_invoice", "purchase_invoice", "payment_entry"))
-
-    # 1. Facturas y notas de crédito/débito
-    if party_type in ("customer", "supplier"):
-        model_class: Any = SalesInvoice if party_type == "customer" else PurchaseInvoice
-        party_filter = (
-            SalesInvoice.customer_id == party_id if party_type == "customer" else PurchaseInvoice.supplier_id == party_id
+    """Build open invoice items for a customer or supplier at the cutoff."""
+    model_class: Any = SalesInvoice if party_type == "customer" else PurchaseInvoice
+    party_filter = (
+        SalesInvoice.customer_id == party_id if party_type == "customer" else PurchaseInvoice.supplier_id == party_id
+    )
+    default_label = "Factura" if party_type == "customer" else "Factura de Compra"
+    stmt = select(model_class).where(
+        model_class.company == company_id,
+        party_filter,
+        model_class.posting_date <= cutoff_date,
+        model_class.docstatus.in_((1, 2)),
+    )
+    items: list[dict[str, Any]] = []
+    for document in database.session.execute(stmt).scalars().all():
+        if document.docstatus == 2 and is_cancelled_before_cutoff(
+            document.document_type or model_class.__tablename__, document.id, cutoff_date
+        ):
+            continue
+        is_credit = document.is_return or document.document_type in {
+            "sales_credit_note",
+            "sales_return",
+            "purchase_credit_note",
+            "purchase_return",
+        }
+        sign = Decimal("-1") if is_credit else Decimal("1")
+        outstanding = compute_outstanding_amount(document, as_of_date=cutoff_date)
+        if is_credit:
+            outstanding -= compute_applied_credit_document_amount(document, cutoff_date)
+        if outstanding <= 0:
+            continue
+        due_date = document.due_date.isoformat() if getattr(document, "due_date", None) else None
+        items.append(
+            {
+                "document_id": document.id,
+                "document_type": _document_type_label(document, default_label),
+                "document_no": document.document_no or document.id,
+                "document_date": document.posting_date.isoformat() if document.posting_date else None,
+                "due_date": due_date,
+                "currency": document.transaction_currency or document.base_currency,
+                "original_amount": str(sign * Decimal(str(document.grand_total or 0))),
+                "outstanding_amount": str(sign * outstanding),
+            }
         )
-        default_invoice_label = "Factura" if party_type == "customer" else "Factura de Compra"
+    return items
 
-        stmt = select(model_class).where(
-            model_class.company == company_id,
-            party_filter,
-            model_class.posting_date <= cutoff_date,
-            model_class.docstatus.in_((1, 2)),
-        )
-        rows = database.session.execute(stmt).scalars().all()
-        for doc in rows:
-            if doc.docstatus == 2:
-                # Excluir si se canceló antes de la fecha de corte
-                doc_type_name = doc.document_type or model_class.__tablename__
-                if is_cancelled_before_cutoff(doc_type_name, doc.id, cutoff_date):
-                    continue
 
-            # Determinar tipo legible y signo del saldo
-            is_credit_document = doc.is_return or doc.document_type in (
-                "sales_credit_note",
-                "sales_return",
-                "purchase_credit_note",
-                "purchase_return",
-            )
-            sign = Decimal("-1") if is_credit_document else Decimal("1")
-
-            outstanding = compute_outstanding_amount(doc, as_of_date=cutoff_date)
-            if is_credit_document:
-                outstanding = outstanding - compute_applied_credit_document_amount(doc, cutoff_date)
-            if outstanding <= 0:
-                continue
-
-            doc_type_label = default_invoice_label
-            if doc.document_type in ("sales_credit_note", "purchase_credit_note"):
-                doc_type_label = "Nota de Crédito"
-            elif doc.document_type in ("sales_debit_note", "purchase_debit_note"):
-                doc_type_label = "Nota de Débito"
-            elif doc.document_type == "sales_return":
-                doc_type_label = "Devolución"
-            elif doc.document_type == "purchase_return":
-                doc_type_label = "Devolución de Compra"
-
-            # Fecha de vencimiento si aplica
-            due_date = None
-            if hasattr(doc, "due_date") and doc.due_date:
-                due_date = doc.due_date.isoformat()
-
-            items.append(
-                {
-                    "document_id": doc.id,
-                    "document_type": doc_type_label,
-                    "document_no": doc.document_no or doc.id,
-                    "document_date": doc.posting_date.isoformat() if doc.posting_date else None,
-                    "due_date": due_date,
-                    "currency": doc.transaction_currency or doc.base_currency,
-                    "original_amount": str(sign * Decimal(str(doc.grand_total or 0))),
-                    "outstanding_amount": str(sign * outstanding),
-                }
-            )
-
-    # 2. Anticipos / Pagos no aplicados
+def _payment_open_items(
+    company_id: str,
+    party_id: str,
+    party_type: str,
+    cutoff_date: date,
+    cancelled_map: dict[tuple[str, str], date],
+) -> list[dict[str, Any]]:
+    """Build open payment items for a customer or supplier at the cutoff."""
     payment_type = "receive" if party_type == "customer" else "pay"
-    p_stmt = select(PaymentEntry).where(
+    stmt = select(PaymentEntry).where(
         PaymentEntry.company == company_id,
         PaymentEntry.party_type == party_type,
         PaymentEntry.party_id == party_id,
@@ -241,21 +238,16 @@ def get_open_documents_at_cutoff(
         PaymentEntry.posting_date <= cutoff_date,
         PaymentEntry.docstatus.in_((1, 2)),
     )
-    p_rows = database.session.execute(p_stmt).scalars().all()
-    for payment in p_rows:
-        if payment.docstatus == 2:
-            cancel_date = cancelled_map.get(("payment_entry", payment.id))
-            if cancel_date is None:
-                if is_cancelled_before_cutoff("payment_entry", payment.id, cutoff_date):
-                    continue
-            elif cancel_date <= cutoff_date:
+    items: list[dict[str, Any]] = []
+    for payment in database.session.execute(stmt).scalars().all():
+        cancel_date = cancelled_map.get(("payment_entry", payment.id))
+        if payment.docstatus == 2 and (cancel_date is None or cancel_date <= cutoff_date):
+            if cancel_date is not None or is_cancelled_before_cutoff("payment_entry", payment.id, cutoff_date):
                 continue
-
         unapplied = compute_payment_unallocated_amount_at_date(payment, cutoff_date, cancelled_map)
         if unapplied == 0:
             continue
-
-        original_val = Decimal(str(payment.paid_amount or payment.received_amount or 0))
+        original_amount = Decimal(str(payment.paid_amount or payment.received_amount or 0))
         items.append(
             {
                 "document_id": payment.id,
@@ -264,10 +256,26 @@ def get_open_documents_at_cutoff(
                 "document_date": payment.posting_date.isoformat() if payment.posting_date else None,
                 "due_date": None,
                 "currency": payment.currency,
-                "original_amount": str(-original_val),
+                "original_amount": str(-original_amount),
                 "outstanding_amount": str(-unapplied),
             }
         )
+    return items
+
+
+def get_open_documents_at_cutoff(
+    company_id: str,
+    party_id: str,
+    party_type: str,
+    cutoff_date: date,
+) -> list[dict[str, Any]]:
+    """Obtiene y calcula todas las partidas abiertas a una fecha de corte determinada."""
+    items: list[dict[str, Any]] = []
+    cancelled_map = build_cancellation_map(("sales_invoice", "purchase_invoice", "payment_entry"))
+
+    if party_type in ("customer", "supplier"):
+        items.extend(_invoice_open_items(company_id, party_id, party_type, cutoff_date))
+        items.extend(_payment_open_items(company_id, party_id, party_type, cutoff_date, cancelled_map))
 
     return items
 
