@@ -65,6 +65,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
 - `modulos/__init__.py` hace idempotente el registro de módulos estándar para
   evitar violaciones de unicidad cuando la inicialización se repite sobre una
   base PostgreSQL existente.
+- `inventario/__init__.py` extrae la creación y conversión de una línea de
+  movimiento para simplificar el iterador del formulario.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en

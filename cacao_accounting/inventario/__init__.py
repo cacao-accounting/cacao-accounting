@@ -858,6 +858,38 @@ def _create_line_relation(
     )
 
 
+def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Decimal:
+    """Create one stock movement line and its source relation."""
+    qty = _form_decimal(f"qty_{index}", "1")
+    rate = _form_decimal(f"rate_{index}", "0")
+    amount = _line_amount(index)
+    default_uom = _item_default_uom(item_code)
+    uom = request.form.get(f"uom_{index}") or default_uom
+    if not uom:
+        raise ValueError(f"La linea del item {item_code} requiere una unidad de medida.")
+    qty_in_base_uom = qty
+    if uom and default_uom:
+        try:
+            qty_in_base_uom = convert_item_qty(item_code, qty, uom, default_uom)
+        except InventoryServiceError as exc:
+            raise ValueError(f"No se pudo convertir {qty} {uom} a {default_uom} para el item {item_code}.") from exc
+    line = StockEntryItem(
+        stock_entry_id=entry.id,
+        item_code=item_code,
+        source_warehouse=entry.from_warehouse,
+        target_warehouse=entry.to_warehouse,
+        qty=qty,
+        uom=uom,
+        qty_in_base_uom=qty_in_base_uom,
+        basic_rate=rate,
+        amount=amount,
+    )
+    database.session.add(line)
+    database.session.flush()
+    _create_line_relation(index, "stock_entry", entry.id, line.id, qty, uom, rate, amount)
+    return amount
+
+
 def _save_stock_entry_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de un movimiento de inventario."""
     i = 0
@@ -866,36 +898,7 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
-            qty = _form_decimal(f"qty_{i}", "1")
-            rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
-            default_uom = _item_default_uom(item_code)
-            uom = request.form.get(f"uom_{i}") or default_uom
-            if not uom:
-                raise ValueError(f"La linea del item {item_code} requiere una unidad de medida.")
-            # INV-05: Calcular qty_in_base_uom para consistencia con StockReconciliation
-            # Este campo es requerido para reportes de inventario y cálculos de FIFO
-            qty_in_base_uom = qty
-            if uom and default_uom:
-                try:
-                    qty_in_base_uom = convert_item_qty(item_code, qty, uom, default_uom)
-                except InventoryServiceError as exc:
-                    raise ValueError(f"No se pudo convertir {qty} {uom} a {default_uom} para el item {item_code}.") from exc
-            line = StockEntryItem(
-                stock_entry_id=entry.id,
-                item_code=item_code,
-                source_warehouse=entry.from_warehouse,
-                target_warehouse=entry.to_warehouse,
-                qty=qty,
-                uom=uom,
-                qty_in_base_uom=qty_in_base_uom,
-                basic_rate=rate,
-                amount=amount,
-            )
-            database.session.add(line)
-            database.session.flush()
-            _create_line_relation(i, "stock_entry", entry.id, line.id, qty, uom, rate, amount)
-            total += amount
+            total += _save_stock_entry_item(entry, i, item_code)
             line_count += 1
         i += 1
     if line_count == 0:
