@@ -72,6 +72,15 @@ La autorización de excepciones del comparativo reconoce tanto la clasificación
 interfaz comparten esta regla; sin justificación, la adjudicación sigue siendo
 rechazada y la autorización queda registrada en el comparativo.
 
+El cierre manual independiente también está disponible para esos perfiles. El
+cierre crea un registro `closed`, cierra la ronda activa y no habilita otra
+acción de colocación de órdenes.
+
+Las órdenes directas desde una cotización de proveedor se permiten como
+borrador, pero muestran advertencia si el comparativo sigue abierto. Al crear
+la orden se propaga la relación hasta la Solicitud de Compra; cuando la orden
+aprobada cubre el 100%, la solicitud puede mostrar `Completado`.
+
 ## 2026-08-14 — Refactors SonarCloud sobre origin/main
 
 ### Petición y base
