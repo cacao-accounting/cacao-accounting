@@ -1020,6 +1020,50 @@ def crear_usuario():
     )
 
 
+def _apply_user_edit(form, usuario) -> bool:
+    """Validate uniqueness and apply editable user fields."""
+    existe_usuario = database.session.execute(
+        database.select(User).filter(User.user == form.usuario.data).filter(User.id != usuario.id)
+    ).scalar_one_or_none()
+    existe_email = None
+    if form.e_mail.data:
+        existe_email = database.session.execute(
+            database.select(User).filter(User.e_mail == form.e_mail.data).filter(User.id != usuario.id)
+        ).scalar_one_or_none()
+    if existe_usuario is not None:
+        form.usuario.errors.append("El nombre de usuario ya está en uso.")
+        return False
+    if existe_email is not None:
+        form.e_mail.errors.append("El correo electrónico ya está en uso.")
+        return False
+
+    usuario.user = form.usuario.data
+    usuario.name = form.name.data or None
+    usuario.name2 = form.name2.data or None
+    usuario.last_name = form.last_name.data or None
+    usuario.last_name2 = form.last_name2.data or None
+    usuario.e_mail = form.e_mail.data or None
+    usuario.phone = form.phone.data or None
+    new_classification = form.classification.data or None
+    if new_classification in {"customer", "supplier"} and not form.party_id.data:
+        form.party_id.errors.append("Los usuarios de portal requieren un tercero asociado.")
+        return False
+    if new_classification in {"customer", "supplier"} and not form.company.data:
+        form.company.errors.append("Los usuarios de portal requieren una compañía asociada.")
+        return False
+    if (
+        new_classification in {"customer", "supplier"}
+        and database.session.execute(database.select(RolesUser).filter_by(user_id=usuario.id)).first()
+    ):
+        form.classification.errors.append("Retire los roles antes de convertir el usuario en portal.")
+        return False
+    usuario.classification = new_classification
+    usuario.party_id = form.party_id.data or None
+    usuario.company = form.company.data or None
+    usuario.active = bool(form.active.data)
+    return True
+
+
 @admin.route("/settings/users/<string:user_id>/edit", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -1032,46 +1076,10 @@ def editar_usuario(user_id: str):
 
     form = UserEditForm(obj=usuario)
     _populate_portal_choices(form)
-    if form.validate_on_submit() and _validate_portal_fields(form):
-        existe_usuario = database.session.execute(
-            database.select(User).filter(User.user == form.usuario.data).filter(User.id != usuario.id)
-        ).scalar_one_or_none()
-        existe_email = None
-        if form.e_mail.data:
-            existe_email = database.session.execute(
-                database.select(User).filter(User.e_mail == form.e_mail.data).filter(User.id != usuario.id)
-            ).scalar_one_or_none()
-
-        if existe_usuario is not None:
-            form.usuario.errors.append("El nombre de usuario ya está en uso.")
-        elif existe_email is not None:
-            form.e_mail.errors.append("El correo electrónico ya está en uso.")
-        else:
-            usuario.user = form.usuario.data
-            usuario.name = form.name.data or None
-            usuario.name2 = form.name2.data or None
-            usuario.last_name = form.last_name.data or None
-            usuario.last_name2 = form.last_name2.data or None
-            usuario.e_mail = form.e_mail.data or None
-            usuario.phone = form.phone.data or None
-            new_classification = form.classification.data or None
-            if new_classification in {"customer", "supplier"} and not form.party_id.data:
-                form.party_id.errors.append("Los usuarios de portal requieren un tercero asociado.")
-            elif new_classification in {"customer", "supplier"} and not form.company.data:
-                form.company.errors.append("Los usuarios de portal requieren una compañía asociada.")
-            elif (
-                new_classification in {"customer", "supplier"}
-                and database.session.execute(database.select(RolesUser).filter_by(user_id=usuario.id)).first()
-            ):
-                form.classification.errors.append("Retire los roles antes de convertir el usuario en portal.")
-            else:
-                usuario.classification = new_classification
-                usuario.party_id = form.party_id.data or None
-                usuario.company = form.company.data or None
-                usuario.active = bool(form.active.data)
-                database.session.commit()
-                flash("Usuario actualizado correctamente.", "success")
-                return redirect(url_for(LISTA_USUARIOS))
+    if form.validate_on_submit() and _validate_portal_fields(form) and _apply_user_edit(form, usuario):
+        database.session.commit()
+        flash("Usuario actualizado correctamente.", "success")
+        return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
         "admin/usuario_form.html",
