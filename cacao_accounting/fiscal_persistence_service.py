@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import select
 
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
+from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
 from cacao_accounting.database import DocumentTaxLine, DocumentTaxSummary, TaxRule, database
 from cacao_accounting.document_flow.status import _
 
@@ -110,6 +111,7 @@ def _build_document_tax_line(
     index: int,
     line_payload: dict[str, Any],
 ) -> DocumentTaxLine:
+    accounting_treatment = _document_tax_line_accounting_treatment(line_payload)
     return DocumentTaxLine(
         document_tax_summary_id=summary_id,
         line_index=index,
@@ -120,9 +122,9 @@ def _build_document_tax_line(
         base_amount=_decimal_or_none(line_payload.get("base_amount")),
         rate=_decimal_or_none(line_payload.get("rate")),
         amount=_decimal_or_none(line_payload.get("amount")) or Decimal("0"),
-        accounting_treatment=_document_tax_line_accounting_treatment(line_payload),
+        accounting_treatment=accounting_treatment,
         account_id=_clean_optional_id(line_payload.get("account_id")),
-        affects_inventory=bool(line_payload.get("affects_inventory")),
+        affects_inventory=affects_inventory_from_treatment(accounting_treatment),
         affects_document_total=bool(line_payload.get("affects_document_total", True)),
         included_in_price=bool(line_payload.get("included_in_price")),
         notes=str(line_payload.get("notes") or ""),
@@ -179,7 +181,9 @@ def _document_tax_context_from_row(
         order=int(snapshot.get("sequence") or snapshot.get("order") or row.line_index),
         accounting_treatment=str(row.accounting_treatment or snapshot.get("accounting_treatment") or "tax"),
         recognition_event=recognition_event,
-        affects_inventory=bool(row.affects_inventory),
+        affects_inventory=affects_inventory_from_treatment(
+            str(row.accounting_treatment or snapshot.get("accounting_treatment") or "separate_tax_account")
+        ),
         affects_document_total=bool(row.affects_document_total),
         included_in_price=bool(row.included_in_price),
         allocation_method=row.allocation_method,
@@ -266,7 +270,7 @@ def _tax_rule_snapshot(tax_rule: TaxRule) -> dict[str, Any]:
         "sequence": int(tax_rule.sequence or 0),
         "accounting_treatment": tax_rule.accounting_treatment,
         "recognition_event": tax_rule.recognition_event,
-        "affects_inventory": bool(tax_rule.affects_inventory),
+        "affects_inventory": affects_inventory_from_treatment(tax_rule.accounting_treatment),
         "affects_document_total": bool(tax_rule.affects_document_total),
         "included_in_price": bool(getattr(tax_rule, "included_in_price", False)),
         "participates_in_next_base": bool(tax_rule.participates_in_next_base),
@@ -290,7 +294,9 @@ def _line_payload_snapshot(*, rule_id: str | None, line_payload: dict[str, Any])
         "sequence": line_payload.get("sequence"),
         "accounting_treatment": line_payload.get("accounting_treatment"),
         "recognition_event": line_payload.get("recognition_event"),
-        "affects_inventory": bool(line_payload.get("affects_inventory")),
+        "affects_inventory": affects_inventory_from_treatment(
+            str(line_payload.get("accounting_treatment") or "separate_tax_account")
+        ),
         "affects_document_total": bool(line_payload.get("affects_document_total", True)),
         "included_in_price": bool(line_payload.get("included_in_price")),
         "participates_in_next_base": bool(line_payload.get("participates_in_next_base")),
