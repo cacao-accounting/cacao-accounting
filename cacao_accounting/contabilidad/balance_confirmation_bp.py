@@ -510,7 +510,7 @@ def public_confirm_balance(token: str):
             TEMPLATE_CONFIRM_BALANCE_STATUS,
             title="Error interno",
             message=(
-                "El snapshot de esta solicitud no superó la verificación de integridad. " "Por favor contacte al solicitante."
+                "El snapshot de esta solicitud no superó la verificación de integridad. Por favor contacte al solicitante."
             ),
         )
     snapshot = json.loads(confirmation.snapshot_json) if confirmation.snapshot_json else {}
