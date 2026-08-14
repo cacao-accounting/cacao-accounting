@@ -3,6 +3,19 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — Login independiente del tema global
+
+### Petición
+
+El login debe conservar el fondo claro aunque el selector de tema global esté
+guardado en modo oscuro.
+
+### Implementación
+
+Se aumentó la especificidad de la regla clara en `auth/templates/login.html`
+para que el selector global `[data-theme="dark"] body` no pueda cambiar el
+fondo del login.
+
 ## 2026-08-14 — Refactors SonarCloud sobre origin/main
 
 ### Petición y base
