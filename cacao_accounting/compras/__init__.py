@@ -1251,6 +1251,53 @@ def compras_comparativo_colocar_ordenes(rfq_id: str):
     return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
 
 
+def _award_lines_by_supplier(award_id: str) -> dict[str, list[PurchaseQuotationAwardItem]]:
+    """Group awarded lines by supplier quotation."""
+    award_lines = (
+        database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award_id)).scalars().all()
+    )
+    if not award_lines:
+        raise PurchaseSourcingError("La adjudicación no contiene líneas.")
+    groups: dict[str, list[PurchaseQuotationAwardItem]] = {}
+    for line in award_lines:
+        groups.setdefault(line.supplier_quotation_id, []).append(line)
+    return groups
+
+
+def _add_award_order_lines(order: PurchaseOrder, lines: list[PurchaseQuotationAwardItem]) -> tuple[Decimal, Decimal]:
+    """Create order lines and source relations for one supplier quotation."""
+    total_qty = Decimal("0")
+    total = Decimal("0")
+    for award_line in lines:
+        source = database.session.get(PurchaseQuotationItem, award_line.purchase_quotation_item_id)
+        line = PurchaseOrderItem(
+            purchase_order_id=order.id,
+            item_code=award_line.item_code,
+            item_name=source.item_name if source else award_line.item_code,
+            qty=award_line.qty,
+            uom=source.uom if source else None,
+            rate=award_line.rate,
+            amount=award_line.amount,
+        )
+        database.session.add(line)
+        database.session.flush()
+        create_document_relation(
+            source_type="supplier_quotation",
+            source_id=award_line.supplier_quotation_id,
+            source_item_id=award_line.supplier_quotation_item_id,
+            target_type="purchase_order",
+            target_id=order.id,
+            target_item_id=line.id,
+            qty=award_line.qty,
+            uom=line.uom,
+            rate=award_line.rate,
+            amount=award_line.amount,
+        )
+        total_qty += award_line.qty
+        total += award_line.amount
+    return total_qty, total
+
+
 def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[PurchaseOrder]:
     """Create one draft purchase order per supplier from an award."""
     claimed = database.session.execute(
@@ -1260,14 +1307,7 @@ def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[Pu
     )
     if getattr(claimed, "rowcount", 0) != 1:
         raise PurchaseSourcingError("Solo un comparativo finalizado puede colocar Órdenes de Compra.")
-    award_lines = (
-        database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award.id)).scalars().all()
-    )
-    if not award_lines:
-        raise PurchaseSourcingError("La adjudicación no contiene líneas.")
-    groups: dict[str, list[PurchaseQuotationAwardItem]] = {}
-    for line in award_lines:
-        groups.setdefault(line.supplier_quotation_id, []).append(line)
+    groups = _award_lines_by_supplier(award.id)
     orders: list[PurchaseOrder] = []
     rfq = database.session.get(PurchaseQuotation, award.purchase_quotation_id)
     for supplier_quotation_id, lines in groups.items():
@@ -1291,35 +1331,7 @@ def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[Pu
             posting_date_raw=order.posting_date,
             naming_series_id=None,
         )
-        total_qty = Decimal("0")
-        total = Decimal("0")
-        for award_line in lines:
-            source = database.session.get(PurchaseQuotationItem, award_line.purchase_quotation_item_id)
-            line = PurchaseOrderItem(
-                purchase_order_id=order.id,
-                item_code=award_line.item_code,
-                item_name=source.item_name if source else award_line.item_code,
-                qty=award_line.qty,
-                uom=source.uom if source else None,
-                rate=award_line.rate,
-                amount=award_line.amount,
-            )
-            database.session.add(line)
-            database.session.flush()
-            create_document_relation(
-                source_type="supplier_quotation",
-                source_id=award_line.supplier_quotation_id,
-                source_item_id=award_line.supplier_quotation_item_id,
-                target_type="purchase_order",
-                target_id=order.id,
-                target_item_id=line.id,
-                qty=award_line.qty,
-                uom=line.uom,
-                rate=award_line.rate,
-                amount=award_line.amount,
-            )
-            total_qty += award_line.qty
-            total += award_line.amount
+        total_qty, total = _add_award_order_lines(order, lines)
         order.total_qty = total_qty
         order.total = total
         order.net_total = total
