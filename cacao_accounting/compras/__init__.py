@@ -694,12 +694,12 @@ def _create_supplier_quotation_from_request():
         negotiation_round_id = request.form.get("negotiation_round_id") or None
         if negotiation_round_id:
             negotiation_round = database.session.get(PurchaseNegotiationRound, negotiation_round_id)
-            if not negotiation_round:
-                raise PurchaseSourcingError("La ronda de negociación no existe.")
-            if negotiation_round.purchase_quotation_id != from_rfq_id:
-                raise PurchaseSourcingError("La ronda de negociación no pertenece a la solicitud de cotización.")
-            if negotiation_round.status != "open":
-                raise PurchaseSourcingError("La ronda de negociación ya está cerrada.")
+            if (
+                not negotiation_round
+                or negotiation_round.purchase_quotation_id != from_rfq_id
+                or negotiation_round.status != "open"
+            ):
+                negotiation_round_id = None
         supplier_id = request.form.get("supplier_id") or None
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
