@@ -696,7 +696,8 @@ class TestCompanyDefaultAccountExtendedSchema(unittest.TestCase):
             "unrealized_exchange_loss_account_id",
             "deferred_income_account_id",
             "deferred_expense_account_id",
-            "payment_discount_account_id",
+            "sales_discount_account_id",
+            "purchase_discount_account_id",
             "period_profit_loss_account_id",
             "retained_earnings_account_id",
         }

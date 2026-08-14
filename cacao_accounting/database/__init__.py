@@ -3486,7 +3486,10 @@ class CompanyDefaultAccount(database.Model, BaseTabla):  # type: ignore[name-def
     deferred_expense_account_id = database.Column(
         database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
-    payment_discount_account_id = database.Column(
+    sales_discount_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    purchase_discount_account_id = database.Column(
         database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     period_profit_loss_account_id = database.Column(

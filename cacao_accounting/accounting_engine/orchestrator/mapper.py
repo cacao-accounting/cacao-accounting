@@ -353,7 +353,11 @@ class AccountingMapper:
             side = "debit" if context.transaction_direction == "purchase" else "credit"
         else:
             side = "credit" if context.transaction_direction == "purchase" else "debit"
-        account_id = context.references.get("payment_discount_account_id")
+        account_id = (
+            context.references.get("purchase_discount_account_id")
+            if context.transaction_direction == "purchase"
+            else context.references.get("sales_discount_account_id")
+        )
         return self._build_line(
             context,
             account_id or "",

@@ -118,6 +118,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 42.01,Ganancia Cambiaria,42,0,Income,,exchange_gain
 42.02,Otros Ingresos,42,0,Income,,
 42.03,Ganancia Cambiaria no Realizada,42,0,Income,,unrealized_exchange_gain
+42.04,Descuentos sobre Compras,42,0,Income,,payment_discount
 51,Costo de Venta,5,1,Expense,,
 51.01,Costo de los bienes vendidos,51,0,Expense,,cost_of_goods_sold
 51.02,Gastos incluidos en la valoración de activos,51,0,Expense,,

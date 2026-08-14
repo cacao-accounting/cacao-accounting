@@ -50,7 +50,7 @@ def test_db_init_and_migrate_record_a_real_revision(tmp_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
         revision = connection.execute("SELECT version_num FROM alembic_version").fetchall()
 
-    assert revision == [("20260813_0005",)]
+    assert revision == [("20260814_0006",)]
 
     with sqlite3.connect(database_path) as connection:
         entity_code = connection.execute("PRAGMA table_info(entity)").fetchall()
@@ -98,13 +98,15 @@ def test_db_migrate_rejects_legacy_null_master_codes(tmp_path: Path) -> None:
     """Legacy null codes must stop migration instead of being guessed."""
     database_path = tmp_path / "legacy.sqlite"
     with sqlite3.connect(database_path) as connection:
-        connection.executescript("""
+        connection.executescript(
+            """
             CREATE TABLE user (id TEXT PRIMARY KEY);
             CREATE TABLE entity (id TEXT PRIMARY KEY, code TEXT);
             CREATE TABLE book (id TEXT PRIMARY KEY, code TEXT);
             INSERT INTO entity (id, code) VALUES ('entity-1', NULL);
             INSERT INTO book (id, code) VALUES ('book-1', 'FISC');
-            """)
+            """
+        )
 
     environment = os.environ.copy()
     environment.update(
