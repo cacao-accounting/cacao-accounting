@@ -175,18 +175,18 @@ def test_outstanding_balance_calculation_at_cutoff(app_ctx) -> None:
     )
 
     # We expect:
-    # 1. FV-00123: original +5000, outstanding 5000
-    # 2. NC-00012: original -500, outstanding -500
+    # 1. FV-00123: original +5000, outstanding 4500 (NC aplicada neteada)
+    # 2. NC-00012: excluded (saldo 500 - monto aplicado 500 = 0)
     # 3. PG-00451: unapplied payment -1000, outstanding -1000
-    # Total sum should be 3000
-    assert len(items) == 3
+    # Total sum should be 3500
+    assert len(items) == 2
 
     fvs = [i for i in items if i["document_no"] == "FV-00123"]
     ncs = [i for i in items if i["document_no"] == "NC-00012"]
     pgs = [i for i in items if i["document_no"] == "PG-00451"]
 
     assert len(fvs) == 1
-    assert len(ncs) == 1
+    assert len(ncs) == 0
     assert len(pgs) == 1
 
     # Outstanding totals checking
@@ -194,7 +194,7 @@ def test_outstanding_balance_calculation_at_cutoff(app_ctx) -> None:
     for i in items:
         totals[i["currency"]] = totals.get(i["currency"], 0) + i["outstanding_amount"]
 
-    assert totals["USD"] == 3000.0
+    assert totals["USD"] == 3500.0
 
 
 def test_desktop_mode_rejection(app_ctx) -> None:
@@ -320,7 +320,7 @@ def test_public_verification_and_response_flow(app_ctx) -> None:
     res_items = client.get(f"/confirm-balance/{raw_token}")
     assert res_items.status_code == 200
     assert "FV-00123" in res_items.get_data(as_text=True)
-    assert "NC-00012" in res_items.get_data(as_text=True)
+    assert "NC-00012" not in res_items.get_data(as_text=True)
 
     # Submit positive confirmation
     res_respond = client.post(

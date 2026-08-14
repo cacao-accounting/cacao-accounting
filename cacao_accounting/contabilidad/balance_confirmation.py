@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Any
 import secrets
 
-from sqlalchemy import select, or_
+from sqlalchemy import func, or_, select
 
 from cacao_accounting.database import (
     database,
@@ -88,6 +88,43 @@ def compute_payment_unallocated_amount_at_date(payment: PaymentEntry, as_of_date
     return remaining if remaining > 0 else Decimal("0")
 
 
+def compute_applied_credit_document_amount(document: Any, as_of_date: date) -> Decimal:
+    """Suma el monto de una nota de crédito/débito ya aplicado a facturas al corte.
+
+    Las notas de crédito y débito aplicadas a una factura se reflejan en el saldo
+    vivo de esa factura a través de la relación documental ``invoice_reversal``.
+    Para evitar contarlas dos veces como partidas abiertas, la confirmación resta
+    ese monto aplicado del saldo independiente de la nota.
+    """
+    raw_document_type = getattr(document, "document_type", None) or getattr(document, "__tablename__", "")
+    document_type = str(raw_document_type or "")
+    if document_type not in {"sales_credit_note", "sales_debit_note", "purchase_credit_note", "purchase_debit_note"}:
+        return Decimal("0")
+    document_id = getattr(document, "id", "")
+
+    def _sum_applied(source_types: tuple[str, ...], invoice_model: Any) -> Decimal:
+        query = (
+            select(func.sum(DocumentRelation.amount))
+            .join(
+                invoice_model,
+                (DocumentRelation.source_id == invoice_model.id)
+                & DocumentRelation.source_type.in_(source_types),
+            )
+            .where(
+                DocumentRelation.relation_type == "invoice_reversal",
+                DocumentRelation.target_type == document_type,
+                DocumentRelation.target_id == document_id,
+                DocumentRelation.status == "active",
+                invoice_model.docstatus == 1,
+                invoice_model.posting_date <= as_of_date,
+            )
+        )
+        return Decimal(str(database.session.execute(query).scalar() or 0))
+
+    applied = _sum_applied(("sales_invoice",), SalesInvoice) + _sum_applied(("purchase_invoice",), PurchaseInvoice)
+    return applied
+
+
 def get_open_documents_at_cutoff(
     company_id: str,
     party_id: str,
@@ -129,7 +166,9 @@ def get_open_documents_at_cutoff(
             sign = Decimal("-1") if is_credit_document else Decimal("1")
 
             outstanding = compute_outstanding_amount(doc, as_of_date=cutoff_date)
-            if outstanding == 0:
+            if is_credit_document:
+                outstanding = outstanding - compute_applied_credit_document_amount(doc, cutoff_date)
+            if outstanding <= 0:
                 continue
 
             doc_type_label = default_invoice_label
