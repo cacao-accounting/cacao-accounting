@@ -223,43 +223,7 @@ def get_concentration(company: str, dimension: str, start: date, end: date, limi
     """Return the largest contributors for an approved dimension."""
     if dimension not in ALLOWED_DIMENSIONS:
         raise ValueError(f"Dimensión no permitida: {dimension}")
-    totals: defaultdict[str, Decimal] = defaultdict(Decimal)
-    if dimension == "customer":
-        rows = database.session.execute(
-            select(SalesInvoice).where(
-                SalesInvoice.company == company,
-                SalesInvoice.docstatus == 1,
-                SalesInvoice.posting_date >= start,
-                SalesInvoice.posting_date <= end,
-            )
-        ).scalars()
-        for row in rows:
-            totals[row.customer_id or ""] += _invoice_base_amount(row)
-    elif dimension == "supplier":
-        rows = database.session.execute(
-            select(PurchaseInvoice).where(
-                PurchaseInvoice.company == company,
-                PurchaseInvoice.docstatus == 1,
-                PurchaseInvoice.posting_date >= start,
-                PurchaseInvoice.posting_date <= end,
-            )
-        ).scalars()
-        for row in rows:
-            totals[row.supplier_id or ""] += _invoice_base_amount(row)
-    else:
-        query = (
-            select(SalesInvoiceItem, SalesInvoice)
-            .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.sales_invoice_id)
-            .where(
-                SalesInvoice.company == company,
-                SalesInvoice.docstatus == 1,
-                SalesInvoice.posting_date >= start,
-                SalesInvoice.posting_date <= end,
-            )
-        )
-        for item, invoice in database.session.execute(query).all():
-            amount = _decimal(item.base_amount if item.base_amount is not None else item.amount)
-            totals[item.item_code] += -amount if invoice.is_return else amount
+    totals = _concentration_totals(company, dimension, start, end)
     ordered = sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
     grand_total = sum(totals.values(), Decimal("0"))
     return [
@@ -271,3 +235,44 @@ def get_concentration(company: str, dimension: str, start: date, end: date, limi
         }
         for key, amount in ordered[: max(1, min(limit, 100))]
     ]
+
+
+def _concentration_totals(company: str, dimension: str, start: date, end: date) -> defaultdict[str, Decimal]:
+    """Aggregate approved invoice values by a concentration dimension."""
+    totals: defaultdict[str, Decimal] = defaultdict(Decimal)
+    if dimension == "customer":
+        rows = database.session.execute(_concentration_invoice_query(SalesInvoice, company, start, end)).scalars()
+        for row in rows:
+            totals[getattr(row, "customer_id") or ""] += _invoice_base_amount(row)
+        return totals
+    if dimension == "supplier":
+        rows = database.session.execute(_concentration_invoice_query(PurchaseInvoice, company, start, end)).scalars()
+        for row in rows:
+            totals[getattr(row, "supplier_id") or ""] += _invoice_base_amount(row)
+        return totals
+    query = _concentration_item_query(company, start, end)
+    for item, invoice in database.session.execute(query).all():
+        amount = _decimal(item.base_amount if item.base_amount is not None else item.amount)
+        totals[item.item_code] += -amount if invoice.is_return else amount
+    return totals
+
+
+def _concentration_invoice_query(model: Any, company: str, start: date, end: date) -> Any:
+    """Build the shared invoice query for customer and supplier concentration."""
+    return select(model).where(
+        model.company == company, model.docstatus == 1, model.posting_date >= start, model.posting_date <= end
+    )
+
+
+def _concentration_item_query(company: str, start: date, end: date) -> Any:
+    """Build the sales-item query for item concentration."""
+    return (
+        select(SalesInvoiceItem, SalesInvoice)
+        .join(SalesInvoice, SalesInvoice.id == SalesInvoiceItem.sales_invoice_id)
+        .where(
+            SalesInvoice.company == company,
+            SalesInvoice.docstatus == 1,
+            SalesInvoice.posting_date >= start,
+            SalesInvoice.posting_date <= end,
+        )
+    )
