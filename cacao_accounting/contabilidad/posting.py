@@ -1511,9 +1511,8 @@ def _line_rate(line: StockEntryItem) -> Decimal:
         rate = rate * raw_qty / qty_in_base_uom
     if amount > 0 and qty_in_base_uom > 0:
         rate = amount / qty_in_base_uom
-    if rate <= 0:
-        if amount > 0 and qty_in_base_uom > 0:
-            rate = amount / qty_in_base_uom
+    if rate <= 0 and amount > 0 and qty_in_base_uom > 0:
+        rate = amount / qty_in_base_uom
     if rate <= 0:
         raise PostingError(f"La linea de inventario {line.item_code} requiere tasa de valuacion.")
     return rate
@@ -1555,9 +1554,8 @@ def _line_rate_generic(line: Any) -> Decimal:
         rate = rate * raw_qty / qty_in_base_uom
     if amount > 0 and qty_in_base_uom > 0:
         rate = amount / qty_in_base_uom
-    if rate <= 0:
-        if amount > 0 and qty_in_base_uom > 0:
-            rate = amount / qty_in_base_uom
+    if rate <= 0 and amount > 0 and qty_in_base_uom > 0:
+        rate = amount / qty_in_base_uom
     if rate <= 0:
         item_code = getattr(line, "item_code", "desconocido")
         raise PostingError(f"La linea de inventario {item_code} requiere tasa de valuacion.")

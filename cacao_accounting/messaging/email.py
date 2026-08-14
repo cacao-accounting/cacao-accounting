@@ -59,7 +59,7 @@ def _get_or_create_password_salt() -> bytes:
     if record and record.value:
         try:
             return base64.urlsafe_b64decode(record.value.encode("ascii"))
-        except (ValueError, UnicodeError) as exc:
+        except ValueError as exc:
             raise EmailError("La sal de cifrado SMTP almacenada no es válida.") from exc
     salt = os.urandom(16)
     database.session.add(CacaoConfig(key=SMTP_PASSWORD_SALT_KEY, value=base64.urlsafe_b64encode(salt).decode("ascii")))
