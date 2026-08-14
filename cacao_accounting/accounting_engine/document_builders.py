@@ -970,7 +970,8 @@ def _build_references(
     custom["exchange_loss_account_id"] = getattr(defaults, "exchange_loss_account_id", None)
     custom["unrealized_exchange_gain_account_id"] = getattr(defaults, "unrealized_exchange_gain_account_id", None)
     custom["unrealized_exchange_loss_account_id"] = getattr(defaults, "unrealized_exchange_loss_account_id", None)
-    custom["payment_discount_account_id"] = getattr(defaults, "payment_discount_account_id", None)
+    custom["sales_discount_account_id"] = getattr(defaults, "sales_discount_account_id", None)
+    custom["purchase_discount_account_id"] = getattr(defaults, "purchase_discount_account_id", None)
     custom["advance_account_id"] = (
         getattr(defaults, "supplier_advance_account_id", None)
         if direction == "purchase"

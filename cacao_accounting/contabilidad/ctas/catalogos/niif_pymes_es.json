@@ -1,0 +1,30 @@
+{
+  "catalog": "niif_pymes_es.csv",
+  "default_accounts": {
+    "default_cash": "11.01.01",
+    "default_bank": "11.01.03",
+    "default_receivable": "11.02.01",
+    "default_payable": "21.01.01",
+    "default_income": "41.01.01",
+    "default_expense": "62.19.01",
+    "default_cogs": "51.01.01",
+    "inventory_adjustment_account_id": "51.01.02",
+    "bridge_account_id": "21.01.02",
+    "customer_advance_account_id": "21.03.01",
+    "supplier_advance_account_id": "11.02.05",
+    "bank_difference_account_id": "69.01.01",
+    "default_sales_tax_account_id": "21.05.02",
+    "default_purchase_tax_account_id": "11.05.02",
+    "default_rounding_account_id": "69.02.01",
+    "exchange_gain_account_id": "73.01.01",
+    "exchange_loss_account_id": "83.01.01",
+    "unrealized_exchange_gain_account_id": "73.02.01",
+    "unrealized_exchange_loss_account_id": "83.02.01",
+    "deferred_income_account_id": "21.03.02",
+    "deferred_expense_account_id": "11.07.03",
+    "sales_discount_account_id": "41.09.02",
+    "purchase_discount_account_id": "42.02.01",
+    "period_profit_loss_account_id": "33.02.01",
+    "retained_earnings_account_id": "33.01.01"
+  }
+}

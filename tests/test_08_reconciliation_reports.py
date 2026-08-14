@@ -2262,6 +2262,25 @@ def test_base_catalog_mapping_covers_required_default_accounts(app_ctx):
     assert all(code in codes_en for code in mapping_en.values())
     assert len(codes_en) == len(rows_en)
 
+    for new_prefix in ["niif_pymes_es", "ifrs_smes_en", "us_gaap"]:
+        cat_p = Path(f"cacao_accounting/contabilidad/ctas/catalogos/{new_prefix}.csv")
+        map_p = Path(f"cacao_accounting/contabilidad/ctas/catalogos/{new_prefix}.json")
+        new_rows = list(csv.DictReader(cat_p.open(encoding="utf-8")))
+        new_codes = {row["codigo"] for row in new_rows}
+        new_mapping = json.loads(map_p.read_text(encoding="utf-8"))["default_accounts"]
+
+        assert set(DEFAULT_ACCOUNT_FIELDS) == set(new_mapping)
+        assert all(code in new_codes for code in new_mapping.values())
+        assert len(new_codes) == len(new_rows)
+
+        account_rows = {row["codigo"]: row for row in new_rows}
+        sales_discount = account_rows[new_mapping["sales_discount_account_id"]]
+        purchase_discount = account_rows[new_mapping["purchase_discount_account_id"]]
+        assert sales_discount["account_type"] == "payment_discount"
+        assert sales_discount["rubro"] == "Expense"
+        assert purchase_discount["account_type"] == "payment_discount"
+        assert purchase_discount["rubro"] == "Income"
+
 
 def test_setup_with_predefined_catalog_creates_complete_company_defaults(app_ctx):
     from cacao_accounting.contabilidad.default_accounts import DEFAULT_ACCOUNT_FIELDS
@@ -2270,6 +2289,9 @@ def test_setup_with_predefined_catalog_creates_complete_company_defaults(app_ctx
 
     assert ("base_es.csv", "Predeterminado - ES") in available_catalog_files()
     assert ("base_en.csv", "Default - EN") in available_catalog_files()
+    assert ("niif_pymes_es.csv", "NIIF Pymes (ES)") in available_catalog_files()
+    assert ("ifrs_smes_en.csv", "IFRS SMEs (EN)") in available_catalog_files()
+    assert ("us_gaap.csv", "US GAAP — Standard") in available_catalog_files()
 
     finalize_setup(
         {

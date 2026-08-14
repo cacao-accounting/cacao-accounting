@@ -3,6 +3,85 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — Corrección de clasificación de descuentos en catálogos
+
+### Hallazgo
+
+La revisión de los commits locales detectó que `sales_discount_account_id` apuntaba a cuentas clasificadas como `Income` en los catálogos IFRS SMEs, NIIF Pymes y US GAAP, aunque los descuentos concedidos sobre ventas deben reconocerse como gasto.
+
+### Corrección y verificación
+
+Se clasificaron `41.09.02` y `410300` como `Expense` con `account_type=payment_discount`, y se agregó una regresión que valida la naturaleza de las cuentas de descuentos de ventas y compras en los catálogos ampliados. El caso focalizado pasó: 1 prueba aprobada, 101 omitidas.
+
+## 2026-08-14 — División de la cuenta de descuentos por pronto pago (ventas/compras)
+
+### Petición
+
+Separar la cuenta única `payment_discount_account_id` en dos cuentas
+específicas por sentido del pago: `sales_discount_account_id` (descuentos
+sobre ventas, lado de gasto) y `purchase_discount_account_id` (descuentos
+sobre compras, lado de ingreso). Usar la misma cuenta para ambos sentidos era
+incorrecto desde el punto de vista contable: el descuento concedido a un
+cliente es un gasto, mientras que el descuento obtenido de un proveedor
+reduce el gasto (ingreso). El cambio es transversal al pago de
+clientes/proveedores.
+
+### Implementación
+
+- **Modelo**: se reemplazó `payment_discount_account_id` por
+  `sales_discount_account_id` y `purchase_discount_account_id` en
+  `CompanyDefaultAccount` (ambas FK a `accounts.id`).
+- **Motor contable**: `_build_references` propaga ambas cuentas y el mapper
+  selecciona la cuenta según `transaction_direction` en
+  `_build_payment_discount_line`.
+- **Catálogos**: se agregó una cuenta de ingresos de descuentos sobre compras
+  en cada plan (42.04 en base ES/EN, 42.02.01 en NIIF/IFRS, 410400 en US
+  GAAP) y los JSON de mapping ahora siembran ambas cuentas por separado.
+- **Migración** `20260814_0006`: agrega las dos columnas, hace backfill del
+  valor legado en ambas y elimina la columna original; `downgrade` restaura la
+  columna única. La pantalla de administración de cuentas predeterminadas es
+  dinámica (`DEFAULT_ACCOUNT_DEFINITIONS`), por lo que los nuevos campos ya se
+  muestran y son editables tras el seed; se fijó con aserciones de regresión.
+- **Verificación**: schema (214), catálogos/setup (15), migraciones (3),
+  mapper/admin (7) y pruebas de pago en verde; black, ruff y flake8 limpios;
+  mypy sin errores en los archivos modificados.
+
+## 2026-08-14 — Catálogos contables ampliados y nombres en español acentuados
+
+### Petición
+
+Regenerar los catálogos IFRS SMEs (EN), NIIF Pymes (ES) y US GAAP con una
+estructura ampliada de cuentas y asegurar que los nombres en español se
+transcriban con la acentuación correcta (la tabla de análisis los escribe
+acentuados).
+
+### Implementación
+
+- Se corrigió el generador `gen_ifrs.py` (script externo) para que los nombres
+  en español usen acentos ortográficos correctos (p. ej. "Estimación por
+  Deterioro", "Mercancías en Tránsito", "Producción en Proceso"). La corrección
+  se aplicó solo a la columna ES; se detectaron y revirtieron 16 nombres en
+  inglés corrompidos por la sustitución ("Impairment and Provision Expenses").
+- Se regeneraron `ifrs_smes_en.csv` y `niif_pymes_es.csv` (353 cuentas cada
+  uno) con un mismo esquema de códigos decimales jerárquicos (1, 11, 11.01,
+  11.01.01) que sustituye la numeración anterior (1, 1.1, 1.1.01).
+- Se actualizaron `ifrs_smes_en.json` y `niif_pymes_es.json` con los nuevos
+  códigos de cuentas predeterminadas: efectivo `11.01.01`, banco `11.01.03`,
+  impuesto de ventas `21.05.02`, impuesto de compras recuperable `11.05.02`,
+  gasto general `62.19.01`, entre otros. Todos los códigos referenciados
+  existen en el CSV y cumplen los tipos de cuenta permitidos.
+- El catálogo US GAAP (working tree) quedó con numeración de 6 dígitos
+  (100000, 110000, ...) y su JSON re-mapeado (`default_cash` 111100,
+  `default_payable` 211100, etc.); la etiqueta de selección pasó a
+  "US GAAP — Standard".
+- Se validó que los cinco catálogos (`base_es`, `base_en`, `niif_pymes_es`,
+  `ifrs_smes_en`, `us_gaap`) cumplen los 25 campos predeterminados, sin
+  códigos faltantes ni duplicados.
+- Los tests de catálogos, setup con catálogo preexistente y cobertura de
+  contabilidad (`test_11`) pasan. Los fallos de `test_04database_schema.py`
+  son ambientales (falta el driver `psycopg2` de PostgreSQL) y no guardan
+  relación con los catálogos.
+
 ## 2026-08-13 — Impuestos y cargos en factura de compra
 
 ### Petición y decisión

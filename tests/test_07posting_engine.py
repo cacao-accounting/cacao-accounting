@@ -2264,7 +2264,7 @@ def test_post_payment_entry_with_discount_and_exchange_revaluation(app_ctx):
                 company="cacao",
                 default_receivable=receivable_account.id,
                 default_bank=bank_gl_account.id,
-                payment_discount_account_id=discount_account.id,
+                sales_discount_account_id=discount_account.id,
                 exchange_gain_account_id=realized_gain_account.id,
                 unrealized_exchange_gain_account_id=unrealized_gain_account.id,
             ),

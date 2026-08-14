@@ -86,7 +86,8 @@ def _ensure_company_default_accounts(company: str, bank: BankAccount) -> Company
     defaults.default_payable = defaults.default_payable or _first_account_id(company, "payable")
     defaults.customer_advance_account_id = defaults.customer_advance_account_id or defaults.default_payable
     defaults.supplier_advance_account_id = defaults.supplier_advance_account_id or defaults.default_receivable
-    defaults.payment_discount_account_id = defaults.payment_discount_account_id or _first_account_id(company, "expense")
+    defaults.sales_discount_account_id = defaults.sales_discount_account_id or _first_account_id(company, "expense")
+    defaults.purchase_discount_account_id = defaults.purchase_discount_account_id or _first_account_id(company, "income")
     defaults.exchange_gain_account_id = defaults.exchange_gain_account_id or _first_account_id(company, "income")
     defaults.exchange_loss_account_id = defaults.exchange_loss_account_id or _first_account_id(company, "expense")
     defaults.unrealized_exchange_gain_account_id = (
