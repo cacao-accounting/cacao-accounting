@@ -935,6 +935,51 @@ def _item_default_uom(item_code: str) -> str | None:
     return item.default_uom if item else None
 
 
+def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: str, warehouse: str) -> Decimal:
+    """Create one reconciliation line from the locked stock snapshot."""
+    current_qty, current_rate, current_value, _reserved_qty = _stock_bin_snapshot(entry.company, item_code, warehouse)
+    uom = request.form.get(f"uom_{index}") or _item_default_uom(item_code)
+    if not uom:
+        raise ValueError(f"La conciliacion del item {item_code} requiere una unidad de medida.")
+    default_uom = _item_default_uom(item_code)
+    if not default_uom:
+        raise ValueError(f"El item {item_code} requiere una UOM base configurada.")
+    counted_qty = _form_decimal(f"counted_qty_{index}", str(current_qty))
+    if uom != default_uom:
+        try:
+            counted_qty = convert_item_qty(item_code, counted_qty, uom, default_uom)
+        except InventoryServiceError as exc:
+            raise ValueError(f"No se pudo convertir {counted_qty} {uom} a {default_uom} para el item {item_code}.") from exc
+    target_rate = _form_decimal(f"target_valuation_rate_{index}", str(current_rate))
+    target_value = _form_decimal(f"target_stock_value_{index}", str(counted_qty * target_rate))
+    qty_difference = counted_qty - current_qty
+    value_difference = target_value - current_value
+    base_qty = abs(qty_difference)
+    line = StockEntryItem(
+        stock_entry_id=entry.id,
+        item_code=item_code,
+        source_warehouse=warehouse,
+        target_warehouse=warehouse,
+        qty=base_qty,
+        uom=uom,
+        qty_in_base_uom=base_qty,
+        basic_rate=target_rate,
+        amount=abs(value_difference),
+        valuation_rate=target_rate,
+        current_qty=current_qty,
+        counted_qty=counted_qty,
+        qty_difference=qty_difference,
+        current_valuation_rate=current_rate,
+        target_valuation_rate=target_rate,
+        current_stock_value=current_value,
+        target_stock_value=target_value,
+        stock_value_difference=value_difference,
+    )
+    database.session.add(line)
+    database.session.flush()
+    return abs(value_difference)
+
+
 def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
     """Guarda lineas de conciliacion con snapshot de cantidad y valuacion."""
     i = 0
@@ -944,49 +989,7 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
         item_code = request.form.get(f"item_code_{i}", "").strip()
         warehouse = request.form.get(f"warehouse_{i}") or entry.to_warehouse or entry.from_warehouse
         if item_code:
-            current_qty, current_rate, current_value, _reserved_qty = _stock_bin_snapshot(entry.company, item_code, warehouse)
-            uom = request.form.get(f"uom_{i}") or _item_default_uom(item_code)
-            if not uom:
-                raise ValueError(f"La conciliacion del item {item_code} requiere una unidad de medida.")
-            default_uom = _item_default_uom(item_code)
-            if not default_uom:
-                raise ValueError(f"El item {item_code} requiere una UOM base configurada.")
-            counted_qty = _form_decimal(f"counted_qty_{i}", str(current_qty))
-            if uom != default_uom:
-                try:
-                    counted_qty = convert_item_qty(item_code, counted_qty, uom, default_uom)
-                except InventoryServiceError as exc:
-                    raise ValueError(
-                        f"No se pudo convertir {counted_qty} {uom} a {default_uom} para el item {item_code}."
-                    ) from exc
-            target_rate = _form_decimal(f"target_valuation_rate_{i}", str(current_rate))
-            target_value = _form_decimal(f"target_stock_value_{i}", str(counted_qty * target_rate))
-            qty_difference = counted_qty - current_qty
-            value_difference = target_value - current_value
-            base_qty = abs(qty_difference)
-            line = StockEntryItem(
-                stock_entry_id=entry.id,
-                item_code=item_code,
-                source_warehouse=warehouse,
-                target_warehouse=warehouse,
-                qty=abs(qty_difference),
-                uom=uom,
-                qty_in_base_uom=base_qty,
-                basic_rate=target_rate,
-                amount=abs(value_difference),
-                valuation_rate=target_rate,
-                current_qty=current_qty,
-                counted_qty=counted_qty,
-                qty_difference=qty_difference,
-                current_valuation_rate=current_rate,
-                target_valuation_rate=target_rate,
-                current_stock_value=current_value,
-                target_stock_value=target_value,
-                stock_value_difference=value_difference,
-            )
-            database.session.add(line)
-            database.session.flush()
-            total_difference += abs(value_difference)
+            total_difference += _save_stock_reconciliation_item(entry, i, item_code, warehouse)
             line_count += 1
         i += 1
     if line_count == 0:

@@ -67,6 +67,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
   base PostgreSQL existente.
 - `inventario/__init__.py` extrae la creación y conversión de una línea de
   movimiento para simplificar el iterador del formulario.
+- `inventario/__init__.py` extrae la creación de líneas de conciliación y su
+  snapshot de valuación del iterador del formulario.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
