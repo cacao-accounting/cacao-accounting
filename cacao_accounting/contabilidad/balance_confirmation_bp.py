@@ -675,7 +675,7 @@ def public_confirm_balance_respond(token: str):
         )
         .execution_options(synchronize_session="fetch")
     )
-    if result.rowcount == 0:
+    if getattr(result, "rowcount", 0) == 0:
         database.session.rollback()
         flash("La confirmación ya fue respondida o ya no se encuentra disponible.", "warning")
         return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
