@@ -3,8 +3,10 @@
 """Blueprint de Confirmación de Saldos."""
 
 import hashlib
+import hmac
 import json
-from datetime import date, datetime
+import re
+from datetime import date, datetime, timezone
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for, session
 from flask_login import current_user, login_required
@@ -33,6 +35,31 @@ from cacao_accounting.audit_trail_service import (
 from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
 balance_confirmations_bp = Blueprint("balance_confirmations", __name__)
+
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _utcnow() -> datetime:
+    """Retorna la fecha/hora actual en UTC con zona horaria explícita."""
+    return datetime.now(timezone.utc)
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    """Normaliza un timestamp a UTC con zona horaria explícita para comparar."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _mark_expired(confirmation: BalanceConfirmation) -> bool:
+    """Marca la confirmación como expirada si la fecha de expiración ya pasó."""
+    if confirmation.expires_at and _utcnow() > _as_utc(confirmation.expires_at):
+        confirmation.status = "expired"
+        database.session.commit()
+        return True
+    return False
 
 
 @balance_confirmations_bp.before_request
@@ -109,7 +136,7 @@ def crear_confirmacion_form():
         emails = []
         for e in emails_raw:
             clean_email = e.strip().lower()
-            if clean_email and "@" in clean_email:
+            if clean_email and EMAIL_PATTERN.match(clean_email):
                 if clean_email not in emails:
                     emails.append(clean_email)
 
@@ -223,14 +250,8 @@ def enviar_confirmacion(confirmation_id: str):
 
     any_sent = False
     for inv in invitations:
-        # Dynamically generate token and code during the send request so we never lose them on redirects!
-        import secrets
-
-        raw_token = secrets.token_urlsafe(32)
-        raw_code = "".join(secrets.choice("0123456789") for _ in range(6))
-
-        inv.token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
-        inv.verification_code_hash = hashlib.sha256(raw_code.encode("utf-8")).hexdigest()
+        # Generar token y código de forma segura durante el envío para no perderlos en redirecciones
+        raw_token, raw_code = prepare_invitation_token(inv)
         inv.status = "pending"
 
         link = url_for("balance_confirmations.public_confirm_balance", token=raw_token, _external=True)
@@ -254,14 +275,14 @@ Atentamente,
                 subject=f"Solicitud de Confirmación de Saldo - {company_name}",
                 body=body,
             )
-            inv.sent_at = datetime.utcnow()
+            inv.sent_at = _utcnow()
             any_sent = True
         except EmailError as exc:
             flash(f"Error al enviar correo a {inv.email}: {exc}", "danger")
 
     if any_sent:
         confirmation.status = "sent"
-        confirmation.sent_at = datetime.utcnow()
+        confirmation.sent_at = _utcnow()
         log_balance_confirmation_event(
             confirmation,
             "balance_confirmation_sent",
@@ -307,14 +328,8 @@ def reenviar_confirmacion(confirmation_id: str):
 
     any_sent = False
     for inv in invitations:
-        # Generar nuevos tokens y códigos de verificación
-        import secrets
-
-        raw_token = secrets.token_urlsafe(32)
-        raw_code = "".join(secrets.choice("0123456789") for _ in range(6))
-
-        inv.token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
-        inv.verification_code_hash = hashlib.sha256(raw_code.encode("utf-8")).hexdigest()
+        # Generar nuevos tokens y códigos de verificación de forma segura
+        raw_token, raw_code = prepare_invitation_token(inv)
         inv.failed_attempts = 0
         inv.status = "pending"
 
@@ -339,7 +354,7 @@ Atentamente,
                 subject=f"Reenvío de Solicitud de Confirmación de Saldo - {company_name}",
                 body=body,
             )
-            inv.sent_at = datetime.utcnow()
+            inv.sent_at = _utcnow()
             any_sent = True
         except EmailError as exc:
             flash(f"Error al enviar correo a {inv.email}: {exc}", "danger")
@@ -375,7 +390,7 @@ def cancelar_confirmacion(confirmation_id: str):
         return redirect(url_for("balance_confirmations.ver_confirmacion", confirmation_id=confirmation_id))
 
     confirmation.status = "cancelled"
-    confirmation.cancelled_at = datetime.utcnow()
+    confirmation.cancelled_at = _utcnow()
 
     invitations = (
         database.session.execute(
@@ -426,9 +441,7 @@ def public_confirm_balance(token: str):
         )
 
     # Verificar fecha de expiración
-    if confirmation.expires_at and datetime.utcnow() > confirmation.expires_at:
-        confirmation.status = "expired"
-        database.session.commit()
+    if _mark_expired(confirmation):
         return render_template(
             "public/confirm_balance_status.html",
             title="Expirada",
@@ -486,6 +499,11 @@ def public_confirm_balance_verify(token: str):
         flash("La confirmación no se encuentra disponible.", "danger")
         return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
 
+    # Verificar fecha de expiración también en la verificación POST
+    if _mark_expired(confirmation):
+        flash("Esta solicitud de confirmación de saldo ha expirado.", "danger")
+        return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
+
     first_name = request.form.get("first_name", "").strip()
     last_name = request.form.get("last_name", "").strip()
     email_input = request.form.get("email", "").strip().lower()
@@ -508,7 +526,7 @@ def public_confirm_balance_verify(token: str):
         return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
 
     # Validar correspondencia exacta de correo
-    if email_input != invitation.email:
+    if not hmac.compare_digest(email_input, invitation.email or ""):
         invitation.failed_attempts += 1
         database.session.commit()
         flash("La dirección de correo electrónico o el código ingresado son incorrectos.", "danger")
@@ -516,21 +534,21 @@ def public_confirm_balance_verify(token: str):
 
     # Validar correspondencia del código de verificación
     hashed_code = hashlib.sha256(code_input.encode("utf-8")).hexdigest()
-    if hashed_code != invitation.verification_code_hash:
+    if not hmac.compare_digest(hashed_code, invitation.verification_code_hash or ""):
         invitation.failed_attempts += 1
         database.session.commit()
         flash("La dirección de correo electrónico o el código ingresado son incorrectos.", "danger")
         return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
 
     # Verificación exitosa
-    invitation.verified_at = datetime.utcnow()
-    invitation.last_access_at = datetime.utcnow()
+    invitation.verified_at = _utcnow()
+    invitation.last_access_at = _utcnow()
     invitation.failed_attempts = 0
     invitation.status = "viewed"
 
     if confirmation.status == "sent":
         confirmation.status = "viewed"
-        confirmation.viewed_at = datetime.utcnow()
+        confirmation.viewed_at = _utcnow()
 
     # Log audit event
     log_balance_confirmation_event(
@@ -570,6 +588,11 @@ def public_confirm_balance_respond(token: str):
         flash("La confirmación no se encuentra disponible para responder.", "danger")
         return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
 
+    # Verificar fecha de expiración también en la respuesta POST
+    if _mark_expired(confirmation):
+        flash("Esta solicitud de confirmación de saldo ha expirado.", "danger")
+        return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
+
     # Verificar sesión de verificación
     session_key = f"verified_confirmation_{confirmation.id}"
     if session.get(session_key) != invitation.id:
@@ -591,7 +614,7 @@ def public_confirm_balance_respond(token: str):
 
     # Actualizar estado de la confirmación
     confirmation.status = "confirmed" if response_type == "confirmed" else "disputed"
-    confirmation.responded_at = datetime.utcnow()
+    confirmation.responded_at = _utcnow()
     confirmation.response_type = response_type
     confirmation.response_comment = response_comment
 
