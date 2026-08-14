@@ -40,6 +40,36 @@ el patrón ya usado en `cacao_accounting/compras/__init__.py:1261`. Se
 verificó con mypy, flake8, ruff y pydocstyle: todas las herramientas pasan
 limpias sobre el archivo modificado.
 
+## 2026-08-14 — Resolución de issues S1192 (duplicación de literales) en SonarCloud
+
+### Petición
+
+Consultar los issues abiertos en SonarCloud mediante su API pública y resolver
+los issues clasificados como CRITICAL por duplicación de literales
+(rule `python:S1192`).
+
+### API consultada
+
+```bash
+curl -s "https://sonarcloud.io/api/issues/search?componentKeys=cacao-accounting_cacao-accounting&statuses=OPEN&ps=500&rules=python:S1192"
+```
+
+Total de issues S1192: 5 (todos CRITICAL).
+
+### Corrección aplicada
+
+Se extrajeron los literales duplicados a constantes de módulo en dos archivos:
+
+- `balance_confirmation_bp.py`: 4 constantes (`ENDPOINT_VER_CONFIRMACION`,
+  `ENDPOINT_PUBLIC_CONFIRM_BALANCE`, `TEMPLATE_NOT_FOUND`,
+  `TEMPLATE_CONFIRM_BALANCE_STATUS`); 28 ocurrencias reemplazadas.
+- `reconciliation_service.py`: 1 constante (`UNSUPPORTED_TARGET_TYPE_ERROR`);
+  3 ocurrencias reemplazadas.
+
+Los cambios siguen las convenciones del codebase (constantes a nivel de
+módulo, como `EMAIL_PATTERN`). Se verificó con flake8, ruff, pydocstyle y
+mypy: todas las herramientas pasan limpias.
+
 ## 2026-08-14 — Revisión por pares y correcciones de confirmación de saldos
 
 ### Petición
