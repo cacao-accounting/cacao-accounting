@@ -808,6 +808,15 @@ def _payment_custom_references(
     }
 
 
+def _fallback_tax_document_type(document: PurchaseInvoice | PurchaseReceipt | SalesInvoice, applies_to: str) -> str:
+    """Resolve the document type used when a fiscal snapshot is unavailable."""
+    if isinstance(document, PurchaseReceipt):
+        return "purchase_receipt"
+    if applies_to == "purchase":
+        return "purchase_invoice"
+    return "sales_invoice"
+
+
 def _document_tax_rules(
     document: PurchaseInvoice | PurchaseReceipt | SalesInvoice,
     items: Iterable[Any],
@@ -817,11 +826,7 @@ def _document_tax_rules(
     event_type: str,
 ) -> list[TaxRuleContext]:
     """Load persisted tax rules and fall back to the current tax template if necessary."""
-    fallback_document_type = (
-        "purchase_receipt"
-        if isinstance(document, PurchaseReceipt)
-        else ("purchase_invoice" if applies_to == "purchase" else "sales_invoice")
-    )
+    fallback_document_type = _fallback_tax_document_type(document, applies_to)
     persisted_rules = build_tax_rule_contexts_from_snapshot(
         document_type=getattr(document, "document_type", None) or fallback_document_type,
         document_id=document.id,
