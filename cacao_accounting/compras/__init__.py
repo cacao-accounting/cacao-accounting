@@ -34,6 +34,7 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
 )
 from cacao_accounting.compras.purchase_sourcing_service import (
     PurchaseSourcingError,
+    close_purchase_quotation_comparison,
     create_purchase_quotation_award,
     current_negotiation_round,
     get_purchase_sourcing_config,
@@ -1231,6 +1232,27 @@ def compras_comparativo_ofertas_adjudicar(rfq_id: str):
         return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
 
 
+@compras.route("/request-for-quotation/<rfq_id>/close", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+@verifica_permiso("purchases", "autorizar")
+def compras_comparativo_ofertas_cerrar(rfq_id: str):
+    """Close an RFQ comparison manually with an authorization reason."""
+    registro = database.session.get(PurchaseQuotation, rfq_id)
+    if not registro:
+        abort(404)
+    _require_purchase_document_access(registro, "autorizar")
+    reason = request.form.get("authorization_reason") or None
+    try:
+        close_purchase_quotation_comparison(registro, current_user.id, reason)
+        database.session.commit()
+        flash(_("Comparativo cerrado manualmente con justificación."), "success")
+    except PurchaseSourcingError as exc:
+        database.session.rollback()
+        flash_error(exc)
+    return redirect(url_for(COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT, rfq_id=rfq_id))
+
+
 @compras.route("/request-for-quotation/<rfq_id>/place-purchase-orders", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -1754,6 +1776,53 @@ def _create_line_relation(
     )
 
 
+def _create_purchase_request_relation_from_supplier_quotation(
+    source_id: str | None,
+    source_item_id: str | None,
+    target_id: str,
+    target_item_id: str,
+    qty: Decimal,
+    uom: str | None,
+    rate: Decimal,
+    amount: Decimal,
+) -> None:
+    """Propagate a supplier quotation line relation back to its purchase request."""
+    if not source_id or not source_item_id:
+        return
+    supplier_relation = database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            source_type="purchase_quotation",
+            target_type="supplier_quotation",
+            target_id=source_id,
+            target_item_id=source_item_id,
+        )
+    ).scalar_one_or_none()
+    if not supplier_relation:
+        return
+    request_relation = database.session.execute(
+        database.select(DocumentRelation).filter_by(
+            source_type="purchase_request",
+            target_type="purchase_quotation",
+            target_id=supplier_relation.source_id,
+            target_item_id=supplier_relation.source_item_id,
+        )
+    ).scalar_one_or_none()
+    if not request_relation:
+        return
+    create_document_relation(
+        source_type="purchase_request",
+        source_id=request_relation.source_id,
+        source_item_id=request_relation.source_item_id,
+        target_type="purchase_order",
+        target_id=target_id,
+        target_item_id=target_item_id,
+        qty=qty,
+        uom=uom,
+        rate=rate,
+        amount=amount,
+    )
+
+
 def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una orden de compra desde el formulario."""
     i = 0
@@ -1781,6 +1850,16 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "purchase_order", order_id, linea.id, qty, uom, rate, amount)
+            _create_purchase_request_relation_from_supplier_quotation(
+                request.form.get(f"source_id_{i}"),
+                request.form.get(f"source_item_id_{i}"),
+                order_id,
+                linea.id,
+                qty,
+                uom,
+                rate,
+                amount,
+            )
             total_qty += qty
             total += amount
             line_count += 1
@@ -2227,8 +2306,19 @@ def _purchase_order_context(form: dict):
     award_id = form.get("purchase_award_id") or None
     exception_reason = form.get("comparison_exception_reason") or None
     sourcing_config = get_purchase_sourcing_config()
+    source = None
+    for model, key in (
+        (PurchaseRequest, "from_request"),
+        (PurchaseQuotation, "from_rfq"),
+        (SupplierQuotation, "from_supplier_quotation"),
+    ):
+        source_id = form.get(key)
+        if source_id:
+            source = database.session.get(model, source_id)
+            break
+    direct_supplier_quotation = isinstance(source, SupplierQuotation) and bool(source.purchase_quotation_id)
     if sourcing_config.require_comparison and not award_id:
-        if not (is_purchase_manager(current_user.id) and exception_reason):
+        if not direct_supplier_quotation and not (is_purchase_manager(current_user.id) and exception_reason):
             flash_error(
                 PurchaseSourcingError(
                     "La Orden de Compra debe originarse en un comparativo o incluir una excepción autorizada."
@@ -2245,19 +2335,19 @@ def _purchase_order_context(form: dict):
         return None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     posting_date = _parse_date(form.get("posting_date"))
-    source = None
-    for model, key in (
-        (PurchaseRequest, "from_request"),
-        (PurchaseQuotation, "from_rfq"),
-        (SupplierQuotation, "from_supplier_quotation"),
-    ):
-        source_id = form.get(key)
-        if source_id:
-            source = database.session.get(model, source_id)
-            break
+    comparison_open = False
+    if isinstance(source, SupplierQuotation) and source.purchase_quotation_id:
+        comparison_open = (
+            database.session.execute(
+                database.select(PurchaseQuotationAward.id)
+                .where(PurchaseQuotationAward.purchase_quotation_id == source.purchase_quotation_id)
+                .where(PurchaseQuotationAward.status.in_(("finalized", "used", "closed")))
+            ).scalar_one_or_none()
+            is None
+        )
     company, transaction_currency = _validate_purchase_flow_header(source, form)
     transaction_currency = transaction_currency or form.get("transaction_currency") or form.get("currency") or None
-    return award_id, supplier_id, supplier, posting_date, company, transaction_currency
+    return award_id, supplier_id, supplier, posting_date, company, transaction_currency, comparison_open
 
 
 def _create_purchase_order_from_request(form: dict):
@@ -2265,7 +2355,7 @@ def _create_purchase_order_from_request(form: dict):
     context = _purchase_order_context(form)
     if context is None:
         return None
-    award_id, supplier_id, supplier, posting_date, company, transaction_currency = context
+    award_id, supplier_id, supplier, posting_date, company, transaction_currency, comparison_open = context
     orden = PurchaseOrder(
         supplier_id=supplier_id,
         supplier_name=supplier.name if supplier else None,
@@ -2296,6 +2386,11 @@ def _create_purchase_order_from_request(form: dict):
         log_create(orden)
         database.session.commit()
         flash("Orden de compra creada correctamente.", "success")
+        if comparison_open:
+            flash(
+                "Advertencia: la orden se creó desde una cotización de proveedor mientras el comparativo sigue abierto. ",
+                "warning",
+            )
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
     except (IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()

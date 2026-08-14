@@ -288,3 +288,34 @@ def create_purchase_quotation_award(
     if negotiation_round:
         negotiation_round.status = "closed"
     return award
+
+
+def close_purchase_quotation_comparison(
+    rfq: PurchaseQuotation, user_id: str | None, reason: str | None
+) -> PurchaseQuotationAward:
+    """Close an RFQ comparison manually with an authorized explanation."""
+    if not is_purchase_sourcing_authorizer(user_id):
+        raise PurchaseSourcingError("Solo un Administrador o el Gerente de Compras puede cerrar el comparativo.")
+    if not reason or not reason.strip():
+        raise PurchaseSourcingError("El cierre manual del comparativo requiere una justificación.")
+    existing = database.session.execute(
+        database.select(PurchaseQuotationAward)
+        .filter_by(purchase_quotation_id=rfq.id)
+        .where(PurchaseQuotationAward.status.in_(("finalized", "used", "closed")))
+    ).scalar_one_or_none()
+    if existing:
+        raise PurchaseSourcingError("La solicitud de cotización ya tiene el comparativo cerrado.")
+    negotiation_round = current_negotiation_round(rfq.id)
+    award = PurchaseQuotationAward(
+        purchase_quotation_id=rfq.id,
+        negotiation_round_id=negotiation_round.id if negotiation_round else None,
+        company=rfq.company or "",
+        status="closed",
+        created_by=user_id,
+        authorized_by=user_id,
+        authorization_reason=reason.strip(),
+    )
+    database.session.add(award)
+    if negotiation_round:
+        negotiation_round.status = "closed"
+    return award
