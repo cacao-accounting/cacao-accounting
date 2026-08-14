@@ -389,7 +389,7 @@
   </div>
 </section>
 
-<section class="border rounded-2 p-3 mt-3">
+<section class="border rounded-2 p-3 mt-3" x-show="showPricing">
   <div class="ca-transaction-summary">
     <strong>{{ _('Subtotal') }}:</strong>
     <span x-text="formatMoney(totalAmount)"></span>
@@ -402,7 +402,7 @@
   <input type="hidden" name="tax_summary_payload" :value="serializedTaxSummary()">
 </section>
 
-<section class="border rounded-2 p-3 mt-3">
+<section class="border rounded-2 p-3 mt-3" x-show="showPricing">
   <div class="ca-journal-toolbar mb-3">
 	    <h5 class="mb-0">{{ _('Impuestos y Cargos') }}</h5>
 	    <div class="d-flex gap-2 align-items-center">

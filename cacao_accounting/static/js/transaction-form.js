@@ -269,6 +269,12 @@
         }
       }
 
+      if (config.showPricing === false) {
+        for (const column of columnsList) {
+          if (column.field === 'rate' || column.field === 'amount') column.visible = false;
+        }
+      }
+
       const flowLockedFields = Array.isArray(config.flowLockedFields)
         ? [...config.flowLockedFields]
         : [];
@@ -278,6 +284,7 @@
 
       return {
         formKey: config.formKey || '',
+        showPricing: config.showPricing !== false,
         viewKey: config.viewKey || 'draft',
         flowLockedFields,
         messages,

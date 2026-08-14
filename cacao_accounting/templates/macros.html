@@ -792,8 +792,8 @@
 {% endmacro %}
 
 {# ─── Line Items read-only table (for detail pages) ───────────── #}
-{% macro lineas_tabla_lectura(items, currency_code='') %}
-{{ dv_macros.detail_lines_table(items, currency_code=currency_code) }}
+{% macro lineas_tabla_lectura(items, currency_code='', show_pricing=True) %}
+{{ dv_macros.detail_lines_table(items, currency_code=currency_code, show_pricing=show_pricing) }}
 {% endmacro %}
 
 {# ─── Audit Timeline (reusable across all document types) ─────── #}

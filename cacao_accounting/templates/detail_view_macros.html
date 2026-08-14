@@ -82,7 +82,7 @@
 </div>
 {% endmacro %}
 
-{% macro detail_lines_table(items, title='Productos / Servicios', currency_code='') %}
+{% macro detail_lines_table(items, title='Productos / Servicios', currency_code='', show_pricing=True) %}
 <div class="ca-card mt-3">
   <div class="ca-card-header">
     <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>{{ _(title) }}</h6>
@@ -98,8 +98,10 @@
           <th>{{ _('Descripción') }}</th>
           <th>{{ _('Unidad de medida') }}</th>
           <th class="text-end">{{ _('Cantidad') }}</th>
+          {% if show_pricing %}
           <th class="text-end">{{ _('Precio / Costo Unitario') }}{% if currency_code %} ({{ currency_code }}){% endif %}</th>
           <th class="text-end">{{ _('Precio / Costo Total') }}{% if currency_code %} ({{ currency_code }}){% endif %}</th>
+          {% endif %}
           <th>{{ _('Acciones') }}</th>
         </tr>
       </thead>
@@ -128,15 +130,17 @@
           <td>{{ item.item_name|default('', true) or '-' }}</td>
           <td>{{ item.uom|default('', true) or '-' }}</td>
           <td class="text-end">{{ format_quantity(item.qty|default(0, true)) }}</td>
+          {% if show_pricing %}
           <td class="text-end">{{ format_money_with_currency(item.rate|default('', true) or item.basic_rate|default('', true), currency_code) }}</td>
           <td class="text-end">{{ format_money_with_currency(item.amount|default(0, true), currency_code) }}</td>
+          {% endif %}
           <td>
             <button type="button" class="btn btn-sm btn-outline-primary btn-line-modal"
                 data-bs-toggle="modal" data-bs-target="#lineDetailModal">{{ _('Ver detalle') }}</button>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="8" class="text-center text-muted py-3">{{ _('Sin líneas registradas.') }}</td></tr>
+        <tr><td colspan="{{ 8 if show_pricing else 6 }}" class="text-center text-muted py-3">{{ _('Sin líneas registradas.') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -153,8 +157,10 @@
     <div class="col-md-8"><strong>{{ _('Descripción') }}</strong><p class="mb-0" id="line-item-name">-</p></div>
     <div class="col-md-4"><strong>{{ _('Unidad de medida') }}</strong><p class="mb-0" id="line-uom">-</p></div>
     <div class="col-md-4"><strong>{{ _('Cantidad') }}</strong><p class="mb-0" id="line-qty">0</p></div>
+    {% if show_pricing %}
     <div class="col-md-4"><strong>{{ _('Precio / Costo Unitario') }}{% if currency_code %} ({{ currency_code }}){% endif %}</strong><p class="mb-0" id="line-rate">0</p></div>
     <div class="col-md-4"><strong>{{ _('Precio / Costo Total') }}{% if currency_code %} ({{ currency_code }}){% endif %}</strong><p class="mb-0" id="line-amount">0</p></div>
+    {% endif %}
     <div class="col-md-4"><strong>{{ _('Bodega') }}</strong><p class="mb-0" id="line-warehouse">-</p></div>
     <div class="col-md-4"><strong>{{ _('Cuenta') }}</strong><p class="mb-0" id="line-account">-</p></div>
     <div class="col-md-4"><strong>{{ _('Centro de costos') }}</strong><p class="mb-0" id="line-cost-center">-</p></div>
@@ -184,10 +190,12 @@
           <dd class="col-sm-8" id="modal-line-uom">-</dd>
           <dt class="col-sm-4">{{ _('Cantidad') }}</dt>
           <dd class="col-sm-8" id="modal-line-qty">0</dd>
+          {% if show_pricing %}
           <dt class="col-sm-4">{{ _('Precio / Costo Unitario') }}{% if currency_code %} ({{ currency_code }}){% endif %}</dt>
           <dd class="col-sm-8" id="modal-line-rate">0</dd>
           <dt class="col-sm-4">{{ _('Precio / Costo Total') }}{% if currency_code %} ({{ currency_code }}){% endif %}</dt>
           <dd class="col-sm-8" id="modal-line-amount">0</dd>
+          {% endif %}
           <dt class="col-sm-4">{{ _('Bodega') }}</dt>
           <dd class="col-sm-8" id="modal-line-warehouse">-</dd>
           <dt class="col-sm-4">{{ _('Cuenta') }}</dt>
@@ -227,8 +235,10 @@
       document.getElementById('line-item-name').textContent = readValue(data.itemName);
       document.getElementById('line-uom').textContent = readValue(data.uom);
       document.getElementById('line-qty').textContent = data.qty || '0';
+      {% if show_pricing %}
       document.getElementById('line-rate').textContent = data.rate || '0';
       document.getElementById('line-amount').textContent = data.amount || '0';
+      {% endif %}
       document.getElementById('line-warehouse').textContent = readValue(data.warehouse);
       document.getElementById('line-account').textContent = readValue(data.account);
       document.getElementById('line-cost-center').textContent = readValue(data.costCenter);
@@ -244,8 +254,10 @@
       document.getElementById('modal-line-item-name').textContent = readValue(data.itemName);
       document.getElementById('modal-line-uom').textContent = readValue(data.uom);
       document.getElementById('modal-line-qty').textContent = data.qty || '0';
+      {% if show_pricing %}
       document.getElementById('modal-line-rate').textContent = data.rate || '0';
       document.getElementById('modal-line-amount').textContent = data.amount || '0';
+      {% endif %}
       document.getElementById('modal-line-warehouse').textContent = readValue(data.warehouse);
       document.getElementById('modal-line-account').textContent = readValue(data.account);
       document.getElementById('modal-line-cost-center').textContent = readValue(data.costCenter);
