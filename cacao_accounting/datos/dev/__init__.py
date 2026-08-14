@@ -20,6 +20,7 @@ from datetime import date
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.database import (
     DeliveryNote,
+    Item,
     PurchaseInvoice,
     PurchaseOrder,
     PurchaseReceipt,
@@ -344,17 +345,39 @@ def cargar_bodegas():
     )
     warehouses = []
     for b in _make_bodegas():
-        warehouses.append(b)
-        database.session.add(b)
+        warehouse = database.session.execute(database.select(type(b)).filter_by(code=b.code)).scalars().first()
+        if warehouse is None:
+            warehouse = b
+            database.session.add(warehouse)
+        else:
+            warehouse.name = b.name
+            warehouse.company = b.company
+            warehouse.is_active = True
+        warehouses.append(warehouse)
+        database.session.flush()
         if inv_account:
-            database.session.add(
-                WarehouseCompanyAccount(
-                    warehouse_code=b.code,
-                    company=b.company,
-                    inventory_account_id=inv_account.id,
-                    is_active=True,
+            account = database.session.execute(
+                database.select(WarehouseCompanyAccount).filter_by(warehouse_code=b.code, company=b.company)
+            ).scalars().first()
+            if account is None:
+                database.session.add(
+                    WarehouseCompanyAccount(
+                        warehouse_code=b.code,
+                        company=b.company,
+                        inventory_account_id=inv_account.id,
+                        is_active=True,
+                    )
                 )
-            )
+            else:
+                account.inventory_account_id = inv_account.id
+                account.is_active = True
+    principal = next((warehouse for warehouse in warehouses if warehouse.code == "PRINCIPAL"), None)
+    if principal:
+        database.session.execute(
+            database.update(Item)
+            .where(Item.is_stock_item.is_(True), Item.default_warehouse_id.is_(None))
+            .values(default_warehouse_id=principal.code)
+        )
     database.session.commit()
     return warehouses
 
