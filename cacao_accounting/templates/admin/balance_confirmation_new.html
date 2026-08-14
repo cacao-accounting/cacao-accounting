@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item">
+      {% if party_type == 'customer' %}
+        <a href="{{ url_for('ventas.ventas_cliente_lista') }}" class="link-dark">{{ _('Clientes') }}</a>
+      {% else %}
+        <a href="{{ url_for('compras.compras_proveedor_lista') }}" class="link-dark">{{ _('Proveedores') }}</a>
+      {% endif %}
+    </li>
+    <li class="breadcrumb-item">
+      {% if party_type == 'customer' %}
+        <a href="{{ url_for('ventas.ventas_cliente', customer_id=party.id) }}" class="link-dark">{{ party.name }}</a>
+      {% else %}
+        <a href="{{ url_for('compras.compras_proveedor', supplier_id=party.id) }}" class="link-dark">{{ party.name }}</a>
+      {% endif %}
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Solicitar confirmación de saldo') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card" style="max-width: 800px; margin: 0 auto;">
+  <div class="ca-card-header bg-primary text-white">
+    <h5 class="ca-card-title text-white mb-0"><i class="bi bi-envelope-plus me-1"></i> {{ _('Solicitar confirmación de saldo') }}</h5>
+  </div>
+  <div class="p-4" x-data="{ emails: {{ suggested_emails | tojson }}, newEmail: '' }">
+    <form method="POST" action="{{ url_for('balance_confirmations.crear_confirmacion_form', party_id=party.id, party_type=party_type) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="mb-3">
+        <label class="form-label fw-bold">{{ _('Cliente / Proveedor') }}</label>
+        <input type="text" class="form-control" value="{{ party.name }}" disabled>
+      </div>
+
+      <div class="mb-3">
+        <label for="company_id" class="form-label fw-bold">{{ _('Compañía') }} <span class="text-danger">*</span></label>
+        <select class="form-select" id="company_id" name="company_id" required>
+          <option value="">-- Seleccione Compañía --</option>
+          {% for code, name in companies %}
+            <option value="{{ code }}">{{ name }}</option>
+          {% endfor %}
+        </select>
+        <div class="form-text small text-muted">{{ _('La compañía determina los documentos y saldos que serán incluidos.') }}</div>
+      </div>
+
+      <div class="mb-3">
+        <label for="cutoff_date" class="form-label fw-bold">{{ _('Fecha de corte') }} <span class="text-danger">*</span></label>
+        <input type="date" class="form-control" id="cutoff_date" name="cutoff_date" max="{{ today }}" required>
+        <div class="form-text small text-muted">{{ _('Representa la fecha para la cual se desea confirmar el saldo. Partidas posteriores no afectarán.') }}</div>
+      </div>
+
+      <!-- Destinatarios con Alpine JS para agregar/eliminar interactivamente -->
+      <div class="mb-4">
+        <label class="form-label fw-bold">{{ _('Destinatarios Autorizados') }} <span class="text-danger">*</span></label>
+        <div class="border rounded p-3 bg-light">
+          <div class="d-flex gap-2 mb-3">
+            <input type="email" class="form-control" x-model="newEmail" @keydown.enter.prevent="if (newEmail.trim() && newEmail.includes('@')) { if (!emails.includes(newEmail.trim().lower())) { emails.push(newEmail.trim().lower()); } newEmail = ''; }" placeholder="ejemplo@correo.com">
+            <button type="button" class="btn btn-secondary btn-sm" @click="if (newEmail.trim() && newEmail.includes('@')) { if (!emails.includes(newEmail.trim().lower())) { emails.push(newEmail.trim().lower()); } newEmail = ''; }"><i class="bi bi-plus"></i> {{ _('Agregar') }}</button>
+          </div>
+
+          <template x-if="emails.length === 0">
+            <div class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i> {{ _('Debe indicar al menos una dirección de correo electrónico.') }}</div>
+          </template>
+
+          <div class="d-flex flex-wrap gap-2">
+            <template x-for="(email, index) in emails" :key="index">
+              <span class="badge bg-primary d-flex align-items-center gap-2 p-2">
+                <span x-text="email"></span>
+                <input type="hidden" name="emails" :value="email">
+                <button type="button" class="btn-close btn-close-white btn-sm" @click="emails.splice(index, 1)" style="font-size: 0.6rem;"></button>
+              </span>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center">
+        {% if party_type == 'customer' %}
+          <a href="{{ url_for('ventas.ventas_cliente', customer_id=party.id) }}" class="btn btn-outline-secondary">{{ _('Cancelar') }}</a>
+        {% else %}
+          <a href="{{ url_for('compras.compras_proveedor', supplier_id=party.id) }}" class="btn btn-outline-secondary">{{ _('Cancelar') }}</a>
+        {% endif %}
+        <button type="submit" class="btn btn-primary" :disabled="emails.length === 0"><i class="bi bi-file-earmark-check me-1"></i> {{ _('Crear Borrador') }}</button>
+      </div>
+
+    </form>
+  </div>
+</div>
+
+{% endblock %}

@@ -30,6 +30,9 @@
         <button type="submit" class="btn btn-info btn-sm"><i class="bi bi-person-plus me-1"></i>{{ _('Habilitar como Cliente') }}</button>
       </form>
       {% endif %}
+      {% if is_cloud_mode() %}
+      <a href="{{ url_for('balance_confirmations.crear_confirmacion_form', party_id=registro.id, party_type='supplier') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-envelope-check me-1"></i>{{ _('Solicitar confirmación de saldo') }}</a>
+      {% endif %}
     </div>
   </div>
   <div class="p-3">
@@ -52,5 +55,87 @@
 {% set address_edit_endpoint = 'compras.compras_proveedor_direccion_editar' %}
 {% set address_deactivate_endpoint = 'compras.compras_proveedor_direccion_desactivar' %}
 {% include "party_detail_sections.html" %}
+
+{% if is_cloud_mode() %}
+<div class="ca-card mt-4">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-clock-history"></i> {{ _('Historial de Confirmaciones de Saldo') }}</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-striped mb-0">
+      <thead>
+        <tr>
+          <th>{{ _('Documento') }}</th>
+          <th>{{ _('Compañía') }}</th>
+          <th>{{ _('Fecha Corte') }}</th>
+          <th>{{ _('Creado En') }}</th>
+          <th>{{ _('Estado') }}</th>
+          <th>{{ _('Resultado') }}</th>
+          <th>{{ _('Respondiente / Comentario') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set conf_history = get_balance_confirmations_history(registro.id, 'supplier') %}
+        {% if conf_history %}
+          {% for conf in conf_history %}
+            <tr>
+              <td>
+                <a href="{{ url_for('balance_confirmations.ver_confirmacion', confirmation_id=conf.id) }}" class="link-primary fw-bold">
+                  {{ conf.document_no or conf.id[:8].upper() }}
+                </a>
+              </td>
+              <td>{{ conf.company }}</td>
+              <td>{{ conf.cutoff_date.strftime('%d/%m/%Y') if conf.cutoff_date else '-' }}</td>
+              <td>{{ conf.created_at.strftime('%d/%m/%Y %H:%M') if conf.created_at else '-' }}</td>
+              <td>
+                {% if conf.status == 'confirmed' %}
+                  <span class="badge bg-success">{{ _('Confirmada') }}</span>
+                {% elif conf.status == 'disputed' %}
+                  <span class="badge bg-danger">{{ _('Disputada') }}</span>
+                {% elif conf.status == 'sent' %}
+                  <span class="badge bg-info">{{ _('Enviada') }}</span>
+                {% elif conf.status == 'viewed' %}
+                  <span class="badge bg-primary">{{ _('Visualizada') }}</span>
+                {% elif conf.status == 'cancelled' %}
+                  <span class="badge bg-secondary">{{ _('Cancelada') }}</span>
+                {% elif conf.status == 'expired' %}
+                  <span class="badge bg-dark">{{ _('Expirada') }}</span>
+                {% else %}
+                  <span class="badge bg-light text-dark">{{ conf.status }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if conf.response_type == 'confirmed' %}
+                  <strong class="text-success"><i class="bi bi-check-circle"></i> {{ _('Conciliado') }}</strong>
+                {% elif conf.response_type == 'disputed' %}
+                  <strong class="text-danger"><i class="bi bi-x-circle"></i> {{ _('No conciliado') }}</strong>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                {% if conf.respondent_email %}
+                  <strong>{{ conf.respondent_first_name }} {{ conf.respondent_last_name }}</strong> ({{ conf.respondent_email }})
+                  {% if conf.response_comment %}
+                    <p class="text-muted mb-0 small"><i class="bi bi-chat-left-quote"></i> {{ conf.response_comment }}</p>
+                  {% endif %}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="7" class="text-center text-muted p-4">
+              <i class="bi bi-info-circle me-1"></i>{{ _('No hay solicitudes de confirmación registradas para este proveedor.') }}
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}

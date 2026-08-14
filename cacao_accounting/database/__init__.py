@@ -2733,6 +2733,7 @@ class PaymentEntry(database.Model, DocBase):  # type: ignore[name-defined]
     reference_date = database.Column(database.Date(), nullable=True)
     mode_of_payment = database.Column(database.String(50), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
+    is_advance = database.Column(database.Boolean(), default=False, nullable=False)
 
 
 class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -4851,3 +4852,69 @@ class ApprovalAction(database.Model, BaseTabla):  # type: ignore[name-defined]
     comments = database.Column(database.Text(), nullable=True)
     level = database.Column(database.Integer(), nullable=True)
     created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
+
+
+class BalanceConfirmation(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Representa la solicitud de confirmación de saldo externa."""
+
+    __tablename__ = "balance_confirmation"
+
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    document_no = database.Column(database.String(100), nullable=True, index=True)
+    document_type = database.Column(database.String(50), default="balance_confirmation", nullable=False)
+    party_type = database.Column(database.String(20), nullable=False)  # customer | supplier
+    party_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    cutoff_date = database.Column(database.Date(), nullable=False)
+    status = database.Column(database.String(50), default="draft", nullable=False, index=True)
+
+    sent_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    viewed_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    responded_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    cancelled_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    expires_at = database.Column(database.DateTime(timezone=True), nullable=True)
+
+    snapshot_json = database.Column(database.Text(), nullable=True)
+    snapshot_hash = database.Column(database.String(64), nullable=True)
+
+    response_type = database.Column(database.String(50), nullable=True)  # confirmed | disputed
+    response_comment = database.Column(database.Text(), nullable=True)
+
+    respondent_first_name = database.Column(database.String(100), nullable=True)
+    respondent_last_name = database.Column(database.String(100), nullable=True)
+    respondent_email = database.Column(database.String(150), nullable=True)
+    respondent_ip = database.Column(database.String(64), nullable=True)
+    respondent_user_agent = database.Column(database.String(512), nullable=True)
+
+
+class BalanceConfirmationInvitation(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Representa cada destinatario autorizado para responder la confirmación."""
+
+    __tablename__ = "balance_confirmation_invitation"
+    __table_args__ = (UniqueConstraint("balance_confirmation_id", "email", name="uq_balance_confirmation_invitation"),)
+
+    balance_confirmation_id = database.Column(
+        database.String(26),
+        database.ForeignKey("balance_confirmation.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    email = database.Column(database.String(150), nullable=False)
+    token_hash = database.Column(database.String(64), nullable=False, index=True)
+    verification_code_hash = database.Column(database.String(64), nullable=False)
+    status = database.Column(database.String(50), default="pending", nullable=False)
+
+    sent_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    verified_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    last_access_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    failed_attempts = database.Column(database.Integer(), default=0, nullable=False)
+    expires_at = database.Column(database.DateTime(timezone=True), nullable=True)
