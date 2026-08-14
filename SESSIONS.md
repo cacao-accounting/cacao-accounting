@@ -49,6 +49,10 @@ Al crear una cotización de proveedor con `from_rfq`, el formulario ahora
 recibe `party` y `party_label` desde la solicitud de cotización origen para
 mostrar el proveedor seleccionado automáticamente.
 
+Las solicitudes de compra y de cotización no muestran ni persisten precios;
+los importes permanecen disponibles únicamente para cotizaciones de proveedor,
+órdenes, recepciones y facturas.
+
 ## 2026-08-14 — Refactors SonarCloud sobre origin/main
 
 ### Petición y base

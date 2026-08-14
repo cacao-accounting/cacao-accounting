@@ -47,13 +47,11 @@
       (_('Compañía'), registro.company),
       (_('Fecha'), registro.posting_date),
       (_('Solicitado por'), registro.requested_by),
-      (_('Total'), format_money_with_currency(registro.grand_total, currency_code)),
-      (_('Moneda'), currency_code),
       (_('Observaciones'), registro.remarks)
     ],
     'bi-clipboard-check'
 ) }}
-{{ macros.lineas_tabla_lectura(items, currency_code) }}
+{{ macros.lineas_tabla_lectura(items, currency_code, show_pricing=False) }}
 {{ macros.document_flow_tree("purchase_request", registro, create_actions_json=create_actions_json) }}
 {{ macros.audit_timeline(audit_timeline) }}
 {% endblock %}

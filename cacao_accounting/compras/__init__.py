@@ -325,6 +325,7 @@ def compras_solicitud_compra_nueva():
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "showPricing": False,
         "availableSourceTypes": [],
     }
     if request.method == "POST":
@@ -461,8 +462,6 @@ def compras_solicitud_compra_editar(request_id: str):
                 "item_name": item.item_name,
                 "qty": str(item.qty),
                 "uom": item.uom or "",
-                "rate": str(item.rate or 0),
-                "amount": str(item.amount or 0),
             }
             for item in lineas
         ],
@@ -551,7 +550,7 @@ def compras_solicitud_compra_submit(request_id: str):
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=True)
+        validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=False)
         check_budget_control(
             company=registro.company,
             posting_date=registro.posting_date,
@@ -1801,8 +1800,6 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
                 raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
-            rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
             linea = PurchaseQuotationItem(
                 purchase_quotation_id=quotation_id,
@@ -1810,14 +1807,13 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
                 item_name=request.form.get(f"item_name_{i}", ""),
                 qty=qty,
                 uom=uom,
-                rate=rate,
-                amount=amount,
+                rate=Decimal("0"),
+                amount=Decimal("0"),
             )
             database.session.add(linea)
             database.session.flush()
-            _create_line_relation(i, "purchase_quotation", quotation_id, linea.id, qty, uom, rate, amount)
+            _create_line_relation(i, "purchase_quotation", quotation_id, linea.id, qty, uom, Decimal("0"), Decimal("0"))
             total_qty += qty
-            total += amount
             line_count += 1
         i += 1
     if line_count == 0:
@@ -1837,20 +1833,17 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
                 raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
-            rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
             linea = PurchaseRequestItem(
                 purchase_request_id=request_id,
                 item_code=item_code,
                 item_name=request.form.get(f"item_name_{i}", ""),
                 qty=qty,
                 uom=request.form.get(f"uom_{i}") or None,
-                rate=rate,
-                amount=amount,
+                rate=Decimal("0"),
+                amount=Decimal("0"),
             )
             database.session.add(linea)
             total_qty += qty
-            total += amount
             line_count += 1
         i += 1
     if line_count == 0:
@@ -2498,6 +2491,7 @@ def _purchase_quotation_transaction_config(
         "viewKey": "draft",
         "items": items,
         "uoms": uoms,
+        "showPricing": False,
         "columns": columns or [],
         "availableSourceTypes": [{"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)}],
         "initialSourceType": initial_source_type,
@@ -2639,6 +2633,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "showPricing": False,
         "availableSourceTypes": [{"value": "purchase_request", "label": _(LABEL_SOLICITUD_COMPRA)}],
         "initialHeader": {
             "company": registro.company or "",
@@ -2748,7 +2743,7 @@ def compras_solicitud_cotizacion_submit(quotation_id: str):
             .scalars()
             .all()
         )
-        validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=True)
+        validate_submit_prerequisites(registro, items=items, require_party=False, require_rate_positive=False)
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Solicitud de cotización"):
