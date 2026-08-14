@@ -22,7 +22,8 @@
     "unrealized_exchange_loss_account_id": "720400",
     "deferred_income_account_id": "215200",
     "deferred_expense_account_id": "114900",
-    "payment_discount_account_id": "410300",
+    "sales_discount_account_id": "410300",
+    "purchase_discount_account_id": "410400",
     "period_profit_loss_account_id": "317100",
     "retained_earnings_account_id": "315100"
   }

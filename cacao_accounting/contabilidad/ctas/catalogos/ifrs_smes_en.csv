@@ -240,6 +240,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 41.09.02,Sales Discounts and Rebates,41.09,0,Income,,
 42,Other Operating Revenue,4,1,Income,,
 42.01.01,Operating Lease and Rental Income,42,0,Income,,
+42.02.01,Purchase Discounts,42,0,Income,,payment_discount
 42.09.01,Other Operating Revenue,42,0,Income,,
 5,Cost of Sales,,1,Cost,,
 51,Cost of Goods Sold,5,1,Cost,,

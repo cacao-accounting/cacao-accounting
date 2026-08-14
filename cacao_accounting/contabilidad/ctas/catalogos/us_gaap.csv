@@ -154,6 +154,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 410100,Product Sales,410000,0,Income,,income
 410200,Sales Returns and Allowances,410000,0,Income,,
 410300,Sales Discounts,410000,0,Income,,
+410400,Purchase Discounts,410000,0,Income,,payment_discount
 420000,Service Revenue,400000,1,Income,,
 420100,Service Revenue,420000,0,Income,,income
 420200,Service Refunds and Allowances,420000,0,Income,,
