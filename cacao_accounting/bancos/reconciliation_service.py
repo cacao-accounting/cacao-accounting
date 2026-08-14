@@ -24,6 +24,8 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, primary_ledger_id
 
+UNSUPPORTED_TARGET_TYPE_ERROR = "Tipo de destino no soportado para conciliacion bancaria."
+
 
 class BankReconciliationError(ValueError):
     """Error controlado de conciliacion bancaria."""
@@ -199,7 +201,7 @@ def _target_amount(target_type: str, target_id: str, transaction: BankTransactio
                     return _decimal_value(amount)
             return _gl_amount(entry)
         case _:
-            raise BankReconciliationError("Tipo de destino no soportado para conciliacion bancaria.")
+            raise BankReconciliationError(UNSUPPORTED_TARGET_TYPE_ERROR)
 
 
 def _target_company(target_type: str, target_id: str) -> str:
@@ -217,7 +219,7 @@ def _target_company(target_type: str, target_id: str) -> str:
                 raise BankReconciliationError("La entrada GL a conciliar no existe.")
             return str(entry.company)
         case _:
-            raise BankReconciliationError("Tipo de destino no soportado para conciliacion bancaria.")
+            raise BankReconciliationError(UNSUPPORTED_TARGET_TYPE_ERROR)
 
 
 def _candidate_score(
@@ -486,7 +488,7 @@ def _lock_reconciliation_target(target_type: str, target_id: str) -> None:
     """Bloquea el documento destino antes de leer su saldo conciliable."""
     model = {"payment_entry": PaymentEntry, "gl_entry": GLEntry}.get(target_type)
     if model is None:
-        raise BankReconciliationError("Tipo de destino no soportado para conciliacion bancaria.")
+        raise BankReconciliationError(UNSUPPORTED_TARGET_TYPE_ERROR)
     target = database.session.get(model, target_id, with_for_update=True)
     if target is None:
         raise BankReconciliationError("El documento destino no existe.")
