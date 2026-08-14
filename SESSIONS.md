@@ -3,6 +3,43 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — Diagnóstico de fallos de CI con GitHub CLI
+
+### Petición
+
+Utilizar `gh` (GitHub CLI) para identificar los fallos en CI de GitHub y
+diagnosticar la causa raíz de las ejecuciones fallidas.
+
+### Hallazgos
+
+Se consultaron las ejecuciones de CI con conclusión `failure` mediante
+`gh api` y `gh run list`. Las fallas activas se agrupan en dos fuentes:
+
+1. **`lint` (mypy)** — ejecutado en el job `lint` de Python 3.13, paso
+   "Lint project code". El error es:
+   ```
+   cacao_accounting/contabilidad/balance_confirmation_bp.py:678: error: "Result[Any]" has no attribute "rowcount"  [attr-defined]
+   ```
+   `session.execute(update(...))` retorna `Result[Any]` según los stubs de
+   SQLAlchemy 2.0; el atributo `rowcount` existe en tiempo de ejecución en
+   `CursorResult` pero no está declarado en la interfaz de tipo `Result`.
+   Este error bloquea a todos los PRs de la rama
+   `feature/balance-confirmation`, ya que mypy falla antes de que pytest
+   comience.
+
+2. **`Publish to PyPi` / `npm_and_yarn` / `pip`** — cientos de fallas históricas
+   de Dependabot update PRs; no guardan relación con el código de la aplicación
+   y son dependientes del estado externo de PyPI/npm (tokens, versión publicada,
+   etc.).
+
+### Corrección aplicada
+
+En `cacao_accounting/contabilidad/balance_confirmation_bp.py:678`, se
+reemplazó `result.rowcount` por `getattr(result, "rowcount", 0)`, replicando
+el patrón ya usado en `cacao_accounting/compras/__init__.py:1261`. Se
+verificó con mypy, flake8, ruff y pydocstyle: todas las herramientas pasan
+limpias sobre el archivo modificado.
+
 ## 2026-08-14 — Revisión por pares y correcciones de confirmación de saldos
 
 ### Petición
