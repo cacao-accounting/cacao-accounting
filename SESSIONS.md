@@ -3,6 +3,16 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — Corrección de clasificación de descuentos en catálogos
+
+### Hallazgo
+
+La revisión de los commits locales detectó que `sales_discount_account_id` apuntaba a cuentas clasificadas como `Income` en los catálogos IFRS SMEs, NIIF Pymes y US GAAP, aunque los descuentos concedidos sobre ventas deben reconocerse como gasto.
+
+### Corrección y verificación
+
+Se clasificaron `41.09.02` y `410300` como `Expense` con `account_type=payment_discount`, y se agregó una regresión que valida la naturaleza de las cuentas de descuentos de ventas y compras en los catálogos ampliados. El caso focalizado pasó: 1 prueba aprobada, 101 omitidas.
+
 ## 2026-08-14 — División de la cuenta de descuentos por pronto pago (ventas/compras)
 
 ### Petición

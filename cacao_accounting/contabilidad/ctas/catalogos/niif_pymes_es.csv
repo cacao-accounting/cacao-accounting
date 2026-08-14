@@ -237,7 +237,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 41.05.01,Ingresos por Comisiones y Agencia,41.05,0,Income,,
 41.09,Deducciones de Ingresos,41,1,Income,,
 41.09.01,Devoluciones y Reembolsos sobre Ventas,41.09,0,Income,,
-41.09.02,Descuentos y Rebajas sobre Ventas,41.09,0,Income,,
+41.09.02,Descuentos y Rebajas sobre Ventas,41.09,0,Expense,,payment_discount
 42,Otros Ingresos Operativos,4,1,Income,,
 42.01.01,Ingresos por Arrendamientos Operativos y Alquileres,42,0,Income,,
 42.02.01,Descuentos sobre Compras,42,0,Income,,payment_discount

@@ -2273,6 +2273,14 @@ def test_base_catalog_mapping_covers_required_default_accounts(app_ctx):
         assert all(code in new_codes for code in new_mapping.values())
         assert len(new_codes) == len(new_rows)
 
+        account_rows = {row["codigo"]: row for row in new_rows}
+        sales_discount = account_rows[new_mapping["sales_discount_account_id"]]
+        purchase_discount = account_rows[new_mapping["purchase_discount_account_id"]]
+        assert sales_discount["account_type"] == "payment_discount"
+        assert sales_discount["rubro"] == "Expense"
+        assert purchase_discount["account_type"] == "payment_discount"
+        assert purchase_discount["rubro"] == "Income"
+
 
 def test_setup_with_predefined_catalog_creates_complete_company_defaults(app_ctx):
     from cacao_accounting.contabilidad.default_accounts import DEFAULT_ACCOUNT_FIELDS
