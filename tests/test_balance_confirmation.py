@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -341,3 +342,76 @@ def test_public_verification_and_response_flow(app_ctx) -> None:
     # Assert AuditTrail records the final response
     audit_events = database.session.execute(select(AuditTrail.action).where(AuditTrail.document_id == conf.id)).scalars().all()
     assert "balance_confirmation_confirmed" in audit_events
+
+
+def test_expired_confirmation_rejects_public_verify_and_respond(app_ctx) -> None:
+    """Expired confirmations must reject POST verify and respond, not only the GET view."""
+    cutoff = date(2026, 5, 31)
+    conf = create_balance_confirmation(
+        company_id="cacao",
+        party_id="cust-1",
+        party_type="customer",
+        cutoff_date=cutoff,
+        emails=["expired@client.com"],
+        created_by_user_id="user-admin",
+    )
+    inv = [i for i in database.session.new if isinstance(i, BalanceConfirmationInvitation)][0]
+    raw_token = inv._raw_token
+    raw_code = inv._raw_code
+
+    conf.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+    database.session.commit()
+
+    client = app_ctx.test_client()
+
+    # POST verify on an expired confirmation must be rejected
+    res_verify = client.post(
+        f"/confirm-balance/{raw_token}/verify",
+        data={"first_name": "Jane", "last_name": "Roe", "email": "expired@client.com", "code": raw_code, "authorized": "on"},
+    )
+    assert res_verify.status_code == 302
+    assert conf.status == "expired"
+    assert inv.status != "viewed"
+    assert inv.failed_attempts == 0
+
+    # POST respond on an expired confirmation must be rejected
+    with client.session_transaction() as session:
+        session[f"verified_confirmation_{conf.id}"] = inv.id
+    res_respond = client.post(
+        f"/confirm-balance/{raw_token}/respond",
+        data={"response_type": "confirmed", "response_comment_optional": "todo en orden"},
+    )
+    assert res_respond.status_code == 302
+    assert conf.status == "expired"
+    assert conf.response_type is None
+
+    # GET shows the expired status page
+    res_view = client.get(f"/confirm-balance/{raw_token}")
+    assert res_view.status_code == 200
+    assert "ha expirado y ya no se permiten respuestas" in res_view.get_data(as_text=True)
+
+
+def test_invitation_emails_are_unique_per_confirmation(app_ctx) -> None:
+    """The unique constraint rejects duplicate emails for the same confirmation."""
+    cutoff = date(2026, 5, 31)
+    conf = create_balance_confirmation(
+        company_id="cacao",
+        party_id="cust-1",
+        party_type="customer",
+        cutoff_date=cutoff,
+        emails=["dup@client.com"],
+        created_by_user_id="user-admin",
+    )
+    database.session.commit()
+
+    duplicate = BalanceConfirmationInvitation(
+        balance_confirmation_id=conf.id,
+        email="dup@client.com",
+        token_hash="a" * 64,
+        verification_code_hash="b" * 64,
+        status="pending",
+    )
+    database.session.add(duplicate)
+    with pytest.raises(IntegrityError):
+        database.session.commit()
+    database.session.rollback()
