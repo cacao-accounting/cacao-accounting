@@ -2220,8 +2220,8 @@ def _purchase_order_transaction_config(
     }
 
 
-def _create_purchase_order_from_request(form: dict):
-    """Crea una orden de compra desde el formulario enviado."""
+def _purchase_order_context(form: dict):
+    """Validate sourcing data and resolve the context for a purchase order."""
     award_id = form.get("purchase_award_id") or None
     exception_reason = form.get("comparison_exception_reason") or None
     sourcing_config = get_purchase_sourcing_config()
@@ -2255,6 +2255,15 @@ def _create_purchase_order_from_request(form: dict):
             break
     company, transaction_currency = _validate_purchase_flow_header(source, form)
     transaction_currency = transaction_currency or form.get("transaction_currency") or form.get("currency") or None
+    return award_id, supplier_id, supplier, posting_date, company, transaction_currency
+
+
+def _create_purchase_order_from_request(form: dict):
+    """Crea una orden de compra desde el formulario enviado."""
+    context = _purchase_order_context(form)
+    if context is None:
+        return None
+    award_id, supplier_id, supplier, posting_date, company, transaction_currency = context
     orden = PurchaseOrder(
         supplier_id=supplier_id,
         supplier_name=supplier.name if supplier else None,
