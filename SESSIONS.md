@@ -21,10 +21,18 @@ JavaScript `S2004`, `S3358` y `S3776`.
   transaccional y se eliminó el ternario anidado de campos bloqueados.
 - `38bc54a2`: se extrajo la resolución de cuentas de anticipo y textos de
   posting de pagos.
+- `0869cb77`: se aplanó la selección de tipos de documento origen en los
+  formularios de ventas y compras.
+- `2ce8ece8`: se hicieron explícitos los caminos de aborto y la ausencia de
+  reglas fiscales para que Mypy valide el flujo completo.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
 `/tmp/sonar-main-reports-test-1786744716.log`.
+
+La validación global actual también pasa pydocstyle y Mypy sobre 212 módulos.
+El build y `twine check` pasan usando artefactos aislados en
+`/tmp/cacao-build-1786745104`.
 
 ---
 
