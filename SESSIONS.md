@@ -58,6 +58,20 @@ opcional: si el identificador enviado por un formulario obsoleto no existe,
 no corresponde al RFQ o ya está cerrado, se descarta y la cotización se guarda
 sin ronda asociada.
 
+## 2026-08-14 — Excepción de adjudicación para administración y compras
+
+### Petición
+
+Un administrador o el Gerente de Compras debe poder cerrar una solicitud de
+cotización con una sola oferta, siempre que registre una justificación.
+
+### Implementación
+
+La autorización de excepciones del comparativo reconoce tanto la clasificación
+`admin` como el rol de Gerente de Compras. La validación del servidor y la
+interfaz comparten esta regla; sin justificación, la adjudicación sigue siendo
+rechazada y la autorización queda registrada en el comparativo.
+
 ## 2026-08-14 — Refactors SonarCloud sobre origin/main
 
 ### Petición y base

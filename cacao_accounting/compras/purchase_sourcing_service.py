@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     RolesUser,
     SupplierQuotation,
     SupplierQuotationItem,
+    User,
     database,
 )
 
@@ -85,6 +86,14 @@ def is_purchase_manager(user_id: str | None) -> bool:
         ).scalar_one_or_none()
         is not None
     )
+
+
+def is_purchase_sourcing_authorizer(user_id: str | None) -> bool:
+    """Return whether a user may authorize sourcing exceptions."""
+    if not user_id:
+        return False
+    user = database.session.get(User, user_id)
+    return bool(user and user.classification == "admin") or is_purchase_manager(user_id)
 
 
 def current_negotiation_round(rfq_id: str) -> PurchaseNegotiationRound | None:
@@ -189,7 +198,7 @@ def validate_award_request(
     if not selections:
         raise PurchaseSourcingError("Debe adjudicar al menos una línea.")
     manual_override_items = _find_manual_override_items(items, offers, selections)
-    if manual_override_items and (not is_purchase_manager(user_id) or not reason):
+    if manual_override_items and (not is_purchase_sourcing_authorizer(user_id) or not reason):
         raise PurchaseSourcingError("Seleccionar una oferta no recomendada requiere autorización y justificación.")
     return cast(list[PurchaseQuotationItem], items), offers, manual_override_items
 
@@ -199,13 +208,13 @@ def _validate_award_authorization(
 ) -> None:
     """Validate offer count and authorization for sourcing exceptions."""
     insufficient = len(offers) < minimum_offers
-    manager = is_purchase_manager(user_id)
-    if insufficient and not manager:
+    authorizer = is_purchase_sourcing_authorizer(user_id)
+    if insufficient and not authorizer:
         raise PurchaseSourcingError(f"Se requieren al menos {minimum_offers} ofertas; solo existen {len(offers)}.")
     if insufficient and not reason:
         raise PurchaseSourcingError("La autorización de oferta única requiere una justificación.")
-    if reason and not manager:
-        raise PurchaseSourcingError("Solo el Gerente de Compras puede autorizar excepciones.")
+    if reason and not authorizer:
+        raise PurchaseSourcingError("Solo un Administrador o el Gerente de Compras puede autorizar excepciones.")
 
 
 def _find_manual_override_items(

@@ -136,14 +136,14 @@
         </tbody>
       </table>
     </div>
-    {% if offers|length < sourcing_config.minimum_offers and not is_purchase_manager %}
+    {% if offers|length < sourcing_config.minimum_offers and not is_purchase_sourcing_authorizer %}
       <div class="alert alert-warning mt-3">No se puede adjudicar: se requieren {{ sourcing_config.minimum_offers }} ofertas.</div>
-    {% elif is_purchase_manager %}
+    {% elif is_purchase_sourcing_authorizer %}
       <div class="alert alert-warning mt-3">La justificación será obligatoria para una excepción de ofertas o una selección no recomendada.</div>
       <label class="form-label" for="authorization_reason">Justificación de autorización</label>
       <textarea class="form-control" id="authorization_reason" name="authorization_reason"></textarea>
     {% endif %}
-    <button class="btn btn-primary mt-3" id="award-submit" type="submit" {% if offers|length < sourcing_config.minimum_offers and not is_purchase_manager %}disabled{% endif %}>Adjudicar y finalizar comparativo</button>
+    <button class="btn btn-primary mt-3" id="award-submit" type="submit" {% if offers|length < sourcing_config.minimum_offers and not is_purchase_sourcing_authorizer %}disabled{% endif %}>Adjudicar y finalizar comparativo</button>
   </form>
 </div>
 {% endif %}
