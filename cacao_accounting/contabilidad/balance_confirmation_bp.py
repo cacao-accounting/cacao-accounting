@@ -23,6 +23,7 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.decorators import modulo_activo, exige_acceso_compania
 from cacao_accounting.contabilidad.balance_confirmation import (
     create_balance_confirmation,
+    prepare_invitation_token,
 )
 from cacao_accounting.messaging.email import send_email, EmailError
 from cacao_accounting.audit_trail_service import (

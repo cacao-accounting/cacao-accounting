@@ -98,87 +98,51 @@ def get_open_documents_at_cutoff(
     items = []
 
     # 1. Facturas y notas de crédito/débito
-    if party_type == "customer":
-        # Facturas, notas de crédito, notas de débito de clientes
-        stmt = select(SalesInvoice).where(
-            SalesInvoice.company == company_id,
-            SalesInvoice.customer_id == party_id,
-            SalesInvoice.posting_date <= cutoff_date,
-            SalesInvoice.docstatus.in_((1, 2)),
+    if party_type in ("customer", "supplier"):
+        model_class: Any = SalesInvoice if party_type == "customer" else PurchaseInvoice
+        party_filter = (
+            SalesInvoice.customer_id == party_id if party_type == "customer" else PurchaseInvoice.supplier_id == party_id
+        )
+        default_invoice_label = "Factura" if party_type == "customer" else "Factura de Compra"
+
+        stmt = select(model_class).where(
+            model_class.company == company_id,
+            party_filter,
+            model_class.posting_date <= cutoff_date,
+            model_class.docstatus.in_((1, 2)),
         )
         rows = database.session.execute(stmt).scalars().all()
         for doc in rows:
             if doc.docstatus == 2:
                 # Excluir si se canceló antes de la fecha de corte
-                doc_type_name = doc.document_type or "sales_invoice"
+                doc_type_name = doc.document_type or model_class.__tablename__
                 if is_cancelled_before_cutoff(doc_type_name, doc.id, cutoff_date):
                     continue
 
             # Determinar tipo legible y signo del saldo
-            is_credit_document = doc.is_return or doc.document_type in ("sales_credit_note", "sales_return")
+            is_credit_document = doc.is_return or doc.document_type in (
+                "sales_credit_note",
+                "sales_return",
+                "purchase_credit_note",
+                "purchase_return",
+            )
             sign = Decimal("-1") if is_credit_document else Decimal("1")
 
             outstanding = compute_outstanding_amount(doc, as_of_date=cutoff_date)
             if outstanding == 0:
                 continue
 
-            doc_type_label = "Factura"
-            if doc.document_type == "sales_credit_note":
+            doc_type_label = default_invoice_label
+            if doc.document_type in ("sales_credit_note", "purchase_credit_note"):
                 doc_type_label = "Nota de Crédito"
-            elif doc.document_type == "sales_debit_note":
+            elif doc.document_type in ("sales_debit_note", "purchase_debit_note"):
                 doc_type_label = "Nota de Débito"
             elif doc.document_type == "sales_return":
                 doc_type_label = "Devolución"
-
-            # Fecha de vencimiento si aplica
-            due_date = None
-            if hasattr(doc, "due_date") and doc.due_date:
-                due_date = doc.due_date.isoformat()
-
-            items.append(
-                {
-                    "document_id": doc.id,
-                    "document_type": doc_type_label,
-                    "document_no": doc.document_no or doc.id,
-                    "document_date": doc.posting_date.isoformat() if doc.posting_date else None,
-                    "due_date": due_date,
-                    "currency": doc.transaction_currency or doc.base_currency,
-                    "original_amount": float(sign * Decimal(str(doc.grand_total or 0))),
-                    "outstanding_amount": float(sign * outstanding),
-                }
-            )
-
-    elif party_type == "supplier":
-        # Facturas, notas de crédito, notas de débito de proveedores
-        stmt = select(PurchaseInvoice).where(
-            PurchaseInvoice.company == company_id,
-            PurchaseInvoice.supplier_id == party_id,
-            PurchaseInvoice.posting_date <= cutoff_date,
-            PurchaseInvoice.docstatus.in_((1, 2)),
-        )
-        rows = database.session.execute(stmt).scalars().all()
-        for doc in rows:
-            if doc.docstatus == 2:
-                # Excluir si se canceló antes de la fecha de corte
-                doc_type_name = doc.document_type or "purchase_invoice"
-                if is_cancelled_before_cutoff(doc_type_name, doc.id, cutoff_date):
-                    continue
-
-            is_credit_document = doc.is_return or doc.document_type in ("purchase_credit_note", "purchase_return")
-            sign = Decimal("-1") if is_credit_document else Decimal("1")
-
-            outstanding = compute_outstanding_amount(doc, as_of_date=cutoff_date)
-            if outstanding == 0:
-                continue
-
-            doc_type_label = "Factura de Compra"
-            if doc.document_type == "purchase_credit_note":
-                doc_type_label = "Nota de Crédito"
-            elif doc.document_type == "purchase_debit_note":
-                doc_type_label = "Nota de Débito"
             elif doc.document_type == "purchase_return":
                 doc_type_label = "Devolución de Compra"
 
+            # Fecha de vencimiento si aplica
             due_date = None
             if hasattr(doc, "due_date") and doc.due_date:
                 due_date = doc.due_date.isoformat()
@@ -231,6 +195,20 @@ def get_open_documents_at_cutoff(
         )
 
     return items
+
+
+def prepare_invitation_token(invitation: Any) -> tuple[str, str]:
+    """Genera de forma segura nuevos tokens y códigos de verificación."""
+    raw_token = secrets.token_urlsafe(32)
+    raw_code = "".join(secrets.choice("0123456789") for _ in range(6))
+
+    invitation.token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    invitation.verification_code_hash = hashlib.sha256(raw_code.encode("utf-8")).hexdigest()
+
+    # Almacenar temporalmente los códigos para el envío (no se guardan en la bd en texto plano)
+    invitation._raw_token = raw_token
+    invitation._raw_code = raw_code
+    return raw_token, raw_code
 
 
 def compute_snapshot_hash(snapshot_data: dict[str, Any]) -> str:
@@ -307,25 +285,15 @@ def create_balance_confirmation(
 
     # Generar invitaciones para cada correo electrónico
     for email in emails:
-        # Generar token seguro e inmutable
-        raw_token = secrets.token_urlsafe(32)
-        raw_code = "".join(secrets.choice("0123456789") for _ in range(6))
-
-        token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
-        verification_code_hash = hashlib.sha256(raw_code.encode("utf-8")).hexdigest()
-
         invitation = BalanceConfirmationInvitation(
             balance_confirmation_id=confirmation.id,
             email=email.strip().lower(),
-            token_hash=token_hash,
-            verification_code_hash=verification_code_hash,
+            token_hash="",
+            verification_code_hash="",
             status="pending",
             expires_at=expires_at,
         )
+        prepare_invitation_token(invitation)
         database.session.add(invitation)
-
-        # Almacenar temporalmente los códigos para el envío (no se guardan en la bd en texto plano)
-        invitation._raw_token = raw_token
-        invitation._raw_code = raw_code
 
     return confirmation
