@@ -3,6 +3,7 @@
 """Servicio core para Confirmación de Saldos de Clientes y Proveedores."""
 
 import hashlib
+import hmac
 import json
 import secrets
 from datetime import date, datetime, timedelta, timezone
@@ -22,6 +23,7 @@ from cacao_accounting.database import (
     DocumentRelation,
     Entity,
     Party,
+    CompanyParty,
     AuditTrail,
 )
 from cacao_accounting.document_flow.payment import compute_outstanding_amount
@@ -290,6 +292,14 @@ def compute_snapshot_hash(snapshot_data: dict[str, Any]) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+def verify_snapshot_hash(confirmation: BalanceConfirmation) -> bool:
+    """Valida que el snapshot almacenado conserve el hash inmutable original."""
+    if not confirmation.snapshot_json or not confirmation.snapshot_hash:
+        return False
+    snapshot_data = json.loads(confirmation.snapshot_json)
+    return hmac.compare_digest(compute_snapshot_hash(snapshot_data), confirmation.snapshot_hash)
+
+
 def create_balance_confirmation(
     company_id: str,
     party_id: str,
@@ -304,6 +314,22 @@ def create_balance_confirmation(
     party = database.session.get(Party, party_id)
     if not company or not party:
         raise ValueError("Compañía o tercero no válido.")
+
+    if party_type not in ("customer", "supplier"):
+        raise ValueError("Tipo de tercero no válido, debe ser customer o supplier.")
+
+    party_classified_as = party.is_customer if party_type == "customer" else party.is_supplier
+    if not party_classified_as:
+        raise ValueError("El tercero no está clasificado para el tipo de confirmación solicitado.")
+
+    company_party = database.session.execute(
+        select(CompanyParty).where(
+            CompanyParty.company == company_id,
+            CompanyParty.party_id == party_id,
+        )
+    ).scalar_one_or_none()
+    if not company_party or not company_party.is_active:
+        raise ValueError("El tercero no está activo en la compañía seleccionada.")
 
     # Obtener partidas abiertas
     items = get_open_documents_at_cutoff(company_id, party_id, party_type, cutoff_date)

@@ -181,6 +181,8 @@
                   <span class="badge bg-primary small">{{ _('Visualizó') }}</span>
                 {% elif inv.status == 'cancelled' %}
                   <span class="badge bg-secondary small">{{ _('Cancelada') }}</span>
+                {% elif inv.status == 'expired' %}
+                  <span class="badge bg-warning text-dark small">{{ _('Expirada') }}</span>
                 {% else %}
                   <span class="badge bg-light text-dark border small">{{ _('Pendiente') }}</span>
                 {% endif %}

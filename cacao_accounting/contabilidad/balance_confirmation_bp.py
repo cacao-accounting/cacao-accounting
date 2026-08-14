@@ -10,7 +10,7 @@ from datetime import date, datetime, timezone
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for, session
 from flask_login import current_user, login_required
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from cacao_accounting.database import (
     database,
@@ -26,6 +26,7 @@ from cacao_accounting.decorators import modulo_activo, exige_acceso_compania
 from cacao_accounting.contabilidad.balance_confirmation import (
     create_balance_confirmation,
     prepare_invitation_token,
+    verify_snapshot_hash,
 )
 from cacao_accounting.messaging.email import send_email, EmailError
 from cacao_accounting.audit_trail_service import (
@@ -54,13 +55,38 @@ def _as_utc(value: datetime | None) -> datetime | None:
 
 
 def _mark_expired(confirmation: BalanceConfirmation) -> bool:
-    """Marca la confirmación como expirada si la fecha de expiración ya pasó."""
+    """Marca la confirmación como expirada si la fecha de expiración ya pasó.
+
+    Registra el evento de auditoría y cierra las invitaciones pendientes para
+    que no queden mostrando un estado de pendiente inconsistente con la
+    confirmación.
+    """
     expires_at = _as_utc(confirmation.expires_at)
-    if expires_at is not None and _utcnow() > expires_at:
+    if expires_at is None or _utcnow() <= expires_at:
+        return False
+    if confirmation.status != "expired":
         confirmation.status = "expired"
+        expired_at = _utcnow()
+        pending_invitations = (
+            database.session.execute(
+                select(BalanceConfirmationInvitation).where(
+                    BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id,
+                    BalanceConfirmationInvitation.status == "pending",
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for invitation in pending_invitations:
+            invitation.status = "expired"
+            invitation.expires_at = expired_at
+        log_balance_confirmation_event(
+            confirmation,
+            "balance_confirmation_expired",
+            comment="La solicitud de confirmación de saldo expiró automáticamente.",
+        )
         database.session.commit()
-        return True
-    return False
+    return True
 
 
 @balance_confirmations_bp.before_request
@@ -474,6 +500,14 @@ def public_confirm_balance(token: str):
         )
 
     # Mostrar partidas y formulario de respuesta
+    if not verify_snapshot_hash(confirmation):
+        return render_template(
+            "public/confirm_balance_status.html",
+            title="Error interno",
+            message=(
+                "El snapshot de esta solicitud no superó la verificación de integridad. " "Por favor contacte al solicitante."
+            ),
+        )
     snapshot = json.loads(confirmation.snapshot_json) if confirmation.snapshot_json else {}
     return render_template(
         "public/confirm_balance_view.html",
@@ -594,6 +628,11 @@ def public_confirm_balance_respond(token: str):
         flash("Esta solicitud de confirmación de saldo ha expirado.", "danger")
         return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
 
+    # Verificar la integridad del snapshot antes de aceptar una respuesta
+    if not verify_snapshot_hash(confirmation):
+        flash("La solicitud presenta una inconsistencia de integridad y no puede responderse.", "danger")
+        return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
+
     # Verificar sesión de verificación
     session_key = f"verified_confirmation_{confirmation.id}"
     if session.get(session_key) != invitation.id:
@@ -613,17 +652,33 @@ def public_confirm_balance_respond(token: str):
 
     first_name, last_name = session.get(f"verified_confirmation_name_{confirmation.id}", ("", ""))
 
-    # Actualizar estado de la confirmación
-    confirmation.status = "confirmed" if response_type == "confirmed" else "disputed"
-    confirmation.responded_at = _utcnow()
-    confirmation.response_type = response_type
-    confirmation.response_comment = response_comment
-
-    confirmation.respondent_first_name = first_name
-    confirmation.respondent_last_name = last_name
-    confirmation.respondent_email = invitation.email
-    confirmation.respondent_ip = request.remote_addr
-    confirmation.respondent_user_agent = request.user_agent.string if request.user_agent else None
+    # Actualizar el estado de forma atómica: solo gana la primera respuesta.
+    # El WHERE por estado evita que dos invitaciones concurrentes queden
+    # registradas como "primera respuesta válida".
+    response_status = "confirmed" if response_type == "confirmed" else "disputed"
+    result = database.session.execute(
+        update(BalanceConfirmation)
+        .where(
+            BalanceConfirmation.id == confirmation.id,
+            BalanceConfirmation.status.in_(("draft", "sent", "viewed")),
+        )
+        .values(
+            status=response_status,
+            responded_at=_utcnow(),
+            response_type=response_type,
+            response_comment=response_comment,
+            respondent_first_name=first_name,
+            respondent_last_name=last_name,
+            respondent_email=invitation.email,
+            respondent_ip=request.remote_addr,
+            respondent_user_agent=request.user_agent.string if request.user_agent else None,
+        )
+        .execution_options(synchronize_session="fetch")
+    )
+    if result.rowcount == 0:
+        database.session.rollback()
+        flash("La confirmación ya fue respondida o ya no se encuentra disponible.", "warning")
+        return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
 
     # Cerrar la invitación actual y todas las demás asociadas a la misma confirmación
     invitation.status = "responded"

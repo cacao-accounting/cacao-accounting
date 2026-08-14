@@ -3,11 +3,12 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting import create_app
@@ -16,6 +17,7 @@ from cacao_accounting.database import (
     database,
     Entity,
     Party,
+    CompanyParty,
     Modules,
     User,
     SalesInvoice,
@@ -67,6 +69,11 @@ def _seed_test_data() -> None:
             # Parties
             Party(id="cust-1", code="CLI-01", is_customer=True, is_supplier=False, name="Cliente Uno", is_active=True),
             Party(id="supp-1", code="PROV-01", is_customer=False, is_supplier=True, name="Proveedor Uno", is_active=True),
+            Party(id="cust-2", code="CLI-02", is_customer=True, is_supplier=False, name="Cliente Inactivo", is_active=True),
+            # Activation by company
+            CompanyParty(company="cacao", party_id="cust-1", is_active=True),
+            CompanyParty(company="cacao", party_id="supp-1", is_active=True),
+            CompanyParty(company="cacao", party_id="cust-2", is_active=False),
         ]
     )
     database.session.commit()
@@ -371,8 +378,12 @@ def test_expired_confirmation_rejects_public_verify_and_respond(app_ctx) -> None
     )
     assert res_verify.status_code == 302
     assert conf.status == "expired"
-    assert inv.status != "viewed"
+    assert inv.status == "expired"
     assert inv.failed_attempts == 0
+
+    # Expiry must be recorded in the audit trail
+    audit_events = database.session.execute(select(AuditTrail.action).where(AuditTrail.document_id == conf.id)).scalars().all()
+    assert "balance_confirmation_expired" in audit_events
 
     # POST respond on an expired confirmation must be rejected
     with client.session_transaction() as session:
@@ -414,4 +425,166 @@ def test_invitation_emails_are_unique_per_confirmation(app_ctx) -> None:
     database.session.add(duplicate)
     with pytest.raises(IntegrityError):
         database.session.commit()
+    database.session.rollback()
+
+
+def test_create_confirmation_rejects_party_not_active_in_company(app_ctx) -> None:
+    """The party must be active in the company to receive a confirmation."""
+    cutoff = date(2026, 5, 31)
+    with pytest.raises(ValueError, match="no está activo"):
+        create_balance_confirmation(
+            company_id="cacao",
+            party_id="cust-2",
+            party_type="customer",
+            cutoff_date=cutoff,
+            emails=["inactive@client.com"],
+            created_by_user_id="user-admin",
+        )
+    database.session.rollback()
+
+
+def test_create_confirmation_rejects_wrong_party_type(app_ctx) -> None:
+    """The party_type must match the party classification and be allowed."""
+    cutoff = date(2026, 5, 31)
+    with pytest.raises(ValueError, match="no está clasificado"):
+        create_balance_confirmation(
+            company_id="cacao",
+            party_id="cust-1",
+            party_type="supplier",
+            cutoff_date=cutoff,
+            emails=["wrong-type@client.com"],
+            created_by_user_id="user-admin",
+        )
+    database.session.rollback()
+
+    with pytest.raises(ValueError, match="Tipo de tercero no válido"):
+        create_balance_confirmation(
+            company_id="cacao",
+            party_id="cust-1",
+            party_type="vendor",
+            cutoff_date=cutoff,
+            emails=["bad-type@client.com"],
+            created_by_user_id="user-admin",
+        )
+    database.session.rollback()
+
+
+def test_snapshot_tampering_is_detected_on_view_and_respond(app_ctx) -> None:
+    """The immutable snapshot hash is verified before showing or responding."""
+    cutoff = date(2026, 5, 31)
+    conf = create_balance_confirmation(
+        company_id="cacao",
+        party_id="cust-1",
+        party_type="customer",
+        cutoff_date=cutoff,
+        emails=["tamper@client.com"],
+        created_by_user_id="user-admin",
+    )
+    inv = [i for i in database.session.new if isinstance(i, BalanceConfirmationInvitation)][0]
+    raw_token = inv._raw_token
+
+    # Tamper with the stored snapshot without recomputing the hash
+    snapshot = json.loads(conf.snapshot_json)
+    snapshot["party_name"] = "Cliente Manipulado"
+    conf.snapshot_json = json.dumps(snapshot, ensure_ascii=False)
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session[f"verified_confirmation_{conf.id}"] = inv.id
+        session[f"verified_confirmation_name_{conf.id}"] = ("Eve", "Tamper")
+
+    # View must refuse to render the tampered items
+    res_view = client.get(f"/confirm-balance/{raw_token}")
+    assert res_view.status_code == 200
+    assert "verificación de integridad" in res_view.get_data(as_text=True)
+
+    # Respond must be rejected as well
+    res_respond = client.post(
+        f"/confirm-balance/{raw_token}/respond",
+        data={"response_type": "confirmed", "response_comment": "todo en orden"},
+    )
+    assert res_respond.status_code == 302
+    assert conf.response_type is None
+
+
+def test_second_response_is_rejected_after_first_response(app_ctx) -> None:
+    """Only the first valid response is registered."""
+    cutoff = date(2026, 5, 31)
+    conf = create_balance_confirmation(
+        company_id="cacao",
+        party_id="cust-1",
+        party_type="customer",
+        cutoff_date=cutoff,
+        emails=["first@client.com", "second@client.com"],
+        created_by_user_id="user-admin",
+    )
+    invitations = [i for i in database.session.new if isinstance(i, BalanceConfirmationInvitation)]
+    inv1 = next(i for i in invitations if i.email == "first@client.com")
+    inv2 = next(i for i in invitations if i.email == "second@client.com")
+    token_1, code_1 = inv1._raw_token, inv1._raw_code
+    token_2 = inv2._raw_token
+    database.session.commit()
+
+    client = app_ctx.test_client()
+
+    client.post(
+        f"/confirm-balance/{token_1}/verify",
+        data={"first_name": "Alice", "last_name": "Uno", "email": "first@client.com", "code": code_1, "authorized": "on"},
+    )
+    res_1 = client.post(
+        f"/confirm-balance/{token_1}/respond",
+        data={"response_type": "confirmed", "response_comment": "Todo concilia correctamente"},
+    )
+    assert res_1.status_code == 200
+    assert conf.status == "confirmed"
+
+    # The second invitation must not be able to respond anymore
+    with client.session_transaction() as session:
+        session[f"verified_confirmation_{conf.id}"] = inv2.id
+        session[f"verified_confirmation_name_{conf.id}"] = ("Bob", "Dos")
+    res_2 = client.post(
+        f"/confirm-balance/{token_2}/respond",
+        data={"response_type": "disputed", "response_comment": "Hay diferencias sin explicar en la factura"},
+    )
+    assert res_2.status_code == 302
+    assert conf.status == "confirmed"
+    assert conf.response_type == "confirmed"
+
+    audit_actions = (
+        database.session.execute(select(AuditTrail.action).where(AuditTrail.document_id == conf.id)).scalars().all()
+    )
+    assert audit_actions.count("balance_confirmation_confirmed") == 1
+
+
+def test_atomic_status_update_prevents_double_response(app_ctx) -> None:
+    """The conditional UPDATE only wins for the first concurrent responder."""
+    cutoff = date(2026, 5, 31)
+    conf = create_balance_confirmation(
+        company_id="cacao",
+        party_id="cust-1",
+        party_type="customer",
+        cutoff_date=cutoff,
+        emails=["race@client.com"],
+        created_by_user_id="user-admin",
+    )
+    database.session.commit()
+
+    # Simulate the first concurrent responder
+    first = database.session.execute(
+        update(BalanceConfirmation)
+        .where(BalanceConfirmation.id == conf.id, BalanceConfirmation.status.in_(("draft", "sent", "viewed")))
+        .values(status="confirmed", response_type="confirmed", responded_at=datetime.now(timezone.utc))
+        .execution_options(synchronize_session=False)
+    )
+    assert first.rowcount == 1
+
+    # Simulate a second responder arriving at the same time
+    second = database.session.execute(
+        update(BalanceConfirmation)
+        .where(BalanceConfirmation.id == conf.id, BalanceConfirmation.status.in_(("draft", "sent", "viewed")))
+        .values(status="disputed", response_type="disputed", responded_at=datetime.now(timezone.utc))
+        .execution_options(synchronize_session=False)
+    )
+    assert second.rowcount == 0
     database.session.rollback()
