@@ -1030,6 +1030,56 @@ def get_slow_moving_items(
     )
 
 
+def _record_turnover_entry(
+    entry: StockLedgerEntry,
+    filters: OperationalReportFilters,
+    running_balances: dict[tuple[str, str], Decimal],
+    keys_with_activity: set[tuple[str, str]],
+    stock_observations: dict[tuple[str, str], list[Decimal]],
+    outgoing_quantities: dict[tuple[str, str], Decimal],
+    initial_stock_recorded: dict[tuple[str, str], bool],
+) -> None:
+    """Update turnover accumulators with one chronological stock movement."""
+    key = (entry.item_code, entry.warehouse)
+    qty_change = _decimal_value(entry.qty_change)
+    if entry.posting_date < filters.date_from:
+        running_balances[key] += qty_change
+        return
+    keys_with_activity.add(key)
+    if not initial_stock_recorded[key]:
+        stock_observations[key].append(max(running_balances[key], Decimal("0")))
+        initial_stock_recorded[key] = True
+    running_balances[key] += qty_change
+    stock_observations[key].append(max(running_balances[key], Decimal("0")))
+    if qty_change < 0:
+        outgoing_quantities[key] += abs(qty_change)
+
+
+def _turnover_rows(
+    keys_with_activity: set[tuple[str, str]],
+    stock_observations: dict[tuple[str, str], list[Decimal]],
+    outgoing_quantities: dict[tuple[str, str], Decimal],
+) -> list[ReportRow]:
+    """Build report rows from the accumulated turnover measurements."""
+    rows: list[ReportRow] = []
+    for item_code, warehouse in sorted(keys_with_activity):
+        observations = stock_observations[(item_code, warehouse)]
+        outgoing_qty = outgoing_quantities[(item_code, warehouse)]
+        average_stock = sum(observations, Decimal("0")) / len(observations) if observations else Decimal("0")
+        rows.append(
+            ReportRow(
+                values={
+                    "item_code": item_code,
+                    "warehouse": warehouse,
+                    "outgoing_qty": outgoing_qty,
+                    "average_stock_qty": average_stock,
+                    "turnover_ratio": outgoing_qty / average_stock if average_stock else None,
+                }
+            )
+        )
+    return rows
+
+
 def get_inventory_turnover(filters: OperationalReportFilters) -> PaginatedReport:
     """Calcula rotación por artículo/almacén como salidas sobre stock promedio reconstruido de forma cronológica."""
     if not filters.date_from or not filters.date_to or filters.date_to < filters.date_from:
@@ -1052,39 +1102,17 @@ def get_inventory_turnover(filters: OperationalReportFilters) -> PaginatedReport
     for entry in database.session.execute(
         query.order_by(StockLedgerEntry.posting_date, StockLedgerEntry.created, StockLedgerEntry.id)
     ).scalars():
-        key = (entry.item_code, entry.warehouse)
-        qty_change = _decimal_value(entry.qty_change)
-
-        if entry.posting_date < filters.date_from:
-            running_balances[key] += qty_change
-        else:
-            keys_with_activity.add(key)
-            if not initial_stock_recorded[key]:
-                stock_observations[key].append(max(running_balances[key], Decimal("0")))
-                initial_stock_recorded[key] = True
-
-            running_balances[key] += qty_change
-            stock_observations[key].append(max(running_balances[key], Decimal("0")))
-
-            if qty_change < 0:
-                outgoing_quantities[key] += abs(qty_change)
-
-    rows = []
-    for item_code, warehouse in sorted(keys_with_activity):
-        observations = stock_observations[(item_code, warehouse)]
-        outgoing_qty = outgoing_quantities[(item_code, warehouse)]
-        average_stock = sum(observations, Decimal("0")) / len(observations) if observations else Decimal("0")
-        rows.append(
-            ReportRow(
-                values={
-                    "item_code": item_code,
-                    "warehouse": warehouse,
-                    "outgoing_qty": outgoing_qty,
-                    "average_stock_qty": average_stock,
-                    "turnover_ratio": outgoing_qty / average_stock if average_stock else None,
-                }
-            )
+        _record_turnover_entry(
+            entry,
+            filters,
+            running_balances,
+            keys_with_activity,
+            stock_observations,
+            outgoing_quantities,
+            initial_stock_recorded,
         )
+
+    rows = _turnover_rows(keys_with_activity, stock_observations, outgoing_quantities)
     return PaginatedReport(rows=rows, totals={"outgoing_qty": sum((row.values["outgoing_qty"] for row in rows), Decimal("0"))})
 
 
