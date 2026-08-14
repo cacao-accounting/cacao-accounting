@@ -2907,17 +2907,20 @@ def ventas_factura_venta_nuevo():
         or selected_company
     )
     source_origen = src["orden_origen"] or src["entrega_origen"] or src["factura_origen"]
+    initial_source_type = ""
+    if src["from_order_id"]:
+        initial_source_type = "sales_order"
+    elif src["from_note_id"]:
+        initial_source_type = "delivery_note"
+    elif src["from_invoice_id"]:
+        initial_source_type = "sales_invoice"
 
     transaction_config = {
         "formKey": _FORMKEY_SALES_INVOICE,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "initialSourceType": (
-            "sales_order"
-            if src["from_order_id"]
-            else "delivery_note" if src["from_note_id"] else "sales_invoice" if src["from_invoice_id"] else ""
-        ),
+        "initialSourceType": initial_source_type,
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
