@@ -38,11 +38,12 @@ def _percentage(current: Decimal, previous: Decimal) -> Decimal | None:
 
 def _invoice_base_amount(row: Any) -> Decimal:
     """Devuelve el total de la factura en la moneda base del documento."""
-    amount = _decimal(
-        row.base_grand_total
-        if row.base_grand_total is not None
-        else row.base_total if row.base_total is not None else row.grand_total or row.total
-    )
+    amount = row.base_grand_total
+    if amount is None:
+        amount = row.base_total
+    if amount is None:
+        amount = row.grand_total or row.total
+    amount = _decimal(amount)
     return -amount if getattr(row, "is_return", False) else amount
 
 
