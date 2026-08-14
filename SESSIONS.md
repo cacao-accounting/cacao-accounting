@@ -43,6 +43,9 @@ JavaScript `S2004`, `S3358` y `S3776`.
 - Trabajo actual: `balance_confirmation.py` separa la construcción de partidas
   de facturas y pagos en helpers reutilizables, conservando el corte, las
   anulaciones y los signos de notas de crédito.
+- `reportes/services.py` separa la acumulación cronológica y la construcción de
+  filas de rotación de inventario, sin alterar el stock inicial ni el cálculo
+  de salidas.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
