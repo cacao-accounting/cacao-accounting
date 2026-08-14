@@ -60,6 +60,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
   configuración SMTP del endpoint administrativo.
 - `admin/__init__.py` extrae la validación de unicidad y reglas de usuarios de
   portal del endpoint de edición.
+- `compras/__init__.py` separa la agrupación de adjudicaciones y la creación de
+  líneas relacionadas al generar órdenes de compra.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
