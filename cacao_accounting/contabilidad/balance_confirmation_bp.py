@@ -609,6 +609,19 @@ def public_confirm_balance_verify(token: str):
     return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
 
+def _validated_public_response() -> tuple[str, str] | None:
+    """Validate response type and required dispute explanation."""
+    response_type = request.form.get("response_type")
+    response_comment = (request.form.get("response_comment") or request.form.get("response_comment_optional") or "").strip()
+    if response_type not in ("confirmed", "disputed"):
+        flash("Tipo de respuesta no válido.", "danger")
+        return None
+    if response_type == "disputed" and (not response_comment or len(response_comment) < 10):
+        flash("Debe proporcionar una explicación detallada de las diferencias encontradas (mínimo 10 caracteres).", "danger")
+        return None
+    return response_type, response_comment
+
+
 @balance_confirmations_bp.route("/confirm-balance/<token>/respond", methods=["POST"])
 def public_confirm_balance_respond(token: str):
     """Procesa el formulario definitivo de respuesta (convalidación o discrepancia)."""
@@ -641,16 +654,10 @@ def public_confirm_balance_respond(token: str):
         flash("Debe completar el paso de verificación primero.", "warning")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
-    response_type = request.form.get("response_type")  # confirmed | disputed
-    response_comment = (request.form.get("response_comment") or request.form.get("response_comment_optional") or "").strip()
-
-    if response_type not in ("confirmed", "disputed"):
-        flash("Tipo de respuesta no válido.", "danger")
+    response_data = _validated_public_response()
+    if response_data is None:
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
-
-    if response_type == "disputed" and (not response_comment or len(response_comment) < 10):
-        flash("Debe proporcionar una explicación detallada de las diferencias encontradas (mínimo 10 caracteres).", "danger")
-        return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
+    response_type, response_comment = response_data
 
     first_name, last_name = session.get(f"verified_confirmation_name_{confirmation.id}", ("", ""))
 
