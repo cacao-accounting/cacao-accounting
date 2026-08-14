@@ -3,6 +3,39 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — División de la cuenta de descuentos por pronto pago (ventas/compras)
+
+### Petición
+
+Separar la cuenta única `payment_discount_account_id` en dos cuentas
+específicas por sentido del pago: `sales_discount_account_id` (descuentos
+sobre ventas, lado de gasto) y `purchase_discount_account_id` (descuentos
+sobre compras, lado de ingreso). Usar la misma cuenta para ambos sentidos era
+incorrecto desde el punto de vista contable: el descuento concedido a un
+cliente es un gasto, mientras que el descuento obtenido de un proveedor
+reduce el gasto (ingreso). El cambio es transversal al pago de
+clientes/proveedores.
+
+### Implementación
+
+- **Modelo**: se reemplazó `payment_discount_account_id` por
+  `sales_discount_account_id` y `purchase_discount_account_id` en
+  `CompanyDefaultAccount` (ambas FK a `accounts.id`).
+- **Motor contable**: `_build_references` propaga ambas cuentas y el mapper
+  selecciona la cuenta según `transaction_direction` en
+  `_build_payment_discount_line`.
+- **Catálogos**: se agregó una cuenta de ingresos de descuentos sobre compras
+  en cada plan (42.04 en base ES/EN, 42.02.01 en NIIF/IFRS, 410400 en US
+  GAAP) y los JSON de mapping ahora siembran ambas cuentas por separado.
+- **Migración** `20260814_0006`: agrega las dos columnas, hace backfill del
+  valor legado en ambas y elimina la columna original; `downgrade` restaura la
+  columna única. La pantalla de administración de cuentas predeterminadas es
+  dinámica (`DEFAULT_ACCOUNT_DEFINITIONS`), por lo que los nuevos campos ya se
+  muestran y son editables tras el seed; se fijó con aserciones de regresión.
+- **Verificación**: schema (214), catálogos/setup (15), migraciones (3),
+  mapper/admin (7) y pruebas de pago en verde; black, ruff y flake8 limpios;
+  mypy sin errores en los archivos modificados.
+
 ## 2026-08-14 — Catálogos contables ampliados y nombres en español acentuados
 
 ### Petición
