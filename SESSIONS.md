@@ -43,6 +43,12 @@ Se ajustaron en el auxiliar compartido `cacaoaccounting.css` los botones
 resaltado de líneas activas para usar colores legibles sobre superficies
 oscuras.
 
+## 2026-08-14 — Hidratar proveedor desde solicitud de cotización
+
+Al crear una cotización de proveedor con `from_rfq`, el formulario ahora
+recibe `party` y `party_label` desde la solicitud de cotización origen para
+mostrar el proveedor seleccionado automáticamente.
+
 ## 2026-08-14 — Refactors SonarCloud sobre origin/main
 
 ### Petición y base
