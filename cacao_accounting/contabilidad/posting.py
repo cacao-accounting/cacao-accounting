@@ -1203,9 +1203,7 @@ def _create_payment_pay_entries(
     party_type = (getattr(document, "party_type", None) or "supplier").lower()
     receivable = party_type == "customer"
     party_account_id = _resolve_party_account_id(document.party_id, company, receivable=receivable)
-    advance_account_id = (
-        (defaults.customer_advance_account_id if receivable else defaults.supplier_advance_account_id) if defaults else None
-    )
+    advance_account_id = _advance_account_id(defaults, receivable)
     bank_account_id = _require_account(
         _resolve_bank_gl_account_id(document, destination=False),
         "El pago no tiene una cuenta bancaria de origen configurada.",
@@ -1276,9 +1274,7 @@ def _create_payment_receive_entries(
     party_type = (getattr(document, "party_type", None) or "customer").lower()
     receivable = party_type == "customer"
     party_account_id = _resolve_party_account_id(document.party_id, company, receivable=receivable)
-    advance_account_id = (
-        (defaults.customer_advance_account_id if receivable else defaults.supplier_advance_account_id) if defaults else None
-    )
+    advance_account_id = _advance_account_id(defaults, receivable)
     account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
     receivable_account_id = _require_account(
         account_id,
@@ -1307,14 +1303,26 @@ def _create_payment_receive_entries(
                 credit=amount,
                 party_type=party_type,
                 party_id=document.party_id,
-                entry_remarks=(
-                    ("Cobro de cliente" if receivable else "Reembolso de proveedor")
-                    if party_account_id
-                    else ("Anticipo de cliente" if receivable else "Reembolso de proveedor")
-                ),
+                entry_remarks=_payment_entry_remarks(receivable, bool(party_account_id)),
             ),
         ),
     ]
+
+
+def _advance_account_id(defaults: Any, receivable: bool) -> str | None:
+    """Resolve the configured advance account for a payment direction."""
+    if defaults is None:
+        return None
+    if receivable:
+        return defaults.customer_advance_account_id
+    return defaults.supplier_advance_account_id
+
+
+def _payment_entry_remarks(receivable: bool, has_party_account: bool) -> str:
+    """Describe the receivable/payable side of a payment posting."""
+    if not receivable:
+        return "Reembolso de proveedor"
+    return "Cobro de cliente" if has_party_account else "Anticipo de cliente"
 
 
 def _resolve_fx_account_id(context: LedgerContext, difference: Decimal) -> str:
