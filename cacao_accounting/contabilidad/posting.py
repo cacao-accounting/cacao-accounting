@@ -1619,8 +1619,6 @@ def _process_valuation_layer(
     layer_value: Decimal,
 ) -> tuple[list[tuple[Decimal, Decimal]], Decimal, bool]:
     """Apply one valuation layer and report whether the caller should continue."""
-    if qty != 0 and layer_value != 0:
-        return queue, negative_balance, False
     if qty == 0 and layer_value != 0 and queue:
         total_qty = sum((available_qty for available_qty, _ in queue), Decimal("0"))
         if total_qty > 0:

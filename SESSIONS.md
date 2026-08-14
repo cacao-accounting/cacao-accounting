@@ -73,6 +73,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
   snapshot de valuación del iterador del formulario.
 - `contabilidad/posting.py` encapsula el efecto de cada capa de valuación para
   separar ajustes, compensaciones negativas y consumo de existencias.
+- Corrección posterior: las capas con cantidad e importe de valuación ajustan
+  su tasa y continúan siendo agregadas/consumidas; no se omite su efecto.
 - `approval_engine.py` separa validaciones de ventas y compras de los
   prerrequisitos comunes de envío para reducir ramas en el motor de aprobación.
 
