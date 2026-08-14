@@ -50,6 +50,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
   pago al corte para simplificar el cálculo de saldos no aplicados.
 - `reportes/services.py` separa los diagnósticos de transacciones bancarias,
   pagos sin extracto y relaciones huérfanas en builders independientes.
+- `balance_confirmation.py` extrae la clasificación y serialización de partidas
+  de facturas, y reutiliza la regla de cancelación de pagos al corte.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
