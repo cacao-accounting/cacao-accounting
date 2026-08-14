@@ -56,6 +56,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
   POST de creación para mantener el endpoint enfocado en la presentación.
 - `balance_confirmation_bp.py` centraliza la validación de respuestas públicas
   confirmadas o disputadas antes de persistir el resultado.
+- `admin/__init__.py` separa el envío de prueba, persistencia y carga de la
+  configuración SMTP del endpoint administrativo.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
