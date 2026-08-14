@@ -3376,9 +3376,12 @@ def compras_factura_compra_nuevo():
         company_id=company_id,
     )
     if from_order_id or from_receipt_id or from_invoice_id:
-        transaction_config["initialSourceType"] = (
-            "purchase_order" if from_order_id else "purchase_receipt" if from_receipt_id else "purchase_invoice"
-        )
+        initial_source_type = "purchase_invoice"
+        if from_order_id:
+            initial_source_type = "purchase_order"
+        elif from_receipt_id:
+            initial_source_type = "purchase_receipt"
+        transaction_config["initialSourceType"] = initial_source_type
         source = orden_origen or recepcion_origen or factura_origen
         source_currency = effective_currency(source)
         transaction_config["initialHeader"] = {
