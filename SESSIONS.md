@@ -29,6 +29,20 @@ Los KPI ahora usan una superficie oscura y colores de texto explícitos en modo
 oscuro. Chart.js recibe colores adaptativos para leyenda, ejes y cuadrículas,
 evitando que sus valores por defecto queden ocultos sobre el fondo oscuro.
 
+## 2026-08-14 — Contraste de vistas de detalle en modo oscuro
+
+### Petición
+
+Las vistas de documentos deben seguir siendo legibles en modo oscuro, en
+particular sus acciones, metadatos y línea seleccionada.
+
+### Implementación
+
+Se ajustaron en el auxiliar compartido `cacaoaccounting.css` los botones
+`outline-dark`, los textos secundarios, las etiquetas de metadatos y el
+resaltado de líneas activas para usar colores legibles sobre superficies
+oscuras.
+
 ## 2026-08-14 — Refactors SonarCloud sobre origin/main
 
 ### Petición y base

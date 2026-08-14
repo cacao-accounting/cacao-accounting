@@ -153,7 +153,7 @@
   --ca-border:        #2B3A32;
   --ca-text:          #EEF4F0;
   --ca-text-secondary:#BECBC4;
-  --ca-text-muted:    #87968E;
+  --ca-text-muted:    #9FB0A7;
 
   /* In dark mode: navbar gets even darker, sidebar marginally lighter */
   --ca-navbar-bg:      #0D1511;
@@ -187,7 +187,8 @@
 }
 
 [data-theme="dark"] .journal-line-row.is-active {
-  background-color: rgba(211, 158, 0, .15);
+  background-color: rgba(217, 119, 6, .22) !important;
+  color: var(--ca-text) !important;
   border-left-color: var(--ca-p400);
 }
 
@@ -748,6 +749,27 @@ nav[aria-label="breadcrumb"] {
 }
 .btn-secondary:hover {
   background-color: var(--ca-surface-hover) !important;
+}
+
+[data-theme="dark"] .btn-outline-dark {
+  border-color: #8fa39a !important;
+  color: #dce8e1 !important;
+}
+
+[data-theme="dark"] .btn-outline-dark:hover,
+[data-theme="dark"] .btn-outline-dark:focus,
+[data-theme="dark"] .btn-outline-dark:active {
+  background-color: var(--ca-surface-hover) !important;
+  border-color: #b8c9bf !important;
+  color: #f2f7f4 !important;
+}
+
+[data-theme="dark"] .text-muted {
+  color: #b8c9bf !important;
+}
+
+[data-theme="dark"] .ca-kv-item label {
+  color: #b8c9bf;
 }
 
 /* ═══════════════════════════════════════════════════════
