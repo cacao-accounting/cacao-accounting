@@ -25,6 +25,15 @@ JavaScript `S2004`, `S3358` y `S3776`.
   formularios de ventas y compras.
 - `2ce8ece8`: se hicieron explícitos los caminos de aborto y la ausencia de
   reglas fiscales para que Mypy valide el flujo completo.
+- `e1963fae`: se aisló el parseo de componentes capitalizables y la
+  re-clasificación de facturas two-way posteriores a la recepción.
+- `0e841c0f`: se separó la autorización del comparativo de compras de la
+  selección de líneas.
+- `caf20dda`: se separaron las reglas de especificación de pagos.
+- `87dd1079`: se dividió la agregación del reporte de concentración por
+  dimensión.
+- `a7cd1f7f`: se separaron los handlers de cancelación del motor de
+  aprobaciones.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
