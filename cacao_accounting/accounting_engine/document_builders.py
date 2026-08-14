@@ -357,23 +357,32 @@ def _already_capitalized_component_ids(document: PurchaseInvoice, company: str) 
     ).scalars()
     component_ids: set[str] = set()
     for row in rows:
-        try:
-            details = json.loads(row.allocation_detail_json or "[]")
-        except (TypeError, json.JSONDecodeError):
-            details = []
-        if not isinstance(details, list):
-            continue
-        for detail in details:
-            if not isinstance(detail, dict):
-                continue
-            if detail.get("tax_type") != "tax":
-                continue
-            source_rule_id = str(detail.get("source_rule_id") or "").strip()
-            if source_rule_id:
-                component_ids.add(f"rule:{source_rule_id}")
-            concept = str(detail.get("concept") or "").strip()
-            if concept:
-                component_ids.add(f"concept:{concept}")
+        component_ids.update(_capitalized_component_ids(row.allocation_detail_json))
+    return component_ids
+
+
+def _capitalized_component_ids(raw_details: str | None) -> set[str]:
+    """Extract tax component identities from one allocation snapshot."""
+    try:
+        details = json.loads(raw_details or "[]")
+    except (TypeError, json.JSONDecodeError):
+        return set()
+    if not isinstance(details, list):
+        return set()
+    return {component for detail in details if isinstance(detail, dict) for component in _detail_component_ids(detail)}
+
+
+def _detail_component_ids(detail: dict[str, Any]) -> set[str]:
+    """Return namespaced rule and concept identities for a tax detail."""
+    if detail.get("tax_type") != "tax":
+        return set()
+    component_ids: set[str] = set()
+    source_rule_id = str(detail.get("source_rule_id") or "").strip()
+    if source_rule_id:
+        component_ids.add(f"rule:{source_rule_id}")
+    concept = str(detail.get("concept") or "").strip()
+    if concept:
+        component_ids.add(f"concept:{concept}")
     return component_ids
 
 
