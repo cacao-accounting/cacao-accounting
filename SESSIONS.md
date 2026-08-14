@@ -3,6 +3,39 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — Resolución de issues fáciles de SonarQube (S1066, S5713, S5799, css:S4656, Web:TableWithoutCaptionCheck)
+
+### Petición
+
+Revisar la lista de issues abiertos en SonarCloud y resolver los clasificados
+como fáciles de corregir.
+
+### Issues resueltos
+
+- **Web:TableWithoutCaptionCheck** (12 issues, MINOR) — Se agregó
+  `<caption class="visually-hidden">` a 12 tablas HTML en:
+  `customer_dashboard.html`, `supplier_dashboard.html`,
+  `proveedor.html`, `cliente.html`,
+  `balance_confirmation_detail.html`, `confirm_balance_view.html`.
+  Los captions usan el mismo texto que los encabezados de sección,
+  envueltos en `_()` para i18n.
+- **python:S1066** (2 issues, MAJOR) — En `posting.py`, se fusionaron
+  dos pares de sentencias `if` anidadas (`if rate <= 0: if amount > 0 ...`)
+  en condiciones compuestas (`if rate <= 0 and amount > 0 and qty_in_base_uom > 0:`).
+- **python:S5713** (1 issue, MINOR) — En `email.py:62`, se eliminó
+  `UnicodeError` del manejador de excepciones `except (ValueError, UnicodeError)`
+  ya que `UnicodeError` deriva de `ValueError`.
+- **python:S5799** (1 issue, MAJOR) — En `balance_confirmation_bp.py:508`,
+  se unieron dos strings implícitamente concatenados en uno solo.
+- **css:S4656** (1 issue, MAJOR) — En `cacaoaccounting.css`, se eliminó
+  la declaración duplicada `margin-left: 0 !important` en
+  `.ca-content-full` (la segunda `margin-left: auto` la sobreescribe).
+
+### Verificación
+
+black, ruff, flake8, pydocstyle y mypy pasan limpios sobre todos los
+archivos modificados.
+
 ## 2026-08-14 — Diagnóstico de fallos de CI con GitHub CLI
 
 ### Petición
