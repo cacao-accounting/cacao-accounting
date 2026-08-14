@@ -45,14 +45,15 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 4.2.01,Realized FX Gain,4.2,0,Income,,exchange_gain
 4.2.02,Unrealized FX Gain,4.2,0,Income,,unrealized_exchange_gain
 5,Costs and Expenses,,1,Expense,,
-5.1,Cost of Sales,5,1,Expense,,
-5.1.01,Cost of Goods Sold,5.1,0,Expense,,cost_of_goods_sold
-5.1.02,Inventory Adjustments,5.1,0,Expense,,inventory_adjustment
+5.1,Cost of Sales,5,1,Cost,,
+5.1.01,Cost of Goods Sold,5.1,0,Cost,,cost_of_goods_sold
+5.1.02,Inventory Adjustments,5.1,0,Cost,,inventory_adjustment
 5.2,Administrative Expenses,5,1,Expense,,
-5.2.01,Personnel Expenses,5.2,0,Expense,,expense
-5.2.02,Utilities,5.2,0,Expense,,expense
-5.2.03,Bank Reconciliation Differences,5.2,0,Expense,,bank_difference
-5.2.04,Rounding,5.2,0,Expense,,rounding
+5.2.01,General Operating Expenses,5.2,0,Expense,,expense
+5.2.02,Personnel Expenses,5.2,0,Expense,,expense
+5.2.03,Utilities,5.2,0,Expense,,expense
+5.2.04,Bank Reconciliation Differences,5.2,0,Expense,,bank_difference
+5.2.05,Rounding,5.2,0,Expense,,rounding
 5.3,Selling and Distribution Expenses,5,1,Expense,,
 5.3.01,Advertising Expenses,5.3,0,Expense,,expense
 5.4,Financial Expenses,5,1,Expense,,

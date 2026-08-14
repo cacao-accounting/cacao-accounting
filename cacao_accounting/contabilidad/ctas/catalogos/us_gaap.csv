@@ -40,18 +40,19 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 4200,Other Income,4000,1,Income,,
 4201,Realized FX Gain,4200,0,Income,,exchange_gain
 4202,Unrealized FX Gain,4200,0,Income,,unrealized_exchange_gain
-5000,Cost of Goods Sold,,1,Expense,,
-5100,Cost of Goods Sold,5000,1,Expense,,
-5101,Cost of Goods Sold,5100,0,Expense,,cost_of_goods_sold
-5200,Inventory Adjustments,5000,1,Expense,,
-5201,Inventory Adjustments,5200,0,Expense,,inventory_adjustment
+5000,Cost of Goods Sold,,1,Cost,,
+5100,Cost of Goods Sold,5000,1,Cost,,
+5101,Cost of Goods Sold,5100,0,Cost,,cost_of_goods_sold
+5200,Inventory Adjustments,5000,1,Cost,,
+5201,Inventory Adjustments,5200,0,Cost,,inventory_adjustment
 6000,Expenses,,1,Expense,,
 6100,Operating Expenses,6000,1,Expense,,
-6101,Salaries and Personnel Expenses,6100,0,Expense,,expense
-6102,Utilities,6100,0,Expense,,expense
-6103,Bank Reconciliation Differences,6100,0,Expense,,bank_difference
-6104,Rounding,6100,0,Expense,,rounding
-6105,Advertising Expenses,6100,0,Expense,,expense
+6101,General Operating Expenses,6100,0,Expense,,expense
+6102,Salaries and Personnel Expenses,6100,0,Expense,,expense
+6103,Utilities,6100,0,Expense,,expense
+6104,Bank Reconciliation Differences,6100,0,Expense,,bank_difference
+6105,Rounding,6100,0,Expense,,rounding
+6106,Advertising Expenses,6100,0,Expense,,expense
 6200,Financial Expenses,6000,1,Expense,,
 6201,Interest Expenses,6200,0,Expense,,
 6202,Realized FX Loss,6200,0,Expense,,exchange_loss

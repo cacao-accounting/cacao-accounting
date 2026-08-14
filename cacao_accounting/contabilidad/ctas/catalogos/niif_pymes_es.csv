@@ -45,14 +45,15 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 4.2.01,Ganancia Cambiaria Realizada,4.2,0,Income,,exchange_gain
 4.2.02,Ganancia Cambiaria No Realizada,4.2,0,Income,,unrealized_exchange_gain
 5,Costos y Gastos,,1,Expense,,
-5.1,Costo de Ventas,5,1,Expense,,
-5.1.01,Costo de Mercancías Vendidas,5.1,0,Expense,,cost_of_goods_sold
-5.1.02,Ajustes de Inventario,5.1,0,Expense,,inventory_adjustment
+5.1,Costo de Ventas,5,1,Cost,,
+5.1.01,Costo de Mercancías Vendidas,5.1,0,Cost,,cost_of_goods_sold
+5.1.02,Ajustes de Inventario,5.1,0,Cost,,inventory_adjustment
 5.2,Gastos de Administración,5,1,Expense,,
-5.2.01,Gastos de Personal,5.2,0,Expense,,expense
-5.2.02,Servicios Públicos,5.2,0,Expense,,expense
-5.2.03,Diferencias de Conciliación Bancaria,5.2,0,Expense,,bank_difference
-5.2.04,Redondeo,5.2,0,Expense,,rounding
+5.2.01,Gastos Generales de Operación,5.2,0,Expense,,expense
+5.2.02,Gastos de Personal,5.2,0,Expense,,expense
+5.2.03,Servicios Públicos,5.2,0,Expense,,expense
+5.2.04,Diferencias de Conciliación Bancaria,5.2,0,Expense,,bank_difference
+5.2.05,Redondeo,5.2,0,Expense,,rounding
 5.3,Gastos de Distribución y Ventas,5,1,Expense,,
 5.3.01,Gastos de Publicidad,5.3,0,Expense,,expense
 5.4,Gastos Financieros,5,1,Expense,,
