@@ -176,10 +176,7 @@ def validate_award_request(
     """Validate coverage, minimum offers and manual exceptions."""
     offers = submitted_supplier_quotations(rfq.id)
     config = get_purchase_sourcing_config()
-    if len(offers) < config.minimum_offers and not is_purchase_manager(user_id):
-        raise PurchaseSourcingError(f"Se requieren al menos {config.minimum_offers} ofertas; solo existen {len(offers)}.")
-    if len(offers) < config.minimum_offers and not reason:
-        raise PurchaseSourcingError("La autorización de oferta única requiere una justificación.")
+    _validate_award_authorization(offers, config.minimum_offers, user_id, reason)
     items = list(
         database.session.execute(
             database.select(PurchaseQuotationItem)
@@ -191,30 +188,44 @@ def validate_award_request(
     )
     if not selections:
         raise PurchaseSourcingError("Debe adjudicar al menos una línea.")
-    if not is_purchase_manager(user_id) and reason:
+    manual_override_items = _find_manual_override_items(items, offers, selections)
+    if manual_override_items and (not is_purchase_manager(user_id) or not reason):
+        raise PurchaseSourcingError("Seleccionar una oferta no recomendada requiere autorización y justificación.")
+    return cast(list[PurchaseQuotationItem], items), offers, manual_override_items
+
+
+def _validate_award_authorization(
+    offers: Sequence[SupplierQuotation], minimum_offers: int, user_id: str | None, reason: str | None
+) -> None:
+    """Validate offer count and authorization for sourcing exceptions."""
+    insufficient = len(offers) < minimum_offers
+    manager = is_purchase_manager(user_id)
+    if insufficient and not manager:
+        raise PurchaseSourcingError(f"Se requieren al menos {minimum_offers} ofertas; solo existen {len(offers)}.")
+    if insufficient and not reason:
+        raise PurchaseSourcingError("La autorización de oferta única requiere una justificación.")
+    if reason and not manager:
         raise PurchaseSourcingError("Solo el Gerente de Compras puede autorizar excepciones.")
-    manual_override_items: set[str] = set()
+
+
+def _find_manual_override_items(
+    items: Sequence[PurchaseQuotationItem], offers: Sequence[SupplierQuotation], selections: dict[str, str]
+) -> set[str]:
+    """Return selected items whose rate is above the best comparable offer."""
+    rfq_items = cast(list[PurchaseQuotationItem], items)
+    overrides: set[str] = set()
     for item in items:
         quotation_id = selections.get(item.id)
         if not quotation_id:
             continue
         quotation = next((offer for offer in offers if offer.id == quotation_id), None)
-        selected_line = (
-            offer_line_for_item(quotation.id, item, cast(list[PurchaseQuotationItem], items)) if quotation else None
-        )
+        selected_line = offer_line_for_item(quotation.id, item, rfq_items) if quotation else None
         if not quotation or not selected_line:
             raise PurchaseSourcingError(f"La oferta seleccionada no cubre el artículo {item.item_code}.")
-        comparable_rates = [
-            line.rate or Decimal("0")
-            for offer in offers
-            if (line := offer_line_for_item(offer.id, item, cast(list[PurchaseQuotationItem], items)))
-        ]
-        selected_rate = selected_line.rate or Decimal("0")
-        if comparable_rates and selected_rate > min(comparable_rates):
-            manual_override_items.add(item.id)
-    if manual_override_items and (not is_purchase_manager(user_id) or not reason):
-        raise PurchaseSourcingError("Seleccionar una oferta no recomendada requiere autorización y justificación.")
-    return cast(list[PurchaseQuotationItem], items), offers, manual_override_items
+        rates = [line.rate or Decimal("0") for offer in offers if (line := offer_line_for_item(offer.id, item, rfq_items))]
+        if rates and (selected_line.rate or Decimal("0")) > min(rates):
+            overrides.add(item.id)
+    return overrides
 
 
 def create_purchase_quotation_award(
