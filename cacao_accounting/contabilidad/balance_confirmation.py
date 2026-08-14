@@ -181,6 +181,30 @@ def _document_type_label(document: Any, default_label: str) -> str:
     return labels.get(document.document_type, default_label)
 
 
+def _invoice_is_credit(document: Any) -> bool:
+    """Return whether an invoice is represented with a credit sign."""
+    return bool(
+        document.is_return
+        or document.document_type in {"sales_credit_note", "sales_return", "purchase_credit_note", "purchase_return"}
+    )
+
+
+def _invoice_item(document: Any, default_label: str, outstanding: Decimal) -> dict[str, Any]:
+    """Build one open invoice item after its balance has been calculated."""
+    sign = Decimal("-1") if _invoice_is_credit(document) else Decimal("1")
+    due_date = document.due_date.isoformat() if getattr(document, "due_date", None) else None
+    return {
+        "document_id": document.id,
+        "document_type": _document_type_label(document, default_label),
+        "document_no": document.document_no or document.id,
+        "document_date": document.posting_date.isoformat() if document.posting_date else None,
+        "due_date": due_date,
+        "currency": document.transaction_currency or document.base_currency,
+        "original_amount": str(sign * Decimal(str(document.grand_total or 0))),
+        "outstanding_amount": str(sign * outstanding),
+    }
+
+
 def _invoice_open_items(
     company_id: str,
     party_id: str,
@@ -205,31 +229,13 @@ def _invoice_open_items(
             document.document_type or model_class.__tablename__, document.id, cutoff_date
         ):
             continue
-        is_credit = document.is_return or document.document_type in {
-            "sales_credit_note",
-            "sales_return",
-            "purchase_credit_note",
-            "purchase_return",
-        }
-        sign = Decimal("-1") if is_credit else Decimal("1")
+        is_credit = _invoice_is_credit(document)
         outstanding = compute_outstanding_amount(document, as_of_date=cutoff_date)
         if is_credit:
             outstanding -= compute_applied_credit_document_amount(document, cutoff_date)
         if outstanding <= 0:
             continue
-        due_date = document.due_date.isoformat() if getattr(document, "due_date", None) else None
-        items.append(
-            {
-                "document_id": document.id,
-                "document_type": _document_type_label(document, default_label),
-                "document_no": document.document_no or document.id,
-                "document_date": document.posting_date.isoformat() if document.posting_date else None,
-                "due_date": due_date,
-                "currency": document.transaction_currency or document.base_currency,
-                "original_amount": str(sign * Decimal(str(document.grand_total or 0))),
-                "outstanding_amount": str(sign * outstanding),
-            }
-        )
+        items.append(_invoice_item(document, default_label, outstanding))
     return items
 
 
@@ -252,10 +258,8 @@ def _payment_open_items(
     )
     items: list[dict[str, Any]] = []
     for payment in database.session.execute(stmt).scalars().all():
-        cancel_date = cancelled_map.get(("payment_entry", payment.id))
-        if payment.docstatus == 2 and (cancel_date is None or cancel_date <= cutoff_date):
-            if cancel_date is not None or is_cancelled_before_cutoff("payment_entry", payment.id, cutoff_date):
-                continue
+        if _payment_cancelled_at_cutoff(payment, cutoff_date, cancelled_map):
+            continue
         unapplied = compute_payment_unallocated_amount_at_date(payment, cutoff_date, cancelled_map)
         if unapplied == 0:
             continue
