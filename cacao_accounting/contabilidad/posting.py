@@ -1248,6 +1248,7 @@ def _create_payment_pay_entries(
         account_id,
         "No existe cuenta por pagar o anticipo configurada para el proveedor.",
     )
+    debit_remarks = _payment_debit_remarks(receivable, bool(party_account_id))
     return _normal_entries_for_amount(
         context=context,
         debit_account_id=payable_account_id,
@@ -1256,9 +1257,7 @@ def _create_payment_pay_entries(
         party_type=party_type,
         party_id=document.party_id,
         credit_bank_account_id=document.bank_account_id,
-        debit_remarks=(
-            "Reembolso a cliente" if receivable else "Pago a proveedor" if party_account_id else "Anticipo a proveedor"
-        ),
+        debit_remarks=debit_remarks,
         credit_remarks="Cuenta bancaria de pago",
     )
 
@@ -1323,6 +1322,13 @@ def _payment_entry_remarks(receivable: bool, has_party_account: bool) -> str:
     if not receivable:
         return "Reembolso de proveedor"
     return "Cobro de cliente" if has_party_account else "Anticipo de cliente"
+
+
+def _payment_debit_remarks(receivable: bool, has_party_account: bool) -> str:
+    """Describe the debit side of a supplier or customer payment."""
+    if receivable:
+        return "Reembolso a cliente"
+    return "Pago a proveedor" if has_party_account else "Anticipo a proveedor"
 
 
 def _resolve_fx_account_id(context: LedgerContext, difference: Decimal) -> str:
