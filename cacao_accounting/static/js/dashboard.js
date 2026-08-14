@@ -201,6 +201,9 @@
         if (!canvas || typeof Chart === "undefined") {
           return;
         }
+        const isDark = document.documentElement.dataset.theme === "dark";
+        const textColor = isDark ? "#c6d4cc" : "#526159";
+        const gridColor = isDark ? "rgba(198, 212, 204, 0.16)" : "rgba(82, 97, 89, 0.14)";
         if (this.charts[canvasId]) {
           this.charts[canvasId].destroy();
         }
@@ -218,8 +221,16 @@
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: datasets.length > 1 } },
-            scales: { y: { beginAtZero: true } },
+            plugins: {
+              legend: {
+                display: datasets.length > 1,
+                labels: { color: textColor },
+              },
+            },
+            scales: {
+              x: { ticks: { color: textColor }, grid: { color: gridColor } },
+              y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } },
+            },
           },
         });
       },

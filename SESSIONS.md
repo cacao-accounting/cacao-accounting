@@ -16,6 +16,19 @@ Se aumentó la especificidad de la regla clara en `auth/templates/login.html`
 para que el selector global `[data-theme="dark"] body` no pueda cambiar el
 fondo del login.
 
+## 2026-08-14 — Contraste del dashboard en modo oscuro
+
+### Petición
+
+El dashboard ejecutivo debe conservar legibilidad cuando el selector de tema
+esté en modo oscuro.
+
+### Implementación
+
+Los KPI ahora usan una superficie oscura y colores de texto explícitos en modo
+oscuro. Chart.js recibe colores adaptativos para leyenda, ejes y cuadrículas,
+evitando que sus valores por defecto queden ocultos sobre el fondo oscuro.
+
 ## 2026-08-14 — Refactors SonarCloud sobre origin/main
 
 ### Petición y base
