@@ -62,6 +62,9 @@ JavaScript `S2004`, `S3358` y `S3776`.
   portal del endpoint de edición.
 - `compras/__init__.py` separa la agrupación de adjudicaciones y la creación de
   líneas relacionadas al generar órdenes de compra.
+- `modulos/__init__.py` hace idempotente el registro de módulos estándar para
+  evitar violaciones de unicidad cuando la inicialización se repite sobre una
+  base PostgreSQL existente.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
