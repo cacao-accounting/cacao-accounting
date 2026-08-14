@@ -3,6 +3,24 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — Confirmación de saldos de clientes y proveedores (Cloud-Only)
+
+### Petición
+
+Implementar un sistema robusto, auditable e inmutable para solicitar confirmaciones externas de saldos a clientes y proveedores a una fecha de corte determinada, exclusivo para instalaciones en la nube.
+
+### Decisiones para la implementación
+
+- **Modelos de Datos:** Definición de `BalanceConfirmation` y `BalanceConfirmationInvitation` heredando de `database.Model` y `BaseTabla`.
+- **Exclusividad Cloud:** Todas las rutas internas, externas y formularios están protegidos contra el modo escritorio. Retornan un estado `403 Forbidden` si `is_desktop_mode()` está activo. Las acciones y botones no se renderizan en la interfaz web de Cacao Accounting Desktop.
+- **Cálculo Histórico al Corte:** Se implementó `get_open_documents_at_cutoff()` para reconstruir el saldo vivo de facturas, notas de débito, notas de crédito/devoluciones (`SalesInvoice`/`PurchaseInvoice`) y anticipos/pagos no aplicados (`PaymentEntry`) considerando únicamente aplicaciones y transacciones con fecha anterior o igual a la fecha de corte. Las anulaciones posteriores a la fecha de corte se consideran activas históricamente.
+- **Snapshot Inmutable:** Al crear/enviar una confirmación, se genera un snapshot inmutable serializado en `snapshot_json` y se calcula su hash SHA-256. El tercero visualiza este snapshot exacto, impidiendo que modificaciones posteriores de los registros alteren la confirmación.
+- **Invitaciones Seguras y Códigos de Verificación:** Cada destinatario recibe un correo individual con un token único aleatorio (almacenado como hash SHA-256 en base de datos) y un código de verificación de 6 dígitos.
+- **Paso de Verificación y Declaración de Autorización:** El usuario externo debe ingresar su nombre, apellido, correo electrónico (coincidencia exacta e insensible a mayúsculas) y código de verificación, además de aceptar una declaración bajo juramento de que está autorizado para acceder.
+- **Respuestas Definitivas:** El tercero puede responder "Sí, concilia" o "No, existen diferencias" (comentario obligatorio de min. 10 caracteres). La primera respuesta válida bloquea la confirmación como inmutable y cierra las demás invitaciones.
+- **Bitácora de Auditoría:** Registro automático de las 9 acciones de confirmación (`balance_confirmation_created`, `_sent`, `_resent`, `_viewed`, `_verified`, `_confirmed`, `_disputed`, `_cancelled`, `_expired`) en el `AuditTrail` centralizado.
+- **Compatibilidad con `_doc_info`:** El modelo `BalanceConfirmation` expone los atributos `company`, `document_no` y `document_type` como columnas para alinearse con las aserciones de descubrimiento automático del servicio de auditoría.
+
 ## 2026-08-12 — Plan transversal para document flow y cobertura de pruebas
 
 ### Hallazgo

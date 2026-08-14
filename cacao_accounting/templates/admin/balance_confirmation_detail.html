@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item">
+      {% if confirmation.party_type == 'customer' %}
+        <a href="{{ url_for('ventas.ventas_cliente_lista') }}" class="link-dark">{{ _('Clientes') }}</a>
+      {% else %}
+        <a href="{{ url_for('compras.compras_proveedor_lista') }}" class="link-dark">{{ _('Proveedores') }}</a>
+      {% endif %}
+    </li>
+    <li class="breadcrumb-item">
+      {% if confirmation.party_type == 'customer' %}
+        <a href="{{ url_for('ventas.ventas_cliente', customer_id=party.id) }}" class="link-dark">{{ party.name }}</a>
+      {% else %}
+        <a href="{{ url_for('compras.compras_proveedor', supplier_id=party.id) }}" class="link-dark">{{ party.name }}</a>
+      {% endif %}
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ confirmation.document_no or confirmation.id }}</li>
+  </ol>
+</nav>
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="ca-card mb-4">
+      <div class="ca-card-header d-flex justify-content-between align-items-center">
+        <h5 class="ca-card-title mb-0"><i class="bi bi-file-earmark-check me-1"></i> {{ _('Confirmación de Saldo') }} {{ confirmation.document_no }}</h5>
+        <div>
+          {% if confirmation.status == 'draft' %}
+            <span class="badge bg-secondary">{{ _('Borrador') }}</span>
+          {% elif confirmation.status == 'sent' %}
+            <span class="badge bg-info">{{ _('Enviada') }}</span>
+          {% elif confirmation.status == 'viewed' %}
+            <span class="badge bg-primary">{{ _('Visualizada') }}</span>
+          {% elif confirmation.status == 'confirmed' %}
+            <span class="badge bg-success">{{ _('Confirmada') }}</span>
+          {% elif confirmation.status == 'disputed' %}
+            <span class="badge bg-danger">{{ _('Disputada') }}</span>
+          {% elif confirmation.status == 'cancelled' %}
+            <span class="badge bg-warning">{{ _('Cancelada') }}</span>
+          {% elif confirmation.status == 'expired' %}
+            <span class="badge bg-dark">{{ _('Expirada') }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="p-4">
+        <div class="ca-kv-list">
+          <div class="ca-kv-item"><label>{{ _('Tercero') }}</label><p><strong>{{ party.name }}</strong></p></div>
+          <div class="ca-kv-item"><label>{{ _('Compañía') }}</label><p>{{ company.company_name if company else confirmation.company }}</p></div>
+          <div class="ca-kv-item"><label>{{ _('Fecha de Corte') }}</label><p>{{ confirmation.cutoff_date.strftime('%d/%m/%Y') }}</p></div>
+          <div class="ca-kv-item"><label>{{ _('Creado En') }}</label><p>{{ confirmation.created_at.strftime('%d/%m/%Y %H:%M') }}</p></div>
+          <div class="ca-kv-item"><label>{{ _('Fecha de Expiración') }}</label><p>{{ confirmation.expires_at.strftime('%d/%m/%Y %H:%M') if confirmation.expires_at else '-' }}</p></div>
+        </div>
+
+        {% if confirmation.status in ('confirmed', 'disputed') %}
+          <div class="ca-card bg-light border-start border-4 border-success p-3 my-4">
+            <h6 class="fw-bold"><i class="bi bi-chat-left-text me-1"></i> {{ _('Evidencia de Respuesta') }}</h6>
+            <div class="ca-kv-list">
+              <div class="ca-kv-item"><label>{{ _('Resultado') }}</label><p class="fw-bold {% if confirmation.status == 'confirmed' %}text-success{% else %}text-danger{% endif %}">{{ _('Conciliado') if confirmation.status == 'confirmed' else _('No conciliado') }}</p></div>
+              <div class="ca-kv-item"><label>{{ _('Respondiente') }}</label><p>{{ confirmation.respondent_first_name }} {{ confirmation.respondent_last_name }} ({{ confirmation.respondent_email }})</p></div>
+              <div class="ca-kv-item"><label>{{ _('Fecha / Hora') }}</label><p>{{ confirmation.responded_at.strftime('%d/%m/%Y %H:%M:%S UTC') }}</p></div>
+              <div class="ca-kv-item"><label>{{ _('IP / User-Agent') }}</label><p class="small text-muted">{{ confirmation.respondent_ip }} <br> {{ confirmation.respondent_user_agent }}</p></div>
+              {% if confirmation.response_comment %}
+                <div class="ca-kv-item"><label>{{ _('Comentario / Explicación') }}</label><p class="text-dark bg-white border rounded p-2">"{{ confirmation.response_comment }}"</p></div>
+              {% endif %}
+              <div class="ca-kv-item"><label>{{ _('Hash del Snapshot Confirmado') }}</label><p class="small text-muted text-break"><code>{{ confirmation.snapshot_hash }}</code></p></div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Snapshot inmutable de partidas -->
+    <div class="ca-card mb-4">
+      <div class="ca-card-header">
+        <h5 class="ca-card-title mb-0"><i class="bi bi-list-columns me-1"></i> {{ _('Partidas Incluidas en Snapshot') }}</h5>
+      </div>
+      <div class="p-4">
+        {% if snapshot["items"] %}
+          <div class="table-responsive">
+            <table class="table table-bordered table-striped align-middle">
+              <thead>
+                <tr>
+                  <th>{{ _('Documento') }}</th>
+                  <th>{{ _('Referencia') }}</th>
+                  <th>{{ _('Fecha') }}</th>
+                  <th>{{ _('Vencimiento') }}</th>
+                  <th>{{ _('Moneda') }}</th>
+                  <th class="text-end">{{ _('Importe Original') }}</th>
+                  <th class="text-end">{{ _('Saldo Pendiente') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in snapshot["items"] %}
+                  <tr>
+                    <td>{{ item.document_type }}</td>
+                    <td class="fw-bold">{{ item.document_no }}</td>
+                    <td>{{ item.document_date if item.document_date else '-' }}</td>
+                    <td>{{ item.due_date if item.due_date else '-' }}</td>
+                    <td class="text-center fw-bold">{{ item.currency }}</td>
+                    <td class="text-end {% if item.original_amount < 0 %}text-danger{% endif %}">{{ "{:,.2f}".format(item.original_amount) }}</td>
+                    <td class="text-end fw-bold {% if item.outstanding_amount < 0 %}text-danger{% endif %}">{{ "{:,.2f}".format(item.outstanding_amount) }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="ca-card bg-light p-3 mt-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-wallet2 me-1"></i> {{ _('Totales por Moneda') }}</h6>
+            <div class="row">
+              {% for currency, total_val in snapshot["totals"].items() %}
+                <div class="col-md-6 mb-2">
+                  <span class="text-muted small">{{ _('Total Pendiente') }} ({{ currency }}):</span>
+                  <strong class="fs-5 ms-2 {% if total_val < 0 %}text-danger{% else %}text-primary{% endif %}">
+                    {{ currency }} {{ "{:,.2f}".format(total_val) }}
+                  </strong>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% else %}
+          <p class="text-center text-muted py-4"><i class="bi bi-info-circle me-1"></i> {{ _('El snapshot no contiene partidas abiertas.') }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Acciones y Destinatarios -->
+  <div class="col-lg-4">
+    <div class="ca-card mb-4">
+      <div class="ca-card-header">
+        <h5 class="ca-card-title mb-0"><i class="bi bi-sliders me-1"></i> {{ _('Acciones de Solicitud') }}</h5>
+      </div>
+      <div class="p-3">
+        <div class="d-grid gap-2">
+          {% if confirmation.status == 'draft' %}
+            <form method="POST" action="{{ url_for('balance_confirmations.enviar_confirmacion', confirmation_id=confirmation.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send-fill me-1"></i> {{ _('Enviar por Correo') }}</button>
+            </form>
+          {% elif confirmation.status in ('sent', 'viewed') %}
+            <form method="POST" action="{{ url_for('balance_confirmations.reenviar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit="return confirm('¿Está seguro de que desea reenviar la confirmación? Esto invalidará el código y enlace anterior.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline-primary w-100"><i class="bi bi-arrow-repeat me-1"></i> {{ _('Reenviar Confirmación') }}</button>
+            </form>
+          {% endif %}
+
+          {% if confirmation.status not in ('confirmed', 'disputed', 'cancelled', 'expired') %}
+            <form method="POST" action="{{ url_for('balance_confirmations.cancelar_confirmacion', confirmation_id=confirmation.id) }}" onsubmit="return confirm('¿Está seguro de que desea cancelar esta solicitud? Se desactivarán todos los accesos externos.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline-danger w-100"><i class="bi bi-x-circle me-1"></i> {{ _('Cancelar Solicitud') }}</button>
+            </form>
+          {% endif %}
+
+          {% if confirmation.party_type == 'customer' %}
+            <a href="{{ url_for('ventas.ventas_cliente', customer_id=party.id) }}" class="btn btn-outline-secondary w-100"><i class="bi bi-arrow-left me-1"></i> {{ _('Regresar al Cliente') }}</a>
+          {% else %}
+            <a href="{{ url_for('compras.compras_proveedor', supplier_id=party.id) }}" class="btn btn-outline-secondary w-100"><i class="bi bi-arrow-left me-1"></i> {{ _('Regresar al Proveedor') }}</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Destinatarios y Códigos -->
+    <div class="ca-card mb-4">
+      <div class="ca-card-header">
+        <h5 class="ca-card-title mb-0"><i class="bi bi-people me-1"></i> {{ _('Destinatarios Autorizados') }}</h5>
+      </div>
+      <div class="p-3">
+        <div class="list-group list-group-flush">
+          {% for inv in invitations %}
+            <div class="list-group-item px-0">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong class="text-dark small text-break">{{ inv.email }}</strong>
+                {% if inv.status == 'responded' %}
+                  <span class="badge bg-success small">{{ _('Respondió') }}</span>
+                {% elif inv.status == 'viewed' %}
+                  <span class="badge bg-primary small">{{ _('Visualizó') }}</span>
+                {% elif inv.status == 'cancelled' %}
+                  <span class="badge bg-secondary small">{{ _('Cancelada') }}</span>
+                {% else %}
+                  <span class="badge bg-light text-dark border small">{{ _('Pendiente') }}</span>
+                {% endif %}
+              </div>
+
+              <div class="text-muted small">
+                {% if inv.sent_at %}
+                  <p class="mb-0"><i class="bi bi-envelope-open me-1"></i> {{ _('Enviado:') }} {{ inv.sent_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                {% endif %}
+                {% if inv.last_access_at %}
+                  <p class="mb-0"><i class="bi bi-eye me-1"></i> {{ _('Último acceso:') }} {{ inv.last_access_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                {% endif %}
+                {% if inv.failed_attempts > 0 %}
+                  <p class="mb-0 text-danger"><i class="bi bi-shield-exclamation me-1"></i> {{ _('Intentos fallidos:') }} {{ inv.failed_attempts }}</p>
+                {% endif %}
+
+                <!-- Mostrar código de verificación solo para borradores (en el envío inicial) -->
+                {% if confirmation.status == 'draft' and inv._raw_code %}
+                  <p class="mb-0 text-success fw-bold"><i class="bi bi-key me-1"></i> {{ _('Código:') }} <code>{{ inv._raw_code }}</code></p>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Bitácora de Auditoría local -->
+    <div class="ca-card">
+      <div class="ca-card-header">
+        <h5 class="ca-card-title mb-0"><i class="bi bi-clock-history"></i> {{ _('Historial de Auditoría') }}</h5>
+      </div>
+      <div class="p-3" style="max-height: 400px; overflow-y: auto;">
+        <div class="list-group list-group-flush small">
+          {% for log in audit_timeline %}
+            <div class="list-group-item px-0">
+              <div class="d-flex justify-content-between mb-1">
+                <strong class="text-dark">{{ log.event.actor_name or 'Sistema' }}</strong>
+                <span class="text-muted" style="font-size: 0.75rem;">{{ log.event.timestamp.strftime('%d/%m %H:%M') }}</span>
+              </div>
+              <p class="mb-1 text-primary fw-bold" style="font-size: 0.8rem;">
+                {% if log.event.action == 'balance_confirmation_created' %}
+                  {{ _('Creación Borrador') }}
+                {% elif log.event.action == 'balance_confirmation_sent' %}
+                  {{ _('Enviada por Correo') }}
+                {% elif log.event.action == 'balance_confirmation_resent' %}
+                  {{ _('Reenviada') }}
+                {% elif log.event.action == 'balance_confirmation_viewed' %}
+                  {{ _('Visualizada') }}
+                {% elif log.event.action == 'balance_confirmation_verified' %}
+                  {{ _('Identidad Verificada') }}
+                {% elif log.event.action == 'balance_confirmation_confirmed' %}
+                  {{ _('Saldo Confirmado/Conciliado') }}
+                {% elif log.event.action == 'balance_confirmation_disputed' %}
+                  {{ _('Saldo Disputado') }}
+                {% elif log.event.action == 'balance_confirmation_cancelled' %}
+                  {{ _('Cancelada') }}
+                {% else %}
+                  {{ log.event.action }}
+                {% endif %}
+              </p>
+              {% if log.event.comment %}
+                <p class="mb-0 text-muted" style="font-size: 0.75rem;">{{ log.event.comment }}</p>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<div class="container my-5" style="max-width: 600px;">
+  <div class="ca-card text-center p-5">
+    <div class="mb-4">
+      <i class="bi bi-info-circle-fill text-secondary" style="font-size: 5rem;"></i>
+    </div>
+
+    <h3 class="fw-bold text-dark mb-3">{{ title }}</h3>
+
+    <p class="text-dark mb-4">
+      {{ message }}
+    </p>
+
+    <p class="text-muted small mb-0">
+      {{ _('Si tiene alguna duda o considera que es un error, por favor comuníquese con su contacto en la compañía.') }}
+    </p>
+  </div>
+</div>
+
+{% endblock %}

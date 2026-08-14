@@ -64,6 +64,7 @@ from cacao_accounting.runtime_mode import force_single_entity, is_cloud_mode, is
 from cacao_accounting.setup import setup_ as setup_wizard
 from cacao_accounting.ventas import ventas
 from cacao_accounting.portal import portal as portal_blueprint
+from cacao_accounting.contabilidad.balance_confirmation_bp import balance_confirmations_bp
 from cacao_accounting.version import PRERELEASE
 from flask_babel import Babel
 
@@ -182,6 +183,7 @@ def registrar_blueprints(app: Flask | None = None) -> None:
             app.register_blueprint(printing_public)
             app.register_blueprint(printing_admin)
             app.register_blueprint(portal_blueprint, url_prefix="/portal")
+            app.register_blueprint(balance_confirmations_bp)
             init_printing()
 
     else:
@@ -245,6 +247,17 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(current_user_open_task_count=current_user_open_task_count)
             app.jinja_env.globals.update(pending_approval_count=pending_approval_count)
             app.jinja_env.globals.update(audit_action_label=audit_action_label)
+
+            def get_balance_confirmations_history(party_id: str, party_type: str):
+                from cacao_accounting.database import BalanceConfirmation, database
+                from sqlalchemy import select
+                stmt = select(BalanceConfirmation).where(
+                    BalanceConfirmation.party_id == party_id,
+                    BalanceConfirmation.party_type == party_type
+                ).order_by(BalanceConfirmation.created_at.desc())
+                return list(database.session.execute(stmt).scalars().all())
+            app.jinja_env.globals.update(get_balance_confirmations_history=get_balance_confirmations_history)
+
             from cacao_accounting.document_flow.tracing import get_create_actions
 
             app.jinja_env.globals.update(get_document_create_actions=get_create_actions)

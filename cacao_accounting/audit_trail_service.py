@@ -34,6 +34,15 @@ ALLOWED_ACTIONS = {
     "task_status_changed",
     "approval_requested",
     "cancellation_requested",
+    "balance_confirmation_created",
+    "balance_confirmation_sent",
+    "balance_confirmation_resent",
+    "balance_confirmation_viewed",
+    "balance_confirmation_verified",
+    "balance_confirmation_confirmed",
+    "balance_confirmation_disputed",
+    "balance_confirmation_cancelled",
+    "balance_confirmation_expired",
 }
 
 
@@ -343,3 +352,14 @@ def format_document_timeline(
     """
     skip = _timeline_skip_fields(exclude_fields)
     return [_format_timeline_event(event, skip) for event in get_document_timeline(document_type, document_id)]
+
+
+def log_balance_confirmation_event(
+    document: Any,
+    action: str,
+    before: Any = None,
+    after: Any = None,
+    comment: str | None = None,
+) -> AuditTrail:
+    """Log an audit trail event for a balance confirmation."""
+    return _log(action, document, before=before, after=after, comment=comment)

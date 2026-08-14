@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<div class="container my-5" style="max-width: 600px;">
+  <div class="ca-card text-center p-5 border-success">
+    <div class="mb-4">
+      <i class="bi bi-patch-check-fill text-success" style="font-size: 5rem;"></i>
+    </div>
+
+    <h3 class="fw-bold text-success mb-3">{{ _('¡Respuesta Recibida con Éxito!') }}</h3>
+
+    <p class="text-dark mb-4">
+      {{ _('Su respuesta a la solicitud de confirmación de saldos para') }} <strong>{{ company_name }}</strong> {{ _('ha sido guardada de forma segura e inmutable en nuestro sistema de auditoría.') }}
+    </p>
+
+    <div class="ca-card bg-light p-3 text-start mb-4">
+      <div class="ca-kv-list">
+        <div class="ca-kv-item"><label>{{ _('Referencia de confirmación') }}</label><p>{{ confirmation.document_no }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Resultado') }}</label><p class="fw-bold {% if confirmation.response_type == 'confirmed' %}text-success{% else %}text-danger{% endif %}">{{ _('Conciliado') if confirmation.response_type == 'confirmed' else _('No conciliado') }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Respondiente') }}</label><p>{{ confirmation.respondent_first_name }} {{ confirmation.respondent_last_name }} ({{ confirmation.respondent_email }})</p></div>
+        <div class="ca-kv-item"><label>{{ _('Fecha de respuesta') }}</label><p>{{ confirmation.responded_at.strftime('%d/%m/%Y %H:%M:%S UTC') }}</p></div>
+      </div>
+    </div>
+
+    <p class="text-muted small mb-0">
+      {{ _('Gracias por ayudarnos a mantener la integridad de nuestra información financiera.') }}
+    </p>
+  </div>
+</div>
+
+{% endblock %}

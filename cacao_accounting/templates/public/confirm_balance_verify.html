@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<div class="container my-5" style="max-width: 600px;">
+  <div class="ca-card">
+    <div class="ca-card-header bg-primary text-white">
+      <h5 class="ca-card-title text-white mb-0"><i class="bi bi-shield-lock me-1"></i> {{ _('Verificación de Identidad') }}</h5>
+    </div>
+    <div class="p-4">
+      <p class="text-muted small">
+        {{ _('Por razones de seguridad y confidencialidad, debe verificar su identidad antes de consultar el detalle de las partidas abiertas y responder a esta solicitud de confirmación.') }}
+      </p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="{{ url_for('balance_confirmations.public_confirm_balance_verify', token=token) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="mb-3">
+          <label for="first_name" class="form-label fw-bold">{{ _('Nombre') }}</label>
+          <input type="text" class="form-control" id="first_name" name="first_name" required placeholder="Escriba su nombre">
+        </div>
+
+        <div class="mb-3">
+          <label for="last_name" class="form-label fw-bold">{{ _('Apellido') }}</label>
+          <input type="text" class="form-control" id="last_name" name="last_name" required placeholder="Escriba su apellido">
+        </div>
+
+        <div class="mb-3">
+          <label for="email" class="form-label fw-bold">{{ _('Correo Autorizado') }}</label>
+          <input type="email" class="form-control" id="email" name="email" required placeholder="ejemplo@empresa.com">
+          <div class="form-text small text-muted">{{ _('Debe ser exactamente el correo donde recibió la invitación.') }}</div>
+        </div>
+
+        <div class="mb-3">
+          <label for="code" class="form-label fw-bold">{{ _('Código de Verificación') }}</label>
+          <input type="text" class="form-control text-center fw-bold" id="code" name="code" required maxlength="6" placeholder="******" style="letter-spacing: 4px; font-size: 1.2rem;">
+          <div class="form-text small text-muted">{{ _('Ingrese el código de 6 dígitos que se le envió por correo.') }}</div>
+        </div>
+
+        <div class="mb-4 form-check">
+          <input type="checkbox" class="form-check-input" id="authorized" name="authorized" required>
+          <label class="form-check-label small text-dark" for="authorized">
+            <strong>{{ _('Declaro que estoy autorizado') }}</strong> {{ _('por la organización para consultar y responder esta solicitud de confirmación de saldos.') }}
+          </label>
+        </div>
+
+        <div class="d-grid">
+          <button type="submit" class="btn btn-primary"><i class="bi bi-unlock me-1"></i> {{ _('Verificar y Continuar') }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

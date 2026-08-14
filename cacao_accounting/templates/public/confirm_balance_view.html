@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+<div class="container my-5">
+  <div class="ca-card">
+    <div class="ca-card-header bg-primary text-white d-flex justify-content-between align-items-center">
+      <h5 class="ca-card-title text-white mb-0">
+        <i class="bi bi-file-earmark-check me-1"></i> {{ _('Solicitud de Confirmación de Saldo') }} #{{ confirmation.document_no }}
+      </h5>
+      <span class="badge bg-light text-primary fw-bold">{{ _('Verificado') }}</span>
+    </div>
+
+    <div class="p-4">
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <label class="text-muted small uppercase fw-bold d-block">{{ _('Compañía Solicitante') }}</label>
+          <strong class="fs-5 text-dark">{{ snapshot["company_name"] }}</strong>
+        </div>
+        <div class="col-md-6 text-md-end">
+          <label class="text-muted small uppercase fw-bold d-block">{{ _('Fecha de Corte') }}</label>
+          <strong class="fs-5 text-dark">{{ confirmation.cutoff_date.strftime('%d/%m/%Y') }}</strong>
+        </div>
+      </div>
+
+      <div class="row mb-4">
+        <div class="col-12">
+          <label class="text-muted small uppercase fw-bold d-block">{{ _('Relación / Organización') }}</label>
+          <strong class="fs-5 text-primary">{{ snapshot["party_name"] }}</strong>
+        </div>
+      </div>
+
+      <h6 class="border-bottom pb-2 mb-3"><i class="bi bi-list-columns me-1"></i> {{ _('Detalle de Partidas Abiertas al Corte') }}</h6>
+
+      {% if snapshot["items"] %}
+        <div class="table-responsive mb-4">
+          <table class="table table-bordered table-striped align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>{{ _('Documento') }}</th>
+                <th>{{ _('Referencia') }}</th>
+                <th>{{ _('Fecha') }}</th>
+                <th>{{ _('Vencimiento') }}</th>
+                <th class="text-center">{{ _('Moneda') }}</th>
+                <th class="text-end">{{ _('Importe Original') }}</th>
+                <th class="text-end">{{ _('Saldo Pendiente') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in snapshot["items"] %}
+                <tr>
+                  <td>{{ item.document_type }}</td>
+                  <td class="fw-bold">{{ item.document_no }}</td>
+                  <td>{{ item.document_date if item.document_date else '-' }}</td>
+                  <td>{{ item.due_date if item.due_date else '-' }}</td>
+                  <td class="text-center fw-bold text-secondary">{{ item.currency }}</td>
+                  <td class="text-end {% if item.original_amount < 0 %}text-danger{% endif %}">
+                    {{ "{:,.2f}".format(item.original_amount) }}
+                  </td>
+                  <td class="text-end fw-bold {% if item.outstanding_amount < 0 %}text-danger{% endif %}">
+                    {{ "{:,.2f}".format(item.outstanding_amount) }}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Totales Consolidados por Moneda -->
+        <div class="ca-card bg-light p-3 mb-4">
+          <h6 class="fw-bold mb-2"><i class="bi bi-wallet2 me-1"></i> {{ _('Saldos Totales por Moneda') }}</h6>
+          <div class="row">
+            {% for currency, total_val in snapshot["totals"].items() %}
+              <div class="col-md-4">
+                <div class="border-start border-primary border-4 ps-3 py-1">
+                  <span class="text-muted small d-block">{{ _('Saldo Pendiente') }} ({{ currency }})</span>
+                  <strong class="fs-4 {% if total_val < 0 %}text-danger{% else %}text-primary{% endif %}">
+                    {{ currency }} {{ "{:,.2f}".format(total_val) }}
+                  </strong>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% else %}
+        <div class="alert alert-info py-4 text-center my-4">
+          <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+          {{ _('No existen partidas abiertas o saldos pendientes registrados para esta organización a la fecha de corte seleccionada.') }}
+        </div>
+      {% endif %}
+
+      <!-- Formulario de Respuesta Externa -->
+      <div class="ca-card border-primary mt-5">
+        <div class="ca-card-header bg-light">
+          <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-chat-dots me-1"></i> {{ _('Responder Confirmación') }}</h5>
+        </div>
+        <div class="p-4" x-data="{ response_type: '' }">
+          <form method="POST" action="{{ url_for('balance_confirmations.public_confirm_balance_respond', token=token) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <p class="fw-bold text-dark">{{ _('¿El saldo anterior concilia con sus registros?') }}</p>
+
+            <div class="mb-4">
+              <div class="form-check form-check-inline me-4">
+                <input class="form-check-input" type="radio" name="response_type" id="res_yes" value="confirmed" required x-model="response_type">
+                <label class="form-check-label fw-bold text-success" for="res_yes">
+                  <i class="bi bi-check-circle-fill"></i> {{ _('Sí, el saldo concilia') }}
+                </label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="response_type" id="res_no" value="disputed" required x-model="response_type">
+                <label class="form-check-label fw-bold text-danger" for="res_no">
+                  <i class="bi bi-x-circle-fill"></i> {{ _('No, existen diferencias') }}
+                </label>
+              </div>
+            </div>
+
+            <!-- Comentario condicional -->
+            <div class="mb-4" x-show="response_type === 'disputed'" x-transition style="display: none;">
+              <label for="response_comment" class="form-label fw-bold">{{ _('Explique las diferencias encontradas') }} <span class="text-danger">*</span></label>
+              <textarea class="form-control" id="response_comment" name="response_comment" rows="4" minlength="10" placeholder="Por favor proporcione suficiente detalle sobre las discrepancias (facturas pendientes, pagos no aplicados, diferencias en importes, etc.)"></textarea>
+              <div class="form-text text-muted small">{{ _('Este campo es obligatorio si indica que existen diferencias (mínimo 10 caracteres).') }}</div>
+            </div>
+
+            <div class="mb-4" x-show="response_type === 'confirmed'" x-transition style="display: none;">
+              <label for="response_comment_opt" class="form-label fw-bold">{{ _('Comentario adicional (opcional)') }}</label>
+              <textarea class="form-control" id="response_comment_opt" name="response_comment" rows="2" placeholder="Agregue algún comentario opcional si lo desea"></textarea>
+            </div>
+
+            <div class="alert alert-warning small d-flex align-items-center mb-4">
+              <i class="bi bi-exclamation-triangle-fill fs-5 me-2 flex-shrink-0"></i>
+              <div>
+                {{ _('Al enviar, su respuesta quedará registrada como definitiva e inmutable, y no podrá ser modificada o enviada nuevamente.') }}
+              </div>
+            </div>
+
+            <div class="d-grid">
+              <button type="submit" class="btn btn-primary btn-lg"><i class="bi bi-send-fill me-1"></i> {{ _('Enviar Respuesta Definitiva') }}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{% endblock %}
