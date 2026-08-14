@@ -3,6 +3,52 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — Revisión por pares y correcciones de confirmación de saldos
+
+### Petición
+
+Realizar una revisión por pares de la rama `feature/balance-confirmation-14116496433863909411`
+y corregir los issues identificados con commits semánticos firmados
+(autor `williamjmorenor@gmail.com`, sign-off).
+
+### Hallazgos de la revisión y correcciones aplicadas
+
+- **CRÍTICO — Reversión de trabajo de main:** el commit `a8ee8f86` revirtió la
+  política fiscal de main (`accounting_engine.common.fiscal`, deduplicación de
+  capitalización, validación de plantillas de compra, tests). Se fusionó
+  `origin/main` y se restauraron los archivos revertidos; la migración de la
+  rama se renumeró a `20260814_0007` (down_revision `20260814_0006`) por
+  colisión de revisión con la de descuentos, y se restauró la entrada de
+  SESSIONS.md "2026-08-13 — Impuestos y cargos en factura de compra".
+- **CRÍTICO — Doble conteo de notas de crédito aplicadas:** el saldo vivo de la
+  factura ya resta las notas aplicadas vía `compute_outstanding_amount`, pero la
+  nota aparecía además como partida negativa independiente. Se agregó
+  `compute_applied_credit_document_amount` (relaciones `invoice_reversal` con
+  destino la nota y factura origen posteada al corte) y se resta del saldo
+  independiente de la nota. Caso verificado: factura 5000 + NC 500 aplicada +
+  pago 1000 no aplicado → total correcto 3500.
+- **ALTO — Expiración solo en GET:** los POST `verify` y `respond` aceptaban
+  confirmaciones vencidas. Se centralizó el chequeo en `_mark_expired` y se
+  aplica en los tres endpoints públicos, con regresión.
+- **MEDIO:** montos del snapshot serializados como string (Decimal) en lugar de
+  float; timestamps UTC con zona horaria explícita (`_utcnow`) en lugar de
+  `datetime.utcnow()`; eliminación de `created_at`/`tenant_id` duplicados del
+  modelo y de la redefinición de `created_by`; unique constraint
+  `(balance_confirmation_id, email)`; scoping de
+  `get_balance_confirmations_history` por compañía; reutilización de
+  `prepare_invitation_token` en envío/reenvío; consulta agrupada de anulaciones
+  (fin del N+1 por documento); eliminación del bloque muerto `_raw_code`.
+- **BAJO:** comparaciones en tiempo constante con `hmac.compare_digest`,
+  validación de correo con regex, textareas de respuesta sin nombre duplicado
+  (con `:disabled` condicional) y sin imports `secrets` inline.
+
+### Verificación
+
+Tests de confirmación (6) y migraciones (3) en verde; 14 pruebas fiscales
+restauradas y 38 pruebas JS en verde; black, ruff y flake8 limpios en los
+archivos modificados. mypy no ejecutable en el entorno por incompatibilidad
+`pathspec` preexistente.
+
 ## 2026-08-14 — Corrección de clasificación de descuentos en catálogos
 
 ### Hallazgo
