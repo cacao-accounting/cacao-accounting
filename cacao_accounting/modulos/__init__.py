@@ -113,9 +113,12 @@ def _parse_plugin_module_name(package_name: str) -> str:
 
 
 def registrar_modulo(entrada: dict) -> None:
-    """Recibe un diccionario y lo inserta en la base de datos."""
+    """Register a module once without duplicating an existing logical name."""
+    module_name = entrada["modulo"]
+    if Modules.query.filter_by(module=module_name).first() is not None:
+        return
     registro = Modules(
-        module=entrada["modulo"],
+        module=module_name,
         default=entrada["estandar"],
         enabled=entrada["habilitado"],
     )
