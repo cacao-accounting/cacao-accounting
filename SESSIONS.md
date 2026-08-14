@@ -34,6 +34,10 @@ JavaScript `S2004`, `S3358` y `S3776`.
   dimensión.
 - `a7cd1f7f`: se separaron los handlers de cancelación del motor de
   aprobaciones.
+- `65190a26`: se separó la resolución de montos de pagos y entradas GL en
+  conciliación bancaria.
+- `6c4e63fb`: se aisló la conversión multimoneda de líneas GL del constructor
+  de entradas contables.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
