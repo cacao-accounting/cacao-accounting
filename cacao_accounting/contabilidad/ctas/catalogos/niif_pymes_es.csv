@@ -1,0 +1,62 @@
+codigo,nombre,padre,grupo,rubro,tipo,account_type
+1,Activo,,1,Asset,,
+1.1,Activo Corriente,1,1,Asset,,
+1.1.01,Efectivo y Equivalentes de Efectivo,1.1,1,Asset,,
+1.1.01.01,Caja General,1.1.01,0,Asset,,cash
+1.1.01.02,Bancos,1.1.01,0,Asset,,bank
+1.1.02,Deudores Comerciales y Otras Cuentas por Cobrar,1.1,1,Asset,,
+1.1.02.01,Clientes Nacionales,1.1.02,0,Asset,,receivable
+1.1.02.02,Anticipos a Proveedores,1.1.02,0,Asset,,supplier_advance
+1.1.03,Inventarios,1.1,1,Asset,,
+1.1.03.01,Inventario de Mercancías,1.1.03,0,Asset,,inventory
+1.1.04,Otros Activos Financieros,1.1,1,Asset,,
+1.1.05,Gastos Pagados por Anticipado,1.1,1,Asset,,
+1.1.05.01,Gastos Diferidos,1.1.05,0,Asset,,deferred_expense
+1.2,Activo No Corriente,1,1,Asset,,
+1.2.01,"Propiedades, Planta y Equipo",1.2,1,Asset,,
+1.2.01.01,Terrenos,1.2.01,0,Asset,,
+1.2.01.02,Edificios,1.2.01,0,Asset,,
+1.2.01.03,Equipos de Oficina,1.2.01,0,Asset,,
+2,Pasivo,,1,Liability,,
+2.1,Pasivo Corriente,2,1,Liability,,
+2.1.01,Acreedores Comerciales y Otras Cuentas por Pagar,2.1,1,Liability,,
+2.1.01.01,Proveedores Nacionales,2.1.01,0,Liability,,payable
+2.1.01.02,Bienes Recibidos No Facturados,2.1.01,0,Liability,,bridge
+2.1.02,Anticipos de Clientes,2.1,1,Liability,,
+2.1.02.01,Anticipos Recibidos de Clientes,2.1.02,0,Liability,,customer_advance
+2.1.03,Pasivos por Impuestos,2.1,1,Liability,,
+2.1.03.01,I.V.A. por Pagar,2.1.03,0,Liability,,tax
+2.1.03.02,I.V.A. Crédito Fiscal,2.1.03,0,Liability,,tax
+2.1.04,Pasivos por Ingresos Diferidos,2.1,1,Liability,,
+2.1.04.01,Ingresos Diferidos,2.1.04,0,Liability,,deferred_income
+2.2,Pasivo No Corriente,2,1,Liability,,
+2.2.01,Préstamos a Largo Plazo,2.2,0,Liability,,
+3,Patrimonio,,1,Equity,,
+3.1,Capital Social,3,1,Equity,,
+3.1.01,Capital Suscrito y Pagado,3.1,0,Equity,,
+3.2,Resultados Acumulados,3,1,Equity,,
+3.2.01,Utilidades Retenidas de Ejercicios Anteriores,3.2,0,Equity,,retained_earnings
+3.3,Resultados del Ejercicio,3,1,Equity,,
+3.3.01,Utilidad o Pérdida del Periodo,3.3,0,Equity,,period_profit_loss
+4,Ingresos,,1,Income,,
+4.1,Ingresos de Actividades Ordinarias,4,1,Income,,
+4.1.01,Ventas de Mercancías,4.1,0,Income,,income
+4.2,Otros Ingresos,4,1,Income,,
+4.2.01,Ganancia Cambiaria Realizada,4.2,0,Income,,exchange_gain
+4.2.02,Ganancia Cambiaria No Realizada,4.2,0,Income,,unrealized_exchange_gain
+5,Costos y Gastos,,1,Expense,,
+5.1,Costo de Ventas,5,1,Expense,,
+5.1.01,Costo de Mercancías Vendidas,5.1,0,Expense,,cost_of_goods_sold
+5.1.02,Ajustes de Inventario,5.1,0,Expense,,inventory_adjustment
+5.2,Gastos de Administración,5,1,Expense,,
+5.2.01,Gastos de Personal,5.2,0,Expense,,expense
+5.2.02,Servicios Públicos,5.2,0,Expense,,expense
+5.2.03,Diferencias de Conciliación Bancaria,5.2,0,Expense,,bank_difference
+5.2.04,Redondeo,5.2,0,Expense,,rounding
+5.3,Gastos de Distribución y Ventas,5,1,Expense,,
+5.3.01,Gastos de Publicidad,5.3,0,Expense,,expense
+5.4,Gastos Financieros,5,1,Expense,,
+5.4.01,Gastos por Intereses,5.4,0,Expense,,
+5.4.02,Pérdida Cambiaria Realizada,5.4,0,Expense,,exchange_loss
+5.4.03,Pérdida Cambiaria No Realizada,5.4,0,Expense,,unrealized_exchange_loss
+5.4.04,Descuentos en Pagos Otorgados,5.4,0,Expense,,payment_discount

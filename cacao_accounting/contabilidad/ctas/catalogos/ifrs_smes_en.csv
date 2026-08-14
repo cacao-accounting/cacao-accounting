@@ -1,0 +1,62 @@
+codigo,nombre,padre,grupo,rubro,tipo,account_type
+1,Assets,,1,Asset,,
+1.1,Current Assets,1,1,Asset,,
+1.1.01,Cash and Cash Equivalents,1.1,1,Asset,,
+1.1.01.01,Cash on Hand,1.1.01,0,Asset,,cash
+1.1.01.02,Bank Accounts,1.1.01,0,Asset,,bank
+1.1.02,Trade and Other Receivables,1.1,1,Asset,,
+1.1.02.01,Trade Receivables,1.1.02,0,Asset,,receivable
+1.1.02.02,Advances to Suppliers,1.1.02,0,Asset,,supplier_advance
+1.1.03,Inventories,1.1,1,Asset,,
+1.1.03.01,Merchandise Inventory,1.1.03,0,Asset,,inventory
+1.1.04,Other Financial Assets,1.1,1,Asset,,
+1.1.05,Prepaid Expenses,1.1,1,Asset,,
+1.1.05.01,Deferred Expenses,1.1.05,0,Asset,,deferred_expense
+1.2,Non-Current Assets,1,1,Asset,,
+1.2.01,"Property, Plant and Equipment",1.2,1,Asset,,
+1.2.01.01,Land,1.2.01,0,Asset,,
+1.2.01.02,Buildings,1.2.01,0,Asset,,
+1.2.01.03,Office Equipment,1.2.01,0,Asset,,
+2,Liabilities,,1,Liability,,
+2.1,Current Liabilities,2,1,Liability,,
+2.1.01,Trade and Other Payables,2.1,1,Liability,,
+2.1.01.01,Trade Payables,2.1.01,0,Liability,,payable
+2.1.01.02,Received Goods Not Invoiced,2.1.01,0,Liability,,bridge
+2.1.02,Customer Advances,2.1,1,Liability,,
+2.1.02.01,Advances Received from Customers,2.1.02,0,Liability,,customer_advance
+2.1.03,Tax Liabilities,2.1,1,Liability,,
+2.1.03.01,VAT Payable,2.1.03,0,Liability,,tax
+2.1.03.02,VAT Purchase Tax,2.1.03,0,Liability,,tax
+2.1.04,Deferred Revenue Liabilities,2.1,1,Liability,,
+2.1.04.01,Deferred Revenue,2.1.04,0,Liability,,deferred_income
+2.2,Non-Current Liabilities,2,1,Liability,,
+2.2.01,Long-Term Loans,2.2,0,Liability,,
+3,Equity,,1,Equity,,
+3.1,Share Capital,3,1,Equity,,
+3.1.01,Subscribed and Paid Capital,3.1,0,Equity,,
+3.2,Retained Earnings,3,1,Equity,,
+3.2.01,Retained Earnings from Prior Periods,3.2,0,Equity,,retained_earnings
+3.3,Current Period Profit and Loss,3,1,Equity,,
+3.3.01,Period Profit or Loss,3.3,0,Equity,,period_profit_loss
+4,Income,,1,Income,,
+4.1,Revenue,4,1,Income,,
+4.1.01,Sales of Goods,4.1,0,Income,,income
+4.2,Other Income,4,1,Income,,
+4.2.01,Realized FX Gain,4.2,0,Income,,exchange_gain
+4.2.02,Unrealized FX Gain,4.2,0,Income,,unrealized_exchange_gain
+5,Costs and Expenses,,1,Expense,,
+5.1,Cost of Sales,5,1,Expense,,
+5.1.01,Cost of Goods Sold,5.1,0,Expense,,cost_of_goods_sold
+5.1.02,Inventory Adjustments,5.1,0,Expense,,inventory_adjustment
+5.2,Administrative Expenses,5,1,Expense,,
+5.2.01,Personnel Expenses,5.2,0,Expense,,expense
+5.2.02,Utilities,5.2,0,Expense,,expense
+5.2.03,Bank Reconciliation Differences,5.2,0,Expense,,bank_difference
+5.2.04,Rounding,5.2,0,Expense,,rounding
+5.3,Selling and Distribution Expenses,5,1,Expense,,
+5.3.01,Advertising Expenses,5.3,0,Expense,,expense
+5.4,Financial Expenses,5,1,Expense,,
+5.4.01,Interest Expenses,5.4,0,Expense,,
+5.4.02,Realized FX Loss,5.4,0,Expense,,exchange_loss
+5.4.03,Unrealized FX Loss,5.4,0,Expense,,unrealized_exchange_loss
+5.4.04,Payment Discounts,5.4,0,Expense,,payment_discount

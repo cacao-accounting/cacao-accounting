@@ -47,6 +47,9 @@ SETUP_ENTITY = "SETUP_DEFAULT_ENTITY"
 CATALOG_FILE_ALIASES = {
     "base_es.csv": "Predeterminado - ES",
     "base_en.csv": "Default - EN",
+    "niif_pymes_es.csv": "NIIF Pymes (ES)",
+    "ifrs_smes_en.csv": "IFRS SMEs (EN)",
+    "us_gaap.csv": "US-GAAP",
 }
 
 

@@ -1,0 +1,29 @@
+{
+  "catalog": "us_gaap.csv",
+  "default_accounts": {
+    "default_cash": "1111",
+    "default_bank": "1112",
+    "default_receivable": "1121",
+    "default_payable": "2111",
+    "default_income": "4101",
+    "default_expense": "6101",
+    "default_cogs": "5101",
+    "inventory_adjustment_account_id": "5201",
+    "bridge_account_id": "2112",
+    "customer_advance_account_id": "2121",
+    "supplier_advance_account_id": "1122",
+    "bank_difference_account_id": "6103",
+    "default_sales_tax_account_id": "2131",
+    "default_purchase_tax_account_id": "2132",
+    "default_rounding_account_id": "6104",
+    "exchange_gain_account_id": "4201",
+    "exchange_loss_account_id": "6202",
+    "unrealized_exchange_gain_account_id": "4202",
+    "unrealized_exchange_loss_account_id": "6203",
+    "deferred_income_account_id": "2141",
+    "deferred_expense_account_id": "1141",
+    "payment_discount_account_id": "6204",
+    "period_profit_loss_account_id": "3301",
+    "retained_earnings_account_id": "3201"
+  }
+}

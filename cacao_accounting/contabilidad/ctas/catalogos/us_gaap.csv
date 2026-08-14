@@ -1,0 +1,59 @@
+codigo,nombre,padre,grupo,rubro,tipo,account_type
+1000,Assets,,1,Asset,,
+1100,Current Assets,1000,1,Asset,,
+1110,Cash and Cash Equivalents,1100,1,Asset,,
+1111,Cash on Hand,1110,0,Asset,,cash
+1112,Bank Accounts,1110,0,Asset,,bank
+1120,Trade and Other Receivables,1100,1,Asset,,
+1121,Trade Accounts Receivable,1120,0,Asset,,receivable
+1122,Advances to Suppliers,1120,0,Asset,,supplier_advance
+1130,Inventories,1100,1,Asset,,
+1131,Merchandise Inventory,1130,0,Asset,,inventory
+1140,Prepaid Expenses,1100,1,Asset,,
+1141,Deferred Expenses,1140,0,Asset,,deferred_expense
+1200,Non-Current Assets,1000,1,Asset,,
+1210,"Property, Plant and Equipment",1200,1,Asset,,
+1211,Land,1210,0,Asset,,
+1212,Buildings,1210,0,Asset,,
+2000,Liabilities,,1,Liability,,
+2100,Current Liabilities,2000,1,Liability,,
+2110,Trade and Other Payables,2100,1,Liability,,
+2111,Trade Accounts Payable,2110,0,Liability,,payable
+2112,Received Goods Not Invoiced,2110,0,Liability,,bridge
+2120,Customer Advances,2100,1,Liability,,
+2121,Advances Received from Customers,2120,0,Liability,,customer_advance
+2130,Tax Liabilities,2100,1,Liability,,
+2131,Accrued Sales Tax,2130,0,Liability,,tax
+2132,Accrued Purchase Tax,2130,0,Liability,,tax
+2140,Deferred Revenue Liabilities,2100,1,Liability,,
+2141,Deferred Revenue,2140,0,Liability,,deferred_income
+2200,Non-Current Liabilities,2000,1,Liability,,
+3000,Equity,,1,Equity,,
+3100,Share Capital,3000,1,Equity,,
+3200,Retained Earnings,3000,1,Equity,,
+3201,Retained Earnings from Prior Periods,3200,0,Equity,,retained_earnings
+3300,Net Income,3000,1,Equity,,
+3301,Net Income for Period,3300,0,Equity,,period_profit_loss
+4000,Revenue,,1,Income,,
+4100,Sales Revenue,4000,1,Income,,
+4101,Sales of Goods,4100,0,Income,,income
+4200,Other Income,4000,1,Income,,
+4201,Realized FX Gain,4200,0,Income,,exchange_gain
+4202,Unrealized FX Gain,4200,0,Income,,unrealized_exchange_gain
+5000,Cost of Goods Sold,,1,Expense,,
+5100,Cost of Goods Sold,5000,1,Expense,,
+5101,Cost of Goods Sold,5100,0,Expense,,cost_of_goods_sold
+5200,Inventory Adjustments,5000,1,Expense,,
+5201,Inventory Adjustments,5200,0,Expense,,inventory_adjustment
+6000,Expenses,,1,Expense,,
+6100,Operating Expenses,6000,1,Expense,,
+6101,Salaries and Personnel Expenses,6100,0,Expense,,expense
+6102,Utilities,6100,0,Expense,,expense
+6103,Bank Reconciliation Differences,6100,0,Expense,,bank_difference
+6104,Rounding,6100,0,Expense,,rounding
+6105,Advertising Expenses,6100,0,Expense,,expense
+6200,Financial Expenses,6000,1,Expense,,
+6201,Interest Expenses,6200,0,Expense,,
+6202,Realized FX Loss,6200,0,Expense,,exchange_loss
+6203,Unrealized FX Loss,6200,0,Expense,,unrealized_exchange_loss
+6204,Payment Discounts,6200,0,Expense,,payment_discount
