@@ -74,7 +74,16 @@ DEFAULT_ACCOUNT_DEFINITIONS: tuple[DefaultAccountDefinition, ...] = (
     ),
     DefaultAccountDefinition("deferred_income_account_id", "Cuenta de ingresos diferidos", ("deferred_income",)),
     DefaultAccountDefinition("deferred_expense_account_id", "Cuenta de gastos diferidos", ("deferred_expense",)),
-    DefaultAccountDefinition("payment_discount_account_id", "Cuenta de descuentos de pago", ("payment_discount", "expense")),
+    DefaultAccountDefinition(
+        "sales_discount_account_id",
+        "Cuenta de descuentos sobre ventas",
+        ("payment_discount", "expense"),
+    ),
+    DefaultAccountDefinition(
+        "purchase_discount_account_id",
+        "Cuenta de descuentos sobre compras",
+        ("payment_discount", "income"),
+    ),
     DefaultAccountDefinition(
         "period_profit_loss_account_id",
         "Cuenta de ganancias y perdidas del periodo",
