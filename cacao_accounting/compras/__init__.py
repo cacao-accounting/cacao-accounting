@@ -68,7 +68,6 @@ from cacao_accounting.database import (
     PaymentReference,
     SupplierQuotation,
     SupplierQuotationItem,
-    TaxTemplate,
     UOM,
     database,
 )
@@ -3591,21 +3590,6 @@ def _validate_supplier_invoice_flags(
         raise ValueError("El proveedor no permite crear facturas de compra sin recepción.")
 
 
-def _validate_purchase_tax_template(company: str, template_id: str | None, currency: str | None) -> None:
-    """Validate a purchase tax template before storing it on the invoice."""
-    if not template_id:
-        return
-    template = database.session.get(TaxTemplate, template_id)
-    if template is None or not template.is_active:
-        raise ValueError("La plantilla de impuestos seleccionada no existe o está inactiva.")
-    if template.company not in (None, company):
-        raise ValueError("La plantilla de impuestos debe pertenecer a la misma compañía.")
-    if template.template_type != "buying":
-        raise ValueError("La plantilla seleccionada no corresponde a compras.")
-    if template.currency and currency and template.currency != currency:
-        raise ValueError("La moneda de la plantilla no coincide con la moneda de la factura.")
-
-
 def _validate_duplicate_supplier_invoice(
     supplier_id: str | None, supplier_invoice_no: str | None, exclude_id: str | None = None
 ) -> None:
@@ -3750,8 +3734,6 @@ def _create_purchase_invoice_from_request():
         )
         source = source_order or source_receipt or source_invoice
         company, transaction_currency = _validate_purchase_flow_header(source)
-        tax_template_id = request.form.get("tax_template_id") or getattr(source, "tax_template_id", None)
-        _validate_purchase_tax_template(company, tax_template_id, transaction_currency)
         supplier_id = supplier_id or getattr(source, "supplier_id", None)
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         transaction_currency = transaction_currency or request.form.get("transaction_currency") or None
@@ -3773,7 +3755,6 @@ def _create_purchase_invoice_from_request():
             document_type=document_type,
             purchase_order_id=from_order,
             purchase_receipt_id=from_receipt,
-            tax_template_id=tax_template_id,
             is_return=document_type in (PURCHASE_RETURN, PURCHASE_CREDIT_NOTE),
             reversal_of=reversal_of,
             remarks=request.form.get("remarks"),
@@ -3955,13 +3936,6 @@ def _handle_purchase_invoice_edit_post(registro):
         )
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.supplier_invoice_no = request.form.get("supplier_invoice_no") or registro.supplier_invoice_no
-        if "tax_template_id" in request.form:
-            registro.tax_template_id = request.form.get("tax_template_id") or None
-        _validate_purchase_tax_template(
-            registro.company,
-            registro.tax_template_id,
-            registro.transaction_currency,
-        )
         registro.remarks = request.form.get("remarks")
         for rel in database.session.execute(
             database.select(DocumentRelation).filter_by(target_type="purchase_invoice", target_id=registro.id)
@@ -4013,7 +3987,6 @@ def compras_factura_compra_duplicar(invoice_id: str):
         posting_date=origen.posting_date,
         supplier_invoice_no=origen.supplier_invoice_no,
         document_type=origen.document_type,
-        tax_template_id=origen.tax_template_id,
         is_return=origen.is_return,
         transaction_currency=origen.transaction_currency,
         exchange_rate=origen.exchange_rate,

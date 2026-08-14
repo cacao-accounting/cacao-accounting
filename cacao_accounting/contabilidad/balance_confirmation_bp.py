@@ -5,7 +5,6 @@
 import hashlib
 import json
 from datetime import date, datetime
-from decimal import Decimal
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for, session
 from flask_login import current_user, login_required
@@ -21,11 +20,9 @@ from cacao_accounting.database import (
     PartyContact,
 )
 from cacao_accounting.runtime_mode import is_desktop_mode
-from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.decorators import modulo_activo, exige_acceso_compania
 from cacao_accounting.contabilidad.balance_confirmation import (
     create_balance_confirmation,
-    get_open_documents_at_cutoff,
-    compute_snapshot_hash,
 )
 from cacao_accounting.messaging.email import send_email, EmailError
 from cacao_accounting.audit_trail_service import (
@@ -36,6 +33,7 @@ from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por
 
 balance_confirmations_bp = Blueprint("balance_confirmations", __name__)
 
+
 @balance_confirmations_bp.before_request
 def check_desktop_mode():
     """Rechaza cualquier uso de esta funcionalidad en modo Desktop."""
@@ -45,13 +43,14 @@ def check_desktop_mode():
 
 # --- INTERNAL VIEWS & ENDPOINTS (Require authentication and accounting module) ---
 
+
 @balance_confirmations_bp.route("/accounting/balance-confirmations/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
 def crear_confirmacion_form():
     """Formulario para solicitar una nueva confirmación de saldo."""
     party_id = request.args.get("party_id")
-    party_type = request.args.get("party_type", "customer") # customer | supplier
+    party_type = request.args.get("party_type", "customer")  # customer | supplier
 
     party = database.session.get(Party, party_id) if party_id else None
     if not party:
@@ -61,12 +60,21 @@ def crear_confirmacion_form():
         else:
             return redirect(url_for("compras.compras_proveedor_lista"))
 
-    companies = obtener_lista_entidades_por_id_razonsocial()
+    # Restringir la lista de compañías a aquellas para las que el usuario tenga acceso "crear"
+    all_companies = obtener_lista_entidades_por_id_razonsocial()
+    companies = []
+    for code, name in all_companies:
+        try:
+            exige_acceso_compania("accounting", code, "crear")
+            companies.append((code, name))
+        except Exception:
+            continue
 
     # Pre-cargar correos de contactos del cliente/proveedor
-    contact_stmt = select(Contact).join(PartyContact, PartyContact.contact_id == Contact.id).where(
-        PartyContact.party_id == party_id,
-        Contact.is_active == True
+    contact_stmt = (
+        select(Contact)
+        .join(PartyContact, PartyContact.contact_id == Contact.id)
+        .where(PartyContact.party_id == party_id, Contact.is_active.is_(True))
     )
     contacts = database.session.execute(contact_stmt).scalars().all()
     suggested_emails = [c.email for c in contacts if c.email]
@@ -82,6 +90,9 @@ def crear_confirmacion_form():
         if not company_id or not cutoff_date_str:
             flash("Debe seleccionar una compañía y fecha de corte.", "danger")
             return redirect(request.url)
+
+        # Enforzar el acceso del usuario para la compañía seleccionada
+        exige_acceso_compania("accounting", company_id, "crear")
 
         try:
             cutoff_date = date.fromisoformat(cutoff_date_str)
@@ -145,6 +156,9 @@ def ver_confirmacion(confirmation_id: str):
     if not confirmation:
         abort(404)
 
+    # Validar acceso de lectura de la compañía de la confirmación
+    exige_acceso_compania("accounting", confirmation.company, "consultar")
+
     party = database.session.get(Party, confirmation.party_id)
     company = database.session.execute(select(Entity).where(Entity.code == confirmation.company)).scalar_one_or_none()
 
@@ -152,11 +166,15 @@ def ver_confirmacion(confirmation_id: str):
     if confirmation.snapshot_json:
         snapshot = json.loads(confirmation.snapshot_json)
 
-    invitations = database.session.execute(
-        select(BalanceConfirmationInvitation).where(
-            BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id
+    invitations = (
+        database.session.execute(
+            select(BalanceConfirmationInvitation).where(
+                BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     audit_timeline = format_document_timeline("balance_confirmation", confirmation.id)
 
@@ -180,15 +198,22 @@ def enviar_confirmacion(confirmation_id: str):
     if not confirmation:
         abort(404)
 
+    # Validar acceso de autorización para la compañía de la confirmación
+    exige_acceso_compania("accounting", confirmation.company, "autorizar")
+
     if confirmation.status not in ("draft", "sent"):
         flash("La confirmación de saldo no se encuentra en un estado válido para envío.", "danger")
         return redirect(url_for("balance_confirmations.ver_confirmacion", confirmation_id=confirmation_id))
 
-    invitations = database.session.execute(
-        select(BalanceConfirmationInvitation).where(
-            BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id
+    invitations = (
+        database.session.execute(
+            select(BalanceConfirmationInvitation).where(
+                BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     snapshot = json.loads(confirmation.snapshot_json) if confirmation.snapshot_json else {}
     company_name = snapshot.get("company_name", confirmation.company)
@@ -199,6 +224,7 @@ def enviar_confirmacion(confirmation_id: str):
     for inv in invitations:
         # Dynamically generate token and code during the send request so we never lose them on redirects!
         import secrets
+
         raw_token = secrets.token_urlsafe(32)
         raw_code = "".join(secrets.choice("0123456789") for _ in range(6))
 
@@ -256,15 +282,22 @@ def reenviar_confirmacion(confirmation_id: str):
     if not confirmation:
         abort(404)
 
+    # Validar acceso de autorización para la compañía de la confirmación
+    exige_acceso_compania("accounting", confirmation.company, "autorizar")
+
     if confirmation.status not in ("sent", "viewed"):
         flash("Solo se pueden reenviar solicitudes ya enviadas o visualizadas.", "danger")
         return redirect(url_for("balance_confirmations.ver_confirmacion", confirmation_id=confirmation_id))
 
-    invitations = database.session.execute(
-        select(BalanceConfirmationInvitation).where(
-            BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id
+    invitations = (
+        database.session.execute(
+            select(BalanceConfirmationInvitation).where(
+                BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     snapshot = json.loads(confirmation.snapshot_json) if confirmation.snapshot_json else {}
     company_name = snapshot.get("company_name", confirmation.company)
@@ -275,6 +308,7 @@ def reenviar_confirmacion(confirmation_id: str):
     for inv in invitations:
         # Generar nuevos tokens y códigos de verificación
         import secrets
+
         raw_token = secrets.token_urlsafe(32)
         raw_code = "".join(secrets.choice("0123456789") for _ in range(6))
 
@@ -332,6 +366,9 @@ def cancelar_confirmacion(confirmation_id: str):
     if not confirmation:
         abort(404)
 
+    # Validar acceso de anulación para la compañía de la confirmación
+    exige_acceso_compania("accounting", confirmation.company, "anular")
+
     if confirmation.status in ("confirmed", "disputed", "cancelled", "expired"):
         flash("No se puede cancelar una solicitud que ya está cerrada, cancelada o expirada.", "danger")
         return redirect(url_for("balance_confirmations.ver_confirmacion", confirmation_id=confirmation_id))
@@ -339,11 +376,15 @@ def cancelar_confirmacion(confirmation_id: str):
     confirmation.status = "cancelled"
     confirmation.cancelled_at = datetime.utcnow()
 
-    invitations = database.session.execute(
-        select(BalanceConfirmationInvitation).where(
-            BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id
+    invitations = (
+        database.session.execute(
+            select(BalanceConfirmationInvitation).where(
+                BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for inv in invitations:
         inv.status = "cancelled"
 
@@ -358,6 +399,7 @@ def cancelar_confirmacion(confirmation_id: str):
 
 
 # --- PUBLIC VIEWS & ENDPOINTS (No login required, external third-party actions) ---
+
 
 @balance_confirmations_bp.route("/confirm-balance/<token>", methods=["GET"])
 def public_confirm_balance(token: str):
@@ -376,19 +418,33 @@ def public_confirm_balance(token: str):
 
     # Verificar estado de la confirmación
     if confirmation.status == "cancelled":
-        return render_template("public/confirm_balance_status.html", title="Cancelada", message="Esta solicitud de confirmación de saldo ha sido cancelada por el solicitante.")
+        return render_template(
+            "public/confirm_balance_status.html",
+            title="Cancelada",
+            message="Esta solicitud de confirmación de saldo ha sido cancelada por el solicitante.",
+        )
 
     # Verificar fecha de expiración
     if confirmation.expires_at and datetime.utcnow() > confirmation.expires_at:
         confirmation.status = "expired"
         database.session.commit()
-        return render_template("public/confirm_balance_status.html", title="Expirada", message="Esta solicitud de confirmación de saldo ha expirado y ya no se permiten respuestas.")
+        return render_template(
+            "public/confirm_balance_status.html",
+            title="Expirada",
+            message="Esta solicitud de confirmación de saldo ha expirado y ya no se permiten respuestas.",
+        )
 
     if confirmation.status in ("confirmed", "disputed"):
+        msg = (
+            f"Esta solicitud ya fue respondida el "
+            f"{confirmation.responded_at.strftime('%d/%m/%Y %H:%M UTC')} por "
+            f"{confirmation.respondent_first_name} {confirmation.respondent_last_name} "
+            f"({confirmation.respondent_email}) y se encuentra cerrada."
+        )
         return render_template(
             "public/confirm_balance_status.html",
             title="Cerrada",
-            message=f"Esta solicitud ya fue respondida el {confirmation.responded_at.strftime('%d/%m/%Y %H:%M UTC')} por {confirmation.respondent_first_name} {confirmation.respondent_last_name} ({confirmation.respondent_email}) y se encuentra cerrada."
+            message=msg,
         )
 
     # Verificar si el usuario actual en sesión ya superó el paso de verificación
@@ -445,7 +501,9 @@ def public_confirm_balance_verify(token: str):
 
     # Rate limiting / failed attempts check
     if invitation.failed_attempts >= 5:
-        flash("Se ha excedido el número de intentos permitidos para este enlace. Por favor contacte al administrador.", "danger")
+        flash(
+            "Se ha excedido el número de intentos permitidos para este enlace. Por favor contacte al administrador.", "danger"
+        )
         return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
 
     # Validar correspondencia exacta de correo
@@ -517,7 +575,7 @@ def public_confirm_balance_respond(token: str):
         flash("Debe completar el paso de verificación primero.", "warning")
         return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
 
-    response_type = request.form.get("response_type") # confirmed | disputed
+    response_type = request.form.get("response_type")  # confirmed | disputed
     response_comment = request.form.get("response_comment", "").strip()
 
     if response_type not in ("confirmed", "disputed"):
@@ -544,14 +602,18 @@ def public_confirm_balance_respond(token: str):
 
     # Cerrar la invitación actual y todas las demás asociadas a la misma confirmación
     invitation.status = "responded"
-    other_invitations = database.session.execute(
-        select(BalanceConfirmationInvitation).where(
-            BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id,
-            BalanceConfirmationInvitation.id != invitation.id
+    other_invitations = (
+        database.session.execute(
+            select(BalanceConfirmationInvitation).where(
+                BalanceConfirmationInvitation.balance_confirmation_id == confirmation.id,
+                BalanceConfirmationInvitation.id != invitation.id,
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for o_inv in other_invitations:
-        o_inv.status = "cancelled" # closed because another person responded first
+        o_inv.status = "cancelled"  # closed because another person responded first
 
     action_event = "balance_confirmation_confirmed" if response_type == "confirmed" else "balance_confirmation_disputed"
     log_balance_confirmation_event(
@@ -569,5 +631,9 @@ def public_confirm_balance_respond(token: str):
     return render_template(
         "public/confirm_balance_success.html",
         confirmation=confirmation,
-        company_name=json.loads(confirmation.snapshot_json).get("company_name", confirmation.company) if confirmation.snapshot_json else confirmation.company
+        company_name=(
+            json.loads(confirmation.snapshot_json).get("company_name", confirmation.company)
+            if confirmation.snapshot_json
+            else confirmation.company
+        ),
     )

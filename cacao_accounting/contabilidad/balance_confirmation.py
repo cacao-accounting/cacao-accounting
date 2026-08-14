@@ -6,10 +6,10 @@ import hashlib
 import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Sequence
+from typing import Any
 import secrets
 
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_
 
 from cacao_accounting.database import (
     database,
@@ -29,13 +29,15 @@ from cacao_accounting.audit_trail_service import log_balance_confirmation_event
 
 # Helper functions for calculations
 
+
 def is_cancelled_before_cutoff(doc_type: str, doc_id: str, cutoff_date: date) -> bool:
     """Retorna verdadero si el documento fue cancelado antes o en la fecha de corte."""
-    stmt = select(AuditTrail.timestamp).where(
-        AuditTrail.document_type == doc_type,
-        AuditTrail.document_id == doc_id,
-        AuditTrail.action == "cancelled"
-    ).order_by(AuditTrail.timestamp.asc()).limit(1)
+    stmt = (
+        select(AuditTrail.timestamp)
+        .where(AuditTrail.document_type == doc_type, AuditTrail.document_id == doc_id, AuditTrail.action == "cancelled")
+        .order_by(AuditTrail.timestamp.asc())
+        .limit(1)
+    )
     res = database.session.execute(stmt).scalar()
     if res:
         return res.date() <= cutoff_date
@@ -56,15 +58,14 @@ def compute_payment_unallocated_amount_at_date(payment: PaymentEntry, as_of_date
     # Obtener todas las aplicaciones del pago realizadas antes o en la fecha de corte
     stmt = select(PaymentReference).where(
         PaymentReference.payment_id == payment.id,
-        or_(PaymentReference.allocation_date <= as_of_date, PaymentReference.allocation_date.is_(None))
+        or_(PaymentReference.allocation_date <= as_of_date, PaymentReference.allocation_date.is_(None)),
     )
     references = database.session.execute(stmt).scalars().all()
     consumed = Decimal("0")
     for ref in references:
         # Verificar la relación del pago y si fue cancelada/revertida antes de la fecha de corte
         rel_stmt = select(DocumentRelation).where(
-            DocumentRelation.target_item_id == ref.id,
-            DocumentRelation.target_type == "payment_entry"
+            DocumentRelation.target_item_id == ref.id, DocumentRelation.target_type == "payment_entry"
         )
         relation = database.session.execute(rel_stmt).scalars().first()
         if relation:
@@ -103,7 +104,7 @@ def get_open_documents_at_cutoff(
             SalesInvoice.company == company_id,
             SalesInvoice.customer_id == party_id,
             SalesInvoice.posting_date <= cutoff_date,
-            SalesInvoice.docstatus.in_((1, 2))
+            SalesInvoice.docstatus.in_((1, 2)),
         )
         rows = database.session.execute(stmt).scalars().all()
         for doc in rows:
@@ -134,16 +135,18 @@ def get_open_documents_at_cutoff(
             if hasattr(doc, "due_date") and doc.due_date:
                 due_date = doc.due_date.isoformat()
 
-            items.append({
-                "document_id": doc.id,
-                "document_type": doc_type_label,
-                "document_no": doc.document_no or doc.id,
-                "document_date": doc.posting_date.isoformat() if doc.posting_date else None,
-                "due_date": due_date,
-                "currency": doc.transaction_currency or doc.base_currency,
-                "original_amount": float(sign * Decimal(str(doc.grand_total or 0))),
-                "outstanding_amount": float(sign * outstanding),
-            })
+            items.append(
+                {
+                    "document_id": doc.id,
+                    "document_type": doc_type_label,
+                    "document_no": doc.document_no or doc.id,
+                    "document_date": doc.posting_date.isoformat() if doc.posting_date else None,
+                    "due_date": due_date,
+                    "currency": doc.transaction_currency or doc.base_currency,
+                    "original_amount": float(sign * Decimal(str(doc.grand_total or 0))),
+                    "outstanding_amount": float(sign * outstanding),
+                }
+            )
 
     elif party_type == "supplier":
         # Facturas, notas de crédito, notas de débito de proveedores
@@ -151,7 +154,7 @@ def get_open_documents_at_cutoff(
             PurchaseInvoice.company == company_id,
             PurchaseInvoice.supplier_id == party_id,
             PurchaseInvoice.posting_date <= cutoff_date,
-            PurchaseInvoice.docstatus.in_((1, 2))
+            PurchaseInvoice.docstatus.in_((1, 2)),
         )
         rows = database.session.execute(stmt).scalars().all()
         for doc in rows:
@@ -180,16 +183,18 @@ def get_open_documents_at_cutoff(
             if hasattr(doc, "due_date") and doc.due_date:
                 due_date = doc.due_date.isoformat()
 
-            items.append({
-                "document_id": doc.id,
-                "document_type": doc_type_label,
-                "document_no": doc.document_no or doc.id,
-                "document_date": doc.posting_date.isoformat() if doc.posting_date else None,
-                "due_date": due_date,
-                "currency": doc.transaction_currency or doc.base_currency,
-                "original_amount": float(sign * Decimal(str(doc.grand_total or 0))),
-                "outstanding_amount": float(sign * outstanding),
-            })
+            items.append(
+                {
+                    "document_id": doc.id,
+                    "document_type": doc_type_label,
+                    "document_no": doc.document_no or doc.id,
+                    "document_date": doc.posting_date.isoformat() if doc.posting_date else None,
+                    "due_date": due_date,
+                    "currency": doc.transaction_currency or doc.base_currency,
+                    "original_amount": float(sign * Decimal(str(doc.grand_total or 0))),
+                    "outstanding_amount": float(sign * outstanding),
+                }
+            )
 
     # 2. Anticipos / Pagos no aplicados
     payment_type = "receive" if party_type == "customer" else "pay"
@@ -199,7 +204,7 @@ def get_open_documents_at_cutoff(
         PaymentEntry.party_id == party_id,
         PaymentEntry.payment_type == payment_type,
         PaymentEntry.posting_date <= cutoff_date,
-        PaymentEntry.docstatus.in_((1, 2))
+        PaymentEntry.docstatus.in_((1, 2)),
     )
     p_rows = database.session.execute(p_stmt).scalars().all()
     for payment in p_rows:
@@ -212,16 +217,18 @@ def get_open_documents_at_cutoff(
             continue
 
         original_val = Decimal(str(payment.paid_amount or payment.received_amount or 0))
-        items.append({
-            "document_id": payment.id,
-            "document_type": "Anticipo / Pago no aplicado" if payment.is_advance else "Pago no aplicado",
-            "document_no": payment.document_no or payment.id,
-            "document_date": payment.posting_date.isoformat() if payment.posting_date else None,
-            "due_date": None,
-            "currency": payment.currency,
-            "original_amount": float(-original_val),
-            "outstanding_amount": float(-unapplied),
-        })
+        items.append(
+            {
+                "document_id": payment.id,
+                "document_type": "Anticipo / Pago no aplicado" if payment.is_advance else "Pago no aplicado",
+                "document_no": payment.document_no or payment.id,
+                "document_date": payment.posting_date.isoformat() if payment.posting_date else None,
+                "due_date": None,
+                "currency": payment.currency,
+                "original_amount": float(-original_val),
+                "outstanding_amount": float(-unapplied),
+            }
+        )
 
     return items
 

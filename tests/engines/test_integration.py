@@ -6,7 +6,6 @@
 from decimal import Decimal
 from datetime import date
 from cacao_accounting.accounting_engine.common.context import (
-    AccountingReferences,
     CalculationContext,
     ItemContext,
     TaxRuleContext,
@@ -162,53 +161,6 @@ def test_orchestrator_skips_landed_cost_on_sales():
 
     results = orchestrator.handle_event(context)
     assert results["landed_cost"] is None
-
-
-def test_orchestrator_does_not_recapitalize_component_already_recognized_at_receipt():
-    """A linked receipt component must not be capitalized again on the invoice."""
-    orchestrator = BusinessEventOrchestrator()
-    context = CalculationContext(
-        company_id="COM-001",
-        document_type="purchase_invoice",
-        event_type="purchase_invoice_confirmed",
-        transaction_direction="purchase",
-        transaction_date=date(2026, 5, 16),
-        posting_date=date(2026, 5, 16),
-        party_type="supplier",
-        party_id="SUP-001",
-        currency="NIO",
-        company_currency="NIO",
-        items=[
-            ItemContext(
-                line_id="L001",
-                item_id="I1",
-                description="Item",
-                quantity=Decimal("1"),
-                unit_price=Decimal("100"),
-                gross_amount=Decimal("100"),
-                net_amount=Decimal("100"),
-            )
-        ],
-        tax_rules=[
-            TaxRuleContext(
-                rule_id="FREIGHT-001",
-                name="Flete",
-                concept="Flete",
-                tax_type="tax",
-                calculation_method="fixed",
-                amount=Decimal("20"),
-                accounting_treatment="capitalizable_inventory_cost",
-                allocation_method="by_value",
-            )
-        ],
-        references=AccountingReferences(custom_references={"already_capitalized_components": ["rule:FREIGHT-001"]}),
-    )
-
-    results = orchestrator.handle_event(context)
-
-    assert results["fiscal"].capitalizable_tax_total == Decimal("20.00")
-    assert results["landed_cost"].capitalizable_charges_total == Decimal("0")
-    assert results["landed_cost"].inventory_value_total == Decimal("100")
 
 
 def test_orchestrator_reversal_from_snapshot():

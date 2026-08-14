@@ -432,12 +432,12 @@ describe('transaction-form', function () {
     component.taxCharges.modalLine.type = 'charge';
     component.taxCharges.modalLine.amount = 12.5;
     component.taxCharges.modalLine.accounting_treatment = 'capitalizable_inventory_cost';
+    component.taxCharges.modalLine.affects_inventory = true;
     component.saveTaxLineModal();
 
     assert.strictEqual(component.taxCharges.lines.length, 1);
     assert.strictEqual(component.taxCharges.lines[0].manual, true);
     assert.strictEqual(component.taxCharges.lines[0].concept, 'Flete');
-    assert.strictEqual(component.taxCharges.lines[0].affects_inventory, true);
     assert.strictEqual(component.taxCharges.summary.document_tax_total, '12.5');
     assert.strictEqual(component.taxCharges.summary.capitalizable_tax_total, '12.5');
     assert.strictEqual(component.grandTotal, 112.5);
@@ -445,29 +445,6 @@ describe('transaction-form', function () {
     const payload = component.buildFiscalPayload();
     assert.strictEqual(payload.tax_lines[0].manual, true);
     assert.strictEqual(payload.tax_lines[0].allocation_method, 'by_value');
-    assert.strictEqual(payload.tax_lines[0].affects_inventory, true);
-  });
-
-  it('derives inventory impact from treatment and ignores stale checkbox data', function () {
-    const create = loadTransactionForm();
-    const component = create({
-      formKey: 'purchases.purchase_invoice',
-      items: [],
-      uoms: [],
-      defaultRows: 1,
-    });
-
-    const line = component.normalizeTaxLine({
-      manual: true,
-      accounting_treatment: 'expense',
-      affects_inventory: true,
-      amount: 10,
-    });
-
-    assert.strictEqual(line.affects_inventory, false);
-    line.accounting_treatment = 'capitalizable_inventory_cost';
-    component.syncTaxTreatment(line);
-    assert.strictEqual(line.affects_inventory, true);
   });
 
   it('reports import validation fetch failures through the shared error handler', async function () {

@@ -4851,7 +4851,7 @@ class ApprovalAction(database.Model, BaseTabla):  # type: ignore[name-defined]
     created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
 
-class BalanceConfirmation(database.Model, BaseTabla):
+class BalanceConfirmation(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Representa la solicitud de confirmación de saldo externa."""
     __tablename__ = "balance_confirmation"
 
@@ -4895,7 +4895,7 @@ class BalanceConfirmation(database.Model, BaseTabla):
     respondent_user_agent = database.Column(database.String(512), nullable=True)
 
 
-class BalanceConfirmationInvitation(database.Model, BaseTabla):
+class BalanceConfirmationInvitation(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Representa cada destinatario autorizado para responder la confirmación."""
     __tablename__ = "balance_confirmation_invitation"
 

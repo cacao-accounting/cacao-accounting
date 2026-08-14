@@ -740,35 +740,33 @@
 	                  <option value="fixed">{{ _('Fijo') }}</option>
 	                </select>
 	              </div>
-              <div class="col-md-6">
-                <label class="form-label">{{ _('Tratamiento contable') }}</label>
-                <select class="form-select" x-model="taxCharges.modalLine.accounting_treatment"
-                  aria-describedby="tax-treatment-help"
-                  @change="syncTaxTreatment(taxCharges.modalLine)"
-                  :disabled="!taxCharges.modalLine.manual">
-                  <option value="separate_tax_account">{{ _('Cuenta separada') }}</option>
-                  <option value="capitalizable_inventory_cost">{{ _('Capitalizable a inventario') }}</option>
-                  <option value="expense">{{ _('Gasto') }}</option>
-                </select>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">{{ _('Prorrateo') }}</label>
-                <select class="form-select" x-model="taxCharges.modalLine.allocation_method"
-                  :disabled="!taxCharges.modalLine.manual">
-                  <option value="by_value">{{ _('Por valor') }}</option>
-                  <option value="by_quantity">{{ _('Por cantidad') }}</option>
-                  <option value="by_weight">{{ _('Por peso') }}</option>
-                  <option value="by_volume">{{ _('Por volumen') }}</option>
-                  <option value="equal">{{ _('Partes iguales') }}</option>
-                </select>
-              </div>
-              <div class="col-md-6 d-flex align-items-end">
-                <div id="tax-treatment-help" class="small text-muted"
-                  x-show="taxCharges.modalLine.accounting_treatment === 'capitalizable_inventory_cost'">
-                  <i class="bi bi-box-seam me-1"></i>
-                  {{ _('Este importe se incorporará al costo valorado del inventario.') }}
-                </div>
-              </div>
+	              <div class="col-md-6">
+	                <label class="form-label">{{ _('Tratamiento contable') }}</label>
+	                <select class="form-select" x-model="taxCharges.modalLine.accounting_treatment"
+	                  :disabled="!taxCharges.modalLine.manual">
+	                  <option value="separate_tax_account">{{ _('Cuenta separada') }}</option>
+	                  <option value="capitalizable_inventory_cost">{{ _('Capitalizable a inventario') }}</option>
+	                  <option value="expense">{{ _('Gasto') }}</option>
+	                </select>
+	              </div>
+	              <div class="col-md-6">
+	                <label class="form-label">{{ _('Prorrateo') }}</label>
+	                <select class="form-select" x-model="taxCharges.modalLine.allocation_method"
+	                  :disabled="!taxCharges.modalLine.manual">
+	                  <option value="by_value">{{ _('Por valor') }}</option>
+	                  <option value="by_quantity">{{ _('Por cantidad') }}</option>
+	                  <option value="by_weight">{{ _('Por peso') }}</option>
+	                  <option value="by_volume">{{ _('Por volumen') }}</option>
+	                  <option value="equal">{{ _('Partes iguales') }}</option>
+	                </select>
+	              </div>
+	              <div class="col-md-6 d-flex align-items-end">
+	                <div class="form-check">
+	                  <input class="form-check-input" id="tax-affects-inventory" type="checkbox"
+	                    x-model="taxCharges.modalLine.affects_inventory" :disabled="!taxCharges.modalLine.manual">
+	                  <label class="form-check-label" for="tax-affects-inventory">{{ _('Afecta inventario') }}</label>
+	                </div>
+	              </div>
 	              <div class="col-md-12">
                 <label class="form-label">{{ _('Cuenta contable') }}</label>
                 {{ smart_select(
