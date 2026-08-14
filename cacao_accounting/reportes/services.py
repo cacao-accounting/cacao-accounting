@@ -205,6 +205,16 @@ def _decimal_value(value: Any) -> Decimal:
     return Decimal(str(value))
 
 
+def _invoice_report_amount(invoice: Any) -> Decimal:
+    """Return the most precise available base amount for an invoice."""
+    amount = invoice.base_grand_total
+    if amount is None:
+        amount = invoice.base_total
+    if amount is None:
+        amount = invoice.grand_total or invoice.total
+    return _decimal_value(amount)
+
+
 def _normalize_account_classification(account: Accounts | None) -> str:
     """Normaliza aliases de clasificaciones de cuentas para reportes financieros."""
     raw_classification = (account.classification or "").strip().lower() if account else ""
@@ -2599,11 +2609,7 @@ def get_purchases_by_supplier(filters: OperationalReportFilters) -> PaginatedRep
     totals: dict[str, Decimal] = {}
     for invoice in database.session.execute(query).scalars():
         supplier_id = invoice.supplier_id or ""
-        amount = _decimal_value(
-            invoice.base_grand_total
-            if invoice.base_grand_total is not None
-            else invoice.base_total if invoice.base_total is not None else invoice.grand_total or invoice.total
-        )
+        amount = _invoice_report_amount(invoice)
         totals[supplier_id] = totals.get(supplier_id, Decimal("0")) + (-amount if invoice.is_return else amount)
     rows = [ReportRow({"supplier_id": supplier_id, "amount": amount}) for supplier_id, amount in sorted(totals.items())]
     return PaginatedReport(rows=rows, totals={"amount": sum(totals.values(), Decimal("0"))})
@@ -2653,11 +2659,7 @@ def get_sales_by_customer(filters: OperationalReportFilters) -> PaginatedReport:
     totals: dict[str, Decimal] = {}
     for invoice in database.session.execute(query).scalars():
         customer_id = invoice.customer_id or ""
-        amount = _decimal_value(
-            invoice.base_grand_total
-            if invoice.base_grand_total is not None
-            else invoice.base_total if invoice.base_total is not None else invoice.grand_total or invoice.total
-        )
+        amount = _invoice_report_amount(invoice)
         totals[customer_id] = totals.get(customer_id, Decimal("0")) + (-amount if invoice.is_return else amount)
     rows = [ReportRow({"customer_id": customer_id, "amount": amount}) for customer_id, amount in sorted(totals.items())]
     return PaginatedReport(rows=rows, totals={"amount": sum(totals.values(), Decimal("0"))})
