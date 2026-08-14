@@ -286,3 +286,4 @@ def _audit_action_for_status(new_status: str, previous_status: str) -> str:
 def abort_for_collaboration_error(error: CollaborationError) -> NoReturn:
     """Abort a Flask request using the status carried by the collaboration error."""
     abort(error.status_code)
+    raise RuntimeError("Flask abort returned unexpectedly")

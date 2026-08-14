@@ -505,8 +505,9 @@ def editar_regla_fiscal(rule_id: str):
     """Edita una regla fiscal."""
     _require_system_admin()
     rule = get_tax_rule(rule_id)
-    if not rule:
+    if rule is None:
         abort(404)
+    assert rule is not None
     if request.method == "POST":
         try:
             update_tax_rule(rule, request.form)
@@ -528,8 +529,9 @@ def eliminar_regla_fiscal(rule_id: str):
     """Elimina una regla fiscal."""
     _require_system_admin()
     rule = get_tax_rule(rule_id)
-    if not rule:
+    if rule is None:
         abort(404)
+    assert rule is not None
     delete_tax_rule(rule)
     database.session.commit()
     flash(_("Regla fiscal eliminada correctamente."), "success")

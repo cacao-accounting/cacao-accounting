@@ -48,6 +48,7 @@ def preview_document(document_type: str, document_id: str) -> str:
         )
     except PrintingError as exc:
         abort(404, str(exc))
+        raise RuntimeError("Flask abort returned unexpectedly")
 
 
 @printing_public.route("/print/<document_type>/<document_id>/pdf")
