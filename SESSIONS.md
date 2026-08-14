@@ -48,6 +48,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
   de salidas.
 - `balance_confirmation.py` aísla la vigencia de cancelaciones y relaciones de
   pago al corte para simplificar el cálculo de saldos no aplicados.
+- `reportes/services.py` separa los diagnósticos de transacciones bancarias,
+  pagos sin extracto y relaciones huérfanas en builders independientes.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en

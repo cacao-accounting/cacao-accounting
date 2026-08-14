@@ -1116,8 +1116,33 @@ def get_inventory_turnover(filters: OperationalReportFilters) -> PaginatedReport
     return PaginatedReport(rows=rows, totals={"outgoing_qty": sum((row.values["outgoing_qty"] for row in rows), Decimal("0"))})
 
 
-def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[ReportRow]:
-    """Detecta vínculos bancarios rotos sin confundirlos con partidas pendientes."""
+def _bank_diagnostic_row(
+    source_type: str,
+    source_id: str,
+    recon_date: date,
+    target_type: str,
+    target_id: str | None,
+    amount: Decimal,
+    status: str,
+) -> ReportRow:
+    """Build one normalized bank diagnostic row."""
+    return ReportRow(
+        values={
+            "reconciliation_id": source_id,
+            "recon_date": recon_date,
+            "recon_type": "bank_diagnostic",
+            "source_type": source_type,
+            "source_id": source_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "amount": amount,
+            "status": status,
+        }
+    )
+
+
+def _transaction_bank_diagnostics(company: str, as_of_date: date | None) -> tuple[list[ReportRow], set[str]]:
+    """Find bank transactions linked to missing payments or missing GL."""
     transaction_query = (
         select(BankTransaction)
         .join(BankAccount, BankAccount.id == BankTransaction.bank_account_id)
@@ -1128,7 +1153,6 @@ def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[Repo
     transactions = database.session.execute(transaction_query).scalars().all()
     transaction_ids = {transaction.id for transaction in transactions}
     rows: list[ReportRow] = []
-
     for transaction in transactions:
         if not transaction.payment_entry_id:
             continue
@@ -1136,18 +1160,14 @@ def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[Repo
         amount = _decimal_value(transaction.deposit or transaction.withdrawal)
         if payment is None or payment.company != company:
             rows.append(
-                ReportRow(
-                    values={
-                        "reconciliation_id": transaction.id,
-                        "recon_date": transaction.posting_date,
-                        "recon_type": "bank_diagnostic",
-                        "source_type": "bank_transaction",
-                        "source_id": transaction.id,
-                        "target_type": "payment_entry",
-                        "target_id": transaction.payment_entry_id,
-                        "amount": amount,
-                        "status": "orphan_payment_link",
-                    }
+                _bank_diagnostic_row(
+                    "bank_transaction",
+                    transaction.id,
+                    transaction.posting_date,
+                    "payment_entry",
+                    transaction.payment_entry_id,
+                    amount,
+                    "orphan_payment_link",
                 )
             )
             continue
@@ -1164,21 +1184,21 @@ def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[Repo
         ).scalar_one_or_none()
         if gl_exists is None and payment.docstatus == 1:
             rows.append(
-                ReportRow(
-                    values={
-                        "reconciliation_id": transaction.id,
-                        "recon_date": transaction.posting_date,
-                        "recon_type": "bank_diagnostic",
-                        "source_type": "bank_transaction",
-                        "source_id": transaction.id,
-                        "target_type": "payment_entry",
-                        "target_id": payment.id,
-                        "amount": amount,
-                        "status": "payment_without_bank_gl",
-                    }
+                _bank_diagnostic_row(
+                    "bank_transaction",
+                    transaction.id,
+                    transaction.posting_date,
+                    "payment_entry",
+                    payment.id,
+                    amount,
+                    "payment_without_bank_gl",
                 )
             )
+    return rows, transaction_ids
 
+
+def _payment_bank_diagnostics(company: str, as_of_date: date | None) -> list[ReportRow]:
+    """Find posted bank payments without a matching transaction."""
     payment_query = select(PaymentEntry).where(
         PaymentEntry.company == company,
         PaymentEntry.docstatus == 1,
@@ -1186,6 +1206,7 @@ def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[Repo
     )
     if as_of_date:
         payment_query = payment_query.where(PaymentEntry.posting_date <= as_of_date)
+    rows: list[ReportRow] = []
     for payment in database.session.execute(payment_query).scalars():
         linked = database.session.execute(
             select(BankTransaction.id).where(BankTransaction.payment_entry_id == payment.id).limit(1)
@@ -1193,43 +1214,48 @@ def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[Repo
         if linked is not None:
             continue
         rows.append(
-            ReportRow(
-                values={
-                    "reconciliation_id": payment.id,
-                    "recon_date": payment.posting_date,
-                    "recon_type": "bank_diagnostic",
-                    "source_type": "payment_entry",
-                    "source_id": payment.id,
-                    "target_type": "bank_transaction",
-                    "target_id": None,
-                    "amount": _decimal_value(payment.paid_amount or payment.received_amount),
-                    "status": "posting_without_bank_transaction",
-                }
+            _bank_diagnostic_row(
+                "payment_entry",
+                payment.id,
+                payment.posting_date,
+                "bank_transaction",
+                None,
+                _decimal_value(payment.paid_amount or payment.received_amount),
+                "posting_without_bank_transaction",
             )
         )
+    return rows
 
+
+def _reconciliation_item_diagnostics(transaction_ids: set[str]) -> list[ReportRow]:
+    """Find active reconciliation items whose bank transaction is missing."""
     item_query = select(ReconciliationItem).where(
         ReconciliationItem.source_type == "bank_transaction",
         ReconciliationItem.status != "cancelled",
     )
+    rows: list[ReportRow] = []
     for item in database.session.execute(item_query).scalars():
         if item.source_id not in transaction_ids:
             rows.append(
-                ReportRow(
-                    values={
-                        "reconciliation_id": item.reconciliation_id,
-                        "recon_date": item.reconciliation_date,
-                        "recon_type": "bank_diagnostic",
-                        "source_type": "bank_transaction",
-                        "source_id": item.source_id,
-                        "target_type": item.target_type,
-                        "target_id": item.target_id,
-                        "amount": _decimal_value(item.allocated_amount or item.amount),
-                        "status": "orphan_reconciliation_item",
-                    }
+                _bank_diagnostic_row(
+                    "bank_transaction",
+                    item.source_id,
+                    item.reconciliation_date,
+                    item.target_type,
+                    item.target_id,
+                    _decimal_value(item.allocated_amount or item.amount),
+                    "orphan_reconciliation_item",
                 )
             )
     return rows
+
+
+def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[ReportRow]:
+    """Detecta vínculos bancarios rotos sin confundirlos con partidas pendientes."""
+    transaction_rows, transaction_ids = _transaction_bank_diagnostics(company, as_of_date)
+    return (
+        transaction_rows + _payment_bank_diagnostics(company, as_of_date) + _reconciliation_item_diagnostics(transaction_ids)
+    )
 
 
 def get_reconciliation_report(company: str, as_of_date: date | None = None) -> PaginatedReport:
