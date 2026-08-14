@@ -77,7 +77,9 @@ def upgrade() -> None:
             sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("balance_confirmation_id", "email", name="uq_balance_confirmation_invitation"),
-            sa.ForeignKeyConstraint(["balance_confirmation_id"], ["balance_confirmation.id"], ondelete="CASCADE", onupdate="CASCADE"),
+            sa.ForeignKeyConstraint(
+                ["balance_confirmation_id"], ["balance_confirmation.id"], ondelete="CASCADE", onupdate="CASCADE"
+            ),
         )
         with op.batch_alter_table("balance_confirmation_invitation") as batch:
             batch.create_index("ix_balance_confirmation_invitation_balance_confirmation_id", ["balance_confirmation_id"])

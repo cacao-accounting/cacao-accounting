@@ -251,6 +251,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             def get_balance_confirmations_history(party_id: str, party_type: str, company: str | None = None):
                 from cacao_accounting.database import BalanceConfirmation, database
                 from sqlalchemy import select
+
                 if not company:
                     return []
                 stmt = (
@@ -263,6 +264,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
                     .order_by(BalanceConfirmation.created.desc())
                 )
                 return list(database.session.execute(stmt).scalars().all())
+
             app.jinja_env.globals.update(get_balance_confirmations_history=get_balance_confirmations_history)
 
             from cacao_accounting.document_flow.tracing import get_create_actions

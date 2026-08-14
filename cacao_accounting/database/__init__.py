@@ -4856,6 +4856,7 @@ class ApprovalAction(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 class BalanceConfirmation(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Representa la solicitud de confirmación de saldo externa."""
+
     __tablename__ = "balance_confirmation"
 
     company = database.Column(
@@ -4897,10 +4898,9 @@ class BalanceConfirmation(database.Model, BaseTabla):  # type: ignore[name-defin
 
 class BalanceConfirmationInvitation(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Representa cada destinatario autorizado para responder la confirmación."""
+
     __tablename__ = "balance_confirmation_invitation"
-    __table_args__ = (
-        UniqueConstraint("balance_confirmation_id", "email", name="uq_balance_confirmation_invitation"),
-    )
+    __table_args__ = (UniqueConstraint("balance_confirmation_id", "email", name="uq_balance_confirmation_invitation"),)
 
     balance_confirmation_id = database.Column(
         database.String(26),

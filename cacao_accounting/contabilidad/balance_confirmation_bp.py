@@ -600,9 +600,7 @@ def public_confirm_balance_respond(token: str):
         return redirect(url_for("balance_confirmations.public_confirm_balance", token=token))
 
     response_type = request.form.get("response_type")  # confirmed | disputed
-    response_comment = (
-        request.form.get("response_comment") or request.form.get("response_comment_optional") or ""
-    ).strip()
+    response_comment = (request.form.get("response_comment") or request.form.get("response_comment_optional") or "").strip()
 
     if response_type not in ("confirmed", "disputed"):
         flash("Tipo de respuesta no válido.", "danger")
