@@ -104,6 +104,74 @@ def check_desktop_mode():
 # --- INTERNAL VIEWS & ENDPOINTS (Require authentication and accounting module) ---
 
 
+def _confirmation_companies() -> list[tuple[str, str]]:
+    """Return companies where the current user may create confirmations."""
+    companies = []
+    for code, name in obtener_lista_entidades_por_id_razonsocial():
+        try:
+            exige_acceso_compania("accounting", code, "crear")
+        except Exception:
+            continue
+        companies.append((code, name))
+    return companies
+
+
+def _party_suggested_emails(party_id: str, party: Party) -> list[str]:
+    """Load active contact emails and prioritize the party primary address."""
+    contact_stmt = (
+        select(Contact)
+        .join(PartyContact, PartyContact.contact_id == Contact.id)
+        .where(PartyContact.party_id == party_id, Contact.is_active.is_(True))
+    )
+    suggested_emails = [contact.email for contact in database.session.execute(contact_stmt).scalars().all() if contact.email]
+    if party.primary_email and party.primary_email not in suggested_emails:
+        suggested_emails.insert(0, party.primary_email)
+    return suggested_emails
+
+
+def _handle_confirmation_creation(party_id: str, party_type: str):
+    """Validate the POST form and create a balance confirmation draft."""
+    company_id = request.form.get("company_id")
+    cutoff_date_str = request.form.get("cutoff_date")
+    emails_raw = request.form.getlist("emails") or request.form.get("emails_text", "").split(",")
+    if not company_id or not cutoff_date_str:
+        flash("Debe seleccionar una compañía y fecha de corte.", "danger")
+        return redirect(request.url)
+    exige_acceso_compania("accounting", company_id, "crear")
+    try:
+        cutoff_date = date.fromisoformat(cutoff_date_str)
+    except ValueError:
+        flash("Fecha de corte no válida.", "danger")
+        return redirect(request.url)
+    if cutoff_date > date.today():
+        flash("La fecha de corte no puede ser una fecha futura.", "danger")
+        return redirect(request.url)
+    emails = []
+    for email in emails_raw:
+        clean_email = email.strip().lower()
+        if clean_email and EMAIL_PATTERN.match(clean_email) and clean_email not in emails:
+            emails.append(clean_email)
+    if not emails:
+        flash("Debe indicar al menos una dirección de correo electrónico válida.", "danger")
+        return redirect(request.url)
+    try:
+        confirmation = create_balance_confirmation(
+            company_id=company_id,
+            party_id=party_id,
+            party_type=party_type,
+            cutoff_date=cutoff_date,
+            emails=emails,
+            created_by_user_id=current_user.id,
+        )
+        database.session.commit()
+        flash("Borrador de confirmación de saldo creado correctamente.", "success")
+        return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation.id))
+    except Exception as exc:
+        database.session.rollback()
+        flash(str(exc), "danger")
+        return redirect(request.url)
+
+
 @balance_confirmations_bp.route("/accounting/balance-confirmations/new", methods=["GET", "POST"])
 @login_required
 @modulo_activo("accounting")
@@ -120,82 +188,11 @@ def crear_confirmacion_form():
         else:
             return redirect(url_for("compras.compras_proveedor_lista"))
 
-    # Restringir la lista de compañías a aquellas para las que el usuario tenga acceso "crear"
-    all_companies = obtener_lista_entidades_por_id_razonsocial()
-    companies = []
-    for code, name in all_companies:
-        try:
-            exige_acceso_compania("accounting", code, "crear")
-            companies.append((code, name))
-        except Exception:
-            continue
-
-    # Pre-cargar correos de contactos del cliente/proveedor
-    contact_stmt = (
-        select(Contact)
-        .join(PartyContact, PartyContact.contact_id == Contact.id)
-        .where(PartyContact.party_id == party_id, Contact.is_active.is_(True))
-    )
-    contacts = database.session.execute(contact_stmt).scalars().all()
-    suggested_emails = [c.email for c in contacts if c.email]
-    if party.primary_email and party.primary_email not in suggested_emails:
-        suggested_emails.insert(0, party.primary_email)
+    companies = _confirmation_companies()
+    suggested_emails = _party_suggested_emails(party_id, party)
 
     if request.method == "POST":
-        company_id = request.form.get("company_id")
-        cutoff_date_str = request.form.get("cutoff_date")
-        emails_raw = request.form.getlist("emails") or request.form.get("emails_text", "").split(",")
-
-        # Validar parámetros obligatorios
-        if not company_id or not cutoff_date_str:
-            flash("Debe seleccionar una compañía y fecha de corte.", "danger")
-            return redirect(request.url)
-
-        # Enforzar el acceso del usuario para la compañía seleccionada
-        exige_acceso_compania("accounting", company_id, "crear")
-
-        try:
-            cutoff_date = date.fromisoformat(cutoff_date_str)
-        except ValueError:
-            flash("Fecha de corte no válida.", "danger")
-            return redirect(request.url)
-
-        if cutoff_date > date.today():
-            flash("La fecha de corte no puede ser una fecha futura.", "danger")
-            return redirect(request.url)
-
-        # Filtrar y validar correos
-        emails = []
-        for e in emails_raw:
-            clean_email = e.strip().lower()
-            if clean_email and EMAIL_PATTERN.match(clean_email):
-                if clean_email not in emails:
-                    emails.append(clean_email)
-
-        if not emails:
-            flash("Debe indicar al menos una dirección de correo electrónico válida.", "danger")
-            return redirect(request.url)
-
-        try:
-            confirmation = create_balance_confirmation(
-                company_id=company_id,
-                party_id=party_id,
-                party_type=party_type,
-                cutoff_date=cutoff_date,
-                emails=emails,
-                created_by_user_id=current_user.id,
-            )
-            database.session.commit()
-            flash("Borrador de confirmación de saldo creado correctamente.", "success")
-            return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation.id))
-        except ValueError as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
-            return redirect(request.url)
-        except Exception as exc:
-            database.session.rollback()
-            flash(str(exc), "danger")
-            return redirect(request.url)
+        return _handle_confirmation_creation(party_id, party_type)
 
     return render_template(
         "admin/balance_confirmation_new.html",

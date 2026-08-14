@@ -52,6 +52,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
   pagos sin extracto y relaciones huérfanas en builders independientes.
 - `balance_confirmation.py` extrae la clasificación y serialización de partidas
   de facturas, y reutiliza la regla de cancelación de pagos al corte.
+- `balance_confirmation_bp.py` separa la preparación del formulario y el flujo
+  POST de creación para mantener el endpoint enfocado en la presentación.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
