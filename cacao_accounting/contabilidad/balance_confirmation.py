@@ -70,17 +70,47 @@ def is_cancelled_before_cutoff(doc_type: str, doc_id: str, cutoff_date: date) ->
     return False
 
 
+def _payment_cancelled_at_cutoff(
+    payment: PaymentEntry,
+    as_of_date: date,
+    cancelled_map: dict[tuple[str, str], date] | None,
+) -> bool:
+    """Return whether a payment cancellation is effective at the cutoff."""
+    if getattr(payment, "docstatus", 0) != 2:
+        return False
+    cancel_date = (cancelled_map or {}).get(("payment_entry", payment.id))
+    if cancel_date is not None:
+        return cancel_date <= as_of_date
+    return is_cancelled_before_cutoff("payment_entry", payment.id, as_of_date)
+
+
+def _reference_active_at_cutoff(reference: PaymentReference, as_of_date: date) -> bool:
+    """Return whether a payment allocation relation was active at the cutoff."""
+    relation = (
+        database.session.execute(
+            select(DocumentRelation).where(
+                DocumentRelation.target_item_id == reference.id,
+                DocumentRelation.target_type == "payment_entry",
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if relation is None:
+        return True
+    if relation.status == "cancelled" and relation.cancelled_at:
+        return relation.cancelled_at.date() > as_of_date
+    if relation.status == "reverted" and relation.reversed_at:
+        return relation.reversed_at.date() > as_of_date
+    return True
+
+
 def compute_payment_unallocated_amount_at_date(
     payment: PaymentEntry, as_of_date: date, cancelled_map: dict[tuple[str, str], date] | None = None
 ) -> Decimal:
     """Calcula el saldo no aplicado de un pago a la fecha de corte."""
-    if getattr(payment, "docstatus", 0) == 2:
-        cancel_date = (cancelled_map or {}).get(("payment_entry", payment.id))
-        if cancel_date is None:
-            if is_cancelled_before_cutoff("payment_entry", payment.id, as_of_date):
-                return Decimal("0")
-        elif cancel_date <= as_of_date:
-            return Decimal("0")
+    if _payment_cancelled_at_cutoff(payment, as_of_date, cancelled_map):
+        return Decimal("0")
     if payment.posting_date > as_of_date:
         return Decimal("0")
     payment_total = Decimal(str(payment.paid_amount or payment.received_amount or 0))
@@ -95,25 +125,7 @@ def compute_payment_unallocated_amount_at_date(
     references = database.session.execute(stmt).scalars().all()
     consumed = Decimal("0")
     for ref in references:
-        # Verificar la relación del pago y si fue cancelada/revertida antes de la fecha de corte
-        rel_stmt = select(DocumentRelation).where(
-            DocumentRelation.target_item_id == ref.id, DocumentRelation.target_type == "payment_entry"
-        )
-        relation = database.session.execute(rel_stmt).scalars().first()
-        if relation:
-            is_active_at_date = True
-            if relation.status == "cancelled":
-                cancel_date = relation.cancelled_at.date() if relation.cancelled_at else None
-                if cancel_date and cancel_date <= as_of_date:
-                    is_active_at_date = False
-            if relation.status == "reverted":
-                revert_date = relation.reversed_at.date() if relation.reversed_at else None
-                if revert_date and revert_date <= as_of_date:
-                    is_active_at_date = False
-
-            if is_active_at_date:
-                consumed += Decimal(str(ref.allocated_amount or 0))
-        else:
+        if _reference_active_at_cutoff(ref, as_of_date):
             consumed += Decimal(str(ref.allocated_amount or 0))
 
     remaining = payment_total - consumed

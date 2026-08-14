@@ -46,6 +46,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
 - `reportes/services.py` separa la acumulación cronológica y la construcción de
   filas de rotación de inventario, sin alterar el stock inicial ni el cálculo
   de salidas.
+- `balance_confirmation.py` aísla la vigencia de cancelaciones y relaciones de
+  pago al corte para simplificar el cálculo de saldos no aplicados.
 
 Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
 reportes y JavaScript se ejecutan en segundo plano con salida persistida en
