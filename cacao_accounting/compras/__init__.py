@@ -729,7 +729,7 @@ def _create_supplier_quotation_from_request():
         database.session.commit()
         flash("Cotización de proveedor creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
-    except (IdentifierConfigurationError, DocumentFlowError) as exc:
+    except (IdentifierConfigurationError, DocumentFlowError, PurchaseSourcingError) as exc:
         database.session.rollback()
         flash_error(exc)
     return None

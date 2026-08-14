@@ -53,6 +53,10 @@ Las solicitudes de compra y de cotización no muestran ni persisten precios;
 los importes permanecen disponibles únicamente para cotizaciones de proveedor,
 órdenes, recepciones y facturas.
 
+El alta de cotizaciones de proveedor captura `PurchaseSourcingError` cuando la
+ronda de negociación no existe, no corresponde al RFQ o ya está cerrada,
+evitando respuestas HTTP 500 ante formularios obsoletos.
+
 ## 2026-08-14 — Refactors SonarCloud sobre origin/main
 
 ### Petición y base
