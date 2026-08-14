@@ -416,37 +416,7 @@ def _create_gl_entry(
         raise PostingError("Toda entrada GL requiere un tipo de comprobante.")
     _validate_single_sided_amount(params.debit, params.credit)
 
-    debit = params.debit
-    credit = params.credit
-    debit_in_ac = params.debit_in_account_currency
-    credit_in_ac = params.credit_in_account_currency
-    exchange_rate = context.exchange_rate
-    if params.exchange_rate is not None:
-        exchange_rate = params.exchange_rate
-
-    requires_conversion = (
-        not params.is_reversal
-        and context.transaction_currency
-        and context.company_currency
-        and context.transaction_currency != context.company_currency
-    )
-    if requires_conversion:
-        assert context.transaction_currency is not None
-        assert context.company_currency is not None
-        if exchange_rate is None or exchange_rate == 0:
-            try:
-                exchange_rate = _lookup_exchange_rate(
-                    context.transaction_currency,
-                    context.company_currency,
-                    context.posting_date,
-                )
-            except (PostingError, SQLAlchemyError) as exc:
-                raise PostingError(f"No se pudo determinar el tipo de cambio para multimoneda: {str(exc)}") from exc
-
-        debit_in_ac = debit if debit_in_ac is None else debit_in_ac
-        credit_in_ac = credit if credit_in_ac is None else credit_in_ac
-        debit = _ledger_amount(context, debit, debit_in_ac, exchange_rate)
-        credit = _ledger_amount(context, credit, credit_in_ac, exchange_rate)
+    debit, credit, debit_in_ac, credit_in_ac, exchange_rate = _resolve_gl_amounts(context, params)
 
     resolved_debit_in_ac = _resolve_currency_amount(debit_in_ac, params.debit, bool(context.transaction_currency))
     resolved_credit_in_ac = _resolve_currency_amount(credit_in_ac, params.credit, bool(context.transaction_currency))
@@ -482,6 +452,49 @@ def _create_gl_entry(
         is_reversal=params.is_reversal,
         reversal_of=params.reversal_of,
     )
+
+
+def _resolve_gl_amounts(
+    context: LedgerContext, params: GLEntryParams
+) -> tuple[Decimal, Decimal, Decimal | None, Decimal | None, Decimal | None]:
+    """Resolve book amounts and the historical rate for one GL line."""
+    debit = params.debit
+    credit = params.credit
+    debit_in_ac = params.debit_in_account_currency
+    credit_in_ac = params.credit_in_account_currency
+    exchange_rate = params.exchange_rate if params.exchange_rate is not None else context.exchange_rate
+    requires_conversion = (
+        not params.is_reversal
+        and context.transaction_currency
+        and context.company_currency
+        and context.transaction_currency != context.company_currency
+    )
+    if not requires_conversion:
+        return debit, credit, debit_in_ac, credit_in_ac, exchange_rate
+    assert context.transaction_currency is not None
+    assert context.company_currency is not None
+    exchange_rate = _entry_exchange_rate(context, exchange_rate)
+    debit_in_ac = debit if debit_in_ac is None else debit_in_ac
+    credit_in_ac = credit if credit_in_ac is None else credit_in_ac
+    return (
+        _ledger_amount(context, debit, debit_in_ac, exchange_rate),
+        _ledger_amount(context, credit, credit_in_ac, exchange_rate),
+        debit_in_ac,
+        credit_in_ac,
+        exchange_rate,
+    )
+
+
+def _entry_exchange_rate(context: LedgerContext, exchange_rate: Decimal | None) -> Decimal:
+    """Resolve a missing conversion rate for a GL entry."""
+    if exchange_rate is not None and exchange_rate != 0:
+        return exchange_rate
+    assert context.transaction_currency is not None
+    assert context.company_currency is not None
+    try:
+        return _lookup_exchange_rate(context.transaction_currency, context.company_currency, context.posting_date)
+    except (PostingError, SQLAlchemyError) as exc:
+        raise PostingError(f"No se pudo determinar el tipo de cambio para multimoneda: {str(exc)}") from exc
 
 
 def _ledger_amount(
