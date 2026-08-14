@@ -4,10 +4,10 @@
 
 import hashlib
 import json
-from datetime import date, datetime, timedelta
+import secrets
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
-import secrets
 
 from sqlalchemy import func, or_, select
 
@@ -30,6 +30,30 @@ from cacao_accounting.audit_trail_service import log_balance_confirmation_event
 # Helper functions for calculations
 
 
+def _utcnow() -> datetime:
+    """Retorna la fecha/hora actual en UTC con zona horaria explícita."""
+    return datetime.now(timezone.utc)
+
+
+def build_cancellation_map(doc_types: tuple[str, ...]) -> dict[tuple[str, str], date]:
+    """Agrupa la fecha de anulación más temprana por (tipo, id) de documento.
+
+    Reemplaza una consulta por documento (N+1) por una única consulta para el
+    conjunto de tipos de documento de la confirmación.
+    """
+    rows = database.session.execute(
+        select(AuditTrail.document_type, AuditTrail.document_id, AuditTrail.timestamp)
+        .where(AuditTrail.action == "cancelled", AuditTrail.document_type.in_(doc_types))
+        .order_by(AuditTrail.timestamp.asc())
+    ).all()
+    cancelled: dict[tuple[str, str], date] = {}
+    for doc_type, doc_id, timestamp in rows:
+        key = (doc_type, doc_id)
+        if key not in cancelled and timestamp is not None:
+            cancelled[key] = timestamp.date()
+    return cancelled
+
+
 def is_cancelled_before_cutoff(doc_type: str, doc_id: str, cutoff_date: date) -> bool:
     """Retorna verdadero si el documento fue cancelado antes o en la fecha de corte."""
     stmt = (
@@ -44,10 +68,16 @@ def is_cancelled_before_cutoff(doc_type: str, doc_id: str, cutoff_date: date) ->
     return False
 
 
-def compute_payment_unallocated_amount_at_date(payment: PaymentEntry, as_of_date: date) -> Decimal:
+def compute_payment_unallocated_amount_at_date(
+    payment: PaymentEntry, as_of_date: date, cancelled_map: dict[tuple[str, str], date] | None = None
+) -> Decimal:
     """Calcula el saldo no aplicado de un pago a la fecha de corte."""
     if getattr(payment, "docstatus", 0) == 2:
-        if is_cancelled_before_cutoff("payment_entry", payment.id, as_of_date):
+        cancel_date = (cancelled_map or {}).get(("payment_entry", payment.id))
+        if cancel_date is None:
+            if is_cancelled_before_cutoff("payment_entry", payment.id, as_of_date):
+                return Decimal("0")
+        elif cancel_date <= as_of_date:
             return Decimal("0")
     if payment.posting_date > as_of_date:
         return Decimal("0")
@@ -107,8 +137,7 @@ def compute_applied_credit_document_amount(document: Any, as_of_date: date) -> D
             select(func.sum(DocumentRelation.amount))
             .join(
                 invoice_model,
-                (DocumentRelation.source_id == invoice_model.id)
-                & DocumentRelation.source_type.in_(source_types),
+                (DocumentRelation.source_id == invoice_model.id) & DocumentRelation.source_type.in_(source_types),
             )
             .where(
                 DocumentRelation.relation_type == "invoice_reversal",
@@ -133,6 +162,7 @@ def get_open_documents_at_cutoff(
 ) -> list[dict[str, Any]]:
     """Obtiene y calcula todas las partidas abiertas a una fecha de corte determinada."""
     items = []
+    cancelled_map = build_cancellation_map(("sales_invoice", "purchase_invoice", "payment_entry"))
 
     # 1. Facturas y notas de crédito/débito
     if party_type in ("customer", "supplier"):
@@ -194,8 +224,8 @@ def get_open_documents_at_cutoff(
                     "document_date": doc.posting_date.isoformat() if doc.posting_date else None,
                     "due_date": due_date,
                     "currency": doc.transaction_currency or doc.base_currency,
-                    "original_amount": float(sign * Decimal(str(doc.grand_total or 0))),
-                    "outstanding_amount": float(sign * outstanding),
+                    "original_amount": str(sign * Decimal(str(doc.grand_total or 0))),
+                    "outstanding_amount": str(sign * outstanding),
                 }
             )
 
@@ -212,10 +242,14 @@ def get_open_documents_at_cutoff(
     p_rows = database.session.execute(p_stmt).scalars().all()
     for payment in p_rows:
         if payment.docstatus == 2:
-            if is_cancelled_before_cutoff("payment_entry", payment.id, cutoff_date):
+            cancel_date = cancelled_map.get(("payment_entry", payment.id))
+            if cancel_date is None:
+                if is_cancelled_before_cutoff("payment_entry", payment.id, cutoff_date):
+                    continue
+            elif cancel_date <= cutoff_date:
                 continue
 
-        unapplied = compute_payment_unallocated_amount_at_date(payment, cutoff_date)
+        unapplied = compute_payment_unallocated_amount_at_date(payment, cutoff_date, cancelled_map)
         if unapplied == 0:
             continue
 
@@ -228,8 +262,8 @@ def get_open_documents_at_cutoff(
                 "document_date": payment.posting_date.isoformat() if payment.posting_date else None,
                 "due_date": None,
                 "currency": payment.currency,
-                "original_amount": float(-original_val),
-                "outstanding_amount": float(-unapplied),
+                "original_amount": str(-original_val),
+                "outstanding_amount": str(-unapplied),
             }
         )
 
@@ -275,10 +309,10 @@ def create_balance_confirmation(
     items = get_open_documents_at_cutoff(company_id, party_id, party_type, cutoff_date)
 
     # Calcular totales por moneda
-    totals: dict[str, float] = {}
+    totals: dict[str, Decimal] = {}
     for item in items:
         currency = item["currency"]
-        totals[currency] = float(Decimal(str(totals.get(currency, 0.0))) + Decimal(str(item["outstanding_amount"])))
+        totals[currency] = totals.get(currency, Decimal("0")) + Decimal(item["outstanding_amount"])
 
     snapshot_data = {
         "company_id": company.code,
@@ -288,14 +322,14 @@ def create_balance_confirmation(
         "party_type": party_type,
         "cutoff_date": cutoff_date.isoformat(),
         "items": items,
-        "totals": totals,
+        "totals": {currency: str(total) for currency, total in totals.items()},
         "emails": [email.strip().lower() for email in emails],
     }
 
     snapshot_json = json.dumps(snapshot_data, ensure_ascii=False)
     snapshot_hash = compute_snapshot_hash(snapshot_data)
 
-    expires_at = datetime.utcnow() + timedelta(days=expiration_days)
+    expires_at = _utcnow() + timedelta(days=expiration_days)
 
     confirmation = BalanceConfirmation(
         company=company_id,

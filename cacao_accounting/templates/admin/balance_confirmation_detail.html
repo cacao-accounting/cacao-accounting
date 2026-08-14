@@ -100,8 +100,8 @@
                     <td>{{ item.document_date if item.document_date else '-' }}</td>
                     <td>{{ item.due_date if item.due_date else '-' }}</td>
                     <td class="text-center fw-bold">{{ item.currency }}</td>
-                    <td class="text-end {% if item.original_amount < 0 %}text-danger{% endif %}">{{ "{:,.2f}".format(item.original_amount) }}</td>
-                    <td class="text-end fw-bold {% if item.outstanding_amount < 0 %}text-danger{% endif %}">{{ "{:,.2f}".format(item.outstanding_amount) }}</td>
+                    <td class="text-end {% if item.original_amount|float < 0 %}text-danger{% endif %}">{{ "{:,.2f}".format(item.original_amount|float) }}</td>
+                    <td class="text-end fw-bold {% if item.outstanding_amount|float < 0 %}text-danger{% endif %}">{{ "{:,.2f}".format(item.outstanding_amount|float) }}</td>
                   </tr>
                 {% endfor %}
               </tbody>
@@ -114,8 +114,8 @@
               {% for currency, total_val in snapshot["totals"].items() %}
                 <div class="col-md-6 mb-2">
                   <span class="text-muted small">{{ _('Total Pendiente') }} ({{ currency }}):</span>
-                  <strong class="fs-5 ms-2 {% if total_val < 0 %}text-danger{% else %}text-primary{% endif %}">
-                    {{ currency }} {{ "{:,.2f}".format(total_val) }}
+                  <strong class="fs-5 ms-2 {% if total_val|float < 0 %}text-danger{% else %}text-primary{% endif %}">
+                    {{ currency }} {{ "{:,.2f}".format(total_val|float) }}
                   </strong>
                 </div>
               {% endfor %}

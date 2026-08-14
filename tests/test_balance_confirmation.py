@@ -190,11 +190,11 @@ def test_outstanding_balance_calculation_at_cutoff(app_ctx) -> None:
     assert len(pgs) == 1
 
     # Outstanding totals checking
-    totals: dict[str, float] = {}
+    totals: dict[str, Decimal] = {}
     for i in items:
-        totals[i["currency"]] = totals.get(i["currency"], 0) + i["outstanding_amount"]
+        totals[i["currency"]] = totals.get(i["currency"], Decimal("0")) + Decimal(i["outstanding_amount"])
 
-    assert totals["USD"] == 3500.0
+    assert totals["USD"] == Decimal("3500.00")
 
 
 def test_desktop_mode_rejection(app_ctx) -> None:

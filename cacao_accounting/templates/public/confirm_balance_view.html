@@ -53,11 +53,11 @@
                   <td>{{ item.document_date if item.document_date else '-' }}</td>
                   <td>{{ item.due_date if item.due_date else '-' }}</td>
                   <td class="text-center fw-bold text-secondary">{{ item.currency }}</td>
-                  <td class="text-end {% if item.original_amount < 0 %}text-danger{% endif %}">
-                    {{ "{:,.2f}".format(item.original_amount) }}
+                  <td class="text-end {% if item.original_amount|float < 0 %}text-danger{% endif %}">
+                    {{ "{:,.2f}".format(item.original_amount|float) }}
                   </td>
-                  <td class="text-end fw-bold {% if item.outstanding_amount < 0 %}text-danger{% endif %}">
-                    {{ "{:,.2f}".format(item.outstanding_amount) }}
+                  <td class="text-end fw-bold {% if item.outstanding_amount|float < 0 %}text-danger{% endif %}">
+                    {{ "{:,.2f}".format(item.outstanding_amount|float) }}
                   </td>
                 </tr>
               {% endfor %}
@@ -73,8 +73,8 @@
               <div class="col-md-4">
                 <div class="border-start border-primary border-4 ps-3 py-1">
                   <span class="text-muted small d-block">{{ _('Saldo Pendiente') }} ({{ currency }})</span>
-                  <strong class="fs-4 {% if total_val < 0 %}text-danger{% else %}text-primary{% endif %}">
-                    {{ currency }} {{ "{:,.2f}".format(total_val) }}
+                  <strong class="fs-4 {% if total_val|float < 0 %}text-danger{% else %}text-primary{% endif %}">
+                    {{ currency }} {{ "{:,.2f}".format(total_val|float) }}
                   </strong>
                 </div>
               </div>
