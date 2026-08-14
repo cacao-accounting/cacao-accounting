@@ -221,6 +221,58 @@ def external_document_validation_settings():
     )
 
 
+def _send_email_test():
+    """Send the SMTP test message and report its result to the administrator."""
+    from cacao_accounting.messaging.email import EmailError, send_email
+
+    test_recipient = request.form.get("test_recipient")
+    if not test_recipient:
+        flash(_("Debe especificar un correo destinatario para la prueba."), "danger")
+        return
+    try:
+        send_email(
+            to_email=test_recipient.strip(),
+            subject=_("Correo de prueba de Cacao Accounting"),
+            body=_("Este es un correo de prueba para verificar la configuración de SMTP en Cacao Accounting."),
+            is_html=False,
+        )
+        flash(_("Correo de prueba enviado correctamente."), "success")
+    except EmailError as exc:
+        flash(_(str(exc)), "danger")
+
+
+def _save_email_settings() -> None:
+    """Persist the SMTP settings submitted by the administrator."""
+    from cacao_accounting.messaging.email import set_smtp_setting
+
+    settings = {
+        "smtp_server": (request.form.get("smtp_server") or "").strip(),
+        "smtp_port": (request.form.get("smtp_port") or "587").strip(),
+        "smtp_user": (request.form.get("smtp_user") or "").strip(),
+        "smtp_use_tls": "true" if request.form.get("smtp_use_tls") == "on" else "false",
+        "smtp_from_email": (request.form.get("smtp_from_email") or "").strip(),
+    }
+    for key, value in settings.items():
+        set_smtp_setting(key, value)
+    new_password = request.form.get("smtp_password")
+    if new_password:
+        set_smtp_setting("smtp_password", new_password.strip())
+    database.session.commit()
+
+
+def _email_settings_values() -> dict[str, str]:
+    """Load SMTP settings with the UI defaults applied."""
+    from cacao_accounting.messaging.email import get_smtp_setting
+
+    return {
+        "smtp_server": get_smtp_setting("smtp_server") or "",
+        "smtp_port": get_smtp_setting("smtp_port") or "587",
+        "smtp_user": get_smtp_setting("smtp_user") or "",
+        "smtp_use_tls": get_smtp_setting("smtp_use_tls") or "true",
+        "smtp_from_email": get_smtp_setting("smtp_from_email") or "",
+    }
+
+
 @admin.route("/settings/email", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -230,54 +282,23 @@ def email_settings():
     if is_desktop_mode():
         abort(403)
 
-    from cacao_accounting.messaging.email import get_smtp_setting, set_smtp_setting, send_email, EmailError
-
     if request.method == "POST":
-        action = request.form.get("action")
-        if action == "test_email":
-            test_recipient = request.form.get("test_recipient")
-            if not test_recipient:
-                flash(_("Debe especificar un correo destinatario para la prueba."), "danger")
-            else:
-                try:
-                    send_email(
-                        to_email=test_recipient.strip(),
-                        subject=_("Correo de prueba de Cacao Accounting"),
-                        body=_("Este es un correo de prueba para verificar la configuración de SMTP en Cacao Accounting."),
-                        is_html=False,
-                    )
-                    flash(_("Correo de prueba enviado correctamente."), "success")
-                except EmailError as exc:
-                    flash(_(str(exc)), "danger")
+        if request.form.get("action") == "test_email":
+            _send_email_test()
             return redirect(url_for("admin.email_settings"))
-
-        # Guardar configuración
-        set_smtp_setting("smtp_server", (request.form.get("smtp_server") or "").strip())
-        set_smtp_setting("smtp_port", (request.form.get("smtp_port") or "587").strip())
-        set_smtp_setting("smtp_user", (request.form.get("smtp_user") or "").strip())
-        new_pwd = request.form.get("smtp_password")
-        if new_pwd:
-            set_smtp_setting("smtp_password", new_pwd.strip())
-        set_smtp_setting("smtp_use_tls", "true" if request.form.get("smtp_use_tls") == "on" else "false")
-        set_smtp_setting("smtp_from_email", (request.form.get("smtp_from_email") or "").strip())
-        database.session.commit()
-
+        _save_email_settings()
         flash(_("Configuración de correo electrónico guardada correctamente."), "success")
         return redirect(url_for("admin.email_settings"))
 
-    smtp_server = get_smtp_setting("smtp_server") or ""
-    smtp_port = get_smtp_setting("smtp_port") or "587"
-    smtp_user = get_smtp_setting("smtp_user") or ""
-    smtp_use_tls = get_smtp_setting("smtp_use_tls") or "true"
-    smtp_from_email = get_smtp_setting("smtp_from_email") or ""
+    settings = _email_settings_values()
 
     return render_template(
         "admin/email_settings.html",
-        smtp_server=smtp_server,
-        smtp_port=smtp_port,
-        smtp_user=smtp_user,
-        smtp_use_tls=smtp_use_tls.lower() in ("true", "1", "yes", "y", "on"),
-        smtp_from_email=smtp_from_email,
+        smtp_server=settings["smtp_server"],
+        smtp_port=settings["smtp_port"],
+        smtp_user=settings["smtp_user"],
+        smtp_use_tls=settings["smtp_use_tls"].lower() in ("true", "1", "yes", "y", "on"),
+        smtp_from_email=settings["smtp_from_email"],
         titulo=_("Configuración de Correo Electrónico"),
     )
 
