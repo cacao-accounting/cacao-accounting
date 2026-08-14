@@ -2813,29 +2813,13 @@ def _comprobante_entry_params(
     original_value: Decimal,
     is_fy_closing: bool,
 ) -> GLEntryParams:
-    if company_value > 0:
-        return GLEntryParams(
-            account_id=account_id,
-            debit=company_value,
-            credit=Decimal("0"),
-            debit_in_account_currency=original_value if context.transaction_currency else None,
-            credit_in_account_currency=None,
-            party_type=getattr(line, "third_type", None),
-            party_id=getattr(line, "third_code", None),
-            bank_account_id=getattr(line, "bank_account_id", None),
-            is_advance=bool(getattr(line, "is_advance", False)),
-            cost_center_code=getattr(line, "cost_center", None),
-            unit_code=getattr(line, "unit", None),
-            project_code=getattr(line, "project", None),
-            entry_remarks=getattr(line, "memo", None) or getattr(line, "line_memo", None),
-            is_fiscal_year_closing=is_fy_closing,
-        )
+    is_debit = company_value > 0
     return GLEntryParams(
         account_id=account_id,
-        debit=Decimal("0"),
-        credit=abs(company_value),
-        debit_in_account_currency=None,
-        credit_in_account_currency=abs(original_value) if context.transaction_currency else None,
+        debit=company_value if is_debit else Decimal("0"),
+        credit=Decimal("0") if is_debit else abs(company_value),
+        debit_in_account_currency=original_value if is_debit and context.transaction_currency else None,
+        credit_in_account_currency=abs(original_value) if not is_debit and context.transaction_currency else None,
         party_type=getattr(line, "third_type", None),
         party_id=getattr(line, "third_code", None),
         bank_account_id=getattr(line, "bank_account_id", None),
