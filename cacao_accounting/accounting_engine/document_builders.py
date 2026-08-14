@@ -234,17 +234,7 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
         .scalars()
         .all()
     )
-    amounts: dict[str, Decimal] = {}
-    invoice_posting_dates: dict[str, date] = {}
-    for invoice in invoices:
-        invoice_items = database.session.execute(
-            select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)
-        ).scalars()
-        for item in invoice_items:
-            amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
-            current_date = invoice_posting_dates.get(item.item_code)
-            if current_date is None or invoice.posting_date < current_date:
-                invoice_posting_dates[item.item_code] = invoice.posting_date
+    amounts, invoice_posting_dates = _late_invoice_amounts(invoices)
 
     prior_receipts = (
         database.session.execute(
@@ -265,45 +255,64 @@ def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decima
     )
 
     if prior_receipts and amounts:
-        from sqlalchemy import or_
-        from cacao_accounting.database import Book, GLEntry
-
-        primary_book = (
-            database.session.execute(
-                select(Book)
-                .where(Book.entity == document.company, or_(Book.status == "activo", Book.status.is_(None)))
-                .order_by(Book.is_primary.desc(), Book.code)
-            )
-            .scalars()
-            .first()
-        )
-        primary_book_id = primary_book.id if primary_book else None
-
-        for item_code in list(amounts.keys()):
-            expense_account_id = _item_account_id(item_code, document.company, "expense")
-            if expense_account_id:
-                invoice_date = invoice_posting_dates[item_code]
-                eligible_receipt_ids = [receipt.id for receipt in prior_receipts if receipt.posting_date >= invoice_date]
-                if not eligible_receipt_ids:
-                    continue
-                query = select(GLEntry).where(
-                    GLEntry.voucher_type == "purchase_receipt",
-                    GLEntry.voucher_id.in_(eligible_receipt_ids),
-                    GLEntry.account_id == expense_account_id,
-                    GLEntry.credit > 0,
-                    GLEntry.is_cancelled.is_(False),
-                    GLEntry.is_reversal.is_(False),
-                )
-                if primary_book_id:
-                    query = query.where(GLEntry.ledger_id == primary_book_id)
-
-                entries = database.session.execute(query).scalars().all()
-                reclassified_sum = sum(
-                    (Decimal(str(entry.credit_in_account_currency or entry.credit)) for entry in entries), Decimal("0")
-                )
-                amounts[item_code] = max(Decimal("0"), amounts[item_code] - reclassified_sum)
+        _subtract_late_receipt_reclassifications(document, amounts, invoice_posting_dates, prior_receipts)
 
     return amounts
+
+
+def _late_invoice_amounts(invoices: Iterable[PurchaseInvoice]) -> tuple[dict[str, Decimal], dict[str, date]]:
+    """Aggregate two-way invoice values and their earliest posting dates."""
+    amounts: dict[str, Decimal] = {}
+    posting_dates: dict[str, date] = {}
+    for invoice in invoices:
+        items = database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)).scalars()
+        for item in items:
+            amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
+            if item.item_code not in posting_dates or invoice.posting_date < posting_dates[item.item_code]:
+                posting_dates[item.item_code] = invoice.posting_date
+    return amounts, posting_dates
+
+
+def _subtract_late_receipt_reclassifications(
+    document: PurchaseReceipt,
+    amounts: dict[str, Decimal],
+    posting_dates: dict[str, date],
+    prior_receipts: Iterable[PurchaseReceipt],
+) -> None:
+    """Subtract receipt expense reclassifications from pending invoice values."""
+    from sqlalchemy import or_
+    from cacao_accounting.database import Book, GLEntry
+
+    primary_book = (
+        database.session.execute(
+            select(Book)
+            .where(Book.entity == document.company, or_(Book.status == "activo", Book.status.is_(None)))
+            .order_by(Book.is_primary.desc(), Book.code)
+        )
+        .scalars()
+        .first()
+    )
+    prior_receipt_list = list(prior_receipts)
+    for item_code, amount in list(amounts.items()):
+        expense_account_id = _item_account_id(item_code, document.company, "expense")
+        if not expense_account_id:
+            continue
+        receipt_ids = [receipt.id for receipt in prior_receipt_list if receipt.posting_date >= posting_dates[item_code]]
+        if not receipt_ids:
+            continue
+        query = select(GLEntry).where(
+            GLEntry.voucher_type == "purchase_receipt",
+            GLEntry.voucher_id.in_(receipt_ids),
+            GLEntry.account_id == expense_account_id,
+            GLEntry.credit > 0,
+            GLEntry.is_cancelled.is_(False),
+            GLEntry.is_reversal.is_(False),
+        )
+        if primary_book:
+            query = query.where(GLEntry.ledger_id == primary_book.id)
+        entries = database.session.execute(query).scalars().all()
+        reclassified = sum((Decimal(str(entry.credit_in_account_currency or entry.credit)) for entry in entries), Decimal("0"))
+        amounts[item_code] = max(Decimal("0"), amount - reclassified)
 
 
 def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationContext:
