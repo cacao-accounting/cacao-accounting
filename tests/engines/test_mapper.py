@@ -226,7 +226,7 @@ def test_collection_mapping_includes_discount_and_unrealized_revaluation():
             cash_account="1010",
             custom_references={
                 "settlement_exchange_rate": Decimal("36.8"),
-                "payment_discount_account_id": "5105",
+                "sales_discount_account_id": "5105",
                 "unrealized_exchange_gain_account_id": "4206",
             },
         ),
