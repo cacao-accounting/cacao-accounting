@@ -659,6 +659,13 @@ def compras_cotizacion_proveedor_nueva():
             "currency": effective_currency(source) or "",
             "posting_date": str(date.today()),
         }
+        if rfq_origen:
+            transaction_config["initialHeader"].update(
+                {
+                    "party": rfq_origen.supplier_id or "",
+                    "party_label": rfq_origen.supplier_name or "",
+                }
+            )
     return render_template(
         "compras/cotizacion_proveedor_nueva.html",
         form=formulario,
