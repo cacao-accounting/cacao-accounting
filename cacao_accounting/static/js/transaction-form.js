@@ -629,6 +629,8 @@
         },
 
         _serializeTaxLine(line) {
+          this.syncTaxTreatment(line);
+          const accountingTreatment = line.accounting_treatment || 'separate_tax_account';
           return {
             source_rule_id: line.source_rule_id || '',
             manual: Boolean(line.manual),
@@ -640,9 +642,9 @@
             exclude_concepts: line.exclude_concepts || [],
             rate: toNumber(line.rate),
             amount: toNumber(line.amount),
-            accounting_treatment: line.accounting_treatment || 'separate_tax_account',
+            accounting_treatment: accountingTreatment,
             allocation_method: line.allocation_method || '',
-            affects_inventory: Boolean(line.affects_inventory),
+            affects_inventory: accountingTreatment === 'capitalizable_inventory_cost',
             affects_document_total: Boolean(line.affects_document_total),
             included_in_price: Boolean(line.included_in_price),
             account_id: line.account_id || '',
@@ -726,6 +728,7 @@
 
 	        saveTaxLineModal() {
 	          if (this.taxCharges.activeIndex !== null && this.taxCharges.modalLine) {
+	            this.syncTaxTreatment(this.taxCharges.modalLine);
 	            if (this.taxCharges.modalLine.manual) {
 	              this.calcTaxLine(this.taxCharges.modalLine);
 	            }
@@ -761,10 +764,17 @@
 	        normalizeTaxLine(line) {
 	          const normalized = { ...this.newTaxLine(), ...line };
 	          normalized.manual = Boolean(normalized.manual || String(normalized.source_rule_id || '').startsWith('MANUAL-'));
+	          this.syncTaxTreatment(normalized);
 	          if (normalized.manual) {
 	            this.calcTaxLine(normalized);
 	          }
 	          return normalized;
+	        },
+
+	        syncTaxTreatment(line) {
+	          if (!line) return;
+
+	          line.affects_inventory = line.accounting_treatment === 'capitalizable_inventory_cost';
 	        },
 
 	        addTaxLine() {

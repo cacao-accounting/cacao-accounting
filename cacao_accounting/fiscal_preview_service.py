@@ -16,6 +16,7 @@ from cacao_accounting.accounting_engine.common.context import (
     ItemContext,
     TaxRuleContext,
 )
+from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts
 
@@ -281,7 +282,7 @@ def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
             "amount": str(line.amount),
             "accounting_treatment": line.accounting_treatment,
             "allocation_method": line.allocation_method or "",
-            "affects_inventory": bool(line.affects_inventory),
+            "affects_inventory": affects_inventory_from_treatment(line.accounting_treatment),
             "affects_document_total": bool(line.affects_document_total),
             "included_in_price": bool(line.included_in_price),
             "account_id": _line_account_id(payload, line.source_rule_id, line.account_id),
@@ -411,7 +412,7 @@ def _tax_rule_context_from_payload(raw_line: Any, recognition_event: str, order:
         order=order,
         accounting_treatment=str(item.get("accounting_treatment") or "separate_tax_account"),
         recognition_event=recognition_event,
-        affects_inventory=bool(item.get("affects_inventory")),
+        affects_inventory=affects_inventory_from_treatment(str(item.get("accounting_treatment") or "separate_tax_account")),
         affects_document_total=bool(item.get("affects_document_total", True)),
         included_in_price=bool(item.get("included_in_price")),
         allocation_method=str(item.get("allocation_method") or "") or None,

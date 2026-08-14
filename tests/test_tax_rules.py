@@ -11,6 +11,7 @@ from flask import Flask
 
 from cacao_accounting import create_app
 from cacao_accounting.accounting_engine.document_builders import _build_payment_context, _document_tax_rules
+from cacao_accounting.compras import _validate_purchase_tax_template
 from cacao_accounting.config import configuracion
 from cacao_accounting.fiscal_persistence_service import (
     build_tax_rule_contexts_from_snapshot,
@@ -72,6 +73,31 @@ def _login_admin(client) -> None:
     with client.session_transaction() as session:
         session["_user_id"] = admin.id
         session["_fresh"] = True
+
+
+def test_purchase_tax_template_validation_uses_template_type_and_applies_to(app_ctx: Flask) -> None:
+    """Purchase templates require buying type and purchase/both applicability."""
+    from cacao_accounting.database import TaxTemplate, database
+
+    valid = TaxTemplate(
+        name="Compras ambas",
+        company="cacao",
+        template_type="buying",
+        currency="NIO",
+        is_active=True,
+    )
+    selling = TaxTemplate(
+        name="Ventas",
+        company="cacao",
+        template_type="selling",
+        is_active=True,
+    )
+    database.session.add_all([valid, selling])
+    database.session.commit()
+
+    _validate_purchase_tax_template("cacao", valid.id, "NIO")
+    with pytest.raises(ValueError, match="no corresponde a compras"):
+        _validate_purchase_tax_template("cacao", selling.id, "NIO")
 
 
 def test_admin_tax_rule_crud(client) -> None:
@@ -364,6 +390,35 @@ def test_document_tax_snapshot_is_persisted_and_loaded_for_invoice(app_ctx: Flas
     assert rules[0].concept == "IVA"
     persisted_lines = load_document_fiscal_lines("purchase_invoice", invoice.id)
     assert persisted_lines[0].account_id is None
+
+
+def test_document_tax_snapshot_derives_inventory_impact_from_treatment(app_ctx: Flask) -> None:
+    """Legacy inventory flags cannot override the accounting treatment."""
+    from cacao_accounting.database import PurchaseInvoice, database
+
+    invoice = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 2), document_type="purchase_invoice", docstatus=0)
+    database.session.add(invoice)
+    database.session.flush()
+    persist_document_fiscal_snapshot(
+        company="cacao",
+        document_type="purchase_invoice",
+        document_id=invoice.id,
+        currency="USD",
+        tax_lines=[
+            {
+                "source_rule_id": "RULE-EXPENSE-001",
+                "concept": "Flete no capitalizable",
+                "type": "charge",
+                "amount": "20.00",
+                "accounting_treatment": "expense",
+                "affects_inventory": True,
+            }
+        ],
+        tax_summary={"subtotal": "100.00", "document_tax_total": "20.00", "grand_total": "120.00"},
+    )
+
+    persisted_line = load_document_fiscal_lines("purchase_invoice", invoice.id)[0]
+    assert persisted_line.affects_inventory is False
 
 
 def test_payment_context_uses_persisted_fiscal_snapshot(app_ctx: Flask) -> None:
