@@ -55,7 +55,8 @@ def _as_utc(value: datetime | None) -> datetime | None:
 
 def _mark_expired(confirmation: BalanceConfirmation) -> bool:
     """Marca la confirmación como expirada si la fecha de expiración ya pasó."""
-    if confirmation.expires_at and _utcnow() > _as_utc(confirmation.expires_at):
+    expires_at = _as_utc(confirmation.expires_at)
+    if expires_at is not None and _utcnow() > expires_at:
         confirmation.status = "expired"
         database.session.commit()
         return True
