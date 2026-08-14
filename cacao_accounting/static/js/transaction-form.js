@@ -269,12 +269,17 @@
         }
       }
 
+      const flowLockedFields = Array.isArray(config.flowLockedFields)
+        ? [...config.flowLockedFields]
+        : [];
+      if (!flowLockedFields.length && config.initialSourceType) {
+        flowLockedFields.push('company', 'currency');
+      }
+
       return {
         formKey: config.formKey || '',
         viewKey: config.viewKey || 'draft',
-        flowLockedFields: Array.isArray(config.flowLockedFields)
-          ? [...config.flowLockedFields]
-          : (config.initialSourceType ? ['company', 'currency'] : []),
+        flowLockedFields,
         messages,
         preferences: {
           columns: columnsList
@@ -372,17 +377,17 @@
           const root = this.$root || document;
           const fields = ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount', 'warehouse', 'account',
             'cost_center', 'unit', 'project', 'remarks', 'source_type', 'source_id', 'source_item_id'];
-          this.lines.forEach((line, index) => {
-            fields.forEach((field) => {
+          for (const [index, line] of this.lines.entries()) {
+            for (const field of fields) {
               const input = root.querySelector(`[name="${field}_${index}"]`);
-              if (!input) return;
+              if (!input) continue;
               const globalWarehouse = this.header.warehouse || this.header.from_warehouse || this.header.to_warehouse;
               const value = field === 'warehouse' && !line[field] ? globalWarehouse : line[field];
               input.value = value === undefined || value === null ? '' : String(value);
               input.dispatchEvent(new Event('input', { bubbles: true }));
               input.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-          });
+            }
+          }
         },
 
         get defaultColumns() {
