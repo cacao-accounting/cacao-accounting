@@ -28,6 +28,79 @@ from cacao_accounting.document_flow.registry import normalize_doctype
 
 PENDING_APPROVAL_STATUS = "Pending Approval"
 PENDING_CANCELLATION_STATUS = "Pending Cancellation"
+_RELATION_ONLY_CANCEL_DOCTYPES = frozenset(
+    {
+        "purchase_request",
+        "purchase_quotation",
+        "supplier_quotation",
+        "purchase_order",
+        "sales_request",
+        "sales_quotation",
+        "sales_order",
+    }
+)
+_POSTED_CANCEL_DOCTYPES = frozenset({"purchase_receipt", "purchase_invoice", "delivery_note", "sales_invoice"})
+
+
+def _cancel_relation_only_document(doctype: str, document: Any) -> None:
+    """Cancel a draft relation document and refresh its flow caches."""
+    from cacao_accounting.audit_trail_service import log_cancel
+    from cacao_accounting.document_flow import refresh_source_caches_for_target, revert_relations_for_target
+
+    if doctype == "sales_order":
+        from cacao_accounting.ventas import _release_reservation_for_sales_order
+
+        _release_reservation_for_sales_order(document)
+    document.docstatus = 2
+    log_cancel(document)
+    revert_relations_for_target(doctype, document.id)
+    refresh_source_caches_for_target(doctype, document.id)
+
+
+def _cancel_posted_document(doctype: str, document: Any) -> None:
+    """Cancel a posted document and refresh reversal-dependent caches."""
+    from cacao_accounting.audit_trail_service import log_cancel
+    from cacao_accounting.contabilidad.posting import cancel_document
+    from cacao_accounting.document_flow import refresh_source_caches_for_target, revert_relations_for_target
+
+    if doctype == "delivery_note":
+        from cacao_accounting.ventas import _restore_reservation_for_delivery_note
+
+        _restore_reservation_for_delivery_note(document)
+    elif doctype == "sales_invoice":
+        from cacao_accounting.ventas import _cancel_linked_delivery_note
+
+        _cancel_linked_delivery_note(document)
+    cancel_document(document)
+    log_cancel(document)
+    target_type = getattr(document, "document_type", None) or doctype
+    revert_relations_for_target(target_type, document.id)
+    refresh_source_caches_for_target(target_type, document.id)
+    _refresh_reversal_cache(document, target_type)
+
+
+def _refresh_reversal_cache(document: Any, target_type: str) -> None:
+    """Refresh outstanding cache for a source document after its reversal."""
+    if not getattr(document, "reversal_of", None):
+        return
+    from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
+
+    source = database.session.get(get_model_class(target_type), document.reversal_of)
+    if source:
+        refresh_outstanding_amount_cache(source)
+
+
+def _cancel_payment_or_stock(doctype: str, document: Any) -> None:
+    """Cancel a payment or stock entry, applying payment-specific hooks."""
+    from cacao_accounting.audit_trail_service import log_cancel
+    from cacao_accounting.contabilidad.posting import cancel_document
+
+    cancel_document(document)
+    if doctype == "payment_entry":
+        from cacao_accounting.bancos import _apply_payment_cancellation_hooks
+
+        _apply_payment_cancellation_hooks(document)
+    log_cancel(document)
 
 
 def _deterministic_default(obj: Any) -> str:
@@ -688,65 +761,19 @@ class ApprovalEngine:
     @classmethod
     def _execute_cancel(cls, doctype: str, document: Any, user: Any) -> None:
         """Ejecuta de manera segura la cancelacion de un documento con todos sus hooks."""
-        from cacao_accounting.contabilidad.posting import cancel_document
-        from cacao_accounting.audit_trail_service import log_cancel
-        from cacao_accounting.document_flow import revert_relations_for_target, refresh_source_caches_for_target
-
         if doctype == "journal_entry":
             from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
 
             cancel_submitted_journal(document.id, user_id=user.id)
             return
-
-        if doctype in {
-            "purchase_request",
-            "purchase_quotation",
-            "supplier_quotation",
-            "purchase_order",
-            "sales_request",
-            "sales_quotation",
-            "sales_order",
-        }:
-            if doctype == "sales_order":
-                from cacao_accounting.ventas import _release_reservation_for_sales_order
-
-                _release_reservation_for_sales_order(document)
-            document.docstatus = 2
-            log_cancel(document)
-            revert_relations_for_target(doctype, document.id)
-            refresh_source_caches_for_target(doctype, document.id)
+        if doctype in _RELATION_ONLY_CANCEL_DOCTYPES:
+            _cancel_relation_only_document(doctype, document)
             return
-
-        if doctype in {"purchase_receipt", "purchase_invoice", "delivery_note", "sales_invoice"}:
-            if doctype == "delivery_note":
-                from cacao_accounting.ventas import _restore_reservation_for_delivery_note
-
-                _restore_reservation_for_delivery_note(document)
-            elif doctype == "sales_invoice":
-                from cacao_accounting.ventas import _cancel_linked_delivery_note
-
-                _cancel_linked_delivery_note(document)
-            cancel_document(document)
-            log_cancel(document)
-            target_type = getattr(document, "document_type", None) or doctype
-            revert_relations_for_target(target_type, document.id)
-            refresh_source_caches_for_target(target_type, document.id)
-            if getattr(document, "reversal_of", None):
-                from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
-
-                source_class = get_model_class(target_type)
-                source = database.session.get(source_class, document.reversal_of)
-                if source:
-                    refresh_outstanding_amount_cache(source)
+        if doctype in _POSTED_CANCEL_DOCTYPES:
+            _cancel_posted_document(doctype, document)
             return
-
         if doctype in {"payment_entry", "stock_entry"}:
-            cancel_document(document)
-            if doctype == "payment_entry":
-                from cacao_accounting.bancos import _apply_payment_cancellation_hooks
-
-                _apply_payment_cancellation_hooks(document)
-            log_cancel(document)
+            _cancel_payment_or_stock(doctype, document)
 
     @classmethod
     def reject(cls, document: Any, user: Any, comments: str | None = None) -> None:
