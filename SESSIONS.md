@@ -62,6 +62,8 @@ JavaScript `S2004`, `S3358` y `S3776`.
   portal del endpoint de edición.
 - `compras/__init__.py` separa la agrupación de adjudicaciones y la creación de
   líneas relacionadas al generar órdenes de compra.
+- `compras/__init__.py` centraliza la resolución del contexto de órdenes de
+  compra y conserva explícitamente el identificador del proveedor.
 - `modulos/__init__.py` hace idempotente el registro de módulos estándar para
   evitar violaciones de unicidad cuando la inicialización se repite sobre una
   base PostgreSQL existente.
