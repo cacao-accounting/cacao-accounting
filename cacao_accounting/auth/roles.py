@@ -164,13 +164,17 @@ def tiene_rol(user_id: str, role_name: str) -> bool:
 
 
 def crea_roles_predeterminados() -> None:
-    """Carga roles predeterminados a la base de datos."""
+    """Carga roles predeterminados sin duplicar nombres existentes."""
     log.debug("Creando Roles Predeterminados.")
     from cacao_accounting.database import Roles, database
 
+    existing_names = {name for (name,) in database.session.execute(database.select(Roles.name)).all()}
     for r in ROLES_PREDETERMINADOS:
+        if r.get("name") in existing_names:
+            continue
         rol = Roles(name=r.get("name"), note=r.get("detalle"))
         database.session.add(rol)
+        existing_names.add(r.get("name"))
     database.session.commit()
 
 
@@ -183,6 +187,12 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
 
     if USUARIO is None or ROL is None:
         raise ValueError("Usuario o rol no encontrado")
+
+    existing_assignment = database.session.execute(
+        database.select(RolesUser.id).filter_by(user_id=USUARIO.id, role_id=ROL.id)
+    ).scalar_one_or_none()
+    if existing_assignment is not None:
+        return
 
     rol = RolesUser(user_id=USUARIO.id, role_id=ROL.id)
 
