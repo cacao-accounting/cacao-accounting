@@ -248,13 +248,20 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(pending_approval_count=pending_approval_count)
             app.jinja_env.globals.update(audit_action_label=audit_action_label)
 
-            def get_balance_confirmations_history(party_id: str, party_type: str):
+            def get_balance_confirmations_history(party_id: str, party_type: str, company: str | None = None):
                 from cacao_accounting.database import BalanceConfirmation, database
                 from sqlalchemy import select
-                stmt = select(BalanceConfirmation).where(
-                    BalanceConfirmation.party_id == party_id,
-                    BalanceConfirmation.party_type == party_type
-                ).order_by(BalanceConfirmation.created_at.desc())
+                if not company:
+                    return []
+                stmt = (
+                    select(BalanceConfirmation)
+                    .where(
+                        BalanceConfirmation.party_id == party_id,
+                        BalanceConfirmation.party_type == party_type,
+                        BalanceConfirmation.company == company,
+                    )
+                    .order_by(BalanceConfirmation.created.desc())
+                )
                 return list(database.session.execute(stmt).scalars().all())
             app.jinja_env.globals.update(get_balance_confirmations_history=get_balance_confirmations_history)
 

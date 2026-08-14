@@ -117,13 +117,13 @@
             <!-- Comentario condicional -->
             <div class="mb-4" x-show="response_type === 'disputed'" x-transition style="display: none;">
               <label for="response_comment" class="form-label fw-bold">{{ _('Explique las diferencias encontradas') }} <span class="text-danger">*</span></label>
-              <textarea class="form-control" id="response_comment" name="response_comment" rows="4" minlength="10" placeholder="Por favor proporcione suficiente detalle sobre las discrepancias (facturas pendientes, pagos no aplicados, diferencias en importes, etc.)"></textarea>
+              <textarea class="form-control" id="response_comment" name="response_comment" rows="4" minlength="10" :disabled="response_type !== 'disputed'" placeholder="Por favor proporcione suficiente detalle sobre las discrepancias (facturas pendientes, pagos no aplicados, diferencias en importes, etc.)"></textarea>
               <div class="form-text text-muted small">{{ _('Este campo es obligatorio si indica que existen diferencias (mínimo 10 caracteres).') }}</div>
             </div>
 
             <div class="mb-4" x-show="response_type === 'confirmed'" x-transition style="display: none;">
               <label for="response_comment_opt" class="form-label fw-bold">{{ _('Comentario adicional (opcional)') }}</label>
-              <textarea class="form-control" id="response_comment_opt" name="response_comment" rows="2" placeholder="Agregue algún comentario opcional si lo desea"></textarea>
+              <textarea class="form-control" id="response_comment_opt" name="response_comment_optional" rows="2" :disabled="response_type !== 'confirmed'" placeholder="Agregue algún comentario opcional si lo desea"></textarea>
             </div>
 
             <div class="alert alert-warning small d-flex align-items-center mb-4">
