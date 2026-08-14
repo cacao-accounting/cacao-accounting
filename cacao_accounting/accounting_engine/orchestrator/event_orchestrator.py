@@ -49,10 +49,20 @@ class BusinessEventOrchestrator:
         results["fiscal"] = fiscal_result
 
         if self._should_run_landed_cost(context):
+            already_capitalized = set(context.references.get("already_capitalized_components", []))
+            is_invoice = context.event_type in ("purchase_invoice_confirmed", "purchase_credit_note_confirmed")
             capitalizable_lines = [
                 line_item
                 for line_item in fiscal_result.tax_lines
                 if line_item.accounting_treatment == "capitalizable_inventory_cost"
+                and (
+                    not is_invoice
+                    or (
+                        line_item.type == "tax"
+                        and f"rule:{line_item.source_rule_id}" not in already_capitalized
+                        and f"concept:{line_item.concept}" not in already_capitalized
+                    )
+                )
             ]
             results["landed_cost"] = self.landed_cost_engine.calculate(
                 items=context.items,
@@ -181,7 +191,13 @@ class BusinessEventOrchestrator:
                         item_line_id=alloc_data["item_line_id"],
                         base_amount=-Decimal(alloc_data["base_amount"]),
                         allocated_costs=[
-                            {"concept": cost["concept"], "amount": -Decimal(cost["amount"]), "source": cost["source"]}
+                            {
+                                "concept": cost["concept"],
+                                "amount": -Decimal(cost["amount"]),
+                                "source": cost["source"],
+                                "source_rule_id": cost.get("source_rule_id"),
+                                "tax_type": cost.get("tax_type"),
+                            }
                             for cost in alloc_data["allocated_costs"]
                         ],
                         final_inventory_cost=-Decimal(alloc_data["final_inventory_cost"]),

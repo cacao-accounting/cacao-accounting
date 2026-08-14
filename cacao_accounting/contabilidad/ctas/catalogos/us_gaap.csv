@@ -1,0 +1,230 @@
+codigo,nombre,padre,grupo,rubro,tipo,account_type
+100000,Assets,,1,Asset,,
+110000,Current Assets,100000,1,Asset,,
+111000,Cash and Cash Equivalents,110000,1,Asset,,
+111100,Cash on Hand,111000,0,Asset,,cash
+111200,Operating Bank Accounts,111000,0,Asset,,bank
+111300,Payroll Bank Accounts,111000,0,Asset,,bank
+111400,Petty Cash,111000,0,Asset,,cash
+111500,Undeposited Funds,111000,0,Asset,,
+112000,Accounts and Other Receivables,110000,1,Asset,,
+112100,Trade Accounts Receivable,112000,0,Asset,,receivable
+112200,Allowance for Credit Losses,112000,0,Asset,,
+112300,Other Receivables,112000,0,Asset,,
+112400,Employee Receivables,112000,0,Asset,,
+112500,Advances to Suppliers,112000,0,Asset,,supplier_advance
+113000,Inventories,110000,1,Asset,,
+113100,Merchandise Inventory,113000,0,Asset,,inventory
+113200,Inventory in Transit,113000,0,Asset,,
+113300,Inventory Reserve / Obsolescence,113000,0,Asset,,
+114000,Prepaid Expenses,110000,1,Asset,,
+114100,Prepaid Insurance,114000,0,Asset,,
+114200,Prepaid Rent,114000,0,Asset,,
+114300,Prepaid Software and Subscriptions,114000,0,Asset,,
+114900,Other Prepaid Expenses,114000,0,Asset,,deferred_expense
+115000,Contract Assets,110000,1,Asset,,
+115100,Contract Assets — Current,115000,0,Asset,,
+116000,Taxes Receivable,110000,1,Asset,,
+116100,Income Taxes Receivable,116000,0,Asset,,
+116900,Other Taxes Receivable,116000,0,Asset,,
+117000,Short-Term Investments,110000,1,Asset,,
+117100,Marketable Securities,117000,0,Asset,,
+119000,Other Current Assets,110000,1,Asset,,
+119100,Other Current Assets,119000,0,Asset,,
+120000,Noncurrent Assets,100000,1,Asset,,
+121000,"Property, Plant and Equipment",120000,1,Asset,,
+121100,Land,121000,0,Asset,,
+121200,Buildings,121000,0,Asset,,
+121300,Furniture and Fixtures,121000,0,Asset,,
+121400,Computer Equipment,121000,0,Asset,,
+121500,Vehicles,121000,0,Asset,,
+121600,Leasehold Improvements,121000,0,Asset,,
+121700,Construction in Progress,121000,0,Asset,,
+121800,Accumulated Depreciation,121000,1,Asset,,
+121810,Accumulated Depreciation — Buildings,121800,0,Asset,,
+121820,Accumulated Depreciation — Furniture & Fixtures,121800,0,Asset,,
+121830,Accumulated Depreciation — Computer Equipment,121800,0,Asset,,
+121840,Accumulated Depreciation — Vehicles,121800,0,Asset,,
+121850,Accumulated Depreciation — Leasehold Improvements,121800,0,Asset,,
+122000,Right-of-Use Assets,120000,1,Asset,,
+122100,Operating Lease Right-of-Use Assets,122000,0,Asset,,
+122200,Finance Lease Right-of-Use Assets,122000,0,Asset,,
+123000,Intangible Assets,120000,1,Asset,,
+123100,Capitalized Software,123000,0,Asset,,
+123200,Patents and Trademarks,123000,0,Asset,,
+123300,Customer Relationships,123000,0,Asset,,
+123400,Other Intangible Assets,123000,0,Asset,,
+123800,Accumulated Amortization — Intangible Assets,123000,0,Asset,,
+124000,Goodwill,120000,1,Asset,,
+124100,Goodwill,124000,0,Asset,,
+125000,Long-Term Investments,120000,1,Asset,,
+125100,Equity Method Investments,125000,0,Asset,,
+125900,Other Long-Term Investments,125000,0,Asset,,
+126000,Deferred Tax Assets,120000,1,Asset,,
+126100,Deferred Tax Assets,126000,0,Asset,,
+126200,Valuation Allowance — Deferred Tax Assets,126000,0,Asset,,
+129000,Other Noncurrent Assets,120000,1,Asset,,
+129100,Long-Term Deposits,129000,0,Asset,,
+129200,Contract Assets — Noncurrent,129000,0,Asset,,
+129900,Other Noncurrent Assets,129000,0,Asset,,
+200000,Liabilities,,1,Liability,,
+210000,Current Liabilities,200000,1,Liability,,
+211000,Accounts Payable,210000,1,Liability,,
+211100,Trade Accounts Payable,211000,0,Liability,,payable
+211200,Goods Received Not Invoiced,211000,0,Liability,,bridge
+211300,Credit Cards Payable,211000,0,Liability,,
+212000,Accrued Liabilities,210000,1,Liability,,
+212100,Accrued Payroll,212000,0,Liability,,
+212200,Accrued Bonuses and Commissions,212000,0,Liability,,
+212300,Accrued Interest,212000,0,Liability,,
+212400,Accrued Professional Fees,212000,0,Liability,,
+212500,Accrued Utilities,212000,0,Liability,,
+212600,Warranty Liability — Current,212000,0,Liability,,
+212900,Other Accrued Expenses,212000,0,Liability,,
+213000,Payroll and Employee Liabilities,210000,1,Liability,,
+213100,Wages Payable,213000,0,Liability,,
+213200,Federal Payroll Taxes Payable,213000,0,Liability,,
+213300,State and Local Payroll Taxes Payable,213000,0,Liability,,
+213400,Employee Withholdings Payable,213000,0,Liability,,
+213500,Employee Benefits Payable,213000,0,Liability,,
+214000,Taxes Payable,210000,1,Liability,,
+214100,Sales Tax Payable,214000,0,Liability,,tax
+214200,Use Tax Payable,214000,0,Liability,,tax
+214300,Income Taxes Payable,214000,0,Liability,,
+214400,Property Taxes Payable,214000,0,Liability,,
+214900,Other Taxes Payable,214000,0,Liability,,
+215000,Customer Deposits and Contract Liabilities,210000,1,Liability,,
+215100,Customer Deposits,215000,0,Liability,,customer_advance
+215200,Contract Liabilities — Current,215000,0,Liability,,deferred_income
+216000,Short-Term Debt,210000,1,Liability,,
+216100,Line of Credit,216000,0,Liability,,
+216200,Notes Payable — Current,216000,0,Liability,,
+216300,Current Portion of Long-Term Debt,216000,0,Liability,,
+217000,Current Lease Liabilities,210000,1,Liability,,
+217100,Operating Lease Liability — Current,217000,0,Liability,,
+217200,Finance Lease Liability — Current,217000,0,Liability,,
+218000,Other Current Liabilities,210000,1,Liability,,
+218100,Refund Liabilities,218000,0,Liability,,
+218900,Other Current Liabilities,218000,0,Liability,,
+220000,Noncurrent Liabilities,200000,1,Liability,,
+221000,Long-Term Debt,220000,1,Liability,,
+221100,Bank Loans Payable — Long-Term,221000,0,Liability,,
+221200,Notes Payable — Long-Term,221000,0,Liability,,
+221300,Bonds Payable,221000,0,Liability,,
+221400,Unamortized Debt Issuance Costs,221000,0,Liability,,
+222000,Noncurrent Lease Liabilities,220000,1,Liability,,
+222100,Operating Lease Liability — Noncurrent,222000,0,Liability,,
+222200,Finance Lease Liability — Noncurrent,222000,0,Liability,,
+223000,Deferred Tax Liabilities,220000,1,Liability,,
+223100,Deferred Tax Liabilities,223000,0,Liability,,
+224000,Employee Benefit Liabilities,220000,1,Liability,,
+224100,Deferred Compensation Liability,224000,0,Liability,,
+224200,Pension and Postretirement Liabilities,224000,0,Liability,,
+225000,Other Noncurrent Liabilities,220000,1,Liability,,
+225100,Contract Liabilities — Noncurrent,225000,0,Liability,,
+225200,Warranty Liability — Noncurrent,225000,0,Liability,,
+225900,Other Noncurrent Liabilities,225000,0,Liability,,
+300000,"Stockholders' / Owners' Equity",,1,Equity,,
+310000,Corporate Equity,300000,1,Equity,,
+311000,Common Stock,310000,1,Equity,,
+311100,Common Stock — Par Value,311000,0,Equity,,
+312000,Preferred Stock,310000,1,Equity,,
+312100,Preferred Stock — Par Value,312000,0,Equity,,
+313000,Additional Paid-In Capital,310000,1,Equity,,
+313100,Additional Paid-In Capital — Common,313000,0,Equity,,
+313200,Additional Paid-In Capital — Preferred,313000,0,Equity,,
+314000,Treasury Stock,310000,1,Equity,,
+314100,Treasury Stock,314000,0,Equity,,
+315000,Retained Earnings,310000,1,Equity,,
+315100,Retained Earnings,315000,0,Equity,,retained_earnings
+316000,Accumulated Other Comprehensive Income (Loss),310000,1,Equity,,
+316100,Foreign Currency Translation Adjustments,316000,0,Equity,,
+316900,Other Accumulated Comprehensive Income (Loss),316000,0,Equity,,
+317000,Current Year Earnings,310000,1,Equity,,
+317100,Current Year Net Income (Loss),317000,0,Equity,,period_profit_loss
+320000,LLC / Partnership Equity,300000,1,Equity,,
+321000,"Members' Capital",320000,0,Equity,,
+321100,"Members' Contributions",320000,0,Equity,,
+321200,"Members' Distributions",320000,0,Equity,,
+322000,"Partners' Capital",320000,0,Equity,,
+322100,"Partners' Contributions",320000,0,Equity,,
+322200,"Partners' Distributions",320000,0,Equity,,
+400000,Operating Revenue,,1,Income,,
+410000,Product Revenue,400000,1,Income,,
+410100,Product Sales,410000,0,Income,,income
+410200,Sales Returns and Allowances,410000,0,Income,,
+410300,Sales Discounts,410000,0,Expense,,payment_discount
+410400,Purchase Discounts,410000,0,Income,,payment_discount
+420000,Service Revenue,400000,1,Income,,
+420100,Service Revenue,420000,0,Income,,income
+420200,Service Refunds and Allowances,420000,0,Income,,
+430000,Other Operating Revenue,400000,1,Income,,
+430100,Shipping and Delivery Revenue,430000,0,Income,,
+430200,Subscription Revenue,430000,0,Income,,
+430900,Other Operating Revenue,430000,0,Income,,
+500000,Cost of Revenue,,1,Cost,,
+510000,Cost of Goods Sold,500000,1,Cost,,
+510100,Merchandise Cost of Goods Sold,510000,0,Cost,,cost_of_goods_sold
+510200,Freight-In and Inbound Transportation,510000,0,Cost,,
+510300,Purchase Price Variances,510000,0,Cost,,
+510400,Inventory Shrinkage,510000,0,Cost,,inventory_adjustment
+510500,Inventory Obsolescence and Write-Downs,510000,0,Cost,,inventory_adjustment
+520000,Cost of Services,500000,1,Cost,,
+520100,Direct Labor — Services,520000,0,Cost,,
+520200,Subcontractors — Services,520000,0,Cost,,
+520900,Other Direct Service Costs,520000,0,Cost,,
+600000,Operating Expenses,,1,Expense,,
+610000,Selling and Marketing Expenses,600000,1,Expense,,
+610100,Advertising Expense,610000,0,Expense,,expense
+610200,Marketing Expense,610000,0,Expense,,expense
+610300,Sales Commissions,610000,0,Expense,,expense
+610400,Outbound Freight and Delivery,610000,0,Expense,,expense
+610500,Merchant and Payment Processing Fees,610000,0,Expense,,expense
+610600,Sales Travel,610000,0,Expense,,expense
+620000,General and Administrative Expenses,600000,1,Expense,,
+620100,Salaries and Wages,620000,0,Expense,,expense
+620200,Payroll Tax Expense,620000,0,Expense,,expense
+620300,Employee Benefits,620000,0,Expense,,expense
+620400,Rent Expense,620000,0,Expense,,expense
+620500,Utilities,620000,0,Expense,,expense
+620600,Insurance Expense,620000,0,Expense,,expense
+620700,Professional Fees,620000,0,Expense,,expense
+620800,Accounting and Audit Fees,620000,0,Expense,,expense
+620900,Legal Fees,620000,0,Expense,,expense
+621000,Software and Subscriptions,620000,0,Expense,,expense
+621100,Office Supplies,620000,0,Expense,,expense
+621200,Telephone and Internet,620000,0,Expense,,expense
+621300,Repairs and Maintenance,620000,0,Expense,,expense
+621400,Travel Expense,620000,0,Expense,,expense
+621500,Meals Expense,620000,0,Expense,,expense
+621600,Training and Education,620000,0,Expense,,expense
+621700,Licenses and Permits,620000,0,Expense,,expense
+621800,Property Tax Expense,620000,0,Expense,,expense
+621900,Bank Service Charges,620000,0,Expense,,expense
+622000,Credit Loss Expense,620000,0,Expense,,expense
+622100,Depreciation Expense,620000,0,Expense,,expense
+622200,Amortization Expense,620000,0,Expense,,expense
+622300,Operating Lease Expense,620000,0,Expense,,expense
+622400,Stock-Based Compensation Expense,620000,0,Expense,,expense
+622900,Other General and Administrative Expense,620000,0,Expense,,expense
+629000,System and Miscellaneous Operating Expenses,600000,1,Expense,,
+629100,Bank Reconciliation Differences,629000,0,Expense,,bank_difference
+629200,Rounding Differences,629000,0,Expense,,rounding
+700000,Other Income and Expense,,1,Expense,,
+710000,Other Income,700000,1,Income,,
+710100,Interest Income,710000,0,Income,,
+710200,Dividend Income,710000,0,Income,,
+710300,Gain on Disposal of Assets,710000,0,Income,,
+710400,Realized Foreign Exchange Gain,710000,0,Income,,exchange_gain
+710500,Unrealized Foreign Exchange Gain,710000,0,Income,,unrealized_exchange_gain
+710900,Other Nonoperating Income,710000,0,Income,,
+720000,Other Expenses,700000,1,Expense,,
+720100,Interest Expense,720000,0,Expense,,
+720200,Loss on Disposal of Assets,720000,0,Expense,,
+720300,Realized Foreign Exchange Loss,720000,0,Expense,,exchange_loss
+720400,Unrealized Foreign Exchange Loss,720000,0,Expense,,unrealized_exchange_loss
+720900,Other Nonoperating Expense,720000,0,Expense,,
+800000,Income Tax Expense,,1,Expense,,
+810000,Income Tax Expense (Benefit),800000,1,Expense,,
+810100,Current Income Tax Expense,810000,0,Expense,,
+810200,Deferred Income Tax Expense (Benefit),810000,0,Expense,,

@@ -558,6 +558,8 @@ def test_cuentas_predeterminadas(app_instance):
         # GET
         response = client.get("/settings/default-accounts?company=cacao")
         assert response.status_code == 200
+        assert b"sales_discount_account_id" in response.data
+        assert b"purchase_discount_account_id" in response.data
 
         # POST empty company using execute mock to simulate empty companies list
         original_execute = database.session.execute

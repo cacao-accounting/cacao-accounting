@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -33,6 +34,7 @@ from cacao_accounting.database import (
     PaymentEntry,
     PaymentReference,
     PaymentTerms,
+    LandedCostAllocation,
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseReceipt,
@@ -316,6 +318,7 @@ def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationCon
     account_lines = _purchase_invoice_account_lines(document, items, company)
     item_contexts = [_item_context_from_purchase_invoice_item(item) for item in items]
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="purchase", event_type=event_type)
+    already_capitalized = _already_capitalized_component_ids(document, company)
     return CalculationContext(
         company_id=company,
         document_type=document.document_type or "purchase_invoice",
@@ -335,8 +338,43 @@ def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationCon
             party_id=document.supplier_id,
             direction="purchase",
             account_lines=account_lines,
+            custom_references={"already_capitalized_components": sorted(already_capitalized)},
         ),
     )
+
+
+def _already_capitalized_component_ids(document: PurchaseInvoice, company: str) -> set[str]:
+    """Return component identities already capitalized by a linked receipt."""
+    receipt_id = getattr(document, "purchase_receipt_id", None)
+    if not receipt_id:
+        return set()
+    rows = database.session.execute(
+        select(LandedCostAllocation).filter_by(
+            company=company,
+            document_type="purchase_receipt",
+            document_id=receipt_id,
+        )
+    ).scalars()
+    component_ids: set[str] = set()
+    for row in rows:
+        try:
+            details = json.loads(row.allocation_detail_json or "[]")
+        except (TypeError, json.JSONDecodeError):
+            details = []
+        if not isinstance(details, list):
+            continue
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            if detail.get("tax_type") != "tax":
+                continue
+            source_rule_id = str(detail.get("source_rule_id") or "").strip()
+            if source_rule_id:
+                component_ids.add(f"rule:{source_rule_id}")
+            concept = str(detail.get("concept") or "").strip()
+            if concept:
+                component_ids.add(f"concept:{concept}")
+    return component_ids
 
 
 def _build_sales_invoice_context(document: SalesInvoice) -> CalculationContext:
@@ -932,7 +970,8 @@ def _build_references(
     custom["exchange_loss_account_id"] = getattr(defaults, "exchange_loss_account_id", None)
     custom["unrealized_exchange_gain_account_id"] = getattr(defaults, "unrealized_exchange_gain_account_id", None)
     custom["unrealized_exchange_loss_account_id"] = getattr(defaults, "unrealized_exchange_loss_account_id", None)
-    custom["payment_discount_account_id"] = getattr(defaults, "payment_discount_account_id", None)
+    custom["sales_discount_account_id"] = getattr(defaults, "sales_discount_account_id", None)
+    custom["purchase_discount_account_id"] = getattr(defaults, "purchase_discount_account_id", None)
     custom["advance_account_id"] = (
         getattr(defaults, "supplier_advance_account_id", None)
         if direction == "purchase"

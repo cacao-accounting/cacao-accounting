@@ -16,6 +16,7 @@ from cacao_accounting.accounting_engine.common.context import (
     TaxRuleContext,
 )
 from cacao_accounting.accounting_engine.common.rounding import RoundingManager
+from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
 
 
 class FiscalEngine:
@@ -65,7 +66,7 @@ class FiscalEngine:
                     amount=amount,
                     recognition_event=rule.recognition_event,
                     accounting_treatment=rule.accounting_treatment,
-                    affects_inventory=rule.affects_inventory,
+                    affects_inventory=affects_inventory_from_treatment(rule.accounting_treatment),
                     affects_document_total=rule.affects_document_total,
                     included_in_price=rule.included_in_price,
                     source_rule_id=rule.rule_id,
