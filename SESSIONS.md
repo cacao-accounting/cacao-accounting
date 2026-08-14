@@ -81,6 +81,10 @@ borrador, pero muestran advertencia si el comparativo sigue abierto. Al crear
 la orden se propaga la relación hasta la Solicitud de Compra; cuando la orden
 aprobada cubre el 100%, la solicitud puede mostrar `Completado`.
 
+El seed de desarrollo crea o recupera de forma idempotente la bodega
+`PRINCIPAL`, asegura su configuración contable y la asigna como bodega
+predeterminada a los artículos inventariables que aún no tienen una.
+
 ## 2026-08-14 — Refactors SonarCloud sobre origin/main
 
 ### Petición y base
