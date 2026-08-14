@@ -2283,7 +2283,7 @@ def test_setup_with_predefined_catalog_creates_complete_company_defaults(app_ctx
     assert ("base_en.csv", "Default - EN") in available_catalog_files()
     assert ("niif_pymes_es.csv", "NIIF Pymes (ES)") in available_catalog_files()
     assert ("ifrs_smes_en.csv", "IFRS SMEs (EN)") in available_catalog_files()
-    assert ("us_gaap.csv", "US-GAAP") in available_catalog_files()
+    assert ("us_gaap.csv", "US GAAP — Standard") in available_catalog_files()
 
     finalize_setup(
         {

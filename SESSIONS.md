@@ -3,6 +3,42 @@
 > Este archivo documenta decisiones de diseño, arquitectura y hitos clave del proyecto.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — Catálogos contables ampliados y nombres en español acentuados
+
+### Petición
+
+Regenerar los catálogos IFRS SMEs (EN), NIIF Pymes (ES) y US GAAP con una
+estructura ampliada de cuentas y asegurar que los nombres en español se
+transcriban con la acentuación correcta (la tabla de análisis los escribe
+acentuados).
+
+### Implementación
+
+- Se corrigió el generador `gen_ifrs.py` (script externo) para que los nombres
+  en español usen acentos ortográficos correctos (p. ej. "Estimación por
+  Deterioro", "Mercancías en Tránsito", "Producción en Proceso"). La corrección
+  se aplicó solo a la columna ES; se detectaron y revirtieron 16 nombres en
+  inglés corrompidos por la sustitución ("Impairment and Provision Expenses").
+- Se regeneraron `ifrs_smes_en.csv` y `niif_pymes_es.csv` (353 cuentas cada
+  uno) con un mismo esquema de códigos decimales jerárquicos (1, 11, 11.01,
+  11.01.01) que sustituye la numeración anterior (1, 1.1, 1.1.01).
+- Se actualizaron `ifrs_smes_en.json` y `niif_pymes_es.json` con los nuevos
+  códigos de cuentas predeterminadas: efectivo `11.01.01`, banco `11.01.03`,
+  impuesto de ventas `21.05.02`, impuesto de compras recuperable `11.05.02`,
+  gasto general `62.19.01`, entre otros. Todos los códigos referenciados
+  existen en el CSV y cumplen los tipos de cuenta permitidos.
+- El catálogo US GAAP (working tree) quedó con numeración de 6 dígitos
+  (100000, 110000, ...) y su JSON re-mapeado (`default_cash` 111100,
+  `default_payable` 211100, etc.); la etiqueta de selección pasó a
+  "US GAAP — Standard".
+- Se validó que los cinco catálogos (`base_es`, `base_en`, `niif_pymes_es`,
+  `ifrs_smes_en`, `us_gaap`) cumplen los 25 campos predeterminados, sin
+  códigos faltantes ni duplicados.
+- Los tests de catálogos, setup con catálogo preexistente y cobertura de
+  contabilidad (`test_11`) pasan. Los fallos de `test_04database_schema.py`
+  son ambientales (falta el driver `psycopg2` de PostgreSQL) y no guardan
+  relación con los catálogos.
+
 ## 2026-08-13 — Impuestos y cargos en factura de compra
 
 ### Petición y decisión
