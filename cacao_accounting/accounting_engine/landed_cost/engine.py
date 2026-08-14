@@ -60,6 +60,8 @@ class LandedCostEngine:
                     "line": line,
                     "amount": line.amount,
                     "concept": line.concept,
+                    "source_rule_id": line.source_rule_id,
+                    "tax_type": line.type,
                     "method": line.allocation_method or allocation_method,
                 }
             )
@@ -70,6 +72,8 @@ class LandedCostEngine:
                     "line": charge,
                     "amount": charge["amount"],
                     "concept": charge["concept"],
+                    "source_rule_id": charge.get("source_rule_id"),
+                    "tax_type": charge.get("tax_type"),
                     "method": charge.get("allocation_method") or allocation_method,
                 }
             )
@@ -125,7 +129,13 @@ class LandedCostEngine:
                 total_allocated_for_rule += allocated_amount
 
                 item_allocations[item_id].append(
-                    {"concept": rule["concept"], "amount": allocated_amount, "source": rule["type"]}
+                    {
+                        "concept": rule["concept"],
+                        "amount": allocated_amount,
+                        "source": rule["type"],
+                        "source_rule_id": rule.get("source_rule_id"),
+                        "tax_type": rule.get("tax_type"),
+                    }
                 )
                 item_costs[item_id] += allocated_amount
 
