@@ -3,6 +3,29 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-14 — Refactors SonarCloud sobre origin/main
+
+### Petición y base
+
+Se actualizó `origin/main` y se dejó el trabajo sobre el checkout limpio
+`b3d375707706ea1f35679828ad9728b7d65b4635`. El stash de la rama anterior se
+conservó sin restaurarlo. SonarCloud reportó 57 issues abiertos: 38
+`python:S3776`, 12 `python:S3358`, 4 `python:S5655`, y un issue de cada regla
+JavaScript `S2004`, `S3358` y `S3776`.
+
+### Implementación
+
+- `0cef598e`: se eliminaron condicionales ternarios anidados en reportes y
+  constructores de pagos mediante resolución explícita de importes/eventos.
+- `08ef4777`: se aplanó la sincronización de líneas del formulario
+  transaccional y se eliminó el ternario anidado de campos bloqueados.
+- `38bc54a2`: se extrajo la resolución de cuentas de anticipo y textos de
+  posting de pagos.
+
+Black, Ruff y Flake8 pasan en los archivos modificados; los tests focales de
+reportes y JavaScript se ejecutan en segundo plano con salida persistida en
+`/tmp/sonar-main-reports-test-1786744716.log`.
+
 ---
 
 ## 1. Invariantes Contables Fundamentales
