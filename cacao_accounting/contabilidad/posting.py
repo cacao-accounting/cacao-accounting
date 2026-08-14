@@ -1611,6 +1611,35 @@ def _consume_valuation_layer(queue: list, remaining: Decimal) -> Decimal:
     return remaining
 
 
+def _process_valuation_layer(
+    queue: list[tuple[Decimal, Decimal]],
+    negative_balance: Decimal,
+    qty: Decimal,
+    rate: Decimal,
+    layer_value: Decimal,
+) -> tuple[list[tuple[Decimal, Decimal]], Decimal, bool]:
+    """Apply one valuation layer and report whether the caller should continue."""
+    if qty != 0 and layer_value != 0:
+        return queue, negative_balance, False
+    if qty == 0 and layer_value != 0 and queue:
+        total_qty = sum((available_qty for available_qty, _ in queue), Decimal("0"))
+        if total_qty > 0:
+            adjustment_rate = layer_value / total_qty
+            queue = [(available_qty, available_rate + adjustment_rate) for available_qty, available_rate in queue]
+        return queue, negative_balance, True
+    if qty > 0:
+        if negative_balance > 0:
+            offset = min(qty, negative_balance)
+            negative_balance -= offset
+            qty -= offset
+        if qty > 0:
+            queue.append((qty, rate))
+        return queue, negative_balance, True
+    if qty < 0:
+        negative_balance += _consume_valuation_layer(queue, abs(qty))
+    return queue, negative_balance, True
+
+
 def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[tuple[Decimal, Decimal]]:
     layers = (
         database.session.execute(
@@ -1629,24 +1658,9 @@ def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[tuple
         layer_value = _decimal_value(layer.stock_value_difference)
         if qty != 0 and layer_value != 0:
             rate = layer_value / qty
-        elif qty == 0 and layer_value != 0 and queue:
-            total_qty = sum((available_qty for available_qty, _ in queue), Decimal("0"))
-            if total_qty > 0:
-                adjustment_rate = layer_value / total_qty
-                queue = [(available_qty, available_rate + adjustment_rate) for available_qty, available_rate in queue]
+        queue, negative_balance, should_continue = _process_valuation_layer(queue, negative_balance, qty, rate, layer_value)
+        if should_continue:
             continue
-        if qty > 0:
-            if negative_balance > 0:
-                offset = min(qty, negative_balance)
-                negative_balance -= offset
-                qty -= offset
-            if qty <= 0:
-                continue
-            queue.append((qty, rate))
-            continue
-        if qty < 0:
-            remaining = _consume_valuation_layer(queue, abs(qty))
-            negative_balance += remaining
     return [(qty, rate) for qty, rate in queue if qty > 0]
 
 
