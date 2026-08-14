@@ -311,6 +311,15 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
     total_original = Decimal("0")
     total_paid = Decimal("0")
     total_outstanding = Decimal("0")
+    party_ids = {
+        getattr(document, "customer_id", None) or getattr(document, "supplier_id", None)
+        for document in database.session.execute(query).scalars()
+    }
+    party_labels = {
+        party.id: party.code or party.name or party.id
+        for party in database.session.execute(select(Party).where(Party.id.in_(party_ids))).scalars()
+        if party_ids
+    }
     for document in database.session.execute(query.order_by(document_model.posting_date)).scalars():
         sign = _document_sign(document)
         base_factor = _document_base_factor(document)
@@ -327,10 +336,13 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
             ReportRow(
                 values={
                     "document_type": document_type,
-                    "document_id": document.id,
+                    "document_id": document.document_no or document.id,
                     "document_no": getattr(document, "document_no", None) or document.id,
                     "posting_date": document.posting_date,
-                    "party_id": getattr(document, "customer_id", None) or getattr(document, "supplier_id", None),
+                    "party_id": party_labels.get(
+                        getattr(document, "customer_id", None) or getattr(document, "supplier_id", None),
+                        getattr(document, "customer_id", None) or getattr(document, "supplier_id", None),
+                    ),
                     "original_amount": original,
                     "paid_amount": paid,
                     "outstanding_amount": outstanding,
