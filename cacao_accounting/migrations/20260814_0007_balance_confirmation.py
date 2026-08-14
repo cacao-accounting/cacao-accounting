@@ -27,14 +27,12 @@ def upgrade() -> None:
             sa.Column("created_by", sa.String(length=26), nullable=True),
             sa.Column("modified", sa.DateTime(timezone=True), nullable=True),
             sa.Column("modified_by", sa.String(length=26), nullable=True),
-            sa.Column("tenant_id", sa.String(length=26), nullable=True),
             sa.Column("company", sa.String(length=10), nullable=False),
             sa.Column("document_no", sa.String(length=100), nullable=True),
             sa.Column("document_type", sa.String(length=50), nullable=False),
             sa.Column("party_type", sa.String(length=20), nullable=False),
             sa.Column("party_id", sa.String(length=26), nullable=False),
             sa.Column("cutoff_date", sa.Date(), nullable=False),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("viewed_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("responded_at", sa.DateTime(timezone=True), nullable=True),
@@ -78,6 +76,7 @@ def upgrade() -> None:
             sa.Column("failed_attempts", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
             sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("balance_confirmation_id", "email", name="uq_balance_confirmation_invitation"),
             sa.ForeignKeyConstraint(["balance_confirmation_id"], ["balance_confirmation.id"], ondelete="CASCADE", onupdate="CASCADE"),
         )
         with op.batch_alter_table("balance_confirmation_invitation") as batch:

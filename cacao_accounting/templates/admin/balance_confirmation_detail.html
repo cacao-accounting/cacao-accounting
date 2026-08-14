@@ -50,7 +50,7 @@
           <div class="ca-kv-item"><label>{{ _('Tercero') }}</label><p><strong>{{ party.name }}</strong></p></div>
           <div class="ca-kv-item"><label>{{ _('Compañía') }}</label><p>{{ company.company_name if company else confirmation.company }}</p></div>
           <div class="ca-kv-item"><label>{{ _('Fecha de Corte') }}</label><p>{{ confirmation.cutoff_date.strftime('%d/%m/%Y') }}</p></div>
-          <div class="ca-kv-item"><label>{{ _('Creado En') }}</label><p>{{ confirmation.created_at.strftime('%d/%m/%Y %H:%M') }}</p></div>
+          <div class="ca-kv-item"><label>{{ _('Creado En') }}</label><p>{{ confirmation.created.strftime('%d/%m/%Y %H:%M') }}</p></div>
           <div class="ca-kv-item"><label>{{ _('Fecha de Expiración') }}</label><p>{{ confirmation.expires_at.strftime('%d/%m/%Y %H:%M') if confirmation.expires_at else '-' }}</p></div>
         </div>
 
@@ -195,11 +195,6 @@
                 {% endif %}
                 {% if inv.failed_attempts > 0 %}
                   <p class="mb-0 text-danger"><i class="bi bi-shield-exclamation me-1"></i> {{ _('Intentos fallidos:') }} {{ inv.failed_attempts }}</p>
-                {% endif %}
-
-                <!-- Mostrar código de verificación solo para borradores (en el envío inicial) -->
-                {% if confirmation.status == 'draft' and inv._raw_code %}
-                  <p class="mb-0 text-success fw-bold"><i class="bi bi-key me-1"></i> {{ _('Código:') }} <code>{{ inv._raw_code }}</code></p>
                 {% endif %}
               </div>
             </div>

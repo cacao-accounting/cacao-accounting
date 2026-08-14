@@ -4858,7 +4858,6 @@ class BalanceConfirmation(database.Model, BaseTabla):  # type: ignore[name-defin
     """Representa la solicitud de confirmación de saldo externa."""
     __tablename__ = "balance_confirmation"
 
-    tenant_id = database.Column(database.String(26), nullable=True)
     company = database.Column(
         database.String(10),
         database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -4877,8 +4876,6 @@ class BalanceConfirmation(database.Model, BaseTabla):  # type: ignore[name-defin
     cutoff_date = database.Column(database.Date(), nullable=False)
     status = database.Column(database.String(50), default="draft", nullable=False, index=True)
 
-    created_by = database.Column(database.String(26), nullable=True)
-    created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     sent_at = database.Column(database.DateTime(timezone=True), nullable=True)
     viewed_at = database.Column(database.DateTime(timezone=True), nullable=True)
     responded_at = database.Column(database.DateTime(timezone=True), nullable=True)
@@ -4901,6 +4898,9 @@ class BalanceConfirmation(database.Model, BaseTabla):  # type: ignore[name-defin
 class BalanceConfirmationInvitation(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Representa cada destinatario autorizado para responder la confirmación."""
     __tablename__ = "balance_confirmation_invitation"
+    __table_args__ = (
+        UniqueConstraint("balance_confirmation_id", "email", name="uq_balance_confirmation_invitation"),
+    )
 
     balance_confirmation_id = database.Column(
         database.String(26),
