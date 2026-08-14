@@ -170,38 +170,44 @@ def _target_amount(target_type: str, target_id: str, transaction: BankTransactio
     bank_currency = _bank_currency(transaction) if transaction else None
     company = _bank_company(transaction) if transaction else None
     company_currency = _company_currency(company) if company else None
-    match target_type:
-        case "payment_entry":
-            payment = database.session.get(PaymentEntry, target_id)
-            if not payment:
-                raise BankReconciliationError("La entrada de pago a conciliar no existe.")
-            if getattr(payment, "docstatus", 0) != 1:
-                raise BankReconciliationError("La entrada de pago debe estar aprobada para conciliarse.")
-            payment_currency = str(payment.currency) if payment.currency else company_currency
-            if bank_currency and payment_currency != bank_currency:
-                if bank_currency != company_currency:
-                    raise BankReconciliationError("La moneda del pago no coincide con la cuenta bancaria.")
-                base_amount = (
-                    payment.base_paid_amount if payment.payment_type in ("pay", "debit_note") else payment.base_received_amount
-                )
-                if base_amount is None:
-                    raise BankReconciliationError("El pago no tiene monto en moneda funcional para conciliarse.")
-                return _decimal_value(base_amount)
-            return _payment_amount(payment)
-        case "gl_entry":
-            entry = database.session.get(GLEntry, target_id)
-            if not entry:
-                raise BankReconciliationError("La entrada GL a conciliar no existe.")
-            entry_currency = str(entry.account_currency or entry.company_currency or company_currency or "")
-            if bank_currency and entry_currency != bank_currency:
-                raise BankReconciliationError("La moneda de la entrada GL no coincide con la cuenta bancaria.")
-            if entry.account_currency == bank_currency:
-                amount = entry.debit_in_account_currency or entry.credit_in_account_currency
-                if amount is not None:
-                    return _decimal_value(amount)
-            return _gl_amount(entry)
-        case _:
-            raise BankReconciliationError(UNSUPPORTED_TARGET_TYPE_ERROR)
+    if target_type == "payment_entry":
+        return _target_payment_amount(target_id, bank_currency, company_currency)
+    if target_type == "gl_entry":
+        return _target_gl_amount(target_id, bank_currency, company_currency)
+    raise BankReconciliationError(UNSUPPORTED_TARGET_TYPE_ERROR)
+
+
+def _target_payment_amount(target_id: str, bank_currency: str | None, company_currency: str | None) -> Decimal:
+    """Resolve a payment amount in the bank transaction currency."""
+    payment = database.session.get(PaymentEntry, target_id)
+    if not payment:
+        raise BankReconciliationError("La entrada de pago a conciliar no existe.")
+    if getattr(payment, "docstatus", 0) != 1:
+        raise BankReconciliationError("La entrada de pago debe estar aprobada para conciliarse.")
+    payment_currency = str(payment.currency) if payment.currency else company_currency
+    if not bank_currency or payment_currency == bank_currency:
+        return _payment_amount(payment)
+    if bank_currency != company_currency:
+        raise BankReconciliationError("La moneda del pago no coincide con la cuenta bancaria.")
+    base_amount = payment.base_paid_amount if payment.payment_type in ("pay", "debit_note") else payment.base_received_amount
+    if base_amount is None:
+        raise BankReconciliationError("El pago no tiene monto en moneda funcional para conciliarse.")
+    return _decimal_value(base_amount)
+
+
+def _target_gl_amount(target_id: str, bank_currency: str | None, company_currency: str | None) -> Decimal:
+    """Resolve a GL amount in the bank transaction currency."""
+    entry = database.session.get(GLEntry, target_id)
+    if not entry:
+        raise BankReconciliationError("La entrada GL a conciliar no existe.")
+    entry_currency = str(entry.account_currency or entry.company_currency or company_currency or "")
+    if bank_currency and entry_currency != bank_currency:
+        raise BankReconciliationError("La moneda de la entrada GL no coincide con la cuenta bancaria.")
+    if entry.account_currency == bank_currency:
+        amount = entry.debit_in_account_currency or entry.credit_in_account_currency
+        if amount is not None:
+            return _decimal_value(amount)
+    return _gl_amount(entry)
 
 
 def _target_company(target_type: str, target_id: str) -> str:
