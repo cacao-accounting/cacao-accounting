@@ -11,6 +11,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Entity,
+    DocumentRelation,
     Item,
     Modules,
     Party,
@@ -18,6 +19,9 @@ from cacao_accounting.database import (
     PurchaseQuotationAwardItem,
     PurchaseQuotationItem,
     PurchaseNegotiationRound,
+    PurchaseOrder,
+    PurchaseOrderComparison,
+    PurchaseOrderComparisonOrder,
     Roles,
     RolesUser,
     SupplierQuotation,
@@ -33,6 +37,10 @@ from cacao_accounting.compras.purchase_sourcing_service import (
     open_negotiation_round,
     set_purchase_sourcing_config,
     submitted_supplier_quotations,
+)
+from cacao_accounting.compras.purchase_order_comparison_service import (
+    comparable_purchase_orders,
+    create_purchase_order_comparison,
 )
 
 
@@ -242,3 +250,63 @@ def test_negotiation_rounds_replace_active_offer_set(app_ctx):
         assert not submitted_supplier_quotations(rfq.id)
         assert offers[0].negotiation_round_id is None
         assert database.session.query(PurchaseNegotiationRound).count() == 2
+
+
+def test_purchase_order_comparison_uses_selected_purchase_orders(app_ctx):
+    """A comparison persists a base order and only the selected related orders."""
+    with app_ctx.app_context():
+        base = PurchaseOrder(
+            id="PO-COMP-BASE",
+            company="cacao",
+            supplier_name="Proveedor base",
+            posting_date=date(2026, 1, 1),
+            docstatus=1,
+        )
+        offer = PurchaseOrder(
+            id="PO-COMP-OFFER",
+            company="cacao",
+            supplier_name="Proveedor oferta",
+            posting_date=date(2026, 1, 2),
+            docstatus=1,
+        )
+        unrelated = PurchaseOrder(
+            id="PO-COMP-OTHER",
+            company="cacao",
+            supplier_name="Proveedor no relacionado",
+            posting_date=date(2026, 1, 3),
+            docstatus=1,
+        )
+        database.session.add_all([base, offer, unrelated])
+        database.session.flush()
+        database.session.add_all(
+            [
+                DocumentRelation(
+                    source_type="purchase_request",
+                    source_id="PREQ-COMP-01",
+                    target_type="purchase_order",
+                    target_id=base.id,
+                    qty=Decimal("1"),
+                    relation_type="fulfillment",
+                    status="active",
+                ),
+                DocumentRelation(
+                    source_type="purchase_request",
+                    source_id="PREQ-COMP-01",
+                    target_type="purchase_order",
+                    target_id=offer.id,
+                    qty=Decimal("1"),
+                    relation_type="fulfillment",
+                    status="active",
+                ),
+            ]
+        )
+        database.session.flush()
+
+        assert comparable_purchase_orders(base) == [base, offer]
+        comparison = create_purchase_order_comparison(base, [offer.id], "USER-COMP")
+        database.session.commit()
+
+        assert database.session.get(PurchaseOrderComparison, comparison.id).base_purchase_order_id == base.id
+        participants = database.session.query(PurchaseOrderComparisonOrder).filter_by(comparison_id=comparison.id).all()
+        assert {row.purchase_order_id for row in participants} == {base.id, offer.id}
+        assert {row.is_base for row in participants} == {True, False}

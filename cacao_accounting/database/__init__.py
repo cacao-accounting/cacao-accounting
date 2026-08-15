@@ -1914,6 +1914,45 @@ class SupplierQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
     )
 
 
+class PurchaseOrderComparison(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Comparativo persistido de órdenes de compra."""
+
+    __tablename__ = "purchase_order_comparison"
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    base_purchase_order_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+
+
+class PurchaseOrderComparisonOrder(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Orden de compra participante en un comparativo."""
+
+    __tablename__ = "purchase_order_comparison_order"
+    __table_args__ = (
+        database.UniqueConstraint(
+            "comparison_id", "purchase_order_id", name="uq_purchase_order_comparison_order"
+        ),
+    )
+    comparison_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_order_comparison.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    purchase_order_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    is_base = database.Column(database.Boolean(), nullable=False, default=False)
+
+
 class PurchaseQuotationAward(database.Model):  # type: ignore[name-defined]
     """Adjudicación por línea de una solicitud de cotización."""
 
