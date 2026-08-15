@@ -86,7 +86,11 @@ def _setup_inventory_test_data(app):
         company = database.session.get(Entity, "cacao")
         if not company:
             company = Entity(
-                code="cacao", name="Cacao Company", company_name="Cacao SA", tax_id="J0001", valuation_method="moving_average"
+                code="cacao",
+                name="Cacao Company",
+                company_name="Cacao SA",
+                tax_id="J0001",
+                valuation_method="moving_average",
             )
             database.session.add(company)
 
@@ -184,6 +188,62 @@ def _setup_inventory_test_data(app):
         database.session.commit()
 
 
+def _create_and_submit_stock_entry(
+    purpose: str,
+    posting_date: date,
+    item_code: str,
+    qty: Decimal,
+    target_warehouse: str | None = None,
+    source_warehouse: str | None = None,
+    valuation_rate: Decimal | None = None,
+    amount: Decimal | None = None,
+    adjustment_account_id: str | None = None,
+    counted_qty: Decimal | None = None,
+    target_stock_value: Decimal | None = None,
+) -> StockEntry:
+    """Helper para crear y aprobar una entrada de stock."""
+    se = StockEntry(
+        company="cacao",
+        docstatus=0,
+        posting_date=posting_date,
+        purpose=purpose,
+        from_warehouse=source_warehouse,
+        to_warehouse=target_warehouse,
+        adjustment_account_id=adjustment_account_id,
+    )
+    database.session.add(se)
+    database.session.flush()
+
+    item_kwargs = {
+        "stock_entry_id": se.id,
+        "item_code": item_code,
+        "qty": qty,
+        "uom": "UND",
+        "target_warehouse": target_warehouse,
+        "source_warehouse": source_warehouse,
+    }
+    if valuation_rate is not None:
+        item_kwargs["valuation_rate"] = valuation_rate
+    if amount is not None:
+        item_kwargs["amount"] = amount
+    if counted_qty is not None:
+        item_kwargs["counted_qty"] = counted_qty
+    if target_stock_value is not None:
+        item_kwargs["target_stock_value"] = target_stock_value
+
+    database.session.add(StockEntryItem(**item_kwargs))
+    database.session.commit()
+    submit_document(se)
+    return se
+
+
+def _get_bin(warehouse: str = "WH-MAIN", item_code: str = "ITEM-GOODS") -> StockBin:
+    """Obtiene la fila de StockBin para las aserciones."""
+    return database.session.execute(
+        database.select(StockBin).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
+    ).scalar_one()
+
+
 def test_01_recepcion_ordenes_compra(app):
     """Prueba de Recepción de Compras (PurchaseReceipt) con mercancías y servicios."""
     _setup_inventory_test_data(app)
@@ -219,10 +279,8 @@ def test_01_recepcion_ordenes_compra(app):
         database.session.add_all([item_stock, item_service])
         database.session.commit()
 
-        # Post receipt
         submit_document(pr)
 
-        # Verify Kardex (StockLedgerEntry) generated only for stock item
         sle_list = (
             database.session.execute(
                 database.select(StockLedgerEntry).filter_by(voucher_type="purchase_receipt", voucher_id=pr.id)
@@ -238,15 +296,11 @@ def test_01_recepcion_ordenes_compra(app):
         assert sle.stock_value == Decimal("1000.00")
         assert sle.valuation_rate == Decimal("100.00")
 
-        # Verify StockBin snapshot
-        bin_row = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
-        ).scalar_one()
+        bin_row = _get_bin()
         assert bin_row.actual_qty == Decimal("10.0")
         assert bin_row.stock_value == Decimal("1000.00")
         assert bin_row.valuation_rate == Decimal("100.00")
 
-        # Verify Valuation Layer
         svl = database.session.execute(
             database.select(StockValuationLayer).filter_by(voucher_type="purchase_receipt", voucher_id=pr.id)
         ).scalar_one()
@@ -258,25 +312,16 @@ def test_02_remision_facturas_notas_venta(app):
     """Prueba de Remisión de Facturas / Notas de Entrega (DeliveryNote)."""
     _setup_inventory_test_data(app)
     with app.app_context():
-        # First stock entry to populate stock
-        se_in = StockEntry(company="cacao", docstatus=0, posting_date=date(2026, 5, 1), purpose="material_receipt")
-        database.session.add(se_in)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_in.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("20.0"),
-                uom="UND",
-                valuation_rate=Decimal("50.00"),
-                amount=Decimal("1000.00"),
-                target_warehouse="WH-MAIN",
-            )
+        _create_and_submit_stock_entry(
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 1),
+            item_code="ITEM-GOODS",
+            qty=Decimal("20.0"),
+            valuation_rate=Decimal("50.00"),
+            amount=Decimal("1000.00"),
+            target_warehouse="WH-MAIN",
         )
-        database.session.commit()
-        submit_document(se_in)
 
-        # Delivery note for 5 units
         dn = DeliveryNote(company="cacao", docstatus=0, posting_date=date(2026, 5, 2), customer_id="CUST-001")
         database.session.add(dn)
         database.session.flush()
@@ -293,10 +338,8 @@ def test_02_remision_facturas_notas_venta(app):
         )
         database.session.commit()
 
-        # Submit delivery note
         submit_document(dn)
 
-        # Verify Kardex
         sle_list = (
             database.session.execute(
                 database.select(StockLedgerEntry).filter_by(voucher_type="delivery_note", voucher_id=dn.id)
@@ -308,12 +351,9 @@ def test_02_remision_facturas_notas_venta(app):
         sle = sle_list[0]
         assert sle.qty_change == Decimal("-5.0")
         assert sle.qty_after_transaction == Decimal("15.0")
-        assert sle.stock_value_difference == Decimal("-250.00")  # 5 * 50 = 250 cost
+        assert sle.stock_value_difference == Decimal("-250.00")
 
-        # Verify Bin updated
-        bin_row = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
-        ).scalar_one()
+        bin_row = _get_bin()
         assert bin_row.actual_qty == Decimal("15.0")
         assert bin_row.stock_value == Decimal("750.00")
 
@@ -322,50 +362,25 @@ def test_03_traslados_entre_inventarios(app):
     """Prueba de Traslados de inventario entre bodegas (material_transfer)."""
     _setup_inventory_test_data(app)
     with app.app_context():
-        # Setup stock in WH-MAIN
-        se_in = StockEntry(company="cacao", docstatus=0, posting_date=date(2026, 5, 1), purpose="material_receipt")
-        database.session.add(se_in)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_in.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("10.0"),
-                uom="UND",
-                valuation_rate=Decimal("100.00"),
-                amount=Decimal("1000.00"),
-                target_warehouse="WH-MAIN",
-            )
+        _create_and_submit_stock_entry(
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 1),
+            item_code="ITEM-GOODS",
+            qty=Decimal("10.0"),
+            valuation_rate=Decimal("100.00"),
+            amount=Decimal("1000.00"),
+            target_warehouse="WH-MAIN",
         )
-        database.session.commit()
-        submit_document(se_in)
 
-        # Transfer 4 units from WH-MAIN to WH-SEC
-        se_tr = StockEntry(
-            company="cacao",
-            docstatus=0,
-            posting_date=date(2026, 5, 3),
+        se_tr = _create_and_submit_stock_entry(
             purpose="material_transfer",
-            from_warehouse="WH-MAIN",
-            to_warehouse="WH-SEC",
+            posting_date=date(2026, 5, 3),
+            item_code="ITEM-GOODS",
+            qty=Decimal("4.0"),
+            source_warehouse="WH-MAIN",
+            target_warehouse="WH-SEC",
         )
-        database.session.add(se_tr)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_tr.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("4.0"),
-                uom="UND",
-                source_warehouse="WH-MAIN",
-                target_warehouse="WH-SEC",
-            )
-        )
-        database.session.commit()
 
-        submit_document(se_tr)
-
-        # Verify 2 stock ledger entries (negative in source, positive in target)
         sles = (
             database.session.execute(
                 database.select(StockLedgerEntry).filter_by(voucher_type="stock_entry", voucher_id=se_tr.id)
@@ -382,40 +397,23 @@ def test_03_traslados_entre_inventarios(app):
         assert sle_in.qty_change == Decimal("4.0")
         assert sle_in.stock_value_difference == Decimal("400.00")
 
-        # Verify Bins
-        bin_main = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
-        ).scalar_one()
-        bin_sec = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-SEC")
-        ).scalar_one()
-
-        assert bin_main.actual_qty == Decimal("6.0")
-        assert bin_sec.actual_qty == Decimal("4.0")
+        assert _get_bin("WH-MAIN").actual_qty == Decimal("6.0")
+        assert _get_bin("WH-SEC").actual_qty == Decimal("4.0")
 
 
 def test_04_entradas_inventario_variantes(app):
     """Prueba de entradas de inventario en distintas variantes (manufacture, repack, adjustment_positive)."""
     _setup_inventory_test_data(app)
     with app.app_context():
-        # Manufacture entry
-        se_mfg = StockEntry(company="cacao", docstatus=0, posting_date=date(2026, 5, 1), purpose="manufacture")
-        database.session.add(se_mfg)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_mfg.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("15.0"),
-                uom="UND",
-                valuation_rate=Decimal("120.00"),
-                amount=Decimal("1800.00"),
-                target_warehouse="WH-MAIN",
-            )
+        se_mfg = _create_and_submit_stock_entry(
+            purpose="manufacture",
+            posting_date=date(2026, 5, 1),
+            item_code="ITEM-GOODS",
+            qty=Decimal("15.0"),
+            valuation_rate=Decimal("120.00"),
+            amount=Decimal("1800.00"),
+            target_warehouse="WH-MAIN",
         )
-        database.session.commit()
-
-        submit_document(se_mfg)
 
         sle = database.session.execute(
             database.select(StockLedgerEntry).filter_by(voucher_type="stock_entry", voucher_id=se_mfg.id)
@@ -428,51 +426,27 @@ def test_05_ajustes_valores_positivos_negativos(app):
     """Prueba de Ajustes Negativos / Positivos de Valor (revaluaciones con qty == 0)."""
     _setup_inventory_test_data(app)
     with app.app_context():
-        # Step 1: initial stock 10 units at 100 = 1000
-        se_in = StockEntry(company="cacao", docstatus=0, posting_date=date(2026, 5, 1), purpose="material_receipt")
-        database.session.add(se_in)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_in.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("10.0"),
-                uom="UND",
-                valuation_rate=Decimal("100.00"),
-                amount=Decimal("1000.00"),
-                target_warehouse="WH-MAIN",
-            )
+        _create_and_submit_stock_entry(
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 1),
+            item_code="ITEM-GOODS",
+            qty=Decimal("10.0"),
+            valuation_rate=Decimal("100.00"),
+            amount=Decimal("1000.00"),
+            target_warehouse="WH-MAIN",
         )
-        database.session.commit()
-        submit_document(se_in)
 
-        # Step 2: Positive value adjustment +200 NIO without changing quantity (qty = 0)
-        se_adj_val = StockEntry(
-            company="cacao",
-            docstatus=0,
-            posting_date=date(2026, 5, 2),
+        _create_and_submit_stock_entry(
             purpose="adjustment_positive",
+            posting_date=date(2026, 5, 2),
+            item_code="ITEM-GOODS",
+            qty=Decimal("0"),
+            amount=Decimal("200.00"),
+            target_warehouse="WH-MAIN",
             adjustment_account_id="5200-ADJ",
         )
-        database.session.add(se_adj_val)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_adj_val.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("0"),
-                uom="UND",
-                amount=Decimal("200.00"),
-                target_warehouse="WH-MAIN",
-            )
-        )
-        database.session.commit()
-        submit_document(se_adj_val)
 
-        # Verify Bin value is now 1200, qty is 10, valuation_rate is 120
-        bin_row = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
-        ).scalar_one()
+        bin_row = _get_bin()
         assert bin_row.actual_qty == Decimal("10.0")
         assert bin_row.stock_value == Decimal("1200.00")
         assert bin_row.valuation_rate == Decimal("120.00")
@@ -482,49 +456,25 @@ def test_06_ajustes_cantidades_positivos_negativos(app):
     """Prueba de Ajustes Negativos / Positivos de Cantidad (material_issue / adjustment_negative)."""
     _setup_inventory_test_data(app)
     with app.app_context():
-        # Setup 10 units
-        se_in = StockEntry(company="cacao", docstatus=0, posting_date=date(2026, 5, 1), purpose="material_receipt")
-        database.session.add(se_in)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_in.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("10.0"),
-                uom="UND",
-                valuation_rate=Decimal("100.00"),
-                amount=Decimal("1000.00"),
-                target_warehouse="WH-MAIN",
-            )
+        _create_and_submit_stock_entry(
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 1),
+            item_code="ITEM-GOODS",
+            qty=Decimal("10.0"),
+            valuation_rate=Decimal("100.00"),
+            amount=Decimal("1000.00"),
+            target_warehouse="WH-MAIN",
         )
-        database.session.commit()
-        submit_document(se_in)
 
-        # Issue 3 units
-        se_out = StockEntry(
-            company="cacao",
-            docstatus=0,
-            posting_date=date(2026, 5, 2),
+        _create_and_submit_stock_entry(
             purpose="material_issue",
-            from_warehouse="WH-MAIN",
+            posting_date=date(2026, 5, 2),
+            item_code="ITEM-GOODS",
+            qty=Decimal("3.0"),
+            source_warehouse="WH-MAIN",
         )
-        database.session.add(se_out)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_out.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("3.0"),
-                uom="UND",
-                source_warehouse="WH-MAIN",
-            )
-        )
-        database.session.commit()
-        submit_document(se_out)
 
-        bin_row = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
-        ).scalar_one()
+        bin_row = _get_bin()
         assert bin_row.actual_qty == Decimal("7.0")
         assert bin_row.stock_value == Decimal("700.00")
 
@@ -533,52 +483,28 @@ def test_07_ajustes_por_inventario(app):
     """Prueba de Ajuste por Inventario / Conciliación Física (stock_reconciliation)."""
     _setup_inventory_test_data(app)
     with app.app_context():
-        # Setup current stock 10 units
-        se_in = StockEntry(company="cacao", docstatus=0, posting_date=date(2026, 5, 1), purpose="material_receipt")
-        database.session.add(se_in)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_in.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("10.0"),
-                uom="UND",
-                valuation_rate=Decimal("100.00"),
-                amount=Decimal("1000.00"),
-                target_warehouse="WH-MAIN",
-            )
+        _create_and_submit_stock_entry(
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 1),
+            item_code="ITEM-GOODS",
+            qty=Decimal("10.0"),
+            valuation_rate=Decimal("100.00"),
+            amount=Decimal("1000.00"),
+            target_warehouse="WH-MAIN",
         )
-        database.session.commit()
-        submit_document(se_in)
 
-        # Reconcile physical count to 12 units and target value 1320.00
-        se_rec = StockEntry(
-            company="cacao",
-            docstatus=0,
-            posting_date=date(2026, 5, 5),
+        _create_and_submit_stock_entry(
             purpose="stock_reconciliation",
+            posting_date=date(2026, 5, 5),
+            item_code="ITEM-GOODS",
+            qty=Decimal("2.0"),
+            counted_qty=Decimal("12.0"),
+            target_stock_value=Decimal("1320.00"),
+            target_warehouse="WH-MAIN",
             adjustment_account_id="5200-ADJ",
         )
-        database.session.add(se_rec)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se_rec.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("2.0"),
-                uom="UND",
-                counted_qty=Decimal("12.0"),
-                target_stock_value=Decimal("1320.00"),
-                target_warehouse="WH-MAIN",
-            )
-        )
-        database.session.commit()
-        submit_document(se_rec)
 
-        # Verify Bin matches counted quantity and target value
-        bin_row = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
-        ).scalar_one()
+        bin_row = _get_bin()
         assert bin_row.actual_qty == Decimal("12.0")
         assert bin_row.stock_value == Decimal("1320.00")
         assert bin_row.valuation_rate == Decimal("110.00")
@@ -588,67 +514,37 @@ def test_08_kardex_confiable_y_reconstructibilidad(app):
     """Prueba de Confiabilidad del Kardex, Cancelación de Documentos y Reconstrucción de Bins/Layers."""
     _setup_inventory_test_data(app)
     with app.app_context():
-        # 1. Entry 1: +10 units @ 100 = 1000
-        se1 = StockEntry(company="cacao", docstatus=0, posting_date=date(2026, 5, 1), purpose="material_receipt")
-        database.session.add(se1)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se1.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("10.0"),
-                uom="UND",
-                valuation_rate=Decimal("100.00"),
-                amount=Decimal("1000.00"),
-                target_warehouse="WH-MAIN",
-            )
+        _create_and_submit_stock_entry(
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 1),
+            item_code="ITEM-GOODS",
+            qty=Decimal("10.0"),
+            valuation_rate=Decimal("100.00"),
+            amount=Decimal("1000.00"),
+            target_warehouse="WH-MAIN",
         )
-        database.session.commit()
-        submit_document(se1)
 
-        # 2. Entry 2: +5 units @ 120 = 600
-        se2 = StockEntry(company="cacao", docstatus=0, posting_date=date(2026, 5, 2), purpose="material_receipt")
-        database.session.add(se2)
-        database.session.flush()
-        database.session.add(
-            StockEntryItem(
-                stock_entry_id=se2.id,
-                item_code="ITEM-GOODS",
-                qty=Decimal("5.0"),
-                uom="UND",
-                valuation_rate=Decimal("120.00"),
-                amount=Decimal("600.00"),
-                target_warehouse="WH-MAIN",
-            )
+        se2 = _create_and_submit_stock_entry(
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 2),
+            item_code="ITEM-GOODS",
+            qty=Decimal("5.0"),
+            valuation_rate=Decimal("120.00"),
+            amount=Decimal("600.00"),
+            target_warehouse="WH-MAIN",
         )
-        database.session.commit()
-        submit_document(se2)
 
-        # Current stock = 15 units, value = 1600
-        bin_before = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
-        ).scalar_one()
-        assert bin_before.actual_qty == Decimal("15.0")
-        assert bin_before.stock_value == Decimal("1600.00")
+        assert _get_bin().actual_qty == Decimal("15.0")
+        assert _get_bin().stock_value == Decimal("1600.00")
 
-        # 3. Cancel Entry 2
         cancel_document(se2)
 
-        # Stock after cancellation = 10 units, value = 1000
-        bin_after_cancel = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
-        ).scalar_one()
-        assert bin_after_cancel.actual_qty == Decimal("10.0")
-        assert bin_after_cancel.stock_value == Decimal("1000.00")
+        assert _get_bin().actual_qty == Decimal("10.0")
+        assert _get_bin().stock_value == Decimal("1000.00")
 
-        # 4. Rebuild Bins directly from Kardex (StockLedgerEntry)
         rebuild_res = rebuild_stock_bins(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
         assert rebuild_res.rebuilt_bins == 1
         assert len(rebuild_res.inconsistencies) == 0
 
-        # Verify Bin after rebuild
-        bin_rebuilt = database.session.execute(
-            database.select(StockBin).filter_by(company="cacao", item_code="ITEM-GOODS", warehouse="WH-MAIN")
-        ).scalar_one()
-        assert bin_rebuilt.actual_qty == Decimal("10.0")
-        assert bin_rebuilt.stock_value == Decimal("1000.00")
+        assert _get_bin().actual_qty == Decimal("10.0")
+        assert _get_bin().stock_value == Decimal("1000.00")

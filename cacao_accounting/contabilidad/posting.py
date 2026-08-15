@@ -2311,6 +2311,48 @@ def _validate_stock_entry_warehouses(document: StockEntry, line: StockEntryItem)
             raise PostingError(f"La bodega {warehouse_code} está inactiva.")
 
 
+def _should_skip_non_stock_line(line: Any) -> bool:
+    """Return True if the line item is a service or non-stock item and should be skipped for stock ledger."""
+    item_code = getattr(line, "item_code", None)
+    if not item_code:
+        return False
+    item = database.session.get(Item, item_code)
+    if not item:
+        item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    return bool(item and (item.item_type == "service" or not item.is_stock_item))
+
+
+def _consume_outflow_stock_valuation(
+    document: Any,
+    line: Any,
+    source_warehouse: str,
+    qty: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """Calculate valuation cost and rate for stock outflows using valuation layers."""
+    item = _stock_item_for(line)
+    fallback_rate = _decimal_value(getattr(line, "valuation_rate", None) or getattr(line, "basic_rate", None))
+    try:
+        cost_amount, cost_rate = _consume_stock_valuation_layers(
+            company=document.company,
+            item_code=line.item_code,
+            warehouse=source_warehouse,
+            quantity=qty,
+        )
+    except PostingError:
+        if not item.allow_negative_stock:
+            raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {source_warehouse}.")
+        cost_rate = _consume_available_layers_for_negative_stock(
+            company=document.company,
+            item_code=line.item_code,
+            warehouse=source_warehouse,
+            total_qty=qty,
+            fallback_rate=fallback_rate,
+        )
+        cost_amount = cost_rate * qty
+    line._inventory_cost_amount = cost_amount
+    return cost_amount, cost_rate
+
+
 def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) -> list[StockLedgerEntry]:
     """Crea movimientos de inventario para una linea segun el proposito."""
     qty = _line_qty(line)
@@ -2330,10 +2372,9 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
         ]
     if purpose in ("material_issue", "adjustment_negative"):
         source_warehouse = line.source_warehouse or document.from_warehouse
-        item = _stock_item_for(line)
-        fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
         if qty == 0:
             value = _decimal_value(line.amount)
+            fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
             return [
                 _create_stock_movement(
                     document=document,
@@ -2344,25 +2385,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
                     value_change=-value,
                 )
             ]
-        try:
-            cost_amount, cost_rate = _consume_stock_valuation_layers(
-                company=document.company,
-                item_code=line.item_code,
-                warehouse=source_warehouse,
-                quantity=qty,
-            )
-        except PostingError:
-            if not item.allow_negative_stock:
-                raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {source_warehouse}.")
-            cost_rate = _consume_available_layers_for_negative_stock(
-                company=document.company,
-                item_code=line.item_code,
-                warehouse=source_warehouse,
-                total_qty=qty,
-                fallback_rate=fallback_rate,
-            )
-            cost_amount = cost_rate * qty
-        line._inventory_cost_amount = cost_amount
+        cost_amount, cost_rate = _consume_outflow_stock_valuation(document, line, source_warehouse, qty)
         return [
             _create_stock_movement(
                 document=document,
@@ -2379,27 +2402,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
             raise PostingError("Las transferencias de material requieren una cantidad mayor a cero.")
         source_warehouse = line.source_warehouse or document.from_warehouse
         target_warehouse = line.target_warehouse or document.to_warehouse
-        item = _stock_item_for(line)
-        fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
-        try:
-            cost_amount, cost_rate = _consume_stock_valuation_layers(
-                company=document.company,
-                item_code=line.item_code,
-                warehouse=source_warehouse,
-                quantity=qty,
-            )
-        except PostingError:
-            if not item.allow_negative_stock:
-                raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {source_warehouse}.")
-            cost_rate = _consume_available_layers_for_negative_stock(
-                company=document.company,
-                item_code=line.item_code,
-                warehouse=source_warehouse,
-                total_qty=qty,
-                fallback_rate=fallback_rate,
-            )
-            cost_amount = cost_rate * qty
-        line._inventory_cost_amount = cost_amount
+        cost_amount, cost_rate = _consume_outflow_stock_valuation(document, line, source_warehouse, qty)
         return [
             _create_stock_movement(
                 document=document,
@@ -2562,14 +2565,7 @@ def _create_stock_ledger_for_document_type(
     allocations_by_line_id = _allocation_by_line_id(landed_cost_result)
     movements: list[StockLedgerEntry] = []
     for line in items:
-        item = database.session.get(Item, line.item_code) if getattr(line, "item_code", None) else None
-        if not item:
-            item = (
-                database.session.execute(select(Item).filter_by(code=line.item_code)).scalar_one_or_none()
-                if getattr(line, "item_code", None)
-                else None
-            )
-        if item and (item.item_type == "service" or not item.is_stock_item):
+        if _should_skip_non_stock_line(line):
             continue
         qty = _line_qty_generic(line)
         rate = _line_rate_generic(line)
@@ -2725,14 +2721,7 @@ def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id,
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         for line in _document_items(document):
-            item = database.session.get(Item, line.item_code) if getattr(line, "item_code", None) else None
-            if not item:
-                item = (
-                    database.session.execute(select(Item).filter_by(code=line.item_code)).scalar_one_or_none()
-                    if getattr(line, "item_code", None)
-                    else None
-                )
-            if item and (item.item_type == "service" or not item.is_stock_item):
+            if _should_skip_non_stock_line(line):
                 continue
             qty = _line_qty_generic(line)
             rate = _line_rate_generic(line)
@@ -2825,14 +2814,7 @@ def _create_delivery_note_gl_entries(
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         for line in _document_items(document):
-            item = database.session.get(Item, line.item_code) if getattr(line, "item_code", None) else None
-            if not item:
-                item = (
-                    database.session.execute(select(Item).filter_by(code=line.item_code)).scalar_one_or_none()
-                    if getattr(line, "item_code", None)
-                    else None
-                )
-            if item and (item.item_type == "service" or not item.is_stock_item):
+            if _should_skip_non_stock_line(line):
                 continue
             value = _get_delivery_note_line_value(document, line)
             inventory_account_id = _require_account(
