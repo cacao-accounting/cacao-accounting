@@ -79,10 +79,12 @@ def test_document_flow_tracks_partial_pending_qty(app_ctx):
     )
 
     items = get_source_items("purchase_order", "PO-001", "purchase_receipt")
+    all_items = get_source_items("purchase_order", "PO-001")
 
     assert items[0]["source_qty"] == 10
     assert items[0]["consumed_qty"] == 4
     assert items[0]["pending_qty"] == 6
+    assert all_items[0]["pending_qty"] == 10
     assert order_item.received_qty == Decimal("4")
 
 
@@ -343,7 +345,7 @@ def test_get_create_actions_includes_request_to_supplier_quotation_action(app_ct
     assert "purchase_quotation" in action_targets
     assert "supplier_quotation" in action_targets
     assert "purchase_order" in action_targets
-    comparison_action = next(action for action in actions if action["target_type"] == "purchase_order_comparison")
+    comparison_action = next(action for action in actions if action["target_type"] == "purchase_request_comparison")
     assert comparison_action["label"] == "Crear Comparativo de Ofertas"
     assert comparison_action["create_url"].endswith(
         f"/buying/request-for-quotation/comparison/purchase-request/{request_doc.id}"
