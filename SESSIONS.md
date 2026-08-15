@@ -401,3 +401,49 @@ El build y `twine check` pasan usando artefactos aislados en
 - Procesamiento asíncrono con daemon threads, rollbacks por documento, `with_for_update()`.
 - Modo escritorio bloquea acceso. Generación de plantillas CSV/XLSX/ODS.
 - Los importes de importación se normalizan a `Decimal`; se rechazan valores no finitos y filas con depósito y retiro simultáneos.
+
+## 2026-08-15 — QA backend y correcciones de flujos de Compras/Configuración
+
+### Peticiones y decisiones
+
+- Se sincronizó `main` con `origin/main` mediante `git fetch` y `git pull --rebase`; se preservó el cambio local no relacionado de `.replit`.
+- Se corrigieron los listados de Solicitud de Compra y Solicitud de Cotización para no mostrar la columna `Total`, manteniendo intactos los campos y cálculos de monto internos.
+- Se cambió la configuración por compañía de Clientes y Proveedores para que se gestione dentro de la página de detalle mediante un formulario independiente. El formulario permite agregar compañías y editar cuentas, listas de precios, reglas fiscales y opciones operativas sin enviar el formulario general del tercero.
+- Se permitió crear N Solicitudes de Cotización desde las mismas cantidades de una Solicitud de Compra. El flujo `purchase_request -> purchase_quotation` es paralelo; los flujos restrictivos posteriores hacia órdenes, recepciones y facturas mantienen el consumo de cantidades.
+- Se confirmó que crear una RFQ no modifica el monto de la Solicitud de Compra. Las líneas de RFQ no tienen precio y las relaciones se registran con monto cero; el monto original de la solicitud se conserva.
+
+### Commits semánticos firmados
+
+- `7353503f fix(purchases): hide purchase request totals`
+- `5e1842a4 fix(parties): add company settings action`
+- `d0235412 fix(purchases): hide quotation request totals`
+- `d6d0c784 refactor(admin): consolidate global configuration`
+- `c07e84dd fix(parties): edit company settings in detail`
+- `27b122b2 fix(document-flow): allow parallel purchase quotations`
+
+### Validación
+
+- `tests/test_party_management.py`: 4 passed.
+- `tests/test_transaction_update_elements.py`: 13 passed.
+- `tests/test_admin_blueprint.py`: 27 passed.
+- `tests/test_e2e_modules.py::test_purchase_quotation_flow_requires_lines_and_inherits_currency`: 1 passed.
+- Black pasó para los archivos Python modificados en esta etapa; la ejecución global aún reporta archivos históricos pendientes.
+- Mypy y flake8 pasaron en la auditoría global; Ruff mantiene 27 hallazgos existentes principalmente en tests.
+- Prettier reporta formato pendiente en plantillas Jinja existentes y no puede parsear `party_company_settings_form.html` por su atributo Alpine `x-data` multilínea; no se ejecutó un reformateo masivo.
+- La base `cacaoaccounting.db` fue consultada en modo solo lectura. La solicitud `cacao-PREQ-2026-08-00002` tenía una RFQ activa por 200 unidades y quedó cubierta por la nueva regla de RFQs paralelas.
+
+### Issues GitHub abiertos para revisión
+
+- #409 Consolidación de configuración global.
+- #410 Ubicación y comportamiento de anticipos automáticos.
+- #411 Columna Total en Solicitudes de Compra.
+- #419 Columna Total en Solicitudes de Cotización.
+- #412 Configuración por compañía dentro del detalle de Clientes/Proveedores.
+- #415 RFQs paralelas desde una Solicitud de Compra.
+- #418 Operaciones destructivas de Contabilidad expuestas por GET.
+- #413 ACL de administrador del sistema en usuarios, roles y módulos.
+- #414 Aislamiento por compañía de `ImportBatch`.
+- #416 Fallback MIME permisivo cuando `magic` no está disponible.
+- #417 Validación de formas JSON en importación de líneas.
+
+Todos permanecen abiertos para revisión posterior. `.replit` continúa fuera de los commits y conserva el cambio local del usuario.
