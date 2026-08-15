@@ -1921,6 +1921,12 @@ class PurchaseOrderComparison(database.Model, BaseTabla):  # type: ignore[name-d
     company = database.Column(
         database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
     )
+    purchase_request_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     base_purchase_order_id = database.Column(
         database.String(26),
         database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),

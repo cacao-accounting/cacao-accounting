@@ -5,7 +5,7 @@
       <a
         href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}"
         class="link-dark"
-        >Comparativo de Órdenes de Compra</a
+        >Comparativo de Ofertas</a
       >
     </li>
     <li class="breadcrumb-item active" aria-current="page">
@@ -18,9 +18,9 @@
   <div class="ca-card-header">
     <h5 class="ca-card-title">Crear comparativa</h5>
     <p class="mb-0 text-muted">
-      Orden base:
-      <strong>{{ base_order.document_no or base_order.id }}</strong>. Seleccione
-      las órdenes que participarán como ofertas.
+      Solicitud de Compra:
+      <strong>{{ purchase_request.document_no or purchase_request.id }}</strong>.
+      Seleccione una Orden de Compra base y las órdenes que participarán como ofertas.
     </p>
   </div>
   <form method="post" class="p-3">
@@ -31,7 +31,8 @@
       </caption>
       <thead>
         <tr>
-          <th scope="col">Participa</th>
+          <th scope="col">Orden base</th>
+          <th scope="col">Participa como oferta</th>
           <th scope="col">Orden</th>
           <th scope="col">Proveedor</th>
           <th scope="col">Fecha</th>
@@ -41,24 +42,8 @@
       <tbody>
         {% for order in candidates %}
         <tr>
-          <td>
-            {% if order.id == base_order.id %}
-            <input
-              type="checkbox"
-              checked
-              disabled
-              aria-label="Orden base seleccionada"
-            />
-            <span class="badge text-bg-primary ms-1">Base</span>
-            {% else %}
-            <input
-              type="checkbox"
-              name="participant_ids"
-              value="{{ order.id }}"
-              aria-label="Seleccionar {{ order.document_no or order.id }}"
-            />
-            {% endif %}
-          </td>
+          <td><input type="radio" name="base_purchase_order_id" value="{{ order.id }}" required aria-label="Orden base {{ order.document_no or order.id }}" /></td>
+          <td><input type="checkbox" name="participant_ids" value="{{ order.id }}" aria-label="Oferta {{ order.document_no or order.id }}" /></td>
           <td>{{ order.document_no or order.id }}</td>
           <td>{{ order.supplier_name or order.supplier_id or "-" }}</td>
           <td>{{ order.posting_date or "" }}</td>
@@ -66,7 +51,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="5" class="text-center text-muted">
+          <td colspan="6" class="text-center text-muted">
             No hay órdenes relacionadas para comparar.
           </td>
         </tr>
