@@ -34,15 +34,15 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
 )
 from cacao_accounting.compras.purchase_order_comparison_service import (
     current_purchase_order_comparison_round,
+    create_purchase_order_comparison,
     open_purchase_order_comparison_round,
+    purchase_request_for_comparison,
     purchase_orders_for_request,
     purchase_order_comparison_round_orders,
 )
 from cacao_accounting.compras.purchase_request_comparison_service import (
-    create_purchase_request_comparison,
     supplier_quotation_comparison_rows,
     supplier_quotations_for_comparison,
-    supplier_quotations_for_request,
 )
 from cacao_accounting.compras.purchase_sourcing_service import (
     PurchaseSourcingError,
@@ -1183,11 +1183,18 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
 @modulo_activo("purchases")
 @login_required
 def compras_comparativo_ofertas_lista():
-    """List approved purchase requests that can originate an offer comparison."""
+    """List approved purchase requests that have purchase orders to compare."""
+    purchase_order_sources = database.select(DocumentRelation.source_id).where(
+        DocumentRelation.source_type == "purchase_request",
+        DocumentRelation.target_type == "purchase_order",
+        DocumentRelation.status == "active",
+    )
     consulta = _paginate_list(
         PurchaseRequest,
         (PurchaseRequest.document_no, PurchaseRequest.requested_by, PurchaseRequest.remarks),
-        query=database.select(PurchaseRequest).where(PurchaseRequest.docstatus == 1),
+        query=database.select(PurchaseRequest).where(
+            PurchaseRequest.docstatus == 1, PurchaseRequest.id.in_(purchase_order_sources)
+        ),
     )
     titulo = "Comparativo de Ofertas - " + APPNAME
     return render_template("compras/comparativo_ofertas_lista.html", consulta=consulta, titulo=titulo)
@@ -1205,18 +1212,19 @@ def compras_comparativo_ofertas_nueva():
 @modulo_activo("purchases")
 @login_required
 def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
-    """Select supplier quotations associated with a purchase request."""
+    """Select a base order and offers from a purchase request."""
     purchase_request = database.session.get(PurchaseRequest, purchase_request_id)
     if not purchase_request or purchase_request.docstatus != 1:
         abort(404)
     _require_purchase_document_access(purchase_request)
-    candidates = supplier_quotations_for_request(purchase_request)
-    candidate_ids = {quotation.id for quotation in candidates}
+    candidates = purchase_orders_for_request(purchase_request)
+    candidate_ids = {order.id for order in candidates}
     if request.method == "POST":
         exige_acceso_compania("purchases", purchase_request.company, "crear")
-        participant_ids = request.form.getlist("supplier_quotation_ids")
-        if not participant_ids or not set(participant_ids).issubset(candidate_ids):
-            flash_error("Seleccione únicamente cotizaciones de proveedor de la misma Solicitud de Compra.")
+        base_order_id = request.form.get("base_purchase_order_id")
+        participant_ids = request.form.getlist("participant_ids")
+        if not base_order_id or base_order_id not in candidate_ids or not set(participant_ids).issubset(candidate_ids):
+            flash_error("Seleccione una orden base y ofertas de la misma Solicitud de Compra.")
             return redirect(
                 url_for(
                     "compras.compras_comparativo_ordenes_seleccionar",
@@ -1224,7 +1232,8 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
                 )
             )
         try:
-            comparison = create_purchase_request_comparison(purchase_request, participant_ids, current_user.id)
+            base_order = database.session.get(PurchaseOrder, base_order_id)
+            comparison = create_purchase_order_comparison(purchase_request, base_order, participant_ids, current_user.id)
             database.session.commit()
             return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
         except (ValueError, SQLAlchemyError) as exc:
@@ -1291,9 +1300,10 @@ def _comparison_item_at_occurrence(
 @modulo_activo("purchases")
 @login_required
 def compras_comparativo_ordenes(comparison_id: str):
-    """Display a persisted comparison using the selected supplier quotations."""
+    """Display a persisted order comparison, with legacy offer fallback."""
+    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
     request_comparison = database.session.get(PurchaseRequestComparison, comparison_id)
-    if request_comparison:
+    if comparison is None and request_comparison:
         exige_acceso_compania("purchases", request_comparison.company, "consultar")
         purchase_request = database.session.get(PurchaseRequest, request_comparison.purchase_request_id)
         offers = supplier_quotations_for_comparison(request_comparison.id)
@@ -1323,15 +1333,10 @@ def compras_comparativo_ordenes(comparison_id: str):
             titulo="Comparativo de Ofertas - " + (request_comparison.id or ""),
         )
 
-    abort(404)
-
-    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
     if not comparison:
         abort(404)
     exige_acceso_compania("purchases", comparison.company, "consultar")
-    purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
-    if not purchase_request:
-        abort(404)
+    purchase_request = purchase_request_for_comparison(comparison)
     selected_round = None
     requested_round_id = request.args.get("round_id")
     if requested_round_id:
@@ -1410,7 +1415,7 @@ def compras_comparativo_ordenes(comparison_id: str):
         base_order=base_order,
         orders=orders,
         comparison_rows=comparison_rows,
-        candidate_orders=purchase_orders_for_request(purchase_request),
+        candidate_orders=purchase_orders_for_request(purchase_request) if purchase_request else [],
         participant_order_ids=participant_order_ids,
         rounds=rounds,
         selected_round=selected_round,
