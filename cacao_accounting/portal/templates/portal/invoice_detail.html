@@ -17,16 +17,25 @@
 </nav>
 
 {% set currency_code = document_currency_code(registro) %}
+{% set doc_type = registro.document_type or ("sales_invoice" if role == "customer" else "purchase_invoice") %}
+{% set doc_label = _('Factura de Venta') if role == 'customer' else (
+    _('Nota de Crédito') if registro.document_type == 'purchase_credit_note' else (
+    _('Nota de Débito') if registro.document_type == 'purchase_debit_note' else (
+    _('Devolución') if registro.document_type == 'purchase_return' else _('Factura de Compra')
+    ))
+) %}
+{% set status_info = document_status_info(doc_type, registro) %}
 {{ dv_macros.detail_header(
     registro.document_no or registro.id,
-    _('Factura de Venta') if role == 'customer' else _('Factura de Compra'),
-    registro.docstatus,
+    doc_label,
+    status_info,
     "",
     [
       (_('Número'), registro.document_no),
       (_('Cliente') if role == 'customer' else _('Proveedor'), registro.customer_name if role == 'customer' else registro.supplier_name),
       (_('Fecha'), registro.posting_date),
       (_('Total'), format_money_with_currency(registro.grand_total, currency_code)),
+      (_('Saldo Pendiente'), format_money_with_currency(registro.outstanding_amount, currency_code)),
       (_('Moneda'), currency_code),
       (_('Observaciones'), registro.remarks)
     ],

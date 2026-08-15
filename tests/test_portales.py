@@ -19,6 +19,12 @@ from cacao_accounting.database import (
     SalesInvoiceItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    PurchaseQuotation,
+    PurchaseQuotationItem,
+    PurchaseReceipt,
+    PurchaseReceiptItem,
     Entity,
 )
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
@@ -233,6 +239,151 @@ def test_user_classification_and_roles_restriction():
         roles_resp = client.post(f"/settings/users/{uid}/roles", data={"roles": []}, follow_redirects=True)
         assert b"Solo los usuarios de tipo" in roles_resp.data
         client.get("/logout")
+
+
+def test_supplier_portal_full_functionality():
+    """Prueba exhaustiva para la funcionalidad completa del Portal del Proveedor."""
+    with app.app_context():
+        init_test_db(app)
+
+        comp = database.session.execute(database.select(Entity)).scalars().first()
+        comp_code = comp.code if comp else "TEST"
+
+        # 1. Crear dos proveedores y sus usuarios portal
+        p1 = Party(code="SUP-001", name="Proveedor Alfa", is_supplier=True, is_active=True)
+        p2 = Party(code="SUP-002", name="Proveedor Beta", is_supplier=True, is_active=True)
+        database.session.add_all([p1, p2])
+        database.session.flush()
+
+        pwd = proteger_passwd("password123")
+        u_p1 = User(
+            user="supplier_alfa",
+            name="Alfa User",
+            password=pwd,
+            active=True,
+            party_id=p1.id,
+            classification="supplier",
+            company=comp_code,
+        )
+        u_p2 = User(
+            user="supplier_beta",
+            name="Beta User",
+            password=pwd,
+            active=True,
+            party_id=p2.id,
+            classification="supplier",
+            company=comp_code,
+        )
+        database.session.add_all([u_p1, u_p2])
+        database.session.flush()
+
+        asigna_rol_a_usuario("supplier_alfa", "supplier")
+        asigna_rol_a_usuario("supplier_beta", "supplier")
+
+        # 2. Crear las 5 categorías de documentos para Proveedor 1 (Alfa) con docstatus=1
+        q_alfa = PurchaseQuotation(
+            supplier_id=p1.id, supplier_name=p1.name, company=comp_code, posting_date=date.today(), docstatus=1, grand_total=Decimal("150.00")
+        )
+        o_alfa = PurchaseOrder(
+            supplier_id=p1.id, supplier_name=p1.name, company=comp_code, posting_date=date.today(), docstatus=1, grand_total=Decimal("250.00")
+        )
+        r_alfa = PurchaseReceipt(
+            supplier_id=p1.id, supplier_name=p1.name, company=comp_code, posting_date=date.today(), docstatus=1, grand_total=Decimal("350.00")
+        )
+        note_alfa = PurchaseInvoice(
+            supplier_id=p1.id,
+            supplier_name=p1.name,
+            company=comp_code,
+            posting_date=date.today(),
+            document_type="purchase_credit_note",
+            docstatus=1,
+            grand_total=Decimal("50.00"),
+        )
+        inv_alfa = PurchaseInvoice(
+            supplier_id=p1.id,
+            supplier_name=p1.name,
+            company=comp_code,
+            posting_date=date.today(),
+            document_type="purchase_invoice",
+            docstatus=1,
+            grand_total=Decimal("450.00"),
+        )
+
+        # 3. Crear documentos Borradores (docstatus=0) y Anulados (docstatus=2) para Alfa
+        draft_inv = PurchaseInvoice(
+            supplier_id=p1.id,
+            supplier_name=p1.name,
+            company=comp_code,
+            posting_date=date.today(),
+            document_type="purchase_invoice",
+            docstatus=0,
+            grand_total=Decimal("999.00"),
+        )
+        cancelled_inv = PurchaseInvoice(
+            supplier_id=p1.id,
+            supplier_name=p1.name,
+            company=comp_code,
+            posting_date=date.today(),
+            document_type="purchase_invoice",
+            docstatus=2,
+            grand_total=Decimal("888.00"),
+        )
+
+        # 4. Crear documento para Proveedor 2 (Beta) con docstatus=1
+        inv_beta = PurchaseInvoice(
+            supplier_id=p2.id,
+            supplier_name=p2.name,
+            company=comp_code,
+            posting_date=date.today(),
+            document_type="purchase_invoice",
+            docstatus=1,
+            grand_total=Decimal("777.00"),
+        )
+
+        database.session.add_all([q_alfa, o_alfa, r_alfa, note_alfa, inv_alfa, draft_inv, cancelled_inv, inv_beta])
+        database.session.flush()
+
+        # Añadir items para detalle
+        database.session.add(PurchaseQuotationItem(purchase_quotation_id=q_alfa.id, item_code="ITM-Q", qty=1, rate=Decimal("150.00"), amount=Decimal("150.00")))
+        database.session.add(PurchaseOrderItem(purchase_order_id=o_alfa.id, item_code="ITM-O", qty=1, rate=Decimal("250.00"), amount=Decimal("250.00")))
+        database.session.add(PurchaseReceiptItem(purchase_receipt_id=r_alfa.id, item_code="ITM-R", qty=1, rate=Decimal("350.00"), amount=Decimal("350.00")))
+        database.session.add(PurchaseInvoiceItem(purchase_invoice_id=note_alfa.id, item_code="ITM-N", qty=1, rate=Decimal("50.00"), amount=Decimal("50.00")))
+        database.session.add(PurchaseInvoiceItem(purchase_invoice_id=inv_alfa.id, item_code="ITM-I", qty=1, rate=Decimal("450.00"), amount=Decimal("450.00")))
+        database.session.commit()
+
+        # Pruebas como Proveedor Alfa
+        with app.test_client() as client:
+            client.post("/login", data={"usuario": "supplier_alfa", "acceso": "password123"}, follow_redirects=True)
+
+            dash = client.get("/portal/supplier")
+            assert dash.status_code == 200
+            # Debe mostrar las 5 categorías de Alfa
+            assert b"150.00" in dash.data  # Quotation
+            assert b"250.00" in dash.data  # Order
+            assert b"350.00" in dash.data  # Receipt
+            assert b"50.00" in dash.data   # Credit Note
+            assert b"450.00" in dash.data  # Invoice
+
+            # NO debe mostrar borradores (999.00), ni anulados (888.00), ni transacciones de Beta (777.00)
+            assert b"999.00" not in dash.data
+            assert b"888.00" not in dash.data
+            assert b"777.00" not in dash.data
+
+            # Verificar rutas de detalle
+            assert client.get(f"/portal/supplier/quotation/{q_alfa.id}").status_code == 200
+            assert client.get(f"/portal/supplier/order/{o_alfa.id}").status_code == 200
+            assert client.get(f"/portal/supplier/receipt/{r_alfa.id}").status_code == 200
+            assert client.get(f"/portal/supplier/invoice/{inv_alfa.id}").status_code == 200
+            assert client.get(f"/portal/supplier/note/{note_alfa.id}").status_code == 200
+
+            # Detalle de borrador o anulado da 404
+            assert client.get(f"/portal/supplier/invoice/{draft_inv.id}").status_code == 404
+            assert client.get(f"/portal/supplier/invoice/{cancelled_inv.id}").status_code == 404
+
+            # Acceso a documento de otro proveedor da 403
+            assert client.get(f"/portal/supplier/invoice/{inv_beta.id}").status_code == 403
+
+            client.get("/logout")
 
 
 def test_portal_desktop_restriction():
