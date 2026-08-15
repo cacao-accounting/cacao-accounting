@@ -4168,6 +4168,13 @@ def _validate_supplier_invoice_flags(
     if not has_receipt and not settings.allow_purchase_invoice_without_receipt:
         raise ValueError("El proveedor no permite crear facturas de compra sin recepción.")
 
+    if not has_order:
+        from cacao_accounting.compras.purchase_reconciliation_service import get_matching_config
+
+        matching_config = get_matching_config(company)
+        if matching_config.require_purchase_order:
+            raise ValueError("La configuración de la compañía requiere una orden de compra para las facturas de compra.")
+
 
 def _validate_purchase_tax_template(company: str, template_id: str | None, currency: str | None) -> None:
     """Validate a purchase tax template before storing it on the invoice."""

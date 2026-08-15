@@ -4003,7 +4003,7 @@ class PurchaseMatchingConfig(database.Model, BaseTabla):  # type: ignore[name-de
     qty_tolerance_type = database.Column(database.String(10), default="percentage", nullable=False)
     qty_tolerance_value = database.Column(database.Numeric(precision=10, scale=4), default=0, nullable=False)
     # Si True, toda factura debe referenciar una OC
-    require_purchase_order = database.Column(database.Boolean(), default=True, nullable=False)
+    require_purchase_order = database.Column(database.Boolean(), default=False, nullable=False)
     # Si True, se requiere cuenta puente configurada en CompanyDefaultAccount
     bridge_account_required = database.Column(database.Boolean(), default=True, nullable=False)
     # Si True, la conciliacion se ejecuta automaticamente al aprobar la factura

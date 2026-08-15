@@ -339,7 +339,7 @@ def get_matching_config(company: str) -> MatchingConfig:
             price_tolerance_value=Decimal("0"),
             qty_tolerance_type=ToleranceType.PERCENTAGE,
             qty_tolerance_value=Decimal("0"),
-            require_purchase_order=True,
+            require_purchase_order=False,
             bridge_account_required=True,
             auto_reconcile=True,
             allow_price_difference=False,
@@ -374,7 +374,7 @@ def seed_matching_config_for_company(company: str) -> PurchaseMatchingConfig:
         price_tolerance_value=Decimal("0"),
         qty_tolerance_type=ToleranceType.PERCENTAGE,
         qty_tolerance_value=Decimal("0"),
-        require_purchase_order=True,
+        require_purchase_order=False,
         bridge_account_required=True,
         auto_reconcile=True,
         allow_price_difference=False,
@@ -515,6 +515,8 @@ def reconcile_purchase_invoice(purchase_invoice_id: str) -> PurchaseReconciliati
 def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
     """Match purchase receipt vs invoice validating received quantities."""
     receipt = _load_purchase_receipt_for_invoice(invoice)
+    if config.require_purchase_order and not getattr(invoice, "purchase_order_id", None) and not getattr(receipt, "purchase_order_id", None):
+        raise PurchaseReconciliationError("La configuración de la compañía requiere una orden de compra para la conciliación.")
     receipt_items = _purchase_receipt_items(receipt.id)
     invoice_items = _invoice_items(invoice.id)
     if not receipt_items or not invoice_items:
