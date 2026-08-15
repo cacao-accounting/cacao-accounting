@@ -15,6 +15,7 @@ from cacao_accounting.database import (
     PurchaseQuotation,
     PurchaseRequest,
     PurchaseRequestComparison,
+    PurchaseRequestComparisonLine,
     PurchaseRequestComparisonOffer,
     PurchaseRequestItem,
     PurchaseOrder,
@@ -32,6 +33,7 @@ from cacao_accounting.compras.purchase_request_comparison_service import (
     create_purchase_orders_from_comparison,
     create_purchase_request_comparison,
     finalize_purchase_request_comparison,
+    purchase_request_comparison_is_closed,
     save_purchase_request_comparison_draft,
     supplier_quotation_comparison_rows,
     supplier_quotations_for_comparison,
@@ -121,6 +123,105 @@ def test_comparison_collects_supplier_quotations_through_request_rfqs(app_ctx):
         assert stored.naming_series_id is not None
         participants = database.session.query(PurchaseRequestComparisonOffer).filter_by(comparison_id=comparison.id).all()
         assert {participant.supplier_quotation_id for participant in participants} == {offer_one.id, offer_two.id}
+
+        second_comparison = create_purchase_request_comparison(request, [offer_one.id], "USER-COMP-SECOND")
+        assert second_comparison.id != comparison.id
+
+
+def test_purchase_request_closes_when_multiple_comparisons_cover_all_lines(app_ctx):
+    """Partial closed comparisons can cover a request in multiple batches."""
+    with app_ctx.app_context():
+        entity = Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-1", currency="NIO")
+        request = PurchaseRequest(id="PREQ-CLOSE-MULTI", company="cacao", docstatus=1)
+        first_item = PurchaseRequestItem(id="PREQI-CLOSE-1", purchase_request_id=request.id, item_code="ITEM-1", qty=1)
+        second_item = PurchaseRequestItem(id="PREQI-CLOSE-2", purchase_request_id=request.id, item_code="ITEM-2", qty=1)
+        first_comparison = PurchaseRequestComparison(
+            id="PRC-CLOSE-1", company="cacao", purchase_request_id=request.id, status="finalized"
+        )
+        second_comparison = PurchaseRequestComparison(
+            id="PRC-CLOSE-2", company="cacao", purchase_request_id=request.id, status="finalized"
+        )
+        first_offer = SupplierQuotation(id="SQ-CLOSE-1", company="cacao", docstatus=1)
+        second_offer = SupplierQuotation(id="SQ-CLOSE-2", company="cacao", docstatus=1)
+        database.session.add_all(
+            [entity, request, first_item, second_item, first_comparison, second_comparison, first_offer, second_offer]
+        )
+        database.session.flush()
+        database.session.add(
+            PurchaseRequestComparisonLine(
+                comparison_id=first_comparison.id,
+                purchase_request_item_id=first_item.id,
+                selected_supplier_quotation_id="SQ-CLOSE-1",
+            )
+        )
+        database.session.commit()
+
+        assert not purchase_request_comparison_is_closed(request)
+
+        database.session.add(
+            PurchaseRequestComparisonLine(
+                comparison_id=second_comparison.id,
+                purchase_request_item_id=second_item.id,
+                selected_supplier_quotation_id="SQ-CLOSE-2",
+            )
+        )
+        database.session.commit()
+        assert purchase_request_comparison_is_closed(request)
+
+
+def test_comparison_can_finalize_only_the_lines_ready_for_partial_purchase(app_ctx):
+    """A comparison may close a valid subset while other lines wait for another comparison."""
+    with app_ctx.app_context():
+        entity = Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-1", currency="NIO")
+        uom = UOM(code="UND", name="Unidad")
+        item = Item(code="ITEM-PARTIAL", name="Producto parcial", item_type="goods", is_stock_item=True, default_uom="UND")
+        supplier = Party(id="PARTY-PARTIAL", code="SUP-PARTIAL", name="Proveedor parcial", is_supplier=True)
+        request = PurchaseRequest(id="PREQ-PARTIAL", company="cacao", posting_date=date(2026, 8, 15), docstatus=1)
+        first_item = PurchaseRequestItem(
+            id="PREQI-PARTIAL-1", purchase_request_id=request.id, item_code=item.code, item_name=item.name, qty=1, uom="UND"
+        )
+        second_item = PurchaseRequestItem(
+            id="PREQI-PARTIAL-2",
+            purchase_request_id=request.id,
+            item_code="ITEM-PARTIAL-2",
+            item_name="Otra línea",
+            qty=1,
+            uom="UND",
+        )
+        offer = SupplierQuotation(
+            id="SQ-PARTIAL", company="cacao", supplier_id=supplier.id, supplier_name=supplier.name, docstatus=1
+        )
+        offer_line = SupplierQuotationItem(
+            id="SQAI-PARTIAL-1",
+            supplier_quotation_id=offer.id,
+            item_code=first_item.item_code,
+            item_name=first_item.item_name,
+            qty=1,
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+        )
+        database.session.add_all([entity, uom, item, supplier, request, first_item, second_item, offer, offer_line])
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=request.id,
+                target_type="supplier_quotation",
+                target_id=offer.id,
+                qty=Decimal("1"),
+                relation_type="quotation",
+                status="active",
+            )
+        )
+        database.session.flush()
+
+        comparison = create_purchase_request_comparison(request, [offer.id], "USER-PARTIAL")
+        save_purchase_request_comparison_draft(comparison, {first_item.id: offer.id}, {}, "USER-PARTIAL")
+        finalize_purchase_request_comparison(comparison, "MANAGER", True)
+
+        assert comparison.status == "finalized"
+        assert not purchase_request_comparison_is_closed(request)
 
 
 def test_comparison_collects_direct_supplier_quotation_from_request(app_ctx):
@@ -541,6 +642,7 @@ def test_comparison_orders_apply_exchange_rate_to_base_total(app_ctx):
         uom = UOM(code="UND", name="Unidad")
         item = Item(code="ITEM-TC", name="Producto tipo de cambio", item_type="goods", is_stock_item=True, default_uom="UND")
         supplier = Party(id="PARTY-TC-1", code="SUP-TC-1", name="Proveedor TC", is_supplier=True)
+        local_supplier = Party(id="PARTY-TC-2", code="SUP-TC-2", name="Proveedor Local", is_supplier=True)
         request = PurchaseRequest(id="PREQ-TC", company="cacao", posting_date=date(2026, 8, 15), docstatus=1)
         request_item = PurchaseRequestItem(
             id="PREQI-TC-1",
@@ -570,6 +672,25 @@ def test_comparison_orders_apply_exchange_rate_to_base_total(app_ctx):
             rate=Decimal("2"),
             amount=Decimal("20"),
         )
+        local_offer = SupplierQuotation(
+            id="SQ-TC-LOCAL",
+            company="cacao",
+            supplier_id=local_supplier.id,
+            supplier_name=local_supplier.name,
+            transaction_currency="NIO",
+            docstatus=1,
+        )
+        local_offer_item = SupplierQuotationItem(
+            id="SQAI-TC-LOCAL-1",
+            supplier_quotation_id=local_offer.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("10"),
+            uom="UND",
+            qty_in_base_uom=Decimal("10"),
+            rate=Decimal("80"),
+            amount=Decimal("800"),
+        )
         from cacao_accounting.database import ExchangeRate
 
         database.session.add_all(
@@ -578,10 +699,13 @@ def test_comparison_orders_apply_exchange_rate_to_base_total(app_ctx):
                 uom,
                 item,
                 supplier,
+                local_supplier,
                 request,
                 request_item,
                 offer,
                 offer_item,
+                local_offer,
+                local_offer_item,
                 ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 8, 15)),
             ]
         )
@@ -597,9 +721,23 @@ def test_comparison_orders_apply_exchange_rate_to_base_total(app_ctx):
                 status="active",
             )
         )
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=request.id,
+                target_type="supplier_quotation",
+                target_id=local_offer.id,
+                qty=Decimal("10"),
+                relation_type="quotation",
+                status="active",
+            )
+        )
         database.session.flush()
 
-        comparison = create_purchase_request_comparison(request, [offer.id], "USER-COMP")
+        comparison = create_purchase_request_comparison(request, [offer.id, local_offer.id], "USER-COMP")
+        rows = comparison_recommendations(comparison)
+        assert rows[0]["recommended"]["offer"].id == offer.id
+        assert rows[0]["recommended"]["base_rate"] == Decimal("72.0000")
         save_purchase_request_comparison_draft(comparison, {request_item.id: offer.id}, {}, "USER-COMP")
         finalize_purchase_request_comparison(comparison, "MANAGER", True)
         orders = create_purchase_orders_from_comparison(comparison)

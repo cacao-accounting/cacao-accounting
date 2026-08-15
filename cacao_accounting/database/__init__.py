@@ -1797,6 +1797,7 @@ class PurchaseRequest(database.Model, DocBase):  # type: ignore[name-defined]
     """Solicitud de compra interna."""
 
     __tablename__ = "purchase_request"
+    status = database.Column(database.String(20), nullable=False, default="open", index=True)
     requested_by = database.Column(database.String(100), nullable=True)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)

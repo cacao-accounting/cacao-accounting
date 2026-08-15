@@ -50,7 +50,7 @@ def test_db_init_and_migrate_record_a_real_revision(tmp_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
         revision = connection.execute("SELECT version_num FROM alembic_version").fetchall()
 
-    assert revision == [("20260815_0013",)]
+    assert revision == [("20260815_0014",)]
 
     with sqlite3.connect(database_path) as connection:
         entity_code = connection.execute("PRAGMA table_info(entity)").fetchall()
@@ -61,6 +61,7 @@ def test_db_init_and_migrate_record_a_real_revision(tmp_path: Path) -> None:
             column[1] for column in connection.execute("PRAGMA table_info(purchase_request_comparison_line)")
         }
         purchase_order_columns = {column[1] for column in connection.execute("PRAGMA table_info(purchase_order)")}
+        purchase_request_columns = {column[1] for column in connection.execute("PRAGMA table_info(purchase_request)")}
 
     assert next(column[3] for column in entity_code if column[1] == "code") == 1
     assert next(column[3] for column in book_code if column[1] == "code") == 1
@@ -69,6 +70,7 @@ def test_db_init_and_migrate_record_a_real_revision(tmp_path: Path) -> None:
         comparison_line_columns
     )
     assert "purchase_request_comparison_id" in purchase_order_columns
+    assert "status" in purchase_request_columns
 
     with sqlite3.connect(database_path) as connection:
         entity_code = connection.execute("PRAGMA table_info(entity)").fetchall()
