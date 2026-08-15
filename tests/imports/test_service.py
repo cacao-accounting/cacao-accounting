@@ -148,6 +148,8 @@ def test_journal_import_with_book_uses_only_selected_book():
     app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
     with app.app_context():
         database.create_all()
+        database.session.add(Book(entity="cacao", code="FISC", name="Fiscal", status="activo"))
+        database.session.commit()
 
         payload = JournalEntryAdapter().build_document(
             [
@@ -158,6 +160,24 @@ def test_journal_import_with_book_uses_only_selected_book():
         )
 
         assert payload["books"] == ["FISC"]
+
+
+def test_journal_import_rejects_book_from_another_company():
+    """El adaptador no puede convertir un libro cross-company en contexto válido."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        database.create_all()
+        database.session.add(Book(entity="other", code="OTHER", name="Otro libro", status="activo"))
+        database.session.commit()
+
+        with pytest.raises(ValueError, match="no pertenece"):
+            JournalEntryAdapter().build_document(
+                [
+                    {"document_ref": "JE-1", "fecha": "2026-01-10", "cuenta": "1105", "debito": "100", "credito": "0"},
+                    {"document_ref": "JE-1", "fecha": "2026-01-10", "cuenta": "2105", "debito": "0", "credito": "100"},
+                ],
+                {"company_id": "cacao", "accounting_book_id": "OTHER"},
+            )
 
 
 def test_journal_import_rejects_non_finite_amounts(monkeypatch):
