@@ -1723,6 +1723,92 @@ def test_financial_reports_framework_uses_gl_and_supports_export(app_ctx):
     assert any(str(row[1]) == "cacao" for row in filter_rows)
 
 
+def test_account_movement_displays_party_name_instead_of_internal_id(app_ctx):
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        Accounts,
+        Book,
+        FiscalYear,
+        GLEntry,
+        Modules,
+        Party,
+        User,
+        database,
+    )
+    from cacao_accounting.reportes.services import FinancialReportFilters, get_account_movement_detail
+
+    report_user = User(user="report-party-user", name="Report Party User", password=b"x", classification="admin", active=True)
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-2026-PARTY",
+        year_start_date=date(2026, 1, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    book = Book(entity="cacao", code="FISC-PARTY", name="Fiscal Party", currency="NIO", is_primary=True, default=True)
+    payable = Accounts(
+        entity="cacao",
+        code="2.01.01",
+        name="Cuentas por pagar",
+        active=True,
+        enabled=True,
+        classification="pasivo",
+    )
+    supplier = Party(id="SUPP-VISIBLE", code="SUPP-VISIBLE", name="Proveedor Visible", is_supplier=True, is_active=True)
+    database.session.add_all(
+        [report_user, fiscal_year, book, payable, supplier, Modules(module="accounting", default=True, enabled=True)]
+    )
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-05-PARTY",
+        enabled=True,
+        is_closed=False,
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+    )
+    database.session.add(period)
+    database.session.flush()
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 5, 15),
+            company="cacao",
+            ledger_id=book.id,
+            accounting_period_id=period.id,
+            account_id=payable.id,
+            account_code=payable.code,
+            debit=Decimal("0"),
+            credit=Decimal("100"),
+            party_type="supplier",
+            party_id=supplier.id,
+            voucher_type="purchase_invoice",
+            voucher_id="PI-VISIBLE-PARTY",
+            document_no="cacao-PI-VISIBLE-PARTY",
+        )
+    )
+    database.session.commit()
+
+    report = get_account_movement_detail(
+        FinancialReportFilters(company="cacao", ledger=book.code, accounting_period=period.name)
+    )
+
+    assert report.rows[0].values["party_id"] == "Proveedor Visible"
+    assert supplier.id not in report.rows[0].values["party_id"]
+
+    app_ctx.config["SECRET_KEY"] = "testing"
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = report_user.id
+        session["_fresh"] = True
+    response = client.get(
+        f"/reports/account-movement?apply_filters=1&company=cacao&ledger={book.code}&accounting_period={period.name}"
+    )
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Proveedor Visible" in html
+
+
 def test_financial_reports_exclude_cancelled_entries_and_reversals_by_default(app_ctx):
     from cacao_accounting.database import AccountingPeriod, Accounts, Book, FiscalYear, GLEntry, Modules, User, database
     from cacao_accounting.reportes.services import (
@@ -2280,9 +2366,7 @@ def test_catalog_loader_accepts_spanish_and_english_headers(app_ctx, tmp_path):
 
     english_catalog = tmp_path / "english.csv"
     english_catalog.write_text(
-        "code,name,parent,group,classification,type,account_type\n"
-        "1,Assets,,true,Asset,,\n"
-        "1.01,Bank,1,false,Asset,,bank\n",
+        "code,name,parent,group,classification,type,account_type\n1,Assets,,true,Asset,,\n1.01,Bank,1,false,Asset,,bank\n",
         encoding="utf-8",
     )
     cargar_catalogos(CatalogoCtas(file=str(english_catalog), pais=None, idioma="EN"), "eng")

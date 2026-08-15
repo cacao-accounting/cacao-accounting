@@ -2054,6 +2054,7 @@ def _movement_detail_row_values(
     entry: GLEntry,
     account: Accounts | None,
     period: AccountingPeriod | None,
+    party: Party | None,
     selected_ledger: Book,
     running_balance: Decimal | None,
     include_running_balance: bool,
@@ -2082,7 +2083,7 @@ def _movement_detail_row_values(
         "unit": entry.unit_code,
         "project": entry.project_code,
         "party_type": entry.party_type,
-        "party_id": entry.party_id,
+        "party_id": party.name or party.code if party else entry.party_id,
         "line_comment": entry.remarks,
         "created_by": entry.created_by,
         "created_at": entry.created,
@@ -2094,7 +2095,7 @@ def _movement_detail_row_values(
 
 
 def _collect_movement_detail_rows(
-    entries: Sequence[tuple[GLEntry, Accounts | None, AccountingPeriod | None]],
+    entries: Sequence[tuple[GLEntry, Accounts | None, AccountingPeriod | None, Party | None]],
     selected_ledger: Book,
     filters: FinancialReportFilters,
     display_from_index: int,
@@ -2105,7 +2106,7 @@ def _collect_movement_detail_rows(
     total_debit = Decimal("0")
     total_credit = Decimal("0")
 
-    for index, (entry, account, period) in enumerate(entries):
+    for index, (entry, account, period, party) in enumerate(entries):
         account_code = entry.account_code or (account.code if account else None) or ""
         debit = _decimal_value(entry.debit)
         credit = _decimal_value(entry.credit)
@@ -2119,6 +2120,7 @@ def _collect_movement_detail_rows(
             entry,
             account,
             period,
+            party,
             selected_ledger,
             running_per_account[account_code],
             filters.include_running_balance,
@@ -2136,9 +2138,10 @@ def _movement_detail_query(
 ) -> Any:
     """Construye la consulta base del detalle de movimiento contable."""
     query = (
-        select(GLEntry, Accounts, AccountingPeriod)
+        select(GLEntry, Accounts, AccountingPeriod, Party)
         .join(Accounts, (Accounts.id == GLEntry.account_id), isouter=True)
         .join(AccountingPeriod, (AccountingPeriod.id == GLEntry.accounting_period_id), isouter=True)
+        .join(Party, (Party.id == GLEntry.party_id), isouter=True)
     )
     query = _apply_gl_filters(query, filters, period_start, period_end).where(GLEntry.ledger_id == selected_ledger.id)
     return _sorted_gl_query(query, filters.sort_by, filters.sort_dir)
@@ -2167,7 +2170,7 @@ def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedRep
             query = query.offset(row_offset).limit(page_size)
 
     entries = cast(
-        Sequence[tuple[GLEntry, Accounts | None, AccountingPeriod | None]],
+        Sequence[tuple[GLEntry, Accounts | None, AccountingPeriod | None, Party | None]],
         database.session.execute(query).all(),
     )
     rows, total_debit, total_credit = _collect_movement_detail_rows(entries, selected_ledger, filters, display_from_index)
