@@ -44,6 +44,7 @@ from cacao_accounting.database import (
 # ---------------------------------------------------------------------------------------
 
 CHOCOLATE_100G = "Chocolate 100g"
+DEMO_SUPPLIER_ID = "PARTY-DEMO-SUPPLIER"
 
 BASE_USUARIOS = [
     {"user": "admin", "e_mail": "a@dm.com", "password": _pg("admin"), "active": True, "classification": "system"},
@@ -539,6 +540,7 @@ def _make_terceros() -> tuple:
     """Crea instancias frescas de Terceros."""
     return (
         Party(
+            id=DEMO_SUPPLIER_ID,
             code="P001",
             is_supplier=True,
             name="Proveedor Demo SA",
@@ -601,6 +603,8 @@ def _make_documentos() -> tuple:
             id=PURCHASE_ORDER_ID,
             document_no="POR-DEMO-2025-001",
             company="cacao",
+            supplier_id=DEMO_SUPPLIER_ID,
+            supplier_name="Proveedor Demo SA",
             posting_date=date(2025, 1, 15),
             docstatus=1,
             remarks="Orden de compra de demostración",
@@ -609,6 +613,8 @@ def _make_documentos() -> tuple:
             id=PURCHASE_RECEIPT_ID,
             document_no="REC-DEMO-2025-001",
             company="cacao",
+            supplier_id=DEMO_SUPPLIER_ID,
+            supplier_name="Proveedor Demo SA",
             posting_date=date(2025, 1, 20),
             purchase_order_id=PURCHASE_ORDER_ID,
             docstatus=1,
@@ -635,6 +641,8 @@ def _make_documentos() -> tuple:
             id=PURCHASE_INVOICE_ID,
             document_no="FCC-DEMO-2025-001",
             company="cacao",
+            supplier_id=DEMO_SUPPLIER_ID,
+            supplier_name="Proveedor Demo SA",
             posting_date=date(2025, 1, 25),
             purchase_order_id=PURCHASE_ORDER_ID,
             purchase_receipt_id=PURCHASE_RECEIPT_ID,

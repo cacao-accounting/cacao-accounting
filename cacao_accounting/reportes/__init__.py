@@ -1414,7 +1414,13 @@ def accounts_payable():
     as_of_date = _date_arg("as_of_date")
     party_id = request.args.get("party_id") or None
     report = get_ar_ap_subledger(
-        SubledgerFilters(company=company, party_type="supplier", party_id=party_id, as_of_date=as_of_date)
+        SubledgerFilters(
+            company=company,
+            party_type="supplier",
+            party_id=party_id,
+            as_of_date=as_of_date,
+            include_returns=False,
+        )
     )
     return _render_operational_framework(
         "accounts-payable",
@@ -1445,7 +1451,15 @@ def ap_aging():
     company = _resolve_company(request.args.get("company", "cacao"))
     as_of_date = _date_arg("as_of_date") or date.today()
     party_id = request.args.get("party_id") or None
-    report = get_aging_report(AgingFilters(company=company, party_type="supplier", party_id=party_id, as_of_date=as_of_date))
+    report = get_aging_report(
+        AgingFilters(
+            company=company,
+            party_type="supplier",
+            party_id=party_id,
+            as_of_date=as_of_date,
+            include_returns=False,
+        )
+    )
     return _render_operational_framework(
         "ap-aging",
         _("Aging de Cuentas por Pagar"),

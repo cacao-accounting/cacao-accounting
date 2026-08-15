@@ -61,6 +61,7 @@ class SubledgerFilters:
     party_type: str
     party_id: str | None = None
     as_of_date: date | None = None
+    include_returns: bool = True
     page: int = 1
     page_size: int = 100
 
@@ -73,6 +74,7 @@ class AgingFilters:
     party_type: str
     as_of_date: date
     party_id: str | None = None
+    include_returns: bool = True
 
 
 @dataclass(frozen=True)
@@ -306,6 +308,8 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
 
     if filters.as_of_date is not None:
         query = query.where(document_model.posting_date <= filters.as_of_date)
+    if not filters.include_returns:
+        query = query.where(document_model.is_return.is_(False))
 
     rows: list[ReportRow] = []
     total_original = Decimal("0")
@@ -639,6 +643,7 @@ def get_aging_report(filters: AgingFilters) -> AgingReport:
             party_type=filters.party_type,
             party_id=filters.party_id,
             as_of_date=filters.as_of_date,
+            include_returns=filters.include_returns,
         )
     )
     bucket_totals = {
