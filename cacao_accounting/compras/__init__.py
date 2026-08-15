@@ -40,6 +40,7 @@ from cacao_accounting.compras.purchase_order_comparison_service import (
 )
 from cacao_accounting.compras.purchase_request_comparison_service import (
     create_purchase_request_comparison,
+    supplier_quotation_comparison_rows,
     supplier_quotations_for_comparison,
     supplier_quotations_for_request,
 )
@@ -658,8 +659,13 @@ def compras_cotizacion_proveedor_nueva():
         if response is not None:
             return response
     from_request_id, from_rfq_id = _supplier_quotation_origin_ids()
+    if from_request_id and from_rfq_id:
+        abort(400, "No se pueden combinar dos documentos origen.")
     negotiation_round = current_negotiation_round(from_rfq_id) if from_rfq_id else None
+    if negotiation_round and negotiation_round.status != "open":
+        negotiation_round = None
     solicitud_origen, rfq_origen = _supplier_quotation_sources(from_request_id, from_rfq_id)
+    _validate_supplier_quotation_origin(solicitud_origen or rfq_origen)
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
     titulo = "Nueva Cotización de Proveedor - " + APPNAME
     transaction_config = _supplier_quotation_transaction_config(
@@ -707,7 +713,11 @@ def _supplier_quotation_origin_ids() -> tuple[str | None, str | None]:
 def _create_supplier_quotation_from_request():
     """Crea una cotizacion de proveedor a partir del formulario enviado."""
     try:
-        _, from_rfq_id = _supplier_quotation_origin_ids()
+        from_request_id, from_rfq_id = _supplier_quotation_origin_ids()
+        if from_request_id and from_rfq_id:
+            raise DocumentFlowError("No se pueden combinar dos documentos origen.", 400)
+        source = _supplier_quotation_origin(from_request_id, from_rfq_id)
+        company, transaction_currency = _validate_supplier_quotation_header(source)
         negotiation_round_id = request.form.get("negotiation_round_id") or None
         if negotiation_round_id:
             negotiation_round = database.session.get(PurchaseNegotiationRound, negotiation_round_id)
@@ -716,7 +726,7 @@ def _create_supplier_quotation_from_request():
                 or negotiation_round.purchase_quotation_id != from_rfq_id
                 or negotiation_round.status != "open"
             ):
-                raise PurchaseSourcingError("La ronda de negociación no existe, no pertenece a la RFQ o ya está cerrada.")
+                negotiation_round_id = None
         supplier_id = request.form.get("supplier_id") or None
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
@@ -725,7 +735,9 @@ def _create_supplier_quotation_from_request():
             supplier_name=supplier.name if supplier else None,
             purchase_quotation_id=from_rfq_id or None,
             negotiation_round_id=negotiation_round_id,
-            company=request.form.get("company") or None,
+            company=company,
+            transaction_currency=transaction_currency,
+            base_currency=company_currency(company),
             posting_date=posting_date,
             remarks=request.form.get("remarks"),
             docstatus=0,
@@ -750,6 +762,31 @@ def _create_supplier_quotation_from_request():
         database.session.rollback()
         flash_error(exc)
     return None
+
+
+def _supplier_quotation_origin(
+    from_request_id: str | None, from_rfq_id: str | None
+) -> PurchaseRequest | PurchaseQuotation | None:
+    """Load and authorize the approved source of a supplier quotation."""
+    source = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
+    source = database.session.get(PurchaseQuotation, from_rfq_id) if from_rfq_id else source
+    _validate_supplier_quotation_origin(source)
+    return source
+
+
+def _validate_supplier_quotation_origin(source: PurchaseRequest | PurchaseQuotation | None) -> None:
+    """Require an approved, company-accessible source when one is supplied."""
+    if source is None:
+        return
+    if source.docstatus != 1:
+        raise DocumentFlowError("El documento origen debe estar aprobado.", 400)
+    _require_purchase_document_access(source, "consultar")
+
+
+def _validate_supplier_quotation_header(source: PurchaseRequest | PurchaseQuotation | None) -> tuple[str | None, str | None]:
+    """Resolve immutable company and currency values from a quotation source."""
+    _validate_supplier_quotation_origin(source)
+    return _validate_purchase_flow_header(source)
 
 
 @compras.route("/supplier-quotation/<quotation_id>")
@@ -1249,14 +1286,6 @@ def _comparison_item_at_occurrence(
     return matching_items[occurrence] if occurrence < len(matching_items) else None
 
 
-def _supplier_comparison_item_at_occurrence(
-    items: list[SupplierQuotationItem], item_code: str, occurrence: int
-) -> SupplierQuotationItem | None:
-    """Return a supplier quotation line matching an item occurrence."""
-    matching_items = [item for item in items if item.item_code == item_code]
-    return matching_items[occurrence] if occurrence < len(matching_items) else None
-
-
 @compras.route("/request-for-quotation/comparison/<comparison_id>")
 @modulo_activo("purchases")
 @login_required
@@ -1283,22 +1312,7 @@ def compras_comparativo_ordenes(comparison_id: str):
             )
             for offer in offers
         }
-        comparison_rows = []
-        item_occurrences: dict[str, int] = {}
-        for base_item in offer_items[offers[0].id]:
-            occurrence = item_occurrences.get(base_item.item_code, 0)
-            item_occurrences[base_item.item_code] = occurrence + 1
-            comparison_rows.append(
-                {
-                    "item": base_item,
-                    "offers": {
-                        offer.id: _supplier_comparison_item_at_occurrence(
-                            offer_items[offer.id], base_item.item_code, occurrence
-                        )
-                        for offer in offers
-                    },
-                }
-            )
+        comparison_rows = supplier_quotation_comparison_rows(offers, offer_items)
         return render_template(
             "compras/comparativo_solicitud.html",
             comparison=request_comparison,

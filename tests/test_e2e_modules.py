@@ -287,12 +287,21 @@ def test_purchase_happy_path(app_ctx):
     assert rfq.docstatus == 1
 
     # 3. Create Supplier Quotation from RFQ
+    from cacao_accounting.compras.purchase_sourcing_service import open_negotiation_round
+
+    stale_round = open_negotiation_round(rfq.id, None)
+    stale_round.status = "closed"
+    database.session.commit()
+    form_response = client.get(f"/buying/supplier-quotation/new?from_rfq={rfq.id}")
+    assert b'name="negotiation_round_id"' in form_response.data
+    assert stale_round.id.encode() not in form_response.data
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     sq_data = {
         "company": "cacao",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "from_rfq": rfq.id,
+        "negotiation_round_id": stale_round.id,
         "item_code_0": "ART-001",
         "qty_0": "10",
         "rate_0": "45",  # Supplier offered better price
@@ -317,6 +326,7 @@ def test_purchase_happy_path(app_ctx):
     client.post(f"/buying/supplier-quotation/{sq.id}/submit", follow_redirects=True)
     database.session.refresh(sq)
     assert sq.docstatus == 1
+    assert sq.negotiation_round_id is None
     check_document_relation(rfq.id, sq.id)
 
     # 4. Create Purchase Order from SQ
