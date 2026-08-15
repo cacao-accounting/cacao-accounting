@@ -22,12 +22,12 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-from cacao_accounting.database import database
+from cacao_accounting.database import Book, database
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.auth.permisos import Permisos
-from cacao_accounting.decorators import modulo_activo
+from cacao_accounting.decorators import exige_acceso_compania, modulo_activo
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 from typing import Any
@@ -61,6 +61,13 @@ def check_permission(action):
         abort(403)
 
 
+def _batch_or_404(batch_id: str, action: str = "consultar") -> ImportBatch:
+    """Load a batch only after validating the user's company scope."""
+    batch = ImportBatch.query.get_or_404(batch_id)
+    exige_acceso_compania("imports", batch.company_id, action)
+    return batch
+
+
 @imports.before_request
 def before_request():
     """Ejecutar verificaciones previas a cada solicitud."""
@@ -73,7 +80,16 @@ def before_request():
 def index():
     """Listado de lotes de importación."""
     check_permission("consultar")
-    batches = ImportBatch.query.order_by(ImportBatch.created.desc()).all()
+    permission = Permisos(modulo=obtener_id_modulo_por_nombre("imports"), usuario=current_user.id)
+    if permission.administrador:
+        batches = ImportBatch.query.order_by(ImportBatch.created.desc()).all()
+    else:
+        book_ids = permission.obtener_libros_autorizados("can_read")
+        batches = (
+            ImportBatch.query.filter(ImportBatch.company_id.in_(database.select(Book.entity).where(Book.id.in_(book_ids))))
+            .order_by(ImportBatch.created.desc())
+            .all()
+        )
     return render_template("imports/index.html", batches=batches)
 
 
@@ -91,6 +107,8 @@ def new():
         if not company_id or not record_type:
             flash("Debe seleccionar compañía y tipo de registro.", "danger")
             return redirect(url_for("imports.new"))
+
+        exige_acceso_compania("imports", company_id, "crear")
 
         if record_type != "journal_entry" and accounting_book_id:
             flash("El libro contable solo se permite para comprobantes contables.", "danger")
@@ -159,7 +177,7 @@ def new():
 def detail(batch_id):
     """Detalle y vista previa de un lote de importación."""
     check_permission("consultar")
-    batch = ImportBatch.query.get_or_404(batch_id)
+    batch = _batch_or_404(batch_id)
     service = ImportService()
     preview_data = {}
     if batch.import_status >= 1:  # Archivo cargado
@@ -261,7 +279,7 @@ def _persist_uploaded_file(file: Any, batch_id: str, filename: str) -> str:
 def upload(batch_id):
     """Subir un archivo a un lote de importación."""
     check_permission("actualizar")
-    batch = ImportBatch.query.get_or_404(batch_id)
+    batch = _batch_or_404(batch_id, "editar")
     file = request.files.get("file")
     if not file or not file.filename:
         return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
@@ -293,6 +311,7 @@ def upload(batch_id):
 def validate(batch_id):
     """Ejecutar la validación del archivo subido."""
     check_permission("validar")
+    _batch_or_404(batch_id, "editar")
     service = ImportService()
     service.validate(batch_id)
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
@@ -304,6 +323,7 @@ def validate(batch_id):
 def execute(batch_id):
     """Ejecutar el proceso de importación."""
     check_permission("autorizar")
+    _batch_or_404(batch_id, "autorizar")
     service = ImportService()
     service.execute(batch_id)
     flash("Importación iniciada", "info")
@@ -316,6 +336,7 @@ def execute(batch_id):
 def cancel(batch_id):
     """Solicitar la cancelación de un lote en proceso."""
     check_permission("anular")
+    _batch_or_404(batch_id, "anular")
     service = ImportService()
     service.cancel(batch_id)
     flash("Cancelación solicitada", "warning")
