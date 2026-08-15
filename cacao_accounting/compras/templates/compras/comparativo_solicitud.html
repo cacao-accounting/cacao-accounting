@@ -1,54 +1,107 @@
-{% extends "base.html" %}
-{% block contenido %}
-{% import "macros.html" as macros %}
+{% extends "base.html" %} {% block contenido %} {% import "macros.html" as
+macros %}
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
-      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a>
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"
+        ><i class="bi bi-house"></i> Inicio</a
+      >
     </li>
     <li class="breadcrumb-item">
       <a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a>
     </li>
     <li class="breadcrumb-item">
-      <a href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}" class="link-dark">Comparativo de Ofertas</a>
+      <a
+        href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}"
+        class="link-dark"
+        >Comparativo de Ofertas</a
+      >
     </li>
-    <li class="breadcrumb-item active" aria-current="page">{{ comparison.id }}</li>
+    <li class="breadcrumb-item active" aria-current="page">
+      {{ comparison.document_no or comparison.id }}
+    </li>
   </ol>
 </nav>
 
 <div class="ca-card">
-  <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas</h5>
-    <p class="mb-0 text-muted">
-      Solicitud de Compra:
-      <strong>{{ purchase_request.document_no or purchase_request.id }}</strong>
-      · Cotizaciones participantes: {{ offers|length }}
-    </p>
+  <div
+    class="ca-card-header d-flex align-items-start justify-content-between gap-3"
+  >
+    <div>
+      <h5 class="ca-card-title">
+        <i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas
+      </h5>
+      <p class="mb-0 text-muted">
+        Solicitud de Compra:
+        <strong
+          >{{ purchase_request.document_no or purchase_request.id }}</strong
+        >
+        · Cotizaciones participantes: {{ offers|length }}
+      </p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap justify-content-end">
+      <a
+        class="btn btn-sm btn-outline-secondary"
+        href="{{ url_for('compras.compras_solicitud_compra', request_id=purchase_request.id) }}"
+      >
+        <i class="bi bi-file-earmark-text me-1"></i>Ver Solicitud de Compra
+      </a>
+      <a
+        class="btn btn-sm btn-primary"
+        href="{{ url_for('compras.compras_comparativo_ofertas_nueva') }}"
+      >
+        <i class="bi bi-plus-circle me-1"></i>Nueva comparativa
+      </a>
+    </div>
   </div>
 
   <div class="table-responsive">
     <table class="ca-table">
-      <caption style="display: none">Comparación de cotizaciones de proveedor.</caption>
+      <caption style="display: none">
+        Comparación de cotizaciones de proveedor.
+      </caption>
       <thead>
         <tr>
           <th scope="col">Artículo</th>
           <th scope="col">Cantidad</th>
           {% for offer in offers %}
-          <th scope="col">{{ offer.supplier_name or offer.supplier_id or offer.id }}<small class="d-block text-muted">{{ offer.document_no or offer.id }}</small></th>
+          <th scope="col">
+            {{ offer.supplier_name or offer.supplier_id or offer.id }}
+            <small class="d-block text-muted">
+              <a
+                href="{{ url_for('compras.compras_cotizacion_proveedor', quotation_id=offer.id) }}"
+              >
+                {{ offer.document_no or offer.id }}
+              </a>
+            </small>
+            <a
+              class="btn btn-sm btn-outline-primary mt-2"
+              href="{{ url_for('compras.compras_orden_compra_nuevo', from_supplier_quotation=offer.id) }}"
+            >
+              <i class="bi bi-cart-plus me-1"></i>Crear Orden de Compra
+            </a>
+          </th>
           {% endfor %}
         </tr>
       </thead>
       <tbody>
         {% for row in comparison_rows %}
         <tr>
-          <td>{{ row.item.item_name or row.item.item_code }}<small class="d-block text-muted">{{ row.item.item_code }}</small></td>
+          <td>
+            {{ row.item.item_name or row.item.item_code }}<small
+              class="d-block text-muted"
+              >{{ row.item.item_code }}</small
+            >
+          </td>
           <td>{{ row.item.qty }} {{ row.item.uom or '' }}</td>
-          {% for offer in offers %}
-          {% set line = row.offers[offer.id] %}
+          {% for offer in offers %} {% set line = row.offers[offer.id] %}
           <td>
             {% if line %}
-            <strong>{{ line.rate or 0 }}</strong><small class="d-block text-muted">{{ line.qty }} {{ line.uom or '' }}</small>
+            <strong>{{ line.rate or 0 }}</strong
+            ><small class="d-block text-muted"
+              >{{ line.qty }} {{ line.uom or '' }}</small
+            >
             {% else %}
             <span class="text-muted">Sin cobertura</span>
             {% endif %}
@@ -56,13 +109,19 @@
           {% endfor %}
         </tr>
         {% else %}
-        <tr><td colspan="{{ offers|length + 2 }}" class="text-center text-muted">Las ofertas no tienen líneas para comparar.</td></tr>
+        <tr>
+          <td colspan="{{ offers|length + 2 }}" class="text-center text-muted">
+            Las ofertas no tienen líneas para comparar.
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
       <tfoot>
         <tr>
           <th colspan="2">Total</th>
-          {% for offer in offers %}<th>{{ offer.grand_total or offer.total or 0 }}</th>{% endfor %}
+          {% for offer in offers %}
+          <th>{{ offer.grand_total or offer.total or 0 }}</th>
+          {% endfor %}
         </tr>
       </tfoot>
     </table>

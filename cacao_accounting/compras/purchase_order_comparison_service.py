@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from cacao_accounting.database import (
     DocumentRelation,
@@ -11,6 +11,7 @@ from cacao_accounting.database import (
     PurchaseOrderComparisonOrder,
     PurchaseOrderComparisonRound,
     PurchaseOrderComparisonRoundOrder,
+    PurchaseOrderItem,
     PurchaseRequest,
     database,
 )
@@ -33,18 +34,78 @@ def purchase_request_for_comparison(comparison: PurchaseOrderComparison) -> Purc
     """Resolve the request origin, including legacy comparisons without backfill."""
     if comparison.purchase_request_id:
         return database.session.get(PurchaseRequest, comparison.purchase_request_id)
+    participant_order_ids = list(
+        database.session.execute(
+            database.select(PurchaseOrderComparisonOrder.purchase_order_id).where(
+                PurchaseOrderComparisonOrder.comparison_id == comparison.id
+            )
+        ).scalars()
+    )
+    order_ids = set(participant_order_ids)
+    order_ids.add(comparison.base_purchase_order_id)
     request_id = database.session.execute(
         database.select(DocumentRelation.source_id)
         .where(
             DocumentRelation.source_type == "purchase_request",
             DocumentRelation.target_type == "purchase_order",
-            DocumentRelation.target_id == comparison.base_purchase_order_id,
+            DocumentRelation.target_id.in_(order_ids),
             DocumentRelation.status == "active",
         )
         .order_by(DocumentRelation.source_id)
         .limit(1)
     ).scalar_one_or_none()
     return database.session.get(PurchaseRequest, request_id) if request_id else None
+
+
+def purchase_order_comparison_rows(
+    orders: Sequence[PurchaseOrder], order_items: Mapping[str, Sequence[PurchaseOrderItem]]
+) -> list[dict[str, object]]:
+    """Build comparison rows from the stable union of all participant lines."""
+    rows: list[dict[str, object]] = []
+    seen_keys: set[tuple[tuple[str | None, ...], int]] = set()
+    occurrences_by_order: dict[str, dict[tuple[str | None, ...], int]] = {}
+
+    for order in orders:
+        occurrences = occurrences_by_order.setdefault(order.id, {})
+        for item in order_items.get(order.id, []):
+            key = _purchase_order_item_key(item)
+            occurrence = occurrences.get(key, 0)
+            occurrences[key] = occurrence + 1
+            row_key = (key, occurrence)
+            if row_key not in seen_keys:
+                seen_keys.add(row_key)
+                rows.append(
+                    {
+                        "item": item,
+                        "offers": {
+                            participant.id: _purchase_order_item_at_occurrence(
+                                order_items.get(participant.id, ()), key, occurrence
+                            )
+                            for participant in orders
+                        },
+                    }
+                )
+
+    return rows
+
+
+def _purchase_order_item_key(item: PurchaseOrderItem) -> tuple[str | None, ...]:
+    """Return the commercial identity for an order line."""
+    return (
+        item.item_code,
+        item.uom,
+        str(item.qty_in_base_uom) if item.qty_in_base_uom is not None else None,
+        item.warehouse,
+        item.description,
+    )
+
+
+def _purchase_order_item_at_occurrence(
+    items: Sequence[PurchaseOrderItem], key: tuple[str | None, ...], occurrence: int
+) -> PurchaseOrderItem | None:
+    """Return the order line matching a commercial identity and occurrence."""
+    matching_items = [item for item in items if _purchase_order_item_key(item) == key]
+    return matching_items[occurrence] if occurrence < len(matching_items) else None
 
 
 def comparable_purchase_orders(base_order: PurchaseOrder) -> list[PurchaseOrder]:

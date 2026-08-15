@@ -32,13 +32,16 @@ macros %} {%- if TESTING -%}
       </p>
     </div>
   </div>
-  <a href="{{ url_for('compras.compras_comparativo_ofertas_nueva') }}" class="btn btn-sm btn-primary">
+  <a
+    href="{{ url_for('compras.compras_comparativo_ofertas_nueva') }}"
+    class="btn btn-sm btn-primary"
+  >
     <i class="bi bi-plus-circle me-1"></i>Nueva comparativa
   </a>
   {{ macros.list_filters(show_status=True) }}
   <table class="ca-table">
     <caption style="display: none">
-      Solicitudes de Compra con Órdenes de Compra relacionadas.
+      Solicitudes de Compra y estado de sus comparativos de ofertas.
     </caption>
     <thead>
       <tr>
@@ -46,28 +49,45 @@ macros %} {%- if TESTING -%}
         <th scope="col">Solicitante</th>
         <th scope="col">Fecha</th>
         <th scope="col">Total</th>
+        <th scope="col">Estado</th>
         <th scope="col">Acciones</th>
       </tr>
     </thead>
     <tbody>
-      {% for item in consulta.items -%}
+      {% for item in consulta.items -%} {% set comparison =
+      comparisons_by_request.get(item.id) %}
       <tr>
         <td>{{ item.document_no or item.id }}</td>
         <td>{{ item.requested_by or "-" }}</td>
         <td>{{ item.posting_date or "" }}</td>
         <td>{{ item.grand_total or item.total or "0" }}</td>
         <td>
+          {% if comparison %}
+          <span class="badge text-bg-success">Comparativo creado</span>
+          {% else %}
+          <span class="badge text-bg-secondary">Pendiente</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if comparison %}
+          <a
+            href="{{ url_for('compras.compras_comparativo_ordenes', comparison_id=comparison.id) }}"
+            class="btn btn-sm btn-outline-primary"
+            >Ver comparativo</a
+          >
+          {% else %}
           <a
             href="{{ url_for('compras.compras_comparativo_ordenes_seleccionar', purchase_request_id=item.id) }}"
             class="btn btn-sm btn-primary"
-            >Seleccionar solicitud</a
+            ><i class="bi bi-plus-circle me-1"></i>Crear comparativo</a
           >
+          {% endif %}
         </td>
       </tr>
       {%- else %}
       <tr>
-        <td colspan="5" class="text-center text-muted">
-            No hay Solicitudes de Compra con órdenes relacionadas.
+        <td colspan="6" class="text-center text-muted">
+          No hay Solicitudes de Compra aprobadas.
         </td>
       </tr>
       {%- endfor %}

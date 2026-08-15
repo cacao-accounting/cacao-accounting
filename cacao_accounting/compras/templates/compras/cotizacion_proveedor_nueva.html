@@ -16,6 +16,19 @@
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_cotizacion_proveedor_lista') }}"
         class="link-dark">Cotizaciones de Proveedor</a></li>
+    {% if solicitud_origen %}
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('compras.compras_solicitud_compra', request_id=solicitud_origen.id) }}" class="link-dark">
+        {{ solicitud_origen.document_no or solicitud_origen.id }}
+      </a>
+    </li>
+    {% elif rfq_origen %}
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('compras.compras_solicitud_cotizacion', quotation_id=rfq_origen.id) }}" class="link-dark">
+        {{ rfq_origen.document_no or rfq_origen.id }}
+      </a>
+    </li>
+    {% endif %}
     <li class="breadcrumb-item active" aria-current="page">
       {{ (registro.document_no or registro.id) if edit else 'Nueva Cotización de Proveedor' }}</li>
   </ol>

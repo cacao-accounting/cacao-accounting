@@ -529,3 +529,238 @@ Solicitud de Compra original, sin conservar comparativos históricos basados en
   con las ofertas `cacao-SPQ-2026-08-00003` y `cacao-SPQ-2026-08-00002`.
 - Se aplicó la migración en el entorno local y se validó por HTTP la creación
   del comparativo con ambas ofertas participantes.
+
+## 2026-08-15 — Seguimiento de issues nuevos y correcciones de continuidad
+
+### Petición
+
+Se solicitó monitorear nuevos issues abiertos, aplicar los fixes sin cerrar
+issues y comentar cada resultado para revisión posterior.
+
+### Issues nuevos revisados
+
+- #422: se aisló el libro contable por compañía tanto en la ruta de creación
+  como en el adaptador de comprobantes, incluyendo permiso granular de libro.
+  Fix: `35223058`.
+- #423: la migración `0009` ahora reconstruye el origen desde relaciones
+  activas y la vista conserva un camino explícito para comparativos legacy sin
+  Solicitud de Compra reconstruible. Fix: `f6f42726`.
+- #424: el comparativo empareja líneas por identidad comercial (artículo, UOM,
+  conversión, bodega y descripción), con regresión para líneas invertidas.
+  Fix: `f6f42726`.
+
+### Monitoreo y calidad
+
+- La consulta de issues abiertos confirmó #422, #423 y #424 como nuevos; los
+  comentarios de fix se publicaron sin cambiar su estado.
+- La migración de desarrollo quedó aplicada hasta `20260815_0010`.
+- Validaciones focales posteriores: aislamiento de libros y emparejamiento de
+  líneas — 3 passed; migraciones — 3 passed; sourcing y rondas — 10 passed;
+  importaciones — 13 y 24 passed en sus suites de regresión previas.
+- La corrida completa solicitada permanece ejecutándose en segundo plano en
+  `/tmp/cacao-backend-qa-20260815-rounds.log`; su resultado final se añadirá
+  cronológicamente en una entrada posterior.
+
+## 2026-08-15 — Auditoría funcional y de flujo de negocio
+
+### Petición
+
+Se solicitó revisar el sistema archivo por archivo en busca de errores lógicos
+o de flujo de negocio y documentar las observaciones mediante issues de GitHub.
+
+### Alcance y método
+
+- Se inspeccionó el estado real de `main`, incluyendo cambios locales no
+  confirmados, `SESSIONS.md`, `ISSUES.md`, los 215 módulos Python, las vistas
+  HTML/JS y los workflows de `.github/workflows`.
+- Se contrastaron hallazgos contra los issues abiertos existentes para evitar
+  duplicados. El seguimiento residual de permisos contables se añadió como
+  comentario al issue #418.
+- Se ejecutaron los tests focales de flujo documental, sourcing, importación y
+  rutas: `102 passed, 5 warnings`.
+- La corrida completa se lanzó en segundo plano en
+  `/tmp/cacao-audit-full-20260815151534.log`; su resultado debe conservarse
+  como evidencia de QA cuando termine.
+- El `.venv` está incompleto: `flake8` y `pydocstyle` no están instalados, y
+  `black`/`mypy` fallan al importar `pathspec.patterns.gitignore`. Estos son
+  fallos del entorno, no veredictos sobre el código.
+
+### Hallazgos confirmados abiertos en GitHub
+
+- #422 — Importación de comprobantes permite seleccionar un libro de otra
+  compañía. La ruta de lotes no valida `Book.entity == company_id` y el
+  adapter conserva el libro cross-company.
+- #423 — La migración `0009` vuelve inaccesibles los comparativos creados bajo
+  `0008`: agrega `purchase_request_id` nullable sin backfill, mientras la vista
+  actual responde 404 cuando falta.
+- #424 — El comparativo empareja líneas repetidas por posición e ignora UOM,
+  conversión, bodega y descripción; puede presentar la tarifa de otra línea.
+- #425 — La ruta `/request-for-quotation/comparison/new` llama al helper no
+  definido `_render_comparativo_ofertas_lista` y falla con `NameError`.
+- #426 — Las APIs de líneas sin `target_type` llegan a
+  `normalize_doctype(None)` y fallan con `AttributeError`/HTTP 500.
+
+El issue #418 recibió seguimiento con el residuo de autorización: las rutas
+de borrado de libros/unidades no verifican permiso de acción y las mutaciones
+GET de entidad siguen sin restringirse a escritura/configuración.
+
+### Decisiones de continuidad
+
+Los próximos cambios deben corregir primero el aislamiento compañía-libro de
+importaciones y el backfill de comparativos antes de ampliar rondas o UI. Toda
+nueva ronda debe conservar una identidad de línea comercial estable y probar
+UOM/conversión, y las operaciones de maestros contables deben usar POST,
+CSRF, permiso de acción y ACL por compañía/libro.
+
+## 2026-08-15 — Cierre de monitoreo de issues #425 y #426
+
+### Petición
+
+Se confirmó continuar con commits semánticos firmados y monitorear los nuevos
+issues abiertos sin cerrarlos.
+
+### Correcciones
+
+- #425 quedó cubierto por `ccaf17f5` y `0e55ebc4`: la ruta Nueva comparativa
+  delega a la vista existente y cuenta con prueba HTTP.
+- #426 quedó corregido en `b1272635`: `get_source_items` acepta explícitamente
+  `target_type=None`, no normaliza `None` y devuelve las líneas completas sin
+  consumir cantidades de un destino inexistente.
+- El residuo de permisos de #418 quedó corregido en `cc129a8a`; las rutas
+  destructivas exigen la acción `eliminar`.
+
+### Validación final
+
+- `tests/test_05document_flow.py`: 31 passed.
+- `tests/test_11_contabilidad_coverage.py tests/test_03webactions.py`: 284
+  passed.
+- Importaciones y sourcing focal: 30 passed; migraciones: 3 passed.
+- Corrida completa en `/tmp/cacao-backend-qa-20260815-rounds.log`: 1532
+  passed, 9 skipped, 188 failed. Los 188 fallos permanecen concentrados en
+  `tests/test_04database_schema.py`, la inconsistencia preexistente del
+  entorno documentada en esta bitácora.
+- Todos los commits realizados en esta etapa tienen sign-off de
+  `williamjmorenor@gmail.com`; todos los issues revisados permanecen abiertos.
+
+## 2026-08-15 — Continuación de auditoría estática de lógica, cálculos y flujo
+
+### Petición
+
+Se indicó no ejecutar pruebas y continuar la revisión de errores de lógica,
+cálculo y flujo de negocio.
+
+### Alcance de esta etapa
+
+- Se detuvo la corrida global de pytest iniciada previamente; terminó por
+  señal `143` y no se usa como resultado de calidad de esta etapa.
+- Se revisaron los cambios locales actuales del flujo de comparativos de
+  Solicitud de Compra, RFQ y Cotización de Proveedor, además de los servicios
+  de relaciones documentales y cálculo de importes.
+- Se preservaron los cambios locales existentes. No se modificó código de
+  aplicación ni se ejecutaron más pruebas.
+
+### Hallazgos nuevos documentados
+
+- #427: el comparativo nuevo toma las líneas de la primera cotización como
+  universo; omite artículos presentes sólo en ofertas posteriores y puede
+  distorsionar la cobertura de compra.
+- #428: la creación de una Cotización de Proveedor desde una RFQ no valida que
+  la compañía enviada coincida con la RFQ origen ni exige acceso/estado del
+  origen antes de persistirla.
+- #429: el flujo válido Solicitud de Compra → Cotización de Proveedor directa
+  no es considerado por `supplier_quotations_for_request`, por lo que esas
+  cotizaciones aprobadas no aparecen en el comparativo.
+- Se comentó #424 porque el nuevo helper de cotizaciones también empareja por
+  `item_code` y ocurrencia, ignorando UOM, conversión, bodega y descripción.
+- Se amplió #299 porque `_line_amount` confía en el `amount` enviado por el
+  cliente en Compras e Inventario en lugar de garantizar `qty × rate`.
+- Se comentó #423 porque el handler compartido aborta antes de alcanzar el
+  código histórico de `PurchaseOrderComparison`, dejando inaccesibles los
+  comparativos antiguos aunque se reconstruya su Solicitud de Compra.
+- #430: el comparativo vuelve a cargar cotizaciones por ID sin filtrar
+  canceladas ni congelar sus importes, por lo que puede mostrar como vigente
+  una oferta retirada.
+- #431: la ruta POST de creación usa acceso de consulta y no exige permiso de
+  acción `crear` para persistir el comparativo.
+
+### Continuidad
+
+Los siguientes cambios deben preservar simultáneamente los comparativos
+históricos y los nuevos, usar como universo las líneas canónicas de la
+Solicitud/RFQ, validar compañía/estado/permisos al crear documentos derivados,
+resolver ambos caminos de sourcing (directo y vía RFQ), y calcular los
+importes en servidor con una política explícita de redondeo.
+
+## 2026-08-15 — Correcciones de continuidad para issues #427–#431
+
+### Petición
+
+Se solicitó monitorear nuevos issues de GitHub, aplicar fixes sin cerrar los
+issues y trabajar con commits semánticos firmados por
+`William José Moreno Reyes <williamjmorenor@gmail.com>`.
+
+### Implementación
+
+- #427: el comparativo ahora construye sus filas como la unión estable de las
+  líneas de todas las ofertas participantes y muestra `Sin cobertura` cuando
+  una oferta no contiene una línea.
+- #428: la creación de Cotizaciones de Proveedor valida origen aprobado,
+  acceso a compañía y encabezado inmutable de compañía/moneda.
+- #429: el servicio del comparativo incluye cotizaciones trazables directamente
+  desde la Solicitud de Compra, además de las relacionadas vía RFQ.
+- #430: las ofertas cargadas en un comparativo deben seguir aprobadas y
+  pertenecer a la compañía del comparativo; se excluyen canceladas y cross-company.
+- #431: la creación POST del comparativo exige la acción `crear` por compañía;
+  la consulta GET conserva `consultar`.
+
+### Commits y validación
+
+- `06590aff fix(purchases): allow supplier quotations without rounds`.
+- `99c0b71f fix(purchases): complete supplier quotation comparison`.
+- `ea975842 fix(purchases): enforce comparison lifecycle and access`.
+- Todos incluyen el sign-off solicitado.
+- `tests/test_purchase_request_comparison.py tests/test_purchase_sourcing.py`:
+  13 passed.
+- Ruff, Black y `git diff --check`: correctos.
+- Se comentaron #427, #428, #429, #430 y #431; todos permanecen abiertos.
+
+### Continuidad
+
+No se cerraron issues. Permanecen cambios locales no relacionados en `.replit`,
+`ISSUES.md`, `SESSIONS.md` y `tests/test_e2e_modules.py`; deben preservarse y
+revisarse antes de cualquier commit posterior.
+
+### Nota de continuidad
+
+Durante esta misma etapa se incorporó también el commit firmado
+`c1d8c425 fix(purchases): allow multiple supplier quotations per rfq`, que
+ajusta el flujo documental y su prueba end-to-end. Se conserva como cambio
+independiente del alcance #427–#431.
+
+## 2026-08-15 — Corrección del flujo aprobado del comparativo (#420)
+
+### Petición
+
+Se reportó una regresión: al crear una comparativa, la Solicitud de Compra
+desaparecía del listado; además, el punto de entrada había vuelto a exigir
+Órdenes de Compra. Se confirmó nuevamente que el proceso aprobado es:
+
+`Solicitud de Compra abierta/aprobada → N Solicitudes de Cotización → N Cotizaciones de Proveedor → Comparativo de Ofertas`.
+
+### Implementación
+
+- El listado `/buying/request-for-quotation/comparison` vuelve a partir de
+  Solicitudes de Compra aprobadas, sin filtrarlas por Órdenes de Compra.
+- Cada solicitud permanece en la lista después de crear el comparativo; la
+  fila muestra `Pendiente` o `Comparativo creado` y enlaza al detalle vigente.
+- La selección carga únicamente Cotizaciones de Proveedor aprobadas asociadas
+  directamente a la Solicitud de Compra o a cualquiera de sus RFQ.
+- La creación persiste `PurchaseRequestComparison` con las ofertas elegidas;
+  no se reintroduce una Orden de Compra como requisito del comparativo.
+
+### Validación y cierre
+
+- `tests/test_purchase_request_comparison.py tests/test_transaction_update_elements.py`: 20 passed.
+- `tests/test_database_migrations.py`: 3 passed.
+- Se cerrará el issue remoto #420 porque su propuesta de basar el proceso en
+  Órdenes de Compra contradice el flujo aprobado confirmado en esta sesión.

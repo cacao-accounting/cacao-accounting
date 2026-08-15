@@ -2004,6 +2004,14 @@ class PurchaseRequestComparison(database.Model, BaseTabla):  # type: ignore[name
     """Comparativo de cotizaciones de proveedor para una solicitud de compra."""
 
     __tablename__ = "purchase_request_comparison"
+    posting_date = database.Column(database.Date(), nullable=True, index=True)
+    document_no = database.Column(database.String(100), nullable=True, index=True)
+    naming_series_id = database.Column(
+        database.String(26),
+        database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
     company = database.Column(
         database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
     )
