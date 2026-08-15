@@ -152,13 +152,20 @@ def create_purchase_request_comparison(
 
 def supplier_quotations_for_comparison(comparison_id: str) -> list[SupplierQuotation]:
     """Return the persisted offers in comparison display order."""
+    comparison = database.session.get(PurchaseRequestComparison, comparison_id)
+    if comparison is None:
+        return []
     offer_ids = database.select(PurchaseRequestComparisonOffer.supplier_quotation_id).where(
         PurchaseRequestComparisonOffer.comparison_id == comparison_id
     )
     return list(
         database.session.execute(
             database.select(SupplierQuotation)
-            .where(SupplierQuotation.id.in_(offer_ids))
+            .where(
+                SupplierQuotation.id.in_(offer_ids),
+                SupplierQuotation.company == comparison.company,
+                SupplierQuotation.docstatus == 1,
+            )
             .order_by(SupplierQuotation.supplier_name, SupplierQuotation.document_no, SupplierQuotation.id)
         )
         .scalars()
