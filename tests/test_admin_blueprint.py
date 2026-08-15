@@ -90,8 +90,16 @@ def test_require_system_admin_unauthorized(app_instance):
         client.post("/login", data={"usuario": "non_admin", "acceso": "ProtectedPassword123!"})
 
         # Accessing system admin endpoints should abort(403)
-        response = client.get("/settings/external-document-validation")
-        assert response.status_code == 403
+        for endpoint in (
+            "/settings/external-document-validation",
+            "/settings/modules",
+            "/settings/users",
+            "/settings/users/new",
+            "/settings/roles",
+            "/settings/roles/new",
+        ):
+            response = client.get(endpoint)
+            assert response.status_code == 403, endpoint
 
 
 def test_lista_modulos(app_instance):
@@ -499,9 +507,7 @@ def test_config_conciliacion_compras_y_ventas(app_instance):
         with app_instance.app_context():
             from cacao_accounting.database import CompanyDefaultAccount
 
-            defaults = database.session.execute(
-                database.select(CompanyDefaultAccount).filter_by(company="cacao")
-            ).scalar_one()
+            defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one()
             assert defaults.apply_advances_automatically is True
 
         # GET sales matching
