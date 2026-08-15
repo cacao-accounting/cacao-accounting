@@ -16,13 +16,23 @@ from cacao_accounting.database import (
     PurchaseRequest,
     PurchaseRequestComparison,
     PurchaseRequestComparisonOffer,
+    PurchaseRequestItem,
+    PurchaseOrder,
+    PurchaseOrderItem,
+    Party,
     SupplierQuotation,
     SupplierQuotationItem,
+    Item,
+    UOM,
     database,
 )
 from cacao_accounting.compras import _validate_supplier_quotation_header
 from cacao_accounting.compras.purchase_request_comparison_service import (
+    comparison_recommendations,
+    create_purchase_orders_from_comparison,
     create_purchase_request_comparison,
+    finalize_purchase_request_comparison,
+    save_purchase_request_comparison_draft,
     supplier_quotation_comparison_rows,
     supplier_quotations_for_comparison,
     supplier_quotations_for_request,
@@ -227,3 +237,394 @@ def test_comparison_excludes_cancelled_or_cross_company_offers(app_ctx):
         database.session.commit()
 
         assert supplier_quotations_for_comparison(comparison.id) == [current]
+
+
+def test_comparison_recommends_by_line_and_groups_purchase_orders(app_ctx):
+    """The comparison selects the lowest price per line and groups orders by supplier."""
+    with app_ctx.app_context():
+        entity = Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-1", currency="NIO")
+        uom = UOM(code="UND", name="Unidad")
+        item_one = Item(code="ITEM-COMP-1", name="Producto 1", item_type="goods", is_stock_item=True, default_uom="UND")
+        item_two = Item(code="ITEM-COMP-2", name="Producto 2", item_type="goods", is_stock_item=True, default_uom="UND")
+        supplier = Party(id="PARTY-AWARD-1", code="SUP-AWARD-1", name="Proveedor Uno", is_supplier=True)
+        request = PurchaseRequest(id="PREQ-AWARD", company="cacao", posting_date=date(2026, 8, 15), docstatus=1)
+        request_item_one = PurchaseRequestItem(
+            id="PREQI-AWARD-1",
+            purchase_request_id=request.id,
+            item_code=item_one.code,
+            item_name=item_one.name,
+            qty=Decimal("10"),
+            uom="UND",
+        )
+        request_item_two = PurchaseRequestItem(
+            id="PREQI-AWARD-2",
+            purchase_request_id=request.id,
+            item_code=item_two.code,
+            item_name=item_two.name,
+            qty=Decimal("5"),
+            uom="UND",
+        )
+        offer_one = SupplierQuotation(
+            id="SQ-AWARD-1", company="cacao", supplier_id=supplier.id, supplier_name=supplier.name, docstatus=1
+        )
+        offer_two = SupplierQuotation(
+            id="SQ-AWARD-2", company="cacao", supplier_id=supplier.id, supplier_name=supplier.name, docstatus=1
+        )
+        lines = [
+            SupplierQuotationItem(
+                id="SQAI-1",
+                supplier_quotation_id=offer_one.id,
+                item_code=item_one.code,
+                qty=10,
+                uom="UND",
+                rate=10,
+                amount=100,
+            ),
+            SupplierQuotationItem(
+                id="SQAI-2", supplier_quotation_id=offer_one.id, item_code=item_two.code, qty=5, uom="UND", rate=20, amount=100
+            ),
+            SupplierQuotationItem(
+                id="SQAI-3",
+                supplier_quotation_id=offer_two.id,
+                item_code=item_one.code,
+                qty=10,
+                uom="UND",
+                rate=12,
+                amount=120,
+            ),
+            SupplierQuotationItem(
+                id="SQAI-4", supplier_quotation_id=offer_two.id, item_code=item_two.code, qty=5, uom="UND", rate=15, amount=75
+            ),
+        ]
+        database.session.add_all(
+            [
+                entity,
+                uom,
+                item_one,
+                item_two,
+                supplier,
+                request,
+                request_item_one,
+                request_item_two,
+                offer_one,
+                offer_two,
+                *lines,
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
+                DocumentRelation(
+                    source_type="purchase_request",
+                    source_id=request.id,
+                    target_type="supplier_quotation",
+                    target_id=offer_one.id,
+                    qty=15,
+                    relation_type="quotation",
+                    status="active",
+                ),
+                DocumentRelation(
+                    source_type="purchase_request",
+                    source_id=request.id,
+                    target_type="supplier_quotation",
+                    target_id=offer_two.id,
+                    qty=15,
+                    relation_type="quotation",
+                    status="active",
+                ),
+            ]
+        )
+        database.session.flush()
+
+        comparison = create_purchase_request_comparison(request, [offer_one.id, offer_two.id], "USER-COMP")
+        rows = comparison_recommendations(comparison)
+        assert [row["recommended"]["offer"].id for row in rows] == [offer_one.id, offer_two.id]
+
+        save_purchase_request_comparison_draft(
+            comparison,
+            {request_item_one.id: offer_one.id, request_item_two.id: offer_one.id},
+            {request_item_two.id: "Preferencia comercial"},
+            "USER-COMP",
+        )
+        assert comparison.status == "pending_authorization"
+        with pytest.raises(ValueError, match="Gerente"):
+            finalize_purchase_request_comparison(comparison, "USER-COMP", False)
+
+        finalize_purchase_request_comparison(comparison, "MANAGER", True)
+        assert comparison.status == "finalized"
+        orders = create_purchase_orders_from_comparison(comparison)
+        assert len(orders) == 1
+        assert orders[0].supplier_name == "Proveedor Uno"
+        assert database.session.query(PurchaseOrderItem).filter_by(purchase_order_id=orders[0].id).count() == 2
+        assert database.session.query(PurchaseOrder).filter_by(purchase_request_comparison_id=comparison.id).count() == 1
+
+
+def test_comparison_matches_request_lines_by_commercial_identity_not_occurrence(app_ctx):
+    """Same item in different UOM are distinct lines and do not cross-match by position."""
+    with app_ctx.app_context():
+        entity = Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-1", currency="NIO")
+        uom = UOM(code="UND", name="Unidad")
+        item = Item(code="ITEM-MULTIUOM", name="Producto multi UOM", item_type="goods", is_stock_item=True, default_uom="UND")
+        supplier = Party(id="PARTY-MULTIUOM-1", code="SUP-MULTIUOM-1", name="Proveedor Multi UOM", is_supplier=True)
+        request = PurchaseRequest(id="PREQ-MULTIUOM", company="cacao", posting_date=date(2026, 8, 15), docstatus=1)
+        request_line_und = PurchaseRequestItem(
+            id="PREQI-MULTIUOM-UND",
+            purchase_request_id=request.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("10"),
+            uom="UND",
+            qty_in_base_uom=Decimal("10"),
+            warehouse="WH-A",
+        )
+        request_line_caja = PurchaseRequestItem(
+            id="PREQI-MULTIUOM-CAJA",
+            purchase_request_id=request.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("2"),
+            uom="CAJA",
+            qty_in_base_uom=Decimal("20"),
+            warehouse="WH-A",
+        )
+        offer = SupplierQuotation(
+            id="SQ-MULTIUOM", company="cacao", supplier_id=supplier.id, supplier_name=supplier.name, docstatus=1
+        )
+        lines = [
+            SupplierQuotationItem(
+                id="SQAI-MULTIUOM-UND",
+                supplier_quotation_id=offer.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("10"),
+                uom="UND",
+                qty_in_base_uom=Decimal("10"),
+                warehouse="WH-A",
+                rate=Decimal("10"),
+                amount=Decimal("100"),
+            ),
+            SupplierQuotationItem(
+                id="SQAI-MULTIUOM-CAJA",
+                supplier_quotation_id=offer.id,
+                item_code=item.code,
+                item_name=item.name,
+                qty=Decimal("2"),
+                uom="CAJA",
+                qty_in_base_uom=Decimal("20"),
+                warehouse="WH-A",
+                rate=Decimal("5"),
+                amount=Decimal("10"),
+            ),
+        ]
+        database.session.add_all([entity, uom, item, supplier, request, request_line_und, request_line_caja, offer, *lines])
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=request.id,
+                target_type="supplier_quotation",
+                target_id=offer.id,
+                qty=Decimal("12"),
+                relation_type="quotation",
+                status="active",
+            )
+        )
+        database.session.flush()
+
+        comparison = create_purchase_request_comparison(request, [offer.id], "USER-COMP")
+        rows = comparison_recommendations(comparison)
+        by_item = {row["item"].id: row for row in rows}
+        assert by_item[request_line_und.id]["recommended"]["line"].id == "SQAI-MULTIUOM-UND"
+        assert by_item[request_line_caja.id]["recommended"]["line"].id == "SQAI-MULTIUOM-CAJA"
+
+
+def test_comparison_coverage_compares_base_uom_quantities(app_ctx):
+    """An offer must cover the request quantity after UOM conversion."""
+    with app_ctx.app_context():
+        entity = Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-1", currency="NIO")
+        uom = UOM(code="UND", name="Unidad")
+        item = Item(code="ITEM-COVER", name="Producto cobertura", item_type="goods", is_stock_item=True, default_uom="UND")
+        supplier = Party(id="PARTY-COVER-1", code="SUP-COVER-1", name="Proveedor Cobertura", is_supplier=True)
+        request = PurchaseRequest(id="PREQ-COVER", company="cacao", posting_date=date(2026, 8, 15), docstatus=1)
+        request_item = PurchaseRequestItem(
+            id="PREQI-COVER-1",
+            purchase_request_id=request.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("1"),
+            uom="UND",
+            qty_in_base_uom=Decimal("12"),
+        )
+        offer = SupplierQuotation(
+            id="SQ-COVER", company="cacao", supplier_id=supplier.id, supplier_name=supplier.name, docstatus=1
+        )
+        short_line = SupplierQuotationItem(
+            id="SQAI-COVER-SHORT",
+            supplier_quotation_id=offer.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("5"),
+            uom="UND",
+            qty_in_base_uom=Decimal("5"),
+            rate=Decimal("10"),
+            amount=Decimal("50"),
+        )
+        covering_line = SupplierQuotationItem(
+            id="SQAI-COVER-OK",
+            supplier_quotation_id=offer.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("20"),
+            uom="UND",
+            qty_in_base_uom=Decimal("20"),
+            rate=Decimal("8"),
+            amount=Decimal("160"),
+        )
+        database.session.add_all([entity, uom, item, supplier, request, request_item, offer, short_line, covering_line])
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=request.id,
+                target_type="supplier_quotation",
+                target_id=offer.id,
+                qty=Decimal("1"),
+                relation_type="quotation",
+                status="active",
+            )
+        )
+        database.session.flush()
+
+        comparison = create_purchase_request_comparison(request, [offer.id], "USER-COMP")
+        rows = comparison_recommendations(comparison)
+        assert rows[0]["recommended"]["line"].id == "SQAI-COVER-OK"
+
+
+def test_comparison_orders_apply_exchange_rate_to_base_total(app_ctx):
+    """Orders derived from a comparison compute base totals with the transaction exchange rate."""
+    with app_ctx.app_context():
+        entity = Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-1", currency="NIO")
+        uom = UOM(code="UND", name="Unidad")
+        item = Item(code="ITEM-TC", name="Producto tipo de cambio", item_type="goods", is_stock_item=True, default_uom="UND")
+        supplier = Party(id="PARTY-TC-1", code="SUP-TC-1", name="Proveedor TC", is_supplier=True)
+        request = PurchaseRequest(id="PREQ-TC", company="cacao", posting_date=date(2026, 8, 15), docstatus=1)
+        request_item = PurchaseRequestItem(
+            id="PREQI-TC-1",
+            purchase_request_id=request.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("10"),
+            uom="UND",
+            qty_in_base_uom=Decimal("10"),
+        )
+        offer = SupplierQuotation(
+            id="SQ-TC",
+            company="cacao",
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            transaction_currency="USD",
+            docstatus=1,
+        )
+        offer_item = SupplierQuotationItem(
+            id="SQAI-TC-1",
+            supplier_quotation_id=offer.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("10"),
+            uom="UND",
+            qty_in_base_uom=Decimal("10"),
+            rate=Decimal("2"),
+            amount=Decimal("20"),
+        )
+        from cacao_accounting.database import ExchangeRate
+
+        database.session.add_all(
+            [
+                entity,
+                uom,
+                item,
+                supplier,
+                request,
+                request_item,
+                offer,
+                offer_item,
+                ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 8, 15)),
+            ]
+        )
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=request.id,
+                target_type="supplier_quotation",
+                target_id=offer.id,
+                qty=Decimal("10"),
+                relation_type="quotation",
+                status="active",
+            )
+        )
+        database.session.flush()
+
+        comparison = create_purchase_request_comparison(request, [offer.id], "USER-COMP")
+        save_purchase_request_comparison_draft(comparison, {request_item.id: offer.id}, {}, "USER-COMP")
+        finalize_purchase_request_comparison(comparison, "MANAGER", True)
+        orders = create_purchase_orders_from_comparison(comparison)
+        assert orders[0].transaction_currency == "USD"
+        assert orders[0].base_currency == "NIO"
+        assert orders[0].exchange_rate == Decimal("36")
+        assert orders[0].base_total == Decimal("720")
+
+
+def test_comparison_rejects_cancelled_offer_when_placing_orders(app_ctx):
+    """A quotation cancelled after finalization must not be turned into an order."""
+    with app_ctx.app_context():
+        entity = Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-1", currency="NIO")
+        uom = UOM(code="UND", name="Unidad")
+        item = Item(code="ITEM-CANCEL", name="Producto cancelado", item_type="goods", is_stock_item=True, default_uom="UND")
+        supplier = Party(id="PARTY-CANCEL-1", code="SUP-CANCEL-1", name="Proveedor Cancelado", is_supplier=True)
+        request = PurchaseRequest(id="PREQ-CANCEL", company="cacao", posting_date=date(2026, 8, 15), docstatus=1)
+        request_item = PurchaseRequestItem(
+            id="PREQI-CANCEL-1",
+            purchase_request_id=request.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("10"),
+            uom="UND",
+            qty_in_base_uom=Decimal("10"),
+        )
+        offer = SupplierQuotation(
+            id="SQ-CANCEL", company="cacao", supplier_id=supplier.id, supplier_name=supplier.name, docstatus=1
+        )
+        offer_item = SupplierQuotationItem(
+            id="SQAI-CANCEL-1",
+            supplier_quotation_id=offer.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("10"),
+            uom="UND",
+            qty_in_base_uom=Decimal("10"),
+            rate=Decimal("2"),
+            amount=Decimal("20"),
+        )
+        database.session.add_all([entity, uom, item, supplier, request, request_item, offer, offer_item])
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=request.id,
+                target_type="supplier_quotation",
+                target_id=offer.id,
+                qty=Decimal("10"),
+                relation_type="quotation",
+                status="active",
+            )
+        )
+        database.session.flush()
+
+        comparison = create_purchase_request_comparison(request, [offer.id], "USER-COMP")
+        save_purchase_request_comparison_draft(comparison, {request_item.id: offer.id}, {}, "USER-COMP")
+        finalize_purchase_request_comparison(comparison, "MANAGER", True)
+        offer.docstatus = 2
+        database.session.flush()
+        with pytest.raises(ValueError, match="aprobada"):
+            create_purchase_orders_from_comparison(comparison)

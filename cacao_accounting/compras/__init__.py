@@ -41,7 +41,11 @@ from cacao_accounting.compras.purchase_order_comparison_service import (
     purchase_order_comparison_round_orders,
 )
 from cacao_accounting.compras.purchase_request_comparison_service import (
+    comparison_recommendations,
+    create_purchase_orders_from_comparison,
     create_purchase_request_comparison,
+    finalize_purchase_request_comparison,
+    save_purchase_request_comparison_draft,
     supplier_quotation_comparison_rows,
     supplier_quotations_for_comparison,
     supplier_quotations_for_request,
@@ -83,6 +87,7 @@ from cacao_accounting.database import (
     PurchaseReceiptItem,
     PurchaseRequest,
     PurchaseRequestComparison,
+    PurchaseRequestComparisonLine,
     PurchaseRequestItem,
     PaymentEntry,
     PaymentReference,
@@ -1255,6 +1260,88 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
     )
 
 
+@compras.route("/request-for-quotation/comparison/<comparison_id>/draft", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_comparativo_guardar_borrador(comparison_id: str):
+    """Save per-line selections without finalizing the comparison."""
+    comparison = database.session.get(PurchaseRequestComparison, comparison_id)
+    if not comparison:
+        abort(404)
+    exige_acceso_compania("purchases", comparison.company, "crear")
+    selections = {
+        key.removeprefix("selection_"): value or None
+        for key, value in request.form.items()
+        if key.startswith("selection_")
+    }
+    reasons = {
+        key.removeprefix("override_reason_"): value or None
+        for key, value in request.form.items()
+        if key.startswith("override_reason_")
+    }
+    try:
+        save_purchase_request_comparison_draft(comparison, selections, reasons, current_user.id)
+        database.session.commit()
+        flash(_("Borrador del comparativo guardado correctamente."), "success")
+    except (ValueError, SQLAlchemyError) as exc:
+        database.session.rollback()
+        flash_error(exc)
+    return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
+
+
+@compras.route("/request-for-quotation/comparison/<comparison_id>/finalize", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_comparativo_finalizar(comparison_id: str):
+    """Authorize and finalize a purchase-request comparison."""
+    comparison = database.session.get(PurchaseRequestComparison, comparison_id)
+    if not comparison:
+        abort(404)
+    exige_acceso_compania("purchases", comparison.company, "autorizar")
+    selections = {
+        key.removeprefix("selection_"): value or None
+        for key, value in request.form.items()
+        if key.startswith("selection_")
+    }
+    reasons = {
+        key.removeprefix("override_reason_"): value or None
+        for key, value in request.form.items()
+        if key.startswith("override_reason_")
+    }
+    try:
+        save_purchase_request_comparison_draft(comparison, selections, reasons, current_user.id)
+        finalize_purchase_request_comparison(
+            comparison,
+            current_user.id,
+            is_purchase_sourcing_authorizer(current_user.id),
+        )
+        database.session.commit()
+        flash(_("Comparativo autorizado y finalizado correctamente."), "success")
+    except (ValueError, SQLAlchemyError) as exc:
+        database.session.rollback()
+        flash_error(exc)
+    return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
+
+
+@compras.route("/request-for-quotation/comparison/<comparison_id>/place-purchase-orders", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_comparativo_colocar_ordenes_solicitud(comparison_id: str):
+    """Create purchase orders grouped by supplier from a finalized comparison."""
+    comparison = database.session.get(PurchaseRequestComparison, comparison_id)
+    if not comparison:
+        abort(404)
+    exige_acceso_compania("purchases", comparison.company, "crear")
+    try:
+        orders = create_purchase_orders_from_comparison(comparison)
+        database.session.commit()
+        flash(_("Se crearon {} Órdenes de Compra correctamente.").format(len(orders)), "success")
+    except (ValueError, DocumentFlowError, IdentifierConfigurationError, SQLAlchemyError) as exc:
+        database.session.rollback()
+        flash_error(exc)
+    return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
+
+
 @compras.route("/request-for-quotation/comparison/<comparison_id>/round", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -1319,6 +1406,15 @@ def compras_comparativo_ordenes(comparison_id: str):
             abort(404)
         for offer in offers:
             _require_purchase_document_access(offer)
+        comparison_lines = list(
+            database.session.execute(
+                database.select(PurchaseRequestComparisonLine)
+                .where(PurchaseRequestComparisonLine.comparison_id == request_comparison.id)
+                .order_by(PurchaseRequestComparisonLine.id)
+            )
+            .scalars()
+            .all()
+        )
         offer_items = {
             offer.id: list(
                 database.session.execute(
@@ -1332,13 +1428,20 @@ def compras_comparativo_ordenes(comparison_id: str):
             for offer in offers
         }
         comparison_rows = supplier_quotation_comparison_rows(offers, offer_items)
+        try:
+            recommendations = comparison_recommendations(request_comparison)
+        except ValueError:
+            recommendations = []
         return render_template(
             "compras/comparativo_solicitud.html",
             comparison=request_comparison,
             purchase_request=purchase_request,
             offers=offers,
             comparison_rows=comparison_rows,
-            titulo="Comparativo de Ofertas - " + (request_comparison.id or ""),
+            recommendations=recommendations,
+            comparison_lines=comparison_lines,
+            is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
+            titulo="Comparativo de Ofertas - " + (request_comparison.document_no or request_comparison.id or ""),
         )
 
     if not comparison:
