@@ -24,6 +24,7 @@ from cacao_accounting.compras import _validate_supplier_quotation_header
 from cacao_accounting.compras.purchase_request_comparison_service import (
     create_purchase_request_comparison,
     supplier_quotation_comparison_rows,
+    supplier_quotations_for_comparison,
     supplier_quotations_for_request,
 )
 
@@ -200,3 +201,27 @@ def test_supplier_quotation_origin_header_is_immutable(app_ctx, monkeypatch):
         with app_ctx.test_request_context(method="POST", data={"company": "other", "currency": "NIO"}):
             with pytest.raises(DocumentFlowError, match="compañía"):
                 _validate_supplier_quotation_header(source)
+
+
+def test_comparison_excludes_cancelled_or_cross_company_offers(app_ctx):
+    """Cancelled and cross-company offers are not current comparison participants."""
+    with app_ctx.app_context():
+        entity = Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-1", currency="NIO")
+        other_entity = Entity(code="other", name="Other", company_name="Other", tax_id="T-2", currency="NIO")
+        request = PurchaseRequest(id="REQ-STATE", company="cacao", docstatus=1)
+        comparison = PurchaseRequestComparison(id="PRC-STATE-01", company="cacao", purchase_request_id=request.id)
+        current = SupplierQuotation(id="SQ-STATE-1", company="cacao", docstatus=1)
+        cancelled = SupplierQuotation(id="SQ-STATE-2", company="cacao", docstatus=2)
+        cross_company = SupplierQuotation(id="SQ-STATE-3", company="other", docstatus=1)
+        database.session.add_all([entity, other_entity, request, comparison, current, cancelled, cross_company])
+        database.session.flush()
+        database.session.add_all(
+            [
+                PurchaseRequestComparisonOffer(comparison_id=comparison.id, supplier_quotation_id=current.id),
+                PurchaseRequestComparisonOffer(comparison_id=comparison.id, supplier_quotation_id=cancelled.id),
+                PurchaseRequestComparisonOffer(comparison_id=comparison.id, supplier_quotation_id=cross_company.id),
+            ]
+        )
+        database.session.commit()
+
+        assert supplier_quotations_for_comparison(comparison.id) == [current]

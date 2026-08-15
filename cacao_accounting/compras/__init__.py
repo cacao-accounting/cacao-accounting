@@ -1213,6 +1213,7 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
     candidates = supplier_quotations_for_request(purchase_request)
     candidate_ids = {quotation.id for quotation in candidates}
     if request.method == "POST":
+        exige_acceso_compania("purchases", purchase_request.company, "crear")
         participant_ids = request.form.getlist("supplier_quotation_ids")
         if not participant_ids or not set(participant_ids).issubset(candidate_ids):
             flash_error("Seleccione únicamente cotizaciones de proveedor de la misma Solicitud de Compra.")
