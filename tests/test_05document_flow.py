@@ -336,12 +336,18 @@ def test_get_create_actions_includes_request_to_supplier_quotation_action(app_ct
     database.session.add(request_doc)
     database.session.flush()
 
-    actions = get_create_actions("purchase_request", request_doc.id)
+    with app_ctx.test_request_context():
+        actions = get_create_actions("purchase_request", request_doc.id)
 
     action_targets = [a["target_type"] for a in actions]
     assert "purchase_quotation" in action_targets
     assert "supplier_quotation" in action_targets
     assert "purchase_order" in action_targets
+    comparison_action = next(action for action in actions if action["target_type"] == "purchase_order_comparison")
+    assert comparison_action["label"] == "Crear Comparativo de Ofertas"
+    assert comparison_action["create_url"].endswith(
+        f"/buying/request-for-quotation/comparison/purchase-request/{request_doc.id}"
+    )
 
 
 def test_get_create_actions_includes_sales_request_to_order_action(app_ctx):

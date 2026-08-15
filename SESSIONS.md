@@ -478,3 +478,25 @@ Todos permanecen abiertos para revisión posterior. `.replit` continúa fuera de
 - `cacaoctl db migrate` inicialmente reveló que `20260814_0007_balance_confirmation.py` usaba `DEFAULT 0` para un booleano en PostgreSQL. Se corrigió en `b4ed3999 fix(migrations): use portable boolean default` usando `sa.false()`.
 - La migración se aplicó correctamente en la base de desarrollo y dejó `alembic_version = 20260815_0008`; las tablas `purchase_order_comparison` y `purchase_order_comparison_order` están disponibles para la UI.
 - La corrida completa solicitada terminó con `188 failed, 1528 passed, 9 skipped`; los 188 fallos están concentrados en `tests/test_04database_schema.py` y corresponden a inconsistencias preexistentes del entorno de pruebas, no al comparativo nuevo.
+
+
+## 2026-08-15 — Inicio del comparativo desde una Solicitud de Compra
+
+### Petición
+
+En `/buying/request-for-quotation/comparison` no era suficientemente visible la
+acción para crear un nuevo comparativo de ofertas a partir de una Solicitud de
+Compra aprobada.
+
+### Plan e implementación
+
+- Se agregó al registro documental de `purchase_request` la acción
+  `Crear Comparativo de Ofertas`, enlazada al selector de órdenes relacionadas
+  por Solicitud de Compra.
+- El listado de comparativos ahora rotula su acción como `Crear comparativo`
+  y mantiene la regla de mostrar únicamente solicitudes con Órdenes de Compra
+  aprobadas relacionadas.
+- La selección del pedido base y de las ofertas continúa validándose en el
+  servidor; no se crean comparativos sin una Orden de Compra participante.
+- Se añadió una prueba de regresión para la acción documental y su URL.
+- Se añadió la ruta `/comparison/new` y el botón visible `Nueva comparativa` en el encabezado del bloque del listado para que el inicio del flujo sea explícito desde la pantalla solicitada.

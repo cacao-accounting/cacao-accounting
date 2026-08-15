@@ -32,10 +32,13 @@ macros %} {%- if TESTING -%}
       </p>
     </div>
   </div>
+  <a href="{{ url_for('compras.compras_comparativo_ofertas_nueva') }}" class="btn btn-sm btn-primary">
+    <i class="bi bi-plus-circle me-1"></i>Nueva comparativa
+  </a>
   {{ macros.list_filters(show_status=True) }}
   <table class="ca-table">
     <caption style="display: none">
-      Solicitudes de Compra con Órdenes de Compra relacionadas.
+      Solicitudes de Compra disponibles para crear comparativos de ofertas.
     </caption>
     <thead>
       <tr>
@@ -57,7 +60,7 @@ macros %} {%- if TESTING -%}
           <a
             href="{{ url_for('compras.compras_comparativo_ordenes_seleccionar', purchase_request_id=item.id) }}"
             class="btn btn-sm btn-primary"
-            >Seleccionar solicitud</a
+            ><i class="bi bi-plus-circle me-1"></i>Crear comparativo</a
           >
         </td>
       </tr>
