@@ -23,6 +23,7 @@ from flask import (
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from cacao_accounting.database import Book, database
+from sqlalchemy import or_
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.imports.services.import_service import ImportService
@@ -65,7 +66,29 @@ def _batch_or_404(batch_id: str, action: str = "consultar") -> ImportBatch:
     """Load a batch only after validating the user's company scope."""
     batch = ImportBatch.query.get_or_404(batch_id)
     exige_acceso_compania("imports", batch.company_id, action)
+    if batch.accounting_book_id:
+        permission = Permisos(modulo=obtener_id_modulo_por_nombre("imports"), usuario=current_user.id)
+        book_action = {
+            "consultar": "can_read",
+            "crear": "can_create",
+            "editar": "can_write",
+            "eliminar": "can_delete",
+        }.get(action, "can_read")
+        if not permission.tiene_acceso_libro(batch.accounting_book_id, book_action):
+            abort(403)
     return batch
+
+
+def _resolve_company_book(company_id: str, book_value: str | None) -> Book | None:
+    """Resolve a book only when it belongs to the selected company."""
+    if not book_value:
+        return None
+    return database.session.execute(
+        database.select(Book).where(
+            Book.entity == company_id,
+            or_(Book.id == book_value, Book.code == book_value),
+        )
+    ).scalar_one_or_none()
 
 
 @imports.before_request
@@ -113,6 +136,16 @@ def new():
         if record_type != "journal_entry" and accounting_book_id:
             flash("El libro contable solo se permite para comprobantes contables.", "danger")
             return redirect(url_for("imports.new"))
+
+        book = _resolve_company_book(company_id, accounting_book_id)
+        if accounting_book_id and not book:
+            flash("El libro contable no pertenece a la compañía seleccionada.", "danger")
+            return redirect(url_for("imports.new"))
+        if book:
+            permission = Permisos(modulo=obtener_id_modulo_por_nombre("imports"), usuario=current_user.id)
+            if not permission.tiene_acceso_libro(book.id, "can_create"):
+                abort(403)
+            accounting_book_id = book.code
 
         batch = ImportBatch(
             company_id=company_id,

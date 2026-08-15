@@ -108,7 +108,13 @@ class JournalEntryAdapter(BaseImportAdapter):
         """Resolve selected book or all active company books when none is selected."""
         selected_book = context.get("accounting_book_id")
         if selected_book:
-            return [str(selected_book)]
+            company_id = context.get("company_id")
+            book = database.session.execute(
+                select(Book).where(Book.entity == company_id, or_(Book.id == selected_book, Book.code == selected_book))
+            ).scalar_one_or_none()
+            if not book or book.entity != company_id:
+                raise ValueError("El libro contable no pertenece a la compañía seleccionada.")
+            return [book.code]
 
         company_id = context.get("company_id")
         if not company_id:
