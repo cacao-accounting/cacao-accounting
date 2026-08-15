@@ -112,13 +112,7 @@ def supplier_quotation_comparison_rows(
 
 def _supplier_quotation_item_key(item: SupplierQuotationItem) -> tuple[str | None, ...]:
     """Return the stable commercial identity for a supplier quotation line."""
-    return (
-        item.item_code,
-        item.uom,
-        str(item.qty_in_base_uom) if item.qty_in_base_uom is not None else None,
-        item.warehouse,
-        item.description,
-    )
+    return _request_item_key(item)
 
 
 def _supplier_quotation_item_at_occurrence(
