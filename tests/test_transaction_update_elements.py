@@ -43,6 +43,18 @@ def test_supplier_quotation_updates_from_purchase_quotation_doctype():
     assert "request_for_quotation" not in template
 
 
+def test_purchase_detail_breadcrumbs_include_their_list_pages():
+    """Los detalles de RFQ y oferta deben conservar el contexto de navegación."""
+    purchase_quotation = _read("cacao_accounting/compras/templates/compras/solicitud_cotizacion.html")
+    supplier_quotation = _read("cacao_accounting/compras/templates/compras/cotizacion_proveedor.html")
+    supplier_quotation_new = _read("cacao_accounting/compras/templates/compras/cotizacion_proveedor_nueva.html")
+
+    assert "compras.compras_solicitud_cotizacion_lista" in purchase_quotation
+    assert "compras.compras_cotizacion_proveedor_lista" in supplier_quotation
+    assert "compras.compras_solicitud_cotizacion" in supplier_quotation_new
+    assert "compras.compras_solicitud_compra" in supplier_quotation_new
+
+
 def test_purchase_request_shortcuts_include_company_and_autofill_lines():
     """Los atajos S2P deben cargar y aplicar las líneas de la solicitud origen."""
     macro = _read("cacao_accounting/templates/transaction_form_macros.html")
@@ -66,6 +78,20 @@ def test_purchase_request_list_displays_generated_document_number():
     assert '<th scope="col">Número</th>' in template
     assert "item.document_no or item.id" in template
     assert "compras.compras_solicitud_compra" in template
+
+
+def test_offer_comparison_list_keeps_requests_and_shows_comparison_status():
+    """El listado conserva la solicitud y presenta el estado del comparativo."""
+    routes = _read("cacao_accounting/compras/__init__.py")
+    template = _read("cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html")
+    selector = _read("cacao_accounting/compras/templates/compras/comparativo_ordenes_seleccionar.html")
+
+    assert "PurchaseRequest.docstatus == 1" in routes
+    assert "PurchaseRequestComparison.purchase_request_id.in_(request_ids)" in routes
+    assert "Comparativo creado" in template
+    assert "Ver comparativo" in template
+    assert 'name="supplier_quotation_ids"' in selector
+    assert "purchase_order" not in selector
 
 
 def test_purchase_request_list_does_not_display_total_column():

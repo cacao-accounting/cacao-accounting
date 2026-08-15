@@ -47,6 +47,7 @@ from cacao_accounting.compras.purchase_order_comparison_service import (
     create_purchase_order_comparison,
     current_purchase_order_comparison_round,
     open_purchase_order_comparison_round,
+    purchase_order_comparison_rows,
     purchase_request_for_comparison,
     purchase_orders_for_request,
     purchase_order_comparison_round_orders,
@@ -383,6 +384,32 @@ def test_legacy_purchase_order_comparison_resolves_request_origin(app_ctx):
         database.session.commit()
 
         assert purchase_request_for_comparison(comparison) is purchase_request
+
+
+def test_purchase_order_comparison_includes_lines_only_in_later_offer(app_ctx):
+    """The order comparison includes the union of participant lines."""
+    with app_ctx.app_context():
+        base = PurchaseOrder(id="PO-ROWS-BASE", company="cacao", docstatus=1)
+        later = PurchaseOrder(id="PO-ROWS-LATER", company="cacao", docstatus=1)
+        base_item = PurchaseOrderItem(
+            id="POI-ROWS-BASE",
+            purchase_order_id=base.id,
+            item_code="ITEM-BASE",
+            qty=Decimal("1"),
+            rate=Decimal("10"),
+        )
+        later_item = PurchaseOrderItem(
+            id="POI-ROWS-LATER",
+            purchase_order_id=later.id,
+            item_code="ITEM-LATER",
+            qty=Decimal("2"),
+            rate=Decimal("20"),
+        )
+
+        rows = purchase_order_comparison_rows([base, later], {base.id: [base_item], later.id: [later_item]})
+
+        assert [row["item"].item_code for row in rows] == ["ITEM-BASE", "ITEM-LATER"]
+        assert rows[1]["offers"][base.id] is None
 
 
 def test_purchase_order_comparison_matches_repeated_lines_by_commercial_identity(app_ctx):

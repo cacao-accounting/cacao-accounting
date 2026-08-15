@@ -15,6 +15,7 @@ from cacao_accounting.database import (
     SupplierQuotationItem,
     database,
 )
+from cacao_accounting.document_identifiers import assign_document_identifier
 
 
 def purchase_quotation_ids_for_request(purchase_request: PurchaseRequest) -> set[str]:
@@ -133,11 +134,18 @@ def create_purchase_request_comparison(
     comparison = PurchaseRequestComparison(
         company=purchase_request.company,
         purchase_request_id=purchase_request.id,
+        posting_date=purchase_request.posting_date,
         status="draft",
         created_by=user_id,
     )
     database.session.add(comparison)
     database.session.flush()
+    assign_document_identifier(
+        document=comparison,
+        entity_type="purchase_request_comparison",
+        posting_date_raw=comparison.posting_date,
+        naming_series_id=None,
+    )
     for quotation_id in sorted(selected_ids):
         database.session.add(
             PurchaseRequestComparisonOffer(

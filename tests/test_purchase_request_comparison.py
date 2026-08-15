@@ -107,6 +107,8 @@ def test_comparison_collects_supplier_quotations_through_request_rfqs(app_ctx):
 
         stored = database.session.get(PurchaseRequestComparison, comparison.id)
         assert stored.purchase_request_id == request.id
+        assert stored.document_no.startswith("cacao-CMP-")
+        assert stored.naming_series_id is not None
         participants = database.session.query(PurchaseRequestComparisonOffer).filter_by(comparison_id=comparison.id).all()
         assert {participant.supplier_quotation_id for participant in participants} == {offer_one.id, offer_two.id}
 
