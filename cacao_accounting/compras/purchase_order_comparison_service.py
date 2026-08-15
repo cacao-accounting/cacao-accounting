@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 
 from cacao_accounting.database import (
     DocumentRelation,
@@ -154,7 +154,7 @@ def purchase_orders_for_request(purchase_request: PurchaseRequest) -> list[Purch
 def create_purchase_order_comparison(
     purchase_request: PurchaseRequest,
     base_order: PurchaseOrder,
-    participant_ids: Sequence[str],
+    participant_ids: Collection[str],
     user_id: str | None,
 ) -> PurchaseOrderComparison:
     """Persist a comparison from a request with selected purchase-order offers."""
@@ -213,7 +213,7 @@ def purchase_order_comparison_round_orders(round_id: str) -> list[PurchaseOrderC
 def open_purchase_order_comparison_round(
     comparison: PurchaseOrderComparison,
     purchase_request: PurchaseRequest,
-    participant_ids: Sequence[str],
+    participant_ids: Collection[str],
     user_id: str | None,
 ) -> PurchaseOrderComparisonRound:
     """Close the current round and open a new explicit participant snapshot."""

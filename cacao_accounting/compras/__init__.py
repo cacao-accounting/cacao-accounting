@@ -1393,6 +1393,7 @@ def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
     purchase_request = purchase_request_for_comparison(comparison)
     if not purchase_request:
         abort(404)
+    assert purchase_request is not None
     candidate_orders = purchase_orders_for_request(purchase_request)
     candidate_ids = {order.id for order in candidate_orders}
     participant_ids = set(request.form.getlist("participant_ids"))
