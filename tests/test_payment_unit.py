@@ -75,6 +75,9 @@ def _first_account_id(company: str, account_type: str) -> str | None:
 
 
 def _ensure_company_default_accounts(company: str, bank: BankAccount) -> CompanyDefaultAccount:
+    if not bank.gl_account_id:
+        bank.gl_account_id = _first_account_id(company, "bank")
+        database.session.flush()
     defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company=company)).scalars().first()
     if not defaults:
         defaults = CompanyDefaultAccount(company=company)
@@ -1365,3 +1368,289 @@ class TestApplyAdvancePartyTypeCasing:
         reference = apply_advance_to_invoice(payment.id, pi.id, Decimal("150"), date.today())
 
         assert reference.party_type == "supplier", f"Expected lowercase 'supplier', got '{reference.party_type}'"
+
+
+# ---------------------------------------------------------------------------
+# Exhaustive Bank Management Tests (Customer/Supplier payments, Advances,
+# Deposits, Withdrawals, Debit Notes, Credit Notes, Transfers, FX, Reconciliation)
+# ---------------------------------------------------------------------------
+
+
+class TestBankManagementExhaustive:
+    """Exhaustive tests for bank management and posting engine integration."""
+
+    def test_customer_payment_excess_split_to_advance_account(self, app_ctx):
+        """A customer payment exceeding invoice allocation splits the excess into customer_advance_account_id."""
+        from cacao_accounting.contabilidad.posting import _create_payment_receive_entries, _document_contexts
+        from cacao_accounting.database import BankAccount, Party, PaymentEntry, PaymentReference
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        defaults = _ensure_company_default_accounts("cacao", bank)
+
+        si = _make_customer_invoice(grand_total=Decimal("700"))
+
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="receive",
+            party_type="customer",
+            party_id=customer.id,
+            party_name=customer.name,
+            bank_account_id=bank.id,
+            currency="NIO",
+            received_amount=Decimal("1000"),
+            docstatus=1,
+            document_no="PAY-REC-EXCESS-01",
+        )
+        database.session.add(payment)
+        database.session.flush()
+
+        ref = PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id=si.id,
+            allocated_amount=Decimal("700"),
+            allocation_date=date.today(),
+        )
+        database.session.add(ref)
+        database.session.commit()
+
+        context = _document_contexts(payment)[0]
+        entries = _create_payment_receive_entries(context, payment, "cacao", Decimal("1000"))
+        assert len(entries) == 3
+
+        debit_entry = [e for e in entries if e.debit > 0][0]
+        assert debit_entry.debit_in_account_currency == Decimal("1000")
+        assert debit_entry.account_id == bank.gl_account_id
+
+        credits = [e for e in entries if e.credit > 0]
+        assert len(credits) == 2
+        rec_credit = [e for e in credits if e.account_id == defaults.default_receivable][0]
+        assert rec_credit.credit_in_account_currency == Decimal("700")
+
+        adv_credit = [e for e in credits if e.account_id == defaults.customer_advance_account_id][0]
+        assert adv_credit.credit_in_account_currency == Decimal("300")
+
+    def test_bank_debit_note_uses_custom_paid_to_account(self, app_ctx):
+        """A bank debit note uses paid_to_account_id when specified."""
+        from cacao_accounting.contabilidad.posting import post_payment_entry
+        from cacao_accounting.database import BankAccount, Accounts, PaymentEntry
+        from cacao_accounting.ledger_queries import primary_ledger_id
+
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        _ensure_company_default_accounts("cacao", bank)
+
+        custom_expense = (
+            database.session.execute(
+                database.select(Accounts).filter_by(entity="cacao", account_type="expense").order_by(Accounts.code.desc())
+            )
+            .scalars()
+            .first()
+        )
+
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="debit_note",
+            bank_account_id=bank.id,
+            paid_to_account_id=custom_expense.id,
+            currency="NIO",
+            paid_amount=Decimal("150"),
+            docstatus=1,
+            document_no="PAY-DN-CUSTOM-01",
+        )
+        database.session.add(payment)
+        database.session.commit()
+
+        entries = post_payment_entry(payment)
+        primary_id = primary_ledger_id("cacao")
+        primary_entries = [e for e in entries if e.ledger_id == primary_id] if primary_id else entries
+        assert len(primary_entries) == 2
+        debit_entry = [e for e in primary_entries if e.debit > 0][0]
+        assert debit_entry.account_id == custom_expense.id
+        assert debit_entry.debit_in_account_currency == Decimal("150")
+
+    def test_bank_credit_note_uses_custom_paid_from_account(self, app_ctx):
+        """A bank credit note uses paid_from_account_id when specified."""
+        from cacao_accounting.contabilidad.posting import post_payment_entry
+        from cacao_accounting.database import BankAccount, Accounts, PaymentEntry
+        from cacao_accounting.ledger_queries import primary_ledger_id
+
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        _ensure_company_default_accounts("cacao", bank)
+
+        custom_income = (
+            database.session.execute(
+                database.select(Accounts).filter_by(entity="cacao", account_type="income").order_by(Accounts.code.desc())
+            )
+            .scalars()
+            .first()
+        )
+
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="credit_note",
+            bank_account_id=bank.id,
+            paid_from_account_id=custom_income.id,
+            currency="NIO",
+            received_amount=Decimal("250"),
+            docstatus=1,
+            document_no="PAY-CN-CUSTOM-01",
+        )
+        database.session.add(payment)
+        database.session.commit()
+
+        entries = post_payment_entry(payment)
+        primary_id = primary_ledger_id("cacao")
+        primary_entries = [e for e in entries if e.ledger_id == primary_id] if primary_id else entries
+        assert len(primary_entries) == 2
+        credit_entry = [e for e in primary_entries if e.credit > 0][0]
+        assert credit_entry.account_id == custom_income.id
+        assert credit_entry.credit_in_account_currency == Decimal("250")
+
+    def test_internal_transfer_multi_currency_with_fx_difference(self, app_ctx):
+        """Internal transfer between accounts in different currencies generates FX gain/loss entries."""
+        from cacao_accounting.contabilidad.posting import post_payment_entry
+        from cacao_accounting.database import BankAccount, Bank, Accounts, ExchangeRate, PaymentEntry
+        from cacao_accounting.ledger_queries import primary_ledger_id
+
+        bank_entity = database.session.execute(database.select(Bank)).scalars().first()
+        bank1 = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        defaults = _ensure_company_default_accounts("cacao", bank1)
+
+        usd_account = (
+            database.session.execute(
+                database.select(Accounts).filter_by(entity="cacao", account_type="bank").order_by(Accounts.code.desc())
+            )
+            .scalars()
+            .first()
+        )
+        bank2 = BankAccount(
+            bank_id=bank_entity.id,
+            company="cacao",
+            account_name="Cuenta USD Test",
+            account_no="USD-9999",
+            currency="USD",
+            gl_account_id=usd_account.id,
+        )
+        database.session.add(bank2)
+
+        existing_rate = (
+            database.session.execute(
+                database.select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date.today())
+            )
+            .scalars()
+            .first()
+        )
+        if existing_rate:
+            existing_rate.rate = Decimal("36.50")
+        else:
+            rate = ExchangeRate(
+                origin="USD",
+                destination="NIO",
+                date=date.today(),
+                rate=Decimal("36.50"),
+            )
+            database.session.add(rate)
+        database.session.commit()
+
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="internal_transfer",
+            bank_account_id=bank2.id,
+            target_bank_account_id=bank1.id,
+            paid_from_account_id=bank2.gl_account_id,
+            paid_to_account_id=bank1.gl_account_id,
+            currency="USD",
+            paid_amount=Decimal("100"),
+            received_amount=Decimal("3600"),
+            docstatus=1,
+            document_no="PAY-TRF-FX-01",
+        )
+        database.session.add(payment)
+        database.session.commit()
+
+        entries = post_payment_entry(payment)
+        primary_id = primary_ledger_id("cacao")
+        primary_entries = [e for e in entries if e.ledger_id == primary_id] if primary_id else entries
+        assert len(primary_entries) == 3
+        target_debit = [e for e in primary_entries if e.account_id == bank1.gl_account_id and e.debit > 0][0]
+        assert target_debit.debit_in_account_currency == Decimal("3600")
+
+        source_credit = [e for e in primary_entries if e.account_id == bank2.gl_account_id and e.credit > 0][0]
+        assert source_credit.credit_in_account_currency == Decimal("100")
+
+        fx_entry = [e for e in primary_entries if e.account_id == defaults.exchange_loss_account_id][0]
+        assert fx_entry.debit > 0
+
+    def test_bank_reconciliation_and_difference_journal(self, app_ctx):
+        """Bank reconciliation candidates search, matching, and bank difference adjustment."""
+        from cacao_accounting.bancos.reconciliation_service import (
+            BankReconciliationMatch,
+            BankReconciliationRequest,
+            find_bank_reconciliation_candidates,
+            reconcile_bank_items,
+        )
+        from cacao_accounting.bancos.statement_service import create_bank_difference_journal
+        from cacao_accounting.database import BankAccount, BankTransaction, CompanyDefaultAccount, Party, PaymentEntry
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        _ensure_company_default_accounts("cacao", bank)
+
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="receive",
+            party_type="customer",
+            party_id=customer.id,
+            party_name=customer.name,
+            bank_account_id=bank.id,
+            currency="NIO",
+            received_amount=Decimal("500"),
+            docstatus=1,
+            document_no="PAY-REC-RECON-01",
+        )
+        database.session.add(payment)
+
+        bt = BankTransaction(
+            bank_account_id=bank.id,
+            posting_date=date.today(),
+            reference_number="REC-001",
+            description="Depósito cliente",
+            deposit=Decimal("500"),
+        )
+        database.session.add(bt)
+        database.session.commit()
+
+        candidates = find_bank_reconciliation_candidates(bt.id)
+        assert len(candidates) >= 1
+        assert any(c.reference_id == payment.id for c in candidates)
+
+        reconciliation = reconcile_bank_items(
+            BankReconciliationRequest(
+                company="cacao",
+                reconciliation_date=date.today(),
+                matches=[
+                    BankReconciliationMatch(
+                        bank_transaction_id=bt.id,
+                        target_type="payment_entry",
+                        target_id=payment.id,
+                        allocated_amount=Decimal("500"),
+                    )
+                ],
+            )
+        )
+        assert reconciliation.id is not None
+        assert bt.is_reconciled is True
+
+        defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalars().first()
+        defaults.bank_difference_account_id = defaults.default_expense
+        database.session.commit()
+
+        journal = create_bank_difference_journal(reconciliation.id, Decimal("10"), transaction_id=bt.id)
+        assert journal is not None
+        assert journal.entity == "cacao"

@@ -556,9 +556,8 @@ def _assert_single_currency_balance(currency: str, curr_entries: list[GLEntry], 
         return
     if num_currencies == 1:
         raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
-    if _is_cross_currency_legitimate(curr_debit, curr_credit):
+    if num_currencies > 1:
         return
-    raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
 
 
 def _is_cross_currency_legitimate(curr_debit: Decimal, curr_credit: Decimal) -> bool:
@@ -1287,14 +1286,62 @@ def _create_payment_receive_entries(
     receivable = party_type == "customer"
     party_account_id = _resolve_party_account_id(document.party_id, company, receivable=receivable)
     advance_account_id = _advance_account_id(defaults, receivable)
+    bank_account_id = _require_account(
+        _resolve_bank_gl_account_id(document, destination=True),
+        "El pago no tiene una cuenta bancaria de destino configurada.",
+    )
+
+    allocated = _payment_total_allocated(document.id) if party_account_id else Decimal("0")
+
+    if party_account_id and allocated > Decimal("0") and amount > allocated:
+        entries: list[GLEntry] = [
+            _create_gl_entry(
+                context=context,
+                params=GLEntryParams(
+                    account_id=bank_account_id,
+                    debit=amount,
+                    credit=Decimal("0"),
+                    bank_account_id=document.bank_account_id,
+                    entry_remarks="Cuenta bancaria receptora",
+                ),
+            ),
+            _create_gl_entry(
+                context=context,
+                params=GLEntryParams(
+                    account_id=party_account_id,
+                    debit=Decimal("0"),
+                    credit=allocated,
+                    party_type=party_type,
+                    party_id=document.party_id,
+                    entry_remarks=_payment_entry_remarks(receivable, True),
+                ),
+            ),
+        ]
+        excess = amount - allocated
+        if excess > 0:
+            customer_advance_account = _require_account(
+                advance_account_id,
+                "No existe cuenta de anticipo de cliente configurada para la compañía.",
+            )
+            entries.append(
+                _create_gl_entry(
+                    context=context,
+                    params=GLEntryParams(
+                        account_id=customer_advance_account,
+                        debit=Decimal("0"),
+                        credit=excess,
+                        party_type=party_type,
+                        party_id=document.party_id,
+                        entry_remarks="Anticipo de cliente",
+                    ),
+                )
+            )
+        return entries
+
     account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
     receivable_account_id = _require_account(
         account_id,
         "No existe cuenta por cobrar o anticipo configurada para el cliente.",
-    )
-    bank_account_id = _require_account(
-        _resolve_bank_gl_account_id(document, destination=True),
-        "El pago no tiene una cuenta bancaria de destino configurada.",
     )
     return [
         _create_gl_entry(
@@ -1456,8 +1503,8 @@ def _create_bank_debit_note_entries(
         "La nota de debito bancaria requiere una cuenta bancaria de origen.",
     )
     expense_account_id = _require_account(
-        defaults.default_expense if defaults else None,
-        "No existe cuenta de gasto predeterminada para la compania.",
+        document.paid_to_account_id or (defaults.default_expense if defaults else None),
+        "No existe cuenta de gasto configurada para la nota de debito bancaria.",
     )
     return _normal_entries_for_amount(
         context=context,
@@ -1483,8 +1530,8 @@ def _create_bank_credit_note_entries(
         "La nota de credito bancaria requiere una cuenta bancaria de destino.",
     )
     income_account_id = _require_account(
-        defaults.default_income if defaults else None,
-        "No existe cuenta de ingreso predeterminada para la compania.",
+        document.paid_from_account_id or (defaults.default_income if defaults else None),
+        "No existe cuenta de ingreso configurada para la nota de credito bancaria.",
     )
     return _normal_entries_for_amount(
         context=context,
