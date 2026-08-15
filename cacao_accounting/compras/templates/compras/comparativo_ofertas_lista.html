@@ -16,7 +16,7 @@ macros %} {%- if TESTING -%}
       <a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a>
     </li>
     <li class="breadcrumb-item active" aria-current="page">
-      Comparativo de Órdenes de Compra
+      Comparativo de Ofertas
     </li>
   </ol>
 </nav>
@@ -25,22 +25,22 @@ macros %} {%- if TESTING -%}
   <div class="ca-card-header d-flex align-items-center justify-content-between">
     <div>
       <h5 class="ca-card-title">
-        <i class="bi bi-bar-chart-line"></i> Comparativo de Órdenes de Compra
+        <i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas
       </h5>
       <p class="mb-0 text-muted">
-        Seleccione una orden de compra como punto de partida.
+        Seleccione una Solicitud de Compra como punto de partida.
       </p>
     </div>
   </div>
   {{ macros.list_filters(show_status=True) }}
   <table class="ca-table">
     <caption style="display: none">
-      Órdenes de compra disponibles para crear comparativos.
+      Solicitudes de Compra con Órdenes de Compra relacionadas.
     </caption>
     <thead>
       <tr>
-        <th scope="col">Orden de Compra</th>
-        <th scope="col">Proveedor</th>
+        <th scope="col">Solicitud de Compra</th>
+        <th scope="col">Solicitante</th>
         <th scope="col">Fecha</th>
         <th scope="col">Total</th>
         <th scope="col">Acciones</th>
@@ -50,21 +50,21 @@ macros %} {%- if TESTING -%}
       {% for item in consulta.items -%}
       <tr>
         <td>{{ item.document_no or item.id }}</td>
-        <td>{{ item.supplier_name or item.supplier_id or "-" }}</td>
+        <td>{{ item.requested_by or "-" }}</td>
         <td>{{ item.posting_date or "" }}</td>
         <td>{{ item.grand_total or item.total or "0" }}</td>
         <td>
           <a
-            href="{{ url_for('compras.compras_comparativo_ordenes_seleccionar', purchase_order_id=item.id) }}"
+            href="{{ url_for('compras.compras_comparativo_ordenes_seleccionar', purchase_request_id=item.id) }}"
             class="btn btn-sm btn-primary"
-            >Seleccionar orden</a
+            >Seleccionar solicitud</a
           >
         </td>
       </tr>
       {%- else %}
       <tr>
         <td colspan="5" class="text-center text-muted">
-          No hay órdenes de compra enviadas disponibles.
+          No hay Solicitudes de Compra con órdenes relacionadas.
         </td>
       </tr>
       {%- endfor %}

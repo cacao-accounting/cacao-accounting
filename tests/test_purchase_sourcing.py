@@ -22,6 +22,7 @@ from cacao_accounting.database import (
     PurchaseOrder,
     PurchaseOrderComparison,
     PurchaseOrderComparisonOrder,
+    PurchaseRequest,
     Roles,
     RolesUser,
     SupplierQuotation,
@@ -41,6 +42,7 @@ from cacao_accounting.compras.purchase_sourcing_service import (
 from cacao_accounting.compras.purchase_order_comparison_service import (
     comparable_purchase_orders,
     create_purchase_order_comparison,
+    purchase_orders_for_request,
 )
 
 
@@ -255,6 +257,12 @@ def test_negotiation_rounds_replace_active_offer_set(app_ctx):
 def test_purchase_order_comparison_uses_selected_purchase_orders(app_ctx):
     """A comparison persists a base order and only the selected related orders."""
     with app_ctx.app_context():
+        purchase_request = PurchaseRequest(
+            id="PREQ-COMP-01",
+            company="cacao",
+            posting_date=date(2026, 1, 1),
+            docstatus=1,
+        )
         base = PurchaseOrder(
             id="PO-COMP-BASE",
             company="cacao",
@@ -276,13 +284,13 @@ def test_purchase_order_comparison_uses_selected_purchase_orders(app_ctx):
             posting_date=date(2026, 1, 3),
             docstatus=1,
         )
-        database.session.add_all([base, offer, unrelated])
+        database.session.add_all([purchase_request, base, offer, unrelated])
         database.session.flush()
         database.session.add_all(
             [
                 DocumentRelation(
                     source_type="purchase_request",
-                    source_id="PREQ-COMP-01",
+                    source_id=purchase_request.id,
                     target_type="purchase_order",
                     target_id=base.id,
                     qty=Decimal("1"),
@@ -291,7 +299,7 @@ def test_purchase_order_comparison_uses_selected_purchase_orders(app_ctx):
                 ),
                 DocumentRelation(
                     source_type="purchase_request",
-                    source_id="PREQ-COMP-01",
+                    source_id=purchase_request.id,
                     target_type="purchase_order",
                     target_id=offer.id,
                     qty=Decimal("1"),
@@ -302,11 +310,14 @@ def test_purchase_order_comparison_uses_selected_purchase_orders(app_ctx):
         )
         database.session.flush()
 
+        assert purchase_orders_for_request(purchase_request) == [base, offer]
         assert comparable_purchase_orders(base) == [base, offer]
-        comparison = create_purchase_order_comparison(base, [offer.id], "USER-COMP")
+        comparison = create_purchase_order_comparison(purchase_request, base, [offer.id], "USER-COMP")
         database.session.commit()
 
-        assert database.session.get(PurchaseOrderComparison, comparison.id).base_purchase_order_id == base.id
+        stored_comparison = database.session.get(PurchaseOrderComparison, comparison.id)
+        assert stored_comparison.base_purchase_order_id == base.id
+        assert stored_comparison.purchase_request_id == purchase_request.id
         participants = database.session.query(PurchaseOrderComparisonOrder).filter_by(comparison_id=comparison.id).all()
         assert {row.purchase_order_id for row in participants} == {base.id, offer.id}
         assert {row.is_base for row in participants} == {True, False}

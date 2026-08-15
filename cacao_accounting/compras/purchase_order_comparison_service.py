@@ -9,6 +9,7 @@ from cacao_accounting.database import (
     PurchaseOrder,
     PurchaseOrderComparison,
     PurchaseOrderComparisonOrder,
+    PurchaseRequest,
     database,
 )
 
@@ -49,17 +50,41 @@ def comparable_purchase_orders(base_order: PurchaseOrder) -> list[PurchaseOrder]
     )
 
 
+def purchase_orders_for_request(purchase_request: PurchaseRequest) -> list[PurchaseOrder]:
+    """Return submitted purchase orders created from a purchase request."""
+    order_ids = database.select(DocumentRelation.target_id).where(
+        DocumentRelation.source_type == "purchase_request",
+        DocumentRelation.source_id == purchase_request.id,
+        DocumentRelation.target_type == "purchase_order",
+        DocumentRelation.status == "active",
+    )
+    statement = database.select(PurchaseOrder).where(
+        PurchaseOrder.id.in_(order_ids),
+        PurchaseOrder.company == purchase_request.company,
+        PurchaseOrder.docstatus == 1,
+    )
+    return list(
+        database.session.execute(statement.order_by(PurchaseOrder.supplier_name, PurchaseOrder.document_no, PurchaseOrder.id))
+        .scalars()
+        .all()
+    )
+
+
 def create_purchase_order_comparison(
-    base_order: PurchaseOrder, participant_ids: Sequence[str], user_id: str | None
+    purchase_request: PurchaseRequest,
+    base_order: PurchaseOrder,
+    participant_ids: Sequence[str],
+    user_id: str | None,
 ) -> PurchaseOrderComparison:
-    """Persist a comparison with the base order and selected participant orders."""
-    candidates = {order.id: order for order in comparable_purchase_orders(base_order)}
+    """Persist a comparison from a request with selected purchase-order offers."""
+    candidates = {order.id: order for order in purchase_orders_for_request(purchase_request)}
     selected_ids = set(participant_ids) | {base_order.id}
     if not selected_ids.issubset(candidates):
         raise ValueError("Solo se pueden comparar órdenes de compra del mismo origen y compañía.")
 
     comparison = PurchaseOrderComparison(
         company=base_order.company,
+        purchase_request_id=purchase_request.id,
         base_purchase_order_id=base_order.id,
         status="draft",
         created_by=user_id,

@@ -33,8 +33,8 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
     get_unlinked_purchase_receipts_summary,
 )
 from cacao_accounting.compras.purchase_order_comparison_service import (
-    comparable_purchase_orders,
     create_purchase_order_comparison,
+    purchase_orders_for_request,
 )
 from cacao_accounting.compras.purchase_sourcing_service import (
     PurchaseSourcingError,
@@ -1137,34 +1137,48 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
 @modulo_activo("purchases")
 @login_required
 def compras_comparativo_ofertas_lista():
-    """List submitted purchase orders available as comparison starting points."""
-    consulta = _paginate_list(
-        PurchaseOrder,
-        (PurchaseOrder.document_no, PurchaseOrder.supplier_name, PurchaseOrder.remarks),
-        query=database.select(PurchaseOrder).where(PurchaseOrder.docstatus == 1),
+    """List purchase requests that have purchase orders available to compare."""
+    purchase_order_sources = database.select(DocumentRelation.source_id).where(
+        DocumentRelation.source_type == "purchase_request",
+        DocumentRelation.target_type == "purchase_order",
+        DocumentRelation.status == "active",
     )
-    titulo = "Comparativo de Órdenes de Compra - " + APPNAME
+    consulta = _paginate_list(
+        PurchaseRequest,
+        (PurchaseRequest.document_no, PurchaseRequest.requested_by, PurchaseRequest.remarks),
+        query=database.select(PurchaseRequest).where(
+            PurchaseRequest.docstatus == 1, PurchaseRequest.id.in_(purchase_order_sources)
+        ),
+    )
+    titulo = "Comparativo de Ofertas - " + APPNAME
     return render_template("compras/comparativo_ofertas_lista.html", consulta=consulta, titulo=titulo)
 
 
-@compras.route("/request-for-quotation/comparison/order/<purchase_order_id>", methods=["GET", "POST"])
+@compras.route("/request-for-quotation/comparison/purchase-request/<purchase_request_id>", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
-def compras_comparativo_ordenes_seleccionar(purchase_order_id: str):
-    """Select purchase-order offers for a new persisted comparison."""
-    base_order = database.session.get(PurchaseOrder, purchase_order_id)
-    if not base_order or base_order.docstatus != 1:
+def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
+    """Select a base order and offers from a purchase request."""
+    purchase_request = database.session.get(PurchaseRequest, purchase_request_id)
+    if not purchase_request or purchase_request.docstatus != 1:
         abort(404)
-    _require_purchase_document_access(base_order)
-    candidates = comparable_purchase_orders(base_order)
+    _require_purchase_document_access(purchase_request)
+    candidates = purchase_orders_for_request(purchase_request)
     candidate_ids = {order.id for order in candidates}
     if request.method == "POST":
+        base_order_id = request.form.get("base_purchase_order_id")
         participant_ids = request.form.getlist("participant_ids")
-        if not set(participant_ids).issubset(candidate_ids):
-            flash_error("Las órdenes seleccionadas no pertenecen al mismo origen de compra.")
-            return redirect(url_for("compras.compras_comparativo_ordenes_seleccionar", purchase_order_id=purchase_order_id))
+        if not base_order_id or base_order_id not in candidate_ids or not set(participant_ids).issubset(candidate_ids):
+            flash_error("Seleccione una orden base y ofertas de la misma Solicitud de Compra.")
+            return redirect(
+                url_for(
+                    "compras.compras_comparativo_ordenes_seleccionar",
+                    purchase_request_id=purchase_request_id,
+                )
+            )
         try:
-            comparison = create_purchase_order_comparison(base_order, participant_ids, current_user.id)
+            base_order = database.session.get(PurchaseOrder, base_order_id)
+            comparison = create_purchase_order_comparison(purchase_request, base_order, participant_ids, current_user.id)
             database.session.commit()
             return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
         except (ValueError, SQLAlchemyError) as exc:
@@ -1172,9 +1186,9 @@ def compras_comparativo_ordenes_seleccionar(purchase_order_id: str):
             flash_error(exc)
     return render_template(
         "compras/comparativo_ordenes_seleccionar.html",
-        base_order=base_order,
+        purchase_request=purchase_request,
         candidates=candidates,
-        titulo="Crear comparativo de órdenes de compra - " + APPNAME,
+        titulo="Crear comparativo de ofertas - " + APPNAME,
     )
 
 
@@ -1195,17 +1209,22 @@ def compras_comparativo_ordenes(comparison_id: str):
     if not comparison:
         abort(404)
     exige_acceso_compania("purchases", comparison.company, "consultar")
-    participant_rows = database.session.execute(
-        database.select(PurchaseOrderComparisonOrder)
-        .where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
-        .order_by(PurchaseOrderComparisonOrder.is_base.desc(), PurchaseOrderComparisonOrder.created)
-    ).scalars().all()
+    participant_rows = (
+        database.session.execute(
+            database.select(PurchaseOrderComparisonOrder)
+            .where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
+            .order_by(PurchaseOrderComparisonOrder.is_base.desc(), PurchaseOrderComparisonOrder.created)
+        )
+        .scalars()
+        .all()
+    )
     orders = [database.session.get(PurchaseOrder, row.purchase_order_id) for row in participant_rows]
     orders = [order for order in orders if order is not None]
     for order in orders:
         _require_purchase_document_access(order)
     base_order = database.session.get(PurchaseOrder, comparison.base_purchase_order_id)
-    if not base_order:
+    purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
+    if not base_order or not purchase_request:
         abort(404)
     base_items = list(
         database.session.execute(
@@ -1245,10 +1264,11 @@ def compras_comparativo_ordenes(comparison_id: str):
     return render_template(
         "compras/comparativo_ordenes.html",
         comparison=comparison,
+        purchase_request=purchase_request,
         base_order=base_order,
         orders=orders,
         comparison_rows=comparison_rows,
-        titulo="Comparativo de Órdenes de Compra - " + (comparison.id or ""),
+        titulo="Comparativo de Ofertas - " + (comparison.id or ""),
     )
 
 
