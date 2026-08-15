@@ -9,57 +9,55 @@
       >
     </li>
     <li class="breadcrumb-item active" aria-current="page">
-      Seleccionar ofertas
+      Seleccionar cotizaciones de proveedor
     </li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title">Crear comparativa</h5>
+    <h5 class="ca-card-title">Crear comparativo de ofertas</h5>
     <p class="mb-0 text-muted">
       Solicitud de Compra:
       <strong>{{ purchase_request.document_no or purchase_request.id }}</strong>.
-      Seleccione una Orden de Compra base y las órdenes que participarán como ofertas.
+      Seleccione las Cotizaciones de Proveedor que participarán en el comparativo.
     </p>
   </div>
   <form method="post" class="p-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <table class="ca-table">
       <caption style="display: none">
-        Selección de órdenes participantes.
+        Selección de cotizaciones participantes.
       </caption>
       <thead>
         <tr>
-          <th scope="col">Orden base</th>
-          <th scope="col">Participa como oferta</th>
-          <th scope="col">Orden</th>
+          <th scope="col">Participa</th>
+          <th scope="col">Cotización de Proveedor</th>
           <th scope="col">Proveedor</th>
           <th scope="col">Fecha</th>
           <th scope="col">Total</th>
         </tr>
       </thead>
       <tbody>
-        {% for order in candidates %}
+        {% for quotation in candidates %}
         <tr>
-          <td><input type="radio" name="base_purchase_order_id" value="{{ order.id }}" required aria-label="Orden base {{ order.document_no or order.id }}" /></td>
-          <td><input type="checkbox" name="participant_ids" value="{{ order.id }}" aria-label="Oferta {{ order.document_no or order.id }}" /></td>
-          <td>{{ order.document_no or order.id }}</td>
-          <td>{{ order.supplier_name or order.supplier_id or "-" }}</td>
-          <td>{{ order.posting_date or "" }}</td>
-          <td>{{ order.grand_total or order.total or "0" }}</td>
+          <td><input type="checkbox" name="supplier_quotation_ids" value="{{ quotation.id }}" aria-label="Oferta {{ quotation.document_no or quotation.id }}" /></td>
+          <td>{{ quotation.document_no or quotation.id }}</td>
+          <td>{{ quotation.supplier_name or quotation.supplier_id or "-" }}</td>
+          <td>{{ quotation.posting_date or "" }}</td>
+          <td>{{ quotation.grand_total or quotation.total or "0" }}</td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="6" class="text-center text-muted">
-            No hay órdenes relacionadas para comparar.
+          <td colspan="5" class="text-center text-muted">
+            No hay Cotizaciones de Proveedor asociadas a esta Solicitud de Compra.
           </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
-    <button type="submit" class="btn btn-primary mt-3">
-      <i class="bi bi-bar-chart-line me-1"></i>Crear comparativa
+    <button type="submit" class="btn btn-primary mt-3" {% if not candidates %}disabled{% endif %}>
+      <i class="bi bi-bar-chart-line me-1"></i>Crear comparativo
     </button>
   </form>
 </div>

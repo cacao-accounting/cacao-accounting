@@ -500,3 +500,32 @@ Compra aprobada.
   servidor; no se crean comparativos sin una Orden de Compra participante.
 - Se añadió una prueba de regresión para la acción documental y su URL.
 - Se añadió la ruta `/comparison/new` y el botón visible `Nueva comparativa` en el encabezado del bloque del listado para que el inicio del flujo sea explícito desde la pantalla solicitada.
+
+## 2026-08-15 — Comparativo desde Cotizaciones de Proveedor
+
+### Petición y decisión
+
+El proceso correcto parte de una Solicitud de Compra abierta. De ella pueden
+derivarse N Solicitudes de Cotización y cada una puede producir N Cotizaciones
+de Proveedor. El comparativo debe seleccionar las ofertas asociadas a la
+Solicitud de Compra original, sin conservar comparativos históricos basados en
+Órdenes de Compra.
+
+### Implementación
+
+- La selección reúne ofertas por la cadena activa
+  `purchase_request -> purchase_quotation -> supplier_quotation`, incluyendo
+  también la relación directa `SupplierQuotation.purchase_quotation_id`.
+- Se agregaron `PurchaseRequestComparison` y
+  `PurchaseRequestComparisonOffer` para persistir únicamente la nueva
+  comparación de ofertas.
+- El selector dejó de pedir una Orden de Compra base y ahora permite elegir
+  Cotizaciones de Proveedor asociadas a la Solicitud de Compra.
+- La vista final compara proveedores, documentos, totales y líneas de las
+  ofertas seleccionadas.
+- La migración `20260815_0011_purchase_request_comparisons.py` crea el nuevo
+  esquema sin backfill de los comparativos anteriores.
+- Se confirmó en la base de datos la solicitud `cacao-PREQ-2026-08-00002`
+  con las ofertas `cacao-SPQ-2026-08-00003` y `cacao-SPQ-2026-08-00002`.
+- Se aplicó la migración en el entorno local y se validó por HTTP la creación
+  del comparativo con ambas ofertas participantes.

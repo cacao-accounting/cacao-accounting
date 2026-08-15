@@ -28,7 +28,7 @@ macros %} {%- if TESTING -%}
         <i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas
       </h5>
       <p class="mb-0 text-muted">
-        Seleccione una Solicitud de Compra como punto de partida.
+        Seleccione una Solicitud de Compra abierta como punto de partida.
       </p>
     </div>
   </div>
@@ -38,7 +38,7 @@ macros %} {%- if TESTING -%}
   {{ macros.list_filters(show_status=True) }}
   <table class="ca-table">
     <caption style="display: none">
-      Solicitudes de Compra disponibles para crear comparativos de ofertas.
+      Solicitudes de Compra abiertas para crear comparativos con sus Cotizaciones de Proveedor.
     </caption>
     <thead>
       <tr>
@@ -67,7 +67,7 @@ macros %} {%- if TESTING -%}
       {%- else %}
       <tr>
         <td colspan="5" class="text-center text-muted">
-          No hay Solicitudes de Compra con órdenes relacionadas.
+          No hay Solicitudes de Compra abiertas disponibles.
         </td>
       </tr>
       {%- endfor %}
