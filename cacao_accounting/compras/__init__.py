@@ -1510,7 +1510,9 @@ def compras_comparativo_ordenes(comparison_id: str):
             abort(404)
     else:
         selected_round = current_purchase_order_comparison_round(comparison.id)
-    participant_rows = purchase_order_comparison_round_orders(selected_round.id) if selected_round else []
+    participant_rows: list[PurchaseOrderComparisonOrder] = (
+        list(purchase_order_comparison_round_orders(selected_round.id)) if selected_round else []
+    )
     if not participant_rows:
         participant_rows = (
             database.session.execute(
@@ -1521,8 +1523,11 @@ def compras_comparativo_ordenes(comparison_id: str):
             .scalars()
             .all()
         )
-    orders = [database.session.get(PurchaseOrder, row.purchase_order_id) for row in participant_rows]
-    orders = [order for order in orders if order is not None]
+    orders: list[PurchaseOrder] = []
+    for row in participant_rows:
+        order = database.session.get(PurchaseOrder, row.purchase_order_id)
+        if order is not None:
+            orders.append(order)
     for order in orders:
         _require_purchase_document_access(order)
     base_order = database.session.get(PurchaseOrder, comparison.base_purchase_order_id)
