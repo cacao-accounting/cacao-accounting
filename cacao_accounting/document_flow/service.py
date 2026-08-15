@@ -49,7 +49,11 @@ _MSG_LINEA_ORIGEN = "Linea origen no encontrada."
 
 def _allows_parallel_purchase_quotations(source_type: str, target_type: str | None) -> bool:
     """Indica si un origen permite cotizaciones paralelas sin consumir su cantidad."""
-    return normalize_doctype(source_type) == "purchase_request" and normalize_doctype(target_type) == "purchase_quotation"
+    return (
+        target_type is not None
+        and normalize_doctype(source_type) == "purchase_request"
+        and normalize_doctype(target_type) == "purchase_quotation"
+    )
 
 
 class DocumentFlowError(ValueError):
@@ -109,8 +113,14 @@ def _line_payload(source_type: str, source_id: str, item: Any, target_type: str 
     """Construye la respuesta estandar para una linea origen."""
     qty = decimal_or_zero(getattr(item, "qty", 0))
     parallel_quotations = _allows_parallel_purchase_quotations(source_type, target_type)
-    consumed = Decimal("0") if parallel_quotations else consumed_qty_for_source(source_type, source_id, item.id, target_type)
-    cancelled, closed = _state_quantities(source_type, source_id, item.id, target_type)
+    consumed = (
+        Decimal("0")
+        if not target_type or parallel_quotations
+        else consumed_qty_for_source(source_type, source_id, item.id, target_type)
+    )
+    cancelled, closed = (
+        _state_quantities(source_type, source_id, item.id, target_type) if target_type else (Decimal("0"), Decimal("0"))
+    )
     pending = qty - consumed - cancelled - closed
     if pending < Decimal("0"):
         pending = Decimal("0")
