@@ -24,6 +24,7 @@ from cacao_accounting.database import (
     PurchaseOrderComparisonOrder,
     PurchaseOrderComparisonRound,
     PurchaseOrderComparisonRoundOrder,
+    PurchaseOrderItem,
     PurchaseRequest,
     Roles,
     RolesUser,
@@ -350,3 +351,61 @@ def test_purchase_order_comparison_uses_selected_purchase_orders(app_ctx):
 
         with pytest.raises(ValueError, match="mismo origen"):
             open_purchase_order_comparison_round(comparison, purchase_request, ["PO-COMP-OTHER"], "USER-COMP")
+
+
+def test_purchase_order_comparison_matches_repeated_lines_by_commercial_identity(app_ctx):
+    """Repeated lines with different UOMs do not match by insertion order."""
+    from cacao_accounting.compras import _comparison_item_at_occurrence
+
+    with app_ctx.app_context():
+        entity = Entity(code="match-company", name="Match Company", company_name="Match Company", tax_id="MATCH")
+        item = Item(code="ITEM-MATCH", name="Producto", item_type="goods", is_stock_item=True, default_uom="UNIT")
+        box = UOM(code="BOX", name="Caja")
+        unit = UOM(code="UNIT", name="Unidad")
+        base = PurchaseOrder(id="PO-MATCH-BASE", company=entity.code, docstatus=1)
+        offer = PurchaseOrder(id="PO-MATCH-OFFER", company=entity.code, docstatus=1)
+        base_box = PurchaseOrderItem(
+            id="POI-MATCH-BOX",
+            purchase_order_id=base.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("10"),
+            uom=box.code,
+            rate=Decimal("100"),
+        )
+        base_unit = PurchaseOrderItem(
+            id="POI-MATCH-UNIT",
+            purchase_order_id=base.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom=unit.code,
+            rate=Decimal("10"),
+        )
+        offer_unit = PurchaseOrderItem(
+            id="POI-OFFER-UNIT",
+            purchase_order_id=offer.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom=unit.code,
+            rate=Decimal("11"),
+        )
+        offer_box = PurchaseOrderItem(
+            id="POI-OFFER-BOX",
+            purchase_order_id=offer.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("10"),
+            uom=box.code,
+            rate=Decimal("101"),
+        )
+        database.session.add_all([entity, item, box, unit, base, offer, base_box, base_unit, offer_unit, offer_box])
+        database.session.flush()
+
+        assert _comparison_item_at_occurrence([offer_unit, offer_box], base_box, 0).rate == Decimal("101")
+        assert _comparison_item_at_occurrence([offer_unit, offer_box], base_unit, 0).rate == Decimal("11")

@@ -20,8 +20,9 @@
       <i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas
     </h5>
     <p class="mb-0 text-muted">
-      Solicitud de Compra:
-      <strong>{{ purchase_request.document_no or purchase_request.id }}</strong> ·
+      {% if purchase_request %}Solicitud de Compra:
+      <strong>{{ purchase_request.document_no or purchase_request.id }}</strong> ·{% else %}
+      <span class="text-warning">Comparativo legacy sin Solicitud de Compra reconstruible</span> ·{% endif %}
       Orden base: <strong>{{ base_order.document_no or base_order.id }}</strong> ·
       Ofertas participantes: {{ orders|length }}
       {% if selected_round %} · Ronda {{ selected_round.round_number }} ({{ selected_round.status }}){% endif %}

@@ -30,6 +30,34 @@ def upgrade() -> None:
                 ["id"],
                 ondelete="RESTRICT",
             )
+    op.execute(
+        sa.text(
+            """
+            UPDATE purchase_order_comparison AS comparison
+            SET purchase_request_id = (
+                SELECT MIN(relation.source_id)
+                FROM purchase_order_comparison_order AS participant
+                JOIN document_relation AS relation
+                  ON relation.target_type = 'purchase_order'
+                 AND relation.target_id = participant.purchase_order_id
+                 AND relation.source_type = 'purchase_request'
+                 AND relation.status = 'active'
+                WHERE participant.comparison_id = comparison.id
+            )
+            WHERE comparison.purchase_request_id IS NULL
+              AND EXISTS (
+                SELECT 1
+                FROM purchase_order_comparison_order AS participant
+                JOIN document_relation AS relation
+                  ON relation.target_type = 'purchase_order'
+                 AND relation.target_id = participant.purchase_order_id
+                 AND relation.source_type = 'purchase_request'
+                 AND relation.status = 'active'
+                WHERE participant.comparison_id = comparison.id
+              )
+            """
+        )
+    )
 
 
 def downgrade() -> None:
