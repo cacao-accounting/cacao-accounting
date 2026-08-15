@@ -680,8 +680,12 @@ def _process_target_line(
     return {"index": index, "target_item_id": item.id}
 
 
-def create_target_document(payload: dict[str, Any]) -> dict[str, Any]:
-    """Crea un documento destino generico a partir de lineas fuente."""
+def create_target_document(payload: dict[str, Any], *, commit: bool = True) -> dict[str, Any]:
+    """Crea un documento destino generico a partir de lineas fuente.
+
+    ``commit=False`` permite que un servicio de negocio agregue relaciones
+    complementarias y confirme el documento de forma atómica.
+    """
     target_type = normalize_doctype(str(payload.get("target_document_type", "")))
     company = payload.get("company") or payload.get("company_id")
     posting_date = payload.get("posting_date")
@@ -699,7 +703,8 @@ def create_target_document(payload: dict[str, Any]) -> dict[str, Any]:
     created_lines = []
     for index, selected in enumerate(lines):
         created_lines.append(_process_target_line(index, selected, target, target_spec, target_type))
-    database.session.commit()
+    if commit:
+        database.session.commit()
     return {
         "target_type": target_type,
         "target_id": target.id,

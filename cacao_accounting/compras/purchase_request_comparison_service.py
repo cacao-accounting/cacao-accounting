@@ -3,18 +3,27 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import or_
 
 from cacao_accounting.database import (
     DocumentRelation,
     PurchaseRequest,
+    PurchaseRequestComparisonLine,
     PurchaseRequestComparison,
     PurchaseRequestComparisonOffer,
+    PurchaseRequestItem,
+    PurchaseOrder,
+    PurchaseOrderItem,
     SupplierQuotation,
     SupplierQuotationItem,
     database,
 )
+from cacao_accounting.document_flow import create_document_relation, create_target_document
+from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 
@@ -126,6 +135,11 @@ def create_purchase_request_comparison(
     user_id: str | None,
 ) -> PurchaseRequestComparison:
     """Persist a comparison with selected offers belonging to the request."""
+    existing = database.session.execute(
+        database.select(PurchaseRequestComparison).filter_by(purchase_request_id=purchase_request.id).limit(1)
+    ).scalar_one_or_none()
+    if existing:
+        raise ValueError("La Solicitud de Compra ya tiene un comparativo vigente.")
     candidates = {quotation.id: quotation for quotation in supplier_quotations_for_request(purchase_request)}
     selected_ids = set(supplier_quotation_ids)
     if not selected_ids or not selected_ids.issubset(candidates):
@@ -179,3 +193,315 @@ def supplier_quotations_for_comparison(comparison_id: str) -> list[SupplierQuota
         .scalars()
         .all()
     )
+
+
+def _request_item_key(item: PurchaseRequestItem) -> tuple[str | None, ...]:
+    """Return the stable commercial identity for a purchase-request line."""
+    return (
+        item.item_code,
+        item.uom,
+        item.warehouse,
+        item.description,
+    )
+
+
+def _line_coverage_qty(line_or_item: Any) -> Decimal:
+    """Return a line quantity normalized to base UOM for coverage comparison."""
+    if getattr(line_or_item, "qty_in_base_uom", None) is not None:
+        return Decimal(str(line_or_item.qty_in_base_uom))
+    return Decimal(str(getattr(line_or_item, "qty", 0) or 0))
+
+
+def _request_item_offer_line(
+    item: PurchaseRequestItem,
+    occurrence: int,
+    offer_items: Mapping[str, Sequence[SupplierQuotationItem]],
+    offer_id: str,
+) -> SupplierQuotationItem | None:
+    """Return the supplier line matching a request item commercial identity."""
+    key = _request_item_key(item)
+    matching = [line for line in offer_items.get(offer_id, ()) if _request_item_key(line) == key]
+    return matching[occurrence] if occurrence < len(matching) else None
+
+
+def purchase_request_comparison_recommendations(
+    purchase_request: PurchaseRequest,
+    offers: Sequence[SupplierQuotation],
+) -> list[dict[str, Any]]:
+    """Build one lowest-price recommendation for every purchase-request line."""
+    request_items = list(
+        database.session.execute(
+            database.select(PurchaseRequestItem)
+            .where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
+            .order_by(PurchaseRequestItem.id)
+        )
+        .scalars()
+        .all()
+    )
+    offer_items = {
+        offer.id: list(
+            database.session.execute(
+                database.select(SupplierQuotationItem)
+                .where(SupplierQuotationItem.supplier_quotation_id == offer.id)
+                .order_by(SupplierQuotationItem.id)
+            )
+            .scalars()
+            .all()
+        )
+        for offer in offers
+    }
+    occurrences: dict[tuple[str | None, ...], int] = {}
+    rows: list[dict[str, Any]] = []
+    for item in request_items:
+        key = _request_item_key(item)
+        occurrence = occurrences.get(key, 0)
+        occurrences[key] = occurrence + 1
+        required_qty = _line_coverage_qty(item)
+        candidates: list[dict[str, Any]] = []
+        for offer in offers:
+            line = _request_item_offer_line(item, occurrence, offer_items, offer.id)
+            offered_qty = _line_coverage_qty(line) if line else Decimal("0")
+            if line is None or offered_qty < required_qty:
+                continue
+            candidates.append(
+                {
+                    "offer": offer,
+                    "line": line,
+                    "rate": Decimal(str(line.rate or 0)),
+                }
+            )
+        candidates.sort(key=lambda candidate: (candidate["rate"], candidate["offer"].document_no or "", candidate["offer"].id))
+        rows.append(
+            {
+                "item": item,
+                "candidates": candidates,
+                "by_offer": {candidate["offer"].id: candidate for candidate in candidates},
+                "recommended": candidates[0] if candidates else None,
+            }
+        )
+    return rows
+
+
+def comparison_recommendations(comparison: PurchaseRequestComparison) -> list[dict[str, Any]]:
+    """Build recommendations using the persisted comparison participants."""
+    purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
+    if not purchase_request:
+        raise ValueError("La Solicitud de Compra del comparativo no existe.")
+    offers = supplier_quotations_for_comparison(comparison.id)
+    if not offers:
+        raise ValueError("El comparativo no tiene Cotizaciones de Proveedor vigentes.")
+    return purchase_request_comparison_recommendations(purchase_request, offers)
+
+
+def save_purchase_request_comparison_draft(
+    comparison: PurchaseRequestComparison,
+    selections: Mapping[str, str | None],
+    reasons: Mapping[str, str | None],
+    user_id: str | None,
+) -> list[PurchaseRequestComparisonLine]:
+    """Save editable per-line selections without final authorization."""
+    if comparison.status in {"finalized", "used"}:
+        raise ValueError("El comparativo ya fue finalizado y no admite cambios.")
+    rows = comparison_recommendations(comparison)
+    database.session.query(PurchaseRequestComparisonLine).filter_by(comparison_id=comparison.id).delete(
+        synchronize_session=False
+    )
+    saved_lines: list[PurchaseRequestComparisonLine] = []
+    has_override = False
+    for row in rows:
+        item = row["item"]
+        candidates = {candidate["offer"].id: candidate for candidate in row["candidates"]}
+        selected_id = selections.get(item.id) or None
+        selected = candidates.get(selected_id) if selected_id else None
+        if selected_id and selected is None:
+            raise ValueError(f"La oferta seleccionada no cubre la línea {item.item_code}.")
+        recommended = row["recommended"]
+        manual_override = bool(selected and (not recommended or selected["offer"].id != recommended["offer"].id))
+        has_override = has_override or manual_override
+        selected_line = selected["line"] if selected else None
+        recommended_line = recommended["line"] if recommended else None
+        reason = (reasons.get(item.id) or "").strip() or None
+        saved_line = PurchaseRequestComparisonLine(
+            comparison_id=comparison.id,
+            purchase_request_item_id=item.id,
+            recommended_supplier_quotation_id=recommended["offer"].id if recommended else None,
+            recommended_supplier_quotation_item_id=recommended_line.id if recommended_line else None,
+            selected_supplier_quotation_id=selected["offer"].id if selected else None,
+            selected_supplier_quotation_item_id=selected_line.id if selected_line else None,
+            qty=item.qty if selected else None,
+            rate=selected["rate"] if selected else None,
+            amount=(Decimal(str(item.qty or 0)) * selected["rate"]).quantize(Decimal("0.0001")) if selected else None,
+            manual_override=manual_override,
+            override_reason=reason,
+            created_by=user_id,
+        )
+        database.session.add(saved_line)
+        saved_lines.append(saved_line)
+    comparison.status = "pending_authorization" if has_override else "draft"
+    comparison.modified_by = user_id
+    database.session.flush()
+    return saved_lines
+
+
+def finalize_purchase_request_comparison(
+    comparison: PurchaseRequestComparison,
+    user_id: str | None,
+    is_authorizer: bool,
+) -> None:
+    """Authorize and finalize every selected request line."""
+    if not is_authorizer:
+        raise ValueError("Solo un Gerente de Compras o Administrador puede autorizar el comparativo.")
+    if comparison.status == "used":
+        raise ValueError("El comparativo ya fue utilizado para crear Órdenes de Compra.")
+    rows = comparison_recommendations(comparison)
+    saved = {
+        line.purchase_request_item_id: line
+        for line in database.session.execute(
+            database.select(PurchaseRequestComparisonLine).where(
+                PurchaseRequestComparisonLine.comparison_id == comparison.id
+            )
+        )
+        .scalars()
+        .all()
+    }
+    for row in rows:
+        item = row["item"]
+        line = saved.get(item.id)
+        if not line or not line.selected_supplier_quotation_id:
+            raise ValueError(f"Debe seleccionar una oferta para la línea {item.item_code}.")
+        if line.manual_override and not line.override_reason:
+            raise ValueError(f"La línea {item.item_code} requiere justificar el cambio de recomendación.")
+        line.authorized_by = user_id
+    now = datetime.now(timezone.utc)
+    comparison.status = "finalized"
+    comparison.authorized_by = user_id
+    comparison.authorized_at = now
+    comparison.finalized_by = user_id
+    comparison.finalized_at = now
+    comparison.modified_by = user_id
+    database.session.flush()
+
+
+def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison) -> list[PurchaseOrder]:
+    """Create one draft purchase order per supplier from a finalized comparison."""
+    if comparison.status != "finalized":
+        raise ValueError("El comparativo debe estar finalizado antes de crear Órdenes de Compra.")
+    existing = list(
+        database.session.execute(
+            database.select(PurchaseOrder).where(PurchaseOrder.purchase_request_comparison_id == comparison.id)
+        )
+        .scalars()
+        .all()
+    )
+    if existing:
+        raise ValueError("El comparativo ya tiene Órdenes de Compra generadas.")
+    purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
+    if not purchase_request:
+        raise ValueError("La Solicitud de Compra del comparativo no existe.")
+    lines = list(
+        database.session.execute(
+            database.select(PurchaseRequestComparisonLine)
+            .where(
+                PurchaseRequestComparisonLine.comparison_id == comparison.id,
+                PurchaseRequestComparisonLine.selected_supplier_quotation_id.is_not(None),
+            )
+            .order_by(PurchaseRequestComparisonLine.id)
+        )
+        .scalars()
+        .all()
+    )
+    grouped: dict[str, list[PurchaseRequestComparisonLine]] = {}
+    quotations_by_group: dict[str, SupplierQuotation] = {}
+    for line in lines:
+        quotation = database.session.get(SupplierQuotation, line.selected_supplier_quotation_id)
+        if not quotation:
+            raise ValueError("Una cotización seleccionada ya no existe.")
+        if quotation.company != comparison.company:
+            raise ValueError("Una cotización seleccionada pertenece a otra compañía.")
+        if quotation.docstatus != 1:
+            raise ValueError("Una cotización seleccionada ya no está aprobada.")
+        group_key = quotation.supplier_id or f"quotation:{quotation.id}"
+        grouped.setdefault(group_key, []).append(line)
+        quotations_by_group.setdefault(group_key, quotation)
+    orders: list[PurchaseOrder] = []
+    for group_key, selected_lines in grouped.items():
+        quotation = quotations_by_group[group_key]
+        flow_lines = []
+        for selected in selected_lines:
+            selected_quotation = database.session.get(SupplierQuotation, selected.selected_supplier_quotation_id)
+            if not selected_quotation:
+                raise ValueError("Una cotización seleccionada ya no existe.")
+            if selected_quotation.company != comparison.company:
+                raise ValueError("Una cotización seleccionada pertenece a otra compañía.")
+            if selected_quotation.docstatus != 1:
+                raise ValueError("Una cotización seleccionada ya no está aprobada.")
+            if selected_quotation.transaction_currency != quotation.transaction_currency:
+                raise ValueError("No se pueden combinar cotizaciones de un mismo proveedor con monedas distintas.")
+            flow_lines.append(
+                {
+                    "source_document_type": "supplier_quotation",
+                    "source_document_id": selected_quotation.id,
+                    "source_row_id": selected.selected_supplier_quotation_item_id,
+                    "qty": selected.qty,
+                }
+            )
+        result = create_target_document(
+            {
+                "target_document_type": "purchase_order",
+                "company": comparison.company,
+                "posting_date": purchase_request.posting_date,
+                "supplier_id": quotation.supplier_id,
+                "supplier_name": quotation.supplier_name,
+                "lines": flow_lines,
+            },
+            commit=False,
+        )
+        order = database.session.get(PurchaseOrder, result["target_id"])
+        if not order:
+            raise ValueError("No se pudo crear la Orden de Compra desde el framework documental.")
+        order.purchase_request_comparison_id = comparison.id
+        order.transaction_currency = quotation.transaction_currency
+        order.base_currency = company_currency(comparison.company)
+        total_qty = Decimal("0")
+        total = Decimal("0")
+        for index, selected in enumerate(selected_lines):
+            request_item = database.session.get(PurchaseRequestItem, selected.purchase_request_item_id)
+            target_item_id = result["lines"][index]["target_item_id"]
+            order_item = database.session.get(PurchaseOrderItem, target_item_id)
+            if not request_item or not order_item:
+                raise ValueError("Una línea seleccionada ya no existe.")
+            order_item.item_name = request_item.item_name or order_item.item_name
+            order_item.description = request_item.description or order_item.description
+            order_item.qty_in_base_uom = request_item.qty_in_base_uom
+            order_item.warehouse = request_item.warehouse
+            order_item.rate = selected.rate
+            order_item.amount = selected.amount
+            create_document_relation(
+                source_type="purchase_request",
+                source_id=purchase_request.id,
+                source_item_id=request_item.id,
+                target_type="purchase_order",
+                target_id=order.id,
+                target_item_id=order_item.id,
+                qty=selected.qty,
+                uom=order_item.uom,
+                rate=selected.rate,
+                amount=selected.amount,
+            )
+            total_qty += Decimal(str(selected.qty or 0))
+            total += Decimal(str(selected.amount or 0))
+        order.total_qty = total_qty
+        order.total = total
+        order.net_total = total
+        order.grand_total = total
+        from cacao_accounting.compras import _purchase_exchange_rate
+
+        exchange_rate = _purchase_exchange_rate(order.company, order.posting_date, order.transaction_currency)
+        order.exchange_rate = exchange_rate
+        order.base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
+        orders.append(order)
+    comparison.status = "used"
+    comparison.used_at = datetime.now(timezone.utc)
+    comparison.modified_by = comparison.finalized_by
+    database.session.flush()
+    return orders

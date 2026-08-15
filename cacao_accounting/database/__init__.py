@@ -1692,6 +1692,12 @@ class PurchaseOrder(database.Model, DocBase):  # type: ignore[name-defined]
         nullable=True,
         index=True,
     )
+    purchase_request_comparison_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_request_comparison.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
 
 
 class PurchaseOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2021,6 +2027,12 @@ class PurchaseRequestComparison(database.Model, BaseTabla):  # type: ignore[name
         nullable=False,
         index=True,
     )
+    authorization_reason = database.Column(database.Text(), nullable=True)
+    authorized_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL), nullable=True)
+    authorized_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    finalized_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL), nullable=True)
+    finalized_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    used_at = database.Column(database.DateTime(timezone=True), nullable=True)
 
 
 class PurchaseRequestComparisonOffer(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2044,6 +2056,53 @@ class PurchaseRequestComparisonOffer(database.Model, BaseTabla):  # type: ignore
         nullable=False,
         index=True,
     )
+
+
+class PurchaseRequestComparisonLine(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Selección y recomendación de una línea del comparativo."""
+
+    __tablename__ = "purchase_request_comparison_line"
+    __table_args__ = (
+        database.UniqueConstraint(
+            "comparison_id", "purchase_request_item_id", name="uq_purchase_request_comparison_line_item"
+        ),
+    )
+    comparison_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_request_comparison.id", ondelete=FK_RESTRICT),
+        nullable=False,
+        index=True,
+    )
+    purchase_request_item_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_request_item.id", ondelete=FK_RESTRICT),
+        nullable=False,
+        index=True,
+    )
+    recommended_supplier_quotation_id = database.Column(
+        database.String(26), database.ForeignKey("supplier_quotation.id", ondelete=FK_SET_NULL), nullable=True, index=True
+    )
+    recommended_supplier_quotation_item_id = database.Column(
+        database.String(26),
+        database.ForeignKey("supplier_quotation_item.id", ondelete=FK_SET_NULL),
+        nullable=True,
+        index=True,
+    )
+    selected_supplier_quotation_id = database.Column(
+        database.String(26), database.ForeignKey("supplier_quotation.id", ondelete=FK_SET_NULL), nullable=True, index=True
+    )
+    selected_supplier_quotation_item_id = database.Column(
+        database.String(26),
+        database.ForeignKey("supplier_quotation_item.id", ondelete=FK_SET_NULL),
+        nullable=True,
+        index=True,
+    )
+    qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    manual_override = database.Column(database.Boolean(), nullable=False, default=False)
+    override_reason = database.Column(database.Text(), nullable=True)
+    authorized_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL), nullable=True)
 
 
 class PurchaseQuotationAward(database.Model):  # type: ignore[name-defined]
