@@ -945,15 +945,17 @@ def _maybe_settle_advance_against_invoice(
 ) -> None:
     """Netea el anticipo contra la cuenta por pagar/cobrar en GL.
 
-    El neteo se genera siempre que el anticipo se aplique a la factura para que
-    el subledger (PaymentReference) no diverja de la cuenta control en GL. La
-    configuracion de cuentas por defecto solo habilita el neteo; no lo silencia.
+    El neteo solo se genera cuando la compañía habilita la aplicación automática
+    de anticipos. La referencia del subledger se conserva aunque la opción esté
+    desactivada, pero el asiento de compensación no se publica en GL.
     """
     from cacao_accounting.contabilidad.default_accounts import get_company_default_accounts
 
     company = invoice.company
     defaults = get_company_default_accounts(company)
     if not defaults:
+        return
+    if not defaults.apply_advances_automatically:
         return
     if amount <= 0:
         return
