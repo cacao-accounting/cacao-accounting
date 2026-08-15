@@ -526,8 +526,8 @@ def test_purchase_quotation_routes(request):
 
                 response = client.get("/buying/request-for-quotation/comparison")
                 assert response.status_code == 200
-                assert "Comparativo de Ofertas" in response.get_data(as_text=True)
-                assert "Nueva Solicitud de Cotización" in response.get_data(as_text=True)
+                assert "Comparativo de Órdenes de Compra" in response.get_data(as_text=True)
+                assert "Seleccione una orden de compra" in response.get_data(as_text=True)
 
 
 def test_purchase_request_and_supplier_quotation_routes(request):

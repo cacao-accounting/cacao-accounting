@@ -32,6 +32,10 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
     get_unlinked_purchase_invoices,
     get_unlinked_purchase_receipts_summary,
 )
+from cacao_accounting.compras.purchase_order_comparison_service import (
+    comparable_purchase_orders,
+    create_purchase_order_comparison,
+)
 from cacao_accounting.compras.purchase_sourcing_service import (
     PurchaseSourcingError,
     close_purchase_quotation_comparison,
@@ -56,6 +60,8 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseOrder,
+    PurchaseOrderComparison,
+    PurchaseOrderComparisonOrder,
     PurchaseOrderItem,
     PurchaseQuotation,
     PurchaseQuotationAward,
@@ -1131,13 +1137,119 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
 @modulo_activo("purchases")
 @login_required
 def compras_comparativo_ofertas_lista():
-    """Listado de comparativos de ofertas para solicitudes de cotización."""
+    """List submitted purchase orders available as comparison starting points."""
     consulta = _paginate_list(
-        PurchaseQuotation,
-        (PurchaseQuotation.document_no, PurchaseQuotation.supplier_name, PurchaseQuotation.remarks),
+        PurchaseOrder,
+        (PurchaseOrder.document_no, PurchaseOrder.supplier_name, PurchaseOrder.remarks),
+        query=database.select(PurchaseOrder).where(PurchaseOrder.docstatus == 1),
     )
-    titulo = "Comparativo de Ofertas - " + APPNAME
+    titulo = "Comparativo de Órdenes de Compra - " + APPNAME
     return render_template("compras/comparativo_ofertas_lista.html", consulta=consulta, titulo=titulo)
+
+
+@compras.route("/request-for-quotation/comparison/order/<purchase_order_id>", methods=["GET", "POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_comparativo_ordenes_seleccionar(purchase_order_id: str):
+    """Select purchase-order offers for a new persisted comparison."""
+    base_order = database.session.get(PurchaseOrder, purchase_order_id)
+    if not base_order or base_order.docstatus != 1:
+        abort(404)
+    _require_purchase_document_access(base_order)
+    candidates = comparable_purchase_orders(base_order)
+    candidate_ids = {order.id for order in candidates}
+    if request.method == "POST":
+        participant_ids = request.form.getlist("participant_ids")
+        if not set(participant_ids).issubset(candidate_ids):
+            flash_error("Las órdenes seleccionadas no pertenecen al mismo origen de compra.")
+            return redirect(url_for("compras.compras_comparativo_ordenes_seleccionar", purchase_order_id=purchase_order_id))
+        try:
+            comparison = create_purchase_order_comparison(base_order, participant_ids, current_user.id)
+            database.session.commit()
+            return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
+        except (ValueError, SQLAlchemyError) as exc:
+            database.session.rollback()
+            flash_error(exc)
+    return render_template(
+        "compras/comparativo_ordenes_seleccionar.html",
+        base_order=base_order,
+        candidates=candidates,
+        titulo="Crear comparativo de órdenes de compra - " + APPNAME,
+    )
+
+
+def _comparison_item_at_occurrence(
+    items: list[PurchaseOrderItem], item_code: str, occurrence: int
+) -> PurchaseOrderItem | None:
+    """Return the matching repeated item line at its occurrence index."""
+    matching_items = [item for item in items if item.item_code == item_code]
+    return matching_items[occurrence] if occurrence < len(matching_items) else None
+
+
+@compras.route("/request-for-quotation/comparison/<comparison_id>")
+@modulo_activo("purchases")
+@login_required
+def compras_comparativo_ordenes(comparison_id: str):
+    """Display a persisted comparison using purchase orders as offers."""
+    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
+    if not comparison:
+        abort(404)
+    exige_acceso_compania("purchases", comparison.company, "consultar")
+    participant_rows = database.session.execute(
+        database.select(PurchaseOrderComparisonOrder)
+        .where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
+        .order_by(PurchaseOrderComparisonOrder.is_base.desc(), PurchaseOrderComparisonOrder.created)
+    ).scalars().all()
+    orders = [database.session.get(PurchaseOrder, row.purchase_order_id) for row in participant_rows]
+    orders = [order for order in orders if order is not None]
+    for order in orders:
+        _require_purchase_document_access(order)
+    base_order = database.session.get(PurchaseOrder, comparison.base_purchase_order_id)
+    if not base_order:
+        abort(404)
+    base_items = list(
+        database.session.execute(
+            database.select(PurchaseOrderItem)
+            .where(PurchaseOrderItem.purchase_order_id == base_order.id)
+            .order_by(PurchaseOrderItem.id)
+        )
+        .scalars()
+        .all()
+    )
+    order_items = {
+        order.id: list(
+            database.session.execute(
+                database.select(PurchaseOrderItem)
+                .where(PurchaseOrderItem.purchase_order_id == order.id)
+                .order_by(PurchaseOrderItem.id)
+            )
+            .scalars()
+            .all()
+        )
+        for order in orders
+    }
+    comparison_rows = []
+    item_occurrences: dict[str, int] = {}
+    for base_item in base_items:
+        occurrence = item_occurrences.get(base_item.item_code, 0)
+        item_occurrences[base_item.item_code] = occurrence + 1
+        comparison_rows.append(
+            {
+                "item": base_item,
+                "offers": {
+                    order.id: _comparison_item_at_occurrence(order_items[order.id], base_item.item_code, occurrence)
+                    for order in orders
+                },
+            }
+        )
+    return render_template(
+        "compras/comparativo_ordenes.html",
+        comparison=comparison,
+        base_order=base_order,
+        orders=orders,
+        comparison_rows=comparison_rows,
+        titulo="Comparativo de Órdenes de Compra - " + (comparison.id or ""),
+    )
 
 
 @compras.route("/request-for-quotation/<rfq_id>/offers")

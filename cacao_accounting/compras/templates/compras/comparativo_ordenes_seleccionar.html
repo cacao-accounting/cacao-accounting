@@ -1,0 +1,81 @@
+{% extends "base.html" %} {% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a
+        href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}"
+        class="link-dark"
+        >Comparativo de Órdenes de Compra</a
+      >
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">
+      Seleccionar ofertas
+    </li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">Crear comparativa</h5>
+    <p class="mb-0 text-muted">
+      Orden base:
+      <strong>{{ base_order.document_no or base_order.id }}</strong>. Seleccione
+      las órdenes que participarán como ofertas.
+    </p>
+  </div>
+  <form method="post" class="p-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <table class="ca-table">
+      <caption style="display: none">
+        Selección de órdenes participantes.
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Participa</th>
+          <th scope="col">Orden</th>
+          <th scope="col">Proveedor</th>
+          <th scope="col">Fecha</th>
+          <th scope="col">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in candidates %}
+        <tr>
+          <td>
+            {% if order.id == base_order.id %}
+            <input
+              type="checkbox"
+              checked
+              disabled
+              aria-label="Orden base seleccionada"
+            />
+            <span class="badge text-bg-primary ms-1">Base</span>
+            {% else %}
+            <input
+              type="checkbox"
+              name="participant_ids"
+              value="{{ order.id }}"
+              aria-label="Seleccionar {{ order.document_no or order.id }}"
+            />
+            {% endif %}
+          </td>
+          <td>{{ order.document_no or order.id }}</td>
+          <td>{{ order.supplier_name or order.supplier_id or "-" }}</td>
+          <td>{{ order.posting_date or "" }}</td>
+          <td>{{ order.grand_total or order.total or "0" }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="text-center text-muted">
+            No hay órdenes relacionadas para comparar.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary mt-3">
+      <i class="bi bi-bar-chart-line me-1"></i>Crear comparativa
+    </button>
+  </form>
+</div>
+{% endblock %}

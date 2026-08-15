@@ -447,3 +447,28 @@ El build y `twine check` pasan usando artefactos aislados en
 - #417 Validación de formas JSON en importación de líneas.
 
 Todos permanecen abiertos para revisión posterior. `.replit` continúa fuera de los commits y conserva el cambio local del usuario.
+
+## 2026-08-15 — Rediseño del comparativo visible en UI
+
+### Petición y decisión de diseño
+
+- Se confirmó que el comparativo no debe iniciar en Solicitudes de Cotización ni usar Cotizaciones de Proveedor.
+- Se aplicó un cambio rompiente apropiado para desarrollo: `/buying/request-for-quotation/comparison` ahora lista Órdenes de Compra enviadas.
+- El flujo visible es: seleccionar una Orden de Compra base, seleccionar las Órdenes de Compra que participarán como ofertas y crear una comparativa persistida.
+- Las ofertas se restringen a órdenes de la misma compañía y que compartan el origen activo en una Solicitud de Compra. La orden base siempre participa.
+- Se agregaron `PurchaseOrderComparison` y `PurchaseOrderComparisonOrder`, junto con la migración `20260815_0008_purchase_order_comparisons.py`.
+- El comparativo resultante muestra las líneas y tarifas de las órdenes participantes; no crea nuevas órdenes ni consulta `SupplierQuotation`.
+- La lógica histórica de rondas de negociación queda fuera de este flujo y continúa documentada en los issues #420 y #421, ambos abiertos.
+
+### Validación
+
+- `tests/test_purchase_sourcing.py`: 7 passed.
+- `tests/test_03webactions.py tests/test_purchase_sourcing.py -k 'purchase_order_comparison or purchase_quotation_routes' --slow=True`: 2 passed.
+- `tests/test_database_migrations.py`: 3 passed.
+- Ruff, Black, `git diff --check` y Prettier para las plantillas nuevas: passed.
+- Flake8 y mypy no están disponibles en el entorno actual; se conserva la validación global previa registrada arriba.
+
+### Issues actualizados sin cerrar
+
+- #420 recibió comentario con la UI y persistencia implementadas para comparar Órdenes de Compra.
+- #421 recibió comentario indicando que las rondas legacy no se reutilizan en el nuevo comparativo y requieren el rediseño posterior propuesto.

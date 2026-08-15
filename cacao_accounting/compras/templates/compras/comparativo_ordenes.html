@@ -1,0 +1,76 @@
+{% extends "base.html" %} {% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a
+        href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}"
+        class="link-dark"
+        >Comparativo de Órdenes de Compra</a
+      >
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">
+      {{ comparison.id }}
+    </li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">
+      <i class="bi bi-bar-chart-line"></i> Comparativo de Órdenes de Compra
+    </h5>
+    <p class="mb-0 text-muted">
+      Orden base:
+      <strong>{{ base_order.document_no or base_order.id }}</strong> · Ofertas
+      participantes: {{ orders|length }}
+    </p>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption style="display: none">
+        Comparación de líneas entre órdenes de compra participantes.
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Artículo</th>
+          {% for order in orders %}
+          <th scope="col">
+            {{ order.supplier_name or order.document_no or order.id }}<small
+              class="d-block text-muted"
+              >{{ order.document_no or order.id }}</small
+            >
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in comparison_rows %}
+        <tr>
+          <td>
+            {{ row.item.item_name or row.item.item_code }}<small
+              class="d-block text-muted"
+              >{{ row.item.item_code }} · {{ row.item.qty }} {{ row.item.uom or
+              "" }}</small
+            >
+          </td>
+          {% for order in orders %} {% set offer = row.offers[order.id] %}
+          <td>
+            {% if offer %}<strong>{{ offer.rate or "0" }}</strong
+            ><small class="d-block text-muted"
+              >{{ offer.qty }} · {{ offer.amount or "0" }}</small
+            >{% else %}<span class="text-muted">Sin cobertura</span>{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{{ orders|length + 1 }}" class="text-center text-muted">
+            Las órdenes no tienen líneas para comparar.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
