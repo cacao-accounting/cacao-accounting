@@ -77,6 +77,7 @@ from cacao_accounting.database import (
     PurchaseOrderComparison,
     PurchaseOrderComparisonOrder,
     PurchaseOrderComparisonRound,
+    PurchaseOrderComparisonRoundOrder,
     PurchaseOrderItem,
     PurchaseQuotation,
     PurchaseQuotationAward,
@@ -1510,11 +1511,11 @@ def compras_comparativo_ordenes(comparison_id: str):
             abort(404)
     else:
         selected_round = current_purchase_order_comparison_round(comparison.id)
-    participant_rows: list[PurchaseOrderComparisonOrder] = (
+    participant_rows: list[PurchaseOrderComparisonRoundOrder | PurchaseOrderComparisonOrder] = (
         list(purchase_order_comparison_round_orders(selected_round.id)) if selected_round else []
     )
     if not participant_rows:
-        participant_rows = (
+        participant_rows = list(
             database.session.execute(
                 database.select(PurchaseOrderComparisonOrder)
                 .where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
