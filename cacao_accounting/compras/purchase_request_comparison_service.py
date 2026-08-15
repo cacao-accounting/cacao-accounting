@@ -224,6 +224,7 @@ def _comparison_line_base_rate(
     offer: SupplierQuotation,
     line: SupplierQuotationItem,
     company: str,
+    comparison_date: Any,
 ) -> Decimal:
     """Resolve a supplier line rate in the company's base currency."""
     rate = Decimal(str(line.rate or 0))
@@ -243,7 +244,11 @@ def _comparison_line_base_rate(
     from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
 
     try:
-        exchange_rate = _lookup_exchange_rate(transaction_currency, base_currency, offer.posting_date)
+        exchange_rate = _lookup_exchange_rate(
+            transaction_currency,
+            base_currency,
+            offer.posting_date or comparison_date,
+        )
     except PostingError as exc:
         raise ValueError(
             f"No existe tipo de cambio para comparar una oferta en {transaction_currency} contra {base_currency}."
@@ -295,7 +300,12 @@ def purchase_request_comparison_recommendations(
                     "offer": offer,
                     "line": line,
                     "rate": Decimal(str(line.rate or 0)),
-                    "base_rate": _comparison_line_base_rate(offer, line, purchase_request.company),
+                    "base_rate": _comparison_line_base_rate(
+                        offer,
+                        line,
+                        purchase_request.company,
+                        purchase_request.posting_date,
+                    ),
                 }
             )
         candidates.sort(
