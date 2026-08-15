@@ -6,14 +6,15 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item active" aria-current="page">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
-        <i class="bi bi-house"></i> Inicio
+        <i class="bi bi-house"></i> {{ _("Inicio") }}
       </a>
     </li>
   </ol>
 </nav>
 
 <div class="ca-page-header">
-  <h4><i class="bi bi-gear me-2" style="color:#78BF30"></i>Administración del Sistema</h4>
+  <h4><i class="bi bi-gear me-2" style="color:#78BF30"></i>{{ _("Configuración Global") }}</h4>
+  <p class="text-muted mb-0">{{ _("Administre los parámetros del sistema por área funcional.") }}</p>
 </div>
 
 <div class="ca-module-grid">
@@ -21,99 +22,83 @@
   {% set imports_access = permisos(modulo=id_modulo("imports"), usuario=usuario.id) %}
 
   <div class="ca-module-card">
-    <h5><i class="bi bi-sliders"></i> Configuración General</h5>
+    <h5><i class="bi bi-sliders"></i> {{ _("Configuración General") }}</h5>
     <ul class="ca-module-links">
-      <li><a href="{{ url_for('admin.lista_modulos') }}">Módulos</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.lista_modulos') }}">{{ _("Módulos") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
       {% if is_cloud_mode() and validar_modulo_activo("imports") and permisos(modulo=id_modulo("imports"), usuario=usuario.id).autorizado %}
-      <li><a href="{{ url_for('imports.index') }}">Importaciones</a>{{ macros.module_status_badge(module_badge(access=imports_access, required='importar')) }}</li>
+      <li><a href="{{ url_for('imports.index') }}">{{ _("Importaciones") }}</a>{{ macros.module_status_badge(module_badge(access=imports_access, required='importar')) }}</li>
       {% endif %}
-      <li><a href="{{ url_for('admin.lista_usuarios') }}">Usuarios</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
-      <li><a href="{{ url_for('admin.lista_roles') }}">Roles y Permisos</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
-      <li><a href="{{ url_for('admin.cuentas_predeterminadas') }}">{{ _("Cuentas por defecto") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
-      <li><a href="{{ url_for('admin.configuracion_valuacion_inventario') }}">{{ _("Valuación de inventarios") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
-      <li><a href="{{ url_for('admin.external_document_validation_settings') }}">External Document Validation</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.external_document_validation_settings') }}">{{ _("Validación externa de documentos") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
       {% if is_cloud_mode() %}
-      <li><a href="{{ url_for('admin.email_settings') }}">{{ _("Configuración de Correo Electrónico") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.email_settings') }}">{{ _("Correo electrónico") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
       {% endif %}
+      <li><a href="{{ url_for('admin.lista_grupos_terceros') }}">{{ _("Tipos de terceros") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.lista_precios') }}">{{ _("Listas de precios") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.precios_item') }}">{{ _("Precios por artículo") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>
 
   <div class="ca-module-card">
-    <h5><i class="bi bi-hash"></i> Series e Identificadores</h5>
+    <h5><i class="bi bi-cart-check"></i> {{ _("Compras") }}</h5>
     <ul class="ca-module-links">
-      <li><a href="{{ url_for('contabilidad.naming_series_list') }}">Series de Numeracion</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
-      <li><a href="{{ url_for('contabilidad.external_counter_list') }}">Contadores Externos</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.config_conciliacion_compras') }}">{{ _("Conciliación y anticipos") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.config_abastecimiento_compras') }}">{{ _("Comparativo de ofertas") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>
 
   <div class="ca-module-card">
-    <h5><i class="bi bi-receipt"></i> {{ _("Impuestos y Precios") }}</h5>
+    <h5><i class="bi bi-receipt"></i> {{ _("Ventas") }}</h5>
     <ul class="ca-module-links">
-      <li><a href="{{ url_for('admin.lista_impuestos') }}">{{ _("Impuestos y Cargos") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
-      <li><a href="{{ url_for('admin.lista_plantillas_impuesto') }}">{{ _("Plantillas de Impuestos") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
-      <li><a href="{{ url_for('admin.lista_precios') }}">{{ _("Listas de Precios") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
-      <li><a href="{{ url_for('admin.precios_item') }}">{{ _("Precios por Item") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.config_conciliacion_ventas') }}">{{ _("Conciliación de ventas") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>
 
   <div class="ca-module-card">
-    <h5><i class="bi bi-arrow-left-right"></i> {{ _("Configuración de Conciliación de Compras") }}</h5>
+    <h5><i class="bi bi-journal-check"></i> {{ _("Contabilidad") }}</h5>
     <ul class="ca-module-links">
-      <li>
-        <a href="{{ url_for('admin.config_conciliacion_compras') }}">{{ _("Configuración de Conciliación") }}</a>
-        {{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}
-      </li>
+      <li><a href="{{ url_for('admin.cuentas_predeterminadas') }}">{{ _("Cuentas predeterminadas") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.config_control_presupuestario') }}">{{ _("Control presupuestario") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.config_approval_matrix') }}">{{ _("Matriz de aprobaciones") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>
 
   <div class="ca-module-card">
-    <h5><i class="bi bi-shield-check"></i> {{ _("Motor de Aprobaciones") }}</h5>
+    <h5><i class="bi bi-box-seam"></i> {{ _("Inventario") }}</h5>
     <ul class="ca-module-links">
-      <li>
-        <a href="{{ url_for('admin.config_approval_matrix') }}">{{ _("Matriz de Aprobaciones") }}</a>
-        {{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}
-      </li>
+      <li><a href="{{ url_for('admin.configuracion_valuacion_inventario') }}">{{ _("Valuación de inventarios") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>
 
   <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-line"></i> {{ _("Abastecimiento") }}</h5>
+    <h5><i class="bi bi-bank"></i> {{ _("Bancos") }}</h5>
     <ul class="ca-module-links">
-      <li>
-        <a href="{{ url_for('admin.config_abastecimiento_compras') }}">{{ _("Comparativo de Ofertas") }}</a>
-        {{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}
-      </li>
+      <li><a href="{{ url_for('bancos.bancos_reglas_matching') }}">{{ _("Reglas de matching bancario") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>
 
   <div class="ca-module-card">
-    <h5><i class="bi bi-sliders"></i> {{ _("Control Presupuestario") }}</h5>
+    <h5><i class="bi bi-hash"></i> {{ _("Series e Identificadores") }}</h5>
     <ul class="ca-module-links">
-      <li>
-        <a href="{{ url_for('admin.config_control_presupuestario') }}">{{ _("Configuración de Control Presupuestario") }}</a>
-        {{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}
-      </li>
+      <li><a href="{{ url_for('contabilidad.naming_series_list') }}">{{ _("Series de numeración") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('contabilidad.external_counter_list') }}">{{ _("Contadores externos") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>
 
   <div class="ca-module-card">
-    <h5><i class="bi bi-arrow-left-right"></i> {{ _("Configuración de Conciliación de Ventas") }}</h5>
+    <h5><i class="bi bi-percent"></i> {{ _("Impuestos y Cargos") }}</h5>
     <ul class="ca-module-links">
-      <li>
-        <a href="{{ url_for('admin.config_conciliacion_ventas') }}">{{ _("Configuración de Matching de Ventas") }}</a>
-        {{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}
-      </li>
+      <li><a href="{{ url_for('admin.lista_impuestos') }}">{{ _("Impuestos y cargos") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.lista_plantillas_impuesto') }}">{{ _("Plantillas de impuestos") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.lista_reglas_fiscales') }}">{{ _("Reglas fiscales") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>
 
   <div class="ca-module-card">
-    <h5><i class="bi bi-card-list"></i> Registros</h5>
+    <h5><i class="bi bi-people"></i> {{ _("Usuarios y Permisos") }}</h5>
     <ul class="ca-module-links">
-      <li><a href="#">Auditoría del Sistema</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
-      <li><a href="#">Sesiones Activas</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.lista_usuarios') }}">{{ _("Usuarios") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
+      <li><a href="{{ url_for('admin.lista_roles') }}">{{ _("Roles y permisos") }}</a>{{ macros.module_status_badge(module_badge(access=admin_access, required='configurar')) }}</li>
     </ul>
   </div>
-
-
 </div>
 {% endblock %}

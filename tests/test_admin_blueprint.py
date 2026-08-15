@@ -490,11 +490,19 @@ def test_config_conciliacion_compras_y_ventas(app_instance):
                 "bridge_account_required": "on",
                 "auto_reconcile": "on",
                 "allow_price_difference": "on",
+                "apply_advances_automatically": "on",
             },
             follow_redirects=True,
         )
         assert response.status_code == 200
         assert b"conciliacion de compras guardada" in response.data
+        with app_instance.app_context():
+            from cacao_accounting.database import CompanyDefaultAccount
+
+            defaults = database.session.execute(
+                database.select(CompanyDefaultAccount).filter_by(company="cacao")
+            ).scalar_one()
+            assert defaults.apply_advances_automatically is True
 
         # GET sales matching
         response = client.get("/settings/sales-matching")
@@ -560,6 +568,7 @@ def test_cuentas_predeterminadas(app_instance):
         assert response.status_code == 200
         assert b"sales_discount_account_id" in response.data
         assert b"purchase_discount_account_id" in response.data
+        assert b"apply_advances_automatically" not in response.data
 
         # POST empty company using execute mock to simulate empty companies list
         original_execute = database.session.execute
@@ -582,7 +591,6 @@ def test_cuentas_predeterminadas(app_instance):
             data={
                 "company": "cacao",
                 "action": "save",
-                "apply_advances_automatically": "on",
             },
             follow_redirects=True,
         )
@@ -600,6 +608,41 @@ def test_cuentas_predeterminadas(app_instance):
         )
         assert response.status_code == 200
         assert b"eliminada correctamente" in response.data
+
+
+def test_admin_home_consolidates_global_configuration_sections(app_instance):
+    """La configuración global se presenta por las áreas funcionales acordadas."""
+    with app_instance.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+        response = client.get("/admin")
+
+    html = response.get_data(as_text=True)
+    assert response.status_code == 200
+    for section in (
+        "Configuración General",
+        "Compras",
+        "Ventas",
+        "Contabilidad",
+        "Inventario",
+        "Bancos",
+        "Series e Identificadores",
+        "Impuestos y Cargos",
+        "Usuarios y Permisos",
+    ):
+        assert section in html
+    assert "Configuración de Conciliación de Compras" not in html
+    assert "Registros" not in html
+
+
+def test_purchase_configuration_owns_automatic_advance_setting(app_instance):
+    """La opción de anticipos vive bajo Compras y no en cuentas predeterminadas."""
+    with app_instance.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+        purchase_page = client.get("/settings/purchase-reconciliation").get_data(as_text=True)
+        account_page = client.get("/settings/default-accounts?company=cacao").get_data(as_text=True)
+
+    assert "Aplicar anticipos automáticamente a facturas de la misma OC" in purchase_page
+    assert "Aplicar anticipos automáticamente a facturas de la misma OC" not in account_page
 
 
 def test_lista_usuarios(app_instance):

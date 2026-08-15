@@ -105,6 +105,15 @@
               <input class="form-check-input" type="checkbox" name="allow_price_difference" id="allow_price">
               <label class="form-check-label" for="allow_price">{{ _("Permitir diferencias de precio (genera ajuste)") }}</label>
             </div>
+            <div class="form-check mt-2 pt-2 border-top">
+              <input class="form-check-input" type="checkbox" name="apply_advances_automatically" id="apply_advances_automatically">
+              <label class="form-check-label" for="apply_advances_automatically">
+                {{ _("Aplicar anticipos automáticamente a facturas de la misma OC") }}
+              </label>
+              <div class="form-text">
+                {{ _("Al pagar una factura con anticipos previos, netea la cuenta de anticipo contra la cuenta por pagar/cobrar.") }}
+              </div>
+            </div>
           </div>
 
           <button type="submit" class="btn btn-primary mt-2">
@@ -152,6 +161,7 @@
                 {% if cfg.bridge_account_required %}<i class="bi bi-link-45deg text-info ms-1" title="{{ _('Requiere cuenta puente') }}"></i>{% endif %}
                 {% if cfg.auto_reconcile %}<i class="bi bi-lightning-fill text-warning ms-1" title="{{ _('Auto-conciliar') }}"></i>{% endif %}
                 {% if cfg.allow_price_difference %}<i class="bi bi-percent text-secondary ms-1" title="{{ _('Permite diferencia precio') }}"></i>{% endif %}
+                {% if advance_settings.get(cfg.company, false) %}<i class="bi bi-arrow-left-right text-primary ms-1" title="{{ _('Aplicación automática de anticipos') }}"></i>{% endif %}
               </td>
             </tr>
             {% endfor %}
