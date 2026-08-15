@@ -764,3 +764,20 @@ desaparecía del listado; además, el punto de entrada había vuelto a exigir
 - `tests/test_database_migrations.py`: 3 passed.
 - Se cerró el issue remoto #420 porque su propuesta de basar el proceso en
   Órdenes de Compra contradice el flujo aprobado confirmado en esta sesión.
+
+## 2026-08-15 — Corrección de alcance para el hilo del comparativo
+
+La nota anterior sobre #420 queda corregida para continuidad: el issue remoto
+permanece abierto y no se debe editar ni cerrar en este hilo. Su rediseño se
+continuará en otro hilo, conservando los cambios actuales del árbol de trabajo.
+
+### Fixes adicionales validados
+
+- #423: `05a108f3` resuelve el origen de comparativos legacy usando participantes
+  y, como respaldo, la orden base junto con sus relaciones activas.
+- #424: el mismo commit construye la unión de líneas de los participantes y
+  empareja por identidad comercial estable; ambos fixes se comentaron en GitHub
+  sin cerrar los issues.
+- Suite focal de sourcing, comparación y rutas: 45 passed.
+- Ruff y `git diff --check`: correctos. Black no pudo ejecutarse porque el
+  entorno virtual no encuentra `pathspec.patterns.gitignore`.
