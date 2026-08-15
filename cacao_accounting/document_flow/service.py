@@ -49,11 +49,15 @@ _MSG_LINEA_ORIGEN = "Linea origen no encontrada."
 
 def _allows_parallel_purchase_quotations(source_type: str, target_type: str | None) -> bool:
     """Indica si un origen permite cotizaciones paralelas sin consumir su cantidad."""
-    return (
-        target_type is not None
-        and normalize_doctype(source_type) == "purchase_request"
-        and normalize_doctype(target_type) == "purchase_quotation"
-    )
+    if target_type is None:
+        return False
+    source_key = normalize_doctype(source_type)
+    target_key = normalize_doctype(target_type)
+    return (source_key, target_key) in {
+        ("purchase_request", "purchase_quotation"),
+        ("purchase_request", "supplier_quotation"),
+        ("purchase_quotation", "supplier_quotation"),
+    }
 
 
 class DocumentFlowError(ValueError):
