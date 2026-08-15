@@ -762,5 +762,5 @@ desaparecía del listado; además, el punto de entrada había vuelto a exigir
 
 - `tests/test_purchase_request_comparison.py tests/test_transaction_update_elements.py`: 20 passed.
 - `tests/test_database_migrations.py`: 3 passed.
-- Se cerrará el issue remoto #420 porque su propuesta de basar el proceso en
+- Se cerró el issue remoto #420 porque su propuesta de basar el proceso en
   Órdenes de Compra contradice el flujo aprobado confirmado en esta sesión.
