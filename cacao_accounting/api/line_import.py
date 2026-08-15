@@ -132,11 +132,15 @@ def validate_lines() -> ResponseReturnValue:
 
 def _get_validation_payload() -> LineValidationPayload:
     """Read and normalize the validation payload."""
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return LineValidationPayload(doctype=None, context={}, rows=[])
+    context = payload.get("context")
+    rows = payload.get("rows")
     return LineValidationPayload(
-        doctype=cast(str | None, payload.get("doctype")),
-        context=cast(dict[str, Any], payload.get("context", {})),
-        rows=cast(list[dict[str, Any]], payload.get("rows", [])),
+        doctype=cast(str | None, payload.get("doctype")) if isinstance(payload.get("doctype"), str) else None,
+        context=cast(dict[str, Any], context) if isinstance(context, dict) else {},
+        rows=cast(list[dict[str, Any]], rows) if isinstance(rows, list) and all(isinstance(row, dict) for row in rows) else [],
     )
 
 
