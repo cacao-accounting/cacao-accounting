@@ -329,6 +329,13 @@ def test_purchase_happy_path(app_ctx):
     assert sq.negotiation_round_id is None
     check_document_relation(rfq.id, sq.id)
 
+    pending_lines_response = client.get(
+        "/api/document-flow/pending-lines"
+        f"?source_type=purchase_quotation&target_type=supplier_quotation&source_id={rfq.id}&company=cacao"
+    )
+    assert pending_lines_response.status_code == 200
+    assert pending_lines_response.get_json()["items"][0]["item_code"] == "ART-001"
+
     # 4. Create Purchase Order from SQ
     po_data = {
         "company": "cacao",
