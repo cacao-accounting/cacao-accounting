@@ -4,6 +4,8 @@
 """Rutas para el servicio de importación."""
 
 import os
+import csv
+import io
 import openpyxl
 from odf import opendocument, table as odf_table
 from cacao_accounting.exceptions import flash_error
@@ -204,14 +206,14 @@ def _validate_mime_type(file: Any) -> bool:
     if magic is None:
         chunk = file.read(2048)
         file.seek(0)
-        if chunk.lstrip().lower().startswith((b"<html", b"<!doctype")):
-            flash("Tipo de archivo no válido", "danger")
-            return False
-        mime = getattr(file, "mimetype", "")
-        if mime in _ALLOWED_MIMES or chunk.strip():
-            flash(_INVALID_FILE_TYPE_MSG, "danger")
+        extension = _extract_file_extension(getattr(file, "filename", ""))
+        if extension == "csv" and _valid_csv_fallback(chunk):
             return True
-        flash(_INVALID_FILE_TYPE_MSG, "danger")
+        if extension in {"xlsx", "ods"} and chunk.startswith(b"PK"):
+            return True
+        if extension == "xls" and chunk.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+            return True
+        flash("Tipo de archivo no válido", "danger")
         return False
     try:
         chunk = file.read(2048)
@@ -224,6 +226,23 @@ def _validate_mime_type(file: Any) -> bool:
         flash("Tipo de archivo no válido", "danger")
         return False
     return True
+
+
+def _valid_csv_fallback(chunk: bytes) -> bool:
+    """Validate minimal CSV structure when python-magic is unavailable."""
+    try:
+        text = chunk.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return False
+    if not text.strip() or "\n" not in text and "," not in text and ";" not in text:
+        return False
+    try:
+        sample = text[:2048]
+        csv.Sniffer().sniff(sample, delimiters=",;\t")
+        rows = list(csv.reader(io.StringIO(text)))
+    except (csv.Error, ValueError):
+        return False
+    return bool(rows and any(cell.strip() for row in rows for cell in row))
 
 
 def _persist_uploaded_file(file: Any, batch_id: str, filename: str) -> str:
