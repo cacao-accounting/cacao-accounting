@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}" class="link-dark">Comparativo de Ofertas</a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ comparison.id }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas</h5>
+    <p class="mb-0 text-muted">
+      Solicitud de Compra:
+      <strong>{{ purchase_request.document_no or purchase_request.id }}</strong>
+      · Cotizaciones participantes: {{ offers|length }}
+    </p>
+  </div>
+
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption style="display: none">Comparación de cotizaciones de proveedor.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Artículo</th>
+          <th scope="col">Cantidad</th>
+          {% for offer in offers %}
+          <th scope="col">{{ offer.supplier_name or offer.supplier_id or offer.id }}<small class="d-block text-muted">{{ offer.document_no or offer.id }}</small></th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in comparison_rows %}
+        <tr>
+          <td>{{ row.item.item_name or row.item.item_code }}<small class="d-block text-muted">{{ row.item.item_code }}</small></td>
+          <td>{{ row.item.qty }} {{ row.item.uom or '' }}</td>
+          {% for offer in offers %}
+          {% set line = row.offers[offer.id] %}
+          <td>
+            {% if line %}
+            <strong>{{ line.rate or 0 }}</strong><small class="d-block text-muted">{{ line.qty }} {{ line.uom or '' }}</small>
+            {% else %}
+            <span class="text-muted">Sin cobertura</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ offers|length + 2 }}" class="text-center text-muted">Las ofertas no tienen líneas para comparar.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th colspan="2">Total</th>
+          {% for offer in offers %}<th>{{ offer.grand_total or offer.total or 0 }}</th>{% endfor %}
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

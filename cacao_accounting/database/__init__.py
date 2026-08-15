@@ -2000,6 +2000,44 @@ class PurchaseOrderComparisonRoundOrder(database.Model, BaseTabla):  # type: ign
     is_base = database.Column(database.Boolean(), nullable=False, default=False)
 
 
+class PurchaseRequestComparison(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Comparativo de cotizaciones de proveedor para una solicitud de compra."""
+
+    __tablename__ = "purchase_request_comparison"
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    purchase_request_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+
+
+class PurchaseRequestComparisonOffer(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Cotización de proveedor participante en un comparativo."""
+
+    __tablename__ = "purchase_request_comparison_offer"
+    __table_args__ = (
+        database.UniqueConstraint(
+            "comparison_id", "supplier_quotation_id", name="uq_purchase_request_comparison_offer"
+        ),
+    )
+    comparison_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_request_comparison.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    supplier_quotation_id = database.Column(
+        database.String(26),
+        database.ForeignKey("supplier_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+
+
 class PurchaseQuotationAward(database.Model):  # type: ignore[name-defined]
     """Adjudicación por línea de una solicitud de cotización."""
 

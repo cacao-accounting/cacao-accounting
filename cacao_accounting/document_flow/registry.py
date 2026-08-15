@@ -170,7 +170,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             DocumentAction(_ACTION_CREAR_ORDEN_COMPRA, "purchase_order", _ENDPOINT_ORDEN_COMPRA_NUEVO, "from_request"),
             DocumentAction(
                 _ACTION_CREAR_COMPARATIVO_OFERTAS,
-                "purchase_order_comparison",
+                "purchase_request_comparison",
                 _ENDPOINT_COMPARATIVO_OFERTAS,
                 "purchase_request_id",
             ),
