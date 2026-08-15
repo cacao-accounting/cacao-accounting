@@ -79,6 +79,7 @@ from cacao_accounting.compras.purchase_sourcing_service import (
     get_purchase_sourcing_config,
     set_purchase_sourcing_config,
 )
+from cacao_accounting.admin.navigation import CONFIGURATION_SECTIONS
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.tax_rule_service import (
     TaxRuleServiceError,
@@ -143,7 +144,7 @@ def _date_form(name: str) -> date | None:
 @modulo_activo("admin")
 def admin_():
     """Definición del modulo administrativo."""
-    return render_template("admin.html")
+    return render_template("admin.html", configuration_sections=CONFIGURATION_SECTIONS)
 
 
 @admin.route("/settings/modules", methods=["GET", "POST"])

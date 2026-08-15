@@ -640,6 +640,27 @@ def test_admin_home_consolidates_global_configuration_sections(app_instance):
     assert "Registros" not in html
 
 
+def test_configuration_navigation_registry_preserves_public_endpoints():
+    """El registro de navegación conserva las nueve áreas y sus endpoints."""
+    from cacao_accounting.admin.navigation import CONFIGURATION_SECTIONS
+
+    assert [section.label for section in CONFIGURATION_SECTIONS] == [
+        "Configuración General",
+        "Compras",
+        "Ventas",
+        "Contabilidad",
+        "Inventario",
+        "Bancos",
+        "Series e Identificadores",
+        "Impuestos y Cargos",
+        "Usuarios y Permisos",
+    ]
+    endpoints = {link.endpoint for section in CONFIGURATION_SECTIONS for link in section.links}
+    assert "admin.config_conciliacion_compras" in endpoints
+    assert "admin.lista_usuarios" in endpoints
+    assert "contabilidad.naming_series_list" in endpoints
+
+
 def test_purchase_configuration_owns_automatic_advance_setting(app_instance):
     """La opción de anticipos vive bajo Compras y no en cuentas predeterminadas."""
     with app_instance.test_client() as client:
