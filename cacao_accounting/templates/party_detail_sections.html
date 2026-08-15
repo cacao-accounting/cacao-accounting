@@ -158,8 +158,13 @@
 </div>
 
 <div class="ca-card mt-3" id="party-company-settings">
-  <div class="ca-card-header">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
     <h6 class="ca-card-title">{{ _("Configuracion por compania") }}</h6>
+    {% if company_settings_edit_url is defined %}
+    <a class="btn btn-outline-primary btn-sm" href="{{ company_settings_edit_url }}#party-company-settings">
+      <i class="bi bi-plus-lg me-1"></i>{{ _("Agregar o editar") }}
+    </a>
+    {% endif %}
   </div>
   <div class="p-3">
     <table class="ca-table">

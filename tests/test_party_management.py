@@ -310,6 +310,8 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
     assert b'href="#party-contacts"' in detail_response.data
     assert b'href="#party-addresses"' in detail_response.data
     assert b'href="#party-company-settings"' in detail_response.data
+    assert b"Agregar o editar" in detail_response.data
+    assert f"/buying/supplier/{supplier.id}/edit#party-company-settings".encode() in detail_response.data
 
 
 def test_purchase_and_sales_admin_menus_show_party_management_links(client):
