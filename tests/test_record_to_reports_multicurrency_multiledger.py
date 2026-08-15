@@ -904,3 +904,529 @@ def test_settlement_analysis_excludes_cancelled_payments(app_ctx):
     rows = get_settlement_analysis(company="r2r")
 
     assert [row["amount"] for row in rows] == [Decimal("100")]
+
+
+def test_r2r_multi_company_isolation_all_ledgers(app_ctx):
+    """Assert strict multi-tenant entity isolation across GL, AR, AP, and Kardex ledgers."""
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        Entity,
+        GLEntry,
+        Item,
+        ItemAccount,
+        PartyAccount,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        SalesInvoice,
+        SalesInvoiceItem,
+        StockBin,
+        StockEntry,
+        StockEntryItem,
+        StockLedgerEntry,
+        Warehouse,
+        database,
+    )
+    from cacao_accounting.reportes.semantic import (
+        get_payables_analysis,
+        get_receivables_analysis,
+    )
+    from cacao_accounting.reportes.services import SubledgerFilters, get_ar_ap_subledger
+
+    # Setup Company B
+    comp_b = Entity(code="r2r-b", name="R2R Corp B", company_name="R2R Corp B", tax_id="R2R-B-1", currency="NIO")
+    database.session.add(comp_b)
+    database.session.flush()
+
+    # Accounts for Company A ("r2r") and Company B ("r2r-b")
+    ar_a = Accounts(entity="r2r", code="AR-A", name="AR A", active=True, enabled=True, classification="asset")
+    ar_b = Accounts(entity="r2r-b", code="AR-B", name="AR B", active=True, enabled=True, classification="asset")
+    inc_a = Accounts(entity="r2r", code="INC-A", name="Inc A", active=True, enabled=True, classification="income", account_type="income")
+    inc_b = Accounts(entity="r2r-b", code="INC-B", name="Inc B", active=True, enabled=True, classification="income", account_type="income")
+    inv_a = Accounts(entity="r2r", code="INV-A", name="Inv A", active=True, enabled=True, classification="asset")
+    inv_b = Accounts(entity="r2r-b", code="INV-B", name="Inv B", active=True, enabled=True, classification="asset")
+    exp_a = Accounts(entity="r2r", code="EXP-A", name="Exp A", active=True, enabled=True, classification="expense", account_type="expense")
+    exp_b = Accounts(entity="r2r-b", code="EXP-B", name="Exp B", active=True, enabled=True, classification="expense", account_type="expense")
+
+    database.session.add_all([ar_a, ar_b, inc_a, inc_b, inv_a, inv_b, exp_a, exp_b])
+    database.session.flush()
+
+    database.session.add_all([
+        CompanyDefaultAccount(company="r2r", default_receivable=ar_a.id, default_income=inc_a.id, default_expense=exp_a.id),
+        CompanyDefaultAccount(company="r2r-b", default_receivable=ar_b.id, default_income=inc_b.id, default_expense=exp_b.id),
+        PartyAccount(party_id="CUST-ISO-A", company="r2r", receivable_account_id=ar_a.id),
+        PartyAccount(party_id="CUST-ISO-B", company="r2r-b", receivable_account_id=ar_b.id),
+    ])
+
+    from cacao_accounting.database import WarehouseCompanyAccount
+
+    wh_a = Warehouse(code="WH-A", name="Warehouse A", company="r2r", is_active=True)
+    wh_b = Warehouse(code="WH-B", name="Warehouse B", company="r2r-b", is_active=True)
+    item_a = Item(code="ITEM-ISO-A", name="Item ISO A", item_type="product", is_stock_item=True, default_uom="PZA")
+    item_b = Item(code="ITEM-ISO-B", name="Item ISO B", item_type="product", is_stock_item=True, default_uom="PZA")
+
+    database.session.add_all([wh_a, wh_b, item_a, item_b])
+    database.session.flush()
+
+    database.session.add_all([
+        WarehouseCompanyAccount(warehouse_code="WH-A", company="r2r", inventory_account_id=inv_a.id),
+        WarehouseCompanyAccount(warehouse_code="WH-B", company="r2r-b", inventory_account_id=inv_b.id),
+    ])
+    database.session.flush()
+
+    database.session.add_all([
+        ItemAccount(item_code="ITEM-ISO-A", company="r2r", income_account_id=inc_a.id, expense_account_id=exp_a.id),
+        ItemAccount(item_code="ITEM-ISO-B", company="r2r-b", income_account_id=inc_b.id, expense_account_id=exp_b.id),
+    ])
+    database.session.commit()
+
+    # Sales Invoice in Company A
+    inv_doc_a = SalesInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 10),
+        customer_id="CUST-ISO-A",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+        docstatus=1,
+        total=Decimal("500"),
+        grand_total=Decimal("500"),
+        outstanding_amount=Decimal("500"),
+    )
+    database.session.add(inv_doc_a)
+    database.session.flush()
+    database.session.add(SalesInvoiceItem(sales_invoice_id=inv_doc_a.id, item_code="ITEM-ISO-A", qty=1, rate=500, amount=500, income_account_id=inc_a.id))
+
+    # Sales Invoice in Company B
+    inv_doc_b = SalesInvoice(
+        company="r2r-b",
+        posting_date=date(2026, 8, 10),
+        customer_id="CUST-ISO-B",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+        docstatus=1,
+        total=Decimal("1200"),
+        grand_total=Decimal("1200"),
+        outstanding_amount=Decimal("1200"),
+    )
+    database.session.add(inv_doc_b)
+    database.session.flush()
+    database.session.add(SalesInvoiceItem(sales_invoice_id=inv_doc_b.id, item_code="ITEM-ISO-B", qty=2, rate=600, amount=1200, income_account_id=inc_b.id))
+    database.session.commit()
+
+    post_document_to_gl(inv_doc_a)
+    post_document_to_gl(inv_doc_b)
+    database.session.commit()
+
+    # Stock Entry in Company A
+    se_a = StockEntry(company="r2r", posting_date=date(2026, 8, 10), purpose="material_receipt", docstatus=1, to_warehouse="WH-A")
+    database.session.add(se_a)
+    database.session.flush()
+    database.session.add(StockEntryItem(stock_entry_id=se_a.id, item_code="ITEM-ISO-A", target_warehouse="WH-A", qty=10, uom="PZA", valuation_rate=50, amount=500))
+
+    # Stock Entry in Company B
+    se_b = StockEntry(company="r2r-b", posting_date=date(2026, 8, 10), purpose="material_receipt", docstatus=1, to_warehouse="WH-B")
+    database.session.add(se_b)
+    database.session.flush()
+    database.session.add(StockEntryItem(stock_entry_id=se_b.id, item_code="ITEM-ISO-B", target_warehouse="WH-B", qty=20, uom="PZA", valuation_rate=100, amount=2000))
+    database.session.commit()
+
+    post_document_to_gl(se_a)
+    post_document_to_gl(se_b)
+    database.session.commit()
+
+    # Assert GL Entry Isolation
+    gl_a = database.session.execute(database.select(GLEntry).filter_by(company="r2r")).scalars().all()
+    gl_b = database.session.execute(database.select(GLEntry).filter_by(company="r2r-b")).scalars().all()
+
+    assert all(e.company == "r2r" for e in gl_a)
+    assert all(e.company == "r2r-b" for e in gl_b)
+    assert sum(e.debit for e in gl_a if e.account_id == ar_a.id) == Decimal("500")
+    assert sum(e.debit for e in gl_b if e.account_id == ar_b.id) == Decimal("1200")
+
+    # Assert Subledger Isolation (AR / Semantic)
+    ar_analysis_a = get_receivables_analysis(company="r2r")
+    ar_analysis_b = get_receivables_analysis(company="r2r-b")
+
+    assert [row["customer_code"] for row in ar_analysis_a if row["customer_code"] == "CUST-ISO-A"] == ["CUST-ISO-A"]
+    assert [row["customer_code"] for row in ar_analysis_a if row["customer_code"] == "CUST-ISO-B"] == []
+    assert [row["customer_code"] for row in ar_analysis_b if row["customer_code"] == "CUST-ISO-B"] == ["CUST-ISO-B"]
+    assert [row["customer_code"] for row in ar_analysis_b if row["customer_code"] == "CUST-ISO-A"] == []
+
+    # Assert Kardex / Stock Bin / Stock Ledger Isolation
+    sle_a = database.session.execute(database.select(StockLedgerEntry).filter_by(company="r2r")).scalars().all()
+    sle_b = database.session.execute(database.select(StockLedgerEntry).filter_by(company="r2r-b")).scalars().all()
+
+    assert all(sle.company == "r2r" and sle.item_code == "ITEM-ISO-A" for sle in sle_a)
+    assert all(sle.company == "r2r-b" and sle.item_code == "ITEM-ISO-B" for sle in sle_b)
+
+    bin_a = database.session.execute(database.select(StockBin).filter_by(company="r2r")).scalars().all()
+    bin_b = database.session.execute(database.select(StockBin).filter_by(company="r2r-b")).scalars().all()
+
+    assert len(bin_a) == 1 and bin_a[0].actual_qty == Decimal("10")
+    assert len(bin_b) == 1 and bin_b[0].actual_qty == Decimal("20")
+
+
+def test_r2r_append_only_cancellation_lifecycle(app_ctx):
+    """Verify that cancellations strictly execute via append-only reversals without hard row deletions."""
+    from cacao_accounting.contabilidad.posting import cancel_document, post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        GLEntry,
+        Item,
+        ItemAccount,
+        PartyAccount,
+        PaymentEntry,
+        PaymentReference,
+        SalesInvoice,
+        SalesInvoiceItem,
+        StockBin,
+        StockEntry,
+        StockEntryItem,
+        StockLedgerEntry,
+        Warehouse,
+        WarehouseCompanyAccount,
+        database,
+    )
+
+    ar = Accounts(entity="r2r", code="AR-CANC", name="AR Canc", active=True, enabled=True, classification="asset")
+    inc = Accounts(entity="r2r", code="INC-CANC", name="Inc Canc", active=True, enabled=True, classification="income", account_type="income")
+    inv = Accounts(entity="r2r", code="INV-CANC", name="Inv Canc", active=True, enabled=True, classification="asset")
+    bank_gl = Accounts(entity="r2r", code="BNK-CANC", name="Bank Canc", active=True, enabled=True, classification="asset", account_type="bank")
+    adj = Accounts(entity="r2r", code="ADJ-CANC", name="Adj Canc", active=True, enabled=True, classification="expense", account_type="expense")
+
+    database.session.add_all([ar, inc, inv, bank_gl, adj])
+    database.session.flush()
+
+    database.session.add_all([
+        CompanyDefaultAccount(
+            company="r2r",
+            default_receivable=ar.id,
+            default_income=inc.id,
+            default_bank=bank_gl.id,
+            default_expense=adj.id,
+            inventory_adjustment_account_id=adj.id,
+        ),
+        PartyAccount(party_id="CUST-CANC", company="r2r", receivable_account_id=ar.id),
+    ])
+
+    wh = Warehouse(code="WH-CANC", name="WH Canc", company="r2r", is_active=True)
+    item = Item(code="ITEM-CANC", name="Item Canc", item_type="product", is_stock_item=True, default_uom="PZA")
+    database.session.add_all([wh, item])
+    database.session.flush()
+
+    database.session.add_all([
+        WarehouseCompanyAccount(warehouse_code="WH-CANC", company="r2r", inventory_account_id=inv.id),
+        ItemAccount(item_code="ITEM-CANC", company="r2r", income_account_id=inc.id),
+    ])
+    database.session.commit()
+
+    # 1. Post and cancel Sales Invoice
+    invoice = SalesInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 12),
+        customer_id="CUST-CANC",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+        docstatus=1,
+        total=Decimal("800"),
+        grand_total=Decimal("800"),
+        outstanding_amount=Decimal("800"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(SalesInvoiceItem(sales_invoice_id=invoice.id, item_code="ITEM-CANC", qty=1, rate=800, amount=800, income_account_id=inc.id))
+    database.session.commit()
+
+    post_document_to_gl(invoice)
+    database.session.commit()
+
+    entries_before = database.session.execute(database.select(GLEntry).filter_by(voucher_id=invoice.id)).scalars().all()
+    assert len(entries_before) == 2
+    assert all(not e.is_cancelled and not e.is_reversal for e in entries_before)
+
+    # Cancel Sales Invoice
+    cancel_document(invoice)
+    database.session.commit()
+
+    assert invoice.docstatus == 2
+    all_entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=invoice.id)).scalars().all()
+    assert len(all_entries) == 4  # 2 original + 2 append-only reversals
+
+    cancelled_originals = [e for e in all_entries if e.is_cancelled]
+    reversals = [e for e in all_entries if e.is_reversal]
+
+    assert len(cancelled_originals) == 2
+    assert len(reversals) == 2
+
+    # Verify debit/credit swap in reversals
+    orig_ar = next(e for e in cancelled_originals if e.account_id == ar.id)
+    rev_ar = next(e for e in reversals if e.account_id == ar.id)
+    assert orig_ar.debit == Decimal("800") and orig_ar.credit == Decimal("0")
+    assert rev_ar.credit == Decimal("800") and rev_ar.debit == Decimal("0")
+    assert rev_ar.reversal_of == orig_ar.id
+
+    # 2. Post and cancel Stock Entry
+    se = StockEntry(company="r2r", posting_date=date(2026, 8, 12), purpose="material_receipt", docstatus=1, to_warehouse="WH-CANC")
+    database.session.add(se)
+    database.session.flush()
+    database.session.add(StockEntryItem(stock_entry_id=se.id, item_code="ITEM-CANC", target_warehouse="WH-CANC", qty=50, uom="PZA", valuation_rate=20, amount=2500))
+    database.session.commit()
+
+    post_document_to_gl(se)
+    database.session.commit()
+
+    bin_row = database.session.execute(database.select(StockBin).filter_by(company="r2r", item_code="ITEM-CANC")).scalar_one()
+    assert bin_row.actual_qty == Decimal("50")
+
+    sles_before = database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=se.id)).scalars().all()
+    assert len(sles_before) == 1
+    assert sles_before[0].qty_change == Decimal("50")
+
+    # Cancel Stock Entry
+    cancel_document(se)
+    database.session.commit()
+
+    assert se.docstatus == 2
+    all_sles = database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=se.id)).scalars().all()
+    assert len(all_sles) == 2  # 1 original cancelled + 1 reversal entry
+
+    orig_sle = next(sle for sle in all_sles if sle.is_cancelled)
+    rev_sle = next(sle for sle in all_sles if not sle.is_cancelled)
+
+    assert orig_sle.qty_change == Decimal("50")
+    assert rev_sle.qty_change == Decimal("-50")
+
+    # Verify StockBin was adjusted back to zero via append-only ledger entries without row deletion
+    bin_row_after = database.session.execute(database.select(StockBin).filter_by(company="r2r", item_code="ITEM-CANC")).scalar_one()
+    assert bin_row_after.actual_qty == Decimal("0")
+
+
+def test_r2r_subledger_to_gl_reconciliation_multi_currency(app_ctx):
+    """Assert exact mathematical agreement between subledger totals, reconciliation matrix, and GL control accounts."""
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        Book,
+        CompanyDefaultAccount,
+        Currency,
+        ExchangeRate,
+        GLEntry,
+        PartyAccount,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        SalesInvoice,
+        SalesInvoiceItem,
+        database,
+    )
+    from cacao_accounting.reportes.services import (
+        ReconciliationFilters,
+        SubledgerFilters,
+        get_ar_ap_subledger,
+        get_reconciliation_matrix,
+    )
+
+    ar = Accounts(entity="r2r", code="AR-REC", name="AR Rec", active=True, enabled=True, classification="asset")
+    ap = Accounts(entity="r2r", code="AP-REC", name="AP Rec", active=True, enabled=True, classification="liability")
+    inc = Accounts(entity="r2r", code="INC-REC", name="Inc Rec", active=True, enabled=True, classification="income", account_type="income")
+    exp = Accounts(entity="r2r", code="EXP-REC", name="Exp Rec", active=True, enabled=True, classification="expense", account_type="expense")
+
+    primary_book = Book(entity="r2r", code="R2RLOC", name="Local", currency="NIO", status="activo", is_primary=True)
+    database.session.add_all([primary_book, ar, ap, inc, exp])
+    database.session.flush()
+
+    database.session.add_all([
+        CompanyDefaultAccount(company="r2r", default_receivable=ar.id, default_payable=ap.id, default_income=inc.id, default_expense=exp.id),
+        PartyAccount(party_id="CUST-REC", company="r2r", receivable_account_id=ar.id),
+        PartyAccount(party_id="SUPP-REC", company="r2r", payable_account_id=ap.id),
+        ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 8, 15)),
+    ])
+    database.session.commit()
+
+    # Post USD Sales Invoice ($100 = NIO 3600)
+    si = SalesInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 15),
+        customer_id="CUST-REC",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+        total=Decimal("100"),
+        grand_total=Decimal("100"),
+        base_total=Decimal("3600"),
+        base_grand_total=Decimal("3600"),
+        outstanding_amount=Decimal("100"),
+        base_outstanding_amount=Decimal("3600"),
+    )
+    database.session.add(si)
+    database.session.flush()
+    database.session.add(SalesInvoiceItem(sales_invoice_id=si.id, item_code="ITEM-REC", qty=1, rate=100, amount=100, base_amount=3600, income_account_id=inc.id))
+
+    # Post USD Purchase Invoice ($200 = NIO 7200)
+    pi = PurchaseInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 15),
+        supplier_id="SUPP-REC",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+        total=Decimal("200"),
+        grand_total=Decimal("200"),
+        base_total=Decimal("7200"),
+        base_grand_total=Decimal("7200"),
+        outstanding_amount=Decimal("200"),
+        base_outstanding_amount=Decimal("7200"),
+    )
+    database.session.add(pi)
+    database.session.flush()
+    database.session.add(PurchaseInvoiceItem(purchase_invoice_id=pi.id, item_code="ITEM-REC", qty=1, rate=200, amount=200, base_amount=7200, expense_account_id=exp.id))
+    database.session.commit()
+
+    post_document_to_gl(si)
+    post_document_to_gl(pi)
+    database.session.commit()
+
+    # 1. Check Subledgers
+    ar_sub = get_ar_ap_subledger(SubledgerFilters(company="r2r", party_type="customer", as_of_date=date(2026, 8, 15)))
+    ap_sub = get_ar_ap_subledger(SubledgerFilters(company="r2r", party_type="supplier", as_of_date=date(2026, 8, 15)))
+
+    assert ar_sub.totals["outstanding_amount"] == Decimal("3600")
+    assert ap_sub.totals["outstanding_amount"] == Decimal("7200")
+
+    # 2. Reconcile with GL Control Accounts
+    gl_ar_balance = database.session.execute(
+        database.select(database.func.sum(GLEntry.debit - GLEntry.credit)).filter_by(company="r2r", account_id=ar.id)
+    ).scalar() or Decimal("0")
+
+    gl_ap_balance = database.session.execute(
+        database.select(database.func.sum(GLEntry.credit - GLEntry.debit)).filter_by(company="r2r", account_id=ap.id)
+    ).scalar() or Decimal("0")
+
+    assert ar_sub.totals["outstanding_amount"] == gl_ar_balance
+    assert ap_sub.totals["outstanding_amount"] == gl_ap_balance
+
+    # 3. Check Reconciliation Matrix Report
+    primary_book = database.session.execute(database.select(Book).filter_by(entity="r2r", is_primary=True)).scalars().first()
+    matrix = get_reconciliation_matrix(ReconciliationFilters(company="r2r", ledger=primary_book.code if primary_book else None, as_of_date=date(2026, 8, 15)))
+
+    ar_row = next(row for row in matrix.rows if row.values["area"] == "AR")
+    ap_row = next(row for row in matrix.rows if row.values["area"] == "AP")
+
+    assert ar_row.values["subledger_amount"] == Decimal("3600")
+    assert ar_row.values["gl_control_amount"] == Decimal("3600")
+    assert ar_row.values["status"] == "reconciled"
+
+    assert ap_row.values["subledger_amount"] == Decimal("-7200")
+    assert ap_row.values["gl_control_amount"] == Decimal("-7200")
+    assert ap_row.values["status"] == "reconciled"
+
+
+def test_r2r_kardex_inventory_valuation_and_moving_average(app_ctx):
+    """Verify StockBin, StockLedgerEntry, and StockValuationLayer moving average calculations and GL synchronization."""
+    from cacao_accounting.contabilidad.posting import post_delivery_note, post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        DeliveryNote,
+        DeliveryNoteItem,
+        GLEntry,
+        Item,
+        ItemAccount,
+        StockBin,
+        StockEntry,
+        StockEntryItem,
+        StockLedgerEntry,
+        StockValuationLayer,
+        Warehouse,
+        WarehouseCompanyAccount,
+        database,
+    )
+
+    inv_acc = Accounts(entity="r2r", code="INV-KARD", name="Inv Kardex", active=True, enabled=True, classification="asset")
+    cogs_acc = Accounts(entity="r2r", code="COGS-KARD", name="COGS Kardex", active=True, enabled=True, classification="expense", account_type="expense")
+    adj_acc = Accounts(entity="r2r", code="ADJ-KARD", name="Adj Kardex", active=True, enabled=True, classification="expense", account_type="expense")
+
+    database.session.add_all([inv_acc, cogs_acc, adj_acc])
+    database.session.flush()
+
+    database.session.add_all([
+        CompanyDefaultAccount(company="r2r", default_expense=adj_acc.id, inventory_adjustment_account_id=adj_acc.id, default_cogs=cogs_acc.id),
+    ])
+
+    wh = Warehouse(code="WH-KARD", name="WH Kardex", company="r2r", is_active=True)
+    item = Item(code="ITEM-KARD", name="Item Kardex", item_type="product", is_stock_item=True, default_uom="PZA")
+    database.session.add_all([wh, item])
+    database.session.flush()
+
+    database.session.add_all([
+        WarehouseCompanyAccount(warehouse_code="WH-KARD", company="r2r", inventory_account_id=inv_acc.id),
+        ItemAccount(item_code="ITEM-KARD", company="r2r", expense_account_id=cogs_acc.id),
+    ])
+    database.session.commit()
+
+    # 1. Receipt 1: 10 units @ 100 NIO = 1000 NIO
+    se1 = StockEntry(company="r2r", posting_date=date(2026, 8, 16), purpose="material_receipt", docstatus=1, to_warehouse="WH-KARD")
+    database.session.add(se1)
+    database.session.flush()
+    database.session.add(StockEntryItem(stock_entry_id=se1.id, item_code="ITEM-KARD", target_warehouse="WH-KARD", qty=10, uom="PZA", valuation_rate=100, amount=1000))
+    database.session.commit()
+
+    post_document_to_gl(se1)
+    database.session.commit()
+
+    bin1 = database.session.execute(database.select(StockBin).filter_by(company="r2r", item_code="ITEM-KARD")).scalar_one()
+    assert bin1.actual_qty == Decimal("10")
+    assert bin1.stock_value == Decimal("1000")
+    assert bin1.valuation_rate == Decimal("100")
+
+    # 2. Receipt 2: 10 units @ 200 NIO = 2000 NIO (Total stock = 20 units, Total value = 3000 NIO, Avg rate = 150 NIO)
+    se2 = StockEntry(company="r2r", posting_date=date(2026, 8, 17), purpose="material_receipt", docstatus=1, to_warehouse="WH-KARD")
+    database.session.add(se2)
+    database.session.flush()
+    database.session.add(StockEntryItem(stock_entry_id=se2.id, item_code="ITEM-KARD", target_warehouse="WH-KARD", qty=10, uom="PZA", valuation_rate=200, amount=2000))
+    database.session.commit()
+
+    post_document_to_gl(se2)
+    database.session.commit()
+
+    bin2 = database.session.execute(database.select(StockBin).filter_by(company="r2r", item_code="ITEM-KARD")).scalar_one()
+    assert bin2.actual_qty == Decimal("20")
+    assert bin2.stock_value == Decimal("3000")
+    assert bin2.valuation_rate == Decimal("150")
+
+    # 3. Delivery Note: 5 units delivered. Expected COGS = 5 * 150 = 750 NIO.
+    dn = DeliveryNote(company="r2r", posting_date=date(2026, 8, 18), docstatus=1)
+    database.session.add(dn)
+    database.session.flush()
+    dn_item = DeliveryNoteItem(delivery_note_id=dn.id, item_code="ITEM-KARD", warehouse="WH-KARD", qty=5, uom="PZA", rate=250, amount=1250)
+    database.session.add(dn_item)
+    database.session.commit()
+
+    post_delivery_note(dn)
+    database.session.commit()
+
+    bin3 = database.session.execute(database.select(StockBin).filter_by(company="r2r", item_code="ITEM-KARD")).scalar_one()
+    assert bin3.actual_qty == Decimal("15")
+    assert bin3.stock_value == Decimal("2250")
+    assert bin3.valuation_rate == Decimal("150")
+
+    # Verify Stock Ledger Entry for Delivery
+    sle_dn = database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=dn.id)).scalar_one()
+    assert sle_dn.qty_change == Decimal("-5")
+    assert sle_dn.valuation_rate == Decimal("150")
+    assert sle_dn.stock_value_difference == Decimal("-750")
+
+    # Verify GL Entries for Delivery Note (Dr COGS 750, Cr Inventory 750)
+    dn_gls = database.session.execute(database.select(GLEntry).filter_by(voucher_id=dn.id)).scalars().all()
+    assert len(dn_gls) == 2
+    cogs_gl = next(g for g in dn_gls if g.account_id == cogs_acc.id)
+    inv_gl = next(g for g in dn_gls if g.account_id == inv_acc.id)
+
+    assert cogs_gl.debit == Decimal("750") and cogs_gl.credit == Decimal("0")
+    assert inv_gl.credit == Decimal("750") and inv_gl.debit == Decimal("0")
