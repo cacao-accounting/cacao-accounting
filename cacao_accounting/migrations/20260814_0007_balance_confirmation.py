@@ -90,7 +90,7 @@ def upgrade() -> None:
         columns = {column["name"] for column in inspector.get_columns("payment_entry")}
         if "is_advance" not in columns:
             with op.batch_alter_table("payment_entry", recreate="auto") as batch:
-                batch.add_column(sa.Column("is_advance", sa.Boolean(), nullable=False, server_default=sa.text("0")))
+                batch.add_column(sa.Column("is_advance", sa.Boolean(), nullable=False, server_default=sa.false()))
 
 
 def downgrade() -> None:
