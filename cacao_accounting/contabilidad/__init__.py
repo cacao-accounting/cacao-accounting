@@ -510,7 +510,7 @@ def editar_entidad(id_entidad):
         )
 
 
-@contabilidad.route("/entity/delete/<id_entidad>")
+@contabilidad.route("/entity/delete/<id_entidad>", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -634,7 +634,7 @@ def unidad(id_unidad):
     )
 
 
-@contabilidad.route("/unit/delete/<id_unidad>")
+@contabilidad.route("/unit/delete/<id_unidad>", methods=["POST"])
 @modulo_activo("accounting")
 @login_required
 def eliminar_unidad(id_unidad):
@@ -810,7 +810,7 @@ def libro(id_unidad):
     )
 
 
-@contabilidad.route("/book/delete/<id_unidad>")
+@contabilidad.route("/book/delete/<id_unidad>", methods=["POST"])
 @modulo_activo("accounting")
 @login_required
 def eliminar_libro(id_unidad):
@@ -1560,7 +1560,7 @@ def centro_costo(id_cc: str):
     )
 
 
-@contabilidad.route("/costs_center/<id_cc>/delete")
+@contabilidad.route("/costs_center/<id_cc>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -1870,7 +1870,7 @@ def _update_project_from_form(
     update_hierarchy_attributes(proyecto)
 
 
-@contabilidad.route("/project/<project_id>/delete")
+@contabilidad.route("/project/<project_id>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -2025,7 +2025,7 @@ def fiscal_year_detail(fy_id):
     )
 
 
-@contabilidad.route("/fiscal_year/<fy_id>/delete")
+@contabilidad.route("/fiscal_year/<fy_id>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -2153,7 +2153,7 @@ def accounting_period_edit(period_id):
     )
 
 
-@contabilidad.route("/accounting_period/<period_id>/delete")
+@contabilidad.route("/accounting_period/<period_id>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
@@ -3810,7 +3810,7 @@ def naming_series_edit(series_id: str):
     return redirect(url_for(CONTABILIDAD_NAMING_SERIES_LIST))
 
 
-@contabilidad.route("/naming-series/<series_id>/delete", methods=["GET", "POST"])
+@contabilidad.route("/naming-series/<series_id>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")

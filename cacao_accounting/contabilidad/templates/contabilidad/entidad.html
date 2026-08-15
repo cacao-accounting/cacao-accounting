@@ -65,9 +65,10 @@
         {{ _('Inactivar') }}
       </a>
       {% endif %}
-      <a class="btn btn-sm btn-outline-danger" href="{{ url_for('contabilidad.eliminar_entidad', id_entidad=registro.id) }}">
-        <i class="bi bi-trash me-1"></i>{{ _('Eliminar') }}
-      </a>
+      <form method="post" action="{{ url_for('contabilidad.eliminar_entidad', id_entidad=registro.id) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash me-1"></i>{{ _('Eliminar') }}</button>
+      </form>
       <a class="btn btn-sm btn-secondary" href="{{ url_for('contabilidad.entidades') }}">
         <i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}
       </a>

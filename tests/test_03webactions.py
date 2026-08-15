@@ -347,7 +347,7 @@ def test_delete_entity(request):
                 with client.session_transaction() as sess:
                     assert sess.get("_user_id") is not None
 
-                client.get("/accounts/entity/delete/TEMP_ENTITY_DELETE", follow_redirects=True)
+                client.post("/accounts/entity/delete/TEMP_ENTITY_DELETE", follow_redirects=True)
 
             db_ent = database.session.get(Entity, "TEMP_ENTITY_DELETE")
             if db_ent:
