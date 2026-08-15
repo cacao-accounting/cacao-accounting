@@ -309,3 +309,20 @@ def test_purchase_request_to_placed_purchase_orders_over_http(e2e_app):
             final_detail = client.get(f"/buying/request-for-quotation/comparison/{comparison.id}")
             assert final_detail.status_code == 200
             assert b"ya fueron generadas" in final_detail.data
+
+            reopened_round = client.post(
+                f"/buying/request-for-quotation/comparison/{comparison.id}/negotiation-round",
+                data={"rfq_id": offers[1].purchase_quotation_id},
+            )
+            assert reopened_round.status_code in {302, 303}
+            assert database.session.query(PurchaseNegotiationRound).filter_by(
+                purchase_quotation_id=offers[1].purchase_quotation_id,
+                round_number=1,
+            ).one_or_none()
+
+            closed_request = client.post(f"/buying/purchase-request/{request_record.id}/close")
+            assert closed_request.status_code in {302, 303}
+            database.session.expire_all()
+            assert database.session.get(PurchaseRequest, request_record.id).status == "closed"
+            listing_after = client.get("/buying/request-for-quotation/comparison")
+            assert b"Utilizado" in listing_after.data

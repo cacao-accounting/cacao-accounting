@@ -31,6 +31,14 @@
             url_for('compras.compras_solicitud_compra_cancel', request_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
+      {% if can_close %}
+        <form method="post" action="{{ url_for('compras.compras_solicitud_compra_close', request_id=registro.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-success" type="submit">
+            <i class="bi bi-lock me-1"></i>{{ _('Cerrar') }}
+          </button>
+        </form>
+      {% endif %}
       {{ macros.detail_nav_buttons(
             url_for('compras.compras_solicitud_compra_lista'),
             url_for('compras.compras_solicitud_compra_nueva')) }}
@@ -47,6 +55,7 @@
       (_('Compañía'), registro.company),
       (_('Fecha'), registro.posting_date),
       (_('Solicitado por'), registro.requested_by),
+      (_('Estado de proceso'), registro.status),
       (_('Observaciones'), registro.remarks)
     ],
     'bi-clipboard-check'
