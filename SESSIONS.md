@@ -794,3 +794,14 @@ fixes de continuidad #423/#424 quedaron actualizados en `05a108f3`. No se
 detectaron nuevos issues del repositorio posteriores al #431. El issue #420
 fue reabierto para respetar la instrucción de mantenerlo abierto y queda fuera
 de este hilo para su corrección posterior.
+
+### Validación posterior
+
+- `cc9a8885 refactor(admin): centralize configuration navigation` conserva los
+  endpoints públicos y extrae el registro de navegación a
+  `cacao_accounting/admin/navigation.py`.
+- `tests/test_admin_blueprint.py`: 28 passed; Ruff y formato Ruff correctos.
+- Suite completa: 1543 passed, 9 skipped y 188 failed. Los fallos están
+  concentrados en `tests/test_04database_schema.py`, el mismo bloque de
+  inconsistencias de esquema preexistentes; el resumen completo queda en
+  `/tmp/cacao-backend-qa-20260815-final.log`.
