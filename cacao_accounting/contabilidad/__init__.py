@@ -75,7 +75,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids, update_hierarchy_attributes
-from cacao_accounting.decorators import modulo_activo, verifica_acceso
+from cacao_accounting.decorators import modulo_activo, verifica_acceso, verifica_permiso
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
 
@@ -513,6 +513,7 @@ def editar_entidad(id_entidad):
 @contabilidad.route("/entity/delete/<id_entidad>", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "eliminar")
 @verifica_acceso("accounting")
 def eliminar_entidad(id_entidad):
     """Elimina una entidad de sistema."""
@@ -637,6 +638,7 @@ def unidad(id_unidad):
 @contabilidad.route("/unit/delete/<id_unidad>", methods=["POST"])
 @modulo_activo("accounting")
 @login_required
+@verifica_permiso("accounting", "eliminar")
 def eliminar_unidad(id_unidad):
     """Elimina una unidad de negocios de la base de datos."""
     from cacao_accounting.database import Unit
@@ -813,6 +815,7 @@ def libro(id_unidad):
 @contabilidad.route("/book/delete/<id_unidad>", methods=["POST"])
 @modulo_activo("accounting")
 @login_required
+@verifica_permiso("accounting", "eliminar")
 def eliminar_libro(id_unidad):
     """Elimina un libro de contabilidad de la base de datos."""
     from cacao_accounting.database import Book
@@ -1563,6 +1566,7 @@ def centro_costo(id_cc: str):
 @contabilidad.route("/costs_center/<id_cc>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "eliminar")
 @verifica_acceso("accounting")
 def eliminar_centro_costo(id_cc):
     """Elimina un centro de costos."""
@@ -1873,6 +1877,7 @@ def _update_project_from_form(
 @contabilidad.route("/project/<project_id>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "eliminar")
 @verifica_acceso("accounting")
 def eliminar_proyecto(project_id):
     """Elimina un proyecto."""
@@ -2028,6 +2033,7 @@ def fiscal_year_detail(fy_id):
 @contabilidad.route("/fiscal_year/<fy_id>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "eliminar")
 @verifica_acceso("accounting")
 def fiscal_year_delete(fy_id):
     """Elimina un año fiscal."""
@@ -2156,6 +2162,7 @@ def accounting_period_edit(period_id):
 @contabilidad.route("/accounting_period/<period_id>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "eliminar")
 @verifica_acceso("accounting")
 def accounting_period_delete(period_id):
     """Elimina un período contable."""
@@ -3813,6 +3820,7 @@ def naming_series_edit(series_id: str):
 @contabilidad.route("/naming-series/<series_id>/delete", methods=["POST"])
 @login_required
 @modulo_activo("accounting")
+@verifica_permiso("accounting", "eliminar")
 @verifica_acceso("accounting")
 def naming_series_delete(series_id: str):
     """Eliminar una serie de numeracion si no ha sido utilizada."""
