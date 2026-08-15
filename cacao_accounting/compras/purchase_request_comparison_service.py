@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from sqlalchemy import or_
 
@@ -12,6 +12,7 @@ from cacao_accounting.database import (
     PurchaseRequestComparison,
     PurchaseRequestComparisonOffer,
     SupplierQuotation,
+    SupplierQuotationItem,
     database,
 )
 
@@ -30,9 +31,15 @@ def purchase_quotation_ids_for_request(purchase_request: PurchaseRequest) -> set
 
 
 def supplier_quotations_for_request(purchase_request: PurchaseRequest) -> list[SupplierQuotation]:
-    """Return all submitted supplier quotations linked through the request RFQs."""
+    """Return submitted supplier quotations linked directly or through request RFQs."""
+    direct_offer_ids = database.select(DocumentRelation.target_id).where(
+        DocumentRelation.source_type == "purchase_request",
+        DocumentRelation.source_id == purchase_request.id,
+        DocumentRelation.target_type == "supplier_quotation",
+        DocumentRelation.status == "active",
+    )
     rfq_ids = purchase_quotation_ids_for_request(purchase_request)
-    if not rfq_ids:
+    if not rfq_ids and not database.session.execute(direct_offer_ids.limit(1)).scalar_one_or_none():
         return []
     related_offer_ids = database.select(DocumentRelation.target_id).where(
         DocumentRelation.source_type == "purchase_quotation",
@@ -43,7 +50,11 @@ def supplier_quotations_for_request(purchase_request: PurchaseRequest) -> list[S
     statement = database.select(SupplierQuotation).where(
         SupplierQuotation.company == purchase_request.company,
         SupplierQuotation.docstatus == 1,
-        or_(SupplierQuotation.purchase_quotation_id.in_(rfq_ids), SupplierQuotation.id.in_(related_offer_ids)),
+        or_(
+            SupplierQuotation.id.in_(direct_offer_ids),
+            SupplierQuotation.purchase_quotation_id.in_(rfq_ids),
+            SupplierQuotation.id.in_(related_offer_ids),
+        ),
     )
     return list(
         database.session.execute(
@@ -52,6 +63,60 @@ def supplier_quotations_for_request(purchase_request: PurchaseRequest) -> list[S
         .scalars()
         .all()
     )
+
+
+def supplier_quotation_comparison_rows(
+    offers: Sequence[SupplierQuotation],
+    offer_items: Mapping[str, Sequence[SupplierQuotationItem]],
+) -> list[dict[str, object]]:
+    """Build comparison rows from the union of all participating offer lines."""
+    rows: list[dict[str, object]] = []
+    seen_keys: set[tuple[tuple[str | None, ...], int]] = set()
+    occurrences_by_offer: dict[str, dict[tuple[str | None, ...], int]] = {}
+
+    for offer in offers:
+        occurrences = occurrences_by_offer.setdefault(offer.id, {})
+        for item in offer_items.get(offer.id, []):
+            key = _supplier_quotation_item_key(item)
+            occurrence = occurrences.get(key, 0)
+            occurrences[key] = occurrence + 1
+            row_key = (key, occurrence)
+            if row_key not in seen_keys:
+                seen_keys.add(row_key)
+                rows.append(
+                    {
+                        "item": item,
+                        "item_key": key,
+                        "occurrence": occurrence,
+                        "offers": {
+                            participant.id: _supplier_quotation_item_at_occurrence(
+                                offer_items.get(participant.id, ()), key, occurrence
+                            )
+                            for participant in offers
+                        },
+                    }
+                )
+
+    return rows
+
+
+def _supplier_quotation_item_key(item: SupplierQuotationItem) -> tuple[str | None, ...]:
+    """Return the stable commercial identity for a supplier quotation line."""
+    return (
+        item.item_code,
+        item.uom,
+        str(item.qty_in_base_uom) if item.qty_in_base_uom is not None else None,
+        item.warehouse,
+        item.description,
+    )
+
+
+def _supplier_quotation_item_at_occurrence(
+    items: Sequence[SupplierQuotationItem], key: tuple[str | None, ...], occurrence: int
+) -> SupplierQuotationItem | None:
+    """Return the line matching a commercial identity and occurrence."""
+    matching_items = [item for item in items if _supplier_quotation_item_key(item) == key]
+    return matching_items[occurrence] if occurrence < len(matching_items) else None
 
 
 def create_purchase_request_comparison(
