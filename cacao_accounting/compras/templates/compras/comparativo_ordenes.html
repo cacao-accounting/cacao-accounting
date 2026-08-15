@@ -24,8 +24,39 @@
       <strong>{{ purchase_request.document_no or purchase_request.id }}</strong> ·
       Orden base: <strong>{{ base_order.document_no or base_order.id }}</strong> ·
       Ofertas participantes: {{ orders|length }}
+      {% if selected_round %} · Ronda {{ selected_round.round_number }} ({{ selected_round.status }}){% endif %}
     </p>
   </div>
+  {% if rounds %}
+  <div class="border-bottom p-3">
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <span class="text-muted">Histórico de rondas:</span>
+      {% for round in rounds %}
+      <a class="btn btn-sm {% if selected_round and round.id == selected_round.id %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{{ url_for('compras.compras_comparativo_ordenes', comparison_id=comparison.id, round_id=round.id) }}">
+        Ronda {{ round.round_number }} · {{ round.status }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('compras.compras_comparativo_ordenes_abrir_ronda', comparison_id=comparison.id) }}" class="border-bottom p-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <fieldset>
+      <legend class="h6">Abrir nueva ronda</legend>
+      <p class="small text-muted">Seleccione explícitamente las órdenes que participarán. La ronda actual quedará cerrada e inmutable.</p>
+      <div class="row g-2">
+        {% for order in candidate_orders %}
+        <div class="col-md-6 col-lg-4">
+          <label class="form-check">
+            <input class="form-check-input" type="checkbox" name="participant_ids" value="{{ order.id }}" {% if order.id in participant_order_ids %}checked{% endif %} {% if order.id == comparison.base_purchase_order_id %}disabled{% endif %} />
+            <span class="form-check-label">{{ order.document_no or order.id }} — {{ order.supplier_name or order.supplier_id or "-" }}</span>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <button type="submit" class="btn btn-outline-primary btn-sm mt-3"><i class="bi bi-arrow-repeat me-1"></i>Abrir ronda</button>
+  </form>
+  {% endif %}
   <div class="table-responsive">
     <table class="ca-table">
       <caption style="display: none">

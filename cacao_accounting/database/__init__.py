@@ -1835,6 +1835,9 @@ class PurchaseNegotiationRound(database.Model):  # type: ignore[name-defined]
     """Ronda de negociación asociada a una solicitud de cotización."""
 
     __tablename__ = "purchase_negotiation_round"
+    __table_args__ = (
+        database.UniqueConstraint("purchase_quotation_id", "round_number", name="uq_purchase_negotiation_round_number"),
+    )
     id = database.Column(database.String(26), primary_key=True, default=obtiene_texto_unico)
     purchase_quotation_id = database.Column(
         database.String(26),
@@ -1940,13 +1943,51 @@ class PurchaseOrderComparisonOrder(database.Model, BaseTabla):  # type: ignore[n
 
     __tablename__ = "purchase_order_comparison_order"
     __table_args__ = (
-        database.UniqueConstraint(
-            "comparison_id", "purchase_order_id", name="uq_purchase_order_comparison_order"
-        ),
+        database.UniqueConstraint("comparison_id", "purchase_order_id", name="uq_purchase_order_comparison_order"),
     )
     comparison_id = database.Column(
         database.String(26),
         database.ForeignKey("purchase_order_comparison.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    purchase_order_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PURCHASE_ORDER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    is_base = database.Column(database.Boolean(), nullable=False, default=False)
+
+
+class PurchaseOrderComparisonRound(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Ronda inmutable de un comparativo de órdenes de compra."""
+
+    __tablename__ = "purchase_order_comparison_round"
+    __table_args__ = (
+        database.UniqueConstraint("comparison_id", "round_number", name="uq_purchase_order_comparison_round_number"),
+    )
+    comparison_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_order_comparison.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    round_number = database.Column(database.Integer, nullable=False)
+    status = database.Column(database.String(20), nullable=False, default="open", index=True)
+    created_by = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL), nullable=True)
+
+
+class PurchaseOrderComparisonRoundOrder(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Orden de compra participante en una ronda del comparativo."""
+
+    __tablename__ = "purchase_order_comparison_round_order"
+    __table_args__ = (
+        database.UniqueConstraint("round_id", "purchase_order_id", name="uq_purchase_order_comparison_round_order"),
+    )
+    round_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_order_comparison_round.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
