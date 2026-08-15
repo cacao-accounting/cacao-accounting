@@ -151,6 +151,14 @@ def test_validate_lines_rejects_missing_company_context(logged_in_client):
     assert data["errors"][0]["field"] == "company_id"
 
 
+@pytest.mark.parametrize("payload", [{"context": [], "rows": []}, {"context": {}, "rows": {}}])
+def test_validate_lines_rejects_invalid_payload_shapes(logged_in_client, payload):
+    """Malformed JSON shapes return structured client errors instead of HTTP 500."""
+    response = logged_in_client.post("/api/line-import/validate", json=payload)
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Doctype no especificado"
+
+
 def test_validate_lines_rejects_unknown_company(logged_in_client):
     payload = {"doctype": "purchase_request", "context": {"company_id": "missing"}, "rows": [{"item_code": "ITEM01"}]}
     response = logged_in_client.post("/api/line-import/validate", data=json.dumps(payload), content_type="application/json")
