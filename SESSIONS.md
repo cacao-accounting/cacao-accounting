@@ -858,3 +858,66 @@ negociación para una Solicitud de Cotización participante.
   Proveedor.
 - El E2E valida la apertura desde el comparativo y la visibilidad de la acción
   para agregar una nueva oferta: 21 pruebas aprobadas.
+
+## 2026-08-15 — Validación real Source-to-Pay y nombres de proveedores en GL
+
+### Petición
+
+Se solicitó validar con pruebas reales por `curl` y contra la base de desarrollo
+el flujo completo de Source-to-Pay: Solicitud de Compra, Solicitudes de
+Cotización, Cotizaciones de Proveedor, Comparativo de Ofertas, ronda de
+negociación, Orden de Compra, recepción en bodega y Factura de Proveedor. La
+validación debía incluir lógica de negocio, cálculos, saldos del ledger y
+kardex. Durante la sesión se detectó que el detalle de movimiento contable
+mostraba el ULID del proveedor (`01M032Z65440DC1QPKHX340RJ8`) en lugar de su
+nombre.
+
+### Ejecución y resultados
+
+- La base usada fue `sqlite:////home/runner/workspace/cacaoaccounting.db` y la
+  aplicación se probó por HTTP en `127.0.0.1:8080` con `test/test`.
+- Se creó y aprobó la Solicitud de Compra
+  `cacao-PREQ-2026-08-00002`, con 4 unidades de `ART-001`.
+- Se aprobaron dos RFQ y dos ofertas: C$1,680 y C$1,600. El comparativo
+  `cacao-CMP-2026-08-00002` recomendó correctamente la oferta de C$1,600 por
+  línea; el usuario seleccionó la de C$1,680 con justificación y autorización.
+- Desde el comparativo se abrió la ronda 1 de la RFQ de Demo y se creó la
+  oferta negociada `cacao-SPQ-2026-08-00005` por C$1,560. La oferta negociada
+  queda asociada a su ronda; el comparativo existente conserva su snapshot y
+  no incorpora automáticamente ofertas creadas después.
+- Se colocó y aprobó la Orden de Compra `cacao-PO-2026-08-00002`, se recibió
+  la mercancía en `PRINCIPAL` mediante `cacao-PR-2026-08-00002` y se aprobó la
+  Factura `cacao-PI-2026-08-00002`, todos por 4 unidades a C$420 y total de
+  C$1,680.
+- Las relaciones activas verificadas fueron oferta→orden,
+  solicitud→orden, orden→recepción y recepción→factura, todas por cantidad 4
+  y monto C$1,680. La recepción quedó totalmente facturada.
+- Cada documento generó dos asientos balanceados en los tres libros `LOCAL`,
+  `FIN` y `MGMT`. En `LOCAL` cada transacción suma débito/crédito C$1,680;
+  `FIN` suma C$45.8712 y `MGMT` C$41.8708, sin asientos cancelados ni
+  reversos.
+- El kardex registró +4 unidades a C$420, con incremento de valor C$1,680.
+  La recomputación desde el ledger coincide con `StockBin`: 204 unidades y
+  C$21,680. La factura mantiene saldo pendiente C$1,680 y no quedan líneas
+  pendientes para esta recepción; el saldo pendiente global restante pertenece
+  a datos demo preexistentes.
+
+### Corrección visual
+
+- El detalle `/reports/account-movement` ahora hace `LEFT JOIN` con `Party` y
+  muestra `Proveedor Demo SA` en la columna visible, manteniendo el ULID para
+  filtros y relaciones internas.
+- Se agregó una prueba de regresión que valida tanto el servicio como el HTML
+  renderizado.
+- Commit: `a23cc9d3 fix(reports): display supplier names in account movements`.
+  El commit está firmado con sign-off de
+  `William José Moreno Reyes <williamjmorenor@gmail.com>`.
+
+### Calidad
+
+- Pruebas focalizadas de reportes: 2 passed.
+- Ruff y `git diff --check`: correctos.
+- Black y mypy no pudieron iniciar en el `.venv` debido a la instalación
+  inconsistente de `pathspec` (`pathspec.patterns.gitignore` ausente). La suite
+  completa continúa teniendo el bloque conocido de fallos de esquema en
+  `tests/test_04database_schema.py`; no se atribuyen al fix visual.
