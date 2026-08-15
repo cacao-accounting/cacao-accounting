@@ -47,6 +47,7 @@ from cacao_accounting.compras.purchase_order_comparison_service import (
     create_purchase_order_comparison,
     current_purchase_order_comparison_round,
     open_purchase_order_comparison_round,
+    purchase_request_for_comparison,
     purchase_orders_for_request,
     purchase_order_comparison_round_orders,
 )
@@ -351,6 +352,37 @@ def test_purchase_order_comparison_uses_selected_purchase_orders(app_ctx):
 
         with pytest.raises(ValueError, match="mismo origen"):
             open_purchase_order_comparison_round(comparison, purchase_request, ["PO-COMP-OTHER"], "USER-COMP")
+
+
+def test_legacy_purchase_order_comparison_resolves_request_origin(app_ctx):
+    """Historical comparisons without backfill remain readable through relations."""
+    with app_ctx.app_context():
+        entity = Entity(code="legacy-company", name="Legacy Company", company_name="Legacy Company", tax_id="LEGACY")
+        purchase_request = PurchaseRequest(id="PREQ-LEGACY", company=entity.code, docstatus=1)
+        base = PurchaseOrder(id="PO-LEGACY", company=entity.code, docstatus=1)
+        comparison = PurchaseOrderComparison(
+            id="POC-LEGACY",
+            company=entity.code,
+            base_purchase_order_id=base.id,
+            purchase_request_id=None,
+            status="draft",
+        )
+        database.session.add_all([entity, purchase_request, base, comparison])
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_request",
+                source_id=purchase_request.id,
+                target_type="purchase_order",
+                target_id=base.id,
+                qty=Decimal("1"),
+                relation_type="fulfillment",
+                status="active",
+            )
+        )
+        database.session.commit()
+
+        assert purchase_request_for_comparison(comparison) is purchase_request
 
 
 def test_purchase_order_comparison_matches_repeated_lines_by_commercial_identity(app_ctx):

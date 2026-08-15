@@ -29,6 +29,24 @@ def purchase_request_ids_for_order(order_id: str) -> set[str]:
     return set(rows)
 
 
+def purchase_request_for_comparison(comparison: PurchaseOrderComparison) -> PurchaseRequest | None:
+    """Resolve the request origin, including legacy comparisons without backfill."""
+    if comparison.purchase_request_id:
+        return database.session.get(PurchaseRequest, comparison.purchase_request_id)
+    request_id = database.session.execute(
+        database.select(DocumentRelation.source_id)
+        .where(
+            DocumentRelation.source_type == "purchase_request",
+            DocumentRelation.target_type == "purchase_order",
+            DocumentRelation.target_id == comparison.base_purchase_order_id,
+            DocumentRelation.status == "active",
+        )
+        .order_by(DocumentRelation.source_id)
+        .limit(1)
+    ).scalar_one_or_none()
+    return database.session.get(PurchaseRequest, request_id) if request_id else None
+
+
 def comparable_purchase_orders(base_order: PurchaseOrder) -> list[PurchaseOrder]:
     """Return submitted purchase orders sharing an origin with the base order."""
     source_ids = purchase_request_ids_for_order(base_order.id)
