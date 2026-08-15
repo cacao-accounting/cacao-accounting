@@ -151,6 +151,7 @@ def admin_():
 @modulo_activo("admin")
 def lista_modulos():
     """Administra los módulos instalados en el sistema."""
+    _require_system_admin()
     sincronizar_modulos()
 
     if request.method == "POST":
@@ -974,6 +975,7 @@ def _validar_creacion_usuario(form: UserCreateForm) -> bool:
 @modulo_activo("admin")
 def lista_usuarios():
     """Administra los usuarios del sistema."""
+    _require_system_admin()
     if request.method == "POST":
         user_id = request.form.get("user_id")
         action = request.form.get("action")
@@ -1008,6 +1010,7 @@ def lista_usuarios():
 @modulo_activo("admin")
 def crear_usuario():
     """Crea un nuevo usuario en el sistema."""
+    _require_system_admin()
     if not _can_create_user():
         if request.method == "POST":
             abort(403)
@@ -1081,6 +1084,7 @@ def _apply_user_edit(form, usuario) -> bool:
 @modulo_activo("admin")
 def editar_usuario(user_id: str):
     """Edita los datos básicos de un usuario."""
+    _require_system_admin()
     usuario = _obtener_usuario(user_id)
     if usuario is None:
         flash(USUARIO_NO_ENCONTRADO, "danger")
@@ -1108,6 +1112,7 @@ def editar_usuario(user_id: str):
 @modulo_activo("admin")
 def usuario_roles(user_id: str):
     """Asigna roles a un usuario."""
+    _require_system_admin()
     usuario = _obtener_usuario(user_id)
     if usuario is None:
         flash(USUARIO_NO_ENCONTRADO, "danger")
@@ -1145,6 +1150,7 @@ def usuario_roles(user_id: str):
 @modulo_activo("admin")
 def usuario_password(user_id: str):
     """Cambia la contraseña de un usuario."""
+    _require_system_admin()
     usuario = _obtener_usuario(user_id)
     if usuario is None:
         flash(USUARIO_NO_ENCONTRADO, "danger")
@@ -1174,6 +1180,7 @@ def usuario_password(user_id: str):
 @modulo_activo("admin")
 def lista_roles():
     """Lista los roles disponibles en el sistema."""
+    _require_system_admin()
     roles = database.session.execute(database.select(Roles).order_by(Roles.name)).scalars().all()
     return render_template("admin/roles.html", roles=roles)
 
@@ -1183,6 +1190,7 @@ def lista_roles():
 @modulo_activo("admin")
 def crear_rol():
     """Crea un nuevo rol."""
+    _require_system_admin()
     form = RoleForm()
     if form.validate_on_submit():
         existe_rol = database.session.execute(database.select(Roles).filter_by(name=form.name.data)).scalar_one_or_none()
@@ -1208,6 +1216,7 @@ def crear_rol():
 @modulo_activo("admin")
 def editar_rol(role_id: str):
     """Edita un rol existente."""
+    _require_system_admin()
     rol = _obtener_rol(role_id)
     if rol is None:
         flash("Rol no encontrado.", "danger")
@@ -1241,6 +1250,7 @@ def editar_rol(role_id: str):
 @modulo_activo("admin")
 def rol_permisos(role_id: str):
     """Asigna permisos a un rol por módulo."""
+    _require_system_admin()
     rol = _obtener_rol(role_id)
     if rol is None:
         flash("Rol no encontrado.", "danger")
