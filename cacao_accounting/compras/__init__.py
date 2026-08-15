@@ -87,6 +87,7 @@ from cacao_accounting.database import (
     PurchaseReceiptItem,
     PurchaseRequest,
     PurchaseRequestComparison,
+    PurchaseRequestComparisonOffer,
     PurchaseRequestComparisonLine,
     PurchaseRequestItem,
     PaymentEntry,
@@ -1289,6 +1290,43 @@ def compras_comparativo_guardar_borrador(comparison_id: str):
     return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
 
 
+@compras.route("/request-for-quotation/comparison/<comparison_id>/negotiation-round", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+@verifica_permiso("purchases", "autorizar")
+def compras_comparativo_solicitud_abrir_ronda(comparison_id: str):
+    """Open a negotiation round for one RFQ participating in a request comparison."""
+    request_comparison = database.session.get(PurchaseRequestComparison, comparison_id)
+    if not request_comparison:
+        abort(404)
+    exige_acceso_compania("purchases", request_comparison.company, "autorizar")
+    rfq_id = request.form.get("rfq_id") or ""
+    rfq = database.session.get(PurchaseQuotation, rfq_id)
+    participant = database.session.execute(
+        database.select(PurchaseRequestComparisonOffer)
+        .join(SupplierQuotation, SupplierQuotation.id == PurchaseRequestComparisonOffer.supplier_quotation_id)
+        .where(
+            PurchaseRequestComparisonOffer.comparison_id == request_comparison.id,
+            SupplierQuotation.purchase_quotation_id == rfq_id,
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if not rfq or not participant or rfq.company != request_comparison.company or rfq.docstatus != 1:
+        abort(404)
+    _require_purchase_document_access(rfq, "crear")
+    if request_comparison.status in {"finalized", "used"}:
+        flash_error("El comparativo ya fue finalizado y no admite nuevas rondas de negociación.")
+        return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
+    try:
+        open_negotiation_round(rfq.id, current_user.id)
+        database.session.commit()
+        flash("Nueva ronda de negociación abierta para la Solicitud de Cotización.", "success")
+    except (PurchaseSourcingError, SQLAlchemyError) as exc:
+        database.session.rollback()
+        flash_error(exc)
+    return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
+
+
 @compras.route("/request-for-quotation/comparison/<comparison_id>/finalize", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -1406,6 +1444,12 @@ def compras_comparativo_ordenes(comparison_id: str):
             abort(404)
         for offer in offers:
             _require_purchase_document_access(offer)
+        negotiation_rfqs = []
+        rfq_ids = {offer.purchase_quotation_id for offer in offers if offer.purchase_quotation_id}
+        for rfq_id in sorted(rfq_ids):
+            rfq = database.session.get(PurchaseQuotation, rfq_id)
+            if rfq:
+                negotiation_rfqs.append({"rfq": rfq, "round": current_negotiation_round(rfq.id)})
         comparison_lines = list(
             database.session.execute(
                 database.select(PurchaseRequestComparisonLine)
@@ -1440,6 +1484,7 @@ def compras_comparativo_ordenes(comparison_id: str):
             comparison_rows=comparison_rows,
             recommendations=recommendations,
             comparison_lines=comparison_lines,
+            negotiation_rfqs=negotiation_rfqs,
             is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
             titulo="Comparativo de Ofertas - " + (request_comparison.document_no or request_comparison.id or ""),
         )

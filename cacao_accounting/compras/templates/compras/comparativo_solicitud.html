@@ -61,6 +61,52 @@ macros %}
     guardar el comparativo como borrador; los cambios de recomendación requieren
     justificación y autorización de un Gerente de Compras o Administrador.
   </div>
+  {% endif %} {% if negotiation_rfqs and comparison.status in ['draft',
+  'pending_authorization'] %}
+  <div class="alert alert-secondary m-3 mb-0">
+    <div class="fw-semibold mb-2">
+      Rondas de negociación por Solicitud de Cotización
+    </div>
+    {% for context in negotiation_rfqs %}
+    <div
+      class="d-flex align-items-center justify-content-between gap-2 flex-wrap border-top pt-2 mt-2"
+    >
+      <span>
+        <a
+          href="{{ url_for('compras.compras_solicitud_cotizacion', quotation_id=context.rfq.id) }}"
+        >
+          {{ context.rfq.document_no or context.rfq.id }}
+        </a>
+        {% if context.round %} · Ronda {{ context.round.round_number }} ·
+        <span
+          class="badge text-bg-{% if context.round.status == 'open' %}success{% else %}secondary{% endif %}"
+        >
+          {{ 'Abierta' if context.round.status == 'open' else 'Cerrada' }}
+        </span>
+        {% else %} · Sin ronda abierta {% endif %}
+      </span>
+      {% if context.round and context.round.status == 'open' %}
+      <a
+        class="btn btn-sm btn-outline-primary"
+        href="{{ url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=context.rfq.id) }}"
+      >
+        <i class="bi bi-plus-circle me-1"></i>Agregar oferta a esta ronda
+      </a>
+      {% else %}
+      <form
+        method="post"
+        action="{{ url_for('compras.compras_comparativo_solicitud_abrir_ronda', comparison_id=comparison.id) }}"
+      >
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <input type="hidden" name="rfq_id" value="{{ context.rfq.id }}" />
+        <button type="submit" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-arrow-repeat me-1"></i>Abrir ronda de negociación
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
   {% endif %}
 
   <form

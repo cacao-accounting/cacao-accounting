@@ -21,6 +21,7 @@ from cacao_accounting.database import (
     PurchaseRequestComparison,
     PurchaseRequestComparisonLine,
     PurchaseRequestItem,
+    PurchaseNegotiationRound,
     SupplierQuotation,
     SupplierQuotationItem,
     UOM,
@@ -201,6 +202,23 @@ def test_purchase_request_to_placed_purchase_orders_over_http(e2e_app):
             assert b"Recomendado" in detail.data
             assert b"Guardar borrador" in detail.data
             assert b"Autorizar y finalizar" in detail.data
+            assert b"Abrir ronda de negociaci" in detail.data
+
+            opened_round = client.post(
+                f"/buying/request-for-quotation/comparison/{comparison.id}/negotiation-round",
+                data={"rfq_id": offers[0].purchase_quotation_id},
+            )
+            assert opened_round.status_code in {302, 303}
+            negotiation_round = database.session.execute(
+                database.select(PurchaseNegotiationRound).filter_by(
+                    purchase_quotation_id=offers[0].purchase_quotation_id,
+                    round_number=1,
+                )
+            ).scalar_one()
+            assert negotiation_round.status == "open"
+            round_detail = client.get(f"/buying/request-for-quotation/comparison/{comparison.id}")
+            assert round_detail.status_code == 200
+            assert b"Agregar oferta a esta ronda" in round_detail.data
 
             draft = client.post(
                 f"/buying/request-for-quotation/comparison/{comparison.id}/draft",
