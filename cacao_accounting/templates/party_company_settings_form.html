@@ -1,3 +1,7 @@
+{% if company_settings_form_action is defined %}
+<form method="post" action="{{ company_settings_form_action }}" id="party-company-settings-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% endif %}
 <div class="col-12">
   <div class="ca-card shadow-sm" id="party-company-settings" x-data='{
     rows: {{ company_settings_rows|tojson }},
@@ -28,9 +32,16 @@
   }'>
     <div class="ca-card-header">
       <h6 class="ca-card-title mb-0">{{ _('Configuración por compañía') }}</h6>
-      <button class="btn btn-outline-primary btn-sm" type="button" @click="addRow()">
-        <i class="bi bi-plus-lg me-1"></i>{{ _('Agregar compañía') }}
-      </button>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary btn-sm" type="button" @click="addRow()">
+          <i class="bi bi-plus-lg me-1"></i>{{ _('Agregar compañía') }}
+        </button>
+        {% if company_settings_form_action is defined %}
+        <button class="btn btn-primary btn-sm" type="submit">
+          <i class="bi bi-floppy me-1"></i>{{ _('Guardar configuración') }}
+        </button>
+        {% endif %}
+      </div>
     </div>
     <div class="p-3">
       <p class="text-muted small mb-3">{{ _('Agregue una fila por cada compañía donde el tercero estará activo.') }}</p>
@@ -291,3 +302,6 @@
     </div>
   </div>
 </div>
+{% if company_settings_form_action is defined %}
+</form>
+{% endif %}

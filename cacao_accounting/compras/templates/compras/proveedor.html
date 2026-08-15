@@ -54,7 +54,7 @@
 {% set address_create_url = url_for('compras.compras_proveedor_direccion_crear', supplier_id=registro.id) %}
 {% set address_edit_endpoint = 'compras.compras_proveedor_direccion_editar' %}
 {% set address_deactivate_endpoint = 'compras.compras_proveedor_direccion_desactivar' %}
-{% set company_settings_edit_url = url_for('compras.compras_proveedor_editar', supplier_id=registro.id) %}
+{% set party_role = "supplier" %}
 {% include "party_detail_sections.html" %}
 
 {% if is_cloud_mode() %}

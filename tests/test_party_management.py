@@ -60,7 +60,7 @@ def client(app_ctx):
 
 def test_party_group_crud_and_customer_type_flow(app_ctx, client):
     """El tipo de cliente se crea, se asigna y aparece en el detalle."""
-    from cacao_accounting.database import Contact, Party, PartyGroup, PriceList, TaxRule, database
+    from cacao_accounting.database import CompanyParty, Contact, Entity, Party, PartyGroup, PriceList, TaxRule, database
 
     response = client.post(
         "/settings/party-groups",
@@ -157,6 +157,43 @@ def test_party_group_crud_and_customer_type_flow(app_ctx, client):
     assert "Lista Cliente".encode() in response.data
     assert "IVA Cliente".encode() in response.data
 
+    detail_response = client.get(f"/sales/customer/{customer.id}")
+    assert detail_response.status_code == 200
+    assert b"party-company-settings-form" in detail_response.data
+    assert b"Agregar compa" in detail_response.data
+    assert b"Guardar configuraci" in detail_response.data
+
+    database.session.add(
+        Entity(
+            code="cacao-2",
+            company_name="Cacao 2",
+            name="Cacao 2",
+            tax_id="J0310000000002",
+            entity_type="company",
+            enabled=True,
+        )
+    )
+    database.session.commit()
+    response = client.post(
+        f"/sales/customer/{customer.id}/company-settings",
+        data={
+            "company": ["cacao", "cacao-2"],
+            "company_is_active": ["1", "1"],
+            "receivable_account_id": ["", ""],
+            "default_price_list_id": ["", ""],
+            "default_tax_rule_id": ["", ""],
+            "tax_template_id": ["", ""],
+            "allow_purchase_invoice_without_order": ["0", "0"],
+            "allow_purchase_invoice_without_receipt": ["0", "0"],
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    configured_companies = database.session.execute(
+        database.select(CompanyParty.company).filter_by(party_id=customer.id).order_by(CompanyParty.company)
+    ).scalars()
+    assert list(configured_companies) == ["cacao", "cacao-2"]
+
 
 def test_customer_company_settings_removed_rows_are_deleted(app_ctx, client):
     """Editar la tabla por compania elimina filas persistidas que ya no se enviaron."""
@@ -224,7 +261,17 @@ def test_customer_company_settings_removed_rows_are_deleted(app_ctx, client):
 
 def test_supplier_edit_and_address_deactivation(app_ctx, client):
     """Proveedor permite tipo, edicion y desactivacion de direcciones."""
-    from cacao_accounting.database import Address, Party, PartyAddress, PartyGroup, PriceList, TaxRule, database
+    from cacao_accounting.database import (
+        Address,
+        CompanyParty,
+        Entity,
+        Party,
+        PartyAddress,
+        PartyGroup,
+        PriceList,
+        TaxRule,
+        database,
+    )
 
     supplier_group = PartyGroup(group_type="supplier", name="Importador", is_active=True)
     database.session.add(supplier_group)
@@ -289,6 +336,18 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
     database.session.add_all([purchase_list, purchase_rule])
     database.session.commit()
 
+    database.session.add(
+        Entity(
+            code="cacao-2",
+            company_name="Cacao 2",
+            name="Cacao 2",
+            tax_id="J0310000000002",
+            entity_type="company",
+            enabled=True,
+        )
+    )
+    database.session.commit()
+
     client.post(
         f"/buying/supplier/{supplier.id}/edit",
         data={
@@ -310,8 +369,29 @@ def test_supplier_edit_and_address_deactivation(app_ctx, client):
     assert b'href="#party-contacts"' in detail_response.data
     assert b'href="#party-addresses"' in detail_response.data
     assert b'href="#party-company-settings"' in detail_response.data
-    assert b"Agregar o editar" in detail_response.data
-    assert f"/buying/supplier/{supplier.id}/edit#party-company-settings".encode() in detail_response.data
+    assert b"party-company-settings-form" in detail_response.data
+    assert b"Agregar compa" in detail_response.data
+    assert b"Guardar configuraci" in detail_response.data
+
+    response = client.post(
+        f"/buying/supplier/{supplier.id}/company-settings",
+        data={
+            "company": ["cacao", "cacao-2"],
+            "company_is_active": ["1", "1"],
+            "payable_account_id": ["", ""],
+            "default_price_list_id": [purchase_list.id, ""],
+            "default_tax_rule_id": [purchase_rule.id, ""],
+            "tax_template_id": ["", ""],
+            "allow_purchase_invoice_without_order": ["0", "0"],
+            "allow_purchase_invoice_without_receipt": ["0", "0"],
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    configured_companies = database.session.execute(
+        database.select(CompanyParty.company).filter_by(party_id=supplier.id).order_by(CompanyParty.company)
+    ).scalars()
+    assert list(configured_companies) == ["cacao", "cacao-2"]
 
 
 def test_purchase_and_sales_admin_menus_show_party_management_links(client):
