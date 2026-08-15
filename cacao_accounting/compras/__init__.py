@@ -46,7 +46,6 @@ from cacao_accounting.compras.purchase_request_comparison_service import (
     create_purchase_request_comparison,
     finalize_purchase_request_comparison,
     save_purchase_request_comparison_draft,
-    supplier_quotation_comparison_rows,
     supplier_quotations_for_comparison,
     supplier_quotations_for_request,
 )
@@ -1460,19 +1459,6 @@ def compras_comparativo_ordenes(comparison_id: str):
             .scalars()
             .all()
         )
-        offer_items = {
-            offer.id: list(
-                database.session.execute(
-                    database.select(SupplierQuotationItem)
-                    .where(SupplierQuotationItem.supplier_quotation_id == offer.id)
-                    .order_by(SupplierQuotationItem.id)
-                )
-                .scalars()
-                .all()
-            )
-            for offer in offers
-        }
-        comparison_rows = supplier_quotation_comparison_rows(offers, offer_items)
         try:
             recommendations = comparison_recommendations(request_comparison)
         except ValueError:
@@ -1482,7 +1468,6 @@ def compras_comparativo_ordenes(comparison_id: str):
             comparison=request_comparison,
             purchase_request=purchase_request,
             offers=offers,
-            comparison_rows=comparison_rows,
             recommendations=recommendations,
             comparison_lines=comparison_lines,
             negotiation_rfqs=negotiation_rfqs,
