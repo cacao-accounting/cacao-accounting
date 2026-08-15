@@ -236,6 +236,8 @@ def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
     sections = response.get_json()["sections"]
     assert sections["sales"]["kpis"]["sales"]["value"] == 800.0
     assert sections["purchases"]["kpis"]["total"]["value"] == 425.0
+    assert sections["purchases"]["kpis"]["outstanding"]["value"] == 150.0
+    assert all(row["document_no"] != "PI-RETURN" for row in sections["purchases"]["tables"]["payables"])
     assert sections["sales"]["tables"]["top_customers"][0]["total"] == 800.0
 
 

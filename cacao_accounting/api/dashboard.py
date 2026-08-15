@@ -314,7 +314,13 @@ def get_purchases_data(
     """Obtiene métricas de compras y cuentas por pagar."""
     invoices = _document_query(PurchaseInvoice, company, start_date, end_date).filter_by(docstatus=1)
     total = _sum_signed_documents(invoices, PurchaseInvoice)
-    outstanding = _sum_document_field(PurchaseInvoice, company, "base_outstanding_amount", "outstanding_amount")
+    outstanding = _sum_document_field(
+        PurchaseInvoice,
+        company,
+        "base_outstanding_amount",
+        "outstanding_amount",
+        include_returns=False,
+    )
     open_orders = database.session.query(PurchaseOrder).filter_by(company=company, docstatus=1).count()
     suppliers = _active_parties(company, "supplier")
 
@@ -580,6 +586,7 @@ def _payable_invoices(company: str, currency: str) -> list[dict[str, Any]]:
     rows = (
         database.session.query(PurchaseInvoice)
         .filter_by(company=company, docstatus=1)
+        .filter(PurchaseInvoice.is_return.is_(False))
         .filter(func.coalesce(PurchaseInvoice.base_outstanding_amount, PurchaseInvoice.outstanding_amount, 0) > 0)
         .order_by(PurchaseInvoice.posting_date.desc())
         .limit(5)
@@ -729,13 +736,23 @@ def _active_parties(company: str, role: str) -> int:
     )
 
 
-def _sum_document_field(model: Any, company: str, base_field: str, fallback_field: str) -> float:
+def _sum_document_field(
+    model: Any,
+    company: str,
+    base_field: str,
+    fallback_field: str,
+    *,
+    include_returns: bool = True,
+) -> float:
     """Sum outstanding documents in the document base currency.
 
     When a document has its transaction total, compute the balance from posted
     allocations; legacy rows without that total retain their stored base value.
     """
-    rows = database.session.query(model).filter_by(company=company, docstatus=1).all()
+    query = database.session.query(model).filter_by(company=company, docstatus=1)
+    if not include_returns and hasattr(model, "is_return"):
+        query = query.filter(model.is_return.is_(False))
+    rows = query.all()
     total = Decimal("0")
     for row in rows:
         original = Decimal(str(getattr(row, "grand_total", None) or getattr(row, "total", None) or 0))

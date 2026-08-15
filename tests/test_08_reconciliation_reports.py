@@ -995,6 +995,64 @@ def test_ar_ap_subledger_excludes_nonposted_documents_and_cancelled_payments(app
     assert report.rows[0].values["outstanding_amount"] == Decimal("100")
 
 
+def test_accounts_payable_reports_exclude_purchase_returns_and_keep_legacy_invoice(app_ctx):
+    """AP views show payable invoices, not negative purchase returns."""
+    from cacao_accounting.database import PurchaseInvoice, database
+    from cacao_accounting.reportes.services import (
+        AgingFilters,
+        SubledgerFilters,
+        get_aging_report,
+        get_ar_ap_subledger,
+    )
+
+    invoice = PurchaseInvoice(
+        id="FCC-REPORT-LEGACY",
+        document_no="FCC-DEMO-2025-001",
+        company="cacao",
+        posting_date=date(2025, 1, 25),
+        grand_total=Decimal("50"),
+        outstanding_amount=Decimal("50"),
+        docstatus=1,
+    )
+    purchase_return = PurchaseInvoice(
+        id="PI-REPORT-RETURN",
+        document_no="cacao-PI-RETURN-00001",
+        company="cacao",
+        posting_date=date(2026, 8, 15),
+        grand_total=Decimal("20000"),
+        outstanding_amount=Decimal("20000"),
+        is_return=True,
+        document_type="purchase_return",
+        docstatus=1,
+    )
+    database.session.add_all([invoice, purchase_return])
+    database.session.commit()
+
+    report = get_ar_ap_subledger(SubledgerFilters(company="cacao", party_type="supplier", include_returns=False))
+    aging = get_aging_report(
+        AgingFilters(
+            company="cacao",
+            party_type="supplier",
+            as_of_date=date(2026, 8, 15),
+            include_returns=False,
+        )
+    )
+
+    assert [row.values["document_no"] for row in report.rows] == ["FCC-DEMO-2025-001"]
+    assert report.totals["outstanding_amount"] == Decimal("50")
+    assert [row.values["document_no"] for row in aging.rows] == ["FCC-DEMO-2025-001"]
+    assert aging.totals["over_90"] == Decimal("50")
+
+
+def test_demo_purchase_invoice_seed_has_supplier_for_ap_filters():
+    """The demo invoice is selectable under the demo supplier in AP reports."""
+    from cacao_accounting.datos.dev.data import _make_documentos
+
+    invoice = next(document for document in _make_documentos() if document.document_no == "FCC-DEMO-2025-001")
+    assert invoice.supplier_id == "PARTY-DEMO-SUPPLIER"
+    assert invoice.supplier_name == "Proveedor Demo SA"
+
+
 def test_ar_subledger_uses_base_currency_and_offsets_returns(app_ctx):
     """AR no mezcla USD nominales con NIO ni presenta devoluciones como débitos."""
     from cacao_accounting.database import SalesInvoice, database
