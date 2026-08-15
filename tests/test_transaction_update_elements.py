@@ -84,11 +84,14 @@ def test_offer_comparison_list_keeps_requests_and_shows_comparison_status():
     """El listado conserva la solicitud y presenta el estado del comparativo."""
     routes = _read("cacao_accounting/compras/__init__.py")
     template = _read("cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html")
+    comparison_template = _read("cacao_accounting/compras/templates/compras/comparativo_solicitud.html")
     selector = _read("cacao_accounting/compras/templates/compras/comparativo_ordenes_seleccionar.html")
 
     assert "PurchaseRequest.docstatus == 1" in routes
     assert "PurchaseRequestComparison.purchase_request_id.in_(request_ids)" in routes
-    assert "Comparativo creado" in template
+    assert "Finalizado" in template
+    assert "Nueva comparativa" in template
+    assert "{% endif %} {% if negotiation_rfqs %}" in comparison_template
     assert "Ver comparativo" in template
     assert 'name="supplier_quotation_ids"' in selector
     assert "purchase_order" not in selector

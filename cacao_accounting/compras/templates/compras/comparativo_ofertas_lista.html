@@ -63,7 +63,15 @@ macros %} {%- if TESTING -%}
         <td>{{ item.grand_total or item.total or "0" }}</td>
         <td>
           {% if comparison %}
-          <span class="badge text-bg-success">Comparativo creado</span>
+          {% if comparison.status == 'used' %}
+          <span class="badge text-bg-dark">Utilizado</span>
+          {% elif comparison.status == 'finalized' %}
+          <span class="badge text-bg-success">Finalizado</span>
+          {% elif comparison.status == 'pending_authorization' %}
+          <span class="badge text-bg-warning">Pendiente de autorización</span>
+          {% else %}
+          <span class="badge text-bg-secondary">Borrador</span>
+          {% endif %}
           {% else %}
           <span class="badge text-bg-secondary">Pendiente</span>
           {% endif %}
@@ -74,6 +82,11 @@ macros %} {%- if TESTING -%}
             href="{{ url_for('compras.compras_comparativo_ordenes', comparison_id=comparison.id) }}"
             class="btn btn-sm btn-outline-primary"
             >Ver comparativo</a
+          >
+          <a
+            href="{{ url_for('compras.compras_comparativo_ordenes_seleccionar', purchase_request_id=item.id) }}"
+            class="btn btn-sm btn-outline-secondary"
+            >Nueva comparativa</a
           >
           {% else %}
           <a

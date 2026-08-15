@@ -61,8 +61,7 @@ macros %}
     guardar el comparativo como borrador; los cambios de recomendación requieren
     justificación y autorización de un Gerente de Compras o Administrador.
   </div>
-  {% endif %} {% if negotiation_rfqs and comparison.status in ['draft',
-  'pending_authorization'] %}
+  {% endif %} {% if negotiation_rfqs %}
   <div class="alert alert-secondary m-3 mb-0">
     <div class="fw-semibold mb-2">
       Rondas de negociación por Solicitud de Cotización

@@ -45,6 +45,7 @@ from cacao_accounting.compras.purchase_request_comparison_service import (
     create_purchase_orders_from_comparison,
     create_purchase_request_comparison,
     finalize_purchase_request_comparison,
+    purchase_request_comparison_is_closed,
     save_purchase_request_comparison_draft,
     supplier_quotations_for_comparison,
     supplier_quotations_for_request,
@@ -407,6 +408,7 @@ def compras_solicitud_compra(request_id: str):
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or request_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("purchase_request", registro.id)
+    can_close = registro.docstatus == 1 and registro.status != "closed" and purchase_request_comparison_is_closed(registro)
     return render_template(
         "compras/solicitud_compra.html",
         registro=registro,
@@ -414,7 +416,31 @@ def compras_solicitud_compra(request_id: str):
         titulo=titulo,
         create_actions_json=create_actions_json,
         audit_timeline=audit_timeline,
+        can_close=can_close,
     )
+
+
+@compras.route("/purchase-request/<request_id>/close", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+@verifica_permiso("purchases", "autorizar")
+def compras_solicitud_compra_close(request_id: str):
+    """Close a purchase request after all its lines have closed comparisons."""
+    registro = database.session.get(PurchaseRequest, request_id)
+    if not registro:
+        abort(404)
+    exige_acceso_compania("purchases", registro.company, "autorizar")
+    if registro.docstatus != 1 or registro.status == "closed":
+        abort(400)
+    if not purchase_request_comparison_is_closed(registro):
+        flash("La Solicitud de Compra requiere comparativos cerrados para todas sus líneas.", "danger")
+        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
+    before = {"status": registro.status}
+    registro.status = "closed"
+    log_update(registro, before=before, after={"status": registro.status})
+    database.session.commit()
+    flash("Solicitud de Compra cerrada correctamente.", "success")
+    return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
 
 
 @compras.route("/purchase-request/<request_id>/edit", methods=["GET", "POST"])
@@ -1313,9 +1339,6 @@ def compras_comparativo_solicitud_abrir_ronda(comparison_id: str):
     if not rfq or not participant or rfq.company != request_comparison.company or rfq.docstatus != 1:
         abort(404)
     _require_purchase_document_access(rfq, "crear")
-    if request_comparison.status in {"finalized", "used"}:
-        flash_error("El comparativo ya fue finalizado y no admite nuevas rondas de negociación.")
-        return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
     try:
         open_negotiation_round(rfq.id, current_user.id)
         database.session.commit()
