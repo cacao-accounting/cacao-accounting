@@ -30,7 +30,6 @@
         <th scope="col">Solicitado por</th>
         <th scope="col">Estado</th>
         <th scope="col">Fecha</th>
-        <th scope="col">Total</th>
       </tr>
     </thead>
     <tbody>
@@ -44,7 +43,6 @@
         <td>{{ item.requested_by or "" }}</td>
         <td>{{ macros.document_status_for("purchase_request", item) }}</td>
         <td>{{ item.posting_date or "" }}</td>
-        <td>{{ item.grand_total or "" }}</td>
       </tr>
       {%- endfor %}
     </tbody>
