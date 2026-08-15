@@ -800,6 +800,44 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
     assert credits[0].credit == Decimal("500")
 
 
+def test_s2p07_does_not_settle_advance_when_flag_is_disabled(app, monkeypatch):
+    """S2P-07: la opción desactivada evita publicar el neteo automático en GL."""
+    from cacao_accounting.database import CompanyDefaultAccount, PaymentEntry, PurchaseInvoice, database
+    from cacao_accounting.document_flow.payment import _maybe_settle_advance_against_invoice
+
+    _seed_entity(database)
+    database.session.add(CompanyDefaultAccount(company="TEST", apply_advances_automatically=False))
+    payment = PaymentEntry(
+        id="ADV-P-DISABLED",
+        company="TEST",
+        posting_date=date(2026, 5, 7),
+        docstatus=1,
+        payment_type="pay",
+        paid_amount=Decimal("500"),
+        currency="NIO",
+    )
+    invoice = PurchaseInvoice(
+        id="PINV-ADV-DISABLED",
+        company="TEST",
+        posting_date=date(2026, 5, 7),
+        docstatus=1,
+        grand_total=Decimal("1000"),
+        outstanding_amount=Decimal("1000"),
+    )
+    database.session.add_all([payment, invoice])
+    database.session.flush()
+
+    calls = []
+    monkeypatch.setattr(
+        "cacao_accounting.document_flow.payment._post_advance_settlement_journal",
+        lambda **kwargs: calls.append(kwargs),
+    )
+
+    _maybe_settle_advance_against_invoice(payment, invoice, "purchase_invoice", Decimal("500"), date(2026, 5, 8))
+
+    assert calls == []
+
+
 # ---------------------------------------------------------------------------
 # Regression tests for code review fixes
 # ---------------------------------------------------------------------------
