@@ -838,3 +838,23 @@ en AP aging y que una devolución se mostraba negativa en cuentas por pagar.
 - En la base QA actual: AP aging y cuentas por pagar muestran
   `FCC-DEMO-2025-001` por C$50; `cacao-PI-2026-08-00001` es una devolución y
   deja de aparecer como saldo por pagar negativo.
+
+## 2026-08-15 — Apertura de rondas desde un comparativo de ofertas
+
+### Petición
+
+Se solicitó que un Comparativo de Ofertas permita abrir una nueva ronda de
+negociación para una Solicitud de Cotización participante.
+
+### Implementación y validación
+
+- El comparativo muestra cada RFQ participante con su ronda actual.
+- Sin ronda aparece `Abrir ronda de negociación`; con una ronda abierta aparece
+  `Agregar oferta a esta ronda`.
+- La acción exige autorización, valida que la RFQ pertenezca al comparativo,
+  esté aprobada y sea de la misma compañía.
+- Abrir una nueva ronda cierra la ronda anterior y crea la siguiente con estado
+  `open`, sin volver obligatoria una ronda para crear una Cotización de
+  Proveedor.
+- El E2E valida la apertura desde el comparativo y la visibilidad de la acción
+  para agregar una nueva oferta: 21 pruebas aprobadas.
