@@ -1040,6 +1040,48 @@ def test_purchase_quotation_flow_requires_lines_and_inherits_currency(app_ctx):
     after = database.session.execute(database.select(PurchaseQuotation)).scalars().all()
     assert len(after) == len(before)
 
+    item = database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=source.id)).scalar_one()
+    quotation_data = {
+        "from_request": source.id,
+        "company": "cacao",
+        "currency": "NIO",
+        "posting_date": date.today().isoformat(),
+        "item_code_0": item.item_code,
+        "item_name_0": item.item_name,
+        "qty_0": "2",
+        "uom_0": item.uom,
+        "source_type_0": "purchase_request",
+        "source_id_0": source.id,
+        "source_item_id_0": item.id,
+    }
+    first = client.post("/buying/request-for-quotation/new", data=quotation_data, follow_redirects=False)
+    assert first.status_code == 302
+    second = client.post("/buying/request-for-quotation/new", data=quotation_data, follow_redirects=False)
+    assert second.status_code == 302
+
+    relations = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                source_type="purchase_request",
+                source_id=source.id,
+                source_item_id=item.id,
+                target_type="purchase_quotation",
+                status="active",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(relations) == 2
+    pending = client.get(
+        "/api/document-flow/pending-lines"
+        f"?source_type=purchase_request&target_type=purchase_quotation&source_id={source.id}&company=cacao"
+    )
+    assert pending.status_code == 200
+    assert pending.get_json()["items"][0]["qty"] == 2.0
+    database.session.refresh(item)
+    assert item.amount == Decimal("20")
+
 
 def test_purchase_quotation_flow_rejects_company_mismatch(app_ctx):
     """A downstream RFQ cannot be moved to another company by changing POST data."""
