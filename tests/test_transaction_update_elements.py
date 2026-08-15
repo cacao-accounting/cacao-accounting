@@ -76,6 +76,14 @@ def test_purchase_request_list_does_not_display_total_column():
     assert "item.grand_total" not in template
 
 
+def test_purchase_quotation_list_does_not_display_total_column():
+    """El listado de solicitudes de cotizacion no debe mostrar la columna de total."""
+    template = _read("cacao_accounting/compras/templates/compras/solicitud_cotizacion_lista.html")
+
+    assert '<th scope="col">Total</th>' not in template
+    assert "item.grand_total" not in template
+
+
 def test_purchase_request_does_not_expose_department_concept():
     """La solicitud de compra no debe presentar Departamento como atributo."""
     form = _read("cacao_accounting/compras/forms.py")
