@@ -87,9 +87,10 @@
             <a href="{{ url_for('contabilidad.naming_series_edit', series_id=item.id) }}" class="btn btn-xs btn-outline-secondary" title="Editar serie">
               <i class="bi bi-pencil"></i>
             </a>
-            <a href="{{ url_for('contabilidad.naming_series_delete', series_id=item.id) }}" class="btn btn-xs btn-outline-danger" title="Eliminar serie">
-              <i class="bi bi-trash"></i>
-            </a>
+            <form method="post" action="{{ url_for('contabilidad.naming_series_delete', series_id=item.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-xs btn-outline-danger" title="Eliminar serie"><i class="bi bi-trash"></i></button>
+            </form>
             <form method="post" action="{{ url_for('contabilidad.naming_series_toggle_default', series_id=item.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit"

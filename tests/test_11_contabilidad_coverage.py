@@ -1419,7 +1419,7 @@ def test_route_eliminar_unidad(app_ctx):
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get("/accounting/unit/delete/HQ2")
+    response = client.post("/accounting/unit/delete/HQ2")
     assert response.status_code in (200, 302)
 
 
@@ -1503,7 +1503,7 @@ def test_route_eliminar_libro(app_ctx):
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get("/accounting/book/delete/BKDEL")
+    response = client.post("/accounting/book/delete/BKDEL")
     assert response.status_code in (200, 302)
 
 
@@ -1784,7 +1784,7 @@ def test_route_eliminar_centro_costo(app_ctx):
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get("/accounting/costs_center/CCDEL/delete")
+    response = client.post("/accounting/costs_center/CCDEL/delete")
     assert response.status_code in (200, 302)
 
 
@@ -1964,7 +1964,7 @@ def test_route_eliminar_proyecto(app_ctx):
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get("/accounting/project/PRJDEL/delete")
+    response = client.post("/accounting/project/PRJDEL/delete")
     assert response.status_code in (200, 302)
 
 
@@ -2055,7 +2055,7 @@ def test_route_fiscal_year_delete(app_ctx):
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get(f"/accounting/fiscal_year/{fy.id}/delete")
+    response = client.post(f"/accounting/fiscal_year/{fy.id}/delete")
     assert response.status_code in (200, 302)
 
 
@@ -2148,7 +2148,7 @@ def test_route_accounting_period_delete(app_ctx):
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get(f"/accounting/accounting_period/{period.id}/delete")
+    response = client.post(f"/accounting/accounting_period/{period.id}/delete")
     assert response.status_code in (200, 302)
 
 
@@ -3046,7 +3046,7 @@ def test_route_naming_series_delete(app_ctx):
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get(f"/accounting/naming-series/{series.id}/delete")
+    response = client.post(f"/accounting/naming-series/{series.id}/delete")
     assert response.status_code in (200, 302)
 
 
@@ -3056,7 +3056,7 @@ def test_route_naming_series_delete_missing(app_ctx):
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get("/accounting/naming-series/NONEXISTENT/delete")
+    response = client.post("/accounting/naming-series/NONEXISTENT/delete")
     assert response.status_code in (200, 302)
 
 
@@ -3525,7 +3525,7 @@ def test_route_eliminar_entidad(app_ctx):
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
     _login(client, user.id)
-    response = client.get(f"/accounting/entity/delete/{extra.id}", follow_redirects=False)
+    response = client.post(f"/accounting/entity/delete/{extra.id}", follow_redirects=False)
     assert response.status_code in (200, 302)
 
 

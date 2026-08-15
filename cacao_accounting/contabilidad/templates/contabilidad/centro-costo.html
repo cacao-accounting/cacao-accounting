@@ -56,9 +56,10 @@
       <a href="{{ url_for('contabilidad.ccostos') }}" class="btn btn-outline-secondary btn-sm">{{ _('Volver al Catálogo') }}</a>
       <a href="{{ url_for('contabilidad.editar_centro_costo', id_cc=registro.code) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
       {% if acceso.configurar %}
-      <a class="btn btn-sm btn-outline-danger" href="{{ url_for('contabilidad.eliminar_centro_costo', id_cc=registro.code) }}">
-        <i class="bi bi-trash me-1"></i>{{ _('Eliminar') }}
-      </a>
+      <form method="post" action="{{ url_for('contabilidad.eliminar_centro_costo', id_cc=registro.code) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash me-1"></i>{{ _('Eliminar') }}</button>
+      </form>
       {% endif %}
     </div>
   </div>
