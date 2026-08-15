@@ -34,7 +34,10 @@ from cacao_accounting.compras.purchase_reconciliation_service import (
 )
 from cacao_accounting.compras.purchase_order_comparison_service import (
     create_purchase_order_comparison,
+    current_purchase_order_comparison_round,
+    open_purchase_order_comparison_round,
     purchase_orders_for_request,
+    purchase_order_comparison_round_orders,
 )
 from cacao_accounting.compras.purchase_sourcing_service import (
     PurchaseSourcingError,
@@ -62,6 +65,7 @@ from cacao_accounting.database import (
     PurchaseOrder,
     PurchaseOrderComparison,
     PurchaseOrderComparisonOrder,
+    PurchaseOrderComparisonRound,
     PurchaseOrderItem,
     PurchaseQuotation,
     PurchaseQuotationAward,
@@ -707,7 +711,7 @@ def _create_supplier_quotation_from_request():
                 or negotiation_round.purchase_quotation_id != from_rfq_id
                 or negotiation_round.status != "open"
             ):
-                negotiation_round_id = None
+                raise PurchaseSourcingError("La ronda de negociación no existe, no pertenece a la RFQ o ya está cerrada.")
         supplier_id = request.form.get("supplier_id") or None
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
@@ -1200,6 +1204,36 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
     )
 
 
+@compras.route("/request-for-quotation/comparison/<comparison_id>/round", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+@verifica_permiso("purchases", "autorizar")
+def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
+    """Open an authorized immutable round with an explicit order snapshot."""
+    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
+    if not comparison:
+        abort(404)
+    exige_acceso_compania("purchases", comparison.company, "autorizar")
+    purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
+    if not purchase_request:
+        abort(404)
+    candidate_orders = purchase_orders_for_request(purchase_request)
+    candidate_ids = {order.id for order in candidate_orders}
+    participant_ids = set(request.form.getlist("participant_ids"))
+    if not participant_ids.issubset(candidate_ids):
+        flash_error("Seleccione únicamente órdenes de compra de la misma Solicitud de Compra.")
+        return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
+    try:
+        round_record = open_purchase_order_comparison_round(comparison, purchase_request, participant_ids, current_user.id)
+        database.session.commit()
+        flash("Nueva ronda de negociación abierta.", "success")
+        return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id, round_id=round_record.id))
+    except (ValueError, SQLAlchemyError) as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
+
+
 def _comparison_item_at_occurrence(
     items: list[PurchaseOrderItem], item_code: str, occurrence: int
 ) -> PurchaseOrderItem | None:
@@ -1217,22 +1251,34 @@ def compras_comparativo_ordenes(comparison_id: str):
     if not comparison:
         abort(404)
     exige_acceso_compania("purchases", comparison.company, "consultar")
-    participant_rows = (
-        database.session.execute(
-            database.select(PurchaseOrderComparisonOrder)
-            .where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
-            .order_by(PurchaseOrderComparisonOrder.is_base.desc(), PurchaseOrderComparisonOrder.created)
+    purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
+    if not purchase_request:
+        abort(404)
+    selected_round = None
+    requested_round_id = request.args.get("round_id")
+    if requested_round_id:
+        selected_round = database.session.get(PurchaseOrderComparisonRound, requested_round_id)
+        if not selected_round or selected_round.comparison_id != comparison.id:
+            abort(404)
+    else:
+        selected_round = current_purchase_order_comparison_round(comparison.id)
+    participant_rows = purchase_order_comparison_round_orders(selected_round.id) if selected_round else []
+    if not participant_rows:
+        participant_rows = (
+            database.session.execute(
+                database.select(PurchaseOrderComparisonOrder)
+                .where(PurchaseOrderComparisonOrder.comparison_id == comparison.id)
+                .order_by(PurchaseOrderComparisonOrder.is_base.desc(), PurchaseOrderComparisonOrder.created)
+            )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    )
     orders = [database.session.get(PurchaseOrder, row.purchase_order_id) for row in participant_rows]
     orders = [order for order in orders if order is not None]
     for order in orders:
         _require_purchase_document_access(order)
     base_order = database.session.get(PurchaseOrder, comparison.base_purchase_order_id)
-    purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
-    if not base_order or not purchase_request:
+    if not base_order:
         abort(404)
     base_items = list(
         database.session.execute(
@@ -1269,6 +1315,16 @@ def compras_comparativo_ordenes(comparison_id: str):
                 },
             }
         )
+    rounds = list(
+        database.session.execute(
+            database.select(PurchaseOrderComparisonRound)
+            .where(PurchaseOrderComparisonRound.comparison_id == comparison.id)
+            .order_by(PurchaseOrderComparisonRound.round_number.desc())
+        )
+        .scalars()
+        .all()
+    )
+    participant_order_ids = {row.purchase_order_id for row in participant_rows}
     return render_template(
         "compras/comparativo_ordenes.html",
         comparison=comparison,
@@ -1276,6 +1332,10 @@ def compras_comparativo_ordenes(comparison_id: str):
         base_order=base_order,
         orders=orders,
         comparison_rows=comparison_rows,
+        candidate_orders=purchase_orders_for_request(purchase_request),
+        participant_order_ids=participant_order_ids,
+        rounds=rounds,
+        selected_round=selected_round,
         titulo="Comparativo de Ofertas - " + (comparison.id or ""),
     )
 
@@ -1328,7 +1388,7 @@ def compras_comparativo_ofertas(rfq_id: str):
 @compras.route("/request-for-quotation/<rfq_id>/negotiation-round", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
-@verifica_permiso("purchases", "crear")
+@verifica_permiso("purchases", "autorizar")
 def compras_comparativo_abrir_ronda(rfq_id: str):
     """Open the next supplier negotiation round for an RFQ."""
     registro = database.session.get(PurchaseQuotation, rfq_id)

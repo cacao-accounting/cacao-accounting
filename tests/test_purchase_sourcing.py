@@ -22,6 +22,8 @@ from cacao_accounting.database import (
     PurchaseOrder,
     PurchaseOrderComparison,
     PurchaseOrderComparisonOrder,
+    PurchaseOrderComparisonRound,
+    PurchaseOrderComparisonRoundOrder,
     PurchaseRequest,
     Roles,
     RolesUser,
@@ -42,7 +44,10 @@ from cacao_accounting.compras.purchase_sourcing_service import (
 from cacao_accounting.compras.purchase_order_comparison_service import (
     comparable_purchase_orders,
     create_purchase_order_comparison,
+    current_purchase_order_comparison_round,
+    open_purchase_order_comparison_round,
     purchase_orders_for_request,
+    purchase_order_comparison_round_orders,
 )
 
 
@@ -321,3 +326,27 @@ def test_purchase_order_comparison_uses_selected_purchase_orders(app_ctx):
         participants = database.session.query(PurchaseOrderComparisonOrder).filter_by(comparison_id=comparison.id).all()
         assert {row.purchase_order_id for row in participants} == {base.id, offer.id}
         assert {row.is_base for row in participants} == {True, False}
+
+        first_round = current_purchase_order_comparison_round(comparison.id)
+        assert first_round is not None
+        assert first_round.round_number == 1
+        assert {row.purchase_order_id for row in purchase_order_comparison_round_orders(first_round.id)} == {
+            base.id,
+            offer.id,
+        }
+
+        second_round = open_purchase_order_comparison_round(comparison, purchase_request, [offer.id], "USER-COMP")
+        database.session.commit()
+
+        assert first_round.status == "closed"
+        assert second_round.round_number == 2
+        assert current_purchase_order_comparison_round(comparison.id).id == second_round.id
+        assert {row.purchase_order_id for row in purchase_order_comparison_round_orders(second_round.id)} == {
+            base.id,
+            offer.id,
+        }
+        assert database.session.query(PurchaseOrderComparisonRound).count() == 2
+        assert database.session.query(PurchaseOrderComparisonRoundOrder).count() == 4
+
+        with pytest.raises(ValueError, match="mismo origen"):
+            open_purchase_order_comparison_round(comparison, purchase_request, ["PO-COMP-OTHER"], "USER-COMP")
