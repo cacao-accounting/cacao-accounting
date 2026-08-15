@@ -921,3 +921,45 @@ nombre.
   inconsistente de `pathspec` (`pathspec.patterns.gitignore` ausente). La suite
   completa continúa teniendo el bloque conocido de fallos de esquema en
   `tests/test_04database_schema.py`; no se atribuyen al fix visual.
+
+## 2026-08-15 — Comparativos múltiples, compras parciales y cierre de solicitudes
+
+### Petición
+
+Se confirmó el diseño de negocio del Comparativo de Ofertas: una Solicitud de
+Compra es el documento raíz; puede originar múltiples Solicitudes de Cotización
+y Cotizaciones de Proveedor. Una solicitud puede tener varios comparativos por
+cotizaciones inválidas, compras parciales o líneas recibidas en distintos
+momentos. Las rondas de negociación no deben quedar bloqueadas por el estado
+del comparativo. El sistema recomienda la menor tarifa por línea en moneda base,
+pero el usuario puede escoger otra oferta y justificar la decisión. Gerente de
+Compras o Administrador autoriza; el borrador debe poder guardarse; y la
+Solicitud de Compra solo puede cerrarse cuando todas sus líneas están cubiertas
+por comparativos finalizados o utilizados.
+
+### Implementación
+
+- Se eliminó la unicidad implícita de un comparativo por Solicitud de Compra;
+  la selección de ofertas continúa validándose contra la solicitud raíz.
+- La finalización permite seleccionar solo las líneas disponibles y deja las
+  restantes para otro comparativo. Al menos una línea debe estar seleccionada.
+- Se agregó `purchase_request.status` con migración `20260815_0014`; la ruta de
+  cierre exige aprobación, permiso de autorización y cobertura completa de
+  líneas por comparativos finalizados/utilizados.
+- Las rondas abiertas desde un comparativo permanecen disponibles aunque el
+  comparativo esté finalizado o utilizado; crear una Cotización de Proveedor
+  sigue validando únicamente la RFQ y la ronda abierta correspondiente.
+- La recomendación compara tarifas en moneda base usando `base_rate`, tasa del
+  documento o tasa histórica de cambio; la lista muestra el estado real y
+  conserva la acción `Nueva comparativa`.
+- Se agregaron regresiones unitarias y E2E para comparativos múltiples,
+  selección parcial, cobertura de líneas, moneda base, ronda posterior al uso,
+  cierre de la solicitud y estado visible.
+
+### Validación
+
+- Ruff y `git diff --check`: correctos.
+- No se ejecutó pytest en esta iteración por la instrucción explícita de no
+  ejecutar pruebas; las pruebas de regresión quedaron incorporadas.
+- Black y mypy continúan sin iniciar en el `.venv` por la instalación
+  inconsistente de `pathspec` documentada arriba.
