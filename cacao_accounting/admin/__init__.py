@@ -645,6 +645,11 @@ def config_conciliacion_compras():
         config.bridge_account_required = bool(request.form.get("bridge_account_required"))
         config.auto_reconcile = bool(request.form.get("auto_reconcile"))
         config.allow_price_difference = bool(request.form.get("allow_price_difference"))
+        default_accounts = get_company_default_accounts(company)
+        if default_accounts is None:
+            default_accounts = CompanyDefaultAccount(company=company)
+            database.session.add(default_accounts)
+        default_accounts.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
         database.session.commit()
         flash(_("Configuracion de conciliacion de compras guardada correctamente."), "success")
         return redirect(url_for("admin.config_conciliacion_compras"))
@@ -654,11 +659,18 @@ def config_conciliacion_compras():
         .scalars()
         .all()
     )
+    default_accounts = (
+        database.session.execute(database.select(CompanyDefaultAccount).order_by(CompanyDefaultAccount.company))
+        .scalars()
+        .all()
+    )
+    advance_settings = {config.company: bool(config.apply_advances_automatically) for config in default_accounts}
 
     return render_template(
         "admin/purchase_reconciliation_config.html",
         configs=configs,
         companies=companies,
+        advance_settings=advance_settings,
         titulo=_("Configuracion de Conciliacion de Compras"),
     )
 
