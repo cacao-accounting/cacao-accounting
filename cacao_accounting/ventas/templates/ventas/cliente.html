@@ -54,7 +54,7 @@
 {% set address_create_url = url_for('ventas.ventas_cliente_direccion_crear', customer_id=registro.id) %}
 {% set address_edit_endpoint = 'ventas.ventas_cliente_direccion_editar' %}
 {% set address_deactivate_endpoint = 'ventas.ventas_cliente_direccion_desactivar' %}
-{% set company_settings_edit_url = url_for('ventas.ventas_cliente_editar', customer_id=registro.id) %}
+{% set party_role = "customer" %}
 {% include "party_detail_sections.html" %}
 
 {% if is_cloud_mode() %}

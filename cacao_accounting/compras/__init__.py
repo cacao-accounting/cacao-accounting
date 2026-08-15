@@ -1608,7 +1608,30 @@ def compras_proveedor(supplier_id):
         abort(404)
     titulo = registro[0].name + " - " + APPNAME
     detail = build_party_detail_context(registro[0])
-    return render_template("compras/proveedor.html", registro=registro[0], detail=detail, titulo=titulo)
+    return render_template(
+        "compras/proveedor.html",
+        registro=registro[0],
+        detail=detail,
+        company_settings_rows=party_company_settings_rows(registro[0].id, None, role="supplier"),
+        company_settings_form_action=url_for("compras.compras_proveedor_configuracion_compania", supplier_id=registro[0].id),
+        titulo=titulo,
+    )
+
+
+@compras.route("/supplier/<supplier_id>/company-settings", methods=["POST"])
+@modulo_activo("purchases")
+@login_required
+def compras_proveedor_configuracion_compania(supplier_id: str):
+    """Crea o actualiza la configuracion por compania de un proveedor."""
+    _party_or_404(supplier_id)
+    try:
+        upsert_party_company_settings_rows(supplier_id, "supplier", request.form)
+        database.session.commit()
+        flash(_("Configuracion por compania del proveedor guardada correctamente."), "success")
+    except ValueError as exc:
+        database.session.rollback()
+        flash_error(exc)
+    return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id) + "#party-company-settings")
 
 
 @compras.route("/supplier/<supplier_id>/edit", methods=["GET", "POST"])

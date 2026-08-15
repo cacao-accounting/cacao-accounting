@@ -954,7 +954,34 @@ def ventas_cliente(customer_id):
         abort(404)
     titulo = registro[0].name + " - " + APPNAME
     detail = build_party_detail_context(registro[0])
-    return render_template("ventas/cliente.html", registro=registro[0], detail=detail, titulo=titulo)
+    return render_template(
+        "ventas/cliente.html",
+        registro=registro[0],
+        detail=detail,
+        company_settings_rows=party_company_settings_rows(registro[0].id, None, role="customer"),
+        company_settings_form_action=url_for("ventas.ventas_cliente_configuracion_compania", customer_id=registro[0].id),
+        titulo=titulo,
+    )
+
+
+@ventas.route("/customer/<customer_id>/company-settings", methods=["POST"])
+@modulo_activo("sales")
+@login_required
+def ventas_cliente_configuracion_compania(customer_id: str):
+    """Crea o actualiza la configuracion por compania de un cliente."""
+    registro = database.session.execute(
+        database.select(Party).filter_by(id=customer_id).filter(Party.is_customer.is_(True))
+    ).scalar_one_or_none()
+    if not registro:
+        abort(404)
+    try:
+        upsert_party_company_settings_rows(customer_id, "customer", request.form)
+        database.session.commit()
+        flash(_("Configuracion por compania del cliente guardada correctamente."), "success")
+    except ValueError as exc:
+        database.session.rollback()
+        flash_error(exc)
+    return redirect(url_for("ventas.ventas_cliente", customer_id=customer_id) + "#party-company-settings")
 
 
 @ventas.route("/customer/<customer_id>/edit", methods=["GET", "POST"])
