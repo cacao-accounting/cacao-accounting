@@ -472,3 +472,9 @@ Todos permanecen abiertos para revisión posterior. `.replit` continúa fuera de
 
 - #420 recibió comentario con la UI y persistencia implementadas para comparar Órdenes de Compra.
 - #421 recibió comentario indicando que las rondas legacy no se reutilizan en el nuevo comparativo y requieren el rediseño posterior propuesto.
+
+### Despliegue local de desarrollo
+
+- `cacaoctl db migrate` inicialmente reveló que `20260814_0007_balance_confirmation.py` usaba `DEFAULT 0` para un booleano en PostgreSQL. Se corrigió en `b4ed3999 fix(migrations): use portable boolean default` usando `sa.false()`.
+- La migración se aplicó correctamente en la base de desarrollo y dejó `alembic_version = 20260815_0008`; las tablas `purchase_order_comparison` y `purchase_order_comparison_order` están disponibles para la UI.
+- La corrida completa solicitada terminó con `188 failed, 1528 passed, 9 skipped`; los 188 fallos están concentrados en `tests/test_04database_schema.py` y corresponden a inconsistencias preexistentes del entorno de pruebas, no al comparativo nuevo.
