@@ -128,12 +128,14 @@ def create_purchase_request_comparison(
     supplier_quotation_ids: Sequence[str],
     user_id: str | None,
 ) -> PurchaseRequestComparison:
-    """Persist a comparison with selected offers belonging to the request."""
-    existing = database.session.execute(
-        database.select(PurchaseRequestComparison).filter_by(purchase_request_id=purchase_request.id).limit(1)
-    ).scalar_one_or_none()
-    if existing:
-        raise ValueError("La Solicitud de Compra ya tiene un comparativo vigente.")
+    """Persist a comparison with selected offers belonging to the request.
+
+    A request may need several comparisons when offers arrive in batches or a
+    previous offer set is rejected. Closed comparison lines determine whether
+    the request can be closed; the comparison header is not unique per request.
+    """
+    if purchase_request.docstatus != 1:
+        raise ValueError("Solo se pueden comparar Solicitudes de Compra aprobadas.")
     candidates = {quotation.id: quotation for quotation in supplier_quotations_for_request(purchase_request)}
     selected_ids = set(supplier_quotation_ids)
     if not selected_ids or not selected_ids.issubset(candidates):
@@ -218,6 +220,37 @@ def _request_item_offer_line(
     return matching[occurrence] if occurrence < len(matching) else None
 
 
+def _comparison_line_base_rate(
+    offer: SupplierQuotation,
+    line: SupplierQuotationItem,
+    company: str,
+) -> Decimal:
+    """Resolve a supplier line rate in the company's base currency."""
+    rate = Decimal(str(line.rate or 0))
+    stored_base_rate = Decimal(str(line.base_rate or 0))
+    if stored_base_rate > 0:
+        return stored_base_rate.quantize(Decimal("0.0001"))
+
+    base_currency = company_currency(company)
+    transaction_currency = offer.transaction_currency or base_currency
+    if not transaction_currency or not base_currency or transaction_currency == base_currency:
+        return rate.quantize(Decimal("0.0001"))
+
+    document_exchange_rate = Decimal(str(getattr(offer, "exchange_rate", 0) or 0))
+    if document_exchange_rate > 0:
+        return (rate * document_exchange_rate).quantize(Decimal("0.0001"))
+
+    from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
+
+    try:
+        exchange_rate = _lookup_exchange_rate(transaction_currency, base_currency, offer.posting_date)
+    except PostingError as exc:
+        raise ValueError(
+            f"No existe tipo de cambio para comparar una oferta en {transaction_currency} contra {base_currency}."
+        ) from exc
+    return (rate * exchange_rate).quantize(Decimal("0.0001"))
+
+
 def purchase_request_comparison_recommendations(
     purchase_request: PurchaseRequest,
     offers: Sequence[SupplierQuotation],
@@ -262,9 +295,17 @@ def purchase_request_comparison_recommendations(
                     "offer": offer,
                     "line": line,
                     "rate": Decimal(str(line.rate or 0)),
+                    "base_rate": _comparison_line_base_rate(offer, line, purchase_request.company),
                 }
             )
-        candidates.sort(key=lambda candidate: (candidate["rate"], candidate["offer"].document_no or "", candidate["offer"].id))
+        candidates.sort(
+            key=lambda candidate: (
+                candidate["base_rate"],
+                candidate["rate"],
+                candidate["offer"].document_no or "",
+                candidate["offer"].id,
+            )
+        )
         rows.append(
             {
                 "item": item,
@@ -358,14 +399,20 @@ def finalize_purchase_request_comparison(
         .scalars()
         .all()
     }
+    selected_line_count = 0
     for row in rows:
         item = row["item"]
         line = saved.get(item.id)
         if not line or not line.selected_supplier_quotation_id:
-            raise ValueError(f"Debe seleccionar una oferta para la línea {item.item_code}.")
+            continue
+        if line.selected_supplier_quotation_id not in row["by_offer"]:
+            raise ValueError(f"La oferta seleccionada para la línea {item.item_code} ya no está vigente.")
         if line.manual_override and not line.override_reason:
             raise ValueError(f"La línea {item.item_code} requiere justificar el cambio de recomendación.")
         line.authorized_by = user_id
+        selected_line_count += 1
+    if selected_line_count == 0:
+        raise ValueError("Debe seleccionar al menos una oferta para cerrar el comparativo.")
     now = datetime.now(timezone.utc)
     comparison.status = "finalized"
     comparison.authorized_by = user_id
@@ -374,6 +421,38 @@ def finalize_purchase_request_comparison(
     comparison.finalized_at = now
     comparison.modified_by = user_id
     database.session.flush()
+
+
+def purchase_request_comparison_is_closed(purchase_request: PurchaseRequest) -> bool:
+    """Return whether closed comparisons cover every request line."""
+    request_item_ids = set(
+        database.session.execute(
+            database.select(PurchaseRequestItem.id).where(
+                PurchaseRequestItem.purchase_request_id == purchase_request.id
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not request_item_ids:
+        return False
+    covered_item_ids = set(
+        database.session.execute(
+            database.select(PurchaseRequestComparisonLine.purchase_request_item_id)
+            .join(
+                PurchaseRequestComparison,
+                PurchaseRequestComparison.id == PurchaseRequestComparisonLine.comparison_id,
+            )
+            .where(
+                PurchaseRequestComparison.purchase_request_id == purchase_request.id,
+                PurchaseRequestComparison.status.in_(("finalized", "used")),
+                PurchaseRequestComparisonLine.selected_supplier_quotation_id.is_not(None),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return request_item_ids.issubset(covered_item_ids)
 
 
 def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison) -> list[PurchaseOrder]:
