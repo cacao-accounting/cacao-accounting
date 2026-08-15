@@ -48,8 +48,10 @@ _ACTION_CREAR_PAGO = "Crear Pago"
 _ACTION_CREAR_NOTA_CREDITO = "Crear Nota de Crédito"
 _ACTION_CREAR_NOTA_DEBITO = "Crear Nota de Débito"
 _ACTION_CREAR_ORDEN_COMPRA = "Crear Orden de Compra"
+_ACTION_CREAR_COMPARATIVO_OFERTAS = "Crear Comparativo de Ofertas"
 _ENDPOINT_PAGO_NUEVO = "bancos.bancos_pago_nuevo"
 _ENDPOINT_ORDEN_COMPRA_NUEVO = "compras.compras_orden_compra_nuevo"
+_ENDPOINT_COMPARATIVO_OFERTAS = "compras.compras_comparativo_ordenes_seleccionar"
 _ENDPOINT_FACTURA_COMPRA = "compras.compras_factura_compra"
 _ENDPOINT_FACTURA_VENTA = "ventas.ventas_factura_venta"
 _ENDPOINT_ENTRADA_NUEVO = "inventario.inventario_entrada_nuevo"
@@ -166,6 +168,12 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 "from_request",
             ),
             DocumentAction(_ACTION_CREAR_ORDEN_COMPRA, "purchase_order", _ENDPOINT_ORDEN_COMPRA_NUEVO, "from_request"),
+            DocumentAction(
+                _ACTION_CREAR_COMPARATIVO_OFERTAS,
+                "purchase_order_comparison",
+                _ENDPOINT_COMPARATIVO_OFERTAS,
+                "purchase_request_id",
+            ),
         ),
     ),
     "purchase_quotation": DocumentType(

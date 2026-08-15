@@ -1154,6 +1154,14 @@ def compras_comparativo_ofertas_lista():
     return render_template("compras/comparativo_ofertas_lista.html", consulta=consulta, titulo=titulo)
 
 
+@compras.route("/request-for-quotation/comparison/new")
+@modulo_activo("purchases")
+@login_required
+def compras_comparativo_ofertas_nueva():
+    """Display eligible purchase requests to start a new comparison."""
+    return compras_comparativo_ofertas_lista()
+
+
 @compras.route("/request-for-quotation/comparison/purchase-request/<purchase_request_id>", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
