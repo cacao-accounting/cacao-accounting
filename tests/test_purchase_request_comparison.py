@@ -193,6 +193,40 @@ def test_comparison_rows_include_lines_only_present_in_later_offer(app_ctx):
         assert rows[1]["offers"][second.id] is second_only_item
 
 
+def test_comparison_rows_identity_ignores_quoted_quantity(app_ctx):
+    """Quantity is coverage, not identity: same item aligns across offers."""
+    with app_ctx.app_context():
+        first = SupplierQuotation(id="SQ-ROWS-3", company="cacao", docstatus=1)
+        second = SupplierQuotation(id="SQ-ROWS-4", company="cacao", docstatus=1)
+        first_item = SupplierQuotationItem(
+            id="SQI-ROWS-4",
+            supplier_quotation_id=first.id,
+            item_code="ITEM-A",
+            uom="UND",
+            qty=Decimal("10"),
+            qty_in_base_uom=Decimal("10"),
+            rate=Decimal("10"),
+        )
+        second_item = SupplierQuotationItem(
+            id="SQI-ROWS-5",
+            supplier_quotation_id=second.id,
+            item_code="ITEM-A",
+            uom="UND",
+            qty=Decimal("20"),
+            qty_in_base_uom=Decimal("20"),
+            rate=Decimal("11"),
+        )
+
+        rows = supplier_quotation_comparison_rows(
+            [first, second],
+            {first.id: [first_item], second.id: [second_item]},
+        )
+
+        assert len(rows) == 1
+        assert rows[0]["offers"][first.id] is first_item
+        assert rows[0]["offers"][second.id] is second_item
+
+
 def test_supplier_quotation_origin_header_is_immutable(app_ctx, monkeypatch):
     """A supplier quotation cannot change the source RFQ company."""
     import sys
