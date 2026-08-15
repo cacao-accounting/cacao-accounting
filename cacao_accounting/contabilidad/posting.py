@@ -1513,13 +1513,17 @@ def _line_qty(line: StockEntryItem) -> Decimal:
 
     item = _stock_item_for(line)
     qty = _decimal_value(line.qty_in_base_uom)
-    if qty <= 0:
+    raw_qty = _decimal_value(line.qty)
+    if qty <= 0 and raw_qty > 0:
         try:
-            qty = convert_item_qty(line.item_code, _decimal_value(line.qty), line.uom, item.default_uom)
+            qty = convert_item_qty(line.item_code, raw_qty, line.uom, item.default_uom)
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc
-    if qty <= 0:
-        raise PostingError("La cantidad de inventario debe ser mayor que cero.")
+    if qty < 0 or raw_qty < 0:
+        raise PostingError("La cantidad de inventario no puede ser negativa.")
+    amount = _decimal_value(line.amount)
+    if qty == 0 and amount == 0:
+        raise PostingError("La línea de inventario debe tener una cantidad o un monto mayor que cero.")
     line.qty_in_base_uom = qty
     return qty
 
@@ -1540,7 +1544,7 @@ def _line_rate(line: StockEntryItem) -> Decimal:
         rate = amount / qty_in_base_uom
     if rate <= 0 and amount > 0 and qty_in_base_uom > 0:
         rate = amount / qty_in_base_uom
-    if rate <= 0:
+    if rate <= 0 and qty_in_base_uom > 0:
         raise PostingError(f"La linea de inventario {line.item_code} requiere tasa de valuacion.")
     return rate
 
@@ -1550,18 +1554,22 @@ def _line_qty_generic(line: Any) -> Decimal:
 
     item = _stock_item_for(line)
     qty = _decimal_value(getattr(line, "qty_in_base_uom", None))
-    if qty <= 0:
+    raw_qty = _decimal_value(getattr(line, "qty", None))
+    if qty <= 0 and raw_qty > 0:
         try:
             qty = convert_item_qty(
                 getattr(line, "item_code"),
-                _decimal_value(getattr(line, "qty", None)),
+                raw_qty,
                 getattr(line, "uom", None) or item.default_uom,
                 item.default_uom,
             )
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc
-    if qty <= 0:
-        raise PostingError("La cantidad de inventario debe ser mayor que cero.")
+    if qty < 0 or raw_qty < 0:
+        raise PostingError("La cantidad de inventario no puede ser negativa.")
+    amount = _decimal_value(getattr(line, "amount", None))
+    if qty == 0 and amount == 0:
+        raise PostingError("La línea de inventario debe tener una cantidad o un monto mayor que cero.")
     if hasattr(line, "qty_in_base_uom"):
         line.qty_in_base_uom = qty
     return qty
@@ -1583,7 +1591,7 @@ def _line_rate_generic(line: Any) -> Decimal:
         rate = amount / qty_in_base_uom
     if rate <= 0 and amount > 0 and qty_in_base_uom > 0:
         rate = amount / qty_in_base_uom
-    if rate <= 0:
+    if rate <= 0 and qty_in_base_uom > 0:
         item_code = getattr(line, "item_code", "desconocido")
         raise PostingError(f"La linea de inventario {item_code} requiere tasa de valuacion.")
     return rate
@@ -2306,10 +2314,10 @@ def _validate_stock_entry_warehouses(document: StockEntry, line: StockEntryItem)
 def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) -> list[StockLedgerEntry]:
     """Crea movimientos de inventario para una linea segun el proposito."""
     qty = _line_qty(line)
-    valuation_rate = _line_rate(line)
-    value = _decimal_value(line.amount) or (qty * valuation_rate)
 
-    if purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
+    if purpose in ("material_receipt", "adjustment_positive", "stock_adjustment", "manufacture", "repack"):
+        valuation_rate = _line_rate(line)
+        value = _decimal_value(line.amount) or (qty * valuation_rate)
         return [
             _create_stock_movement(
                 document=document,
@@ -2321,20 +2329,21 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
             )
         ]
     if purpose in ("material_issue", "adjustment_negative"):
-        return [
-            _create_stock_movement(
-                document=document,
-                line=line,
-                warehouse=line.source_warehouse or document.from_warehouse,
-                qty_change=-qty,
-                valuation_rate=valuation_rate,
-                value_change=-value,
-            )
-        ]
-    if purpose == "material_transfer":
         source_warehouse = line.source_warehouse or document.from_warehouse
-        target_warehouse = line.target_warehouse or document.to_warehouse
         item = _stock_item_for(line)
+        fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
+        if qty == 0:
+            value = _decimal_value(line.amount)
+            return [
+                _create_stock_movement(
+                    document=document,
+                    line=line,
+                    warehouse=source_warehouse,
+                    qty_change=Decimal("0"),
+                    valuation_rate=fallback_rate,
+                    value_change=-value,
+                )
+            ]
         try:
             cost_amount, cost_rate = _consume_stock_valuation_layers(
                 company=document.company,
@@ -2350,7 +2359,44 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
                 item_code=line.item_code,
                 warehouse=source_warehouse,
                 total_qty=qty,
-                fallback_rate=valuation_rate,
+                fallback_rate=fallback_rate,
+            )
+            cost_amount = cost_rate * qty
+        line._inventory_cost_amount = cost_amount
+        return [
+            _create_stock_movement(
+                document=document,
+                line=line,
+                warehouse=source_warehouse,
+                qty_change=-qty,
+                valuation_rate=cost_rate,
+                value_change=-cost_amount,
+                _skip_layer_consumption=True,
+            )
+        ]
+    if purpose == "material_transfer":
+        if qty == 0:
+            raise PostingError("Las transferencias de material requieren una cantidad mayor a cero.")
+        source_warehouse = line.source_warehouse or document.from_warehouse
+        target_warehouse = line.target_warehouse or document.to_warehouse
+        item = _stock_item_for(line)
+        fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
+        try:
+            cost_amount, cost_rate = _consume_stock_valuation_layers(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=source_warehouse,
+                quantity=qty,
+            )
+        except PostingError:
+            if not item.allow_negative_stock:
+                raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {source_warehouse}.")
+            cost_rate = _consume_available_layers_for_negative_stock(
+                company=document.company,
+                item_code=line.item_code,
+                warehouse=source_warehouse,
+                total_qty=qty,
+                fallback_rate=fallback_rate,
             )
             cost_amount = cost_rate * qty
         line._inventory_cost_amount = cost_amount
@@ -2516,6 +2562,15 @@ def _create_stock_ledger_for_document_type(
     allocations_by_line_id = _allocation_by_line_id(landed_cost_result)
     movements: list[StockLedgerEntry] = []
     for line in items:
+        item = database.session.get(Item, line.item_code) if getattr(line, "item_code", None) else None
+        if not item:
+            item = (
+                database.session.execute(select(Item).filter_by(code=line.item_code)).scalar_one_or_none()
+                if getattr(line, "item_code", None)
+                else None
+            )
+        if item and (item.item_type == "service" or not item.is_stock_item):
+            continue
         qty = _line_qty_generic(line)
         rate = _line_rate_generic(line)
         amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
@@ -2670,6 +2725,15 @@ def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id,
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         for line in _document_items(document):
+            item = database.session.get(Item, line.item_code) if getattr(line, "item_code", None) else None
+            if not item:
+                item = (
+                    database.session.execute(select(Item).filter_by(code=line.item_code)).scalar_one_or_none()
+                    if getattr(line, "item_code", None)
+                    else None
+                )
+            if item and (item.item_type == "service" or not item.is_stock_item):
+                continue
             qty = _line_qty_generic(line)
             rate = _line_rate_generic(line)
             amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
@@ -2761,6 +2825,15 @@ def _create_delivery_note_gl_entries(
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         for line in _document_items(document):
+            item = database.session.get(Item, line.item_code) if getattr(line, "item_code", None) else None
+            if not item:
+                item = (
+                    database.session.execute(select(Item).filter_by(code=line.item_code)).scalar_one_or_none()
+                    if getattr(line, "item_code", None)
+                    else None
+                )
+            if item and (item.item_type == "service" or not item.is_stock_item):
+                continue
             value = _get_delivery_note_line_value(document, line)
             inventory_account_id = _require_account(
                 _warehouse_inventory_account_id(document, line, company),
@@ -3006,13 +3079,33 @@ def _get_stock_entry_line_amount(line: StockEntryItem, purpose: str) -> Decimal:
     if purpose == "stock_reconciliation":
         return abs(_decimal_value(line.stock_value_difference))
 
-    # Actual stock cost should always take precedence for GL posting to keep it in sync
-    # with the Stock Ledger (Kardex), specially for FIFO/Moving Average outflows.
     cost_amount = getattr(line, "_inventory_cost_amount", None)
     if cost_amount is not None:
         return _decimal_value(cost_amount)
 
-    return _decimal_value(line.amount) or (_line_qty(line) * _line_rate(line))
+    # Fetch actual stock value difference from StockLedgerEntry to ensure GL is synced with Kardex
+    sle = (
+        database.session.execute(
+            select(StockLedgerEntry).filter_by(
+                voucher_type="stock_entry",
+                voucher_id=str(line.stock_entry_id),
+                item_code=line.item_code,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if sle:
+        return abs(_decimal_value(sle.stock_value_difference))
+
+    if _decimal_value(line.amount) > 0:
+        return _decimal_value(line.amount)
+
+    rate = _decimal_value(line.valuation_rate or line.basic_rate)
+    if rate > 0:
+        return _line_qty(line) * rate
+
+    return Decimal("0")
 
 
 def _get_inventory_account_for_line(document: StockEntry, line: StockEntryItem, company: str, purpose: str) -> str:
