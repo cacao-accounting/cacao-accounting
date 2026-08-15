@@ -337,6 +337,14 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser):
     page.locator(".ca-smart-select-option >> text=Proveedor Demo").click()
     page.wait_for_timeout(500)
 
+    # Select Bodega destino in Purchase Receipt header
+    to_wh_select = page.locator(".ca-smart-select", has=page.locator('input[name="to_warehouse"]'))
+    to_wh_input = to_wh_select.locator("input.ca-smart-select-input")
+    to_wh_input.click()
+    to_wh_input.fill("PRINCIPAL")
+    page.locator(".ca-smart-select-option", has_text="PRINCIPAL").click()
+    page.wait_for_timeout(500)
+
     # Wait for the background prefill to load line items into the grid
     expect(page.locator('input[name="item_code_0"]')).to_have_value("ART-001")
 
