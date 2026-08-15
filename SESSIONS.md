@@ -781,3 +781,16 @@ continuará en otro hilo, conservando los cambios actuales del árbol de trabajo
 - Suite focal de sourcing, comparación y rutas: 45 passed.
 - Ruff y `git diff --check`: correctos. Black no pudo ejecutarse porque el
   entorno virtual no encuentra `pathspec.patterns.gitignore`.
+
+## 2026-08-15 — Confirmación funcional del menú y auditoría final de issues
+
+El usuario confirmó que el menú actual de Configuración Global se ve bien y
+que la agrupación en las nueve áreas funcionales es lógica. Por tanto, #409 se
+considera funcionalmente corregido con `d6d0c784`; la separación interna del
+backend queda como mejora arquitectónica posterior.
+
+La revisión remota confirmó fixes comentados para #410–#419, #421–#431, y los
+fixes de continuidad #423/#424 quedaron actualizados en `05a108f3`. No se
+detectaron nuevos issues del repositorio posteriores al #431. El issue #420
+fue reabierto para respetar la instrucción de mantenerlo abierto y queda fuera
+de este hilo para su corrección posterior.
