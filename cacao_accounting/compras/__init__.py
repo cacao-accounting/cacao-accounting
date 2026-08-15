@@ -1234,11 +1234,22 @@ def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
         return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
 
 
+def _comparison_item_key(item: PurchaseOrderItem) -> tuple[str | None, ...]:
+    """Build the commercial identity used to match repeated order lines."""
+    return (
+        item.item_code,
+        item.uom,
+        str(item.qty_in_base_uom) if item.qty_in_base_uom is not None else None,
+        item.warehouse,
+        item.description,
+    )
+
+
 def _comparison_item_at_occurrence(
-    items: list[PurchaseOrderItem], item_code: str, occurrence: int
+    items: list[PurchaseOrderItem], base_item: PurchaseOrderItem, occurrence: int
 ) -> PurchaseOrderItem | None:
-    """Return the matching repeated item line at its occurrence index."""
-    matching_items = [item for item in items if item.item_code == item_code]
+    """Return the matching line by commercial identity and occurrence."""
+    matching_items = [item for item in items if _comparison_item_key(item) == _comparison_item_key(base_item)]
     return matching_items[occurrence] if occurrence < len(matching_items) else None
 
 
@@ -1302,16 +1313,16 @@ def compras_comparativo_ordenes(comparison_id: str):
         for order in orders
     }
     comparison_rows = []
-    item_occurrences: dict[str, int] = {}
+    item_occurrences: dict[tuple[str | None, ...], int] = {}
     for base_item in base_items:
-        occurrence = item_occurrences.get(base_item.item_code, 0)
-        item_occurrences[base_item.item_code] = occurrence + 1
+        item_key = _comparison_item_key(base_item)
+        occurrence = item_occurrences.get(item_key, 0)
+        item_occurrences[item_key] = occurrence + 1
         comparison_rows.append(
             {
                 "item": base_item,
                 "offers": {
-                    order.id: _comparison_item_at_occurrence(order_items[order.id], base_item.item_code, occurrence)
-                    for order in orders
+                    order.id: _comparison_item_at_occurrence(order_items[order.id], base_item, occurrence) for order in orders
                 },
             }
         )
