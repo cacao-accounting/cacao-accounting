@@ -805,3 +805,36 @@ de este hilo para su corrección posterior.
   concentrados en `tests/test_04database_schema.py`, el mismo bloque de
   inconsistencias de esquema preexistentes; el resumen completo queda en
   `/tmp/cacao-backend-qa-20260815-final.log`.
+
+## 2026-08-15 — Cierre de validación del comparativo y corrección de AP
+
+### Petición
+
+Se solicitó una prueba end-to-end exhaustiva desde la Solicitud de Compra
+hasta la Orden de Compra colocada, usando el framework de `document_flow`.
+Durante la validación se reportó además que `FCC-DEMO-2025-001` no aparecía
+en AP aging y que una devolución se mostraba negativa en cuentas por pagar.
+
+### Implementación
+
+- La prueba `tests/test_e2e_purchase_request_comparison.py` recorre dos RFQ,
+  dos cotizaciones, tres líneas, recomendación por precio, borrador, override
+  justificado, autorización, dos órdenes por proveedor y relaciones de flujo.
+- La generación de órdenes usa `create_target_document` con commit controlado,
+  más las relaciones complementarias de la Solicitud de Compra.
+- AP permite excluir devoluciones mediante `include_returns=False`; las rutas
+  `/reports/accounts-payable` y `/reports/ap-aging` no muestran devoluciones
+  como saldos por pagar.
+- El dashboard excluye devoluciones de `Por pagar` y de la tabla de facturas
+  por pagar, conservando el total neto de Compras.
+- La semilla demo asocia `FCC-DEMO-2025-001` con `P001 / Proveedor Demo SA`.
+  La base QA actual fue corregida únicamente para ese documento demo.
+
+### Validación
+
+- Flujo de comparativo, E2E, sourcing, migraciones y transacciones: 19 passed.
+- Reportes de conciliación y dashboard: 40 passed.
+- Rutas y acciones web: 32 passed.
+- En la base QA actual: AP aging y cuentas por pagar muestran
+  `FCC-DEMO-2025-001` por C$50; `cacao-PI-2026-08-00001` es una devolución y
+  deja de aparecer como saldo por pagar negativo.
