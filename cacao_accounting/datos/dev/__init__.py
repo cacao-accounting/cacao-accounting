@@ -356,9 +356,13 @@ def cargar_bodegas():
         warehouses.append(warehouse)
         database.session.flush()
         if inv_account:
-            account = database.session.execute(
-                database.select(WarehouseCompanyAccount).filter_by(warehouse_code=b.code, company=b.company)
-            ).scalars().first()
+            account = (
+                database.session.execute(
+                    database.select(WarehouseCompanyAccount).filter_by(warehouse_code=b.code, company=b.company)
+                )
+                .scalars()
+                .first()
+            )
             if account is None:
                 database.session.add(
                     WarehouseCompanyAccount(

@@ -583,9 +583,15 @@ def test_budget_control_inactive_ledger_resolution(app_ctx):
     # Budget of active secondary book is 250
     print("DEBUG TEST INFO:")
     from sqlalchemy import or_
+
     all_books = database.session.query(Book).filter_by(entity="cacao").all()
     print("all_books:", [(b.code, b.status, b.is_primary) for b in all_books])
-    rli = database.session.query(Book).filter(Book.entity == "cacao", or_(Book.status == "activo", Book.status.is_(None))).order_by(Book.is_primary.desc(), Book.code).first()
+    rli = (
+        database.session.query(Book)
+        .filter(Book.entity == "cacao", or_(Book.status == "activo", Book.status.is_(None)))
+        .order_by(Book.is_primary.desc(), Book.code)
+        .first()
+    )
     print("resolved_ledger_id:", rli.id if rli else None)
     print("secondary_book_id:", secondary_book.id)
     print("val_res:", val_res)

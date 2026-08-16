@@ -402,9 +402,7 @@ def finalize_purchase_request_comparison(
     saved = {
         line.purchase_request_item_id: line
         for line in database.session.execute(
-            database.select(PurchaseRequestComparisonLine).where(
-                PurchaseRequestComparisonLine.comparison_id == comparison.id
-            )
+            database.select(PurchaseRequestComparisonLine).where(PurchaseRequestComparisonLine.comparison_id == comparison.id)
         )
         .scalars()
         .all()
@@ -437,9 +435,7 @@ def purchase_request_comparison_is_closed(purchase_request: PurchaseRequest) -> 
     """Return whether closed comparisons cover every request line."""
     request_item_ids = set(
         database.session.execute(
-            database.select(PurchaseRequestItem.id).where(
-                PurchaseRequestItem.purchase_request_id == purchase_request.id
-            )
+            database.select(PurchaseRequestItem.id).where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
         )
         .scalars()
         .all()

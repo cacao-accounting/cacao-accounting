@@ -209,7 +209,14 @@ def test_approval_flow_draft_to_approved(app):
         _seed_item()
         _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("15000"))
 
-        po = PurchaseOrder(id="po10025", company="comp_test", grand_total=Decimal("12000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
+        po = PurchaseOrder(
+            id="po10025",
+            company="comp_test",
+            grand_total=Decimal("12000"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            supplier_id="PARTY-TEST",
+        )
         database.session.add(po)
         database.session.flush()
         _add_po_item("po10025", rate=Decimal("12000"))
@@ -344,7 +351,14 @@ def test_multilevel_approval_three_levels(app):
         _create_rule("comp_test", "purchase_order", role_id=rol_pm.id, max_amount=Decimal("50000"), approval_level=2)
         _create_rule("comp_test", "purchase_order", role_id=rol_cfo.id, max_amount=None, approval_level=3)
 
-        po = PurchaseOrder(id="po_multi", company="comp_test", grand_total=Decimal("42000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
+        po = PurchaseOrder(
+            id="po_multi",
+            company="comp_test",
+            grand_total=Decimal("42000"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            supplier_id="PARTY-TEST",
+        )
         database.session.add(po)
         database.session.flush()
         _add_po_item("po_multi", rate=Decimal("42000"))
@@ -384,7 +398,14 @@ def test_multilevel_approval_tiers(app):
         _create_rule("comp_test", "purchase_order", role_id=rol_pm.id, max_amount=Decimal("50000"), approval_level=1)
         _create_rule("comp_test", "purchase_order", role_id=rol_cfo.id, max_amount=None, approval_level=2)
 
-        po_low = PurchaseOrder(id="po_low", company="comp_test", grand_total=Decimal("30000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
+        po_low = PurchaseOrder(
+            id="po_low",
+            company="comp_test",
+            grand_total=Decimal("30000"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            supplier_id="PARTY-TEST",
+        )
         database.session.add(po_low)
         database.session.flush()
         _add_po_item("po_low", rate=Decimal("30000"))
@@ -398,7 +419,14 @@ def test_multilevel_approval_tiers(app):
         assert result is True
         assert req_low.status == "Approved"
 
-        po_high = PurchaseOrder(id="po_high", company="comp_test", grand_total=Decimal("100000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
+        po_high = PurchaseOrder(
+            id="po_high",
+            company="comp_test",
+            grand_total=Decimal("100000"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            supplier_id="PARTY-TEST",
+        )
         database.session.add(po_high)
         database.session.flush()
         _add_po_item("po_high", rate=Decimal("100000"))
@@ -603,7 +631,14 @@ def test_approve_already_approved_request(app):
         _seed_item()
         _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("50000"))
 
-        po = PurchaseOrder(id="po_already", company="comp_test", grand_total=Decimal("5000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
+        po = PurchaseOrder(
+            id="po_already",
+            company="comp_test",
+            grand_total=Decimal("5000"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            supplier_id="PARTY-TEST",
+        )
         database.session.add(po)
         database.session.flush()
         _add_po_item("po_already", rate=Decimal("5000"))
@@ -683,7 +718,14 @@ def test_approval_action_on_approve(app):
         _seed_item()
         _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("15000"))
 
-        po = PurchaseOrder(id="po_audit", company="comp_test", grand_total=Decimal("12000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
+        po = PurchaseOrder(
+            id="po_audit",
+            company="comp_test",
+            grand_total=Decimal("12000"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            supplier_id="PARTY-TEST",
+        )
         database.session.add(po)
         database.session.flush()
         _add_po_item("po_audit", rate=Decimal("12000"))
@@ -733,8 +775,16 @@ def test_execute_submit_purchase_request(app):
     with app.app_context():
         user_juan = _create_user("juan")
         _seed_item()
-        pr = PurchaseRequest(id="pr_exec", company="comp_test", grand_total=Decimal("1000"), docstatus=0, posting_date=date(2026, 1, 1))
-        pr_item = PurchaseRequestItem(purchase_request_id="pr_exec", item_code="ITEM-TEST", qty=Decimal("1"), rate=Decimal("1000"), amount=Decimal("1000"))
+        pr = PurchaseRequest(
+            id="pr_exec", company="comp_test", grand_total=Decimal("1000"), docstatus=0, posting_date=date(2026, 1, 1)
+        )
+        pr_item = PurchaseRequestItem(
+            purchase_request_id="pr_exec",
+            item_code="ITEM-TEST",
+            qty=Decimal("1"),
+            rate=Decimal("1000"),
+            amount=Decimal("1000"),
+        )
         database.session.add_all([pr, pr_item])
         database.session.commit()
 
@@ -748,7 +798,14 @@ def test_execute_submit_purchase_order(app):
         user_juan = _create_user("juan")
         _seed_party()
         _seed_item()
-        po = PurchaseOrder(id="po_exec", company="comp_test", grand_total=Decimal("1000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
+        po = PurchaseOrder(
+            id="po_exec",
+            company="comp_test",
+            grand_total=Decimal("1000"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            supplier_id="PARTY-TEST",
+        )
         database.session.add(po)
         database.session.flush()
         _add_po_item("po_exec", rate=Decimal("1000"))
@@ -822,7 +879,14 @@ def test_handle_submission_auto_approve(app):
         _seed_item()
         _create_rule("comp_test", "purchase_order", user_id=user_juan.id, max_amount=Decimal("50000"))
 
-        po = PurchaseOrder(id="po_hs_auto", company="comp_test", grand_total=Decimal("5000"), docstatus=0, posting_date=date(2026, 1, 1), supplier_id="PARTY-TEST")
+        po = PurchaseOrder(
+            id="po_hs_auto",
+            company="comp_test",
+            grand_total=Decimal("5000"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            supplier_id="PARTY-TEST",
+        )
         database.session.add(po)
         database.session.flush()
         _add_po_item("po_hs_auto", rate=Decimal("5000"))
