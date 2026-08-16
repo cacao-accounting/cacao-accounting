@@ -217,10 +217,12 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     entity = database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
     default_company_currency = getattr(entity, "currency", None) if entity else None
     document_base_currency = document_base_currency or default_company_currency
-    if type(document).__name__ != "ComprobanteContable" and not transaction_currency:
-        # Los importes de documentos operativos sin moneda explícita nacen en
-        # moneda base. Declararla permite convertir inventario, recepciones y
-        # otros movimientos independientemente a la moneda funcional de cada libro.
+    if not transaction_currency:
+        # Los importes de documentos sin moneda explícita nacen en la moneda
+        # base de la compañía. Declararla permite convertir inventario,
+        # recepciones, journals manuales y otros movimientos independientemente
+        # a la moneda funcional de cada libro, evitando copiar importes sin
+        # conversión a libros con moneda distinta.
         transaction_currency = document_base_currency
     contexts: list[LedgerContext] = []
     for book in _active_books(company, ledger_code):

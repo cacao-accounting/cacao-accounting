@@ -563,6 +563,81 @@ def test_submit_journal_converts_foreign_currency_to_book_currency(app_ctx):
     assert credit_entry.credit == Decimal("360.0000") or credit_entry.credit == Decimal("360.00")
 
 
+def test_submit_journal_infers_currency_for_multilibro_without_transaction_currency(app_ctx):
+    """R2R-AUDIT-21: un journal manual sin transaction_currency debe inferir la
+    moneda funcional de la compañía y convertir a cada libro usando tasas históricas."""
+    from decimal import Decimal
+
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
+    from cacao_accounting.database import Accounts, Book, ExchangeRate, GLEntry, database
+
+    debit_account = Accounts(entity="cacao", code="EXP-009", name="Gasto", active=True, enabled=True, group=False)
+    credit_account = Accounts(entity="cacao", code="CASH-009", name="Caja", active=True, enabled=True, group=False)
+    local_book = Book(entity="cacao", code="LOCAL", name="Local", currency="NIO", status="activo", is_primary=True)
+    fin_book = Book(entity="cacao", code="FIN", name="Financiero", currency="USD", status="activo")
+    mgt_book = Book(entity="cacao", code="MGMT", name="Management", currency="EUR", status="activo")
+    database.session.add_all(
+        [
+            debit_account,
+            credit_account,
+            local_book,
+            fin_book,
+            mgt_book,
+            ExchangeRate(origin="NIO", destination="USD", rate="0.0273043", date=date(2026, 5, 6)),
+            ExchangeRate(origin="NIO", destination="EUR", rate="0.0249231", date=date(2026, 5, 6)),
+        ]
+    )
+    database.session.commit()
+
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-06",
+            "books": ["LOCAL", "FIN", "MGMT"],
+            "lines": [
+                {"account": debit_account.id, "debit": "1000.00", "credit": "0"},
+                {"account": credit_account.id, "debit": "0", "credit": "1000.00"},
+            ],
+        },
+        user_id="user-1",
+    )
+
+    submit_journal(journal.id)
+
+    posted_entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
+    assert len(posted_entries) == 6
+
+    by_book: dict[str, list[GLEntry]] = {}
+    for entry in posted_entries:
+        book = database.session.get(Book, entry.ledger_id) if entry.ledger_id else None
+        book_code = book.code if book else "SIN LIBRO"
+        by_book.setdefault(book_code, []).append(entry)
+
+    assert set(by_book.keys()) == {"LOCAL", "FIN", "MGMT"}
+
+    local_debit = next(e for e in by_book["LOCAL"] if e.debit > 0)
+    local_credit = next(e for e in by_book["LOCAL"] if e.credit > 0)
+    assert local_debit.account_currency == "NIO"
+    assert local_debit.debit == Decimal("1000.0000")
+    assert local_credit.credit == Decimal("1000.0000")
+
+    fin_debit = next(e for e in by_book["FIN"] if e.debit > 0)
+    fin_credit = next(e for e in by_book["FIN"] if e.credit > 0)
+    assert fin_debit.account_currency == "NIO"
+    assert fin_credit.account_currency == "NIO"
+    assert fin_debit.debit < Decimal("1000.0000")
+    assert fin_credit.credit < Decimal("1000.0000")
+
+    mgt_debit = next(e for e in by_book["MGMT"] if e.debit > 0)
+    mgt_credit = next(e for e in by_book["MGMT"] if e.credit > 0)
+    assert mgt_debit.account_currency == "NIO"
+    assert mgt_credit.account_currency == "NIO"
+    assert mgt_debit.debit < Decimal("1000.0000")
+    assert mgt_credit.credit < Decimal("1000.0000")
+
+    assert fin_debit.debit != mgt_debit.debit
+
+
 def test_submit_journal_allows_cash_account_in_manual_entry(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft
     from cacao_accounting.database import Accounts, Book, ComprobanteContable, User, database
