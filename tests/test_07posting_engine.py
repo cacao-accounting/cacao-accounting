@@ -1087,7 +1087,7 @@ def test_supplier_invoice_flags_reject_without_order_when_disallowed(app_ctx):
 
 def test_supplier_invoice_flags_allow_without_order_when_enabled(app_ctx):
     """S2P-08: Verifica que permitir sin OC/recepción no bloquee la creación."""
-    from cacao_accounting.database import CompanyParty, database
+    from cacao_accounting.database import CompanyParty, PurchaseMatchingConfig, database
     from cacao_accounting.compras import _validate_supplier_invoice_flags
 
     company_party = CompanyParty(
@@ -1096,7 +1096,12 @@ def test_supplier_invoice_flags_allow_without_order_when_enabled(app_ctx):
         allow_purchase_invoice_without_order=True,
         allow_purchase_invoice_without_receipt=True,
     )
-    database.session.add(company_party)
+    database.session.add_all(
+        [
+            company_party,
+            PurchaseMatchingConfig(company="cacao", require_purchase_order=False),
+        ]
+    )
     database.session.commit()
 
     _validate_supplier_invoice_flags("PROV-FLAG-ALLOW", "cacao", None, None)
