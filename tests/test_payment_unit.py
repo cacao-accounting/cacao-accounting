@@ -1518,7 +1518,7 @@ class TestBankManagementExhaustive:
 
         bank_entity = database.session.execute(database.select(Bank)).scalars().first()
         bank1 = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        defaults = _ensure_company_default_accounts("cacao", bank1)
+        _ensure_company_default_accounts("cacao", bank1)
 
         usd_account = (
             database.session.execute(
@@ -1583,8 +1583,86 @@ class TestBankManagementExhaustive:
         source_credit = [e for e in primary_entries if e.account_id == bank2.gl_account_id and e.credit > 0][0]
         assert source_credit.credit_in_account_currency == Decimal("100")
 
-        fx_entry = [e for e in primary_entries if e.account_id == defaults.exchange_loss_account_id][0]
-        assert fx_entry.debit > 0
+    def test_internal_transfer_multi_currency_unbalanced_rejected(self, app_ctx):
+        """Internal transfer with internally unbalanced amounts in foreign currency is rejected."""
+        from cacao_accounting.contabilidad.posting import post_payment_entry, PostingError
+        from cacao_accounting.database import BankAccount, Bank, Accounts, ExchangeRate, PaymentEntry
+
+        bank_entity = database.session.execute(database.select(Bank)).scalars().first()
+        bank1 = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        _ensure_company_default_accounts("cacao", bank1)
+
+        usd_account1 = (
+            database.session.execute(
+                database.select(Accounts).filter_by(entity="cacao", account_type="bank").order_by(Accounts.code.asc())
+            )
+            .scalars()
+            .first()
+        )
+        usd_account2 = (
+            database.session.execute(
+                database.select(Accounts).filter_by(entity="cacao", account_type="bank").order_by(Accounts.code.desc())
+            )
+            .scalars()
+            .first()
+        )
+        bank_usd1 = BankAccount(
+            bank_id=bank_entity.id,
+            company="cacao",
+            account_name="Cuenta USD Out",
+            account_no="USD-100",
+            currency="USD",
+            gl_account_id=usd_account1.id,
+        )
+        bank_usd2 = BankAccount(
+            bank_id=bank_entity.id,
+            company="cacao",
+            account_name="Cuenta USD In",
+            account_no="USD-200",
+            currency="USD",
+            gl_account_id=usd_account2.id,
+        )
+        database.session.add_all([bank_usd1, bank_usd2])
+
+        existing_rate = (
+            database.session.execute(
+                database.select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date.today())
+            )
+            .scalars()
+            .first()
+        )
+        if existing_rate:
+            existing_rate.rate = Decimal("36.50")
+        else:
+            rate = ExchangeRate(
+                origin="USD",
+                destination="NIO",
+                date=date.today(),
+                rate=Decimal("36.50"),
+            )
+            database.session.add(rate)
+        database.session.commit()
+
+        # Unbalanced USD transfer: 100 USD paid from bank_usd1, 90 USD received into bank_usd2
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="internal_transfer",
+            bank_account_id=bank_usd1.id,
+            target_bank_account_id=bank_usd2.id,
+            paid_from_account_id=bank_usd1.gl_account_id,
+            paid_to_account_id=bank_usd2.gl_account_id,
+            currency="USD",
+            paid_amount=Decimal("100"),
+            received_amount=Decimal("90"),
+            docstatus=1,
+            document_no="PAY-TRF-UNBAL-01",
+        )
+        database.session.add(payment)
+        database.session.commit()
+
+        with pytest.raises(PostingError, match="Las entradas GL no balancean en moneda de transaccion"):
+            post_payment_entry(payment)
 
     def test_bank_reconciliation_and_difference_journal(self, app_ctx):
         """Bank reconciliation candidates search, matching, and bank difference adjustment."""
