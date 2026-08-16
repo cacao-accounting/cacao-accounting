@@ -1047,3 +1047,21 @@ base de datos descartable con una única migración dummy.
 
 - La prueba combinada de logística, migraciones y O2C pasó: 15 pruebas.
 - Black, Ruff y Mypy pasan sobre los módulos modificados.
+
+## 2026-08-16 — Correcciones finales de feedback
+
+### Implementación
+
+- La macro logística ahora recibe `terms_field`; O2C utiliza `sales_terms` y
+  compras utiliza `purchase_terms`.
+- El servicio compartido valida explícitamente los nombres de términos
+  permitidos y acepta un catálogo de Incoterms inyectado para evitar depender
+  siempre de una sesión de base de datos.
+- La compatibilidad logística del comparativo usa una función compartida y
+  rechaza condiciones incompatibles antes de crear la orden.
+- Se agregaron pruebas para el binding O2C, catálogo inyectado, nombres de
+  términos y conflicto logístico.
+
+### Validación
+
+- Pruebas específicas: 12 exitosas.

@@ -539,20 +539,13 @@ def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison
         if not order:
             raise ValueError("No se pudo crear la Orden de Compra desde el framework documental.")
         from cacao_accounting.compras import _copy_logistics, _landed_cost_snapshot
+        from cacao_accounting.logistics import ensure_compatible_logistics
 
         selected_quotations = [
             database.session.get(SupplierQuotation, selected.selected_supplier_quotation_id) for selected in selected_lines
         ]
-        logistics_signatures = {
-            tuple(
-                getattr(quotation, field, None)
-                for field in ("incoterm_code", "incoterm_version", "delivery_date", "delivery_place", "purchase_terms")
-            )
-            for quotation in selected_quotations
-            if quotation is not None
-        }
-        if len(logistics_signatures) > 1:
-            raise ValueError("Las cotizaciones seleccionadas tienen condiciones logísticas incompatibles.")
+        selected_quotations = [quotation for quotation in selected_quotations if quotation is not None]
+        ensure_compatible_logistics(selected_quotations, terms_field="purchase_terms")
         selected_quotation = next((quotation for quotation in selected_quotations if quotation is not None), None)
         _copy_logistics(order, selected_quotation)
         order.landed_cost_estimates_json = _landed_cost_snapshot(source=selected_quotation)
