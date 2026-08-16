@@ -3,6 +3,51 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-16 — Corrección de CI y ampliación de cobertura bancaria, portal y query tools
+
+### Petición
+
+Conseguir que las pruebas unitarias pasen en GitHub y ampliar la cobertura de
+los schemas de `query_tools`, el portal y los servicios bancarios de forecast y
+conciliación.
+
+### Implementación y decisiones
+
+La ejecución de GitHub identificó un `UndefinedError` porque los macros de
+correo usaban `can_send_transaction_emails()` sin registrarlo como global de
+Jinja. Se agregó el global en la inicialización de la aplicación; el test
+focal de vistas y los tests de correo pasan.
+
+Se agregaron pruebas de contrato para todos los schemas solicitados de
+`query_tools`, cubriendo requisitos, filtros, paginación, enums y respuestas.
+El portal recibió casos para detalles de cliente, administración y usuarios
+sin tercero; su cobertura focal subió a 91%. `cash_forecast.py` recibió un
+flujo de creación, validación, transición Draft/Approved/Closed/Archived,
+entradas, comparación, importación y eliminación; su cobertura focal subió a
+81%. También se agregaron pruebas unitarias para las reglas de importe,
+dirección, scoring, destinos y asociación de pagos de
+`reconciliation_service.py`.
+
+La estrategia de commits será semántica, con autor y committer
+`williamjmorenor@gmail.com` y `Signed-off-by` en cada commit.
+
+## 2026-08-16 — Estado de issues abiertos en GitHub
+
+### Petición
+
+Consultar el estado actual de los issues abiertos del repositorio
+`cacao-accounting/cacao-accounting`.
+
+### Plan implementado y contexto
+
+Se identificó el repositorio mediante el remoto `origin` y se consultaron los
+issues abiertos con el conector de GitHub, excluyendo pull requests. Se
+recuperó el detalle de cada issue para clasificar prioridad, área, actividad
+reciente, comentarios y siguiente acción sugerida. El resultado se usa como
+línea base para priorizar la siguiente etapa: primero riesgos contables
+críticos/altos, después robustez transaccional y finalmente cobertura de
+pruebas y mejoras funcionales de severidad baja.
+
 ## 2026-08-16 — Merge squash del PR #440: notificaciones operativas por correo
 
 ### Petición
