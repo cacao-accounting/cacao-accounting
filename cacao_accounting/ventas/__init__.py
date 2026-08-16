@@ -85,37 +85,19 @@ from cacao_accounting.party_management import (  # noqa: F401
 )
 from cacao_accounting.version import APPNAME
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
+from cacao_accounting.logistics import copy_logistics, logistics_values
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
-
-_SALES_LOGISTICS_FIELDS = (
-    "incoterm_code",
-    "incoterm_version",
-    "delivery_date",
-    "delivery_place",
-    "sales_terms",
-)
 
 
 def _sales_logistics_values(source: Any = None, form: Any = None) -> dict[str, Any]:
     """Obtiene los datos logísticos comerciales desde un origen o formulario."""
-    values: dict[str, Any] = {}
-    for field in _SALES_LOGISTICS_FIELDS:
-        value = form.get(field) if form is not None else None
-        if value in (None, "") and source is not None:
-            value = getattr(source, field, None)
-        if field == "delivery_date" and isinstance(value, str):
-            value = _parse_date(value) if value else None
-        values[field] = value or None
-    if values["incoterm_code"] and not values["incoterm_version"]:
-        values["incoterm_version"] = "2020"
-    return values
+    return logistics_values(source, form, terms_field="sales_terms")
 
 
 def _copy_sales_logistics(target: Any, source: Any = None, form: Any = None) -> None:
     """Copia el snapshot logístico al documento comercial destino."""
-    for field, value in _sales_logistics_values(source, form).items():
-        setattr(target, field, value)
+    copy_logistics(target, source, form, terms_field="sales_terms")
 
 
 # Constantes para rutas y endpoints (S1192 - evitar duplicación de cadenas)
@@ -577,7 +559,7 @@ def ventas_pedido_venta_nuevo():
             database.session.commit()
             flash("Pedido de venta creado correctamente.", "success")
             return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=pedido.id))
-        except IdentifierConfigurationError as exc:
+        except (IdentifierConfigurationError, ValueError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -2625,7 +2607,7 @@ def ventas_entrega_nuevo():
             database.session.commit()
             flash("Nota de entrega creada correctamente.", "success")
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=entrega.id))
-        except (DocumentFlowError, IdentifierConfigurationError) as exc:
+        except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(

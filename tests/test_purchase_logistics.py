@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from cacao_accounting.compras import _landed_cost_snapshot, _logistics_values
+from cacao_accounting.logistics import copy_logistics
 
 
 def test_logistics_values_normalizes_date_and_default_incoterm_version():
@@ -55,6 +56,23 @@ def test_landed_cost_snapshot_validates_and_compacts_estimates():
     )
 
     assert result == '[{"concept":"Flete","amount":"125.50","currency":"USD"}]'
+
+
+def test_copy_logistics_propagates_source_snapshot(monkeypatch):
+    """El mismo copiador sirve para cada salto del document flow."""
+    monkeypatch.setattr("cacao_accounting.logistics.validate_incoterm", lambda values: None)
+    source = SimpleNamespace(
+        incoterm_code="CIF",
+        incoterm_version="2020",
+        delivery_date=date(2026, 12, 1),
+        delivery_place="Puerto de entrada",
+        purchase_terms="Seguro incluido",
+    )
+    target = SimpleNamespace()
+
+    copy_logistics(target, source, terms_field="purchase_terms")
+
+    assert target.__dict__ == source.__dict__
 
 
 @pytest.mark.parametrize(
