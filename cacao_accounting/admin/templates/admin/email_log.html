@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{% if TESTING %}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/admin/templates/admin/email_log.html"></div>
+{% endif %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Bitácora de Correos Electrónicos") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header mb-3">
+  <h4><i class="bi bi-envelope-paper me-2" style="color:#78BF30"></i>{{ _("Bitácora de Correos Electrónicos") }}</h4>
+</div>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-clock-history me-1"></i>{{ _("Historial y Cola de Correos") }}</h6>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('admin.email_settings') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-gear me-1"></i>{{ _("Ajustes SMTP") }}
+      </a>
+    </div>
+  </div>
+
+  <div class="p-3 border-bottom">
+    <form method="get" action="{{ url_for('admin.email_log') }}" class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label small text-muted mb-1" for="list-search">{{ _('Buscar') }}</label>
+        <input
+          type="text"
+          id="list-search"
+          name="search"
+          class="form-control form-control-sm"
+          placeholder="{{ _('Buscar por destinatario, asunto o documento...') }}"
+          value="{{ request.args.get('search', '') }}"
+        >
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1" for="list-status">{{ _('Estado') }}</label>
+        <select id="list-status" name="status" class="form-select form-select-sm">
+          <option value="">{{ _('Todos') }}</option>
+          <option value="sent" {% if request.args.get('status') == 'sent' %}selected{% endif %}>{{ _('Enviado') }}</option>
+          <option value="failed" {% if request.args.get('status') == 'failed' %}selected{% endif %}>{{ _('Fallido') }}</option>
+          <option value="pending" {% if request.args.get('status') == 'pending' %}selected{% endif %}>{{ _('Pendiente') }}</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>{{ _('Buscar') }}</button>
+        <a href="{{ url_for('admin.email_log') }}" class="btn btn-sm btn-outline-secondary">{{ _('Limpiar') }}</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="table-responsive">
+    <table class="ca-table mb-0">
+      <caption class="visually-hidden">{{ _("Bitácora de Correos Electrónicos") }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _("Fecha") }}</th>
+          <th>{{ _("Destinatario") }}</th>
+          <th>{{ _("Asunto") }}</th>
+          <th>{{ _("Documento") }}</th>
+          <th>{{ _("Estado") }}</th>
+          <th class="text-center">{{ _("Intentos") }}</th>
+          <th>{{ _("Detalles / Error") }}</th>
+          <th class="text-end">{{ _("Acciones") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in consulta.items %}
+        <tr>
+          <td class="small">{{ item.created.strftime('%Y-%m-%d %H:%M') if item.created else '-' }}</td>
+          <td><strong>{{ item.recipient }}</strong></td>
+          <td class="small">{{ item.subject }}</td>
+          <td class="small">
+            {% if item.document_type and item.document_id %}
+            <span class="badge bg-light text-dark">{{ item.document_type }}: {{ item.document_id }}</span>
+            {% else %}
+            -
+            {% endif %}
+          </td>
+          <td>
+            {% if item.status == 'sent' %}
+            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>{{ _("Enviado") }}</span>
+            {% elif item.status == 'failed' %}
+            <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>{{ _("Fallido") }}</span>
+            {% else %}
+            <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>{{ _("Pendiente") }}</span>
+            {% endif %}
+          </td>
+          <td class="text-center">{{ item.attempts or 0 }}</td>
+          <td class="small text-muted" style="max-width:250px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ item.error_message or '' }}">
+            {% if item.error_message %}
+            <span class="text-danger">{{ item.error_message }}</span>
+            {% elif item.sent_at %}
+            <span class="text-success">{{ _("Enviado el") }} {{ item.sent_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% else %}
+            -
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if item.status == 'failed' or item.status == 'pending' %}
+            <form method="post" action="{{ url_for('admin.email_log_retry', queue_id=item.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-primary" title="{{ _('Reintentar envío de correo') }}">
+                <i class="bi bi-arrow-repeat me-1"></i>{{ _("Reintentar") }}
+              </button>
+            </form>
+            {% else %}
+            <button class="btn btn-sm btn-outline-secondary" disabled title="{{ _('Correo ya enviado') }}">
+              <i class="bi bi-check2 me-1"></i>{{ _("Enviado") }}
+            </button>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="text-center text-muted py-4">
+            <i class="bi bi-inbox me-2"></i>{{ _("No hay registros de correos electrónicos en la bitácora.") }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{{ macros.rendizar_paginacion(consulta, 'admin.email_log') }}
+{% endblock %}

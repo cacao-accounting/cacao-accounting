@@ -3,6 +3,62 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-16 — Merge squash del PR #440: notificaciones operativas por correo
+
+### Petición
+
+Analizar el pull request abierto considerando los cambios de code review y
+hacer merge con estrategia squash.
+
+### Implementación y decisión
+
+Se revisó el PR #440, titulado "Add operational transaction email
+notifications, queue, and admin log". El cambio agrega configuración para
+deshabilitar correos transaccionales, cola y bitácora administrativa,
+reintentos, endpoints API para consultar/enviar notificaciones, auditoría de
+envíos exitosos y macros Alpine.js para el formulario de correo.
+
+El PR tenía los checks visibles `license/cla` y `security/snyk` exitosos y
+GitHub lo marcaba como mergeable. Se ejecutó merge remoto con `squash`,
+protegido por el SHA de cabeza `429f39ca6d363986b7b232d5349a1bd60ff261fc`, y
+se generó el commit `96543528005da3f98fe2a49c5a9217ef50cb0ba3`.
+
+### Code review pendiente para la siguiente etapa
+
+- P1: el endpoint de envío usa solo `_require_document_read_access`; debe
+  exigir un permiso de mutación/autorización con alcance de compañía para
+  impedir que usuarios con permiso `consultar` utilicen el SMTP institucional
+  para enviar destinatarios y contenido arbitrarios.
+- P1: las macros `document_email_button` y `document_email_modal` fueron
+  definidas, pero no están invocadas en las plantillas de detalle operativas;
+  la funcionalidad queda inaccesible desde la interfaz.
+- P2: el envío a múltiples destinatarios devuelve éxito total y registra
+  todos los destinatarios aunque algunos fallen; debe distinguir entregas
+  parciales, auditar solo los envíos exitosos y mostrar los fallos para
+  permitir reintentos.
+- P2: `disable_transaction_emails` se carga en el contexto de la plantilla,
+  pero falta el control correspondiente en `email_settings.html`; guardar el
+  formulario puede restablecer silenciosamente el valor a `false`.
+
+Estas observaciones no bloquearon el merge solicitado, pero son deuda técnica
+prioritaria antes de considerar completa la funcionalidad de correo. El
+checkout local conserva además un commit propio (`e06422f1`) por delante de
+`origin/main`; no fue alterado durante el merge remoto.
+
+## 2026-08-16 — Correcciones de robustez para notificaciones por correo
+
+### Implementación
+
+Se exigió autorización con alcance de compañía para el endpoint mutante de
+envío. La consulta de información conserva permiso de lectura. Los envíos
+parciales ahora devuelven HTTP 207, reportan destinatarios fallidos y auditan
+solo los envíos exitosos. El switch global se agregó al formulario SMTP y las
+acciones de detalle incluyen los macros de botón y modal de correo.
+
+Se agregó una prueba de entrega parcial; las pruebas focalizadas quedaron en
+9 aprobadas. El commit de esta etapa debe usar como autor y committer
+`williamjmorenor@gmail.com` y llevar `Signed-off-by` por cumplimiento del CLA.
+
 ## 2026-08-14 — Login independiente del tema global
 
 ### Petición

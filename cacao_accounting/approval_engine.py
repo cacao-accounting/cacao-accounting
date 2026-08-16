@@ -460,6 +460,7 @@ class ApprovalEngine:
             document.company,
             document.purchase_order_id,
             document.purchase_receipt_id,
+            document_type=getattr(document, "document_type", None),
         )
         _validate_duplicate_supplier_invoice(
             document.supplier_id,

@@ -40,6 +40,7 @@ CONFIGURATION_SECTIONS: tuple[ConfigurationSection, ...] = (
             ),
             ConfigurationLink("admin.external_document_validation_settings", "Validación externa de documentos"),
             ConfigurationLink("admin.email_settings", "Correo electrónico", cloud_only=True),
+            ConfigurationLink("admin.email_log", "Bitácora de correos", cloud_only=True),
             ConfigurationLink("admin.lista_grupos_terceros", "Tipos de terceros"),
             ConfigurationLink("admin.lista_precios", "Listas de precios"),
             ConfigurationLink("admin.precios_item", "Precios por artículo"),
