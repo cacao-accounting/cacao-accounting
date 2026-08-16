@@ -159,10 +159,16 @@ def _convert_gl_amount_to_bank_currency(entry: GLEntry, bank_currency: str, comp
     if bank_currency == company_currency:
         return company_amount
 
-    rate = _lookup_exchange_rate(entry_currency, bank_currency, entry.posting_date)
+    if not company_currency:
+        raise BankReconciliationError("La entrada GL no tiene moneda funcional para convertirla.")
+
+    # ``debit``/``credit`` are persisted in the company currency.  The
+    # account-currency amount is only authoritative when the bank itself uses
+    # that currency (handled above); otherwise convert the functional amount.
+    rate = _lookup_exchange_rate(company_currency, bank_currency, entry.posting_date)
     if rate is None:
         raise BankReconciliationError(
-            f"No existe tipo de cambio para {entry_currency} -> {bank_currency} en {entry.posting_date}."
+            f"No existe tipo de cambio para {company_currency} -> {bank_currency} en {entry.posting_date}."
         )
     return (company_amount * rate).quantize(Decimal("0.0001"))
 
