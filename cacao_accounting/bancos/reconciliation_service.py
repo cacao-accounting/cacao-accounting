@@ -16,6 +16,7 @@ from cacao_accounting.database import (
     BankAccount,
     BankTransaction,
     Entity,
+    ExchangeRate,
     GLEntry,
     PaymentEntry,
     Reconciliation,
@@ -119,6 +120,53 @@ def _gl_amount(entry: GLEntry) -> Decimal:
     return _decimal_value(entry.debit or entry.credit)
 
 
+def _lookup_exchange_rate(origin: str, destination: str, posting_date: date) -> Decimal | None:
+    """Look up a historical exchange rate, trying the inverse pair as fallback."""
+    if origin == destination:
+        return Decimal("1")
+    direct = (
+        database.session.execute(select(ExchangeRate).filter_by(origin=origin, destination=destination, date=posting_date))
+        .scalars()
+        .first()
+    )
+    if direct is not None:
+        return _decimal_value(direct.rate)
+    inverse = (
+        database.session.execute(select(ExchangeRate).filter_by(origin=destination, destination=origin, date=posting_date))
+        .scalars()
+        .first()
+    )
+    if inverse is not None:
+        inverse_value = _decimal_value(inverse.rate)
+        if inverse_value > 0:
+            return Decimal("1") / inverse_value
+    return None
+
+
+def _convert_gl_amount_to_bank_currency(entry: GLEntry, bank_currency: str, company_currency: str | None) -> Decimal:
+    """Resolve a GL amount expressed in the bank transaction currency.
+
+    When the GL entry currency differs from the bank currency, the amount is
+    converted from the entry's company currency using historical exchange rates.
+    """
+    entry_currency = str(entry.account_currency or entry.company_currency or company_currency or "")
+    account_currency_amount = entry.debit_in_account_currency or entry.credit_in_account_currency
+    company_amount = _gl_amount(entry)
+
+    if entry_currency == bank_currency and account_currency_amount is not None:
+        return _decimal_value(account_currency_amount)
+
+    if bank_currency == company_currency:
+        return company_amount
+
+    rate = _lookup_exchange_rate(entry_currency, bank_currency, entry.posting_date)
+    if rate is None:
+        raise BankReconciliationError(
+            f"No existe tipo de cambio para {entry_currency} -> {bank_currency} en {entry.posting_date}."
+        )
+    return (company_amount * rate).quantize(Decimal("0.0001"))
+
+
 def _bank_company(transaction: BankTransaction) -> str:
     bank_account = database.session.get(BankAccount, transaction.bank_account_id)
     if not bank_account:
@@ -196,17 +244,16 @@ def _target_payment_amount(target_id: str, bank_currency: str | None, company_cu
 
 
 def _target_gl_amount(target_id: str, bank_currency: str | None, company_currency: str | None) -> Decimal:
-    """Resolve a GL amount in the bank transaction currency."""
+    """Resolve a GL amount in the bank transaction currency.
+
+    When the GL entry currency differs from the bank currency, the entry amount
+    is converted using historical exchange rates instead of discarding it.
+    """
     entry = database.session.get(GLEntry, target_id)
     if not entry:
         raise BankReconciliationError("La entrada GL a conciliar no existe.")
-    entry_currency = str(entry.account_currency or entry.company_currency or company_currency or "")
-    if bank_currency and entry_currency != bank_currency:
-        raise BankReconciliationError("La moneda de la entrada GL no coincide con la cuenta bancaria.")
-    if entry.account_currency == bank_currency:
-        amount = entry.debit_in_account_currency or entry.credit_in_account_currency
-        if amount is not None:
-            return _decimal_value(amount)
+    if bank_currency:
+        return _convert_gl_amount_to_bank_currency(entry, bank_currency, company_currency)
     return _gl_amount(entry)
 
 
@@ -350,15 +397,14 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool 
         for entry in gl_entries:
             if _gl_direction(entry) != _bank_direction(transaction):
                 continue
-            entry_currency = str(entry.account_currency or entry.company_currency or company_currency or "")
-            if bank_currency and entry_currency != bank_currency:
+            try:
+                entry_amount = (
+                    _convert_gl_amount_to_bank_currency(entry, bank_currency, company_currency)
+                    if bank_currency
+                    else _gl_amount(entry)
+                )
+            except BankReconciliationError:
                 continue
-            entry_amount = (
-                _decimal_value(entry.debit_in_account_currency or entry.credit_in_account_currency)
-                if entry.account_currency == bank_currency
-                and (entry.debit_in_account_currency is not None or entry.credit_in_account_currency is not None)
-                else _gl_amount(entry)
-            )
             pending = entry_amount - _allocated_for_target("gl_entry", entry.id)
             if pending <= 0:
                 continue

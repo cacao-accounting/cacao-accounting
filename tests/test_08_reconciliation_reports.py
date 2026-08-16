@@ -559,6 +559,71 @@ def test_bank_candidates_match_direction_and_allow_partial_payment(app_ctx):
     ]
 
 
+def test_bank_reconciliation_converts_gl_entry_with_mismatched_currency(app_ctx):
+    """BANK-AUDIT-16: una entrada GL con moneda distinta a la bancaria debe
+    convertirse a la moneda bancaria en lugar de descartarse."""
+    from cacao_accounting.bancos.reconciliation_service import find_bank_reconciliation_candidates
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        BankTransaction,
+        Book,
+        ExchangeRate,
+        GLEntry,
+        database,
+    )
+
+    bank = Bank(name="Banco USD")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta USD", currency="USD", gl_account_id=None)
+    database.session.add(bank_account)
+    database.session.flush()
+
+    gl_account = Accounts(entity="cacao", code="BANK-GL-01", name="Banco GL", active=True, enabled=True, group=False)
+    database.session.add(gl_account)
+    database.session.flush()
+
+    local_book = Book(code="LOCAL", name="Local", entity="cacao", currency="NIO", is_primary=True, status="activo")
+    database.session.add(local_book)
+    database.session.flush()
+
+    bank_account.gl_account_id = str(gl_account.id)
+    database.session.add(bank_account)
+    database.session.add(ExchangeRate(origin="NIO", destination="USD", rate="0.0273043", date=date(2026, 5, 5)))
+
+    transaction = BankTransaction(
+        bank_account_id=bank_account.id,
+        posting_date=date(2026, 5, 5),
+        deposit=Decimal("100.00"),
+    )
+    entry = GLEntry(
+        posting_date=date(2026, 5, 5),
+        company="cacao",
+        ledger_id=local_book.id,
+        account_id=gl_account.id,
+        account_code=gl_account.code,
+        debit=Decimal("1000.0000"),
+        credit=Decimal("0"),
+        account_currency="NIO",
+        company_currency="NIO",
+        voucher_type="journal_entry",
+        voucher_id="TEST-GL-USD-1",
+        is_cancelled=False,
+        is_reversal=False,
+    )
+    database.session.add_all([transaction, entry])
+    database.session.commit()
+
+    candidates = find_bank_reconciliation_candidates(transaction.id)
+    gl_candidates = [c for c in candidates if c.reference_type == "gl_entry"]
+
+    assert len(gl_candidates) == 1
+    assert gl_candidates[0].reference_id == entry.id
+    assert gl_candidates[0].amount == Decimal("27.3043")
+
+
 def test_posted_payment_bank_dimension_reconciles_with_bank_summary(app_ctx):
     """Payment GL lines must retain the bank account used by the posting."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
