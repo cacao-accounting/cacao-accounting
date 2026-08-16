@@ -54,6 +54,7 @@
       </div>
     </div>
   </div>
+  {{ tf_macros.logistics_section(include_landed_costs=true) }}
   {% if from_request_id %}
     {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_request&target_type=purchase_order&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company %}
     {% set source_label = "Solicitud de Compra" %}

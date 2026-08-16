@@ -88,6 +88,36 @@ from cacao_accounting.audit_trail_service import format_document_timeline, log_c
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
+_SALES_LOGISTICS_FIELDS = (
+    "incoterm_code",
+    "incoterm_version",
+    "delivery_date",
+    "delivery_place",
+    "sales_terms",
+)
+
+
+def _sales_logistics_values(source: Any = None, form: Any = None) -> dict[str, Any]:
+    """Obtiene los datos logísticos comerciales desde un origen o formulario."""
+    values: dict[str, Any] = {}
+    for field in _SALES_LOGISTICS_FIELDS:
+        value = form.get(field) if form is not None else None
+        if value in (None, "") and source is not None:
+            value = getattr(source, field, None)
+        if field == "delivery_date" and isinstance(value, str):
+            value = _parse_date(value) if value else None
+        values[field] = value or None
+    if values["incoterm_code"] and not values["incoterm_version"]:
+        values["incoterm_version"] = "2020"
+    return values
+
+
+def _copy_sales_logistics(target: Any, source: Any = None, form: Any = None) -> None:
+    """Copia el snapshot logístico al documento comercial destino."""
+    for field, value in _sales_logistics_values(source, form).items():
+        setattr(target, field, value)
+
+
 # Constantes para rutas y endpoints (S1192 - evitar duplicación de cadenas)
 VENTAS_CLIENTE_NUEVO_TEMPLATE = "ventas/cliente_nuevo.html"
 _ENDPOINT_CLIENTE = "ventas.ventas_cliente"
@@ -1815,6 +1845,7 @@ def _build_sales_order_transaction_config(
             "party": getattr(source_origen, "customer_id", None) or "",
             "party_label": getattr(source_origen, "customer_name", None) or "",
             "posting_date": str(date.today()),
+            **_sales_logistics_values(source_origen),
         }
     return transaction_config
 
@@ -1835,6 +1866,8 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
             remarks=request.form.get("remarks"),
             docstatus=0,
         )
+        source = database.session.get(SalesQuotation, from_quotation_id) if from_quotation_id else None
+        _copy_sales_logistics(orden, source, request.form)
         database.session.add(orden)
         database.session.flush()
         assign_document_identifier(
@@ -2134,6 +2167,7 @@ def ventas_cotizacion_nueva():
             "party": getattr(solicitud_origen, "customer_id", None) or "",
             "party_label": getattr(solicitud_origen, "customer_name", None) or "",
             "posting_date": str(date.today()),
+            **_sales_logistics_values(solicitud_origen),
         }
     if request.method == "POST":
         try:
@@ -2157,6 +2191,7 @@ def ventas_cotizacion_nueva():
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
+            _copy_sales_logistics(cotizacion, source, request.form)
             database.session.add(cotizacion)
             database.session.flush()
             assign_document_identifier(
@@ -2549,6 +2584,7 @@ def ventas_entrega_nuevo():
             "party": orden_origen.customer_id or "",
             "party_label": orden_origen.customer_name or "",
             "posting_date": str(date.today()),
+            **_sales_logistics_values(orden_origen),
         }
     if request.method == "POST":
         try:
@@ -2573,6 +2609,7 @@ def ventas_entrega_nuevo():
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
+            _copy_sales_logistics(entrega, source, request.form)
             database.session.add(entrega)
             database.session.flush()
             assign_document_identifier(
@@ -3007,6 +3044,12 @@ def _create_sales_invoice_from_form():
             remarks=request.form.get("remarks"),
             docstatus=0,
         )
+        source = None
+        if factura.sales_order_id:
+            source = database.session.get(SalesOrder, factura.sales_order_id)
+        if not source and factura.delivery_note_id:
+            source = database.session.get(DeliveryNote, factura.delivery_note_id)
+        _copy_sales_logistics(factura, source, request.form)
         database.session.add(factura)
         database.session.flush()
         assign_document_identifier(

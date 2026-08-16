@@ -43,6 +43,7 @@
       </div>
     </div>
   </div>
+  {{ tf_macros.logistics_section() }}
 
   {% set source_api_url = "/api/document-flow/pending-lines?source_type=purchase_request&target_type=purchase_quotation&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company if from_request_id and solicitud_origen else None %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label="Solicitud de Compra") }}

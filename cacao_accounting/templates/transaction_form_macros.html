@@ -4,6 +4,48 @@
 </script>
 {% endmacro %}
 
+{% macro logistics_section(include_landed_costs=false) %}
+<section class="ca-card p-3 mb-3" x-data="{ open: false }">
+  <button class="btn btn-link text-decoration-none px-0 fw-semibold" type="button"
+    :aria-expanded="open.toString()" aria-controls="purchase-logistics-fields" @click="open = !open">
+    <i class="bi" :class="open ? 'bi-chevron-down' : 'bi-chevron-right'"></i>
+    {{ _('Detalles logísticos') }}
+  </button>
+  <div id="purchase-logistics-fields" class="row g-3 mt-1" x-show="open" x-cloak>
+    <div class="col-md-3">
+      <label class="form-label" for="incoterm_code">{{ _('Incoterm') }}</label>
+      <select class="form-select" id="incoterm_code" name="incoterm_code" x-model="header.incoterm_code">
+        <option value="">{{ _('Seleccione') }}</option>
+        {% for code, label in [('EXW','EXW'),('FCA','FCA'),('CPT','CPT'),('CIP','CIP'),('DAP','DAP'),('DPU','DPU'),('DDP','DDP'),('FAS','FAS'),('FOB','FOB'),('CFR','CFR'),('CIF','CIF')] %}
+        <option value="{{ code }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+      <input type="hidden" name="incoterm_version" value="2020" x-model="header.incoterm_version">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="delivery_date">{{ _('Fecha de entrega') }}</label>
+      <input class="form-control" type="date" id="delivery_date" name="delivery_date" x-model="header.delivery_date">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="delivery_place">{{ _('Lugar de entrega') }}</label>
+      <input class="form-control" type="text" id="delivery_place" name="delivery_place" x-model="header.delivery_place">
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="purchase_terms">{{ _('Términos') }}</label>
+      <textarea class="form-control" id="purchase_terms" name="purchase_terms" rows="2" x-model="header.purchase_terms"></textarea>
+    </div>
+    {% if include_landed_costs %}
+    <div class="col-12">
+      <label class="form-label" for="landed_cost_estimates_json">{{ _('Landed costs estimados (JSON)') }}</label>
+      <textarea class="form-control font-monospace" id="landed_cost_estimates_json" name="landed_cost_estimates_json" rows="3"
+        placeholder='[{"concept":"Flete","amount":"0","currency":"USD"}]' x-model="header.landed_cost_estimates_json"></textarea>
+      <div class="form-text">{{ _('Son informativos y no modifican el total ni generan contabilidad.') }}</div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endmacro %}
+
 {% macro smart_select(doctype, name, label, initial_value='', initial_label='', filters={}, filter_sources=[], required=False, min_chars=1, preload=False, required_filters=[], auto_select_default=False, load_on_filter_change=False, x_model=None, on_select=None, initial_value_expr=None, initial_label_expr=None, locked_expr='false', default_after_ms=1500) %}
 <div class="ca-smart-select" x-data='smartSelect({
     doctype: {{ doctype | tojson }},

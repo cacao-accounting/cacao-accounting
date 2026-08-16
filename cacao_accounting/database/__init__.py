@@ -1664,6 +1664,17 @@ class LandedCostAllocation(database.Model, BaseTabla):  # type: ignore[name-defi
 # <---------------------------------------------------------------------------------------------> #
 # Purchasing — Compras y Cuentas por Pagar.
 # <---------------------------------------------------------------------------------------------> #
+class Incoterm(database.Model):  # type: ignore[name-defined]
+    """Catálogo de términos comerciales internacionales."""
+
+    __tablename__ = "incoterm"
+    code = database.Column(database.String(20), primary_key=True)
+    version = database.Column(database.String(10), primary_key=True, default="2020")
+    name = database.Column(database.String(100), nullable=False)
+    description = database.Column(database.Text(), nullable=True)
+    is_active = database.Column(database.Boolean(), nullable=False, default=True, index=True)
+
+
 class PurchaseOrder(database.Model, DocBase):  # type: ignore[name-defined]
     """Orden de compra."""
 
@@ -1686,6 +1697,12 @@ class PurchaseOrder(database.Model, DocBase):  # type: ignore[name-defined]
         database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     remarks = database.Column(database.Text(), nullable=True)
+    incoterm_code = database.Column(database.String(20), nullable=True, index=True)
+    incoterm_version = database.Column(database.String(10), nullable=True)
+    delivery_date = database.Column(database.Date(), nullable=True)
+    delivery_place = database.Column(database.String(255), nullable=True)
+    purchase_terms = database.Column(database.Text(), nullable=True)
+    landed_cost_estimates_json = database.Column(database.Text(), nullable=True)
     purchase_award_id = database.Column(
         database.String(26),
         database.ForeignKey("purchase_quotation_award.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
@@ -1754,6 +1771,11 @@ class PurchaseQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
+    incoterm_code = database.Column(database.String(20), nullable=True, index=True)
+    incoterm_version = database.Column(database.String(10), nullable=True)
+    delivery_date = database.Column(database.Date(), nullable=True)
+    delivery_place = database.Column(database.String(255), nullable=True)
+    purchase_terms = database.Column(database.Text(), nullable=True)
 
 
 class PurchaseQuotationItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1885,6 +1907,12 @@ class SupplierQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
+    incoterm_code = database.Column(database.String(20), nullable=True, index=True)
+    incoterm_version = database.Column(database.String(10), nullable=True)
+    delivery_date = database.Column(database.Date(), nullable=True)
+    delivery_place = database.Column(database.String(255), nullable=True)
+    purchase_terms = database.Column(database.Text(), nullable=True)
+    landed_cost_estimates_json = database.Column(database.Text(), nullable=True)
 
 
 class SupplierQuotationItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2186,6 +2214,12 @@ class PurchaseReceipt(database.Model, DocBase):  # type: ignore[name-defined]
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
+    incoterm_code = database.Column(database.String(20), nullable=True, index=True)
+    incoterm_version = database.Column(database.String(10), nullable=True)
+    delivery_date = database.Column(database.Date(), nullable=True)
+    delivery_place = database.Column(database.String(255), nullable=True)
+    purchase_terms = database.Column(database.Text(), nullable=True)
+    landed_cost_estimates_json = database.Column(database.Text(), nullable=True)
 
 
 class PurchaseReceiptItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2249,6 +2283,12 @@ class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     supplier_name = database.Column(database.String(200), nullable=True)
     supplier_invoice_no = database.Column(database.String(50), nullable=True)  # Validado contra duplicados
     supplier_invoice_key = database.Column(database.String(50), nullable=True, index=True)
+    incoterm_code = database.Column(database.String(20), nullable=True, index=True)
+    incoterm_version = database.Column(database.String(10), nullable=True)
+    delivery_date = database.Column(database.Date(), nullable=True)
+    delivery_place = database.Column(database.String(255), nullable=True)
+    purchase_terms = database.Column(database.Text(), nullable=True)
+    landed_cost_estimates_json = database.Column(database.Text(), nullable=True)
     document_type = database.Column(database.String(50), nullable=False, default="purchase_invoice")
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
     purchase_order_id = database.Column(
@@ -2477,6 +2517,11 @@ class SalesOrder(database.Model, DocBase):  # type: ignore[name-defined]
         database.String(26), database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     remarks = database.Column(database.Text(), nullable=True)
+    incoterm_code = database.Column(database.String(20), nullable=True, index=True)
+    incoterm_version = database.Column(database.String(10), nullable=True)
+    delivery_date = database.Column(database.Date(), nullable=True)
+    delivery_place = database.Column(database.String(255), nullable=True)
+    sales_terms = database.Column(database.Text(), nullable=True)
 
 
 class SalesRequest(database.Model, DocBase):  # type: ignore[name-defined]
@@ -2554,6 +2599,11 @@ class SalesQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
+    incoterm_code = database.Column(database.String(20), nullable=True, index=True)
+    incoterm_version = database.Column(database.String(10), nullable=True)
+    delivery_date = database.Column(database.Date(), nullable=True)
+    delivery_place = database.Column(database.String(255), nullable=True)
+    sales_terms = database.Column(database.Text(), nullable=True)
 
 
 class SalesQuotationItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2661,6 +2711,11 @@ class DeliveryNote(database.Model, DocBase):  # type: ignore[name-defined]
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
+    incoterm_code = database.Column(database.String(20), nullable=True, index=True)
+    incoterm_version = database.Column(database.String(10), nullable=True)
+    delivery_date = database.Column(database.Date(), nullable=True)
+    delivery_place = database.Column(database.String(255), nullable=True)
+    sales_terms = database.Column(database.Text(), nullable=True)
 
 
 class DeliveryNoteItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -2749,6 +2804,11 @@ class SalesInvoice(database.Model, DocBase):  # type: ignore[name-defined]
         database.String(26), database.ForeignKey(CONTACT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     remarks = database.Column(database.Text(), nullable=True)
+    incoterm_code = database.Column(database.String(20), nullable=True, index=True)
+    incoterm_version = database.Column(database.String(10), nullable=True)
+    delivery_date = database.Column(database.Date(), nullable=True)
+    delivery_place = database.Column(database.String(255), nullable=True)
+    sales_terms = database.Column(database.Text(), nullable=True)
 
 
 class SalesInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defined]
