@@ -90,7 +90,7 @@ def app_ctx():
                 database.session.add(r)
 
         # Configure supplier settings to allow direct invoices for tests
-        from cacao_accounting.database import CompanyParty, Party
+        from cacao_accounting.database import CompanyParty, Party, PurchaseMatchingConfig
 
         supplier = database.session.execute(database.select(Party).filter_by(is_supplier=True)).scalars().first()
         if supplier:
@@ -100,6 +100,14 @@ def app_ctx():
             if cp:
                 cp.allow_purchase_invoice_without_order = True
                 cp.allow_purchase_invoice_without_receipt = True
+
+        matching_config = database.session.execute(
+            database.select(PurchaseMatchingConfig).filter_by(company="cacao")
+        ).scalar_one_or_none()
+        if matching_config is None:
+            database.session.add(PurchaseMatchingConfig(company="cacao", require_purchase_order=False))
+        else:
+            matching_config.require_purchase_order = False
 
         database.session.commit()
         yield app
