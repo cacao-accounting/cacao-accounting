@@ -29,6 +29,7 @@ from cacao_accounting.database import (
     ImportLandedCost,
     ImportLandedCostCharge,
     ImportLandedCostItem,
+    Item,
     ItemAccount,
     PartyAccount,
     PaymentEntry,
@@ -143,6 +144,9 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
     account_lines: list[AccountLineSpec] = []
     item_contexts: list[ItemContext] = []
     for item in items:
+        item_record = database.session.get(Item, item.item_code)
+        if item_record is not None and (item_record.item_type == "service" or not item_record.is_stock_item):
+            continue
         amount = _line_amount(item)
         inventory_account_id = _require_account_id(
             inventory_account_id_for_document_line(document, item, company),
