@@ -521,6 +521,133 @@
 </div>
 {% endmacro %}
 
+{# ─── Email Notification Shortcuts ────────────────────────────── #}
+{% macro document_email_button(document_type, document) %}
+{% if can_send_transaction_emails() %}
+<button class="btn btn-sm btn-outline-primary"
+        type="button"
+        data-bs-toggle="modal"
+        data-bs-target="#emailNotificationModal"
+        title="{{ _('Notificar por correo electrónico') }}">
+  <i class="bi bi-envelope me-1"></i>{{ _('Notificar por correo') }}
+</button>
+{% endif %}
+{% endmacro %}
+
+{% macro document_email_modal(document_type, document) %}
+{% if can_send_transaction_emails() %}
+<div class="modal fade" id="emailNotificationModal" tabindex="-1" aria-labelledby="emailNotificationModalLabel" aria-hidden="true"
+     x-data="{
+       recipients: '',
+       subject: '',
+       body: '',
+       loading: false,
+       infoLoaded: false,
+       alertMessage: '',
+       alertType: 'success',
+       loadInfo() {
+         if (this.infoLoaded) return;
+         this.loading = true;
+         fetch('/api/documents/{{ document_type }}/{{ document.id }}/email-info', { credentials: 'same-origin' })
+           .then(r => r.json())
+           .then(data => {
+             this.loading = false;
+             this.infoLoaded = true;
+             if (data.enabled) {
+               this.recipients = data.default_recipient || '';
+               this.subject = data.subject || 'Notificación de documento';
+               this.body = data.body || '';
+             }
+           })
+           .catch(() => { this.loading = false; });
+       },
+       sendEmail() {
+         if (!this.recipients.trim()) {
+           this.alertType = 'danger';
+           this.alertMessage = '{{ _("Ingrese al menos un correo de destinatario.") }}';
+           return;
+         }
+         this.loading = true;
+         this.alertMessage = '';
+         fetch('/api/documents/{{ document_type }}/{{ document.id }}/email', {
+           method: 'POST',
+           headers: {
+             'Content-Type': 'application/json',
+             'X-CSRFToken': '{{ csrf_token() }}'
+           },
+           credentials: 'same-origin',
+           body: JSON.stringify({
+             recipients: this.recipients,
+             subject: this.subject,
+             body: this.body
+           })
+         })
+         .then(r => r.json().then(d => ({ status: r.status, body: d })))
+         .then(res => {
+           this.loading = false;
+           if (res.status === 200 && res.body.success) {
+             this.alertType = 'success';
+             this.alertMessage = res.body.message || '{{ _("Correo enviado exitosamente.") }}';
+             setTimeout(() => {
+               var modalEl = document.getElementById('emailNotificationModal');
+               var modal = bootstrap.Modal.getInstance(modalEl);
+               if (modal) modal.hide();
+               window.location.reload();
+             }, 1500);
+           } else {
+             this.alertType = 'danger';
+             this.alertMessage = res.body.error || '{{ _("Error al enviar el correo.") }}';
+           }
+         })
+         .catch(() => {
+           this.loading = false;
+           this.alertType = 'danger';
+           this.alertMessage = '{{ _("Error de conexión al enviar el correo.") }}';
+         });
+       }
+     }"
+     x-init="$el.addEventListener('shown.bs.modal', () => loadInfo())">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="emailNotificationModalLabel">
+          <i class="bi bi-envelope me-2" style="color:#78BF30"></i>{{ _("Notificar por Correo Electrónico") }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
+      </div>
+      <div class="modal-body">
+        <div x-show="alertMessage" class="alert mb-3" :class="'alert-' + alertType" x-text="alertMessage"></div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold" for="email-recipients">{{ _("Destinatarios (separados por coma)") }}</label>
+          <input type="text" class="form-control form-control-sm" id="email-recipients" x-model="recipients" placeholder="proveedor@ejemplo.com, cliente@ejemplo.com" :disabled="loading">
+          <div class="form-text text-muted">{{ _("Sugerido automáticamente desde la ficha del tercero. Puede modificar la lista.") }}</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold" for="email-subject">{{ _("Asunto") }}</label>
+          <input type="text" class="form-control form-control-sm" id="email-subject" x-model="subject" placeholder="{{ _('Asunto del correo') }}" :disabled="loading">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold" for="email-body">{{ _("Mensaje / Contenido") }}</label>
+          <textarea class="form-control form-control-sm" id="email-body" x-model="body" rows="6" placeholder="{{ _('Redacte el mensaje...') }}" :disabled="loading"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal" :disabled="loading">{{ _("Cancelar") }}</button>
+        <button type="button" class="btn btn-sm btn-primary" @click="sendEmail()" :disabled="loading">
+          <span x-show="loading" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+          <i x-show="!loading" class="bi bi-send me-1"></i>
+          {{ _("Enviar Correo") }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
+
 {# ─── Primary document shortcuts ─────────────────────────────── #}
 {% macro document_create_actions(document_type, document) %}
 {% set actions = get_document_create_actions(document_type, document.id) %}

@@ -256,6 +256,124 @@ def api_fiscal_preview():
     return jsonify(result)
 
 
+@api.route("/api/documents/<document_type>/<document_id>/email-info")
+@login_required
+def api_document_email_info(document_type: str, document_id: str):
+    """Devuelve la información predeterminada para redactar el correo de un documento."""
+    from cacao_accounting.messaging.email import can_send_transaction_emails, get_document_default_recipient_email
+
+    if not can_send_transaction_emails():
+        return jsonify({"enabled": False, "error": _("El envío de correos no está disponible.")}), 403
+
+    doc = _require_document_read_access(document_type, document_id)
+    default_recipient = get_document_default_recipient_email(document_type, document_id)
+    doc_no = getattr(doc, "document_no", None) or document_id
+    company = getattr(doc, "company", None) or ""
+
+    return jsonify(
+        {
+            "enabled": True,
+            "default_recipient": default_recipient,
+            "document_no": doc_no,
+            "subject": f"Notificación de documento #{doc_no}",
+            "body": (
+                f"Estimado(a),\n\nLe compartimos la información correspondiente "
+                f"al documento #{doc_no}.\n\nSaludos cordiales,\n{company}"
+            ),
+        }
+    )
+
+
+@api.route("/api/documents/<document_type>/<document_id>/email", methods=["POST"])
+@login_required
+def api_document_send_email(document_type: str, document_id: str):
+    """Envía una notificación por correo electrónico para un documento operativo."""
+    import re
+    from datetime import datetime, timezone
+    from cacao_accounting.database import EmailQueue
+    from cacao_accounting.messaging.email import can_send_transaction_emails, EmailError, send_email
+    from cacao_accounting.audit_trail_service import log_email_sent
+
+    if not can_send_transaction_emails():
+        return jsonify({"error": _("El envío de correos electrónicos no está habilitado o no está configurado.")}), 403
+
+    doc = _require_document_read_access(document_type, document_id)
+
+    payload = request.get_json(silent=True) or request.form.to_dict()
+    raw_recipients = payload.get("recipients") or payload.get("recipient") or ""
+    subject = str(payload.get("subject") or "").strip()
+    body = str(payload.get("body") or payload.get("message") or "").strip()
+
+    if isinstance(raw_recipients, list):
+        recipient_list = [str(r).strip() for r in raw_recipients if str(r).strip()]
+    else:
+        recipient_list = [r.strip() for r in re.split(r"[,;]", str(raw_recipients)) if r.strip()]
+
+    if not recipient_list:
+        return jsonify({"error": _("Debe especificar al menos un destinatario válido.")}), 400
+
+    doc_no = getattr(doc, "document_no", None) or document_id
+    company = getattr(doc, "company", None) or ""
+
+    if not subject:
+        subject = f"Notificación de documento #{doc_no}"
+
+    if not body:
+        body = f"Estimado(a),\n\nSe le notifica la emisión del documento #{doc_no}.\n\nAtentamente,\n{company}"
+
+    sent_count = 0
+    errors = []
+
+    for to_email in recipient_list:
+        queue_item = EmailQueue(
+            document_type=document_type,
+            document_id=document_id,
+            recipient=to_email,
+            subject=subject,
+            body=body,
+            status="pending",
+            attempts=1,
+        )
+        database.session.add(queue_item)
+        database.session.flush()
+
+        try:
+            send_email(to_email=to_email, subject=subject, body=body, is_html=False)
+            queue_item.status = "sent"
+            queue_item.sent_at = datetime.now(timezone.utc)
+            sent_count += 1
+        except EmailError as exc:
+            queue_item.status = "failed"
+            queue_item.error_message = str(exc)
+            errors.append(f"{to_email}: {exc}")
+        except Exception as exc:
+            queue_item.status = "failed"
+            queue_item.error_message = str(exc)
+            errors.append(f"{to_email}: {exc}")
+
+    if sent_count > 0:
+        recipients_str = ", ".join(recipient_list)
+        log_email_sent(
+            doc,
+            recipients=recipients_str,
+            subject=subject,
+            comment=f"correo enviado exitosamente a {recipients_str}",
+        )
+        database.session.commit()
+        return jsonify(
+            {
+                "success": True,
+                "message": _("Correo enviado exitosamente."),
+                "sent_count": sent_count,
+                "recipients": recipient_list,
+            }
+        )
+    else:
+        database.session.commit()
+        error_msg = "; ".join(errors) if errors else _("No se pudo enviar el correo.")
+        return jsonify({"error": error_msg}), 500
+
+
 @api.route("/api/documents/<document_type>/<document_id>/comments", methods=["POST"])
 @login_required
 def api_document_comment(document_type: str, document_id: str):

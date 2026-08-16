@@ -179,6 +179,99 @@ def _send_smtp_message(
     smtp.quit()
 
 
+def retry_email_queue_item(queue_id: str) -> Any:
+    """Reintenta el envío de un correo fallido desde la cola de correos."""
+    from datetime import datetime, timezone
+    from cacao_accounting.database import EmailQueue
+
+    if is_desktop_mode():
+        raise EmailError("El reintento de envío de correos no está disponible en modo DESKTOP.")
+
+    item = database.session.get(EmailQueue, queue_id)
+    if not item:
+        raise EmailError("El registro de correo no existe.")
+
+    item.attempts = (item.attempts or 0) + 1
+    try:
+        send_email(to_email=item.recipient, subject=item.subject, body=item.body, is_html=False)
+        item.status = "sent"
+        item.error_message = None
+        item.sent_at = datetime.now(timezone.utc)
+
+        if item.document_type and item.document_id:
+            try:
+                from cacao_accounting.document_flow.repository import get_document
+                from cacao_accounting.audit_trail_service import log_email_sent
+
+                doc = get_document(item.document_type, item.document_id)
+                if doc:
+                    log_email_sent(
+                        doc,
+                        recipients=item.recipient,
+                        subject=item.subject,
+                        comment=f"correo reintentado y enviado exitosamente a {item.recipient}",
+                    )
+            except Exception as audit_exc:
+                LOGGER.warning("No se pudo registrar auditoría en reintento: %s", audit_exc)
+
+        database.session.commit()
+        return item
+    except Exception as exc:
+        item.status = "failed"
+        item.error_message = str(exc)
+        database.session.commit()
+        raise EmailError(f"Error al reintentar envío: {exc}") from exc
+
+
+def can_send_transaction_emails() -> bool:
+    """Verifica si el envío de correos desde transacciones operativas está habilitado y configurado."""
+    if is_desktop_mode():
+        return False
+    server = get_smtp_setting("smtp_server")
+    from_email = get_smtp_setting("smtp_from_email")
+    if not server or not from_email:
+        return False
+    disabled = _get_db_value("disable_transaction_emails")
+    if disabled and disabled.lower() in ("true", "1", "yes", "y", "on"):
+        return False
+    return True
+
+
+def get_document_default_recipient_email(document_type: str, document_id: str) -> str:
+    """Obtiene la dirección de correo del proveedor/cliente o tercero asociado al documento."""
+    if not has_app_context():
+        return ""
+    try:
+        from cacao_accounting.document_flow.repository import get_document
+        from cacao_accounting.database import Party, database
+
+        doc = get_document(document_type, document_id)
+        if not doc:
+            return ""
+
+        party_id = (
+            getattr(doc, "supplier_id", None)
+            or getattr(doc, "customer_id", None)
+            or getattr(doc, "client_id", None)
+            or getattr(doc, "party_id", None)
+            or getattr(doc, "entity_id", None)
+        )
+        if not party_id:
+            return ""
+
+        tercero = database.session.execute(
+            database.select(Party).where((Party.id == str(party_id)) | (Party.code == str(party_id)))
+        ).scalar_one_or_none()
+
+        if tercero:
+            email = (tercero.primary_email or tercero.legal_representative_email or "").strip()
+            if email:
+                return email
+    except Exception:
+        pass
+    return ""
+
+
 def send_email(to_email: str, subject: str, body: str, is_html: bool = False) -> None:
     """Envía un correo electrónico utilizando la configuración SMTP activa (Cloud-Only)."""
     if is_desktop_mode():

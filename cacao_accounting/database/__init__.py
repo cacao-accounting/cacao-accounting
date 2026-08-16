@@ -4579,6 +4579,21 @@ class AuditTrail(database.Model):  # type: ignore[name-defined]
     user_agent = database.Column(database.String(512), nullable=True)
 
 
+class EmailQueue(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Cola de correos electrónicos y registro de notificaciones del sistema."""
+
+    __tablename__ = "email_queue"
+    document_type = database.Column(database.String(80), nullable=True, index=True)
+    document_id = database.Column(database.String(50), nullable=True, index=True)
+    recipient = database.Column(database.String(255), nullable=False)
+    subject = database.Column(database.String(255), nullable=False)
+    body = database.Column(database.Text(), nullable=False)
+    status = database.Column(database.String(20), nullable=False, default="pending", index=True)
+    error_message = database.Column(database.Text(), nullable=True)
+    attempts = database.Column(database.Integer(), nullable=False, default=0)
+    sent_at = database.Column(database.DateTime(timezone=True), nullable=True)
+
+
 class DocumentTask(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Lightweight cloud task assigned to a document."""
 

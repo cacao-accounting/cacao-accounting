@@ -43,6 +43,7 @@ ALLOWED_ACTIONS = {
     "balance_confirmation_disputed",
     "balance_confirmation_cancelled",
     "balance_confirmation_expired",
+    "email_sent",
 }
 
 
@@ -219,6 +220,17 @@ def log_delete_attempt(document: Any) -> AuditTrail:
 def log_comment(document: Any, comment: str) -> AuditTrail:
     """Log a user comment on a document."""
     return _log("commented", document, after=document, comment=comment)
+
+
+def log_email_sent(
+    document: Any,
+    recipients: str,
+    subject: str,
+    comment: str | None = None,
+) -> AuditTrail:
+    """Log an audit trail entry when a transaction email is sent successfully."""
+    msg = comment or f"correo enviado exitosamente a {recipients} (Asunto: {subject})"
+    return _log("email_sent", document, after=document, comment=msg)
 
 
 def log_task_event(document: Any, action: str, comment: str) -> AuditTrail:
