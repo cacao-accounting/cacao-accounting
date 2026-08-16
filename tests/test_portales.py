@@ -17,6 +17,12 @@ from cacao_accounting.database import (
     Party,
     SalesInvoice,
     SalesInvoiceItem,
+    SalesOrder,
+    SalesOrderItem,
+    SalesQuotation,
+    SalesQuotationItem,
+    DeliveryNote,
+    DeliveryNoteItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseOrder,
@@ -453,3 +459,99 @@ def test_portal_desktop_restriction():
         finally:
             # Restaurar estado
             app.config["MODO_ESCRITORIO"] = False
+
+
+def test_customer_portal_details_and_access_edge_cases():
+    """Cubre detalles de ventas, administración y usuarios sin tercero asociado."""
+    with app.app_context():
+        customer = database.session.execute(database.select(Party).filter_by(code="CUST-001")).scalar_one()
+        company = database.session.execute(database.select(Entity)).scalars().first().code
+        order = SalesOrder(
+            customer_id=customer.id,
+            customer_name=customer.name,
+            company=company,
+            posting_date=date.today(),
+            docstatus=1,
+            grand_total=Decimal("120.00"),
+        )
+        quotation = SalesQuotation(
+            customer_id=customer.id,
+            customer_name=customer.name,
+            company=company,
+            posting_date=date.today(),
+            docstatus=1,
+            grand_total=Decimal("130.00"),
+        )
+        delivery = DeliveryNote(
+            customer_id=customer.id,
+            customer_name=customer.name,
+            company=company,
+            posting_date=date.today(),
+            docstatus=1,
+            grand_total=Decimal("140.00"),
+        )
+        database.session.add_all([order, quotation, delivery])
+        database.session.flush()
+        database.session.add_all(
+            [
+                SalesOrderItem(
+                    sales_order_id=order.id,
+                    item_code="ITM-ORDER",
+                    qty=1,
+                    rate=Decimal("120.00"),
+                    amount=Decimal("120.00"),
+                ),
+                SalesQuotationItem(
+                    sales_quotation_id=quotation.id,
+                    item_code="ITM-QUOTATION",
+                    qty=1,
+                    rate=Decimal("130.00"),
+                    amount=Decimal("130.00"),
+                ),
+                DeliveryNoteItem(
+                    delivery_note_id=delivery.id,
+                    item_code="ITM-DELIVERY",
+                    qty=1,
+                    rate=Decimal("140.00"),
+                    amount=Decimal("140.00"),
+                ),
+            ]
+        )
+        database.session.commit()
+        order_id = order.id
+        quotation_id = quotation.id
+        delivery_id = delivery.id
+
+    with app.test_client() as client:
+        client.post("/login", data={"usuario": "cliente1", "acceso": "password123"})
+        assert client.get(f"/portal/customer/order/{order_id}").status_code == 200
+        assert client.get(f"/portal/customer/quotation/{quotation_id}").status_code == 200
+        assert client.get(f"/portal/customer/delivery/{delivery_id}").status_code == 200
+        assert client.get("/portal/customer/order/not-found").status_code == 404
+        client.get("/logout")
+
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+        assert client.get("/portal/customer").status_code == 200
+        client.get("/logout")
+
+
+def test_portal_rejects_user_without_party_assignment():
+    """Rechaza explícitamente un usuario portal sin tercero o compañía."""
+    with app.app_context():
+        unassigned = database.session.execute(database.select(User).filter_by(user="portal_unassigned")).scalar_one_or_none()
+        if unassigned is None:
+            unassigned = User(
+                user="portal_unassigned",
+                name="Portal sin tercero",
+                password=proteger_passwd("password123"),
+                active=True,
+                classification="customer",
+                company=None,
+            )
+            database.session.add(unassigned)
+            database.session.commit()
+
+    with app.test_client() as client:
+        response = client.post("/login", data={"usuario": "portal_unassigned", "acceso": "password123"})
+        assert response.status_code in (200, 302)
+        assert client.get("/portal/customer").status_code == 403

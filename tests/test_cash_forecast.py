@@ -553,6 +553,128 @@ def test_manual_entries_dashboard_route():
             db.session.commit()
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
+def test_cash_forecast_creation_status_and_entry_validation_routes():
+    """Cubre creación, estados, eliminación y validaciones del pronóstico."""
+    with test_app.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+        with test_app.app_context():
+            fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+            existing = db.session.query(CashForecast).filter_by(version="COVERAGE-ROUTES", company="cacao").first()
+            if existing:
+                db.session.delete(existing)
+                db.session.commit()
+            fiscal_year_id = fy.id
+
+        assert client.get("/cash_management/cash-forecast/new?company=cacao").status_code == 200
+        missing = client.post(
+            "/cash_management/cash-forecast/new?company=cacao",
+            data={"version": "", "fiscal_year_id": fiscal_year_id, "periodicity": "monthly"},
+        )
+        assert missing.status_code == 200
+
+        created = client.post(
+            "/cash_management/cash-forecast/new?company=cacao",
+            data={
+                "version": "COVERAGE-ROUTES",
+                "description": "Cobertura de rutas",
+                "fiscal_year_id": fiscal_year_id,
+                "periodicity": "monthly",
+            },
+        )
+        assert created.status_code == 302
+
+        with test_app.app_context():
+            forecast = db.session.query(CashForecast).filter_by(version="COVERAGE-ROUTES", company="cacao").one()
+            forecast_id = forecast.id
+
+        duplicate = client.post(
+            "/cash_management/cash-forecast/new?company=cacao",
+            data={
+                "version": "COVERAGE-ROUTES",
+                "fiscal_year_id": fiscal_year_id,
+                "periodicity": "monthly",
+            },
+        )
+        assert duplicate.status_code == 200
+
+        invalid_entry = client.post(
+            f"/cash_management/cash-forecast/{forecast_id}/entry/add",
+            data={"type": "Income", "concept": "", "currency": "NIO", "amount": "0", "estimated_date": ""},
+        )
+        assert invalid_entry.status_code == 302
+
+        valid_entry = client.post(
+            f"/cash_management/cash-forecast/{forecast_id}/entry/add?next=https://example.com",
+            data={
+                "type": "Income",
+                "concept": "Entrada validada",
+                "currency": "NIO",
+                "amount": "125.00",
+                "estimated_date": "2026-09-01",
+            },
+        )
+        assert valid_entry.status_code == 302
+        assert f"/cash_management/cash-forecast/{forecast_id}" in valid_entry.location
+
+        with test_app.app_context():
+            entry = db.session.query(CashForecastEntry).filter_by(forecast_id=forecast_id).one()
+            entry_id = entry.id
+
+        assert client.post(f"/cash_management/cash-forecast/{forecast_id}/approve").status_code == 302
+        assert client.post(f"/cash_management/cash-forecast/{forecast_id}/approve").status_code == 302
+        assert client.post(f"/cash_management/cash-forecast/{forecast_id}/close").status_code == 302
+        assert client.post(f"/cash_management/cash-forecast/{forecast_id}/archive").status_code == 302
+        assert client.post(f"/cash_management/cash-forecast/{forecast_id}/entry/{entry_id}/delete").status_code == 302
+
+        with test_app.app_context():
+            draft = CashForecast(
+                version="COVERAGE-DRAFT-DELETE",
+                description="Cobertura de eliminación",
+                fiscal_year_id=fiscal_year_id,
+                company="cacao",
+                periodicity="monthly",
+                status="Draft",
+            )
+            base = CashForecast(
+                version="COVERAGE-BASE",
+                description="Base de comparación",
+                fiscal_year_id=fiscal_year_id,
+                company="cacao",
+                periodicity="monthly",
+                status="Draft",
+            )
+            compare = CashForecast(
+                version="COVERAGE-COMPARE",
+                description="Comparativo",
+                fiscal_year_id=fiscal_year_id,
+                company="cacao",
+                periodicity="monthly",
+                status="Draft",
+            )
+            db.session.add_all([draft, base, compare])
+            db.session.commit()
+            draft_id, base_id, compare_id = draft.id, base.id, compare.id
+
+        assert client.post(f"/cash_management/cash-forecast/{draft_id}/delete").status_code == 302
+        assert (
+            client.get(
+                f"/cash_management/cash-forecast/compare?company=cacao&base_id={base_id}&compare_id={compare_id}"
+            ).status_code
+            == 200
+        )
+        assert client.get("/cash_management/cash-forecast/manual-entries?company=cacao").status_code == 200
+        assert client.post(f"/cash_management/cash-forecast/{base_id}/entry/import").status_code == 302
+
+        with test_app.app_context():
+            for forecast_id_to_delete in (forecast_id, base_id, compare_id):
+                forecast_to_delete = db.session.get(CashForecast, forecast_id_to_delete)
+                if forecast_to_delete:
+                    db.session.delete(forecast_to_delete)
+            db.session.commit()
+
+
 def test_budget_desktop_mode_redirect(monkeypatch):
     """Test that if in desktop mode, the budget routes redirect with warning."""
     with test_app.test_client() as client:
