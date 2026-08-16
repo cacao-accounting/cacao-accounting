@@ -49,7 +49,7 @@
       </div>
     </div>
   </div>
-  {{ tf_macros.logistics_section() }}
+  {{ tf_macros.logistics_section(terms_field="sales_terms") }}
 
     {% if from_quotation_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,

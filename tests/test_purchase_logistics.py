@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from cacao_accounting.compras import _landed_cost_snapshot, _logistics_values
-from cacao_accounting.logistics import copy_logistics
+from cacao_accounting.logistics import copy_logistics, ensure_compatible_logistics, logistics_values, validate_incoterm
 
 
 def test_logistics_values_normalizes_date_and_default_incoterm_version():
@@ -60,7 +60,7 @@ def test_landed_cost_snapshot_validates_and_compacts_estimates():
 
 def test_copy_logistics_propagates_source_snapshot(monkeypatch):
     """El mismo copiador sirve para cada salto del document flow."""
-    monkeypatch.setattr("cacao_accounting.logistics.validate_incoterm", lambda values: None)
+    monkeypatch.setattr("cacao_accounting.logistics.validate_incoterm", lambda values, allowed_codes=None: None)
     source = SimpleNamespace(
         incoterm_code="CIF",
         incoterm_version="2020",
@@ -73,6 +73,32 @@ def test_copy_logistics_propagates_source_snapshot(monkeypatch):
     copy_logistics(target, source, terms_field="purchase_terms")
 
     assert target.__dict__ == source.__dict__
+
+
+def test_logistics_terms_field_is_restricted():
+    """Solo los nombres de términos de compras y ventas son válidos."""
+    with pytest.raises(ValueError, match="Campo de términos"):
+        logistics_values(form={"terms": "no válido"}, terms_field="terms")
+
+
+def test_incoterm_validation_accepts_injected_catalog_without_database_session():
+    """La validación puede ejecutarse con un catálogo inyectado."""
+    validate_incoterm({"incoterm_code": "X1", "incoterm_version": "2020"}, allowed_codes={"X1"})
+    with pytest.raises(ValueError):
+        validate_incoterm({"incoterm_code": "CIF", "incoterm_version": "2020"}, allowed_codes={"X1"})
+
+
+def test_incompatible_logistics_are_rejected_before_comparison_order_creation():
+    """El comparativo no combina cotizaciones con términos distintos."""
+    first = SimpleNamespace(
+        incoterm_code="CIF", incoterm_version="2020", delivery_date=None, delivery_place=None, purchase_terms=None
+    )
+    second = SimpleNamespace(
+        incoterm_code="FOB", incoterm_version="2020", delivery_date=None, delivery_place=None, purchase_terms=None
+    )
+
+    with pytest.raises(ValueError, match="incompatibles"):
+        ensure_compatible_logistics([first, second], terms_field="purchase_terms")
 
 
 @pytest.mark.parametrize(
