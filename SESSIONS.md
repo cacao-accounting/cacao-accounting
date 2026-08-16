@@ -963,3 +963,61 @@ por comparativos finalizados o utilizados.
   ejecutar pruebas; las pruebas de regresión quedaron incorporadas.
 - Black y mypy continúan sin iniciar en el `.venv` por la instalación
   inconsistente de `pathspec` documentada arriba.
+
+## 2026-08-16 — Logística y landed costs en compras
+
+### Petición
+
+Mejorar la Orden de Compra con una sección opcional y colapsable para Incoterm,
+fecha y lugar de entrega y términos. La información debe originarse en la RFQ,
+pasar por la cotización de proveedor y continuar por el flujo documental hasta
+la recepción y, cuando sea útil, la factura. Las cotizaciones deben conservar
+landed costs estimados para compras como CIF.
+
+### Implementación
+
+- Se añadieron los metadatos logísticos opcionales a RFQ, cotización de
+  proveedor, orden, recepción y factura; la solicitud de compra interna no se
+  modifica.
+- Se agregó el catálogo de Incoterms 2020 en el modelo. Como la base de datos
+  es descartable en desarrollo, se dejó únicamente el stamp dummy de Alembic
+  `20260809_0001_baseline`; el esquema se crea desde los modelos.
+- Los landed costs estimados se guardan como snapshot JSON, separados del
+  total comercial y sin efecto contable. El proceso existente de
+  `ImportLandedCost` continúa representando los costos finales.
+- Se propagaron los snapshots por creación directa, adjudicación, comparativo,
+  recepción y factura; se rechazan combinaciones de cotizaciones con logística
+  incompatible.
+- Se agregó una sección Alpine.js cerrada por defecto a los formularios de
+  RFQ, cotización de proveedor y orden.
+
+### Validación
+
+- Black, Ruff y Mypy pasan sobre el código modificado.
+- Las pruebas específicas de logística, devoluciones y edición de factura
+  pasan: 8 pruebas exitosas.
+- El ciclo S2P existente mantiene un fallo preexistente al intentar comparar
+  una solicitud que el fixture no deja aprobada.
+
+## 2026-08-16 — Logística en O2C
+
+### Petición
+
+Considerar una solución equivalente para el flujo Order to Cash.
+
+### Implementación
+
+- Se añadieron los mismos metadatos logísticos opcionales a cotización de
+  venta, orden de venta, nota de entrega y factura de venta.
+- Se reutilizó la sección Alpine.js colapsable y cerrada por defecto.
+- Los valores fluyen desde la cotización hacia la orden, entrega y factura;
+  el pedido interno de venta permanece sin términos comerciales.
+- El modelo común incorpora también las columnas O2C y conserva el catálogo de
+  Incoterms 2020. El cambio se registra con el único stamp dummy de Alembic,
+  sin migración DDL para datos existentes.
+
+### Validación
+
+- El ciclo O2C existente pasó: 21 pruebas exitosas.
+- Se agregó una prueba unitaria específica para la herencia y normalización
+  logística comercial.

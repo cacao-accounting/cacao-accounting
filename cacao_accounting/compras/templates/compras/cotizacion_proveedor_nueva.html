@@ -73,6 +73,7 @@
     </div>
   </div>
 
+  {{ tf_macros.logistics_section(include_landed_costs=true) }}
   {% if from_request_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
          source_api_url="/api/document-flow/pending-lines?source_type=purchase_request&target_type=supplier_quotation&source_id=" ~ from_request_id ~ "&company=" ~ solicitud_origen.company,

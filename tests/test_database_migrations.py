@@ -50,7 +50,7 @@ def test_db_init_and_migrate_record_a_real_revision(tmp_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
         revision = connection.execute("SELECT version_num FROM alembic_version").fetchall()
 
-    assert revision == [("20260815_0014",)]
+    assert revision == [("20260809_0001",)]
 
     with sqlite3.connect(database_path) as connection:
         entity_code = connection.execute("PRAGMA table_info(entity)").fetchall()

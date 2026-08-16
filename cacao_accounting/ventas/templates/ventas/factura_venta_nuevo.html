@@ -68,6 +68,8 @@
     </div>
   </div>
 
+  {{ tf_macros.logistics_section() }}
+
   {% if from_return_id or from_invoice_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
          source_api_url="/api/document-flow/pending-lines?source_type=sales_invoice&target_type=sales_invoice&source_id=" ~ from_invoice_id ~ "&company=" ~ factura_origen.company,

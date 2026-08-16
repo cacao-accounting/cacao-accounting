@@ -155,6 +155,55 @@ from cacao_accounting.version import APPNAME
 
 logger = getLogger(__name__)
 
+_LOGISTICS_FIELDS = ("incoterm_code", "incoterm_version", "delivery_date", "delivery_place", "purchase_terms")
+
+
+def _logistics_values(source: Any = None, form: Any = None) -> dict[str, Any]:
+    """Obtiene datos logísticos desde un documento o un formulario."""
+    values: dict[str, Any] = {}
+    for field in _LOGISTICS_FIELDS:
+        raw = form.get(field) if form is not None else None
+        if raw in (None, "") and source is not None:
+            raw = getattr(source, field, None)
+        if field == "delivery_date" and isinstance(raw, str):
+            raw = _parse_date(raw) if raw else None
+        values[field] = raw or None
+    if values["incoterm_code"] and not values["incoterm_version"]:
+        values["incoterm_version"] = "2020"
+    return values
+
+
+def _copy_logistics(target: Any, source: Any = None, form: Any = None) -> None:
+    """Copia datos logísticos a un documento destino."""
+    for field, value in _logistics_values(source, form).items():
+        setattr(target, field, value)
+
+
+def _landed_cost_snapshot(form: Any = None, source: Any = None) -> str | None:
+    """Valida y serializa los cargos landed cost estimados."""
+    raw = form.get("landed_cost_estimates_json") if form is not None else None
+    if not raw and source is not None:
+        raw = getattr(source, "landed_cost_estimates_json", None)
+    if not raw:
+        return None
+    try:
+        charges = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("Los landed costs estimados deben ser un JSON válido.") from exc
+    if not isinstance(charges, list):
+        raise ValueError("Los landed costs estimados deben ser una lista.")
+    for charge in charges:
+        if not isinstance(charge, dict) or not charge.get("concept"):
+            raise ValueError("Cada landed cost estimado requiere un concepto.")
+        try:
+            amount = Decimal(str(charge.get("amount", "0")))
+        except Exception as exc:
+            raise ValueError("El importe de un landed cost estimado no es válido.") from exc
+        if amount < 0:
+            raise ValueError("Los landed costs estimados no pueden ser negativos.")
+    return json.dumps(charges, ensure_ascii=False, separators=(",", ":"))
+
+
 # < --------------------------------------------------------------------------------------------- >
 compras = Blueprint("compras", __name__, template_folder="templates")
 
@@ -715,6 +764,7 @@ def compras_cotizacion_proveedor_nueva():
             "currency": effective_currency(source) or "",
             "posting_date": str(date.today()),
         }
+        transaction_config["initialHeader"].update(_logistics_values(source))
         if rfq_origen:
             transaction_config["initialHeader"].update(
                 {
@@ -776,6 +826,8 @@ def _create_supplier_quotation_from_request():
             remarks=request.form.get("remarks"),
             docstatus=0,
         )
+        _copy_logistics(cotizacion, source, request.form)
+        cotizacion.landed_cost_estimates_json = _landed_cost_snapshot(form=request.form, source=source)
         database.session.add(cotizacion)
         database.session.flush()
         assign_document_identifier(
@@ -792,7 +844,7 @@ def _create_supplier_quotation_from_request():
         database.session.commit()
         flash("Cotización de proveedor creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
-    except (IdentifierConfigurationError, DocumentFlowError, PurchaseSourcingError) as exc:
+    except (IdentifierConfigurationError, DocumentFlowError, PurchaseSourcingError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
     return None
@@ -882,6 +934,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
             "remarks": registro.remarks or "",
             "party": registro.supplier_id or "",
             "party_label": registro.supplier_name or "",
+            **_logistics_values(registro),
         },
         initial_lines=[
             {
@@ -998,6 +1051,8 @@ def _handle_supplier_quotation_update(registro: SupplierQuotation, form: dict, q
     registro.company = form.get("company") or None
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
+    _copy_logistics(registro, form=form)
+    registro.landed_cost_estimates_json = _landed_cost_snapshot(form=form)
     for item in database.session.execute(
         database.select(SupplierQuotationItem).filter_by(supplier_quotation_id=registro.id)
     ).scalars():
@@ -1111,6 +1166,8 @@ def compras_cotizacion_proveedor_duplicar(quotation_id: str):
         remarks=origen.remarks,
         docstatus=0,
     )
+    _copy_logistics(duplicada, origen)
+    duplicada.landed_cost_estimates_json = _landed_cost_snapshot(source=origen)
     database.session.add(duplicada)
     database.session.flush()
     assign_document_identifier(
@@ -1781,6 +1838,8 @@ def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[Pu
             transaction_currency=quotation.transaction_currency,
             docstatus=0,
         )
+        _copy_logistics(order, quotation or rfq)
+        order.landed_cost_estimates_json = _landed_cost_snapshot(source=quotation or rfq)
         database.session.add(order)
         database.session.flush()
         assign_document_identifier(
@@ -2737,6 +2796,7 @@ def _purchase_order_transaction_config(
             "remarks": registro.remarks or "",
             "party": registro.supplier_id or "",
             "party_label": registro.supplier_name or "",
+            **_logistics_values(registro),
         },
         "initialLines": [
             {
@@ -2818,6 +2878,17 @@ def _create_purchase_order_from_request(form: dict):
         purchase_award_id=award_id,
         docstatus=0,
     )
+    source = None
+    for model, key in (
+        (PurchaseRequest, "from_request"),
+        (PurchaseQuotation, "from_rfq"),
+        (SupplierQuotation, "from_supplier_quotation"),
+    ):
+        if form.get(key):
+            source = database.session.get(model, form.get(key))
+            break
+    _copy_logistics(orden, source, form)
+    orden.landed_cost_estimates_json = _landed_cost_snapshot(form=form, source=source)
     try:
         database.session.add(orden)
         database.session.flush()
@@ -2843,7 +2914,7 @@ def _create_purchase_order_from_request(form: dict):
                 "warning",
             )
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
-    except (IdentifierConfigurationError, DocumentFlowError) as exc:
+    except (IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
         return None
@@ -2859,6 +2930,8 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
+    _copy_logistics(registro, form=request.form)
+    registro.landed_cost_estimates_json = _landed_cost_snapshot(form=request.form)
     registro.transaction_currency = request.form.get("transaction_currency") or None
     for item in database.session.execute(
         database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)
@@ -2900,6 +2973,8 @@ def compras_orden_compra_duplicar(order_id: str):
         exchange_rate=origen.exchange_rate,
         docstatus=0,
     )
+    _copy_logistics(duplicada, origen)
+    duplicada.landed_cost_estimates_json = _landed_cost_snapshot(source=origen)
     database.session.add(duplicada)
     database.session.flush()
     assign_document_identifier(
@@ -3068,6 +3143,7 @@ def _create_purchase_quotation_from_request():
             remarks=request.form.get("remarks"),
             docstatus=0,
         )
+        _copy_logistics(cotizacion, form=request.form)
         database.session.add(cotizacion)
         database.session.flush()
         assign_document_identifier(
@@ -3126,6 +3202,7 @@ def _handle_purchase_quotation_edit_post(registro):
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
+    _copy_logistics(registro, form=request.form)
     for item in database.session.execute(
         database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=registro.id)
     ).scalars():
@@ -3236,6 +3313,7 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
         remarks=origen.remarks,
         docstatus=0,
     )
+    _copy_logistics(duplicada, origen)
     database.session.add(duplicada)
     database.session.flush()
     assign_document_identifier(
@@ -3518,6 +3596,8 @@ def _create_purchase_receipt_from_form():
             transaction_currency=transaction_currency,
             docstatus=0,
         )
+        _copy_logistics(receipt, source, request.form)
+        receipt.landed_cost_estimates_json = _landed_cost_snapshot(source=source, form=request.form)
         database.session.add(receipt)
         database.session.flush()
         assign_document_identifier(
@@ -3534,7 +3614,7 @@ def _create_purchase_receipt_from_form():
         database.session.commit()
         flash("Recepción de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt.id))
-    except (DocumentFlowError, IdentifierConfigurationError) as exc:
+    except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
         return None
@@ -3705,6 +3785,8 @@ def compras_recepcion_duplicar(receipt_id: str):
         remarks=origen.remarks,
         docstatus=0,
     )
+    _copy_logistics(duplicada, origen)
+    duplicada.landed_cost_estimates_json = _landed_cost_snapshot(source=origen)
     database.session.add(duplicada)
     database.session.flush()
     assign_document_identifier(
@@ -4369,6 +4451,8 @@ def _create_purchase_invoice_from_request():
             base_currency=company_currency(company),
             docstatus=0,
         )
+        _copy_logistics(factura, source, request.form)
+        factura.landed_cost_estimates_json = _landed_cost_snapshot(source=source, form=request.form)
         database.session.add(factura)
         database.session.flush()
         assign_document_identifier(
@@ -4609,6 +4693,8 @@ def compras_factura_compra_duplicar(invoice_id: str):
         remarks=origen.remarks,
         docstatus=0,
     )
+    _copy_logistics(duplicada, origen)
+    duplicada.landed_cost_estimates_json = _landed_cost_snapshot(source=origen)
     database.session.add(duplicada)
     database.session.flush()
     assign_document_identifier(

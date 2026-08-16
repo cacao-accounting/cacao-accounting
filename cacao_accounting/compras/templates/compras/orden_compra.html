@@ -65,6 +65,17 @@
     'bi-cart4'
 ) }}
 
+<details class="ca-card p-3 mb-3">
+  <summary class="fw-semibold">{{ _('Detalles logísticos') }}</summary>
+  <div class="row g-3 mt-1">
+    <div class="col-md-3"><strong>{{ _('Incoterm') }}</strong><br>{{ registro.incoterm_code or '-' }}{% if registro.incoterm_version %} ({{ registro.incoterm_version }}){% endif %}</div>
+    <div class="col-md-3"><strong>{{ _('Fecha de entrega') }}</strong><br>{{ registro.delivery_date or '-' }}</div>
+    <div class="col-md-6"><strong>{{ _('Lugar de entrega') }}</strong><br>{{ registro.delivery_place or '-' }}</div>
+    <div class="col-12"><strong>{{ _('Términos') }}</strong><br>{{ registro.purchase_terms or '-' }}</div>
+    {% if registro.landed_cost_estimates_json %}<div class="col-12"><strong>{{ _('Landed costs estimados') }}</strong><pre class="mb-0">{{ registro.landed_cost_estimates_json }}</pre></div>{% endif %}
+  </div>
+</details>
+
 {{ macros.lineas_tabla_lectura(items, currency_code) }}
 {{ macros.document_flow_tree("purchase_order", registro) }}
 {{ macros.audit_timeline(audit_timeline) }}
