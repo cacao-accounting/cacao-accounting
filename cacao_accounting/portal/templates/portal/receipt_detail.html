@@ -17,10 +17,11 @@
 </nav>
 
 {% set currency_code = document_currency_code(registro) %}
+{% set status_info = document_status_info("purchase_receipt", registro) %}
 {{ dv_macros.detail_header(
     registro.document_no or registro.id,
     _('Recepción de Compra'),
-    registro.docstatus,
+    status_info,
     "",
     [
       (_('Número'), registro.document_no),

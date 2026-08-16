@@ -5,7 +5,7 @@
   <div class="col-12">
     <div class="p-4 bg-light border rounded-3 shadow-sm">
       <h2><span class="bi bi-house-door-fill text-primary"></span> {{ _('Portal del Proveedor') }}</h2>
-      <p class="lead mb-0">{{ _('Bienvenido a su portal de servicios de lectura. Aquí puede consultar sus solicitudes de cotización, órdenes de compra, recepciones de almacén y facturas de compra.') }}</p>
+      <p class="lead mb-0">{{ _('Bienvenido a su portal de servicios de lectura. Aquí puede consultar sus solicitudes de cotización, órdenes de compra, recepciones de almacén, notas de débito y crédito, y facturas de compra.') }}</p>
     </div>
   </div>
 </div>
@@ -33,7 +33,7 @@
         <td><strong>{{ item.document_no or item.id }}</strong></td>
         <td>{{ item.posting_date }}</td>
         <td class="text-end">{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
-        <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
+        <td>{{ macros.document_status_for("purchase_quotation", item) }}</td>
         <td class="text-center">
           <a href="{{ url_for('portal.supplier_quotation', quotation_id=item.id) }}" class="btn btn-sm btn-outline-primary">
             <span class="bi bi-eye"></span> {{ _('Ver') }}
@@ -72,7 +72,7 @@
         <td><strong>{{ item.document_no or item.id }}</strong></td>
         <td>{{ item.posting_date }}</td>
         <td class="text-end">{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
-        <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
+        <td>{{ macros.document_status_for("purchase_order", item) }}</td>
         <td class="text-center">
           <a href="{{ url_for('portal.supplier_order', order_id=item.id) }}" class="btn btn-sm btn-outline-primary">
             <span class="bi bi-eye"></span> {{ _('Ver') }}
@@ -111,7 +111,7 @@
         <td><strong>{{ item.document_no or item.id }}</strong></td>
         <td>{{ item.posting_date }}</td>
         <td class="text-end">{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
-        <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
+        <td>{{ macros.document_status_for("purchase_receipt", item) }}</td>
         <td class="text-center">
           <a href="{{ url_for('portal.supplier_receipt', receipt_id=item.id) }}" class="btn btn-sm btn-outline-primary">
             <span class="bi bi-eye"></span> {{ _('Ver') }}
@@ -121,6 +121,57 @@
       {% else %}
       <tr>
         <td colspan="5" class="text-center text-muted py-3">{{ _('No se encontraron recepciones.') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Notas de Débito y Crédito -->
+<div class="portal-section-header d-flex justify-content-between align-items-center">
+  <h4><span class="bi bi-file-earmark-diff text-info me-2" aria-hidden="true"></span>{{ _('Notas de Débito y Crédito') }}</h4>
+  <span class="badge bg-secondary">{{ notes|length }}</span>
+</div>
+<div class="table-responsive bg-white border rounded shadow-sm mb-4">
+  <table class="table table-hover align-middle mb-0">
+    <caption class="visually-hidden">{{ _('Notas de Débito y Crédito') }}</caption>
+    <thead class="table-light">
+      <tr>
+        <th scope="col">{{ _('Número') }}</th>
+        <th scope="col">{{ _('Tipo') }}</th>
+        <th scope="col">{{ _('Fecha') }}</th>
+        <th scope="col" class="text-end">{{ _('Total') }}</th>
+        <th scope="col">{{ _('Estado') }}</th>
+        <th scope="col" class="text-center" style="width: 10%;">{{ _('Acción') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in notes %}
+      <tr>
+        <td><strong>{{ item.document_no or item.id }}</strong></td>
+        <td>
+          {% if item.document_type == 'purchase_credit_note' %}
+            <span class="badge text-bg-info">{{ _('Nota de Crédito') }}</span>
+          {% elif item.document_type == 'purchase_debit_note' %}
+            <span class="badge text-bg-warning">{{ _('Nota de Débito') }}</span>
+          {% elif item.document_type == 'purchase_return' %}
+            <span class="badge text-bg-secondary">{{ _('Devolución') }}</span>
+          {% else %}
+            <span class="badge text-bg-light">{{ item.document_type }}</span>
+          {% endif %}
+        </td>
+        <td>{{ item.posting_date }}</td>
+        <td class="text-end">{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
+        <td>{{ macros.document_status_for(item.document_type or "purchase_invoice", item) }}</td>
+        <td class="text-center">
+          <a href="{{ url_for('portal.supplier_invoice', invoice_id=item.id) }}" class="btn btn-sm btn-outline-primary">
+            <span class="bi bi-eye"></span> {{ _('Ver') }}
+          </a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="text-center text-muted py-3">{{ _('No se encontraron notas de débito o crédito.') }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -150,7 +201,7 @@
         <td><strong>{{ item.document_no or item.id }}</strong></td>
         <td>{{ item.posting_date }}</td>
         <td class="text-end">{{ format_money_with_currency(item.grand_total, document_currency_code(item)) }}</td>
-        <td>{{ macros.docstatus_badge(item.docstatus) }}</td>
+        <td>{{ macros.document_status_for("purchase_invoice", item) }}</td>
         <td class="text-center">
           <a href="{{ url_for('portal.supplier_invoice', invoice_id=item.id) }}" class="btn btn-sm btn-outline-primary">
             <span class="bi bi-eye"></span> {{ _('Ver') }}
