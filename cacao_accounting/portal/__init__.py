@@ -27,6 +27,7 @@ from cacao_accounting.database import (
 )
 
 portal = Blueprint("portal", __name__, template_folder="templates")
+PORTAL_PAGE_SIZE = 100
 
 
 def _is_user_admin() -> bool:
@@ -189,24 +190,48 @@ def supplier_dashboard():
     q_invoices = database.select(PurchaseInvoice).filter_by(
         document_type="purchase_invoice", company=current_user.company, docstatus=1
     )
+    q_notes = database.select(PurchaseInvoice).filter(
+        PurchaseInvoice.company == current_user.company,
+        PurchaseInvoice.docstatus == 1,
+        PurchaseInvoice.document_type.in_(["purchase_credit_note", "purchase_debit_note", "purchase_return"]),
+    )
     q_orders = database.select(PurchaseOrder).filter_by(company=current_user.company, docstatus=1)
     q_quotations = database.select(PurchaseQuotation).filter_by(company=current_user.company, docstatus=1)
     q_receipts = database.select(PurchaseReceipt).filter_by(company=current_user.company, docstatus=1)
 
     if not is_admin and pid:
         q_invoices = q_invoices.filter_by(supplier_id=pid)
+        q_notes = q_notes.filter_by(supplier_id=pid)
         q_orders = q_orders.filter_by(supplier_id=pid)
         q_quotations = q_quotations.filter_by(supplier_id=pid)
         q_receipts = q_receipts.filter_by(supplier_id=pid)
 
-    invoices = database.session.execute(q_invoices.order_by(PurchaseInvoice.posting_date.desc())).scalars().all()
-    orders = database.session.execute(q_orders.order_by(PurchaseOrder.posting_date.desc())).scalars().all()
-    quotations = database.session.execute(q_quotations.order_by(PurchaseQuotation.posting_date.desc())).scalars().all()
-    receipts = database.session.execute(q_receipts.order_by(PurchaseReceipt.posting_date.desc())).scalars().all()
+    invoices = (
+        database.session.execute(q_invoices.order_by(PurchaseInvoice.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
+        .scalars()
+        .all()
+    )
+    notes = (
+        database.session.execute(q_notes.order_by(PurchaseInvoice.posting_date.desc()).limit(PORTAL_PAGE_SIZE)).scalars().all()
+    )
+    orders = (
+        database.session.execute(q_orders.order_by(PurchaseOrder.posting_date.desc()).limit(PORTAL_PAGE_SIZE)).scalars().all()
+    )
+    quotations = (
+        database.session.execute(q_quotations.order_by(PurchaseQuotation.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
+        .scalars()
+        .all()
+    )
+    receipts = (
+        database.session.execute(q_receipts.order_by(PurchaseReceipt.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
+        .scalars()
+        .all()
+    )
 
     return render_template(
         "portal/supplier_dashboard.html",
         invoices=invoices,
+        notes=notes,
         orders=orders,
         quotations=quotations,
         receipts=receipts,
@@ -215,6 +240,7 @@ def supplier_dashboard():
 
 
 @portal.route("/supplier/invoice/<invoice_id>")
+@portal.route("/supplier/note/<invoice_id>")
 @login_required
 def supplier_invoice(invoice_id):
     """Detalle de factura de compra para el proveedor."""

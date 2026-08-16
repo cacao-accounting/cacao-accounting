@@ -1,7 +1,10 @@
 {% macro detail_header(document_title, document_type_label, status_value, buttons_html, items, icon) %}
 {% set status_badge = 'bg-secondary' %}
 {% set status_label = _('draft') %}
-{% if status_value == 'submitted' or status_value == 1 %}
+{% if status_value and status_value.badge_class is defined %}
+    {% set status_badge = status_value.badge_class %}
+    {% set status_label = status_value.label %}
+{% elif status_value == 'submitted' or status_value == 1 %}
     {% set status_badge = 'bg-success' %}
     {% set status_label = _('submitted') %}
 {% elif status_value == 'rejected' %}

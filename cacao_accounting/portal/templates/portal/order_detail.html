@@ -17,10 +17,12 @@
 </nav>
 
 {% set currency_code = document_currency_code(registro) %}
+{% set doc_type = "sales_order" if role == "customer" else "purchase_order" %}
+{% set status_info = document_status_info(doc_type, registro) %}
 {{ dv_macros.detail_header(
     registro.document_no or registro.id,
     _('Orden de Venta') if role == 'customer' else _('Orden de Compra'),
-    registro.docstatus,
+    status_info,
     "",
     [
       (_('Número'), registro.document_no),
