@@ -26,10 +26,17 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, database
+        from cacao_accounting.database import Entity, PurchaseMatchingConfig, database
 
         database.create_all()
-        database.session.add(Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO"))
+        database.session.add_all(
+            [
+                Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO"),
+                # Estos escenarios cubren conciliaciones sin OC; el comportamiento
+                # estricto se verifica en pruebas que cambian explícitamente la configuración.
+                PurchaseMatchingConfig(company="cacao", require_purchase_order=False),
+            ]
+        )
         database.session.commit()
         yield app
 
