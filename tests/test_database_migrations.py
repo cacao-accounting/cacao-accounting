@@ -111,15 +111,13 @@ def test_db_migrate_rejects_legacy_null_master_codes(tmp_path: Path) -> None:
     """Legacy null codes must stop migration instead of being guessed."""
     database_path = tmp_path / "legacy.sqlite"
     with sqlite3.connect(database_path) as connection:
-        connection.executescript(
-            """
+        connection.executescript("""
             CREATE TABLE user (id TEXT PRIMARY KEY);
             CREATE TABLE entity (id TEXT PRIMARY KEY, code TEXT);
             CREATE TABLE book (id TEXT PRIMARY KEY, code TEXT);
             INSERT INTO entity (id, code) VALUES ('entity-1', NULL);
             INSERT INTO book (id, code) VALUES ('book-1', 'FISC');
-            """
-        )
+            """)
 
     environment = os.environ.copy()
     environment.update(

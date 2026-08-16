@@ -30,9 +30,7 @@ def upgrade() -> None:
                 ["id"],
                 ondelete="RESTRICT",
             )
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE purchase_order_comparison AS comparison
             SET purchase_request_id = (
                 SELECT MIN(relation.source_id)
@@ -55,9 +53,7 @@ def upgrade() -> None:
                  AND relation.status = 'active'
                 WHERE participant.comparison_id = comparison.id
               )
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:

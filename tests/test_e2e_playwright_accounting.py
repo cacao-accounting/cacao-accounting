@@ -63,6 +63,7 @@ def flask_server():
         database.session.commit()
 
         from cacao_accounting.database import Book, UserBookAccess
+
         books = database.session.execute(database.select(Book)).scalars().all()
         for username, _, _ in user_list:
             user = database.session.execute(database.select(User).filter_by(user=username)).scalars().first()
