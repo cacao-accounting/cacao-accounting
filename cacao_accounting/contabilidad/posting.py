@@ -563,20 +563,9 @@ def _assert_single_currency_balance(currency: str, curr_entries: list[GLEntry], 
     curr_credit = sum((_decimal_value(e.credit_in_account_currency) for e in curr_entries), Decimal("0"))
     if abs(curr_debit - curr_credit) <= Decimal("0.01"):
         return
-    if num_currencies == 1:
-        raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
-    if _is_cross_currency_legitimate(curr_debit, curr_credit):
+    if num_currencies > 1:
         return
     raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
-
-
-def _is_cross_currency_legitimate(curr_debit: Decimal, curr_credit: Decimal) -> bool:
-    """Check if imbalance is legitimate in a cross-currency FX scenario."""
-    return (
-        (curr_debit == Decimal("0") and curr_credit == Decimal("0"))
-        or (curr_debit > Decimal("0") and curr_credit == Decimal("0"))
-        or (curr_debit == Decimal("0") and curr_credit > Decimal("0"))
-    )
 
 
 def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:

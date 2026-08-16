@@ -1,31 +1,31 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Reyes
 
-import pytest
 from decimal import Decimal
-from cacao_accounting.runtime_mode import is_desktop_mode
-
-pytestmark = pytest.mark.skipif(is_desktop_mode(), reason="Gestión de presupuesto no disponible en modo DESKTOP")
+import pytest
 from cacao_accounting import create_app
 from cacao_accounting.contabilidad.budget_service import BudgetService
 from cacao_accounting.database import (
-    GLEntry,
-    database,
-    User,
-    Entity,
-    Book,
-    FiscalYear,
-    Accounts,
-    CostCenter,
     AccountingPeriod,
+    Accounts,
+    AuditTrail,
+    Book,
+    CompanyParty,
+    CostCenter,
+    Entity,
+    FiscalYear,
+    GLEntry,
+    Party,
     PurchaseOrder,
     PurchaseOrderItem,
-    AuditTrail,
-    Party,
-    CompanyParty,
+    User,
+    database,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
+from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.setup.repository import set_setup_value
+
+pytestmark = pytest.mark.skipif(is_desktop_mode(), reason="Gestión de presupuesto no disponible en modo DESKTOP")
 
 
 @pytest.fixture()

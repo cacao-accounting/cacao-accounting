@@ -202,7 +202,7 @@ def test_s2p_sourcing_and_negotiation_rounds(app_ctx):
         id="PR-FULL-01",
         company="cacao",
         posting_date=date.today(),
-        docstatus=0,
+        docstatus=1,
     )
     pr_item = PurchaseRequestItem(
         id="PRI-FULL-01",
