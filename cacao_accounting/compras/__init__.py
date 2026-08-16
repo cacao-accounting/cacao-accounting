@@ -4168,7 +4168,7 @@ def _validate_supplier_invoice_flags(
     if not has_receipt and not settings.allow_purchase_invoice_without_receipt:
         raise ValueError("El proveedor no permite crear facturas de compra sin recepción.")
 
-    if not has_order and document_type not in {PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE}:
+    if not has_order and document_type not in {PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE, PURCHASE_RETURN}:
         from cacao_accounting.compras.purchase_reconciliation_service import get_matching_config
 
         matching_config = get_matching_config(company)
