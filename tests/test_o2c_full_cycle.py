@@ -341,7 +341,7 @@ def test_sales_order_stock_reservation_and_credit_limit(app_ctx):
     database.session.refresh(bin_row)
     assert bin_row.reserved_qty == Decimal("20")
 
-    # 2. Intentar crear y aprobar otra Orden de Venta que exceda el límite de crédito ($4,000 + $2,000 previa = $6,000 > $5,000)
+    # 2. Intentar crear y aprobar otra Orden de Venta que exceda el límite de crédito ($4,000 + $2,000 = $6,000 > $5,000)
     so_excess = SalesOrder(
         customer_id=customer.id,
         customer_name=customer.name,

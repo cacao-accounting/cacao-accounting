@@ -291,7 +291,7 @@ class TestGetPendingLines:
             company="cacao",
         )
         assert len(lines) == 2
-        item_ids = {l["source_item_id"] for l in lines}
+        item_ids = {line["source_item_id"] for line in lines}
         assert item1.id in item_ids
         assert item2.id in item_ids
 

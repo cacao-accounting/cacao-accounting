@@ -253,6 +253,7 @@ def _save_email_settings() -> None:
         "smtp_user": (request.form.get("smtp_user") or "").strip(),
         "smtp_use_tls": "true" if request.form.get("smtp_use_tls") == "on" else "false",
         "smtp_from_email": (request.form.get("smtp_from_email") or "").strip(),
+        "disable_transaction_emails": "true" if request.form.get("disable_transaction_emails") == "on" else "false",
     }
     for key, value in settings.items():
         set_smtp_setting(key, value)
@@ -272,6 +273,7 @@ def _email_settings_values() -> dict[str, str]:
         "smtp_user": get_smtp_setting("smtp_user") or "",
         "smtp_use_tls": get_smtp_setting("smtp_use_tls") or "true",
         "smtp_from_email": get_smtp_setting("smtp_from_email") or "",
+        "disable_transaction_emails": get_smtp_setting("disable_transaction_emails") or "false",
     }
 
 
@@ -301,8 +303,69 @@ def email_settings():
         smtp_user=settings["smtp_user"],
         smtp_use_tls=settings["smtp_use_tls"].lower() in ("true", "1", "yes", "y", "on"),
         smtp_from_email=settings["smtp_from_email"],
+        disable_transaction_emails=settings["disable_transaction_emails"].lower() in ("true", "1", "yes", "y", "on"),
         titulo=_("Configuración de Correo Electrónico"),
     )
+
+
+@admin.route("/settings/email-log")
+@login_required
+@modulo_activo("admin")
+def email_log():
+    """Muestra la bitácora y cola de correos electrónicos del sistema (Cloud-Only)."""
+    _require_system_admin()
+    if is_desktop_mode():
+        abort(403)
+
+    from cacao_accounting.database import EmailQueue
+
+    page = request.args.get("page", 1, type=int)
+    search = (request.args.get("search") or "").strip()
+    status_filter = (request.args.get("status") or "").strip()
+
+    query = database.select(EmailQueue)
+
+    if search:
+        query = query.where(
+            EmailQueue.recipient.ilike(f"%{search}%")
+            | EmailQueue.subject.ilike(f"%{search}%")
+            | EmailQueue.document_id.ilike(f"%{search}%")
+        )
+
+    if status_filter:
+        query = query.where(EmailQueue.status == status_filter)
+
+    query = query.order_by(EmailQueue.created.desc())
+
+    consulta = database.paginate(query, page=page, per_page=20)
+
+    return render_template(
+        "admin/email_log.html",
+        consulta=consulta,
+        titulo=_("Bitácora de Correos Electrónicos"),
+    )
+
+
+@admin.route("/settings/email-log/<queue_id>/retry", methods=["POST"])
+@login_required
+@modulo_activo("admin")
+def email_log_retry(queue_id: str):
+    """Reintenta el envío de un correo electrónico desde la bitácora."""
+    _require_system_admin()
+    if is_desktop_mode():
+        abort(403)
+
+    from cacao_accounting.messaging.email import retry_email_queue_item, EmailError
+
+    try:
+        retry_email_queue_item(queue_id)
+        flash(_("Correo reenviado exitosamente."), "success")
+    except EmailError as exc:
+        flash(_(str(exc)), "danger")
+    except Exception as exc:
+        flash(_(f"Error al reintentar envío: {exc}"), "danger")
+
+    return redirect(url_for("admin.email_log"))
 
 
 @admin.route("/settings/inventory-valuation", methods=["GET", "POST"])
