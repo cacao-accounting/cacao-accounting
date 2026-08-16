@@ -48,6 +48,7 @@ from cacao_accounting.database.helpers import (
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.logs import log
+from cacao_accounting.messaging.email import can_send_transaction_emails
 from cacao_accounting.module_badges import module_badge
 from cacao_accounting.imports.routes import imports
 from cacao_accounting.imports.utils.recovery import recover_crashed_batches
@@ -228,6 +229,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(MODO_ESCRITORIO=is_desktop_mode())
             app.jinja_env.globals.update(is_desktop_mode=is_desktop_mode)
             app.jinja_env.globals.update(is_cloud_mode=is_cloud_mode)
+            app.jinja_env.globals.update(can_send_transaction_emails=can_send_transaction_emails)
             app.jinja_env.globals.update(force_single_entity=force_single_entity)
             app.jinja_env.globals.update(TESTING=TESTING_MODE)
             # En las plantillas no se utiliza el termino permiso para evitar un conflicto de nombre
