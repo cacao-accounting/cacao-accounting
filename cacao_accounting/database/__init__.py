@@ -2041,9 +2041,7 @@ class PurchaseRequestComparisonOffer(database.Model, BaseTabla):  # type: ignore
 
     __tablename__ = "purchase_request_comparison_offer"
     __table_args__ = (
-        database.UniqueConstraint(
-            "comparison_id", "supplier_quotation_id", name="uq_purchase_request_comparison_offer"
-        ),
+        database.UniqueConstraint("comparison_id", "supplier_quotation_id", name="uq_purchase_request_comparison_offer"),
     )
     comparison_id = database.Column(
         database.String(26),
