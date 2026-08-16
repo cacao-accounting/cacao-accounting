@@ -919,3 +919,93 @@ def test_rol_permisos(app_instance):
             )
             assert response.status_code == 200
             assert b"Permisos del rol actualizados" in response.data
+
+
+def test_purchase_reconciliation_require_purchase_order_enforced(app_instance):
+    """Verifica que la opción require_purchase_order configurada por el usuario impida crear/reconciliar facturas sin OC."""
+    from cacao_accounting.compras import _validate_supplier_invoice_flags
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        PurchaseReconciliationError,
+        reconcile_purchase_invoice,
+    )
+    from cacao_accounting.database import CompanyParty, Party, PurchaseInvoice, PurchaseReceipt
+
+    with app_instance.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+        # Configurar require_purchase_order = "on" en admin
+        response = client.post(
+            "/settings/purchase-reconciliation",
+            data={
+                "company": "cacao",
+                "matching_type": "3-way",
+                "price_tolerance_type": "percentage",
+                "price_tolerance_value": "0",
+                "qty_tolerance_type": "percentage",
+                "qty_tolerance_value": "0",
+                "require_purchase_order": "on",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        supplier_id = None
+        with app_instance.app_context():
+            # Crear un proveedor con flags flexibles
+            supplier = Party(code="SUP-REQ-PO", name="Supplier Req PO", is_supplier=True)
+            database.session.add(supplier)
+            database.session.flush()
+            supplier_id = supplier.id
+            cp = CompanyParty(
+                party_id=supplier_id,
+                company="cacao",
+                allow_purchase_invoice_without_order=True,
+                allow_purchase_invoice_without_receipt=True,
+            )
+            database.session.add(cp)
+            database.session.commit()
+
+            # Validar que _validate_supplier_invoice_flags rechaza factura sin OC
+            with pytest.raises(ValueError, match="requiere una orden de compra"):
+                _validate_supplier_invoice_flags(supplier_id, "cacao", purchase_order_id=None, purchase_receipt_id=None)
+
+            # Probar que _reconcile_three_way rechaza factura sin OC
+            invoice = PurchaseInvoice(
+                supplier_id=supplier_id,
+                company="cacao",
+                docstatus=1,
+                purchase_order_id=None,
+                purchase_receipt_id="dummy_receipt_id",
+            )
+            receipt = PurchaseReceipt(
+                id="dummy_receipt_id",
+                supplier_id=supplier_id,
+                company="cacao",
+                docstatus=1,
+                purchase_order_id=None,
+            )
+            database.session.add_all([invoice, receipt])
+            database.session.commit()
+
+            with pytest.raises(PurchaseReconciliationError, match="requiere una orden de compra"):
+                reconcile_purchase_invoice(invoice.id)
+
+        # Deshabilitar require_purchase_order en admin
+        response = client.post(
+            "/settings/purchase-reconciliation",
+            data={
+                "company": "cacao",
+                "matching_type": "3-way",
+                "price_tolerance_type": "percentage",
+                "price_tolerance_value": "0",
+                "qty_tolerance_type": "percentage",
+                "qty_tolerance_value": "0",
+                "require_purchase_order": "",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+        with app_instance.app_context():
+            # Ahora la validación de flags sin OC debe tener éxito
+            _validate_supplier_invoice_flags(supplier_id, "cacao", purchase_order_id=None, purchase_receipt_id=None)

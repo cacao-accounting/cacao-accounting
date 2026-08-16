@@ -1297,9 +1297,7 @@ def compras_comparativo_guardar_borrador(comparison_id: str):
         abort(404)
     exige_acceso_compania("purchases", comparison.company, "crear")
     selections = {
-        key.removeprefix("selection_"): value or None
-        for key, value in request.form.items()
-        if key.startswith("selection_")
+        key.removeprefix("selection_"): value or None for key, value in request.form.items() if key.startswith("selection_")
     }
     reasons = {
         key.removeprefix("override_reason_"): value or None
@@ -1360,9 +1358,7 @@ def compras_comparativo_finalizar(comparison_id: str):
         abort(404)
     exige_acceso_compania("purchases", comparison.company, "autorizar")
     selections = {
-        key.removeprefix("selection_"): value or None
-        for key, value in request.form.items()
-        if key.startswith("selection_")
+        key.removeprefix("selection_"): value or None for key, value in request.form.items() if key.startswith("selection_")
     }
     reasons = {
         key.removeprefix("override_reason_"): value or None
@@ -4148,7 +4144,11 @@ def _capture_purchase_state(registro: Any) -> dict[str, Any]:
 
 
 def _validate_supplier_invoice_flags(
-    supplier_id: str | None, company: str | None, purchase_order_id: str | None, purchase_receipt_id: str | None
+    supplier_id: str | None,
+    company: str | None,
+    purchase_order_id: str | None,
+    purchase_receipt_id: str | None,
+    document_type: str | None = None,
 ) -> None:
     """S2P-08: Valida flags del proveedor antes de crear/aprobar factura."""
     if not supplier_id or not company:
@@ -4167,6 +4167,13 @@ def _validate_supplier_invoice_flags(
         raise ValueError("El proveedor no permite crear facturas de compra sin orden de compra.")
     if not has_receipt and not settings.allow_purchase_invoice_without_receipt:
         raise ValueError("El proveedor no permite crear facturas de compra sin recepción.")
+
+    if not has_order and document_type not in {PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE}:
+        from cacao_accounting.compras.purchase_reconciliation_service import get_matching_config
+
+        matching_config = get_matching_config(company)
+        if matching_config.require_purchase_order:
+            raise ValueError("La configuración de la compañía requiere una orden de compra para las facturas de compra.")
 
 
 def _validate_purchase_tax_template(company: str, template_id: str | None, currency: str | None) -> None:
@@ -4327,13 +4334,16 @@ def _create_purchase_invoice_from_request():
             }
         )
         source = source_order or source_receipt or source_invoice
+        if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) and source_invoice is not None:
+            from_order = from_order or source_invoice.purchase_order_id
+            from_receipt = from_receipt or source_invoice.purchase_receipt_id
         company, transaction_currency = _validate_purchase_flow_header(source)
         tax_template_id = request.form.get("tax_template_id") or getattr(source, "tax_template_id", None)
         _validate_purchase_tax_template(company, tax_template_id, transaction_currency)
         supplier_id = supplier_id or getattr(source, "supplier_id", None)
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         transaction_currency = transaction_currency or request.form.get("transaction_currency") or None
-        _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt)
+        _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt, document_type)
         _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
         reversal_of = (
             (request.form.get("from_invoice") or request.form.get("from_return"))
@@ -4525,6 +4535,7 @@ def _handle_purchase_invoice_edit_post(registro):
             registro.company,
             purchase_order_id,
             purchase_receipt_id,
+            getattr(registro, "document_type", None),
         )
         _validate_duplicate_supplier_invoice(
             registro.supplier_id,
@@ -4661,6 +4672,7 @@ def compras_factura_compra_submit(invoice_id: str):
             getattr(registro, "company", None),
             getattr(registro, "purchase_order_id", None),
             getattr(registro, "purchase_receipt_id", None),
+            getattr(registro, "document_type", None),
         )
         _validate_duplicate_supplier_invoice(
             getattr(registro, "supplier_id", None),
