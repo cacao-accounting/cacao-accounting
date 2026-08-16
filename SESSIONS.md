@@ -1166,3 +1166,27 @@ base de datos descartable con una única migración dummy.
 ### Validación
 
 - Pruebas específicas: 12 exitosas.
+
+## 2026-08-16 — Verificación del issue #293
+
+### Petición
+
+Confirmar si la validación de duplicidad de `supplier_invoice_no` quedó
+corregida.
+
+### Análisis
+
+- El modelo `PurchaseInvoice` incluye `supplier_invoice_key` y el constraint
+  único `(supplier_id, supplier_invoice_key)` para facturas activas.
+- Un listener normaliza el número y libera la clave cuando `docstatus == 2`.
+- La validación de aplicación usa `FOR UPDATE` sobre el proveedor.
+- Las pruebas cubren duplicados activos, actualización directa y reutilización
+  posterior a cancelación.
+- La política vigente conserva únicamente la migración Alembic dummy; por ello
+  una base existente no recibe automáticamente la nueva columna y constraint.
+
+### Conclusión
+
+El fix está implementado y probado para esquemas nuevos, pero el issue #293 no
+debe cerrarse aún como resuelto operacionalmente: falta una estrategia de
+upgrade para instalaciones existentes. GitHub permanece abierto.
