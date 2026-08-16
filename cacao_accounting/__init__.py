@@ -133,6 +133,12 @@ def registrar_rutas_predeterminadas(app: Flask | None = None) -> None:
     if app and isinstance(app, Flask):
         from flask import render_template
         from flask_wtf.csrf import CSRFError
+        from cacao_accounting.logistics import incoterm_options
+
+        @app.context_processor
+        def inject_logistics_options():
+            """Expose active Incoterms to all transaction form macros."""
+            return {"incoterm_options": incoterm_options()}
 
         @app.errorhandler(CSRFError)
         def error_csrf(error):

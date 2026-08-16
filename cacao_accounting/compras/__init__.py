@@ -152,31 +152,19 @@ from cacao_accounting.party_settings import (
     upsert_party_company_settings_rows,
 )
 from cacao_accounting.version import APPNAME
+from cacao_accounting.logistics import copy_logistics, logistics_values
 
 logger = getLogger(__name__)
-
-_LOGISTICS_FIELDS = ("incoterm_code", "incoterm_version", "delivery_date", "delivery_place", "purchase_terms")
 
 
 def _logistics_values(source: Any = None, form: Any = None) -> dict[str, Any]:
     """Obtiene datos logísticos desde un documento o un formulario."""
-    values: dict[str, Any] = {}
-    for field in _LOGISTICS_FIELDS:
-        raw = form.get(field) if form is not None else None
-        if raw in (None, "") and source is not None:
-            raw = getattr(source, field, None)
-        if field == "delivery_date" and isinstance(raw, str):
-            raw = _parse_date(raw) if raw else None
-        values[field] = raw or None
-    if values["incoterm_code"] and not values["incoterm_version"]:
-        values["incoterm_version"] = "2020"
-    return values
+    return logistics_values(source, form, terms_field="purchase_terms")
 
 
 def _copy_logistics(target: Any, source: Any = None, form: Any = None) -> None:
     """Copia datos logísticos a un documento destino."""
-    for field, value in _logistics_values(source, form).items():
-        setattr(target, field, value)
+    copy_logistics(target, source, form, terms_field="purchase_terms")
 
 
 def _landed_cost_snapshot(form: Any = None, source: Any = None) -> str | None:

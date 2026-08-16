@@ -16,8 +16,8 @@
       <label class="form-label" for="incoterm_code">{{ _('Incoterm') }}</label>
       <select class="form-select" id="incoterm_code" name="incoterm_code" x-model="header.incoterm_code">
         <option value="">{{ _('Seleccione') }}</option>
-        {% for code, label in [('EXW','EXW'),('FCA','FCA'),('CPT','CPT'),('CIP','CIP'),('DAP','DAP'),('DPU','DPU'),('DDP','DDP'),('FAS','FAS'),('FOB','FOB'),('CFR','CFR'),('CIF','CIF')] %}
-        <option value="{{ code }}">{{ label }}</option>
+        {% for incoterm in incoterm_options %}
+        <option value="{{ incoterm.code }}">{{ incoterm.label }}</option>
         {% endfor %}
       </select>
       <input type="hidden" name="incoterm_version" value="2020" x-model="header.incoterm_version">

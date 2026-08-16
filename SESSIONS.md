@@ -1021,3 +1021,29 @@ Considerar una solución equivalente para el flujo Order to Cash.
 - El ciclo O2C existente pasó: 21 pruebas exitosas.
 - Se agregó una prueba unitaria específica para la herencia y normalización
   logística comercial.
+
+## 2026-08-16 — Resolución de feedback de logística
+
+### Petición
+
+Atender el resto de observaciones de `feedback.md` y conservar la política de
+base de datos descartable con una única migración dummy.
+
+### Implementación
+
+- Se extrajo la normalización, copia y validación de logística a
+  `cacao_accounting/logistics.py`; compras y ventas usan el mismo servicio.
+- El selector de Incoterm dejó de tener opciones hardcoded en la plantilla y
+  ahora recibe el catálogo activo desde el contexto de Flask, con fallback
+  estándar para bases nuevas sin seed.
+- Se agregó validación backend de código y versión de Incoterm para formularios
+  y API, evitando valores desconocidos o inactivos.
+- Se eliminaron todas las migraciones incrementales y se conservó únicamente
+  `20260809_0001_baseline.py`, que registra el stamp dummy inicial.
+- Se retiró la prueba que exigía validaciones de migraciones DDL históricas y se
+  agregaron pruebas de copia de snapshots y normalización compartida.
+
+### Validación
+
+- La prueba combinada de logística, migraciones y O2C pasó: 15 pruebas.
+- Black, Ruff y Mypy pasan sobre los módulos modificados.
