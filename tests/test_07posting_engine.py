@@ -25,17 +25,21 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, database
+        from cacao_accounting.database import Entity, PurchaseMatchingConfig, database
 
         database.create_all()
-        database.session.add(
-            Entity(
-                code="cacao",
-                name="Cacao",
-                company_name="Cacao",
-                tax_id="J0001",
-                currency="NIO",
-            )
+        database.session.add_all(
+            [
+                Entity(
+                    code="cacao",
+                    name="Cacao",
+                    company_name="Cacao",
+                    tax_id="J0001",
+                    currency="NIO",
+                ),
+                # Los escenarios históricos de posting ejercitan facturas sin OC.
+                PurchaseMatchingConfig(company="cacao", require_purchase_order=False),
+            ]
         )
         database.session.commit()
         yield app
@@ -1087,7 +1091,7 @@ def test_supplier_invoice_flags_reject_without_order_when_disallowed(app_ctx):
 
 def test_supplier_invoice_flags_allow_without_order_when_enabled(app_ctx):
     """S2P-08: Verifica que permitir sin OC/recepción no bloquee la creación."""
-    from cacao_accounting.database import CompanyParty, PurchaseMatchingConfig, database
+    from cacao_accounting.database import CompanyParty, database
     from cacao_accounting.compras import _validate_supplier_invoice_flags
 
     company_party = CompanyParty(
@@ -1099,7 +1103,6 @@ def test_supplier_invoice_flags_allow_without_order_when_enabled(app_ctx):
     database.session.add_all(
         [
             company_party,
-            PurchaseMatchingConfig(company="cacao", require_purchase_order=False),
         ]
     )
     database.session.commit()
