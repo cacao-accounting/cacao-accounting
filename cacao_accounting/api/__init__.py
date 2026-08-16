@@ -381,16 +381,19 @@ def api_document_send_email(document_type: str, document_id: str):
         )
         database.session.commit()
         if errors:
-            return jsonify(
-                {
-                    "success": False,
-                    "partial": True,
-                    "message": _("El correo se envió parcialmente."),
-                    "sent_count": len(sent_recipients),
-                    "recipients": sent_recipients,
-                    "errors": errors,
-                }
-            ), 207
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "partial": True,
+                        "message": _("El correo se envió parcialmente."),
+                        "sent_count": len(sent_recipients),
+                        "recipients": sent_recipients,
+                        "errors": errors,
+                    }
+                ),
+                207,
+            )
         return jsonify(
             {
                 "success": True,
