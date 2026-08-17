@@ -185,11 +185,20 @@ def get_document_flow_items(target_type: str, source_values: list[str]) -> list[
 
 
 def pending_qty(source_type: str, source_id: str, source_item_id: str | None, target_type: str) -> Decimal:
-    """Calcula la cantidad pendiente para una linea origen hacia un target."""
+    """Calcula la cantidad pendiente para una linea origen hacia un target.
+
+    La cantidad y el consumo se expresan en la UOM base del articulo para que
+    la parcialidad sea dimensionalmente consistente con flujos que utilizan
+    unidades comerciales distintas.
+    """
     source_item = get_document_item(source_type, source_item_id)
     if not source_item:
         raise DocumentFlowError(_MSG_LINEA_ORIGEN, 404)
-    qty = decimal_or_zero(getattr(source_item, "qty", 0))
+    qty = decimal_or_zero(
+        getattr(source_item, "qty_in_base_uom", None)
+        if getattr(source_item, "qty_in_base_uom", None) is not None
+        else getattr(source_item, "qty", 0)
+    )
     if _allows_parallel_purchase_quotations(source_type, target_type):
         return qty if qty > 0 else Decimal("0")
     consumed = consumed_qty_for_source(source_type, source_id, source_item_id, target_type)
@@ -284,6 +293,40 @@ def refresh_source_caches_for_target(target_type: str, target_id: str) -> None:
         _update_source_cache(relation.source_type, relation.source_id, relation.source_item_id, target_key)
 
 
+def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: str | None) -> Decimal:
+    """Convierte una cantidad de relación a la UOM base del artículo origen.
+
+    Usa la UOM base del ítem (default_uom) como referencia dimensional para
+    que el consumo/pendiente de un flujo sea comparable incluso cuando la línea
+    destino se expresa en una unidad comercial distinta. Si no hay artículo,
+    UOM o conversión configurada, conserva la cantidad tal cual.
+
+    Args:
+        source_item: Línea origen del flujo documental.
+        qty: Cantidad de la relación en la UOM de presentación.
+        presentation_uom: UOM en que se expresa la cantidad relacionada.
+
+    Returns:
+        Cantidad equivalente en la UOM base del artículo.
+    """
+    item_code = getattr(source_item, "item_code", None)
+    if not item_code or not qty:
+        return qty
+    from cacao_accounting.database import Item
+
+    item = database.session.get(Item, item_code)
+    base_uom = getattr(item, "default_uom", None) if item else None
+    from_uom = presentation_uom or getattr(source_item, "uom", None) or base_uom
+    if not base_uom or not from_uom or base_uom == from_uom:
+        return qty
+    from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
+
+    try:
+        return convert_item_qty(item_code, qty, from_uom, base_uom)
+    except InventoryServiceError:
+        return qty
+
+
 def create_document_relation(
     *,
     source_type: str,
@@ -297,19 +340,30 @@ def create_document_relation(
     rate: Any = None,
     amount: Any = None,
 ) -> DocumentRelation:
-    """Crea una relacion entre lineas validando parcialidad y compania."""
+    """Crea una relacion entre lineas validando parcialidad y compania.
+
+    La cantidad se normaliza a la UOM base del articulo origen para que la
+    comparacion contra ``pending_qty`` y el consumo acumulado sean
+    dimensionalmente consistentes cuando la linea destino usa una unidad
+    comercial distinta (p.ej. 1 BOX contra un origen en EA).
+    """
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
-    _, target_item = _validate_relation_documents(source_key, source_id, source_item_id, target_key, target_id, target_item_id)
+    source_item, target_item = _validate_relation_documents(
+        source_key, source_id, source_item_id, target_key, target_id, target_item_id
+    )
     _assert_same_company(source_key, source_id, target_key, target_id)
     _validate_relation_status(source_key, source_id, target_key, target_id)
     qty_decimal = decimal_or_zero(qty)
     if qty_decimal <= 0:
         raise DocumentFlowError("La cantidad relacionada debe ser mayor que cero.", 409)
 
+    presentation_uom = uom or getattr(target_item, "uom", None) or getattr(source_item, "uom", None)
+    base_qty = _relation_qty_in_base_uom(source_item, qty_decimal, presentation_uom)
+
     if source_item_id:
         available = pending_qty(source_key, source_id, source_item_id, target_key)
-        if qty_decimal > available:
+        if base_qty.quantize(Decimal("0.000000001")) > available.quantize(Decimal("0.000000001")):
             raise DocumentFlowError("La cantidad relacionada excede el pendiente disponible.", 409)
 
     flow = get_flow(source_key, target_key)
@@ -322,7 +376,8 @@ def create_document_relation(
         target_item_id=target_item_id,
         company=get_document_company(source_key, source_id) or get_document_company(target_key, target_id),
         qty=qty_decimal,
-        uom=uom or getattr(target_item, "uom", None),
+        qty_in_base_uom=base_qty,
+        uom=presentation_uom,
         rate=decimal_or_zero(rate),
         amount=decimal_or_zero(amount),
         relation_type=flow.relation_type,
@@ -335,7 +390,7 @@ def create_document_relation(
         relation.id,
         "create",
         None,
-        {"status": relation.status, "qty": str(relation.qty)},
+        {"status": relation.status, "qty": str(relation.qty), "qty_in_base_uom": str(relation.qty_in_base_uom)},
     )
     if source_item_id:
         recompute_line_flow_state(source_key, source_id, source_item_id, target_key, relation.company)
@@ -344,7 +399,12 @@ def create_document_relation(
 
 
 def _validate_relation_documents(source_key, source_id, source_item_id, target_key, target_id, target_item_id):
-    """Valida el flujo y las líneas asociadas a una relación."""
+    """Valida el flujo y las líneas asociadas a una relación.
+
+    Verifica que ambas líneas existan y pertenezcan a sus documentos, y que
+    una relación línea a línea no cruce artículos o UOMs incompatibles que
+    harían inconsistente la trazabilidad de cantidades del flujo documental.
+    """
     if not is_allowed_flow(source_key, target_key):
         raise DocumentFlowError(f"Relacion no permitida: {source_key} -> {target_key}", 400)
     source_item = get_document_item(source_key, source_item_id) if source_item_id else None

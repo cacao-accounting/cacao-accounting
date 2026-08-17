@@ -3828,7 +3828,11 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
         if not po_item:
             continue
         consumed = consumed_qty_for_source("purchase_order", rel.source_id, rel.source_item_id, "purchase_receipt")
-        ordered = Decimal(str(po_item.qty or 0))
+        ordered = (
+            Decimal(str(po_item.qty_in_base_uom))
+            if po_item.qty_in_base_uom is not None
+            else Decimal(str(po_item.qty or 0))
+        )
         if consumed > ordered:
             raise ValueError(
                 _("Sobre-recepción: cantidad recibida {} excede la ordenada {} para el artículo {}.").format(
@@ -3865,7 +3869,11 @@ def _validate_purchase_invoice_relation(relation: DocumentRelation) -> None:
     if not item:
         return
     consumed = consumed_qty_for_source(relation.source_type, relation.source_id, relation.source_item_id, "purchase_invoice")
-    available = Decimal(str(item.qty or 0))
+    available = (
+        Decimal(str(item.qty_in_base_uom))
+        if getattr(item, "qty_in_base_uom", None) is not None
+        else Decimal(str(item.qty or 0))
+    )
     if consumed > available:
         raise ValueError(
             _("Sobre-facturación: cantidad facturada {} excede la {} para el artículo {}.").format(
