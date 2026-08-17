@@ -1118,6 +1118,8 @@ def ventas_cliente_contacto_crear(customer_id: str):
 def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: str, request_id: str):
     """Maneja la actualizacion de un pedido de venta desde el formulario POST."""
     before_state = _capture_sales_state(registro)
+    revert_relations_for_target("sales_request", registro.id, reason="draft_edited")
+    refresh_source_caches_for_target("sales_request", registro.id)
     customer_id = form.get("customer_id") or None
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
@@ -1141,6 +1143,8 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
 def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, order_id: str):
     """Maneja la actualizacion de una orden de venta desde el formulario POST."""
     before_state = _capture_sales_state(registro)
+    revert_relations_for_target("sales_order", registro.id, reason="draft_edited")
+    refresh_source_caches_for_target("sales_order", registro.id)
     customer_id = form.get("customer_id") or None
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
@@ -2350,6 +2354,8 @@ def ventas_cotizacion_editar(quotation_id: str):
 
 def _handle_sales_quotation_edit_post(registro):
     before_state = _capture_sales_state(registro)
+    revert_relations_for_target("sales_quotation", registro.id, reason="draft_edited")
+    refresh_source_caches_for_target("sales_quotation", registro.id)
     customer_id = request.form.get("customer_id") or None
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
@@ -2790,6 +2796,8 @@ def ventas_entrega_editar(note_id: str):
 
 def _handle_delivery_note_edit_post(registro):
     before_state = _capture_sales_state(registro)
+    revert_relations_for_target("delivery_note", registro.id, reason="draft_edited")
+    refresh_source_caches_for_target("delivery_note", registro.id)
     customer_id = request.form.get("customer_id") or None
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
@@ -3301,6 +3309,8 @@ def _handle_sales_invoice_edit_post(registro):
     """
     try:
         before_state = _capture_sales_state(registro)
+        revert_relations_for_target("sales_invoice", registro.id, reason="draft_edited")
+        refresh_source_caches_for_target("sales_invoice", registro.id)
         registro.customer_id = request.form.get("customer_id") or None
         registro.company = request.form.get("company") or None
         registro.posting_date = _parse_date(request.form.get("posting_date"))
