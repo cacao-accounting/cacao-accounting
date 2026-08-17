@@ -120,7 +120,13 @@ def _line_payload(source_type: str, source_id: str, item: Any, target_type: str 
     consumed = (
         Decimal("0")
         if not target_type or parallel_quotations
-        else consumed_qty_for_source(source_type, source_id, item.id, target_type)
+        else consumed_qty_for_source(
+            source_type,
+            source_id,
+            item.id,
+            target_type,
+            exclude_draft_targets=True,
+        )
     )
     cancelled, closed = (
         _state_quantities(source_type, source_id, item.id, target_type) if target_type else (Decimal("0"), Decimal("0"))
@@ -184,7 +190,15 @@ def get_document_flow_items(target_type: str, source_values: list[str]) -> list[
     return items
 
 
-def pending_qty(source_type: str, source_id: str, source_item_id: str | None, target_type: str) -> Decimal:
+def pending_qty(
+    source_type: str,
+    source_id: str,
+    source_item_id: str | None,
+    target_type: str,
+    *,
+    exclude_draft_targets: bool = False,
+    include_target_id: str | None = None,
+) -> Decimal:
     """Calcula la cantidad pendiente para una linea origen hacia un target.
 
     La cantidad y el consumo se expresan en la UOM base del articulo para que
@@ -201,7 +215,14 @@ def pending_qty(source_type: str, source_id: str, source_item_id: str | None, ta
     )
     if _allows_parallel_purchase_quotations(source_type, target_type):
         return qty if qty > 0 else Decimal("0")
-    consumed = consumed_qty_for_source(source_type, source_id, source_item_id, target_type)
+    consumed = consumed_qty_for_source(
+        source_type,
+        source_id,
+        source_item_id,
+        target_type,
+        exclude_draft_targets=exclude_draft_targets,
+        include_target_id=include_target_id,
+    )
     cancelled, closed = _state_quantities(source_type, source_id, source_item_id, target_type)
     pending = qty - consumed - cancelled - closed
     return pending if pending > 0 else Decimal("0")
@@ -362,7 +383,14 @@ def create_document_relation(
     base_qty = _relation_qty_in_base_uom(source_item, qty_decimal, presentation_uom)
 
     if source_item_id:
-        available = pending_qty(source_key, source_id, source_item_id, target_key)
+        available = pending_qty(
+            source_key,
+            source_id,
+            source_item_id,
+            target_key,
+            exclude_draft_targets=True,
+            include_target_id=target_id,
+        )
         if base_qty.quantize(Decimal("0.000000001")) > available.quantize(Decimal("0.000000001")):
             raise DocumentFlowError("La cantidad relacionada excede el pendiente disponible.", 409)
 

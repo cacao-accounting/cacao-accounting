@@ -82,8 +82,9 @@ def test_document_flow_tracks_partial_pending_qty(app_ctx):
     all_items = get_source_items("purchase_order", "PO-001")
 
     assert items[0]["source_qty"] == 10
-    assert items[0]["consumed_qty"] == 4
-    assert items[0]["pending_qty"] == 6
+    # Los borradores no reservan el saldo del origen hasta aprobarse.
+    assert items[0]["consumed_qty"] == 0
+    assert items[0]["pending_qty"] == 10
     assert all_items[0]["pending_qty"] == 10
     assert order_item.received_qty == Decimal("4")
 
@@ -212,6 +213,76 @@ def test_document_flow_closes_manual_line_balance(app_ctx):
     assert state["pending_qty"] == 7
     assert items[0]["closed_qty"] == 3
     assert items[0]["pending_qty"] == 7
+
+
+def test_draft_relation_does_not_consume_source_for_other_drafts(app_ctx):
+    """Un borrador abandonado no debe bloquear la disponibilidad de otros documentos.
+
+    Issue 483: las relaciones de documentos en borrador no consumen la
+    cantidad del origen para terceros; el control se recalcula al aprobar.
+    """
+    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.document_flow import create_document_relation
+    from cacao_accounting.document_flow.service import get_source_items
+
+    order_item = _seed_purchase_order(app_ctx)
+    draft_receipt = PurchaseReceipt(id="PR-DRAFT-01", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    draft_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-DRAFT-01",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("6"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("30"),
+    )
+    database.session.add_all([draft_receipt, draft_item])
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id="PR-DRAFT-01",
+        target_item_id=draft_item.id,
+        qty=Decimal("6"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("30"),
+    )
+
+    # Un segundo borrador (abandonado el primero) no debe ver bloqueado el origen.
+    new_receipt = PurchaseReceipt(id="PR-DRAFT-02", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    new_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-DRAFT-02",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("8"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("40"),
+    )
+    database.session.add_all([new_receipt, new_item])
+    database.session.flush()
+
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id="PR-DRAFT-02",
+        target_item_id=new_item.id,
+        qty=Decimal("8"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("40"),
+    )
+
+    items = get_source_items("purchase_order", "PO-001", "purchase_receipt")
+    assert items[0]["source_qty"] == 10
+    assert items[0]["consumed_qty"] == 0
+    assert items[0]["pending_qty"] == 10
 
 
 def test_document_status_uses_single_operational_badge(app_ctx):
@@ -801,19 +872,30 @@ def test_receipt_submit_validates_against_po(app_ctx):
     database.session.add_all([receipt2, receipt2_item])
     database.session.flush()
 
+    # Un borrador ajeno no bloquea la creación de otra recepción (issue 483).
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id="PR-OVR-02",
+        target_item_id=receipt2_item.id,
+        qty=Decimal("1"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("5"),
+    )
+
+    # La validación de submit de PR-OVR-02 solo considera lo aprobado + lo propio.
+    _validate_receipt_quantities_against_po("PR-OVR-02")
+
+    # Al aprobar primero PR-OVR-01 (10), el submit de PR-OVR-02 debe
+    # rechazarse porque el consumo aprobado (10) más lo propio (1) excede
+    # la cantidad ordenada (10).
+    receipt.docstatus = 1
+    database.session.commit()
     with pytest.raises((ValueError, DocumentFlowError)):
-        create_document_relation(
-            source_type="purchase_order",
-            source_id="PO-001",
-            source_item_id=order_item.id,
-            target_type="purchase_receipt",
-            target_id="PR-OVR-02",
-            target_item_id=receipt2_item.id,
-            qty=Decimal("1"),
-            uom="UND",
-            rate=Decimal("5"),
-            amount=Decimal("5"),
-        )
+        _validate_receipt_quantities_against_po("PR-OVR-02")
 
 
 def test_receipt_edit_cleans_old_relations(app_ctx):
@@ -889,7 +971,7 @@ def test_receipt_edit_cleans_old_relations(app_ctx):
     assert consumed == Decimal("3"), f"Esperado 3, obtenido {consumed}"
 
     items = get_source_items("purchase_order", "PO-001", "purchase_receipt")
-    assert items[0]["pending_qty"] == Decimal("7"), f"Esperado 7, obtenido {items[0]['pending_qty']}"
+    assert items[0]["pending_qty"] == Decimal("10"), f"Esperado 10, obtenido {items[0]['pending_qty']}"
 
 
 def test_invoice_submit_validates_against_receipt(app_ctx):
@@ -950,19 +1032,29 @@ def test_invoice_submit_validates_against_receipt(app_ctx):
     database.session.add_all([invoice2, invoice2_item])
     database.session.flush()
 
+    # Un borrador ajeno no bloquea la creación de otra factura (issue 483).
+    create_document_relation(
+        source_type="purchase_receipt",
+        source_id="PR-INV-01",
+        source_item_id=receipt_item.id,
+        target_type="purchase_invoice",
+        target_id="PI-INV-02",
+        target_item_id=invoice2_item.id,
+        qty=Decimal("1"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("5"),
+    )
+
+    # La validación de submit de PI-INV-02 solo considera lo aprobado + lo propio.
+    _validate_invoice_quantities_against_receipt("PI-INV-02")
+
+    # Al aprobar primero PI-INV-01, el submit de PI-INV-02 debe rechazarse
+    # porque el consumo aprobado (5) más lo propio (1) excede la recepción (5).
+    invoice.docstatus = 1
+    database.session.commit()
     with pytest.raises((ValueError, DocumentFlowError)):
-        create_document_relation(
-            source_type="purchase_receipt",
-            source_id="PR-INV-01",
-            source_item_id=receipt_item.id,
-            target_type="purchase_invoice",
-            target_id="PI-INV-02",
-            target_item_id=invoice2_item.id,
-            qty=Decimal("1"),
-            uom="UND",
-            rate=Decimal("5"),
-            amount=Decimal("5"),
-        )
+        _validate_invoice_quantities_against_receipt("PI-INV-02")
 
 
 def test_invoice_edit_cleans_old_relations(app_ctx):
@@ -1058,7 +1150,7 @@ def test_invoice_edit_cleans_old_relations(app_ctx):
     assert consumed == Decimal("2"), f"Esperado 2, obtenido {consumed}"
 
     items = get_source_items("purchase_receipt", "PR-INV-EDIT", "purchase_invoice")
-    assert items[0]["pending_qty"] == Decimal("3"), f"Esperado 3, obtenido {items[0]['pending_qty']}"
+    assert items[0]["pending_qty"] == Decimal("5"), f"Esperado 5, obtenido {items[0]['pending_qty']}"
 
 
 def test_invoice_submit_rejects_over_invoice(app_ctx):

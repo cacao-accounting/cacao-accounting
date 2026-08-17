@@ -1711,7 +1711,14 @@ def _validate_delivery_quantities_against_so(note_id: str) -> None:
         so_item = database.session.get(SalesOrderItem, rel.source_item_id)
         if not so_item:
             continue
-        consumed = consumed_qty_for_source("sales_order", rel.source_id, rel.source_item_id, "delivery_note")
+        consumed = consumed_qty_for_source(
+            "sales_order",
+            rel.source_id,
+            rel.source_item_id,
+            "delivery_note",
+            exclude_draft_targets=True,
+            include_target_id=note_id,
+        )
         ordered = (
             Decimal(str(so_item.qty_in_base_uom))
             if so_item.qty_in_base_uom is not None
@@ -1736,7 +1743,7 @@ def _validate_sales_invoice_quantities(invoice_id: str) -> None:
     ).scalars()
     for rel in relations:
         if rel.source_item_id:
-            _validate_sales_invoice_relation(rel)
+            _validate_sales_invoice_relation(rel, invoice_id=invoice_id)
 
 
 def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[SalesInvoiceItem]) -> None:
@@ -1792,7 +1799,7 @@ def _validate_sales_order_requirement(invoice: SalesInvoice) -> None:
     raise ValueError("La factura debe estar vinculada a una Orden de Venta aprobada.")
 
 
-def _validate_sales_invoice_relation(relation: DocumentRelation) -> None:
+def _validate_sales_invoice_relation(relation: DocumentRelation, invoice_id: str | None = None) -> None:
     """Valida una relación de factura contra su documento fuente."""
     sources = {"delivery_note": (DeliveryNoteItem, "entregada"), "sales_order": (SalesOrderItem, "ordenada")}
     source = sources.get(relation.source_type)
@@ -1801,7 +1808,14 @@ def _validate_sales_invoice_relation(relation: DocumentRelation) -> None:
     item: Any = database.session.get(source[0], relation.source_item_id)
     if not item:
         return
-    consumed = consumed_qty_for_source(relation.source_type, relation.source_id, relation.source_item_id, "sales_invoice")
+    consumed = consumed_qty_for_source(
+        relation.source_type,
+        relation.source_id,
+        relation.source_item_id,
+        "sales_invoice",
+        exclude_draft_targets=True,
+        include_target_id=invoice_id,
+    )
     available = (
         Decimal(str(item.qty_in_base_uom))
         if getattr(item, "qty_in_base_uom", None) is not None
