@@ -569,6 +569,9 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
         books = [book]
     transaction_currency, lines = _normalize_transaction_currency(_optional_text(payload.get("transaction_currency")), lines)
     _validate_active_transaction_currency(transaction_currency)
+    exchange_rate = _optional_decimal(payload.get("exchange_rate"))
+    if exchange_rate is not None and exchange_rate <= 0:
+        raise JournalValidationError("El tipo de cambio debe ser mayor que cero.")
     return JournalDraftInput(
         company=company,
         posting_date=posting_date,
@@ -577,7 +580,7 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
         reference=_optional_text(payload.get("reference")),
         memo=_optional_text(payload.get("memo")),
         transaction_currency=transaction_currency,
-        exchange_rate=None,
+        exchange_rate=exchange_rate,
         is_closing=_optional_bool(payload.get("is_closing")),
         is_fiscal_year_closing=_optional_bool(payload.get("is_fiscal_year_closing")),
         fiscal_year_id=_optional_text(payload.get("fiscal_year_id")),
