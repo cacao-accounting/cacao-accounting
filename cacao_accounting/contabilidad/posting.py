@@ -20,6 +20,7 @@ from cacao_accounting.database import (
     BankAccount,
     Book,
     CompanyDefaultAccount,
+    CostCenter,
     ComprobanteContable,
     ComprobanteContableDetalle,
     DeliveryNote,
@@ -45,6 +46,8 @@ from cacao_accounting.database import (
     StockEntryItem,
     StockLedgerEntry,
     StockValuationLayer,
+    Unit,
+    Project,
     Entity,
     Warehouse,
     database,
@@ -3015,6 +3018,9 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
     purpose = getattr(document, "purpose", "").lower()
     company = _company_for(document)
 
+    if purpose == "stock_reconciliation":
+        _validate_stock_reconciliation_dimensions(document, company)
+
     # In Material Transfer, we only generate GL if source and target warehouses
     # use different GL accounts. Otherwise, it's just a stock movement.
     if purpose == "material_transfer" and not _is_cross_account_transfer(document, company):
@@ -3164,12 +3170,35 @@ def _get_offset_account_for_line(document: StockEntry, line: StockEntryItem, com
         offset_type = "inventory_adjustment"
     if purpose == "stock_reconciliation":
         account = getattr(document, "adjustment_account_id", None)
+        if account:
+            return _require_company_account(
+                account,
+                company,
+                "La cuenta de ajuste de conciliación debe pertenecer a la compañía del documento.",
+            )
     else:
         account = _account_id_for_item(line, company, offset_type)
     return _require_account(
         account or _account_id_for_item(line, company, offset_type),
         "Falta la cuenta de contrapartida para la linea de stock.",
     )
+
+
+def _validate_stock_reconciliation_dimensions(document: StockEntry, company: str) -> None:
+    """Valida que las dimensiones de una conciliación pertenezcan a la compañía."""
+    dimensions = (
+        (CostCenter, getattr(document, "cost_center_code", None), "centro de costo"),
+        (Unit, getattr(document, "unit_code", None), "unidad"),
+        (Project, getattr(document, "project_code", None), "proyecto"),
+    )
+    for model, code, label in dimensions:
+        if not code:
+            continue
+        exists = database.session.execute(
+            select(model.id).where(model.entity == company, model.code == code)
+        ).scalar_one_or_none()
+        if exists is None:
+            raise PostingError(f"El {label} de la conciliación no pertenece a la compañía del documento.")
 
 
 def _get_dimension_kwargs(document: StockEntry) -> dict[str, Any]:

@@ -3667,6 +3667,47 @@ def test_stock_reconciliation_value_adjustment_uses_warehouse_inventory_account_
     assert sum(line.stock_value_difference for line in all_stock_entries) == Decimal("0.0000")
 
 
+def test_stock_reconciliation_rejects_cross_company_account_and_dimension(app_ctx):
+    """La conciliación no puede usar cuentas ni dimensiones de otra compañía."""
+    from cacao_accounting.contabilidad.posting import (
+        PostingError,
+        _get_offset_account_for_line,
+        _validate_stock_reconciliation_dimensions,
+    )
+    from cacao_accounting.database import Accounts, CostCenter, Entity, StockEntry, StockEntryItem, database
+
+    database.session.add(
+        Entity(
+            code="other",
+            name="Other",
+            company_name="Other Company",
+            tax_id="OTHER-504",
+            currency="NIO",
+        )
+    )
+    foreign_account = Accounts(
+        entity="other",
+        code="ADJ-OTHER-504",
+        name="Ajuste externo",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    foreign_dimension = CostCenter(entity="other", code="CC-OTHER-504", name="Centro externo", active=True, enabled=True)
+    database.session.add_all([foreign_account, foreign_dimension])
+    database.session.flush()
+
+    entry = StockEntry(company="cacao", purpose="stock_reconciliation", adjustment_account_id=foreign_account.id)
+    line = StockEntryItem(stock_entry_id=entry.id, item_code="ITEM-504")
+    with pytest.raises(PostingError, match="pertenecer a la compañía"):
+        _get_offset_account_for_line(entry, line, "cacao", "stock_reconciliation")
+
+    entry.cost_center_code = foreign_dimension.code
+    with pytest.raises(PostingError, match="centro de costo"):
+        _validate_stock_reconciliation_dimensions(entry, "cacao")
+
+
 def test_payment_debit_note_creates_balanced_gl_entries(app_ctx):
     """Verifica que una nota de debito bancaria (PaymentEntry) genera GL balanceado."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
