@@ -104,6 +104,53 @@ def _copy_sales_logistics(target: Any, source: Any = None, form: Any = None) -> 
     copy_logistics(target, source, form, terms_field="sales_terms")
 
 
+def _sales_exchange_rate(company: str | None, posting_date: Any, transaction_currency: str | None) -> Decimal:
+    """Resuelve la tasa de conversión de moneda transaccional a funcional."""
+    rate = Decimal("1")
+    base_currency = company_currency(company)
+    if not company or not transaction_currency or not base_currency or transaction_currency == base_currency:
+        return rate
+    from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
+
+    try:
+        return _lookup_exchange_rate(transaction_currency, base_currency, posting_date)
+    except PostingError:
+        return rate
+
+
+def _sales_invoice_currency_and_rate(
+    company: str | None, posting_date: Any, source: Any | None, requested_currency: str | None
+) -> tuple[str | None, str | None, Decimal]:
+    """Resuelve moneda, moneda funcional y tasa, conservando la tasa del origen."""
+    source_currency = effective_currency(source)
+    transaction_currency = source_currency or requested_currency
+    base_currency = company_currency(company)
+    if source is not None and source_currency == transaction_currency and getattr(source, "exchange_rate", None):
+        exchange_rate = Decimal(str(source.exchange_rate))
+    else:
+        exchange_rate = _sales_exchange_rate(company, posting_date, transaction_currency)
+    return transaction_currency, base_currency, exchange_rate
+
+
+def _set_sales_invoice_totals(
+    invoice: SalesInvoice, total: Decimal, grand_total: Decimal, source: Any | None = None
+) -> None:
+    """Recalcula importes transaccionales y funcionales de una factura de venta."""
+    requested_currency = getattr(invoice, "transaction_currency", None)
+    transaction_currency, base_currency, exchange_rate = _sales_invoice_currency_and_rate(
+        invoice.company, invoice.posting_date, source, requested_currency
+    )
+    invoice.transaction_currency = transaction_currency
+    invoice.base_currency = base_currency
+    invoice.exchange_rate = exchange_rate
+    invoice.total = total
+    invoice.base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
+    invoice.grand_total = grand_total
+    invoice.base_grand_total = (grand_total * exchange_rate).quantize(Decimal("0.0001"))
+    invoice.outstanding_amount = grand_total
+    invoice.base_outstanding_amount = invoice.base_grand_total
+
+
 # Constantes para rutas y endpoints (S1192 - evitar duplicación de cadenas)
 VENTAS_CLIENTE_NUEVO_TEMPLATE = "ventas/cliente_nuevo.html"
 _ENDPOINT_CLIENTE = "ventas.ventas_cliente"
@@ -3123,6 +3170,7 @@ def _create_sales_invoice_from_form():
             document_type=document_type,
             sales_order_id=request.form.get("from_order") or None,
             delivery_note_id=request.form.get("from_note") or None,
+            transaction_currency=request.form.get("transaction_currency") or request.form.get("currency") or None,
             update_inventory=bool(request.form.get("update_inventory"))
             and document_type not in ("sales_credit_note", "sales_return"),
             is_return=document_type in ("sales_credit_note", "sales_return"),
@@ -3153,9 +3201,7 @@ def _create_sales_invoice_from_form():
         elif factura.delivery_note_id:
             _validate_sales_source_link(factura, "delivery_note", factura.delivery_note_id, items)
         grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
-        factura.total = factura.base_total = total
-        factura.grand_total = factura.base_grand_total = grand_total
-        factura.outstanding_amount = factura.base_outstanding_amount = grand_total
+        _set_sales_invoice_totals(factura, total, grand_total, source)
         if reversal_of:
             _validate_reversal_of(
                 reversal_of,
@@ -3372,11 +3418,13 @@ def _handle_sales_invoice_edit_post(registro):
         items = (
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
         )
+        source = None
+        if registro.sales_order_id:
+            source = _validate_sales_source_link(registro, "sales_order", registro.sales_order_id, items)
+        elif registro.delivery_note_id:
+            source = _validate_sales_source_link(registro, "delivery_note", registro.delivery_note_id, items)
         grand_total = calculate_document_total_with_taxes(registro, total, items, request.form.get("tax_summary_payload"))
-        registro.grand_total = grand_total
-        registro.base_grand_total = grand_total
-        registro.outstanding_amount = grand_total
-        registro.base_outstanding_amount = grand_total
+        _set_sales_invoice_totals(registro, total, grand_total, source)
         if registro.reversal_of:
             _validate_reversal_of(
                 registro.reversal_of,

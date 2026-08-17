@@ -3609,9 +3609,7 @@ def _create_purchase_receipt_from_form():
                 .all()
             )
             _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
-        receipt.total = receipt.grand_total = total
-        receipt.exchange_rate = _purchase_exchange_rate(company, posting_date, receipt.transaction_currency)
-        receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
+        _set_purchase_receipt_totals(receipt, total)
         log_create(receipt)
         database.session.commit()
         flash("Recepción de compra creada correctamente.", "success")
@@ -3755,13 +3753,20 @@ def _handle_purchase_receipt_edit_post(registro):
     ).scalars():
         database.session.delete(item)
     _total_qty, total = _save_purchase_receipt_items(registro.id)
-    registro.total = total
-    registro.grand_total = total
+    _set_purchase_receipt_totals(registro, total)
     after_state = _capture_purchase_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
     flash(_("Recepcion de compra actualizada correctamente."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=registro.id))
+
+
+def _set_purchase_receipt_totals(receipt: PurchaseReceipt, total: Decimal) -> None:
+    """Recalcula importes transaccionales y funcionales de una recepción."""
+    receipt.total = receipt.grand_total = total
+    receipt.base_currency = company_currency(receipt.company)
+    receipt.exchange_rate = _purchase_exchange_rate(receipt.company, receipt.posting_date, receipt.transaction_currency)
+    receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
 
 
 @compras.route("/purchase-receipt/<receipt_id>/duplicate", methods=["POST"])
