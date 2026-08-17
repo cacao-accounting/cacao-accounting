@@ -75,7 +75,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids, update_hierarchy_attributes
-from cacao_accounting.decorators import modulo_activo, verifica_acceso, verifica_permiso
+from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_acceso, verifica_permiso
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
 
@@ -3286,6 +3286,7 @@ def contabilizar_comprobante(identifier: str):
     journal = database.session.get(ComprobanteContable, identifier)
     if not journal:
         abort(404)
+    exige_acceso_compania("accounting", journal.entity, "autorizar")
 
     try:
         if ApprovalEngine.is_enabled(journal.entity):
@@ -3323,6 +3324,11 @@ def rechazar_comprobante(identifier: str):
     if not permisos.validar:
         abort(403)
 
+    journal = database.session.get(ComprobanteContable, identifier)
+    if not journal:
+        abort(404)
+    exige_acceso_compania("accounting", journal.entity, "autorizar")
+
     try:
         reject_journal_draft(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
@@ -3350,6 +3356,7 @@ def anular_comprobante(identifier: str):
     journal = database.session.get(ComprobanteContable, identifier)
     if not journal:
         abort(404)
+    exige_acceso_compania("accounting", journal.entity, "anular")
 
     try:
         if ApprovalEngine.is_enabled(journal.entity):
@@ -3454,6 +3461,7 @@ def ver_comprobante(identifier: str):
     if journal is None:
         flash("El comprobante contable indicado no existe.", "warning")
         return redirect(url_for("contabilidad.conta"))
+    exige_acceso_compania("accounting", journal.entity, "consultar")
     creator = database.session.get(User, journal.user_id) if journal.user_id else None
     creator_nickname = creator.user if creator is not None else (journal.user_id or "")
     lineas_raw = list_journal_lines(identifier)
@@ -3513,6 +3521,11 @@ def duplicar_comprobante(identifier: str):
     """Duplica un comprobante y crea un nuevo borrador editable."""
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, duplicate_journal_as_draft
 
+    journal = database.session.get(ComprobanteContable, identifier)
+    if not journal:
+        abort(404)
+    exige_acceso_compania("accounting", journal.entity, "crear")
+
     try:
         duplicated = duplicate_journal_as_draft(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
@@ -3530,6 +3543,11 @@ def duplicar_comprobante(identifier: str):
 def revertir_comprobante(identifier: str):
     """Crea borrador de reversión invirtiendo débitos y créditos del comprobante origen."""
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, duplicate_journal_as_reversal_draft
+
+    journal = database.session.get(ComprobanteContable, identifier)
+    if not journal:
+        abort(404)
+    exige_acceso_compania("accounting", journal.entity, "crear")
 
     reversal_date = request.form.get("reversal_date")
     if not reversal_date:
@@ -3568,6 +3586,7 @@ def editar_comprobante(identifier: str):
     if journal is None:
         flash("El comprobante contable indicado no existe.", "warning")
         return redirect(url_for("contabilidad.listar_comprobantes"))
+    exige_acceso_compania("accounting", journal.entity, "editar")
     if journal.voucher_type == "Capitalización Automática de Proyecto":
         flash("No se puede editar un comprobante de capitalización automática.", "warning")
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
