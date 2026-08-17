@@ -4404,6 +4404,22 @@ def _persist_purchase_reversal_relation(invoice: PurchaseInvoice) -> None:
         refresh_outstanding_amount_cache(source)
 
 
+def _has_active_purchase_reversal_notes(invoice_id: str) -> bool:
+    """Indica si una factura tiene notas de crédito/débito activas downstream."""
+    active_note = (
+        database.select(DocumentRelation.id)
+        .join(PurchaseInvoice, PurchaseInvoice.id == DocumentRelation.target_id)
+        .where(
+            DocumentRelation.source_type == "purchase_invoice",
+            DocumentRelation.source_id == invoice_id,
+            DocumentRelation.target_type.in_(("purchase_credit_note", "purchase_debit_note")),
+            DocumentRelation.status == "active",
+            PurchaseInvoice.docstatus != 2,
+        )
+    )
+    return database.session.execute(active_note).scalar_one_or_none() is not None
+
+
 def _create_purchase_invoice_from_request():
     """Create a purchase invoice from the submitted form."""
     try:
@@ -4831,6 +4847,9 @@ def compras_factura_compra_cancel(invoice_id: str):
     )
     if database.session.execute(active_payment).scalars().first() is not None:
         flash(_("No se puede cancelar la factura de compra porque tiene pagos activos."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
+    if _has_active_purchase_reversal_notes(invoice_id):
+        flash(_("No se puede cancelar la factura de compra porque tiene notas de crédito o débito activas."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine

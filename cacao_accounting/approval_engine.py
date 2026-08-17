@@ -393,6 +393,10 @@ class ApprovalEngine:
                 raise ValueError("El documento adquirió relaciones activas mientras esperaba aprobación.")
         if doctype == "purchase_invoice":
             from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference
+            from cacao_accounting.compras import _has_active_purchase_reversal_notes
+
+            if _has_active_purchase_reversal_notes(document.id):
+                raise ValueError("La factura adquirió notas de crédito o débito activas mientras esperaba aprobación.")
 
             active_payment = (
                 database.select(PaymentReference.id)
