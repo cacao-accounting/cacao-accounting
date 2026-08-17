@@ -59,7 +59,10 @@ from cacao_accounting.decorators import (  # noqa: F401
 )
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
+from cacao_accounting.fiscal_persistence_service import (
+    calculate_document_total_with_taxes,
+    persist_document_fiscal_snapshot,
+)
 from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_settings import (
@@ -3096,14 +3099,21 @@ def _create_sales_invoice_from_form():
             naming_series_id=request.form.get("naming_series") or None,
         )
         _total_qty, total = _save_sales_invoice_items(factura.id)
-        factura.total = factura.base_total = factura.grand_total = factura.base_grand_total = total
-        factura.outstanding_amount = factura.base_outstanding_amount = total
+        items = database.session.execute(
+            database.select(SalesInvoiceItem).filter_by(sales_invoice_id=factura.id)
+        ).scalars().all()
+        grand_total = calculate_document_total_with_taxes(
+            factura, total, items, request.form.get("tax_summary_payload")
+        )
+        factura.total = factura.base_total = total
+        factura.grand_total = factura.base_grand_total = grand_total
+        factura.outstanding_amount = factura.base_outstanding_amount = grand_total
         if reversal_of:
             _validate_reversal_of(
                 reversal_of,
                 factura.customer_id,
                 factura.company,
-                note_amount=total,
+                note_amount=grand_total,
                 document_type=document_type,
                 posting_date=factura.posting_date,
             )
@@ -3309,10 +3319,16 @@ def _handle_sales_invoice_edit_post(registro):
         _total_qty, total = _save_sales_invoice_items(registro.id)
         registro.total = total
         registro.base_total = total
-        registro.grand_total = total
-        registro.base_grand_total = total
-        registro.outstanding_amount = total
-        registro.base_outstanding_amount = total
+        items = database.session.execute(
+            database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)
+        ).scalars().all()
+        grand_total = calculate_document_total_with_taxes(
+            registro, total, items, request.form.get("tax_summary_payload")
+        )
+        registro.grand_total = grand_total
+        registro.base_grand_total = grand_total
+        registro.outstanding_amount = grand_total
+        registro.base_outstanding_amount = grand_total
         if registro.reversal_of:
             _validate_reversal_of(
                 registro.reversal_of,
@@ -3586,15 +3602,22 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
     ).scalars()
     exposure = Decimal("0")
     current_order_id = getattr(current_document, "sales_order_id", None)
+    if not current_order_id and getattr(current_document, "delivery_note_id", None):
+        delivery_note = database.session.get(DeliveryNote, current_document.delivery_note_id)
+        current_order_id = delivery_note.sales_order_id if delivery_note else None
     for order in orders:
         order_total = Decimal(str(order.grand_total or "0"))
+        delivery_note_ids = database.select(DeliveryNote.id).filter_by(sales_order_id=order.id)
         billed_total = database.session.execute(
-            database.select(database.func.coalesce(database.func.sum(SalesInvoice.grand_total), 0)).filter_by(
-                company=company,
-                customer_id=customer_id,
-                sales_order_id=order.id,
-                docstatus=1,
-                is_return=False,
+            database.select(database.func.coalesce(database.func.sum(SalesInvoice.grand_total), 0)).where(
+                SalesInvoice.company == company,
+                SalesInvoice.customer_id == customer_id,
+                SalesInvoice.docstatus == 1,
+                SalesInvoice.is_return.is_(False),
+                or_(
+                    SalesInvoice.sales_order_id == order.id,
+                    SalesInvoice.delivery_note_id.in_(delivery_note_ids),
+                ),
             )
         ).scalar_one()
         pending = max(Decimal("0"), order_total - Decimal(str(billed_total or "0")))

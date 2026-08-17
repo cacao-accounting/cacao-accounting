@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from decimal import Decimal
 
 import pytest
 from flask import url_for
@@ -13,6 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__)))
 from z_func import init_test_db
 
 from cacao_accounting import create_app
+from cacao_accounting.fiscal_persistence_service import calculate_document_total_with_taxes
 
 app = create_app(
     {
@@ -25,6 +27,17 @@ app = create_app(
         "SQLALCHEMY_DATABASE_URI": "sqlite://",
     }
 )
+
+
+def test_document_total_uses_tax_summary_without_template():
+    """Conserva el grand total del snapshot fiscal manual de la factura."""
+    total = calculate_document_total_with_taxes(
+        type("Document", (), {"tax_template_id": None})(),
+        Decimal("100"),
+        [],
+        '{"grand_total": "115.00"}',
+    )
+    assert total == Decimal("115.00")
 
 
 @pytest.fixture(scope="module", autouse=True)

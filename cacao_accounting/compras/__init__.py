@@ -129,7 +129,10 @@ from cacao_accounting.document_flow.repository import consumed_qty_for_source, h
 from cacao_accounting.document_flow.service import _relation_qty_in_base_uom
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
-from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
+from cacao_accounting.fiscal_persistence_service import (
+    calculate_document_total_with_taxes,
+    persist_document_fiscal_snapshot,
+)
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.party_management import (  # noqa: F401
     apply_party_group,
@@ -4489,25 +4492,31 @@ def _create_purchase_invoice_from_request():
         )
         _total_qty, total = _save_purchase_invoice_items(factura.id)
         factura.total = total
+        # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
+        fx_rate = _purchase_exchange_rate(company, posting_date, transaction_currency)
+        factura.exchange_rate = fx_rate
+        base_total, _base = _compute_base_amounts(total, fx_rate)
+        items = database.session.execute(
+            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id)
+        ).scalars().all()
+        grand_total = calculate_document_total_with_taxes(
+            factura, total, items, request.form.get("tax_summary_payload")
+        )
+        base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
+        factura.base_total = base_total
+        factura.grand_total = grand_total
+        factura.base_grand_total = base_grand_total
+        factura.outstanding_amount = grand_total
+        factura.base_outstanding_amount = base_grand_total
         if reversal_of:
             _validate_purchase_reversal_of(
                 reversal_of,
                 factura.supplier_id,
                 factura.company,
-                note_amount=total,
+                note_amount=grand_total,
                 document_type=document_type,
                 posting_date=factura.posting_date,
             )
-        # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
-        fx_rate = _purchase_exchange_rate(company, posting_date, transaction_currency)
-        factura.exchange_rate = fx_rate
-        base_total, _base = _compute_base_amounts(total, fx_rate)
-        base_grand_total, _base2 = _compute_base_amounts(total, fx_rate)
-        factura.base_total = base_total
-        factura.grand_total = total
-        factura.base_grand_total = base_grand_total
-        factura.outstanding_amount = total
-        factura.base_outstanding_amount = base_grand_total
         _persist_purchase_invoice_fiscal_snapshot(factura)
         log_create(factura)
         database.session.commit()
@@ -4674,12 +4683,18 @@ def _handle_purchase_invoice_edit_post(registro):
         fx_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
         registro.exchange_rate = fx_rate
         base_total, _base = _compute_base_amounts(total, fx_rate)
-        base_grand_total, _base2 = _compute_base_amounts(total, fx_rate)
+        items = database.session.execute(
+            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
+        ).scalars().all()
+        grand_total = calculate_document_total_with_taxes(
+            registro, total, items, request.form.get("tax_summary_payload")
+        )
+        base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
         registro.total = total
         registro.base_total = base_total
-        registro.grand_total = total
+        registro.grand_total = grand_total
         registro.base_grand_total = base_grand_total
-        registro.outstanding_amount = total
+        registro.outstanding_amount = grand_total
         registro.base_outstanding_amount = base_grand_total
         _persist_purchase_invoice_fiscal_snapshot(registro)
         after_state = _capture_purchase_state(registro)
