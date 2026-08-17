@@ -2335,6 +2335,11 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
                 raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
+            item_obj = database.session.get(Item, item_code)
+            if not item_obj:
+                raise DocumentFlowError(f"El item {item_code} no existe.", 400)
+            if not item_obj.is_active or not item_obj.is_purchase_item:
+                raise DocumentFlowError(f"El item {item_code} no está habilitado para compra.", 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -3449,6 +3454,10 @@ def compras_orden_compra_submit(order_id: str):
             .scalars()
             .all()
         )
+        for item in items:
+            item_obj = database.session.get(Item, item.item_code)
+            if not item_obj or not item_obj.is_active or not item_obj.is_purchase_item:
+                raise ValueError(f"El item {item.item_code} no está habilitado para compra.")
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         check_budget_control(
             company=registro.company,
