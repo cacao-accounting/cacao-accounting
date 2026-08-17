@@ -182,10 +182,11 @@ def _compute_real_movements(
 
 
 def _sum_invoice_amount(invoices: list, start_date: date, end_date: date) -> Decimal:
-    """Suma montos pendientes de facturas dentro de un rango de fechas."""
+    """Suma saldos pendientes usando la fecha de vencimiento del documento."""
     total = Decimal("0")
     for inv in invoices:
-        if start_date <= inv.posting_date <= end_date:
+        flow_date = getattr(inv, "due_date", None) or inv.posting_date
+        if start_date <= flow_date <= end_date:
             amount = inv.base_outstanding_amount
             if amount is None:
                 amount = Decimal(str(inv.outstanding_amount or 0)) * Decimal(str(inv.exchange_rate or 1))

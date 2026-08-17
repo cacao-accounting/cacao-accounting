@@ -146,7 +146,7 @@ def _validate_batch(line, item):
         raise InventoryServiceError("El lote no existe, esta inactivo o no pertenece al item.")
 
 
-def _validate_serial(line, item, outgoing):
+def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False):
     serial_no = getattr(line, "serial_no", None)
     if not serial_no:
         raise InventoryServiceError("El item requiere numero de serie.")
@@ -156,11 +156,15 @@ def _validate_serial(line, item, outgoing):
     if outgoing:
         if not serial or serial.serial_status != "available":
             raise InventoryServiceError("El serial no esta disponible para salida.")
-    elif serial and serial.serial_status == "delivered":
+        if warehouse and serial.warehouse != warehouse:
+            raise InventoryServiceError("El serial no se encuentra en la bodega de salida.")
+    elif serial and serial.serial_status == "delivered" and not allow_transfer:
         raise InventoryServiceError("El serial ya fue entregado.")
 
 
-def validate_batch_serial(line: Any, *, outgoing: bool) -> None:
+def validate_batch_serial(
+    line: Any, *, outgoing: bool, warehouse: str | None = None, allow_transfer: bool = False
+) -> None:
     """Valida obligatoriedad y disponibilidad de lote/serial en una linea."""
     item = database.session.get(Item, getattr(line, "item_code", None))
     if not item or not item.is_stock_item:
@@ -168,7 +172,7 @@ def validate_batch_serial(line: Any, *, outgoing: bool) -> None:
     if item.has_batch:
         _validate_batch(line, item)
     if item.has_serial_no:
-        _validate_serial(line, item, outgoing)
+        _validate_serial(line, item, outgoing, warehouse, allow_transfer)
 
 
 def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> None:
