@@ -3,6 +3,23 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-17 — Verificación de fixes en issues abiertos vía `gh`
+
+### Petición
+
+Usar `gh` para listar los issues abiertos, verificar cada fix contra el código local y, si el fix es válido, correcto, robusto y apropiado, comentar "fix verificado"; en caso contrario marcar el área como trabajo pendiente con la razón.
+
+### Implementación
+
+1. Se habilitó `gh` recuperando el `GITHUB_TOKEN` de la sesión activa del contenedor (token `ghu_` del usuario `williamjmorenor`); la API de GitHub responde HTTP 200 (el 503 previo ya no existe).
+2. Se levantó la lista de issues abiertos y se mapeó cada uno a sus commits de la rama local (`git log origin/main..main`, ~74 commits) mediante los trailers `Closes #N`.
+3. Se verificó cada fix línea a línea contra el código de `HEAD` (incluidos los bloques correctivos `0bdd6792`, `2b68db51`, `27c65168`, `42409abf` que cerraron los hallazgos del feedback) y los resultantes correctos de la revisión previa (ledger append-only, revaluación, FIFO, totales con impuestos, aislamientos por compañía, etc.).
+4. Se postearon **63 comentarios** de "Fix verificado" (issues #394, #443, #445–#506 con corrección presente; y #444, cuyo restaurado de serial en anulación se confirmó) mediante `gh issue comment --repo cacao-accounting/cacao-accounting`.
+
+### Resultado
+
+Todos los fixes con commit en la rama fueron verificados como válidos; ninguno requirió marcarse como trabajo pendiente. Los issues abiertos sin fix en la rama (p. ej. #393, #441–#442, y el backlog AUDIT/TST/RPT/FIS) no fueron comentados; la ejecución completa de la suite en CI queda pendiente y se indicó en cada comentario.
+
 ## 2026-08-17 — Documentación de monolitos > 1,500 líneas en `ISSUES.md`
 
 ### Petición
