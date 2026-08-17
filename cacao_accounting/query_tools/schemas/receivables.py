@@ -1,6 +1,8 @@
 """Esquemas de validación para los endpoints del módulo de cuentas por cobrar."""
 
-RECEIVABLES_AGING_PARAMS = {
+from typing import Any
+
+RECEIVABLES_AGING_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
@@ -12,7 +14,7 @@ RECEIVABLES_AGING_PARAMS = {
     "required": ["company_id", "as_of_date"],
 }
 
-RECEIVABLES_OPEN_DOCUMENTS_PARAMS = {
+RECEIVABLES_OPEN_DOCUMENTS_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},

@@ -1,6 +1,8 @@
 """Esquemas de validación para los endpoints del módulo de cuentas por pagar."""
 
-PAYABLES_AGING_PARAMS = {
+from typing import Any
+
+PAYABLES_AGING_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
@@ -12,7 +14,7 @@ PAYABLES_AGING_PARAMS = {
     "required": ["company_id", "as_of_date"],
 }
 
-PAYABLES_OPEN_DOCUMENTS_PARAMS = {
+PAYABLES_OPEN_DOCUMENTS_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},

@@ -225,6 +225,7 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
         # conversión a libros con moneda distinta.
         transaction_currency = document_base_currency
     contexts: list[LedgerContext] = []
+    is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
     for book in _active_books(company, ledger_code):
         book_currency = getattr(book, "currency", None)
         company_currency = book_currency or document_base_currency or default_company_currency
@@ -234,6 +235,7 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
             document_base_currency=document_base_currency,
             document_exchange_rate=document_exchange_rate,
             posting_date=posting_date,
+            is_fiscal_year_closing=is_fy_closing,
         )
         contexts.append(
             LedgerContext(
@@ -263,8 +265,11 @@ def _ledger_exchange_rate(
     document_base_currency: str | None,
     document_exchange_rate: Any,
     posting_date: Any,
+    is_fiscal_year_closing: bool = False,
 ) -> Decimal | None:
     """Resolve the historical conversion rate independently for each book."""
+    if is_fiscal_year_closing:
+        return Decimal("1")
     if not transaction_currency or not ledger_currency or transaction_currency == ledger_currency:
         return None
     if ledger_currency == document_base_currency and document_exchange_rate is not None:
@@ -476,6 +481,7 @@ def _resolve_gl_amounts(
     exchange_rate = params.exchange_rate if params.exchange_rate is not None else context.exchange_rate
     requires_conversion = (
         not params.is_reversal
+        and not params.is_fiscal_year_closing
         and context.transaction_currency
         and context.company_currency
         and context.transaction_currency != context.company_currency
