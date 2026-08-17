@@ -297,7 +297,12 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
 
 
 def _release_reservation_for_sales_order(so: SalesOrder) -> None:
-    """Libera la reserva de inventario al cancelar una Orden de Venta."""
+    """Libera la reserva de inventario al cancelar una Orden de Venta.
+
+    Usa la misma resolución de bodega que ``_validate_and_reserve_stock_for_sales_order``
+    (incluyendo ``Item.default_warehouse_id``) para que la cancelación libere
+    exactamente la bodega efectiva en que se reservó el inventario.
+    """
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars().all()
 
     for item in items:
@@ -305,7 +310,7 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
         if item_obj and not item_obj.is_stock_item:
             continue
 
-        warehouse = item.warehouse
+        warehouse = _resolve_item_warehouse(item, item_obj)
         if not warehouse:
             continue
 

@@ -371,6 +371,27 @@ class TestReservaOrdenVenta:
         bin_row2 = _get_bin()
         assert bin_row2.reserved_qty == Decimal("0")
 
+    def test_so_cancel_libera_reserva_en_bodega_predeterminada(self, app_ctx):
+        """La cancelación libera la bodega usada por la reserva implícita."""
+        item = database.session.execute(database.select(Item).filter_by(code="ART-RESERVE")).scalar_one()
+        item.default_warehouse_id = "WH-RESERVE"
+        database.session.commit()
+
+        so = _make_so("SO-RES-DEFAULT-WH", Decimal("6"), warehouse="")
+        client = app_ctx.test_client()
+        login(client)
+
+        submit_response = client.post("/sales/sales-order/SO-RES-DEFAULT-WH/submit", follow_redirects=True)
+        assert submit_response.status_code == 200
+        assert _get_bin().reserved_qty == Decimal("6")
+
+        cancel_response = client.post("/sales/sales-order/SO-RES-DEFAULT-WH/cancel", follow_redirects=True)
+        assert cancel_response.status_code == 200
+
+        database.session.refresh(so)
+        assert so.docstatus == 2
+        assert _get_bin().reserved_qty == Decimal("0")
+
 
 class TestReservaNotaEntrega:
     """Pruebas de liberacion/restauracion de reserva al aprobar/cancelar Nota de Entrega."""
