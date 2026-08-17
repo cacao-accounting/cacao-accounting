@@ -110,12 +110,11 @@ def _sales_exchange_rate(company: str | None, posting_date: Any, transaction_cur
     base_currency = company_currency(company)
     if not company or not transaction_currency or not base_currency or transaction_currency == base_currency:
         return rate
-    from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
+    from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 
-    try:
-        return _lookup_exchange_rate(transaction_currency, base_currency, posting_date)
-    except PostingError:
-        return rate
+    # Una tasa faltante debe impedir el posting: usar 1:1 altera el libro
+    # funcional y oculta una configuración cambiaria incompleta.
+    return _lookup_exchange_rate(transaction_currency, base_currency, posting_date)
 
 
 def _sales_invoice_currency_and_rate(
@@ -3471,7 +3470,7 @@ def _handle_sales_invoice_edit_post(registro):
                 registro.reversal_of,
                 registro.customer_id,
                 registro.company,
-                note_amount=total,
+                note_amount=grand_total,
                 document_type=registro.document_type,
                 posting_date=registro.posting_date,
             )
@@ -3511,6 +3510,13 @@ def ventas_factura_venta_duplicar(invoice_id: str):
         is_return=origen.is_return,
         remarks=origen.remarks,
         docstatus=0,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
+        tax_template_id=origen.tax_template_id,
+        sales_order_id=origen.sales_order_id,
+        delivery_note_id=origen.delivery_note_id,
+        reversal_of=origen.reversal_of,
     )
     database.session.add(duplicado)
     database.session.flush()
@@ -3530,15 +3536,20 @@ def ventas_factura_venta_duplicar(invoice_id: str):
             uom=item.uom,
             rate=item.rate,
             amount=item.amount,
+            warehouse=getattr(item, "warehouse", None),
+            account=getattr(item, "account", None),
+            cost_center=getattr(item, "cost_center", None),
+            unit=getattr(item, "unit", None),
+            project=getattr(item, "project", None),
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
     duplicado.total = total
-    duplicado.base_total = total
-    duplicado.grand_total = total
-    duplicado.base_grand_total = total
-    duplicado.outstanding_amount = total
-    duplicado.base_outstanding_amount = total
+    duplicado.base_total = origen.base_total
+    duplicado.grand_total = origen.grand_total
+    duplicado.base_grand_total = origen.base_grand_total
+    duplicado.outstanding_amount = origen.grand_total
+    duplicado.base_outstanding_amount = origen.base_grand_total
     database.session.commit()
     flash(_("Factura de venta duplicada como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=duplicado.id))
