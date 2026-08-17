@@ -443,10 +443,20 @@ def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
     database.session.flush()
     transaction = BankTransaction(bank_account_id=bank_account.id, posting_date=date(2026, 5, 5), deposit=Decimal("100.00"))
     payment_a = PaymentEntry(
-        company="cacao", posting_date=date(2026, 5, 5), payment_type="receive", received_amount=Decimal("60.00"), docstatus=1
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="receive",
+        received_amount=Decimal("60.00"),
+        bank_account_id=bank_account.id,
+        docstatus=1,
     )
     payment_b = PaymentEntry(
-        company="cacao", posting_date=date(2026, 5, 5), payment_type="receive", received_amount=Decimal("40.00"), docstatus=1
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="receive",
+        received_amount=Decimal("40.00"),
+        bank_account_id=bank_account.id,
+        docstatus=1,
     )
     database.session.add_all([transaction, payment_a, payment_b])
     database.session.commit()
@@ -489,7 +499,12 @@ def test_bank_reconciliation_locks_shared_target(app_ctx, monkeypatch):
     database.session.flush()
     transaction = BankTransaction(bank_account_id=account.id, posting_date=date(2026, 5, 5), deposit=Decimal("100"))
     payment = PaymentEntry(
-        company="cacao", posting_date=date(2026, 5, 5), payment_type="receive", received_amount=Decimal("100"), docstatus=1
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="receive",
+        received_amount=Decimal("100"),
+        bank_account_id=account.id,
+        docstatus=1,
     )
     database.session.add_all([transaction, payment])
     database.session.commit()
@@ -519,6 +534,9 @@ def test_bank_candidates_match_direction_and_allow_partial_payment(app_ctx):
     bank_account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta candidatos")
     database.session.add(bank_account)
     database.session.flush()
+    other_account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta ajena")
+    database.session.add(other_account)
+    database.session.flush()
     deposit = BankTransaction(
         bank_account_id=bank_account.id,
         posting_date=date(2026, 5, 5),
@@ -545,7 +563,15 @@ def test_bank_candidates_match_direction_and_allow_partial_payment(app_ctx):
         bank_account_id=bank_account.id,
         docstatus=1,
     )
-    database.session.add_all([deposit, withdrawal, receive, pay])
+    other_receive = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        payment_type="receive",
+        received_amount=Decimal("500"),
+        bank_account_id=other_account.id,
+        docstatus=1,
+    )
+    database.session.add_all([deposit, withdrawal, receive, pay, other_receive])
     database.session.commit()
 
     deposit_candidates = find_bank_reconciliation_candidates(deposit.id)
