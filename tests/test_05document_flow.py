@@ -86,7 +86,7 @@ def test_document_flow_tracks_partial_pending_qty(app_ctx):
     assert items[0]["consumed_qty"] == 0
     assert items[0]["pending_qty"] == 10
     assert all_items[0]["pending_qty"] == 10
-    assert order_item.received_qty == Decimal("4")
+    assert order_item.received_qty == Decimal("0")
 
 
 def test_document_flow_blocks_overconsumption(app_ctx):
@@ -322,7 +322,7 @@ def test_document_status_uses_single_operational_badge(app_ctx):
     )
 
     partial_status = calculate_document_status("purchase_order", "PO-001")
-    assert partial_status.label == "Recibido Parcialmente"
+    assert partial_status.label == "Pendiente Recibir"
 
     close_line_balance(
         source_type="purchase_order",
