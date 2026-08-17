@@ -4496,12 +4496,12 @@ def _create_purchase_invoice_from_request():
         fx_rate = _purchase_exchange_rate(company, posting_date, transaction_currency)
         factura.exchange_rate = fx_rate
         base_total, _base = _compute_base_amounts(total, fx_rate)
-        items = database.session.execute(
-            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id)
-        ).scalars().all()
-        grand_total = calculate_document_total_with_taxes(
-            factura, total, items, request.form.get("tax_summary_payload")
+        items = (
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id))
+            .scalars()
+            .all()
         )
+        grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
         base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
         factura.base_total = base_total
         factura.grand_total = grand_total
@@ -4683,12 +4683,12 @@ def _handle_purchase_invoice_edit_post(registro):
         fx_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
         registro.exchange_rate = fx_rate
         base_total, _base = _compute_base_amounts(total, fx_rate)
-        items = database.session.execute(
-            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
-        ).scalars().all()
-        grand_total = calculate_document_total_with_taxes(
-            registro, total, items, request.form.get("tax_summary_payload")
+        items = (
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id))
+            .scalars()
+            .all()
         )
+        grand_total = calculate_document_total_with_taxes(registro, total, items, request.form.get("tax_summary_payload"))
         base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
         registro.total = total
         registro.base_total = base_total
