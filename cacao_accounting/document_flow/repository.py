@@ -109,13 +109,22 @@ def consumed_qty_for_source(
     históricos) recurre a ``qty``. Con ``exclude_draft_targets`` no se
     consumen destinos en borrador salvo el indicado por ``include_target_id``.
     """
+    source_item = get_document_item(source_type, source_item_id) if source_item_id else None
+    def relation_qty_in_base(relation: DocumentRelation) -> Decimal:
+        """Normaliza relaciones legacy que aún no tienen cantidad base."""
+        if relation.qty_in_base_uom is not None:
+            return decimal_or_zero(relation.qty_in_base_uom)
+        from cacao_accounting.document_flow.service import _relation_qty_in_base_uom
+
+        return _relation_qty_in_base_uom(
+            source_item,
+            decimal_or_zero(relation.qty),
+            getattr(relation, "uom", None),
+        )
+
     return sum(
         (
-            (
-                decimal_or_zero(relation.qty_in_base_uom)
-                if relation.qty_in_base_uom is not None
-                else decimal_or_zero(relation.qty)
-            )
+            relation_qty_in_base(relation)
             for relation in iter_active_relations_for_source(
                 source_type,
                 source_id,

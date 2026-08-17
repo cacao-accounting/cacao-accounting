@@ -473,6 +473,12 @@ def _evaluate_matching_result(
 
     if qty_difference > 0 and not qty_ok:
         return MatchingResult.MATCH_FAILED
+    if config.allow_price_difference:
+        # La configuración permite cerrar el matching aunque la tarifa no
+        # coincida; la cantidad sigue siendo una restricción independiente.
+        price_tolerance_failed = False
+        price_ok = True
+        amount_ok = True
     if price_tolerance_failed or not price_ok or not amount_ok:
         return MatchingResult.MATCH_FAILED
     if qty_difference != 0:
@@ -586,7 +592,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
         price_difference = invoice_group.rate - receipt_group.rate
         amount_difference = invoice_group.amount - reference_amount
         line_price_difference = price_difference * min(invoice_group.qty, reference_qty)
-        if not _within_tolerance(
+        if reference_qty > 0 and not _within_tolerance(
             line_price_difference,
             reference_amount,
             config.price_tolerance_type,
@@ -665,7 +671,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     price_tolerance_failed = False
 
     for key, invoice_group in invoice_groups.items():
-        order_group = order_groups.get(key)
+        order_group = _compatible_group(order_groups, invoice_group.lines[0])
         if order_group is None:
             item_code, _uom, _warehouse = key
             raise PurchaseReconciliationError(f"No existe linea de OC compatible para el item {item_code}.")
@@ -681,7 +687,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
         price_difference = invoice_group.rate - order_group.rate
         amount_difference = invoice_group.amount - reference_amount
         line_price_difference = price_difference * min(invoice_group.qty, reference_qty)
-        if not _within_tolerance(
+        if reference_qty > 0 and not _within_tolerance(
             line_price_difference,
             reference_amount,
             config.price_tolerance_type,

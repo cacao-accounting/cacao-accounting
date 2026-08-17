@@ -1632,7 +1632,12 @@ def _flow_source_type(reference_type: str, document: object, line: dict) -> str:
     """Resuelve el tipo lógico de origen que debe conservarse en trazabilidad."""
     explicit = str(line.get("flow_source_type") or "").strip().lower()
     document_type = normalize_doctype(str(getattr(document, "document_type", None) or reference_type))
-    if explicit and normalize_doctype(explicit) != document_type:
+    legacy_aliases = {
+        "purchase_invoice": {"purchase_invoice", "purchase_credit_note", "purchase_debit_note"},
+        "sales_invoice": {"sales_invoice", "sales_credit_note", "sales_debit_note", "sales_return"},
+    }
+    equivalent = legacy_aliases.get(document_type, {document_type})
+    if explicit and normalize_doctype(explicit) not in equivalent:
         raise ValueError(_("El tipo de flujo no coincide con el tipo documental referenciado."))
     return document_type
 

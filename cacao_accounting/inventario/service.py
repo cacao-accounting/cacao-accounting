@@ -156,6 +156,10 @@ def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None
             )
         ).scalar_one()
         requested = Decimal(str(getattr(line, "qty", 0) or 0))
+        line_uom = getattr(line, "uom", None)
+        base_uom = getattr(item, "default_uom", None)
+        if line_uom and base_uom and line_uom != base_uom:
+            requested = convert_item_qty(item.code, requested, line_uom, base_uom)
         if Decimal(str(balance or 0)) < requested:
             raise InventoryServiceError("El lote no tiene saldo suficiente en la bodega de salida.")
 

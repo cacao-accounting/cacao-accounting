@@ -69,6 +69,9 @@ class BankStatementAdapter(BaseImportAdapter):
             except (InvalidOperation, TypeError, ValueError):
                 amounts[field] = None
                 errors.append(f"Monto bancario inválido en columna '{field}': {row_data.get(field)}")
+            else:
+                if amounts[field] is not None and amounts[field] < 0:
+                    errors.append(f"El monto bancario en columna '{field}' no puede ser negativo.")
         if (
             amounts["deposit"] is None
             and amounts["withdrawal"] is None
