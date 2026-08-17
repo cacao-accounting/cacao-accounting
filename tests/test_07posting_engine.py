@@ -3708,6 +3708,37 @@ def test_stock_reconciliation_rejects_cross_company_account_and_dimension(app_ct
         _validate_stock_reconciliation_dimensions(entry, "cacao")
 
 
+def test_stock_adjustment_uses_item_specific_adjustment_account(app_ctx):
+    """Los ajustes usan la cuenta específica del item antes del default."""
+    from cacao_accounting.contabilidad.posting import _get_offset_account_for_line
+    from cacao_accounting.database import Accounts, ItemAccount, StockEntry, StockEntryItem, database
+
+    account = Accounts(
+        entity="cacao",
+        code="ADJ-ITEM-505",
+        name="Ajuste específico",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    database.session.add(account)
+    database.session.flush()
+    database.session.add(
+        ItemAccount(
+            item_code="ITEM-505",
+            company="cacao",
+            stock_adjustment_account_id=account.id,
+        )
+    )
+    database.session.flush()
+
+    entry = StockEntry(company="cacao", purpose="stock_adjustment")
+    line = StockEntryItem(stock_entry_id=entry.id, item_code="ITEM-505")
+
+    assert _get_offset_account_for_line(entry, line, "cacao", "stock_adjustment") == account.id
+
+
 def test_payment_debit_note_creates_balanced_gl_entries(app_ctx):
     """Verifica que una nota de debito bancaria (PaymentEntry) genera GL balanceado."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
