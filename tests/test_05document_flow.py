@@ -296,7 +296,7 @@ def test_document_status_uses_single_operational_badge(app_ctx):
     assert open_status.label == "Pendiente Recibir"
     assert open_status.badge_class == "text-bg-primary"
 
-    receipt = PurchaseReceipt(id="PR-005", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    receipt = PurchaseReceipt(id="PR-005", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
     receipt_item = PurchaseReceiptItem(
         purchase_receipt_id="PR-005",
         item_code="ART-001",
@@ -322,7 +322,7 @@ def test_document_status_uses_single_operational_badge(app_ctx):
     )
 
     partial_status = calculate_document_status("purchase_order", "PO-001")
-    assert partial_status.label == "Pendiente Recibir"
+    assert partial_status.label == "Recibido Parcialmente"
 
     close_line_balance(
         source_type="purchase_order",
