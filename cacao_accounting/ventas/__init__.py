@@ -464,6 +464,27 @@ def _can_manage_delivery_notes() -> bool:
     return bool(permissions.administrador or permissions.crear)
 
 
+def _require_sales_document_access(document: Any, action: str = "consultar") -> None:
+    """Require granular company access for an O2C document.
+
+    Shares the company-scope check used by the submit/cancel routes so that
+    detail, edit and duplicate endpoints cannot read or mutate documents of
+    companies outside the user's authorized books.
+
+    Args:
+        document: Operational sales document carrying a ``company`` attribute.
+        action: Granular action ("consultar", "crear", "editar", "autorizar").
+
+    Raises:
+        HTTPException: ``404`` for documents without a company or ``403``
+            when the current user lacks access to the document company.
+    """
+    company = getattr(document, "company", None)
+    if not company:
+        abort(404)
+    exige_acceso_compania("sales", str(company), action)
+
+
 @ventas.route("/")
 @ventas.route("/ventas")
 @ventas.route("/sales")
@@ -580,6 +601,7 @@ def ventas_pedido_venta(request_id: str):
     registro = database.session.get(SalesRequest, request_id)
     if not registro:
         abort(404)
+    _require_sales_document_access(registro, "consultar")
     items = database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=request_id)).all()
     titulo = (registro.document_no or request_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("sales_request", registro.id)
@@ -1946,6 +1968,7 @@ def ventas_orden_venta(order_id):
     registro = database.session.get(SalesOrder, order_id)
     if not registro:
         abort(404)
+    _require_sales_document_access(registro, "consultar")
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=order_id)).all()
     titulo = (registro.document_no or order_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("sales_order", registro.id)
@@ -2212,6 +2235,7 @@ def ventas_cotizacion(quotation_id: str):
     registro = database.session.get(SalesQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_sales_document_access(registro, "consultar")
     items = database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=quotation_id)).all()
     titulo = (registro.document_no or quotation_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("sales_quotation", registro.id)
@@ -3130,6 +3154,7 @@ def ventas_factura_venta(invoice_id):
     registro = database.session.get(SalesInvoice, invoice_id)
     if not registro:
         abort(404)
+    _require_sales_document_access(registro, "consultar")
     items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice_id)).all()
     titulo = (registro.document_no or invoice_id) + " - " + APPNAME
     audit_timeline = format_document_timeline(registro.document_type or "sales_invoice", registro.id)
