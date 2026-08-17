@@ -5041,6 +5041,20 @@ def _create_import_landed_cost_from_request():
         flash(_("Compania y fecha son obligatorios."), "danger")
         return None
 
+    exige_acceso_compania("purchases", company, "crear")
+
+    if from_invoice_id:
+        source_invoice = database.session.get(PurchaseInvoice, from_invoice_id)
+        if not source_invoice:
+            flash(_("La factura de compra seleccionada no existe."), "danger")
+            return None
+        if source_invoice.company != company:
+            flash(_("La factura de compra no pertenece a la compañía indicada."), "danger")
+            return None
+        if getattr(source_invoice, "docstatus", 0) != 1:
+            flash(_("La factura de compra debe estar aprobada para capitalizar costos."), "danger")
+            return None
+
     supplier_id, supplier_name = _resolve_supplier_from_invoice(from_invoice_id)
 
     registro = ImportLandedCost(
