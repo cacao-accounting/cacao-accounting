@@ -605,6 +605,20 @@ def test_cash_forecast_creation_status_and_entry_validation_routes():
         )
         assert invalid_entry.status_code == 302
 
+        invalid_type = client.post(
+            f"/cash_management/cash-forecast/{forecast_id}/entry/add",
+            data={
+                "type": "Transfer",
+                "concept": "Tipo no permitido",
+                "currency": "NIO",
+                "amount": "125.00",
+                "estimated_date": "2026-09-01",
+            },
+        )
+        assert invalid_type.status_code == 302
+        with test_app.app_context():
+            assert db.session.query(CashForecastEntry).filter_by(concept="Tipo no permitido").first() is None
+
         valid_entry = client.post(
             f"/cash_management/cash-forecast/{forecast_id}/entry/add?next=https://example.com",
             data={
