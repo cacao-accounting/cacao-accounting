@@ -896,6 +896,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                 SalesRequestItem,
                 StockEntry,
                 ExchangeRate,
+                Item,
                 SupplierQuotation,
                 SupplierQuotationItem,
                 database,
@@ -933,6 +934,25 @@ def test_transaccional_full_transition_routes_get_post(request):
                     )
                     database.session.add(customer)
                     database.session.flush()
+
+                transition_item = database.session.execute(
+                    database.select(Item).filter_by(code="ART-001")
+                ).scalar_one_or_none()
+                if transition_item is None:
+                    transition_item = Item(
+                        code="ART-001",
+                        name="Artículo de transición",
+                        item_type="goods",
+                        is_stock_item=False,
+                        is_active=True,
+                        is_purchase_item=True,
+                        is_sale_item=True,
+                        default_uom="UND",
+                    )
+                    database.session.add(transition_item)
+                else:
+                    transition_item.is_stock_item = False
+                database.session.flush()
 
                 purchase_quotation = PurchaseQuotation(
                     document_no="TEST2-RFQ-DRAFT",
