@@ -3099,12 +3099,10 @@ def _create_sales_invoice_from_form():
             naming_series_id=request.form.get("naming_series") or None,
         )
         _total_qty, total = _save_sales_invoice_items(factura.id)
-        items = database.session.execute(
-            database.select(SalesInvoiceItem).filter_by(sales_invoice_id=factura.id)
-        ).scalars().all()
-        grand_total = calculate_document_total_with_taxes(
-            factura, total, items, request.form.get("tax_summary_payload")
+        items = (
+            database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=factura.id)).scalars().all()
         )
+        grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
         factura.total = factura.base_total = total
         factura.grand_total = factura.base_grand_total = grand_total
         factura.outstanding_amount = factura.base_outstanding_amount = grand_total
@@ -3319,12 +3317,10 @@ def _handle_sales_invoice_edit_post(registro):
         _total_qty, total = _save_sales_invoice_items(registro.id)
         registro.total = total
         registro.base_total = total
-        items = database.session.execute(
-            database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)
-        ).scalars().all()
-        grand_total = calculate_document_total_with_taxes(
-            registro, total, items, request.form.get("tax_summary_payload")
+        items = (
+            database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
         )
+        grand_total = calculate_document_total_with_taxes(registro, total, items, request.form.get("tax_summary_payload"))
         registro.grand_total = grand_total
         registro.base_grand_total = grand_total
         registro.outstanding_amount = grand_total
