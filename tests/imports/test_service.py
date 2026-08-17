@@ -12,6 +12,7 @@ from cacao_accounting.imports.models import ImportBatch
 from cacao_accounting.imports.services.import_service import ImportService
 from cacao_accounting.imports.adapters import journal_entry as journal_entry_adapter
 from cacao_accounting.imports.services import import_service as import_service_module
+from cacao_accounting.imports.adapters.cash_forecast_entry import CashForecastEntryAdapter
 from ulid import ULID
 
 
@@ -204,3 +205,20 @@ def test_journal_import_balances_high_precision_amounts_without_float_rounding(m
     )
 
     assert not any("no está balanceado" in error for error in errors)
+
+
+def test_cash_forecast_import_rejects_forecast_from_other_company(monkeypatch):
+    """La importación no debe inyectar entradas en el forecast de otra compañía."""
+    forecast = type("Forecast", (), {"id": "FORECAST-B", "company": "company-b"})()
+    monkeypatch.setattr(
+        database.session,
+        "get",
+        lambda model, identifier: forecast if identifier == "FORECAST-B" else None,
+    )
+
+    errors = CashForecastEntryAdapter().validate_document(
+        [{"forecast_id": "FORECAST-B"}],
+        {"company_id": "company-a"},
+    )
+
+    assert errors == ["El pronóstico FORECAST-B pertenece a la compañía company-b, no a company-a."]
