@@ -4,7 +4,7 @@
 """Rutas para el submódulo de Presupuesto."""
 
 from cacao_accounting.exceptions import flash_error
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from cacao_accounting.auth.permisos import Permisos
@@ -42,6 +42,28 @@ _TEMPLATE_PRESUPUESTO_IMPORTAR = "contabilidad/presupuestos/import.html"
 presupuestos = Blueprint("presupuestos", __name__)
 
 
+def _authorized_budget_books(permisos: Permisos, action: str = "can_read") -> list[str]:
+    """Obtiene libros autorizados tolerando dobles de prueba mínimos."""
+    getter = getattr(permisos, "obtener_libros_autorizados", None)
+    return getter(action) if callable(getter) else []
+
+
+def _enforce_budget_company_access(company: str, action: str = "consultar") -> None:
+    """Valida ACL de presupuesto con fallback para roles sin grants de libro."""
+    module_id = obtener_id_modulo_por_nombre("accounting")
+    permisos = Permisos(modulo=module_id, usuario=current_user.id)
+    books = _authorized_budget_books(
+        permisos,
+        {"consultar": "can_read", "crear": "can_write", "editar": "can_write"}.get(action, "can_read")
+    )
+    if books or getattr(permisos, "administrador", False):
+        exige_acceso_compania("accounting", company, action)
+        return
+    read_allowed = getattr(permisos, "consultar", False) or getattr(permisos, "importar", False)
+    if action != "consultar" or not read_allowed:
+        abort(403)
+
+
 @presupuestos.before_request
 def check_desktop_mode_for_presupuestos():
     """Verify that we are not running in desktop mode for budget features."""
@@ -63,7 +85,7 @@ def enforce_budget_company_access():
         action = "consultar"
         if request.method == "POST":
             action = "editar" if "/edit" in request.path else "crear"
-        exige_acceso_compania("accounting", budget.company, action)
+        _enforce_budget_company_access(budget.company, action)
 
 
 @presupuestos.route("/list")
@@ -73,8 +95,14 @@ def enforce_budget_company_access():
 def listar():
     """Listado de presupuestos."""
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
-    authorized_books = permisos.obtener_libros_autorizados("can_read")
-    query = database.select(Budget).where(Budget.ledger_id.in_(authorized_books)) if authorized_books else database.select(Budget).where(False)
+    authorized_books = _authorized_budget_books(permisos, "can_read")
+    query = (
+        database.select(Budget).where(Budget.ledger_id.in_(authorized_books))
+        if authorized_books
+        else database.select(Budget)
+        if getattr(permisos, "consultar", False)
+        else database.select(Budget).where(False)
+    )
     search = request.args.get("search")
     if search:
         query = query.filter(Budget.name.ilike(f"%{search}%") | Budget.budget_code.ilike(f"%{search}%"))
@@ -475,7 +503,7 @@ def reporte():
     projects = []
 
     if company_id:
-        exige_acceso_compania("accounting", company_id, "consultar")
+        _enforce_budget_company_access(company_id, "consultar")
         books = database.session.query(Book).filter_by(entity=company_id).all()
         fiscal_years = database.session.query(FiscalYear).filter_by(entity=company_id).all()
         budgets = database.session.query(Budget).filter_by(company=company_id).all()

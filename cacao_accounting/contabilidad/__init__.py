@@ -74,7 +74,12 @@ from cacao_accounting.database import (
     RecurringJournalTemplate,
     database,
 )
-from cacao_accounting.database.helpers import check_hierarchy_cycle, get_descendant_ids, update_hierarchy_attributes
+from cacao_accounting.database.helpers import (
+    check_hierarchy_cycle,
+    get_descendant_ids,
+    obtener_id_modulo_por_nombre,
+    update_hierarchy_attributes,
+)
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_acceso, verifica_permiso
 from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME

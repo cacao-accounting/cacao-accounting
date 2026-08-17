@@ -573,7 +573,13 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
         if company_currency:
             transaction_currency = str(company_currency)
             lines = _apply_currency_to_lines(lines, transaction_currency)
-    _validate_active_transaction_currency(transaction_currency)
+    # Las empresas antiguas pueden no tener todavía la moneda en el catálogo;
+    # un borrador puede conservar el valor y validarlo estrictamente al enviar.
+    explicit_currency = _optional_text(payload.get("transaction_currency")) or any(
+        _optional_text(line.get("currency")) for line in lines_payload if isinstance(line, dict)
+    )
+    if explicit_currency:
+        _validate_active_transaction_currency(transaction_currency)
     exchange_rate = _optional_decimal(payload.get("exchange_rate"))
     if exchange_rate is not None and exchange_rate <= 0:
         raise JournalValidationError("El tipo de cambio debe ser mayor que cero.")
