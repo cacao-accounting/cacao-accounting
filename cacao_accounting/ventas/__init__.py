@@ -621,6 +621,7 @@ def ventas_pedido_venta_editar(request_id: str):
     registro = database.session.get(SalesRequest, request_id)
     if not registro:
         abort(404)
+    _require_sales_document_access(registro, "editar")
     if registro.docstatus != 0:
         abort(400)
 
@@ -687,6 +688,7 @@ def ventas_pedido_venta_duplicar(request_id: str):
     origen = database.session.get(SalesRequest, request_id)
     if not origen:
         abort(404)
+    _require_sales_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -1988,6 +1990,7 @@ def ventas_orden_venta_editar(order_id: str):
     registro = database.session.get(SalesOrder, order_id)
     if not registro:
         abort(404)
+    _require_sales_document_access(registro, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
@@ -2076,6 +2079,7 @@ def ventas_orden_venta_duplicar(order_id: str):
     origen = database.session.get(SalesOrder, order_id)
     if not origen:
         abort(404)
+    _require_sales_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -2255,6 +2259,7 @@ def ventas_cotizacion_editar(quotation_id: str):
     registro = database.session.get(SalesQuotation, quotation_id)
     if not registro:
         abort(404)
+    _require_sales_document_access(registro, "editar")
     if registro.docstatus != 0:
         abort(400)
 
@@ -2347,6 +2352,7 @@ def ventas_cotizacion_duplicar(quotation_id: str):
     origen = database.session.get(SalesQuotation, quotation_id)
     if not origen:
         abort(404)
+    _require_sales_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
@@ -3174,6 +3180,7 @@ def ventas_factura_venta_editar(invoice_id: str):
     registro = database.session.get(SalesInvoice, invoice_id)
     if not registro:
         abort(404)
+    _require_sales_document_access(registro, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
@@ -3313,6 +3320,7 @@ def ventas_factura_venta_duplicar(invoice_id: str):
     origen = database.session.get(SalesInvoice, invoice_id)
     if not origen:
         abort(404)
+    _require_sales_document_access(origen, "crear")
     if origen.docstatus == 2:
         abort(400)
 
