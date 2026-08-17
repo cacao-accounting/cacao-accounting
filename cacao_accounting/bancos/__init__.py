@@ -1068,6 +1068,7 @@ def bancos_cuenta_bancaria(account_id):
     registro = database.session.get(BankAccount, account_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("cash", registro.company, "consultar")
     titulo = registro.account_name + " - " + APPNAME
 
     from cacao_accounting.document_identifiers import PAYMENT_TYPE_TO_ENTITY_TYPE as ENTITY_MAP
@@ -1158,10 +1159,11 @@ def bancos_cuenta_bancaria_numbering_config(account_id: str) -> ResponseReturnVa
     bank_account = database.session.get(BankAccount, account_id)
     if not bank_account:
         abort(404)
-
     if request.method == "POST":
+        exige_acceso_compania("cash", bank_account.company, "editar")
         return _save_numbering_configs(bank_account)
 
+    exige_acceso_compania("cash", bank_account.company, "consultar")
     return _build_numbering_config_response(bank_account)
 
 
