@@ -110,6 +110,7 @@ def consumed_qty_for_source(
     consumen destinos en borrador salvo el indicado por ``include_target_id``.
     """
     source_item = get_document_item(source_type, source_item_id) if source_item_id else None
+
     def relation_qty_in_base(relation: DocumentRelation) -> Decimal:
         """Normaliza relaciones legacy que aún no tienen cantidad base."""
         if relation.qty_in_base_uom is not None:

@@ -53,8 +53,7 @@ def _enforce_budget_company_access(company: str, action: str = "consultar") -> N
     module_id = obtener_id_modulo_por_nombre("accounting")
     permisos = Permisos(modulo=module_id, usuario=current_user.id)
     books = _authorized_budget_books(
-        permisos,
-        {"consultar": "can_read", "crear": "can_write", "editar": "can_write"}.get(action, "can_read")
+        permisos, {"consultar": "can_read", "crear": "can_write", "editar": "can_write"}.get(action, "can_read")
     )
     if books or getattr(permisos, "administrador", False):
         exige_acceso_compania("accounting", company, action)
@@ -99,9 +98,7 @@ def listar():
     query = (
         database.select(Budget).where(Budget.ledger_id.in_(authorized_books))
         if authorized_books
-        else database.select(Budget)
-        if getattr(permisos, "consultar", False)
-        else database.select(Budget).where(False)
+        else database.select(Budget) if getattr(permisos, "consultar", False) else database.select(Budget).where(False)
     )
     search = request.args.get("search")
     if search:

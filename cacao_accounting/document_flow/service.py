@@ -484,15 +484,19 @@ def _validate_relation_status(source_key: str, source_id: str, target_key: str, 
 
 def get_target_line_source(target_type: str, target_item_id: str) -> dict[str, str]:
     """Devuelve el origen activo que debe conservar una línea editada."""
-    relation = database.session.execute(
-        database.select(DocumentRelation)
-        .filter_by(
-            target_type=normalize_doctype(target_type),
-            target_item_id=target_item_id,
-            status="active",
+    relation = (
+        database.session.execute(
+            database.select(DocumentRelation)
+            .filter_by(
+                target_type=normalize_doctype(target_type),
+                target_item_id=target_item_id,
+                status="active",
+            )
+            .order_by(DocumentRelation.created.asc(), DocumentRelation.id.asc())
         )
-        .order_by(DocumentRelation.created.asc(), DocumentRelation.id.asc())
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if not relation:
         return {}
     return {
@@ -543,9 +547,7 @@ def revert_relations_for_target(target_type: str, target_id: str, reason: str = 
     if reason != "draft_edited":
         downstream = (
             database.session.execute(
-                database.select(DocumentRelation).filter_by(
-                    source_type=target_key, source_id=target_id, status="active"
-                )
+                database.select(DocumentRelation).filter_by(source_type=target_key, source_id=target_id, status="active")
             )
             .scalars()
             .all()

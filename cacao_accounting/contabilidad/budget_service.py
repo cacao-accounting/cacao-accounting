@@ -378,14 +378,11 @@ class BudgetService:
             return Decimal("0")
         from cacao_accounting.database import BudgetLine
 
-        lines = (
-            database.session.query(BudgetLine)
-            .filter(
-                BudgetLine.budget_id.in_(budget_ids),
-                BudgetLine.account_id == resolved_account_id,
-                BudgetLine.cost_center_id == resolved_cost_center_id,
-                BudgetLine.period_id == period_id,
-            )
+        lines = database.session.query(BudgetLine).filter(
+            BudgetLine.budget_id.in_(budget_ids),
+            BudgetLine.account_id == resolved_account_id,
+            BudgetLine.cost_center_id == resolved_cost_center_id,
+            BudgetLine.period_id == period_id,
         )
         if business_unit_id is not None:
             lines = lines.filter(BudgetLine.business_unit_id == business_unit_id)

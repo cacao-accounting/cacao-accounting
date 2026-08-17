@@ -132,9 +132,7 @@ def _sales_invoice_currency_and_rate(
     return transaction_currency, base_currency, exchange_rate
 
 
-def _set_sales_invoice_totals(
-    invoice: SalesInvoice, total: Decimal, grand_total: Decimal, source: Any | None = None
-) -> None:
+def _set_sales_invoice_totals(invoice: SalesInvoice, total: Decimal, grand_total: Decimal, source: Any | None = None) -> None:
     """Recalcula importes transaccionales y funcionales de una factura de venta."""
     requested_currency = getattr(invoice, "transaction_currency", None)
     transaction_currency, base_currency, exchange_rate = _sales_invoice_currency_and_rate(
@@ -2026,9 +2024,9 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
         )
         _total_qty, total = _save_sales_order_items(orden.id)
         if source_type and source_id:
-            order_items = database.session.execute(
-                database.select(SalesOrderItem).filter_by(sales_order_id=orden.id)
-            ).scalars().all()
+            order_items = (
+                database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=orden.id)).scalars().all()
+            )
             _validate_sales_source_link(orden, source_type, source_id, order_items)
         orden.total = total
         orden.base_total = total
@@ -2358,9 +2356,11 @@ def ventas_cotizacion_nueva():
                 naming_series_id=request.form.get("naming_series") or None,
             )
             _total_qty, total = _save_sales_quotation_items(cotizacion.id)
-            quotation_items = database.session.execute(
-                database.select(SalesQuotationItem).filter_by(sales_quotation_id=cotizacion.id)
-            ).scalars().all()
+            quotation_items = (
+                database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=cotizacion.id))
+                .scalars()
+                .all()
+            )
             if from_request_id:
                 _validate_sales_source_link(cotizacion, "sales_request", from_request_id, quotation_items)
             cotizacion.total = total
