@@ -333,6 +333,8 @@ def _resolve_item_account_id(item_code: str | None, company: str, account_type: 
             mapped = {
                 "income": mapping.income_account_id,
                 "expense": mapping.expense_account_id,
+                "stock_adjustment": mapping.stock_adjustment_account_id,
+                "inventory_adjustment": mapping.stock_adjustment_account_id,
             }.get(account_type)
             if mapped:
                 return mapped
@@ -3178,8 +3180,9 @@ def _get_offset_account_for_line(document: StockEntry, line: StockEntryItem, com
             )
     else:
         account = _account_id_for_item(line, company, offset_type)
-    return _require_account(
+    return _require_company_account(
         account or _account_id_for_item(line, company, offset_type),
+        company,
         "Falta la cuenta de contrapartida para la linea de stock.",
     )
 
