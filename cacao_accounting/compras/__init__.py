@@ -121,6 +121,7 @@ from cacao_accounting.document_flow import (
     create_document_relation,
     get_create_actions,
     refresh_source_caches_for_target,
+    require_line_relations,
     revert_relations_for_target,
     validate_submit_prerequisites,
 )
@@ -3601,6 +3602,11 @@ def _create_purchase_receipt_from_form():
             naming_series_id=request.form.get("naming_series") or None,
         )
         _total_qty, total = _save_purchase_receipt_items(receipt.id)
+        if receipt.purchase_order_id:
+            receipt_items = database.session.execute(
+                database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id)
+            ).scalars().all()
+            _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
         receipt.total = receipt.grand_total = total
         receipt.exchange_rate = _purchase_exchange_rate(company, posting_date, receipt.transaction_currency)
         receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
@@ -3810,10 +3816,46 @@ def compras_recepcion_duplicar(receipt_id: str):
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=duplicada.id))
 
 
+def _validate_purchase_source_link(
+    document: Any, source_type: str, source_id: str, items: list[Any] | None = None
+) -> Any:
+    """Valida estado, compañía, proveedor y relaciones de un origen S2P."""
+    source_models = {"purchase_order": PurchaseOrder, "purchase_receipt": PurchaseReceipt}
+    source_model = source_models.get(source_type)
+    source = database.session.get(source_model, source_id) if source_model else None
+    if not source:
+        raise ValueError(f"El documento origen '{source_id}' no existe.")
+    if source.docstatus != 1:
+        raise ValueError(f"El documento origen '{source_id}' debe estar aprobado.")
+    if source.company != document.company:
+        raise ValueError("El documento origen y el documento destino deben pertenecer a la misma compañía.")
+    if source.supplier_id and source.supplier_id != document.supplier_id:
+        raise ValueError("El documento origen y el documento destino deben pertenecer al mismo proveedor.")
+    target_currency = getattr(document, "transaction_currency", None)
+    if target_currency and effective_currency(source) != target_currency:
+        raise ValueError("El documento origen y el documento destino deben usar la misma moneda.")
+    if source_type == "purchase_receipt" and getattr(document, "purchase_order_id", None):
+        if source.purchase_order_id != document.purchase_order_id:
+            raise ValueError("La recepción no pertenece a la orden de compra indicada.")
+    if items is not None:
+        require_line_relations(
+            target_type="purchase_invoice" if isinstance(document, PurchaseInvoice) else "purchase_receipt",
+            target_id=document.id,
+            source_type=source_type,
+            source_id=source_id,
+            items=list(items),
+        )
+    return source
+
+
 def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
     """Valida que las cantidades recibidas no excedan las ordenadas en la OC."""
     receipt = database.session.get(PurchaseReceipt, receipt_id)
     if receipt and receipt.purchase_order_id:
+        receipt_items = database.session.execute(
+            database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt_id)
+        ).scalars().all()
+        _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
         purchase_order = database.session.get(PurchaseOrder, receipt.purchase_order_id)
         if purchase_order and purchase_order.supplier_id != receipt.supplier_id:
             raise ValueError(_("El proveedor de la recepción no coincide con el proveedor de la orden de compra."))
@@ -3855,6 +3897,15 @@ def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
     Cuando la factura se vincula directamente a una OC (sin recepción),
     valida contra la cantidad ordenada en la OC.
     """
+    invoice = database.session.get(PurchaseInvoice, invoice_id)
+    if invoice:
+        invoice_items = database.session.execute(
+            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)
+        ).scalars().all()
+        if invoice.purchase_receipt_id:
+            _validate_purchase_source_link(invoice, "purchase_receipt", invoice.purchase_receipt_id, invoice_items)
+        elif invoice.purchase_order_id:
+            _validate_purchase_source_link(invoice, "purchase_order", invoice.purchase_order_id, invoice_items)
     relations = database.session.execute(
         database.select(DocumentRelation).filter_by(
             target_type="purchase_invoice",
@@ -4489,6 +4540,13 @@ def _create_purchase_invoice_from_request():
             naming_series_id=request.form.get("naming_series") or None,
         )
         _total_qty, total = _save_purchase_invoice_items(factura.id)
+        invoice_items = database.session.execute(
+            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id)
+        ).scalars().all()
+        if factura.purchase_receipt_id:
+            _validate_purchase_source_link(factura, "purchase_receipt", factura.purchase_receipt_id, invoice_items)
+        elif factura.purchase_order_id:
+            _validate_purchase_source_link(factura, "purchase_order", factura.purchase_order_id, invoice_items)
         factura.total = total
         # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
         fx_rate = _purchase_exchange_rate(company, posting_date, transaction_currency)
