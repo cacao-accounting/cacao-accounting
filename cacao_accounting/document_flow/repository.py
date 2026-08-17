@@ -86,10 +86,17 @@ def consumed_qty_for_source(
     source_item_id: str | None,
     target_type: str | None = None,
 ) -> Decimal:
-    """Suma la cantidad consumida por relaciones activas."""
+    """Suma la cantidad consumida por relaciones activas.
+
+    Normaliza el consumo a la UOM base del artículo origen: si la relación
+    guarda ``qty_in_base_uom`` usa ese valor; en caso contrario (datos
+    históricos) recurre a ``qty``.
+    """
     return sum(
         (
-            decimal_or_zero(relation.qty)
+            decimal_or_zero(relation.qty_in_base_uom)
+            if relation.qty_in_base_uom is not None
+            else decimal_or_zero(relation.qty)
             for relation in iter_active_relations_for_source(source_type, source_id, source_item_id, target_type)
         ),
         Decimal("0"),
@@ -130,7 +137,11 @@ def recompute_line_flow_state(
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
     source_item = get_document_item(source_key, source_item_id)
-    source_qty = decimal_or_zero(getattr(source_item, "qty", 0)) if source_item else Decimal("0")
+    source_qty = (
+        decimal_or_zero(getattr(source_item, "qty_in_base_uom", None))
+        if source_item and getattr(source_item, "qty_in_base_uom", None) is not None
+        else (decimal_or_zero(getattr(source_item, "qty", 0)) if source_item else Decimal("0"))
+    )
     state = get_line_flow_state(source_key, source_id, source_item_id, target_key)
     if state is None:
         state = DocumentLineFlowState(

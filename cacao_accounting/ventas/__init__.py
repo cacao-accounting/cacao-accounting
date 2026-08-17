@@ -1712,7 +1712,11 @@ def _validate_delivery_quantities_against_so(note_id: str) -> None:
         if not so_item:
             continue
         consumed = consumed_qty_for_source("sales_order", rel.source_id, rel.source_item_id, "delivery_note")
-        ordered = Decimal(str(so_item.qty or 0))
+        ordered = (
+            Decimal(str(so_item.qty_in_base_uom))
+            if so_item.qty_in_base_uom is not None
+            else Decimal(str(so_item.qty or 0))
+        )
         if consumed > ordered:
             raise ValueError(
                 _("Sobre-entrega: cantidad entregada {} excede la ordenada {} para el artículo {}.").format(
@@ -1798,7 +1802,11 @@ def _validate_sales_invoice_relation(relation: DocumentRelation) -> None:
     if not item:
         return
     consumed = consumed_qty_for_source(relation.source_type, relation.source_id, relation.source_item_id, "sales_invoice")
-    available = Decimal(str(item.qty or 0))
+    available = (
+        Decimal(str(item.qty_in_base_uom))
+        if getattr(item, "qty_in_base_uom", None) is not None
+        else Decimal(str(item.qty or 0))
+    )
     if consumed > available:
         raise ValueError(
             _("Sobre-facturación: cantidad facturada {} excede la {} para el artículo {}.").format(

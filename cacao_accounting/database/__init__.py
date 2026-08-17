@@ -3055,6 +3055,7 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
         index=True,
     )
     qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     uom = database.Column(
         database.String(20), database.ForeignKey(UOM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
