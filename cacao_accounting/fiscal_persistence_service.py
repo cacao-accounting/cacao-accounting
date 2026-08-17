@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import json
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -23,9 +23,9 @@ def calculate_document_total_with_taxes(
     """Calcula el total persistible de una factura con impuestos server-side.
 
     Cuando existe una plantilla fiscal, ésta es la fuente de verdad y evita
-    confiar en totales manipulables del navegador. El resumen enviado por la
-    interfaz se usa sólo para documentos sin plantilla, donde conserva el
-    snapshot fiscal manual capturado por el formulario.
+    confiar en totales manipulables del navegador. Sin plantilla, el total
+    persistible es la suma server-side de las líneas; el resumen del cliente
+    nunca modifica el importe contable.
     """
     template_id = getattr(document, "tax_template_id", None)
     if template_id:
@@ -33,17 +33,12 @@ def calculate_document_total_with_taxes(
 
         setattr(document, "_tax_items", items)
         tax_result = calculate_taxes(document, template_id)
-        return abs(subtotal + tax_result.payable_delta)
-
-    if summary_payload:
-        try:
-            summary = json.loads(summary_payload) if isinstance(summary_payload, str) else summary_payload
-            grand_total = summary.get("grand_total") if isinstance(summary, dict) else None
-            if grand_total not in (None, ""):
-                return abs(Decimal(str(grand_total)))
-        except (InvalidOperation, TypeError, ValueError):
-            pass
-    return abs(subtotal)
+        total = subtotal + tax_result.payable_delta
+    else:
+        total = subtotal
+    if total < 0:
+        raise ValueError("El total fiscal no puede ser negativo.")
+    return total
 
 
 def persist_document_fiscal_snapshot(

@@ -519,13 +519,17 @@ def revert_relations_for_target(target_type: str, target_id: str, reason: str = 
             before,
             {"status": relation.status, "reason": reason},
         )
-    downstream = (
-        database.session.execute(
-            database.select(DocumentRelation).filter_by(source_type=target_key, source_id=target_id, status="active")
+    downstream = []
+    if reason != "draft_edited":
+        downstream = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(
+                    source_type=target_key, source_id=target_id, status="active"
+                )
+            )
+            .scalars()
+            .all()
         )
-        .scalars()
-        .all()
-    )
     for relation in downstream:
         before = {"status": relation.status, "qty": str(relation.qty)}
         relation.status = "reverted"
