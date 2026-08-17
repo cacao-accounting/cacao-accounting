@@ -1258,19 +1258,15 @@ def _form_decimal(field_name: str, default: str = "0") -> Decimal:
 def _invoice_outstanding(invoice) -> Decimal:
     """Devuelve el saldo vivo calculado de una factura."""
     computed = compute_outstanding_amount(invoice)
-    cached_values = []
-    for attr in ("outstanding_amount", "base_outstanding_amount"):
-        raw = getattr(invoice, attr, None)
-        if raw is None:
-            continue
-        value = Decimal(str(raw))
-        if value >= 0:
-            cached_values.append(value)
-    if not cached_values:
+    raw_cached = getattr(invoice, "outstanding_amount", None)
+    if raw_cached is None:
         return computed
-    if min(cached_values) < computed:
+    cached = Decimal(str(raw_cached))
+    if cached < 0:
+        return computed
+    if cached < computed:
         refresh_outstanding_amount_cache(invoice)
-    return min(computed, *cached_values)
+    return min(computed, cached)
 
 
 def _payment_reference_lines_from_form() -> list[dict]:
