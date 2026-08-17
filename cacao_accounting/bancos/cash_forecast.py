@@ -31,6 +31,15 @@ from cacao_accounting.document_flow.status import _
 CASH_FORECAST_DETAIL_ENDPOINT = "bancos.cash_forecast_detail"
 BANCOS_PREFIX = "bancos.bancos_"
 PRONOSTICO_NO_MODIFICABLE_MSG = "No se pueden modificar pronósticos aprobados o cerrados."
+CASH_FORECAST_ENTRY_TYPES = {"Income", "Expense"}
+
+
+def _normalize_cash_forecast_entry_type(value: str | None) -> str:
+    """Normalize and validate the type of a manual cash forecast entry."""
+    normalized = str(value or "").strip().capitalize()
+    if normalized not in CASH_FORECAST_ENTRY_TYPES:
+        raise ValueError("El tipo debe ser Income o Expense.")
+    return normalized
 
 
 def _safe_next_url(value: str | None) -> str | None:
@@ -300,14 +309,14 @@ def cash_forecast_entry_add(forecast_id):
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     try:
-        type_ = request.form.get("type")
+        type_ = _normalize_cash_forecast_entry_type(request.form.get("type"))
         concept = request.form.get("concept", "").strip()
         currency = request.form.get("currency")
         amount = Decimal(request.form.get("amount", "0"))
         estimated_date = date.fromisoformat(request.form.get("estimated_date", ""))
         notes = request.form.get("notes", "").strip()
 
-        if not type_ or not concept or not currency or amount <= 0 or not estimated_date:
+        if not concept or not currency or amount <= 0 or not estimated_date:
             flash("Todos los campos obligatorios deben tener valores válidos.", "danger")
         else:
             entry = CashForecastEntry(
@@ -497,14 +506,14 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
         abort(404)
 
     try:
-        type_ = request.form.get("type")
+        type_ = _normalize_cash_forecast_entry_type(request.form.get("type"))
         concept = request.form.get("concept", "").strip()
         currency = request.form.get("currency")
         amount = Decimal(request.form.get("amount", "0"))
         estimated_date = date.fromisoformat(request.form.get("estimated_date", ""))
         notes = request.form.get("notes", "").strip()
 
-        if not type_ or not concept or not currency or amount <= 0 or not estimated_date:
+        if not concept or not currency or amount <= 0 or not estimated_date:
             flash("Todos los campos obligatorios deben tener valores válidos.", "danger")
         else:
             entry.type = type_
