@@ -3797,6 +3797,93 @@ def test_material_receipt_resolves_offset_per_line_source(app_ctx):
     assert _get_offset_account_for_line(entry, manual_line, "cacao", "material_receipt") == adjustment.id
 
 
+def test_cancel_landed_cost_reverses_capitalized_inventory_value(app_ctx):
+    """Cancelar el landed cost revierte la capa y el valor del StockBin."""
+    from cacao_accounting.contabilidad.posting import _cancel_landed_cost_valuations
+    from cacao_accounting.database import (
+        ImportLandedCost,
+        Item,
+        LandedCostAllocation,
+        StockBin,
+        StockValuationLayer,
+        UOM,
+        Warehouse,
+        database,
+    )
+
+    database.session.add_all(
+        [
+            UOM(code="EA-503", name="Each 503"),
+            Item(code="ITEM-503", name="Item 503", item_type="goods", is_stock_item=True, default_uom="EA-503"),
+            Warehouse(code="WH-503", name="Bodega 503", company="cacao"),
+        ]
+    )
+    database.session.flush()
+    database.session.add(
+        StockBin(
+            company="cacao",
+            item_code="ITEM-503",
+            warehouse="WH-503",
+            actual_qty=Decimal("10"),
+            stock_value=Decimal("120"),
+            valuation_rate=Decimal("12"),
+        )
+    )
+    document = ImportLandedCost(
+        id="ILC-503",
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        document_type="import_landed_cost",
+        docstatus=2,
+    )
+    database.session.add(document)
+    layer = StockValuationLayer(
+        id="SVL-503",
+        item_code="ITEM-503",
+        warehouse="WH-503",
+        company="cacao",
+        qty=Decimal("0"),
+        rate=Decimal("12"),
+        stock_value_difference=Decimal("20"),
+        remaining_qty=Decimal("10"),
+        remaining_stock_value=Decimal("120"),
+        voucher_type="import_landed_cost",
+        voucher_id=document.id,
+        posting_date=document.posting_date,
+    )
+    database.session.add(layer)
+    database.session.flush()
+    database.session.add(
+        LandedCostAllocation(
+            company="cacao",
+            document_type="import_landed_cost",
+            document_id=document.id,
+            document_line_id="line-503",
+            item_code="ITEM-503",
+            warehouse="WH-503",
+            posting_date=document.posting_date,
+            base_amount=Decimal("20"),
+            allocated_amount=Decimal("20"),
+            final_inventory_cost=Decimal("120"),
+            unit_inventory_cost=Decimal("12"),
+            stock_valuation_layer_id=layer.id,
+        )
+    )
+    database.session.flush()
+
+    _cancel_landed_cost_valuations(document, "cacao", "import_landed_cost", document.id)
+
+    bin_row = database.session.execute(
+        database.select(StockBin).filter_by(company="cacao", item_code="ITEM-503", warehouse="WH-503")
+    ).scalar_one()
+    assert bin_row.stock_value == Decimal("100.0000")
+    assert database.session.execute(
+        database.select(StockValuationLayer).filter_by(
+            voucher_type="import_landed_cost", voucher_id=document.id, stock_value_difference=Decimal("-20")
+        )
+    ).scalar_one_or_none() is not None
+
+
 def test_payment_debit_note_creates_balanced_gl_entries(app_ctx):
     """Verifica que una nota de debito bancaria (PaymentEntry) genera GL balanceado."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
