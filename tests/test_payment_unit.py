@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from cacao_accounting import create_app
@@ -97,6 +98,17 @@ def test_duplicate_payment_warning_covers_receipts(app_ctx):
         messages = get_flashed_messages(with_categories=True)
 
     assert any(category == "warning" for category, _message in messages)
+
+
+def test_invoice_outstanding_ignores_base_currency_cache(monkeypatch):
+    """El saldo aplicable no debe mezclar moneda transaccional y moneda base."""
+    import cacao_accounting.bancos as bancos_module
+
+    invoice = SimpleNamespace(outstanding_amount=Decimal("100"), base_outstanding_amount=Decimal("1"))
+    monkeypatch.setattr(bancos_module, "compute_outstanding_amount", lambda _invoice: Decimal("100"))
+    monkeypatch.setattr(bancos_module, "refresh_outstanding_amount_cache", lambda _invoice: Decimal("100"))
+
+    assert bancos_module._invoice_outstanding(invoice) == Decimal("100")
 
 
 def _first_account_id(company: str, account_type: str) -> str | None:
