@@ -5,6 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
+from importlib import import_module
 import pytest
 from sqlalchemy import select
 
@@ -35,6 +36,9 @@ from cacao_accounting.database import (
     UOM,
 )
 from cacao_accounting.approval_engine import ApprovalEngine
+
+
+compras_module = import_module("cacao_accounting.compras")
 
 
 @pytest.fixture(name="app")
@@ -1035,7 +1039,8 @@ def test_final_purchase_receipt_revalidates_order_quantities(app, monkeypatch):
         )
         calls = []
         monkeypatch.setattr(
-            "cacao_accounting.compras._validate_receipt_quantities_against_po",
+            compras_module,
+            "_validate_receipt_quantities_against_po",
             lambda receipt_id: calls.append(receipt_id),
         )
 
@@ -1074,10 +1079,11 @@ def test_final_purchase_credit_note_revalidates_source_balance(app, monkeypatch)
             "_validate_supplier_invoice_flags",
             "_validate_duplicate_supplier_invoice",
         ):
-            monkeypatch.setattr(f"cacao_accounting.compras.{name}", lambda *args, **kwargs: None)
+            monkeypatch.setattr(compras_module, name, lambda *args, **kwargs: None)
         calls = []
         monkeypatch.setattr(
-            "cacao_accounting.compras._validate_purchase_reversal_of",
+            compras_module,
+            "_validate_purchase_reversal_of",
             lambda *args, **kwargs: calls.append((args, kwargs)),
         )
 

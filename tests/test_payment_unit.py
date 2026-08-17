@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from importlib import import_module
 from types import SimpleNamespace
 
 import pytest
@@ -102,7 +103,7 @@ def test_duplicate_payment_warning_covers_receipts(app_ctx):
 
 def test_invoice_outstanding_ignores_base_currency_cache(monkeypatch):
     """El saldo aplicable no debe mezclar moneda transaccional y moneda base."""
-    import cacao_accounting.bancos as bancos_module
+    bancos_module = import_module("cacao_accounting.bancos")
 
     invoice = SimpleNamespace(outstanding_amount=Decimal("100"), base_outstanding_amount=Decimal("1"))
     monkeypatch.setattr(bancos_module, "compute_outstanding_amount", lambda _invoice: Decimal("100"))
