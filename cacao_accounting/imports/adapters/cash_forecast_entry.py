@@ -55,9 +55,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
                 checked_forecasts[forecast_id] = database.session.get(CashForecast, forecast_id)
             forecast = checked_forecasts[forecast_id]
             if forecast and forecast.company != company_id:
-                errors.append(
-                    f"El pronóstico {forecast_id} pertenece a la compañía {forecast.company}, no a {company_id}."
-                )
+                errors.append(f"El pronóstico {forecast_id} pertenece a la compañía {forecast.company}, no a {company_id}.")
         return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
@@ -90,9 +88,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
             if forecast is None:
                 raise ValueError(f"Pronóstico no encontrado: {entry_data['forecast_id']}")
             if company_id and forecast.company != company_id:
-                raise ValueError(
-                    f"El pronóstico {forecast.id} pertenece a la compañía {forecast.company}, no a {company_id}."
-                )
+                raise ValueError(f"El pronóstico {forecast.id} pertenece a la compañía {forecast.company}, no a {company_id}.")
             entry = CashForecastEntry(
                 forecast_id=entry_data["forecast_id"],
                 type=entry_data["type"],
