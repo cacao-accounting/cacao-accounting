@@ -448,9 +448,7 @@ def _validate_relation_documents(source_key, source_id, source_item_id, target_k
     source_item_code = getattr(source_item, "item_code", None) if source_item else None
     target_item_code = getattr(target_item, "item_code", None) if target_item else None
     if source_item_code and target_item_code and source_item_code != target_item_code:
-        raise DocumentFlowError(
-            "La linea destino usa un articulo distinto al de la linea origen de la relacion.", 409
-        )
+        raise DocumentFlowError("La linea destino usa un articulo distinto al de la linea origen de la relacion.", 409)
     return source_item, target_item
 
 
