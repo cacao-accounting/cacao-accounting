@@ -794,6 +794,7 @@ def inventario_bodega(warehouse_id):
     registro = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_id)).first()
     if not registro:
         abort(404)
+    exige_acceso_compania("inventory", registro[0].company, "consultar")
     titulo = registro[0].name + " - " + APPNAME
     company_accounts = (
         database.session.execute(
