@@ -5123,6 +5123,7 @@ def compras_import_landed_cost(landed_cost_id: str):
     registro = database.session.get(ImportLandedCost, landed_cost_id)
     if not registro:
         abort(404)
+    _require_purchase_document_access(registro)
     items = _get_import_landed_cost_items(landed_cost_id)
     cargos = _get_import_landed_cost_charges(landed_cost_id)
     titulo = f"Costo de Importacion {registro.document_no or registro.id} - {APPNAME}"
