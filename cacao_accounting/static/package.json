@@ -24,5 +24,8 @@
     "jsdom": "^29.1.1",
     "mocha": "^11.7.6",
     "playwright": "^1.61.1"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.4"
   }
 }

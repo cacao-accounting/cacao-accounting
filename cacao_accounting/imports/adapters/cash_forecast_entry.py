@@ -31,7 +31,8 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         forecast = database.session.get(CashForecast, str(row_data.get("forecast_id", "")))
         if forecast is None:
             errors.append(f"Pronóstico no encontrado: {row_data.get('forecast_id')}")
-        if str(row_data.get("type", "")).strip() not in ("Income", "Expense"):
+        entry_type = str(row_data.get("type", "")).strip().capitalize()
+        if entry_type not in ("Income", "Expense"):
             errors.append(f"Tipo inválido: {row_data.get('type')}. Debe ser 'Income' o 'Expense'.")
         try:
             Decimal(str(row_data.get("amount") or 0))

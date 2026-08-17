@@ -482,6 +482,26 @@ def _validate_relation_status(source_key: str, source_id: str, target_key: str, 
         raise DocumentFlowError("No se puede crear una relacion hacia un documento cancelado (docstatus=2).", 409)
 
 
+def get_target_line_source(target_type: str, target_item_id: str) -> dict[str, str]:
+    """Devuelve el origen activo que debe conservar una línea editada."""
+    relation = database.session.execute(
+        database.select(DocumentRelation)
+        .filter_by(
+            target_type=normalize_doctype(target_type),
+            target_item_id=target_item_id,
+            status="active",
+        )
+        .order_by(DocumentRelation.created.asc(), DocumentRelation.id.asc())
+    ).scalars().first()
+    if not relation:
+        return {}
+    return {
+        "source_type": relation.source_type,
+        "source_id": relation.source_id,
+        "source_item_id": relation.source_item_id or "",
+    }
+
+
 def revert_relations_for_target(target_type: str, target_id: str, reason: str = "target_cancelled") -> int:
     """Revierte relaciones activas de un documento destino y libera saldos.
 
@@ -569,7 +589,13 @@ def close_line_balance(
     target_key = normalize_doctype(target_type)
     if not reason.strip():
         raise DocumentFlowError("Debe indicar el motivo del cierre de saldo.", 409)
-    available = pending_qty(source_key, source_id, source_item_id, target_key)
+    available = pending_qty(
+        source_key,
+        source_id,
+        source_item_id,
+        target_key,
+        exclude_draft_targets=True,
+    )
     close_qty = available if qty in (None, "") else decimal_or_zero(qty)
     if close_qty <= 0:
         raise DocumentFlowError("La cantidad a cerrar debe ser mayor que cero.", 409)
