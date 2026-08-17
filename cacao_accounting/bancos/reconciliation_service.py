@@ -75,12 +75,18 @@ def _decimal_value(value: Any) -> Decimal:
 def _bank_amount(transaction: BankTransaction) -> Decimal:
     deposit = _decimal_value(transaction.deposit)
     withdrawal = _decimal_value(transaction.withdrawal)
+    if deposit > 0 and withdrawal > 0:
+        raise BankReconciliationError("Una transaccion bancaria no puede tener deposito y retiro simultaneos.")
+    if deposit <= 0 and withdrawal <= 0:
+        raise BankReconciliationError("La transaccion bancaria requiere un monto positivo.")
     return deposit if deposit > 0 else withdrawal
 
 
 def _bank_direction(transaction: BankTransaction) -> str | None:
     """Devuelve la dirección económica de una transacción bancaria."""
     if _decimal_value(transaction.deposit) > 0:
+        if _decimal_value(transaction.withdrawal) > 0:
+            raise BankReconciliationError("Una transaccion bancaria no puede tener dos direcciones.")
         return "deposit"
     if _decimal_value(transaction.withdrawal) > 0:
         return "withdrawal"
@@ -207,7 +213,7 @@ def _allocated_for_source(bank_transaction_id: str) -> Decimal:
         select(func.coalesce(func.sum(ReconciliationItem.allocated_amount), 0)).filter_by(
             source_type="bank_transaction",
             source_id=bank_transaction_id,
-        )
+        ).where(ReconciliationItem.status != "cancelled")
     ).scalar_one()
     return _decimal_value(value)
 
@@ -550,6 +556,8 @@ def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: s
         payment = database.session.get(PaymentEntry, match.target_id)
         if not payment or not _payment_belongs_to_bank(payment, transaction.bank_account_id):
             raise BankReconciliationError("El pago no pertenece a la cuenta bancaria conciliada.")
+        if _payment_direction(payment, transaction) != _bank_direction(transaction):
+            raise BankReconciliationError("El tipo de pago no coincide con la direccion bancaria.")
     return transaction
 
 

@@ -3145,6 +3145,18 @@ class BankTransaction(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
 
 
+@event.listens_for(BankTransaction, "before_insert")
+@event.listens_for(BankTransaction, "before_update")
+def _validate_bank_transaction_amounts(mapper, connection, target: BankTransaction) -> None:
+    """Enforce one positive economic direction for every bank transaction."""
+    deposit = Decimal(str(target.deposit or 0))
+    withdrawal = Decimal(str(target.withdrawal or 0))
+    if deposit < 0 or withdrawal < 0:
+        raise ValueError("Los montos bancarios no pueden ser negativos.")
+    if (deposit > 0) == (withdrawal > 0):
+        raise ValueError("La transaccion bancaria requiere exactamente un deposito o retiro positivo.")
+
+
 def _bank_transaction_identity(transaction: BankTransaction) -> str:
     """Build a deterministic identity independent of nullable amount columns."""
     values = (

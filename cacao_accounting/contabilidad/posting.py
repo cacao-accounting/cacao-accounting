@@ -2563,7 +2563,7 @@ def _create_stock_ledger_for_document(
         if not warehouse:
             raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
         try:
-            validate_batch_serial(line, outgoing=True)
+            validate_batch_serial(line, outgoing=True, warehouse=warehouse)
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc
         try:
@@ -2591,7 +2591,12 @@ def _create_stock_ledger_for_document(
         if not warehouse:
             raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
         try:
-            validate_batch_serial(line, outgoing=False)
+            validate_batch_serial(
+                line,
+                outgoing=False,
+                warehouse=warehouse,
+                allow_transfer=getattr(document, "purpose", None) == "material_transfer",
+            )
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc
         valuation_rate = (
@@ -2779,6 +2784,14 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
             posting_date=posting_date,
         )
     )
+    if movement.serial_no:
+        from cacao_accounting.inventario.service import update_serial_state
+
+        update_serial_state(
+            movement,
+            outgoing=qty_change < 0,
+            warehouse=movement.warehouse if qty_change > 0 else movement.warehouse,
+        )
     return StockLedgerEntry(
         posting_date=posting_date,
         item_code=movement.item_code,
