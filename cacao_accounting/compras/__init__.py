@@ -3838,9 +3838,7 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
             include_target_id=receipt_id,
         )
         ordered = (
-            Decimal(str(po_item.qty_in_base_uom))
-            if po_item.qty_in_base_uom is not None
-            else Decimal(str(po_item.qty or 0))
+            Decimal(str(po_item.qty_in_base_uom)) if po_item.qty_in_base_uom is not None else Decimal(str(po_item.qty or 0))
         )
         if consumed > ordered:
             raise ValueError(

@@ -1720,9 +1720,7 @@ def _validate_delivery_quantities_against_so(note_id: str) -> None:
             include_target_id=note_id,
         )
         ordered = (
-            Decimal(str(so_item.qty_in_base_uom))
-            if so_item.qty_in_base_uom is not None
-            else Decimal(str(so_item.qty or 0))
+            Decimal(str(so_item.qty_in_base_uom)) if so_item.qty_in_base_uom is not None else Decimal(str(so_item.qty or 0))
         )
         if consumed > ordered:
             raise ValueError(

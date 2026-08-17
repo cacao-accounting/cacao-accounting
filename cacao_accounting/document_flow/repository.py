@@ -111,9 +111,11 @@ def consumed_qty_for_source(
     """
     return sum(
         (
-            decimal_or_zero(relation.qty_in_base_uom)
-            if relation.qty_in_base_uom is not None
-            else decimal_or_zero(relation.qty)
+            (
+                decimal_or_zero(relation.qty_in_base_uom)
+                if relation.qty_in_base_uom is not None
+                else decimal_or_zero(relation.qty)
+            )
             for relation in iter_active_relations_for_source(
                 source_type,
                 source_id,
