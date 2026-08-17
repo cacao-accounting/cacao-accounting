@@ -20,9 +20,27 @@ from cacao_accounting.database import (
     GLEntry,
 )
 from cacao_accounting.contabilidad.fiscal_year_closing import (
+    _build_closing_voucher_payload,
     create_fiscal_year_closing_voucher,
 )
 from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal, cancel_submitted_journal
+
+
+def test_closing_payload_omits_zero_net_retained_earnings_line():
+    """Un libro con resultado neto cero no genera una línea sin importe."""
+    fiscal_year = type("FiscalYearStub", (), {"name": "2024"})()
+    payload = _build_closing_voucher_payload(
+        company="CMP",
+        fiscal_year=fiscal_year,
+        balances=[
+            {"book": "GEN", "account_code": "41.01", "cost_center": None, "unit": None, "project": None, "balance": "500"},
+            {"book": "GEN", "account_code": "51.01", "cost_center": None, "unit": None, "project": None, "balance": "-500"},
+        ],
+        retained_earnings_code="33.02",
+    )
+
+    assert len(payload["lines"]) == 2
+    assert all(line["account"] != "33.02" for line in payload["lines"])
 
 
 @pytest.fixture

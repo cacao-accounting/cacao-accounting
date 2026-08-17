@@ -163,16 +163,17 @@ def _build_closing_voucher_payload(
             )
             total_net_balance += Decimal(str(balance_row["balance"]))
             order += 1
-        lines.append(
-            _closing_retain_earnings_payload(
-                fiscal_year_name=fiscal_year.name,
-                order=order,
-                total_net_balance=total_net_balance,
-                retained_earnings_code=retained_earnings_code,
-                book=book,
+        if total_net_balance != 0:
+            lines.append(
+                _closing_retain_earnings_payload(
+                    fiscal_year_name=fiscal_year.name,
+                    order=order,
+                    total_net_balance=total_net_balance,
+                    retained_earnings_code=retained_earnings_code,
+                    book=book,
+                )
             )
-        )
-        order += 1
+            order += 1
 
     return {
         "company": company,
