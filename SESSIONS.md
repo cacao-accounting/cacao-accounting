@@ -1921,6 +1921,15 @@ existente fuera de contexto Flask. El commit `d191128f fix(types): align
 warehouse matching key annotations` corrige las anotaciones de mypy del
 matching por bodega.
 
+La ejecución focal de `test_transaccional_full_transition_routes_get_post`
+descubrió una regresión en #473: la validación de compras buscaba `Item` por
+clave primaria usando el código comercial, por lo que rechazaba artículos
+válidos. `b5d51dbc fix(orders): resolve purchase items by code` (`Closes #473`)
+usa la consulta correcta por `Item.code` y ajusta el fixture para declarar un
+artículo válido no inventariable; la prueba pasa (`1 passed`). La suite
+completa anterior se interrumpió para no conservar un resultado contaminado
+por ese defecto y debe ejecutarse nuevamente.
+
 ## 2026-08-17 — Validación de orígenes upstream O2C/S2P #463/#464/#474/#475
 
 Los comentarios de los issues indicaban que el bypass también existía en los
