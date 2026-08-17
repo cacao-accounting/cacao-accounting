@@ -180,7 +180,7 @@ Se aplicaron y se dejaron en el commit firmado `0bdd6792` (`fix(sales): protect 
 | M3 | La edición de notas de crédito valida el límite usando `grand_total`, igual que creación y submit. |
 | M4 | La duplicación de facturas conserva moneda, tasa, plantilla fiscal, vínculos de origen, dimensiones de línea y totales funcionales. |
 
-H1, M5–M18 y B1–B6 permanecen pendientes de implementación o verificación específica; no se marcan como resueltos por este commit.
+H1 y M5–M18 permanecen pendientes de implementación o verificación específica; no se marcan como resueltos por este commit.
 
 ### Referencias de correcciones anteriores
 
@@ -195,9 +195,47 @@ Los siguientes fixes ya estaban presentes antes de esta revisión y se conservan
 | #445 | `d78ace45` — ledger contable y de inventario append-only. |
 | #457 | `aa500476` — saldo de lotes por almacén. |
 | #462, #467, #479 | `2f6ac620` — dimensiones de pagos y aislamiento de presupuesto/operaciones. |
-| #443 | `c83d2ac6` — gate `npm audit`; el hallazgo high de `serialize-javascript` aún requiere resolver dependencia. |
+| #443 | `c83d2ac6` — gate `npm audit`; el override de `serialize-javascript` se completó posteriormente en `27c65168`. |
 | #394 | `6a39b6a3` — persistencia de moneda funcional inferida. |
 | #452 | `a452feef` — validación de vínculos de origen en el flujo documental. |
 | #393 | `f309381f` — conversión de importes GL a moneda de la cuenta bancaria. |
 
 La referencia canónica de esta actualización documental es el commit posterior que registra este bloque en `feedback.md`.
+
+### Segundo bloque aplicado
+
+El commit firmado `2b68db51` (`fix(security): harden feedback regressions`) aplica además:
+
+| Hallazgo | Corrección aplicada |
+|---|---|
+| M5 | El matching 2-way usa `_compatible_group`, permitiendo el fallback seguro de almacén. |
+| M7 | `allow_price_difference` se respeta tanto en diferencias por línea como en la evaluación agregada. |
+| M8 | Las diferencias de precio por línea se omiten cuando la cantidad de referencia es cero. |
+| M9 | La importación bancaria rechaza depósitos/retiros negativos antes del flush de SQLAlchemy. |
+| M10 | Se aceptan alias legacy de facturas/notas para no romper la edición de referencias históricas. |
+| M11 | La creación de pagos por document-flow exige permiso `cash/crear` para la compañía. |
+| M12 | Las aprobaciones de solicitudes y órdenes de compra capturan `BudgetError` como error controlado. |
+| M13 | El reporte Real vs Presupuesto valida ACL de compañía antes de cargar datos. |
+| M14 | El asistente de cierre mensual filtra corridas y períodos por compañías derivadas de libros autorizados. |
+| M15 | El saldo de lotes convierte la cantidad solicitada a la UOM base antes de comparar. |
+| M16 | Las relaciones legacy sin `qty_in_base_uom` se normalizan usando la conversión de UOM existente. |
+| M17 | Se agregó la migración incremental `20260817_0001` y su prueba para `base_total` y `qty_in_base_uom`. |
+
+M6 ya estaba cubierto por la condición `not (invoice_po_id and receipt_po_id)` presente en `HEAD`. Las pruebas enfocadas de este bloque finalizaron con **44 passed, 2 skipped**.
+
+### Tercer bloque aplicado
+
+El commit firmado `27c65168` (`fix(document-flow): preserve revisions and close feedback gaps`) aplica:
+
+| Hallazgo | Corrección aplicada |
+|---|---|
+| H1 | Las líneas editables ahora rehidratan `source_type`, `source_id` y `source_item_id` desde la relación activa; al editar el borrador se conserva la trazabilidad para la reaprobación. |
+| B1 | Se eliminó el ternario no-op de restauración de seriales y se conserva explícitamente la bodega del movimiento. |
+| B2 | La moneda funcional de la entidad deja de ser obligatoria para guardar un borrador; el posting sigue validando los requisitos necesarios. |
+| B3 | El importador de cash forecast normaliza `income`/`expense` igual que la captura manual. |
+| B4 | El cierre manual excluye destinos borrador abandonados del cálculo de consumo. |
+| B5 | Facturas con orden y nota de entrega validan ambos vínculos y rechazan flujos inconsistentes. |
+| B6 | Notas de crédito/débito conservan la factura origen al resolver moneda y tasa cambiaria. |
+| #443 | `package.json` usa un override de `serialize-javascript` 7.x y `package-lock.json` queda actualizado; la auditoría offline de severidad high reporta 0 high/critical. La auditoría online sigue limitada por DNS del entorno. |
+
+Las pruebas enfocadas de este bloque finalizaron con **57 passed**; la validación Black del alcance modificado no reportó diferencias.
