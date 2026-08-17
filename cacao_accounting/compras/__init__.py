@@ -2916,6 +2916,8 @@ def _create_purchase_order_from_request(form: dict):
 def _update_purchase_order_from_request(registro: PurchaseOrder):
     """Actualiza una orden de compra desde el formulario enviado."""
     before_state = _capture_purchase_state(registro)
+    revert_relations_for_target("purchase_order", registro.id, reason="draft_edited")
+    refresh_source_caches_for_target("purchase_order", registro.id)
     supplier_id = request.form.get("supplier_id") or None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     registro.supplier_id = supplier_id
@@ -3188,6 +3190,8 @@ def _handle_purchase_quotation_edit_post(registro):
     from cacao_accounting.database import Party
 
     before_state = _capture_purchase_state(registro)
+    revert_relations_for_target("purchase_quotation", registro.id, reason="draft_edited")
+    refresh_source_caches_for_target("purchase_quotation", registro.id)
     supplier_id = request.form.get("supplier_id") or None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     registro.supplier_id = supplier_id
@@ -3731,6 +3735,8 @@ def compras_recepcion_editar(receipt_id: str):
 
 def _handle_purchase_receipt_edit_post(registro):
     before_state = _capture_purchase_state(registro)
+    revert_relations_for_target("purchase_receipt", registro.id, reason="draft_edited")
+    refresh_source_caches_for_target("purchase_receipt", registro.id)
     supplier_id = request.form.get("supplier_id") or None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     registro.supplier_id = supplier_id
@@ -3738,11 +3744,6 @@ def _handle_purchase_receipt_edit_post(registro):
     registro.company = request.form.get("company") or None
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
-
-    for rel in database.session.execute(
-        database.select(DocumentRelation).filter_by(target_type="purchase_receipt", target_id=registro.id)
-    ).scalars():
-        database.session.delete(rel)
 
     for item in database.session.execute(
         database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
@@ -4645,6 +4646,8 @@ def compras_factura_compra_editar(invoice_id: str):
 def _handle_purchase_invoice_edit_post(registro):
     try:
         before_state = _capture_purchase_state(registro)
+        revert_relations_for_target("purchase_invoice", registro.id, reason="draft_edited")
+        refresh_source_caches_for_target("purchase_invoice", registro.id)
         registro.supplier_id = request.form.get("supplier_id") or None
         registro.company = request.form.get("company") or None
         purchase_order_id = request.form.get("from_order") or getattr(registro, "purchase_order_id", None)
@@ -4671,10 +4674,6 @@ def _handle_purchase_invoice_edit_post(registro):
             registro.transaction_currency,
         )
         registro.remarks = request.form.get("remarks")
-        for rel in database.session.execute(
-            database.select(DocumentRelation).filter_by(target_type="purchase_invoice", target_id=registro.id)
-        ).scalars():
-            database.session.delete(rel)
         for item in database.session.execute(
             database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
         ).scalars():

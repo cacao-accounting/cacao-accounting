@@ -842,6 +842,11 @@ class ApprovalEngine:
         database.session.add(action)
         req.status = "Rejected"
         database.session.flush()
+        if req.document_type == doctype:
+            from cacao_accounting.document_flow import refresh_source_caches_for_target, revert_relations_for_target
+
+            revert_relations_for_target(doctype, document.id, reason="approval_rejected")
+            refresh_source_caches_for_target(doctype, document.id)
 
     @staticmethod
     def _collect_approvers_from_rules(

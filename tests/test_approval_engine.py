@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     ApprovalAction,
     CacaoConfig,
     ComprobanteContable,
+    DocumentRelation,
     Item,
     Party,
     PurchaseOrder,
@@ -294,6 +295,17 @@ def test_approval_flow_rejection(app):
         po = PurchaseOrder(id="po_rej", company="comp_test", grand_total=Decimal("4000"), docstatus=0)
         database.session.add(po)
         database.session.commit()
+        relation = DocumentRelation(
+            source_type="purchase_quotation",
+            source_id="quotation-rejected",
+            target_type="purchase_order",
+            target_id=po.id,
+            relation_type="purchase_order",
+            company="comp_test",
+            qty=Decimal("1"),
+        )
+        database.session.add(relation)
+        database.session.commit()
 
         ApprovalEngine.request_approval(po)
         ApprovalEngine.reject(po, user_juan, "Rechazado")
@@ -303,6 +315,8 @@ def test_approval_flow_rejection(app):
         ).scalar_one()
         assert req.status == "Rejected"
         assert po.docstatus == 0
+        assert relation.status == "reverted"
+        assert relation.reversal_reason == "approval_rejected"
 
 
 def test_pending_approvals_view(app, client):
