@@ -83,6 +83,27 @@ from cacao_accounting.version import APPNAME
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 contabilidad.register_blueprint(gl, url_prefix="/gl")
 contabilidad.register_blueprint(presupuestos, url_prefix="/presupuestos")
+
+
+@contabilidad.before_request
+def enforce_close_and_recurring_company_access():
+    """Enforce company isolation for close runs and recurring templates."""
+    if not request.view_args:
+        return None
+    identifier = request.view_args.get("identifier")
+    if not identifier:
+        return None
+    if request.path.startswith("/accounting/period-close/"):
+        from cacao_accounting.database import PeriodCloseRun
+
+        close_run = database.session.get(PeriodCloseRun, identifier)
+        if close_run:
+            exige_acceso_compania("accounting", close_run.company, "autorizar" if request.method == "POST" else "consultar")
+    elif request.path.startswith("/accounting/journal/recurring/"):
+        template = database.session.get(RecurringJournalTemplate, identifier)
+        if template:
+            exige_acceso_compania("accounting", template.company, "autorizar" if request.method == "POST" else "consultar")
+    return None
 LISTA_ENTIDADES = redirect("/accounting/entity/list")
 
 CONTABILIDAD_LIBROS = "contabilidad.libros"
@@ -2621,6 +2642,7 @@ def nuevo_cierre_mensual():
     if not period:
         flash(CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE, "danger")
         return redirect(url_for(CONTABILIDAD_ASISTENTE_CIERRE_MENSUAL))
+    exige_acceso_compania("accounting", period.entity, "autorizar")
 
     existing = database.session.execute(
         database.select(PeriodCloseRun).filter_by(company=period.entity, period_id=period.id)

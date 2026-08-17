@@ -25,7 +25,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-from cacao_accounting.decorators import modulo_activo, verifica_acceso
+from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_acceso
 from cacao_accounting.version import APPNAME
 from sqlalchemy.exc import SQLAlchemyError
 from cacao_accounting.contabilidad.auxiliares import (
@@ -50,13 +50,31 @@ def check_desktop_mode_for_presupuestos():
         return redirect(url_for("contabilidad.conta"))
 
 
+@presupuestos.before_request
+def enforce_budget_company_access():
+    """Reject budget routes whose record belongs to an unauthorized company."""
+    budget_id = request.view_args.get("budget_id") if request.view_args else None
+    line_id = request.view_args.get("line_id") if request.view_args else None
+    budget = database.session.get(Budget, budget_id) if budget_id else None
+    if line_id and budget is None:
+        line = database.session.get(BudgetLine, line_id)
+        budget = database.session.get(Budget, line.budget_id) if line else None
+    if budget is not None:
+        action = "consultar"
+        if request.method == "POST":
+            action = "editar" if "/edit" in request.path else "crear"
+        exige_acceso_compania("accounting", budget.company, action)
+
+
 @presupuestos.route("/list")
 @login_required
 @modulo_activo("accounting")
 @verifica_acceso("accounting")
 def listar():
     """Listado de presupuestos."""
-    query = database.select(Budget)
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    authorized_books = permisos.obtener_libros_autorizados("can_read")
+    query = database.select(Budget).where(Budget.ledger_id.in_(authorized_books)) if authorized_books else database.select(Budget).where(False)
     search = request.args.get("search")
     if search:
         query = query.filter(Budget.name.ilike(f"%{search}%") | Budget.budget_code.ilike(f"%{search}%"))
