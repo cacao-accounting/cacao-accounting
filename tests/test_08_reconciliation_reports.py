@@ -4668,6 +4668,101 @@ def test_purchase_reconciliation_currency_mismatch_rejected(app_ctx):
         reconcile_purchase_invoice(invoice.id)
 
 
+def test_three_way_rejects_receipt_from_another_purchase_order(app_ctx):
+    """Una factura 3-way no puede mezclar la OC de la factura y la recepción."""
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        PurchaseReconciliationError,
+        reconcile_purchase_invoice,
+    )
+    from cacao_accounting.database import (
+        Item,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseMatchingConfig,
+        PurchaseOrder,
+        PurchaseReconciliation,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        UOM,
+        Warehouse,
+        database,
+    )
+
+    database.session.add_all(
+        [
+            UOM(code="EA-PO-MIX", name="Each PO mix"),
+            Item(code="ITEM-PO-MIX", name="Item PO mix", item_type="goods", is_stock_item=True, default_uom="EA-PO-MIX"),
+            Warehouse(code="WH-PO-MIX", name="Bodega PO mix", company="cacao"),
+        ]
+    )
+    order_a = PurchaseOrder(
+        id="PO-MIX-A",
+        company="cacao",
+        supplier_id="SUPP-PO-MIX",
+        posting_date=date(2026, 5, 1),
+        docstatus=1,
+    )
+    order_b = PurchaseOrder(
+        id="PO-MIX-B",
+        company="cacao",
+        supplier_id="SUPP-PO-MIX",
+        posting_date=date(2026, 5, 1),
+        docstatus=1,
+    )
+    database.session.add_all([order_a, order_b])
+    database.session.flush()
+    receipt = PurchaseReceipt(
+        company="cacao",
+        supplier_id="SUPP-PO-MIX",
+        purchase_order_id=order_b.id,
+        posting_date=date(2026, 5, 2),
+        docstatus=1,
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ITEM-PO-MIX",
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom="EA-PO-MIX",
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+            warehouse="WH-PO-MIX",
+        )
+    )
+    invoice = PurchaseInvoice(
+        company="cacao",
+        supplier_id="SUPP-PO-MIX",
+        purchase_order_id=order_a.id,
+        purchase_receipt_id=receipt.id,
+        posting_date=date(2026, 5, 3),
+        docstatus=1,
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-PO-MIX",
+            qty=Decimal("1"),
+            uom="EA-PO-MIX",
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+        )
+    )
+    config = database.session.execute(
+        database.select(PurchaseMatchingConfig).filter_by(company="cacao")
+    ).scalar_one()
+    config.require_purchase_order = True
+    database.session.commit()
+
+    with pytest.raises(PurchaseReconciliationError, match="misma orden"):
+        reconcile_purchase_invoice(invoice.id)
+    assert database.session.execute(database.select(PurchaseReconciliation).filter_by(purchase_invoice_id=invoice.id)).scalar_one_or_none() is None
+
+
 def test_partial_invoice_price_variance_scaling(app_ctx):
     from cacao_accounting.compras.purchase_reconciliation_service import (
         reconcile_purchase_invoice,
