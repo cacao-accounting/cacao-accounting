@@ -1342,6 +1342,8 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             item_obj = _item_by_code(item_code)
             if not item_obj:
                 raise ValueError(f"El item {item_code} no existe.")
+            if not item_obj.is_active or not item_obj.is_sale_item:
+                raise ValueError(f"El item {item_code} no está habilitado para venta.")
             qty_in_base_uom = convert_item_qty(item_code, qty, uom or item_obj.default_uom, item_obj.default_uom)
             linea = SalesOrderItem(
                 sales_order_id=order_id,
@@ -2625,6 +2627,10 @@ def ventas_orden_venta_submit(order_id: str):
         abort(400)
     try:
         items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars().all()
+        for item in items:
+            item_obj = _item_by_code(item.item_code)
+            if not item_obj or not item_obj.is_active or not item_obj.is_sale_item:
+                raise ValueError(f"El item {item.item_code} no está habilitado para venta.")
         validate_submit_prerequisites(
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )
