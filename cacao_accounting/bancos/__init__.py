@@ -2295,6 +2295,7 @@ def bancos_pago(payment_id):
     registro = database.session.get(PaymentEntry, payment_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("cash", registro.company, "consultar")
 
     # Entradas contables
     lineas_gl = (
