@@ -3742,7 +3742,15 @@ def test_stock_adjustment_uses_item_specific_adjustment_account(app_ctx):
 def test_material_receipt_resolves_offset_per_line_source(app_ctx):
     """Una recepción mixta no envía líneas manuales a la cuenta puente."""
     from cacao_accounting.contabilidad.posting import _get_offset_account_for_line
-    from cacao_accounting.database import Accounts, CompanyDefaultAccount, DocumentRelation, StockEntry, StockEntryItem, database
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        DocumentRelation,
+        StockEntry,
+        StockEntryItem,
+        UOM,
+        database,
+    )
 
     bridge = Accounts(
         entity="cacao",
@@ -3762,7 +3770,7 @@ def test_material_receipt_resolves_offset_per_line_source(app_ctx):
         classification="expense",
         account_type="expense",
     )
-    database.session.add_all([bridge, adjustment])
+    database.session.add_all([bridge, adjustment, UOM(code="EA-506", name="Each 506")])
     database.session.flush()
     database.session.add(
         CompanyDefaultAccount(
@@ -3774,8 +3782,18 @@ def test_material_receipt_resolves_offset_per_line_source(app_ctx):
     entry = StockEntry(id="ST-506", company="cacao", purpose="material_receipt")
     database.session.add(entry)
     database.session.flush()
-    related_line = StockEntryItem(stock_entry_id=entry.id, item_code="ITEM-RELATED-506")
-    manual_line = StockEntryItem(stock_entry_id=entry.id, item_code="ITEM-MANUAL-506")
+    related_line = StockEntryItem(
+        stock_entry_id=entry.id,
+        item_code="ITEM-RELATED-506",
+        qty=Decimal("1"),
+        uom="EA-506",
+    )
+    manual_line = StockEntryItem(
+        stock_entry_id=entry.id,
+        item_code="ITEM-MANUAL-506",
+        qty=Decimal("1"),
+        uom="EA-506",
+    )
     database.session.add_all([related_line, manual_line])
     database.session.flush()
     database.session.add(
@@ -3804,6 +3822,7 @@ def test_cancel_landed_cost_reverses_capitalized_inventory_value(app_ctx):
         ImportLandedCost,
         Item,
         LandedCostAllocation,
+        PurchaseInvoice,
         StockBin,
         StockValuationLayer,
         UOM,
@@ -3829,9 +3848,20 @@ def test_cancel_landed_cost_reverses_capitalized_inventory_value(app_ctx):
             valuation_rate=Decimal("12"),
         )
     )
+    invoice = PurchaseInvoice(
+        id="PI-503",
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        docstatus=1,
+        total=Decimal("100"),
+        grand_total=Decimal("100"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
     document = ImportLandedCost(
         id="ILC-503",
         company="cacao",
+        purchase_invoice_id=invoice.id,
         posting_date=date(2026, 5, 5),
         document_type="import_landed_cost",
         docstatus=2,
@@ -3927,6 +3957,8 @@ def test_stock_reconciliation_reduction_preserves_fifo_and_value_adjustment(app_
         stock_entry_id=entry.id,
         item_code="ITEM-502",
         target_warehouse="WH-502",
+        qty=Decimal("20"),
+        uom="EA-502",
         counted_qty=Decimal("80"),
         target_stock_value=Decimal("1200"),
     )
