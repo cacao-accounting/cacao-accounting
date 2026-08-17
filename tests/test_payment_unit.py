@@ -1001,6 +1001,33 @@ class TestLoadAdvanceInvoice:
 class TestCreatePaymentTarget:
     """Tests for _create_payment_target (dispatched via create_target_document)."""
 
+    def test_internal_transfer_target_resolves_both_bank_gl_accounts(self, app_ctx):
+        """El target documental conserva la cuenta GL de cada pata bancaria."""
+        from cacao_accounting.document_flow.payment import _build_payment_target_payment
+
+        bank_accounts = (
+            database.session.execute(database.select(BankAccount).filter_by(company="cacao"))
+            .scalars()
+            .all()
+        )
+        eligible = [account for account in bank_accounts if account.gl_account_id]
+        if len(eligible) < 2:
+            pytest.skip("La fixture requiere dos cuentas bancarias con cuenta GL configurada.")
+
+        source, target = eligible[:2]
+        payment = _build_payment_target_payment(
+            "cacao",
+            {
+                "payment_type": "internal_transfer",
+                "bank_account_id": source.id,
+                "target_bank_account_id": target.id,
+                "posting_date": date.today(),
+            },
+        )
+
+        assert payment.paid_from_account_id == source.gl_account_id
+        assert payment.paid_to_account_id == target.gl_account_id
+
     def test_create_payment_from_sales_invoice(self, app_ctx):
         from cacao_accounting.document_flow.service import create_target_document
 
