@@ -3165,7 +3165,9 @@ def _get_offset_account_for_line(document: StockEntry, line: StockEntryItem, com
     # INV-04: Recepción manual sin origen documental debe usar cuenta de ajuste
     if purpose == "material_receipt":
         has_source = database.session.execute(
-            select(DocumentRelation.id).filter_by(target_type="stock_entry", target_id=document.id, status="active").limit(1)
+            select(DocumentRelation.id)
+            .filter_by(target_type="stock_entry", target_id=document.id, target_item_id=line.id, status="active")
+            .limit(1)
         ).scalar_one_or_none()
         offset_type = "inventory_adjustment" if not has_source else "bridge"
     else:

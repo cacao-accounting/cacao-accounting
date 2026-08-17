@@ -3739,6 +3739,64 @@ def test_stock_adjustment_uses_item_specific_adjustment_account(app_ctx):
     assert _get_offset_account_for_line(entry, line, "cacao", "stock_adjustment") == account.id
 
 
+def test_material_receipt_resolves_offset_per_line_source(app_ctx):
+    """Una recepción mixta no envía líneas manuales a la cuenta puente."""
+    from cacao_accounting.contabilidad.posting import _get_offset_account_for_line
+    from cacao_accounting.database import Accounts, CompanyDefaultAccount, DocumentRelation, StockEntry, StockEntryItem, database
+
+    bridge = Accounts(
+        entity="cacao",
+        code="BRIDGE-506",
+        name="Puente 506",
+        active=True,
+        enabled=True,
+        classification="liability",
+        account_type="liability",
+    )
+    adjustment = Accounts(
+        entity="cacao",
+        code="ADJ-506",
+        name="Ajuste 506",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    database.session.add_all([bridge, adjustment])
+    database.session.flush()
+    database.session.add(
+        CompanyDefaultAccount(
+            company="cacao",
+            bridge_account_id=bridge.id,
+            inventory_adjustment_account_id=adjustment.id,
+        )
+    )
+    entry = StockEntry(id="ST-506", company="cacao", purpose="material_receipt")
+    database.session.add(entry)
+    database.session.flush()
+    related_line = StockEntryItem(stock_entry_id=entry.id, item_code="ITEM-RELATED-506")
+    manual_line = StockEntryItem(stock_entry_id=entry.id, item_code="ITEM-MANUAL-506")
+    database.session.add_all([related_line, manual_line])
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="purchase_receipt",
+            source_id="PR-506",
+            target_type="stock_entry",
+            target_id=entry.id,
+            target_item_id=related_line.id,
+            relation_type="stock_entry",
+            company="cacao",
+            qty=Decimal("1"),
+            status="active",
+        )
+    )
+    database.session.flush()
+
+    assert _get_offset_account_for_line(entry, related_line, "cacao", "material_receipt") == bridge.id
+    assert _get_offset_account_for_line(entry, manual_line, "cacao", "material_receipt") == adjustment.id
+
+
 def test_payment_debit_note_creates_balanced_gl_entries(app_ctx):
     """Verifica que una nota de debito bancaria (PaymentEntry) genera GL balanceado."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
