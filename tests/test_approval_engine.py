@@ -23,6 +23,9 @@ from cacao_accounting.database import (
     Party,
     PurchaseOrder,
     PurchaseOrderItem,
+    PurchaseReceipt,
+    PurchaseReceiptItem,
+    PurchaseInvoice,
     PurchaseRequest,
     PurchaseRequestItem,
     PaymentEntry,
@@ -996,3 +999,75 @@ def test_final_payment_submission_revalidates_header(app):
         )
         with pytest.raises(ValueError, match="monto del pago"):
             ApprovalEngine._validate_final_submission("payment_entry", payment)
+
+
+def test_final_purchase_receipt_revalidates_order_quantities(app, monkeypatch):
+    """Una aprobación diferida vuelve a comprobar la sobre-recepción."""
+    with app.app_context():
+        receipt = PurchaseReceipt(id="receipt_final_recheck", company="comp_test", docstatus=0)
+        item = PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ITEM-TEST",
+            qty=Decimal("1"),
+            rate=Decimal("10"),
+            amount=Decimal("10"),
+        )
+        database.session.add_all([receipt, item])
+        database.session.flush()
+
+        monkeypatch.setattr(
+            "cacao_accounting.document_flow.validation.validate_submit_prerequisites",
+            lambda *args, **kwargs: None,
+        )
+        calls = []
+        monkeypatch.setattr(
+            "cacao_accounting.compras._validate_receipt_quantities_against_po",
+            lambda receipt_id: calls.append(receipt_id),
+        )
+
+        ApprovalEngine._validate_final_submission("purchase_receipt", receipt)
+
+        assert calls == [receipt.id]
+
+
+def test_final_purchase_credit_note_revalidates_source_balance(app, monkeypatch):
+    """Una nota de crédito revalida el saldo de su factura origen al aprobarse."""
+    with app.app_context():
+        source = PurchaseInvoice(
+            id="invoice_final_recheck",
+            company="comp_test",
+            docstatus=1,
+            grand_total=Decimal("100"),
+        )
+        note = PurchaseInvoice(
+            id="credit_final_recheck",
+            company="comp_test",
+            docstatus=0,
+            document_type="purchase_credit_note",
+            reversal_of=source.id,
+            grand_total=Decimal("25"),
+        )
+        database.session.add_all([source, note])
+        database.session.flush()
+
+        monkeypatch.setattr(
+            "cacao_accounting.document_flow.validation.validate_submit_prerequisites",
+            lambda *args, **kwargs: None,
+        )
+        for name in (
+            "_validate_invoice_quantities_against_receipt",
+            "_validate_invoice_requires_supplier_link",
+            "_validate_supplier_invoice_flags",
+            "_validate_duplicate_supplier_invoice",
+        ):
+            monkeypatch.setattr(f"cacao_accounting.compras.{name}", lambda *args, **kwargs: None)
+        calls = []
+        monkeypatch.setattr(
+            "cacao_accounting.compras._validate_purchase_reversal_of",
+            lambda *args, **kwargs: calls.append((args, kwargs)),
+        )
+
+        ApprovalEngine._validate_final_submission("purchase_invoice", note)
+
+        assert calls and calls[0][0][:3] == (source.id, None, "comp_test")
+        assert calls[0][1]["lock_source"] is True
