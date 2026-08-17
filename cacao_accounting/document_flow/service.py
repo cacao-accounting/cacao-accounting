@@ -115,7 +115,11 @@ def _state_quantities(
 
 def _line_payload(source_type: str, source_id: str, item: Any, target_type: str | None = None) -> dict[str, Any]:
     """Construye la respuesta estandar para una linea origen."""
-    qty = decimal_or_zero(getattr(item, "qty", 0))
+    qty = decimal_or_zero(
+        getattr(item, "qty_in_base_uom", None)
+        if getattr(item, "qty_in_base_uom", None) is not None
+        else getattr(item, "qty", 0)
+    )
     parallel_quotations = _allows_parallel_purchase_quotations(source_type, target_type)
     consumed = (
         Decimal("0")
@@ -243,7 +247,13 @@ def _update_source_cache(source_type: str, source_id: str, source_item_id: str |
     source_item = get_document_item(source_key, source_item_id)
     if not source_item:
         return
-    consumed = consumed_qty_for_source(source_key, source_id, source_item_id, target_key)
+    consumed = consumed_qty_for_source(
+        source_key,
+        source_id,
+        source_item_id,
+        target_key,
+        exclude_draft_targets=True,
+    )
     if source_key == "purchase_order" and target_key == "purchase_receipt":
         source_item.received_qty = consumed
     elif source_key == "purchase_order" and target_key == "purchase_invoice":
@@ -281,7 +291,13 @@ def _propagate_billed_qty(source_type: str, source_id: str, source_item_id: str 
         parent_item = get_document_item(parent_type, rel.source_item_id)
         if parent_item and hasattr(parent_item, "billed_qty"):
             invoice_type = "sales_invoice" if parent_type == "sales_order" else "purchase_invoice"
-            direct_billed = consumed_qty_for_source(parent_type, rel.source_id, rel.source_item_id, invoice_type)
+            direct_billed = consumed_qty_for_source(
+                parent_type,
+                rel.source_id,
+                rel.source_item_id,
+                invoice_type,
+                exclude_draft_targets=True,
+            )
 
             intermediary_type = "delivery_note" if parent_type == "sales_order" else "purchase_receipt"
 
@@ -298,7 +314,11 @@ def _propagate_billed_qty(source_type: str, source_id: str, source_item_id: str 
 
             for inter_rel in intermediaries:
                 indirect_billed += consumed_qty_for_source(
-                    intermediary_type, inter_rel.target_id, inter_rel.target_item_id, invoice_type
+                    intermediary_type,
+                    inter_rel.target_id,
+                    inter_rel.target_item_id,
+                    invoice_type,
+                    exclude_draft_targets=True,
                 )
 
             parent_item.billed_qty = direct_billed + indirect_billed

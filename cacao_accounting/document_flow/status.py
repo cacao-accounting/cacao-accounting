@@ -254,7 +254,13 @@ def _flow_progress(source_type: str, source_id: str, target_type: str) -> FlowPr
         qty = decimal_or_zero(getattr(item, "qty", 0))
         state = get_line_flow_state(source_type, source_id, item.id, target_type)
         total += decimal_or_zero(getattr(state, "source_qty", None) or qty)
-        processed += consumed_qty_for_source(source_type, source_id, item.id, target_type)
+        processed += consumed_qty_for_source(
+            source_type,
+            source_id,
+            item.id,
+            target_type,
+            exclude_draft_targets=True,
+        )
         closed += decimal_or_zero(getattr(state, "closed_qty", 0)) if state else Decimal("0")
     pending = total - processed - closed
     if pending < 0:
