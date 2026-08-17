@@ -1,6 +1,8 @@
 """Esquemas de validación para los endpoints del módulo de pista de auditoría."""
 
-DOCUMENT_TIMELINE_PARAMS = {
+from typing import Any
+
+DOCUMENT_TIMELINE_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},

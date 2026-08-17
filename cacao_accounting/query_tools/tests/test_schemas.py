@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 import pytest
 
 from cacao_accounting.query_tools.schemas.accounting import (
@@ -37,14 +38,14 @@ from cacao_accounting.query_tools.schemas.receivables import (
 )
 
 
-def _assert_object_schema(schema: dict, required: set[str], properties: set[str]) -> None:
+def _assert_object_schema(schema: dict[str, Any], required: set[str], properties: set[str]) -> None:
     """Comprueba el contrato común de un esquema de parámetros JSON."""
     assert schema["type"] == "object"
     assert set(schema.get("required", [])) == required
     assert set(schema["properties"]) == properties
 
 
-def _assert_pagination_properties(schema: dict) -> None:
+def _assert_pagination_properties(schema: dict[str, Any]) -> None:
     """Comprueba los límites públicos de paginación."""
     assert schema["properties"]["page"] == {"type": "integer", "default": 1}
     assert schema["properties"]["page_size"] == {"type": "integer", "default": 100, "maximum": 500}
@@ -75,7 +76,9 @@ def _assert_pagination_properties(schema: dict) -> None:
         ),
     ],
 )
-def test_receivables_and_payables_schemas_have_expected_contract(schema, required, properties):
+def test_receivables_and_payables_schemas_have_expected_contract(
+    schema: dict[str, Any], required: set[str], properties: set[str]
+) -> None:
     """Verifica filtros, requisitos y paginación de AR y AP."""
     _assert_object_schema(schema, required, properties)
     _assert_pagination_properties(schema)
