@@ -1202,6 +1202,7 @@ def inventario_entrada(entry_id):
     registro = database.session.get(StockEntry, entry_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("inventory", registro.company, "consultar")
     items = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry_id)).all()
     titulo = (registro.document_no or entry_id) + " - " + APPNAME
     return render_template(
@@ -1224,6 +1225,7 @@ def inventario_entrada_editar(entry_id: str):
     registro = database.session.get(StockEntry, entry_id)
     if not registro:
         abort(404)
+    exige_acceso_compania("inventory", registro.company, "editar")
     from cacao_accounting.approval_engine import ApprovalEngine
 
     try:
