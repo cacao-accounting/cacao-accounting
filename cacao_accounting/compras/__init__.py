@@ -2890,6 +2890,16 @@ def _create_purchase_order_from_request(form: dict):
             naming_series_id=form.get("naming_series") or None,
         )
         total_qty, total = _save_purchase_order_items(orden.id)
+        if source:
+            source_type = {
+                PurchaseRequest: "purchase_request",
+                PurchaseQuotation: "purchase_quotation",
+                SupplierQuotation: "supplier_quotation",
+            }[type(source)]
+            order_items = database.session.execute(
+                database.select(PurchaseOrderItem).filter_by(purchase_order_id=orden.id)
+            ).scalars().all()
+            _validate_purchase_source_link(orden, source_type, source.id, order_items)
         orden.total_qty = total_qty
         orden.total = total
         orden.net_total = total
@@ -3146,6 +3156,11 @@ def _create_purchase_quotation_from_request():
             naming_series_id=request.form.get("naming_series") or None,
         )
         _qty, total = _save_purchase_quotation_items(cotizacion.id)
+        if source:
+            quotation_items = database.session.execute(
+                database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=cotizacion.id)
+            ).scalars().all()
+            _validate_purchase_source_link(cotizacion, "purchase_request", source.id, quotation_items)
         cotizacion.total = total
         cotizacion.base_total = total
         cotizacion.grand_total = total
@@ -3825,7 +3840,13 @@ def compras_recepcion_duplicar(receipt_id: str):
 
 def _validate_purchase_source_link(document: Any, source_type: str, source_id: str, items: list[Any] | None = None) -> Any:
     """Valida estado, compañía, proveedor y relaciones de un origen S2P."""
-    source_models = {"purchase_order": PurchaseOrder, "purchase_receipt": PurchaseReceipt}
+    source_models = {
+        "purchase_request": PurchaseRequest,
+        "purchase_quotation": PurchaseQuotation,
+        "supplier_quotation": SupplierQuotation,
+        "purchase_order": PurchaseOrder,
+        "purchase_receipt": PurchaseReceipt,
+    }
     source_model = source_models.get(source_type)
     source = database.session.get(source_model, source_id) if source_model else None
     if not source:
@@ -3843,8 +3864,14 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
         if source.purchase_order_id != document.purchase_order_id:
             raise ValueError("La recepción no pertenece a la orden de compra indicada.")
     if items is not None:
+        target_types = {
+            PurchaseQuotation: "purchase_quotation",
+            PurchaseOrder: "purchase_order",
+            PurchaseReceipt: "purchase_receipt",
+            PurchaseInvoice: "purchase_invoice",
+        }
         require_line_relations(
-            target_type="purchase_invoice" if isinstance(document, PurchaseInvoice) else "purchase_receipt",
+            target_type=target_types[type(document)],
             target_id=document.id,
             source_type=source_type,
             source_id=source_id,
