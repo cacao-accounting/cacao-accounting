@@ -120,7 +120,7 @@ class PurchasePendingRow:
 
 @dataclass
 class _AggregatedLines:
-    key: tuple[str, str | None]
+    key: tuple[str, str | None, str | None]
     lines: list[Any] = field(default_factory=list)
     qty: Decimal = Decimal("0")
     amount: Decimal = Decimal("0")
@@ -254,15 +254,17 @@ def _compatible_group(groups: dict, line: Any) -> Any | None:
     return None
 
 
-def _group_lines_by_item_and_uom(lines: list[Any]) -> dict[tuple[str, str | None], list[Any]]:
-    grouped: dict[tuple[str, str | None], list[Any]] = defaultdict(list)
+def _group_lines_by_item_and_uom(lines: list[Any]) -> dict[tuple[str, str | None, str | None], list[Any]]:
+    grouped: dict[tuple[str, str | None, str | None], list[Any]] = defaultdict(list)
     for line in lines:
         grouped[_line_key(line)].append(line)
     return grouped
 
 
-def _aggregate_lines_by_item_and_uom(lines: list[Any]) -> dict[tuple[str, str | None], _AggregatedLines]:
-    aggregates: dict[tuple[str, str | None], _AggregatedLines] = {}
+def _aggregate_lines_by_item_and_uom(
+    lines: list[Any],
+) -> dict[tuple[str, str | None, str | None], _AggregatedLines]:
+    aggregates: dict[tuple[str, str | None, str | None], _AggregatedLines] = {}
     for line in lines:
         key = _line_key(line)
         aggregate = aggregates.setdefault(key, _AggregatedLines(key=key))
