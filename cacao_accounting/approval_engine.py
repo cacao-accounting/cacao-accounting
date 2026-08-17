@@ -450,6 +450,7 @@ class ApprovalEngine:
             _validate_duplicate_supplier_invoice,
             _validate_invoice_requires_supplier_link,
             _validate_invoice_quantities_against_receipt,
+            _validate_purchase_reversal_of,
             _validate_supplier_invoice_flags,
         )
 
@@ -467,6 +468,16 @@ class ApprovalEngine:
             document.supplier_invoice_no,
             exclude_id=document.id,
         )
+        if getattr(document, "document_type", None) in {"purchase_credit_note", "purchase_debit_note"}:
+            _validate_purchase_reversal_of(
+                document.reversal_of or "",
+                document.supplier_id,
+                document.company,
+                note_amount=Decimal(str(document.grand_total or "0")),
+                document_type=document.document_type,
+                posting_date=document.posting_date,
+                lock_source=True,
+            )
 
     @staticmethod
     def _validate_final_submission(doctype: str, document: Any) -> None:
@@ -536,6 +547,10 @@ class ApprovalEngine:
             ApprovalEngine._validate_sales_submission(doctype, document)
         elif doctype == "purchase_invoice":
             ApprovalEngine._validate_purchase_submission(document)
+        elif doctype == "purchase_receipt":
+            from cacao_accounting.compras import _validate_receipt_quantities_against_po
+
+            _validate_receipt_quantities_against_po(document.id)
 
     @classmethod
     def request_approval(cls, document: Any) -> ApprovalRequest | None:
