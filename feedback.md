@@ -180,7 +180,7 @@ Se aplicaron y se dejaron en el commit firmado `0bdd6792` (`fix(sales): protect 
 | M3 | La edición de notas de crédito valida el límite usando `grand_total`, igual que creación y submit. |
 | M4 | La duplicación de facturas conserva moneda, tasa, plantilla fiscal, vínculos de origen, dimensiones de línea y totales funcionales. |
 
-H1 y M5–M18 permanecen pendientes de implementación o verificación específica; no se marcan como resueltos por este commit.
+Todos los hallazgos H1–H3, M1–M18 y B1–B6 se detallan en los bloques aplicados abajo.
 
 ### Referencias de correcciones anteriores
 
@@ -239,3 +239,9 @@ El commit firmado `27c65168` (`fix(document-flow): preserve revisions and close 
 | #443 | `package.json` usa un override de `serialize-javascript` 7.x y `package-lock.json` queda actualizado; la auditoría offline de severidad high reporta 0 high/critical. La auditoría online sigue limitada por DNS del entorno. |
 
 Las pruebas enfocadas de este bloque finalizaron con **57 passed**; la validación Black del alcance modificado no reportó diferencias.
+
+### Cuarto bloque aplicado
+
+El commit firmado `42409abf` (`fix(accounting): allow read-only budget fallback`) cierra M18: la vista y los reportes de presupuesto pueden consultarse con permiso de lectura del módulo Contabilidad aunque no existan grants explícitos por libro. Las acciones de escritura continúan exigiendo permisos granulares. También permite conservar borradores contables de entidades antiguas sin moneda funcional configurada, y mantiene la validación estricta para monedas explícitas.
+
+La prueba de ruta de importación y las regresiones contables seleccionadas finalizaron con **3 passed**.
