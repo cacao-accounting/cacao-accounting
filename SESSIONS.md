@@ -1858,6 +1858,66 @@ línea excede la tolerancia. Se añadió regresión para diferencias opuestas.
 El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
 ni se hizo push.
 
+## 2026-08-17 — Revisión de comentarios y snapshots multimoneda #481/#482
+
+La revisión de los issues abiertos confirmó que #481 seguía dejando el
+snapshot funcional de `PurchaseReceipt` obsoleto al editar y que #482 igualaba
+los importes transaccionales y funcionales de `SalesInvoice`. El commit
+`95b642e3 fix(currency): refresh transactional document snapshots` (`Closes
+#481`, `Closes #482`) agrega `base_total` persistente a las recepciones,
+recalcula tasa/moneda funcional al crear y editar, y conserva la moneda y tasa
+histórica del documento origen en facturas de venta. Incluye pruebas unitarias
+de ambos snapshots.
+
+## 2026-08-17 — Fixes iniciales de issues #480–#393 solicitados
+
+Se consultaron directamente en GitHub los issues #480, #479, #478, #477, #473,
+#472, #468, #467, #465, #462, #459, #458, #457, #455, #453, #452, #451,
+#445, #444, #443, #442, #441, #394 y #393, y se contrastaron con el checkout
+actual antes de modificarlo.
+
+El commit firmado `690bf30a fix(banking): enforce transaction direction and
+reconciliation state` (`Closes #480, #453, #459, #465, #468, #472`) hace que
+Cash Forecast use vencimiento, excluye conciliaciones canceladas, valida la
+dirección de pagos, rechaza transacciones bancarias ambiguas y valida/actualiza
+la ubicación de seriales en salidas, transferencias y reversas.
+
+El commit firmado `d1ad7197 fix(accounting): preserve document dimensions and
+validity` (`Closes #455, #458, #477, #478`) valida vigencia de recurrentes,
+deriva el tipo documental real de referencias de pago, separa matching por
+bodega con fallback sólo cuando es inequívoco y conserva proyecto/unidad de
+negocio en el control presupuestario.
+
+El cambio pendiente para el siguiente commit corrige el contexto Flask de
+`cacaoctl serve` durante la inicialización de base existente (#451). La
+revisión actual confirma implementaciones previas para #452, #441, #442 y
+#393, pero todavía requieren auditoría focal y/o pruebas independientes antes
+de cerrar esos issues. Permanecen pendientes #443, #445, #467, #473, #479,
+#394 y el saldo por lote de #457; no se hizo push.
+
+Durante la continuación se añadieron además los commits firmados:
+`593b6e68 fix(server): initialize database inside app context` (`Closes
+#451`), `080574a5 fix(orders): enforce item commercial eligibility` (`Closes
+#473`), `d78ace45 fix(ledger): enforce append-only accounting evidence` (`Closes
+#445`) y `aa500476 fix(inventory): validate batch balances by warehouse`
+(`Closes #457`). Sus pruebas focales pasaron: 33, 65 y 69 tests según el
+bloque, respectivamente. La suite completa se deja ejecutándose en
+`/tmp/cacao-issues-full.log`; no se hizo push.
+
+## 2026-08-17 — Validación de orígenes upstream O2C/S2P #463/#464/#474/#475
+
+Los comentarios de los issues indicaban que el bypass también existía en los
+pasos solicitud/cotización → orden. El commit `a452feef
+fix(document-flow): validate upstream source links` (`Closes #463`, `Closes
+#464`, `Closes #474`, `Closes #475`) exige origen aprobado, compañía,
+contraparte, moneda y relación activa por cada línea al crear/enviar órdenes y
+cotizaciones downstream.
+
+Se detectó y revisó el commit paralelo `194c82a4 chore(format): apply black
+formater`; sus cambios fueron sólo de formato sobre el fix de relaciones y la
+bitácora, sin conflicto funcional. No se ejecutó la suite; se validó
+compilación, `black --check` y `git diff --check`. No se hizo push.
+
 ## 2026-08-17 — Análisis de la corrida final de pruebas y validaciones de documentos
 
 El usuario reportó nueve fallos en la suite final. Los errores de importación de
