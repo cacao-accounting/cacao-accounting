@@ -107,6 +107,11 @@ def _payment_direction(payment: PaymentEntry, transaction: BankTransaction) -> s
     return None
 
 
+def _payment_belongs_to_bank(payment: PaymentEntry, bank_account_id: str) -> bool:
+    """Return whether a payment touches the bank account being reconciled."""
+    return bank_account_id in {payment.bank_account_id, payment.target_bank_account_id}
+
+
 def _gl_direction(entry: GLEntry) -> str | None:
     """Interpreta débito bancario como depósito y crédito como retiro."""
     if _decimal_value(entry.debit) > 0:
@@ -357,6 +362,8 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool 
         .all()
     )
     for payment in payments:
+        if not _payment_belongs_to_bank(payment, transaction.bank_account_id):
+            continue
         if _payment_direction(payment, transaction) != _bank_direction(transaction):
             continue
         payment_currency = str(payment.currency) if payment.currency else company_currency
@@ -539,6 +546,10 @@ def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: s
         bank_gl_account_id = _bank_gl_account_id(transaction)
         if not entry or not bank_gl_account_id or entry.account_id != bank_gl_account_id:
             raise BankReconciliationError("La entrada GL no pertenece a la cuenta bancaria conciliada.")
+    elif match.target_type == "payment_entry":
+        payment = database.session.get(PaymentEntry, match.target_id)
+        if not payment or not _payment_belongs_to_bank(payment, transaction.bank_account_id):
+            raise BankReconciliationError("El pago no pertenece a la cuenta bancaria conciliada.")
     return transaction
 
 
