@@ -2241,10 +2241,7 @@ def _form_decimal(field_name: str, default: str = "0") -> Decimal:
 
 
 def _line_amount(index: int) -> Decimal:
-    """Obtiene o calcula el monto de una linea."""
-    amount = request.form.get(f"amount_{index}")
-    if amount not in (None, ""):
-        return Decimal(str(amount))
+    """Calcula el monto de una línea con datos confiables del servidor."""
     return _form_decimal(f"qty_{index}", "1") * _form_decimal(f"rate_{index}", "0")
 
 

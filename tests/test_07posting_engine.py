@@ -3815,6 +3815,20 @@ def test_material_receipt_resolves_offset_per_line_source(app_ctx):
     assert _get_offset_account_for_line(entry, manual_line, "cacao", "material_receipt") == adjustment.id
 
 
+def test_line_amount_ignores_client_supplied_total(app_ctx):
+    """Los módulos transaccionales calculan el monto y no confían en el formulario."""
+    from cacao_accounting.compras import _line_amount as purchase_line_amount
+    from cacao_accounting.inventario import _line_amount as inventory_line_amount
+    from cacao_accounting.ventas import _line_amount as sales_line_amount
+
+    with app_ctx.test_request_context(
+        data={"qty_0": "10", "rate_0": "5", "amount_0": "5000"}
+    ):
+        assert sales_line_amount(0) == Decimal("50")
+        assert purchase_line_amount(0) == Decimal("50")
+        assert inventory_line_amount(0) == Decimal("50")
+
+
 def test_cancel_landed_cost_reverses_capitalized_inventory_value(app_ctx):
     """Cancelar el landed cost revierte la capa y el valor del StockBin."""
     from cacao_accounting.contabilidad.posting import _cancel_landed_cost_valuations
