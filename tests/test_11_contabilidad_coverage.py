@@ -915,6 +915,34 @@ def test_journal_service_normalize_transaction_currency_matching(app_ctx):
     assert journal.transaction_currency == "USD"
 
 
+def test_journal_service_preserves_manual_exchange_rate(app_ctx):
+    """La tasa manual de cabecera debe persistirse en el borrador."""
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft
+    from cacao_accounting.database import Accounts, Currency, database
+
+    debit = Accounts(entity="cacao", code="EXP-TC-MANUAL", name="Gasto", active=True, enabled=True)
+    credit = Accounts(entity="cacao", code="CAJ-TC-MANUAL", name="Caja", active=True, enabled=True)
+    currency = Currency(code="USD-MANUAL", name="Dollar manual", decimals=2, active=True, default=False)
+    database.session.add_all([debit, credit, currency])
+    database.session.commit()
+
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-01",
+            "transaction_currency": "USD-MANUAL",
+            "exchange_rate": "36.5",
+            "lines": [
+                {"account": debit.id, "debit": "10.00", "credit": "0"},
+                {"account": credit.id, "debit": "0", "credit": "10.00"},
+            ],
+        },
+        user_id="admin",
+    )
+
+    assert journal.exchange_rate == Decimal("36.5")
+
+
 def test_journal_service_account_labels_no_name(app_ctx):
     from cacao_accounting.contabilidad.journal_service import _account_labels_for_company
     from cacao_accounting.database import Accounts, database
