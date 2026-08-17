@@ -425,6 +425,7 @@ def _evaluate_matching_result(
     total_amount_difference: Decimal,
     total_reference_amount: Decimal,
     config: MatchingConfig,
+    price_tolerance_failed: bool = False,
 ) -> MatchingResult:
     """Evalua el resultado del matching segun la configuracion de tolerancias."""
     qty_difference = total_invoiced_qty - total_reference_qty
@@ -453,7 +454,7 @@ def _evaluate_matching_result(
 
     if qty_difference > 0 and not qty_ok:
         return MatchingResult.MATCH_FAILED
-    if not price_ok or not amount_ok:
+    if price_tolerance_failed or not price_ok or not amount_ok:
         return MatchingResult.MATCH_FAILED
     if qty_difference != 0:
         return MatchingResult.MATCH_PARTIAL
@@ -545,6 +546,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     total_amount_difference = Decimal("0")
     total_invoiced_qty = Decimal("0")
     total_received_qty = Decimal("0")
+    price_tolerance_failed = False
 
     for key, invoice_group in invoice_groups.items():
         receipt_group = receipt_groups.get(key)
@@ -561,9 +563,17 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
         matched_amount = min(invoice_group.qty, reference_qty) * receipt_group.rate
         price_difference = invoice_group.rate - receipt_group.rate
         amount_difference = invoice_group.amount - reference_amount
+        line_price_difference = price_difference * min(invoice_group.qty, reference_qty)
+        if not _within_tolerance(
+            line_price_difference,
+            reference_amount,
+            config.price_tolerance_type,
+            config.price_tolerance_value,
+        ):
+            price_tolerance_failed = True
 
         total_amount += matched_amount
-        total_price_difference += price_difference * min(invoice_group.qty, reference_qty)
+        total_price_difference += line_price_difference
         total_amount_difference += amount_difference
         total_invoiced_qty += invoice_group.qty
         total_received_qty += reference_qty
@@ -579,6 +589,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
         total_invoiced_qty,
         total_received_qty,
         receipt_id=receipt.id,
+        price_tolerance_failed=price_tolerance_failed,
     )
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
         for invoice_item in invoice_items:
@@ -626,6 +637,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     total_amount_difference = Decimal("0")
     total_invoiced_qty = Decimal("0")
     total_ordered_qty = Decimal("0")
+    price_tolerance_failed = False
 
     for key, invoice_group in invoice_groups.items():
         order_group = order_groups.get(key)
@@ -643,9 +655,17 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
         matched_amount = min(invoice_group.qty, reference_qty) * order_group.rate
         price_difference = invoice_group.rate - order_group.rate
         amount_difference = invoice_group.amount - reference_amount
+        line_price_difference = price_difference * min(invoice_group.qty, reference_qty)
+        if not _within_tolerance(
+            line_price_difference,
+            reference_amount,
+            config.price_tolerance_type,
+            config.price_tolerance_value,
+        ):
+            price_tolerance_failed = True
 
         total_amount += matched_amount
-        total_price_difference += price_difference * min(invoice_group.qty, reference_qty)
+        total_price_difference += line_price_difference
         total_amount_difference += amount_difference
         total_invoiced_qty += invoice_group.qty
         total_ordered_qty += reference_qty
@@ -661,6 +681,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
         total_invoiced_qty,
         total_ordered_qty,
         receipt_id=None,
+        price_tolerance_failed=price_tolerance_failed,
     )
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
         for invoice_item in invoice_items:
@@ -815,6 +836,7 @@ def _finalize_reconciliation(
     total_invoiced_qty: Decimal,
     total_reference_qty: Decimal,
     receipt_id: str | None,
+    price_tolerance_failed: bool = False,
 ) -> PurchaseReconciliationResult:
     """Evalua el resultado del matching y emite el evento economico correspondiente."""
     matching_result = _evaluate_matching_result(
@@ -824,6 +846,7 @@ def _finalize_reconciliation(
         total_amount_difference,
         total_amount,
         config,
+        price_tolerance_failed=price_tolerance_failed,
     )
 
     reconciliation.status = _derive_reconciliation_status(matching_result, total_invoiced_qty, total_reference_qty)
