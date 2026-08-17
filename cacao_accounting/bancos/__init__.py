@@ -335,9 +335,11 @@ def _warn_duplicate_payment(payment):
     Regla de negocio: solo se emite advertencia (flash warning), no se detiene
     el registro del pago. El usuario decide si confirma o cancela.
     """
-    from sqlalchemy import or_
-
-    if not payment.paid_amount or payment.paid_amount <= 0:
+    payment_type = str(payment.payment_type or "").lower()
+    is_outflow = payment_type in {"pay", "debit_note"}
+    amount_column = PaymentEntry.paid_amount if is_outflow else PaymentEntry.received_amount
+    amount = payment.paid_amount if is_outflow else payment.received_amount
+    if not amount or amount <= 0:
         return
     window_start = (payment.posting_date or date.today()) - timedelta(days=3)
     window_end = (payment.posting_date or date.today()) + timedelta(days=3)
@@ -350,7 +352,9 @@ def _warn_duplicate_payment(payment):
                 PaymentEntry.docstatus == 1,
                 PaymentEntry.posting_date >= window_start,
                 PaymentEntry.posting_date <= window_end,
-                or_(PaymentEntry.paid_amount == payment.paid_amount, PaymentEntry.received_amount == payment.paid_amount),
+                PaymentEntry.payment_type.in_({"pay", "debit_note"} if is_outflow else {"receive", "credit_note"}),
+                amount_column == amount,
+                PaymentEntry.currency == payment.currency,
             )
         )
         .scalars()

@@ -61,6 +61,44 @@ def login(client, username, password):
     return client.post("/login", data={"usuario": username, "acceso": password}, follow_redirects=True)
 
 
+def test_duplicate_payment_warning_covers_receipts(app_ctx):
+    """Un cobro repetido debe generar la advertencia preventiva de duplicidad."""
+    from flask import get_flashed_messages
+
+    from cacao_accounting.bancos import _warn_duplicate_payment
+
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    existing = PaymentEntry(
+        company="cacao",
+        party_id=customer.id,
+        party_type="customer",
+        payment_type="receive",
+        received_amount=Decimal("500"),
+        currency="NIO",
+        posting_date=date(2026, 8, 17),
+        docstatus=1,
+    )
+    candidate = PaymentEntry(
+        id="PAY-DUP-RECEIVE",
+        company="cacao",
+        party_id=customer.id,
+        party_type="customer",
+        payment_type="receive",
+        received_amount=Decimal("500"),
+        currency="NIO",
+        posting_date=date(2026, 8, 18),
+        docstatus=0,
+    )
+    database.session.add_all([existing, candidate])
+    database.session.flush()
+
+    with app_ctx.test_request_context():
+        _warn_duplicate_payment(candidate)
+        messages = get_flashed_messages(with_categories=True)
+
+    assert any(category == "warning" for category, _message in messages)
+
+
 def _first_account_id(company: str, account_type: str) -> str | None:
     from cacao_accounting.database import Accounts
 
