@@ -1,6 +1,8 @@
 """Esquemas de validación para los endpoints del módulo de compañías."""
 
-COMPANIES_LIST_PARAMS = {
+from typing import Any
+
+COMPANIES_LIST_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "page": {"type": "integer", "default": 1},
@@ -8,7 +10,7 @@ COMPANIES_LIST_PARAMS = {
     },
 }
 
-COMPANIES_LIST_RESPONSE = {
+COMPANIES_LIST_RESPONSE: dict[str, Any] = {
     "type": "object",
     "properties": {
         "page": {"type": "integer"},

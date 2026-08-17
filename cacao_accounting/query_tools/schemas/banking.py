@@ -1,6 +1,8 @@
 """Esquemas de validación para los endpoints del módulo de banca."""
 
-BANKING_ACCOUNTS_PARAMS = {
+from typing import Any
+
+BANKING_ACCOUNTS_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
@@ -10,7 +12,7 @@ BANKING_ACCOUNTS_PARAMS = {
     "required": ["company_id"],
 }
 
-BANKING_TRANSACTIONS_PARAMS = {
+BANKING_TRANSACTIONS_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},

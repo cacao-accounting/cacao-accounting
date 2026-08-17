@@ -1,6 +1,8 @@
 """Esquemas de validación comunes compartidos entre módulos."""
 
-PAGINATION_PARAMS = {
+from typing import Any
+
+PAGINATION_PARAMS: dict[str, Any] = {
     "page": {
         "type": "integer",
         "description": "Número de página (empieza en 1)",
@@ -15,7 +17,7 @@ PAGINATION_PARAMS = {
     },
 }
 
-DATE_FILTERS = {
+DATE_FILTERS: dict[str, Any] = {
     "date_from": {
         "type": "string",
         "format": "date",
@@ -28,7 +30,7 @@ DATE_FILTERS = {
     },
 }
 
-PAGINATED_RESPONSE = {
+PAGINATED_RESPONSE: dict[str, Any] = {
     "type": "object",
     "properties": {
         "page": {"type": "integer"},
@@ -40,7 +42,7 @@ PAGINATED_RESPONSE = {
     },
 }
 
-ERROR_RESPONSE = {
+ERROR_RESPONSE: dict[str, Any] = {
     "type": "object",
     "properties": {
         "error": {
@@ -54,7 +56,7 @@ ERROR_RESPONSE = {
     },
 }
 
-COMPANY_PARAM = {
+COMPANY_PARAM: dict[str, Any] = {
     "company_id": {
         "type": "string",
         "description": "Código de la compañía",

@@ -1,6 +1,8 @@
 """Esquemas de validación para los endpoints del módulo de documentos."""
 
-DOCUMENTS_FLOW_PARAMS = {
+from typing import Any
+
+DOCUMENTS_FLOW_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},

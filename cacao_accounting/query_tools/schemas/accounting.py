@@ -1,6 +1,8 @@
 """Esquemas de validación para los endpoints del módulo de contabilidad."""
 
-ACCOUNTING_PERIODS_PARAMS = {
+from typing import Any
+
+ACCOUNTING_PERIODS_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string", "description": "Código de la compañía"},
@@ -15,7 +17,7 @@ ACCOUNTING_PERIODS_PARAMS = {
     "required": ["company_id"],
 }
 
-ACCOUNTS_SEARCH_PARAMS = {
+ACCOUNTS_SEARCH_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
@@ -31,7 +33,7 @@ ACCOUNTS_SEARCH_PARAMS = {
     "required": ["company_id"],
 }
 
-TRIAL_BALANCE_PARAMS = {
+TRIAL_BALANCE_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
@@ -44,7 +46,7 @@ TRIAL_BALANCE_PARAMS = {
     "required": ["company_id", "ledger_id", "date_from", "date_to"],
 }
 
-GENERAL_LEDGER_PARAMS = {
+GENERAL_LEDGER_PARAMS: dict[str, Any] = {
     "type": "object",
     "properties": {
         "company_id": {"type": "string"},
