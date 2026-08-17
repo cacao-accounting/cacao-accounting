@@ -2212,6 +2212,7 @@ class PurchaseReceipt(database.Model, DocBase):  # type: ignore[name-defined]
     )
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
     total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    base_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     remarks = database.Column(database.Text(), nullable=True)
     incoterm_code = database.Column(database.String(20), nullable=True, index=True)
