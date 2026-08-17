@@ -60,25 +60,26 @@ def _validate_warehouse_assignments(items, warehouse_for_stock_items_only):
             raise ValueError(f"La linea del articulo {item_code} requiere un almacen asignado.")
 
 
-def require_line_relations(
-    *, target_type: str, target_id: str, source_type: str, source_id: str, items: list[Any]
-) -> None:
+def require_line_relations(*, target_type: str, target_id: str, source_type: str, source_id: str, items: list[Any]) -> None:
     """Exige una relación activa por cada línea cuando existe un documento origen."""
-    relations = database.session.execute(
-        database.select(DocumentRelation).filter_by(
-            target_type=target_type,
-            target_id=target_id,
-            source_type=source_type,
-            source_id=source_id,
-            status="active",
+    relations = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                target_type=target_type,
+                target_id=target_id,
+                source_type=source_type,
+                source_id=source_id,
+                status="active",
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     expected_item_ids = {str(item.id) for item in items}
     relation_item_ids = {str(relation.target_item_id) for relation in relations if relation.target_item_id}
     if len(relations) != len(items) or relation_item_ids != expected_item_ids:
         raise ValueError(
-            "Cada línea debe conservar una relación activa con el documento origen "
-            f"({source_type}:{source_id})."
+            "Cada línea debe conservar una relación activa con el documento origen " f"({source_type}:{source_id})."
         )
 
 

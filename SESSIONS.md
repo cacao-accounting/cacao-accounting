@@ -3,6 +3,315 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-17 — Documentación de monolitos > 1,500 líneas en `ISSUES.md`
+
+### Petición
+
+Documentar como issues todos los archivos de código fuente del proyecto que superan
+las 1,500 líneas, excluyendo archivos de tests. Se verificó que `gh` no está
+autenticado y la API de GitHub devuelve HTTP 503, por lo que se documenta
+localmente en `ISSUES.md`.
+
+### Resultado
+
+Se identificaron **10 archivos monolíticos** de código fuente > 1,500 líneas:
+
+| Archivo | Líneas | Módulo |
+|---------|--------|--------|
+| `compras/__init__.py` | 5,426 | S2P |
+| `database/__init__.py` | 5,186 | Core |
+| `contabilidad/__init__.py` | 4,259 | R2R |
+| `ventas/__init__.py` | 3,677 | O2C |
+| `contabilidad/posting.py` | 3,425 | R2R |
+| `reportes/services.py` | 2,908 | Reportes |
+| `bancos/__init__.py` | 2,439 | Bancos |
+| `reportes/__init__.py` | 1,601 | Reportes |
+| `inventario/__init__.py` | 1,551 | Inventario |
+| `admin/__init__.py` | 1,534 | Admin |
+
+Total: **32,066 líneas** de código fuente a refactorizar en ~120 submódulos.
+
+### Decisión de diseño
+
+Se creó `ISSUES.md` (775 líneas) con:
+- 10 issues documentados (REF-001 a REF-010)
+- Problema concreto y justificación por archivo
+- Propuesta de descomposición en submódulos
+- Dependencias afectadas
+- Esfuerzo estimado (Alto/Medio/Bajo)
+- Orden de refactorización recomendado
+
+La estructura de issues sigue el formato existente del proyecto. Cuando `gh` se
+recupere, se podrán crear los issues remotamente desde este archivo.
+
+### Estado
+
+`ISSUES.md` creado. Pendiente: crear issues remotos en GitHub cuando la API se
+recupere, y actualizar `SESSIONS.md` con referencias a issues creados.
+
+## 2026-08-17 — Validación remota de `ISSUES.md` y registro de incidencias
+
+### Petición
+
+Confirmar que los hallazgos de `ISSUES.md` son defectos reales antes de abrir
+incidencias, evitando duplicados: si ya existe una incidencia abierta, aportar
+el análisis como comentario.
+
+### Resultado
+
+Se confirmó que `issues.md` no existe y que el documento de referencia es
+`ISSUES.md`. Se revisaron sus 25 hallazgos incrementales contra el código y se
+buscó cada caso en los issues abiertos del repositorio.
+
+- Se abrieron 22 incidencias confirmadas: #485–#506.
+- DF-01 se agregó como análisis a #483; S2P-30 a #283; R2R-26 a #278.
+- Se ampliaron las confirmaciones de #444 y #468.
+- El catálogo histórico de `ISSUES.md` reportaba 53 abiertos, pero la consulta
+  remota posterior mostró 81 abiertos; #287–#320 ya figuran cerrados.
+
+### Decisión de diseño
+
+La regla operativa queda fijada: antes de crear cualquier issue, buscar por
+módulo, función y reproducción; un resultado abierto equivalente recibe un
+comentario técnico con evidencia adicional, y sólo una brecha independiente
+genera una nueva incidencia.
+
+### Validación de calidad
+
+Se ejecutó en `.venv` el comando completo solicitado y se guardó la salida en
+`/tmp/cacao-audit-pytest.log`: **1810 passed, 11 skipped, 209 warnings** en
+1722.02 segundos. También pasaron Black (`--check`), Ruff, Flake8, mypy y
+pydocstyle sobre `cacao_accounting`; mypy sólo emitió sus notas informativas
+habituales sobre cuerpos no tipados no comprobados.
+
+La modificación existente en `cacao_accounting/bancos/__init__.py` (tres
+validaciones de acceso por compañía) se preservó y no forma parte de esta
+auditoría documental.
+
+## 2026-08-17 — Auditoría O2C, S2P, R2R, Bancos e Inventario (segunda ronda); GitHub API caída
+
+### Petición
+
+Hacer una auditoría rigurosa de código a los procesos O2C, S2P, R2R, Bancos e
+Inventarios que expone el sistema, y documentar los hallazgos abriendo issues en
+GitHub o comentando en issues existentes. Ante la caída de la API de GitHub
+(HTTP 503 persistente), se instruyó documentar los hallazgos en `ISSUES.md`,
+verificando primero que no existiera una incidencia abierta para el mismo caso.
+
+### Plan ejecutado
+
+1. Se leyó `SESSIONS.md`, `ISSUES.md` y el catálogo completo de issues abiertos
+   (#246–#481) para fijar el contexto y evitar duplicados.
+2. Se despacharon cinco agentes de auditoría en paralelo (uno por proceso) con
+   lectura exhaustiva de los módulos: `ventas`, `compras`, `contabilidad`,
+   `bancos`, `inventario`, `document_flow`, `accounting_engine`, `approval_engine`,
+   `reportes`, `imports`.
+3. Se verificaron manualmente los hallazgos clave en el código (línea a línea)
+   antes de registrarlos: totales con/sin impuestos, exponencia de crédito,
+   relaciones de borradores, approval engine, revaluación, cierre fiscal,
+   conciliación bancaria, valoración FIFO y reversión de capitalizable.
+4. Se comparó cada hallazgo contra los issues abiertos; los que confirmaban/ampliaban
+   uno existente (#468, #444, #474, #452) se registraron como confirmaciones con
+   comentario de resolución propuesto, no como hallazgo nuevo.
+5. Se documentaron 25 hallazgos nuevos en `ISSUES.md` (sección
+   "Auditoría incremental O2C/S2P/R2R/Bancos/Inventario — 2026-08-17") con el
+   template del repositorio y el texto de issue propuesto, quedando pendiente la
+   creación remota cuando GitHub se recupere.
+
+### Hallazgos más relevantes
+
+- **SL-01 [CRÍTICA]** — El `grand_total`/`outstanding_amount` de facturas AR/AP se
+  persiste sin impuestos mientras el GL postea el total con impuestos; pago/cobro
+  topeado al subtotal y residuo perpetuo en la cuenta por pagar/cobrar.
+- **O2C-11/Alta** — La exposición de crédito doble-cuenta órdenes entregadas y
+  facturadas vía Nota de Entrega (`billed_total` filtra solo por `sales_order_id`).
+- **DF-01/Alta** — Relaciones de borradores consumen cantidad del origen; editar un
+  borrador vinculado falla y un borrador abandonado bloquea la fuente.
+- **INV-28/Alta** — Conciliación con reducción de cantidad + revalorización
+  corrompe la valoración FIFO (cola vs bin divergen).
+- **INV-29/Alta** — Cancelar factura/landed cost con capitalizable no revierte el
+  StockBin ni las capas.
+- **R2R-23/Alta** — Re-ejecución de revaluación anula (void+commit) la corrida
+  previa antes de recalcular; un fallo deja el período sin revaluación.
+- **Confirmaciones** — #468 (`_allocated_for_source` sin excluir cancelados),
+  #444 (cancelar salida seriada no restaura el serial; también la reversa de
+  entrada), #474 (DN sin relaciones de línea), #452 (fallback de bodega afecta a
+  la DN auto-generada desde factura).
+
+### Estado
+
+`ISSUES.md` actualizado con los 25 hallazgos nuevos y 4 confirmaciones. La
+creación de issues remotos queda pendiente por la indisponibilidad de la API de
+GitHub; los cuerpos de issue propuestos quedaron listos en la sección detallada
+de `ISSUES.md` y en `/tmp/opencode/issues/*.md`.
+
+## 2026-08-17 — Auditoría incremental O2C, S2P y Bancos
+
+### Petición
+
+Revisar de forma completa los flujos O2C, S2P, R2R, Bancos e Inventario,
+analizando flujo por flujo y archivo por archivo en busca de errores de lógica
+de negocio, y documentar los hallazgos mediante issues de GitHub.
+
+### Avance y decisiones
+
+Se revisó el estado actual del checkout, la estrategia CI de
+`.github/workflows`, la bitácora y los issues abiertos para no duplicar
+hallazgos ya registrados. En esta etapa se identificaron y documentaron
+defectos nuevos:
+
+### Matriz de recorrido técnico
+
+El recorrido de lógica se hizo sobre las capas que exponen los flujos, no
+solamente sobre las plantillas:
+
+| Flujo | Rutas y servicios revisados | Invariantes comprobadas |
+| --- | --- | --- |
+| O2C | `ventas/__init__.py`, `document_flow/{context,service,repository,payment,validation}.py`, `contabilidad/posting.py` | origen aprobado, relaciones por línea, cantidades/UOM, importes, reservas, AR, moneda, acceso por compañía |
+| S2P | `compras/__init__.py`, `document_flow/*`, `contabilidad/posting.py`, `contabilidad/budget_service.py` | OC/recepción/factura, 3-way match, proveedor, bodega, cantidades/UOM, importes, AP, FX, presupuesto |
+| R2R | `contabilidad/{__init__,journal_service,posting,recurring_journal_service,fiscal_year_closing,exchange_revaluation_service,project_capitalization_service,budget_service,presupuesto}.py` | balance por libro, período/cierre, multilibro, FX, recurrentes, capitalización, dimensiones, aislamiento |
+| Bancos | `bancos/{__init__,statement_service,reconciliation_service,cash_forecast_service,cash_forecast}.py` | dirección, cuenta/compañía, conciliación parcial, cancelación, matching, forecast AR/AP, moneda |
+| Inventario | `inventario/{__init__,service,valuation_settings}.py`, `contabilidad/posting.py` | stock ledger/bin, UOM, bodega, lote/serial, transferencias, valoración, reservas, permisos |
+
+La configuración de calidad se contrastó con `.github/workflows/python-package.yml`:
+Python 3.12+ en la matriz, Black, Ruff, Flake8, pydocstyle, mypy y pytest.
+La suite completa se lanzó con `.venv` y su salida se guardó en
+`/tmp/cacao-audit-pytest.log` para analizarla al terminar.
+Como validación estática del checkout actual, `black --check`, `ruff check`,
+`flake8` y `mypy` finalizaron correctamente; mypy sólo emitió sus notas
+informativas habituales sobre cuerpos de funciones sin tipar.
+`pydocstyle cacao_accounting` también finalizó correctamente.
+
+- Issue #452 — O2C: una orden aprobada reserva usando la bodega predeterminada
+  del artículo, pero la cancelación solo libera cuando la línea tiene bodega
+  explícita; puede quedar `StockBin.reserved_qty` inflado.
+- Issue #453 — Bancos: `BankTransaction` permite depósito y retiro
+  simultáneos, mientras conciliación y posting priorizan silenciosamente el
+  depósito; una transacción ambigua puede producir dirección y asiento GL
+  incorrectos.
+- Issue #454 — S2P: el matching 3-way valida compañía, proveedor, moneda y
+  estado, pero no verifica que `invoice.purchase_order_id` coincida con
+  `receipt.purchase_order_id`; permite cruzar factura y recepción de OCs
+  distintas cuando las líneas comparten artículo/UOM.
+- Issue #455 — R2R: el cierre mensual acepta `template_ids` enviados
+  explícitamente y permite aplicar plantillas recurrentes fuera de su rango de
+  vigencia; el servicio tampoco revalida la fecha.
+- Issue #456 — Inventario: el detalle y la edición de `StockEntry` no validan
+  acceso por compañía, a diferencia de submit/cancel, permitiendo lectura y
+  mutación cruzada de borradores.
+- Issue #457 — Inventario: el control de lotes solo valida que el lote exista;
+  no existe saldo por lote/bodega y una salida puede consumir el stock global
+  usando un lote que nunca fue recibido.
+- Issue #458 — S2P: el matching 3-way agrupa por artículo/UOM e ignora la
+  bodega, por lo que una factura puede quedar conciliada contra una recepción
+  de otra bodega.
+- Issue #459 — Bancos: la búsqueda filtra candidatos por dirección, pero la
+  validación del POST no impide conciliar un cobro contra un retiro (o un pago
+  contra un depósito) si coinciden compañía e importe.
+- Issue #460 — O2C/S2P: `DocumentRelation` valida la pertenencia de la línea
+  origen, pero no la correspondencia de artículo/UOM ni la pertenencia de la
+  línea destino; los formularios pueden hacer que un artículo consuma el
+  saldo documental de otro.
+- Issue #461 — O2C/S2P: las cantidades de `DocumentRelation` se comparan y
+  acumulan sin convertir a UOM base, permitiendo estados incorrectos con
+  conversiones como EA/BOX. Se añadió un comentario al issue con evidencia
+  adicional: `_save_purchase_order_items` tampoco persiste `qty_in_base_uom`.
+- Issue #462 — Bancos: Cash Forecast filtra cobros/pagos por `party_type` en
+  la línea bancaria, pero posting deja esa línea sin tercero; los movimientos
+  reales terminan clasificados como `real_other` y no como inflow/outflow.
+- Issue #463 — O2C: `_create_sales_invoice_from_form` acepta `from_order` y
+  asigna el FK sin validar estado aprobado, compañía, cliente o moneda del
+  origen. `_validate_sales_order_requirement` confía sólo en el FK y la
+  validación de cantidades recorre únicamente relaciones activas; una factura
+  puede aprobarse contra una orden borrador/ajena y sin relaciones de líneas.
+  Se comentó el issue con la misma variante en SalesOrder/SalesQuotation y
+  `from_note`.
+- Issue #464 — S2P: `_create_purchase_invoice_from_request` guarda
+  `purchase_order_id` tras validar sólo cabecera. En submit, las validaciones
+  de flags/enlace consideran suficiente el FK y no exigen OC aprobada ni
+  relaciones activas por línea; una factura puede aprobarse contra una OC
+  borrador y evadir el matching de cantidades. Se comentó el issue con la
+  variante equivalente en la creación de PurchaseOrder.
+- Issue #465 — Inventario: `_validate_serial` comprueba artículo y estado del
+  serial, pero no compara `SerialNumber.warehouse` con la bodega origen. Una
+  salida desde otra bodega puede marcar como entregado un serial físicamente
+  ubicado en una ubicación distinta.
+- Issue #466 — R2R: las rutas de comprobantes manuales usan sólo acceso global
+  al módulo contable y no validan la compañía del journal cargado por ID;
+  permiten leer o mutar comprobantes de otra compañía.
+- Issue #467 — R2R: cierre mensual y plantillas recurrentes no aíslan por
+  compañía los registros cargados por ID ni los listados; un usuario con
+  acceso contable a A puede ejecutar cierres, revaluaciones o aplicaciones
+  recurrentes sobre B.
+- Issue #468 — Bancos: `_allocated_for_source` suma conciliaciones canceladas,
+  aunque `_allocated_for_target` las excluye. Al cancelar un pago, la
+  transacción bancaria puede quedar ocupada y no volver a conciliarse.
+- Issue #469 — Bancos: las reglas de matching aceptan `bank_account_id` de
+  otra compañía; la autorización se valida contra la compañía de la regla,
+  pero la ejecución consulta transacciones de la cuenta recibida.
+- Issue #470 — Inventario: el detalle de bodega no ejecuta autorización por
+  compañía y expone configuraciones y cuentas contables de una bodega ajena,
+  aunque el listado sí aplica un filtro por compañías autorizadas.
+- Issue #471 — Inventario: los POST de artículos, UOM y bodegas sólo exigen
+  login/módulo activo; no requieren permisos de escritura ni acceso por
+  compañía antes de modificar maestros que afectan valoración y posting.
+- Issue #472 — Inventario: una transferencia de artículo serializado ejecuta
+  primero una salida que marca el serial como `delivered` y luego una entrada
+  que rechaza ese estado; el traslado interno no puede aprobarse.
+- Issue #473 — O2C/S2P: las órdenes sólo comprueban que exista el artículo y
+  no respetan `Item.is_sale_item`/`Item.is_purchase_item` ni su estado al
+  aprobar; se pueden crear órdenes para artículos no habilitados.
+- Issue #474 — O2C: una nota de entrega guarda `sales_order_id` y puede
+  aprobarse contra una orden borrador/ajena porque el submit no valida el
+  estado de la orden ni exige relaciones activas por línea. Se comentó el
+  issue con la misma debilidad en los orígenes SalesRequest/SalesQuotation.
+- Issue #475 — S2P: una recepción guarda `purchase_order_id` y puede
+  aprobarse contra una OC borrador/ajena porque el submit sólo comprueba
+  proveedor y relaciones opcionales, sin exigir origen aprobado por línea. Se
+  comentó el issue con la variante equivalente en los orígenes S2P.
+- Issue #476 — O2C/S2P: órdenes y recepciones persisten `amount` enviado por
+  el formulario y sólo comprueban que no sea cero; no validan `qty * rate`, a
+  diferencia de la factura de venta. Un cliente puede alterar los totales.
+
+- Issue #477 — Bancos: las referencias de pago aceptan un
+  `flow_source_type` enviado por el cliente que no coincide con el
+  `document_type` real cargado por `reference_type`/`reference_id`. Una nota
+  puede tratarse como factura ordinaria, invirtiendo el sentido del pago y
+  contaminando `PaymentReference`/`DocumentRelation`. Se revisaron también
+  las incidencias existentes antes de registrar este hallazgo.
+- Issue #478 — R2R: el control presupuestario permite líneas dimensionadas por
+  proyecto/unidad de negocio, pero `BudgetService.validate_transaction()` no
+  recibe esas dimensiones y suma presupuesto y comprometido sólo por cuenta,
+  centro, período y libro.
+- Issue #479 — R2R: las rutas y servicios de presupuestos no filtran ni
+  autorizan por compañía; un usuario autorizado en A puede listar, leer o
+  mutar un presupuesto de B por ID.
+- Issue #480 — Bancos: Cash Forecast ubica AR/AP por `posting_date` y no por
+  `due_date`, desplazando cobros y pagos proyectados entre períodos.
+- Issue #481 — S2P: la edición de una recepción recalcula `total` y
+  `grand_total`, pero deja `exchange_rate` y `base_total` de la versión
+  anterior, generando inconsistencias funcionales en moneda extranjera.
+- Issue #482 — O2C: la factura de venta creada/editada desde una orden o nota
+  no conserva la moneda/tasa del origen y asigna los campos base igual al
+  importe transaccional, distorsionando AR y posting multimoneda.
+- Issue #483 — O2C/S2P: `iter_active_relations_for_source()` cuenta como
+  consumo las relaciones cuyo destino sigue en borrador. Un hijo abandonado
+  puede bloquear indefinidamente cantidades pendientes del origen.
+- Issue #484 — O2C: las rutas de edición/duplicado de varios documentos
+  comerciales no aplican de forma consistente acceso por compañía y permiso
+  de acción; el control puede aparecer sólo al aprobar.
+
+También se aportó análisis a incidencias abiertas existentes: #446 (crear
+pagos en una compañía no autorizada), #456 (duplicar movimientos de inventario
+ajenos), #476 (el mismo monto manipulable en entradas de inventario) y #278
+(uso de una tasa FX futura cuando no existe una tasa previa al cierre). No se
+abrieron duplicados para esas variantes.
+
+Los issues existentes #393–#451 se trataron como contexto y no se
+duplicaron. La auditoría global permanece abierta: aún falta recorrer en
+detalle los módulos restantes de O2C, S2P, R2R, Bancos e Inventario y abrir
+los issues adicionales que la evidencia confirme.
+
 ## 2026-08-16 — Corrección de CI y ampliación de cobertura bancaria, portal y query tools
 
 ### Petición
@@ -1190,3 +1499,506 @@ corregida.
 El fix está implementado y probado para esquemas nuevos, pero el issue #293 no
 debe cerrarse aún como resuelto operacionalmente: falta una estrategia de
 upgrade para instalaciones existentes. GitHub permanece abierto.
+
+## 2026-08-17 — Validación E2E HTTP con base de datos de desarrollo nueva
+
+### Petición
+
+Crear una base de datos de desarrollo nueva, levantar el servidor WSGI en
+segundo plano, simular la interacción de un usuario mediante peticiones GET y
+POST con `curl`, validar el flujo end to end, confirmar la persistencia en la
+base de datos y documentar los errores encontrados en GitHub.
+
+### Implementación y decisiones
+
+- Se actualizó `main` con `git fetch` y `git pull --ff-only`; el checkout quedó
+  limpio en `cfbab3b68bf0cc523bc1164783736b84b48e03af`.
+- Se creó una SQLite aislada en `/tmp/cacao-accounting-e2e.sqlite`, se
+  inicializó con `db init --seed` usando `.venv`, y se usaron las credenciales
+  de desarrollo `e2e_user` / `e2e_password`.
+- El comando oficial `cacaoctl serve` falló antes de abrir el socket cuando su
+  comprobación de conexión entró al camino de inicialización: el servidor
+  invoca `inicia_base_de_datos()` sin `app.app_context()`. El defecto quedó
+  documentado en GitHub como issue #451.
+- Para completar la validación funcional sin ocultar ese defecto, se levantó
+  Waitress en segundo plano con el objeto WSGI configurado
+  `cacao_accounting.server:app`, en `127.0.0.1:18080`.
+
+### Validación E2E
+
+- `GET /health` respondió `200 OK` con `ok`.
+- `GET /login` respondió `200 OK` y entregó el token CSRF.
+- `POST /login` con `e2e_user`, contraseña y CSRF respondió `302` a `/index`,
+  seguido de `200 OK` para el dashboard.
+- `GET /sales/customer/new` respondió `200 OK`.
+- `POST /sales/customer/new` creó `Cliente E2E curl` con nombre comercial
+  `Cliente E2E` e ID fiscal `E2E-2026-001`, respondió `302` a
+  `/sales/customer/list`, y la lista respondió `200 OK` mostrando el registro.
+- `GET /sales/customer/<id>` respondió `200 OK` y mostró el cliente creado.
+
+### Verificación de persistencia
+
+La consulta directa a `/tmp/cacao-accounting-e2e.sqlite` confirmó:
+
+```text
+party.id=01M083FS55CPCQNG49YA2BXHKJ
+party.code=CUSTM-00001
+party.name=Cliente E2E curl
+party.comercial_name=Cliente E2E
+party.tax_id=E2E-2026-001
+party.is_customer=1
+party.is_active=1
+```
+
+También se confirmó que el usuario seed `e2e_user` existe, está activo y tiene
+clasificación `admin`. El log final de Waitress no contiene `ERROR`, `500`,
+`Traceback` ni `RuntimeError` durante el flujo funcional.
+
+## 2026-08-17 — Code review de commits locales contra issues abiertos
+
+### Petición
+
+Revisar los commits locales, asociarlos con issues abiertos y sus comentarios,
+confirmar si los fixes son correctos, implementar correcciones adicionales con
+commits semánticos firmados como `williamjmorenor@gmail.com`, no hacer push y
+vigilar commits nuevos en paralelo.
+
+### Revisión y decisiones
+
+- Se verificó que `main` tenía inicialmente 13 commits locales sobre
+  `origin/main`; después del review quedaron 15. `git fetch origin main`
+  confirmó que `origin/main` sigue en `cfbab3b6`, sin commits nuevos.
+- Se contrastaron los mensajes y diffs con los issues #446, #447, #448, #449,
+  #456, #460, #461, #466, #469, #470, #471, #483, #484 y #490, junto con sus
+  comentarios remotos. No existe PR asociado a `main`; la revisión se hizo
+  contra issues y comentarios.
+- Los fixes de aislamiento por compañía, correspondencia de líneas y UOM de
+  relaciones son correctos en su alcance. Los comentarios revelaron además
+  proteger la creación de pagos (#446), duplicar movimientos de inventario
+  (#456), persistir `qty_in_base_uom` en PurchaseOrder (#461) y excluir
+  borradores abandonados de pendientes/estado (#483).
+
+### Correcciones adicionales
+
+- `3517a0d8 fix(security): protect payment creation and stock duplication`
+  añade acceso `cash/crear` antes de crear y hacer flush de pagos, y acceso
+  `inventory/crear` antes de duplicar un `StockEntry`.
+- `d25c9a24 fix(document-flow): ignore draft consumption and normalize purchase UOM`
+  persiste cantidades base en líneas S2P, excluye destinos en borrador de
+  pendientes y estados de flujo, y conserva el documento actual durante las
+  validaciones de submit. Incluye regresiones de borradores abandonados y
+  edición de relaciones.
+- `a949f8b5 fix(document-flow): keep caches dimensionally consistent` completa
+  el aislamiento: los payloads usan la cantidad base y los caches de recibido,
+  facturado y estados resumidos excluyen destinos en borrador.
+- Durante el monitoreo apareció un cambio paralelo para #452. Se revisó y se
+  completó con `03a520a0 fix(inventory): release sales reservations from default warehouse`,
+  que libera la reserva usando la misma bodega efectiva (incluida la bodega
+  predeterminada del artículo); su regresión focalizada pasó `14 passed`.
+- También apareció `efa77163 chore(format): apply black formating`, firmado y
+  sin cambio funcional; se verificó como formato de los fixes anteriores.
+- Ambos commits tienen autor/committer `William José Moreno Reyes
+  <williamjmorenor@gmail.com>` y `Signed-off-by`. No se hizo push.
+
+La API de bajo nivel `consumed_qty_for_source()` conserva por compatibilidad su
+modo histórico cuando no se solicita el nuevo filtro; disponibilidad, creación
+de relaciones, submit y estados cacheados usan explícitamente
+`exclude_draft_targets=True`. La suite completa y los chequeos finales quedan
+pendientes para la etapa final solicitada.
+
+La ejecución completa fue detenida a solicitud del usuario con `SIGINT` cuando
+había alcanzado aproximadamente 38%; el log parcial queda en
+`/tmp/cacao-review-full.log`. El usuario proporcionará el resultado de pruebas
+para continuar el diagnóstico.
+
+### Issues abiertos sin fix local y propuesta
+
+La consulta REST de GitHub confirmó que #485–#506 siguen abiertos y no tienen
+comentarios que anuncien commits implementados. La API GraphQL respondió 503,
+por lo que la evidencia de detalle se tomó de `ISSUES.md` y del catálogo REST.
+Las propuestas priorizadas son:
+
+| Issues | Propuesta de corrección y regresión mínima |
+| --- | --- |
+| #485, #476 | Centralizar snapshot fiscal/totales con impuestos y retenciones; recalcular `grand_total`, base y outstanding en la misma transacción. Probar AR/AP, moneda extranjera y `qty * rate` manipulado. |
+| #486, #493 | Resolver cadena documental completa OV→ND→factura y excluir asientos de cierre de presupuesto/margen. Probar límite de crédito antes/después de facturar y reportes tras cierre. |
+| #487, #488 | Revalidar en la transición final del Approval Engine y en `create-target`: docstatus, tercero, compañía, moneda, cantidades y saldos bajo bloqueo. Probar cambios concurrentes entre solicitud y aprobación. |
+| #489, #497 | Persistir las cuentas GL origen/destino y filtrar/validar cuenta bancaria, libro y moneda en candidatos y aplicación. Probar transferencias A→B y pagos de otra cuenta. |
+| #491, #454, #458 | Hacer matching por línea y por dimensiones (OC, recepción, bodega, artículo/UOM), sin netear desviaciones opuestas. Probar tolerancia por línea y OCs distintas. |
+| #492, #474, #475 | Bloquear cancelación de documentos con downstream activo y exigir origen aprobado con relaciones por línea. Probar cadenas de NC/DN y borradores ajenos. |
+| #494, #278 | Calcular/validar la nueva revaluación antes de anular la anterior y limitarla al saldo abierto por fecha de corte. Probar fallo de tasa y pagos parciales. |
+| #495, #496 | Omitir líneas cero en cierre con resultado neto cero y persistir/validar la tasa manual según política. Probar cierre equilibrado y tasa explícita sin catálogo. |
+| #497–#501 | En conciliación/cash forecast validar dirección, cuenta, compañía, tipo canónico, `due_date`, importación y moneda; corregir alerta receive y comparar outstanding sólo en una moneda. Probar pagos parciales, cobros duplicados e importación cross-company. |
+| #502–#506 | Hacer atómica la mutación FIFO/bin/GL, revertir ajustes capitalizables idempotentemente, validar cuentas/dimensiones por compañía, resolver cuenta de ajuste por artículo y separar líneas relacionadas/manuales. Probar reducción FIFO, cancelación, cuenta cross-company y recepción mixta. |
+
+También permanecen sin fix local los issues abiertos #453, #455, #457,
+#459, #462, #463, #464, #465, #467, #468, #472, #477–#482 y los issues de
+auditoría #393–#445; requieren aplicar las mismas propuestas detalladas en
+`ISSUES.md` antes de considerarlos resueltos. No se implementaron en esta
+etapa porque la petición fue proponerlos; no se hizo push.
+
+## 2026-08-17 — Smoke E2E completo por módulos con curl
+
+### Petición
+
+Ampliar la validación para cubrir la funcionalidad principal de la aplicación
+simulando una sesión de usuario real con peticiones GET y POST de `curl`.
+
+### Implementación
+
+- Se creó una segunda base aislada en
+  `/tmp/cacao-accounting-complete-20260817.sqlite` y se cargó con
+  `db init --seed` dentro de `.venv`.
+- Se levantó Waitress en segundo plano en `127.0.0.1:18081`, usando el objeto
+  WSGI configurado `cacao_accounting.server:app`.
+- Se autenticó `complete_user` obteniendo y enviando el token CSRF como lo
+  haría un navegador.
+
+### Cobertura HTTP
+
+El barrido autenticado cubrió 56 endpoints principales: salud y readiness,
+dashboard, ventas, compras, inventario, bancos/tesorería, contabilidad,
+reportes, configuración y búsqueda. El resultado fue `55` respuestas `200` y
+un `400` controlado de `/api/dashboard/data` sin el parámetro obligatorio
+`company`. Al repetir la petición con el ID de la compañía (`cacao`), la API
+respondió `200` con secciones de ventas, compras, bancos, inventario y
+contabilidad.
+
+Además se ejecutaron estos flujos POST y sus GET de confirmación:
+
+- Cliente: creación de `Cliente Completo E2E`, ID fiscal
+  `COMPLETE-2026-001`; respuesta `302` a la lista y posterior `200`.
+- Solicitud de compra con `ART-001`, cantidad `3` y compañía `cacao`; creación
+  y consulta `200`, seguida de submit `302` y estado `docstatus=1`.
+- Pedido de venta con `ART-001`, cantidad `2` y tarifa `12`; creación y
+  consulta `200`, seguida de submit `302` y estado `docstatus=1`.
+
+Un primer pedido de venta con tarifa cero permaneció correctamente en borrador
+y registró el mensaje de validación “Todas las tarifas deben ser mayores a
+cero”; no se considera un defecto, sino una regla de negocio ejercitada.
+
+### Persistencia y errores
+
+SQLite confirmó un cliente, una solicitud de compra con una línea y dos
+pedidos de venta con dos líneas. El log WSGI no mostró errores 500 ni
+excepciones; el único mensaje fue la validación esperada de tarifa cero. El
+único defecto de arranque identificado en las etapas E2E sigue documentado en
+GitHub issue #451.
+
+## 2026-08-17 — Fixes adicionales de bancos #498 y #501
+
+### Petición
+
+Continuar con los bug fixes de issues abiertos, usando un commit semántico por
+fix, firmado como `williamjmorenor@gmail.com`, con referencias compatibles con
+GitHub para cerrar los issues al hacer push; no hacer push y dejar los cambios
+locales.
+
+### Implementación
+
+- `5d52e51f fix(banks): validate manual cash forecast entry types` (`Closes #498`):
+  normaliza `Income`/`Expense` en alta y edición de entradas manuales del Cash
+  Forecast y rechaza otros valores. Se agregó una regresión para impedir que
+  `Transfer` se persista.
+- `c0c74cf7 fix(banks): keep invoice balances in transaction currency`
+  (`Closes #501`): `_invoice_outstanding` deja de comparar el saldo transaccional
+  con el cache en moneda base, evitando subestimar saldos multimoneda. Se agregó
+  una prueba aislada para el caso de tasas distintas.
+
+No se ejecutaron tests ni se hizo push, conforme a la instrucción vigente. Los
+tests quedan preparados para que el usuario proporcione o ejecute sus resultados.
+
+## 2026-08-17 — Revisión continua y fixes #499 y #497
+
+### Revisión
+
+Se actualizó `origin/main` y no aparecieron commits nuevos en el remoto. GitHub
+mantiene abiertos los issues asociados porque los commits aún no se han
+publicado; no se encontraron comentarios nuevos que anuncien fixes paralelos
+para #498, #499, #500, #501 o #497.
+
+### Fixes implementados
+
+- `7f26a82f fix(imports): isolate cash forecast entries by company`
+  (`Closes #499`): la importación valida la compañía del pronóstico durante el
+  lote y vuelve a comprobarla antes de persistir; el contexto de compañía viaja
+  en el documento construido.
+- `bedf36cd fix(banks): isolate reconciliation by bank account`
+  (`Closes #497`): candidatos y matches de pagos quedan restringidos a la cuenta
+  bancaria conciliada, incluyendo las cuentas origen/destino de transferencias
+  internas. Se actualizan regresiones para cubrir aislamiento y datos válidos.
+
+Ambos commits tienen sign-off de `williamjmorenor@gmail.com`. No se ejecutaron
+tests ni se hizo push; quedan como cambios locales para que el usuario entregue
+o ejecute los resultados de pruebas.
+
+## 2026-08-17 — Fix de pagos vía create-target #488
+
+La revisión del flujo `POST /api/document-flow/create-target` encontró que la
+aplicación de líneas contra facturas solo validaba compañía, moneda y saldo. El
+commit `264a2176 fix(document-flow): validate payment target references`
+(`Closes #488`) agrega validación de factura aprobada, coincidencia de tercero y
+compatibilidad entre tipo de pago y documento (AR/AP y notas). Se agregaron
+regresiones para facturas en borrador y facturas de otro cliente.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests ni
+se hizo push.
+
+## 2026-08-17 — Resultados de pruebas proporcionados por el usuario
+
+El usuario proporcionó el resultado de la ejecución completa: `7 failed,
+1806 passed, 9 skipped, 209 warnings` en aproximadamente 60 minutos.
+
+Clasificación de los fallos:
+
+- `test_05document_flow.py` falló porque aún esperaba que una relación de
+  borrador actualizara `received_qty` y el estado a parcial. La regla implementada
+  para #483 exige que los borradores no consuman el origen; las expectativas se
+  actualizaron en `972b0459 test(document-flow): align draft relation
+  expectations` (`Closes #483`).
+- `test_11_contabilidad_coverage.py::test_route_journal_reject_flash_error`
+  esperaba 200/302 para un identificador inexistente, pero la ruta correctamente
+  devuelve 404.
+- `test_accounting_exhaustive.py::test_rbac_manager_vs_auxiliar_vs_user`
+  devuelve 403 para `conta` porque el fixture de datos no crea `UserBookAccess`
+  para los libros de los usuarios demo; no se debilitó el aislamiento de #466.
+- Los fallos de `test_bank_account_numbering.py` usan `inspect.unwrap` sobre una
+  ruta protegida sin usuario autenticado, por lo que reciben un resultado sin
+  `status_code` y no crean el pago.
+- `test_payment_entry_improved.py` también accede a `current_user` sin sesión
+  autenticada. Estos tres grupos requieren ajustar fixtures/helpers de pruebas,
+  no retirar controles de autorización.
+
+En esta iteración también se implementaron y firmaron:
+
+- `1ae1a178 fix(accounting): skip zero net fiscal closing lines` (`Closes #495`).
+- `a3069307 fix(accounting): preserve manual journal exchange rates`
+  (`Closes #496`).
+
+No se ejecutaron nuevas pruebas después de estos commits y no se hizo push.
+
+## 2026-08-17 — Fix transaccional de revaluación #494
+
+Se detectó que la reejecución de una revaluación anulaba y confirmaba la corrida
+anterior antes de calcular y validar la nueva. El commit
+`15e14518 fix(accounting): keep prior revaluation on failed rerun` (`Closes
+#494`) agrega un modo transaccional a `void()` y hace rollback de la anulación
+si falla el recálculo. La regresión elimina la tasa de cierre después de una
+primera corrida y verifica que esta permanezca `posted` tras el fallo.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+después del cambio y no se hizo push.
+
+## 2026-08-17 — Fix de presupuesto y cierre fiscal #493
+
+La revisión del issue #493 confirmó que las consultas de presupuesto comprometido
+y del reporte Real vs Presupuesto filtraban cancelaciones y reversas, pero no
+`GLEntry.is_fiscal_year_closing`. El commit
+`9a732aaa fix(budgets): exclude fiscal closing entries from actuals` (`Closes
+#493`) añade el filtro en ambos servicios y cubre un asiento normal de 300 junto
+a uno de cierre de 999, que debe quedar excluido.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests ni
+se hizo push.
+
+## 2026-08-17 — Alineación del escenario de estado documental #483
+
+El nuevo resultado de pruebas mostró que `test_document_status_uses_single_operational_badge`
+seguía creando la recepción usada para la transición a facturación como borrador.
+Como los borradores ya no consumen cantidades ni alteran el estado operativo, el
+escenario se corrigió para representar una recepción aprobada (`docstatus=1`) y
+mantener la expectativa de recepción parcial antes del cierre del saldo. La
+prueba independiente de relaciones en borrador conserva la validación de #483.
+
+Se dejó el cambio local para revisión; no se ejecutaron tests y no se hizo push.
+
+## 2026-08-17 — Revisión de `feedback.md`
+
+Se analizó el review de los commits `d54c2339..a7586e02`. Los comentarios sobre
+ausencia de pruebas son brechas de cobertura, no evidencia de regresión de
+producción; el comentario sobre el mensaje de validación de Cash Forecast (#498)
+ya está resuelto en el código actual porque los handlers muestran el mensaje de
+`ValueError` mediante `str(exc)`. También se descartó cambiar silenciosamente la
+seguridad o el comportamiento de conversión sólo para satisfacer sugerencias de
+cobertura.
+
+El escenario documental que mezclaba una recepción borrador con una transición
+de facturación se corrigió en `38b3becb test(document-flow): distinguish draft
+and approved statuses`, firmado por `williamjmorenor@gmail.com`. No se ejecutaron
+tests ni se hizo push.
+
+## 2026-08-17 — Revalidación de Approval Engine #487 y transferencias #489
+
+La revisión del issue #487 confirmó que `ApprovalEngine._validate_final_submission`
+no repetía la validación de sobre-recepción para recepciones ni el límite de
+notas de crédito/débito para la factura origen. El commit
+`21e82c98 fix(approval): revalidate purchase submissions` (`Closes #487`) añadió
+ambas comprobaciones y regresiones focales.
+
+El issue #489 confirmó que `create-target` construía transferencias internas sin
+persistir las cuentas GL de origen y destino. El commit
+`5771b959 fix(banks): preserve transfer accounts in document flow` (`Closes
+#489`) resuelve ambas cuentas desde sus cuentas bancarias, valida compañía,
+cuentas distintas y configuraciones inconsistentes, con regresión focal.
+
+Ambos commits tienen sign-off de `williamjmorenor@gmail.com`. No se ejecutaron
+tests ni se hizo push. El commit paralelo `08758313 docs: cleanup` fue detectado
+durante el monitoreo y se conservó; sólo eliminó contenido histórico de
+`ISSUES.md`.
+
+## 2026-08-17 — Tolerancia de matching por línea #491
+
+El matching 2-way/3-way acumulaba diferencias de precio con signo y permitía
+que un sobreprecio y un subprecio de líneas distintas se cancelaran. El commit
+`23c68365 fix(purchases): enforce price tolerance per line` (`Closes #491`)
+evalúa la tolerancia de cada línea antes de finalizar la conciliación, conserva
+el total firmado para trazabilidad y marca el resultado como fallido si alguna
+línea excede la tolerancia. Se añadió regresión para diferencias opuestas.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push.
+
+## 2026-08-17 — Análisis de la corrida final de pruebas y validaciones de documentos
+
+El usuario reportó nueve fallos en la suite final. Los errores de importación de
+helpers de Compras/Bancos eran causados por la sombra de los módulos con los
+objetos `Blueprint` exportados por `cacao_accounting.__init__`; se corrigieron
+los tests para importar los módulos mediante `import_module`. Los fallos 404,
+403, `NoResultFound`, ausencia de `book` y `current_user is None` quedaron
+clasificados como problemas de rutas o fixtures/entorno de pruebas y no se
+debilitaron las reglas de autorización ni las rutas para hacerlos pasar.
+
+Además, se dejó preparado el fix para los issues O2C/S2P #463, #464, #474 y
+#475: los documentos origen deben estar aprobados, pertenecer a la misma
+compañía y contraparte/moneda, y conservar una relación activa por cada línea.
+La validación se ejecuta tanto al crear como al enviar/aprobar documentos.
+
+No se ejecutó la suite por indicación del usuario; únicamente se verificaron
+espacios en blanco y compilación de Python. No se hizo push.
+
+## 2026-08-17 — Corrección de fixtures de posting #502/#503/#506
+
+El resultado de pruebas reportó `IntegrityError` en las tres regresiones nuevas:
+las líneas de `StockEntryItem` no tenían `qty`/`uom` y el `ImportLandedCost` no
+tenía una `PurchaseInvoice` origen. El commit
+`b15d82b6 test(inventory): complete posting regression fixtures` completa esos
+datos obligatorios y mantiene los casos enfocados en los fixes funcionales.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push; queda pendiente que el usuario reejecute las pruebas.
+
+## 2026-08-17 — Revisión de commit paralelo de formato
+
+Durante el trabajo apareció el commit paralelo firmado
+`19b2d8ae chore(format): apply black formater`. Aunque el mensaje indica
+formato, su diff contiene las llamadas de reversión de relaciones de borrador
+que estaban siendo integradas en las rutas O2C/S2P; se revisó el diff y se
+conservó sin sobrescribirlo. El commit posterior `8c6de536` contiene sólo la
+parte adicional del Approval Engine y su regresión.
+
+No se hizo push ni se ejecutaron tests.
+
+## 2026-08-17 — Relaciones de borradores al editar o rechazar #483
+
+La revisión de comentarios de GitHub confirmó que el fix inicial no cubría
+ediciones de todos los documentos ni el rechazo desde Approval Engine. Varias
+rutas eliminaban líneas y podían dejar relaciones activas; además, rechazar un
+borrador mantenía su consumo temporal. El commit
+`8c6de536 fix(document-flow): release draft relations on edit rejection`
+(`Closes #483`) revierte las relaciones antes de editar documentos O2C/S2P,
+actualiza los caches de origen y revierte las relaciones de un documento cuando
+su aprobación es rechazada. Se añadió regresión al flujo de rechazo y se
+conserva la trazabilidad histórica.
+
+La revisión de comentarios también confirmó que los hallazgos adicionales de
+#446 (crear pagos), #456 (duplicar movimientos) y #461 (cantidad base en OC)
+ya estaban cubiertos por commits locales anteriores.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push; queda pendiente que el usuario reejecute las pruebas.
+
+## 2026-08-17 — Totales fiscales persistidos y exposición desde notas de entrega #485/#486
+
+Las facturas de ventas y compras persistían `grand_total` y `outstanding_amount`
+con el subtotal, aunque el posting contable ya incorporaba impuestos. El commit
+`e05b1e49 fix(fiscal): persist invoice totals including taxes` (`Closes #485`)
+calcula el total final usando la plantilla fiscal o el snapshot manual del
+formulario y lo aplica también a las validaciones de reversas. El mismo commit
+(`Closes #486`) hace que la exposición de crédito relacione facturas directas y
+facturas originadas desde notas de entrega asociadas a una orden de venta.
+Se añadieron regresiones para ambos casos.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push.
+
+## 2026-08-17 — Reducción FIFO con ajuste de valor #502
+
+La conciliación de inventario calculaba el costo FIFO de una reducción pero lo
+descartaba y registraba sólo el cambio neto hacia el valor objetivo. El commit
+`9cf01da5 fix(inventory): preserve FIFO value on reconciliation` (`Closes #502`)
+registra una capa de salida FIFO y, cuando corresponde, una capa adicional de
+ajuste de valor con `qty=0`; así la cola FIFO, `StockBin` y el valor objetivo
+permanecen consistentes. Se añadió regresión de reducción seguida de
+revalorización.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push.
+
+## 2026-08-17 — Reversa de costos capitalizados #503
+
+La cancelación de facturas de compra y `ImportLandedCost` sólo revertía el GL;
+no revertía las capas/valores de inventario creados por
+`LandedCostAllocation`. El commit `e398fd1f fix(inventory): reverse capitalized
+landed costs` (`Closes #503`) agrega reversas append-only de valoración y ajusta
+el `StockBin` asociado, abortando si falta la capa o el saldo necesario. Se
+añadió regresión del caso capitalizado.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push.
+
+## 2026-08-17 — Offset contable por línea en recepción mixta #506
+
+`_get_offset_account_for_line` consultaba cualquier relación activa del
+documento y podía enviar también líneas manuales a la cuenta puente. El commit
+`6085b5e0 fix(inventory): resolve receipt offsets per line` (`Closes #506`)
+restringe la consulta a `target_item_id` de la línea actual y añade regresión
+para una recepción mixta relacionada/manual.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push.
+
+## 2026-08-17 — Cuenta de ajuste específica por artículo #505
+
+El posting sólo resolvía cuentas de ingreso/gasto desde `ItemAccount`; por ello
+`stock_adjustment_account_id` nunca se usaba y los ajustes caían al default de
+compañía. El commit `3b684e52 fix(inventory): honor item adjustment accounts`
+(`Closes #505`) añade ambos alias de resolución, mantiene fallback al default y
+exige que la cuenta resultante pertenezca a la compañía. Se añadió regresión de
+cuenta específica por artículo.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push.
+
+## 2026-08-17 — Aislamiento de conciliación de inventario #504
+
+El posting de conciliaciones aceptaba una cuenta de ajuste explícita sin
+comprobar su entidad y propagaba dimensiones sin validar su compañía. El commit
+`d3eb19b6 fix(inventory): validate reconciliation company dimensions` (`Closes
+#504`) valida la cuenta contra la compañía del documento y comprueba centro de
+costo, unidad y proyecto antes de generar movimientos. Se añadió regresión
+cross-company.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push.
+
+## 2026-08-17 — Bloqueo de cancelación con notas activas #492
+
+La cancelación de una factura de compra sólo comprobaba pagos activos y podía
+dejar NC/DN aprobadas apuntando a una factura cancelada. El commit
+`0f7042c1 fix(purchases): block cancellation with active reversal notes`
+(`Closes #492`) añade una consulta explícita de notas downstream activas en la
+ruta de cancelación y en la revalidación final del Approval Engine. Se añadió
+regresión para una relación activa y su posterior cancelación.
+
+El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
+ni se hizo push.

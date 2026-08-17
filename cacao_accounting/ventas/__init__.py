@@ -1776,9 +1776,7 @@ def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[
             )
 
 
-def _validate_sales_source_link(
-    document: Any, source_type: str, source_id: str, items: Sequence[Any] | None = None
-) -> Any:
+def _validate_sales_source_link(document: Any, source_type: str, source_id: str, items: Sequence[Any] | None = None) -> Any:
     """Valida estado, compañía, cliente y relaciones de un origen O2C."""
     source_models = {"sales_order": SalesOrder, "delivery_note": DeliveryNote}
     source_model = source_models.get(source_type)
@@ -2697,9 +2695,11 @@ def ventas_entrega_nuevo():
             )
             _total_qty, total = _save_delivery_note_items(entrega.id)
             if entrega.sales_order_id:
-                delivery_items = database.session.execute(
-                    database.select(DeliveryNoteItem).filter_by(delivery_note_id=entrega.id)
-                ).scalars().all()
+                delivery_items = (
+                    database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=entrega.id))
+                    .scalars()
+                    .all()
+                )
                 _validate_sales_source_link(entrega, "sales_order", entrega.sales_order_id, delivery_items)
             entrega.total = total
             entrega.grand_total = total
