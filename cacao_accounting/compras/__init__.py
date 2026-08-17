@@ -5383,7 +5383,7 @@ def compras_proveedor_deshabilitar_cliente(supplier_id: str):
 
 
 def _group_items_by_budget_dimensions(items: Any, company: str, supplier_id: str | None) -> dict[tuple, Decimal]:
-    """Agrupa los montos solicitados por combinacion de cuenta y centro de costo."""
+    """Agrupa montos por cuenta, centro y dimensiones analíticas."""
     from cacao_accounting.contabilidad.budget_service import BudgetService
 
     budget_service = BudgetService()
@@ -5393,7 +5393,12 @@ def _group_items_by_budget_dimensions(items: Any, company: str, supplier_id: str
         amount = getattr(item, "base_amount", None) or getattr(item, "amount", None) or Decimal("0")
         acc = budget_service.resolve_expense_account(item_code, company)
         cc = budget_service.resolve_cost_center(item_code, company, supplier_id)
-        key = (acc.id if acc else "", cc.id if cc else "")
+        key = (
+            acc.id if acc else "",
+            cc.id if cc else "",
+            getattr(item, "business_unit_id", None),
+            getattr(item, "project_id", None),
+        )
         groups[key] = groups.get(key, Decimal("0")) + Decimal(str(amount))
     return groups
 
@@ -5510,7 +5515,7 @@ def check_budget_control(
     groups = _group_items_by_budget_dimensions(items, company, supplier_id)
     budget_service = BudgetService()
 
-    for (acc_id, cc_id), total_requested in groups.items():
+    for (acc_id, cc_id, business_unit_id, project_id), total_requested in groups.items():
         if not acc_id:
             continue
 
@@ -5522,6 +5527,8 @@ def check_budget_control(
             amount=total_requested,
             document_id=document_id,
             document_type=document_type,
+            business_unit_id=business_unit_id,
+            project_id=project_id,
         )
 
         if not result["exceeded"]:

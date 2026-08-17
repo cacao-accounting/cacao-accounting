@@ -233,8 +233,25 @@ def _invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
     )
 
 
-def _line_key(line: Any) -> tuple[str, str | None]:
-    return (str(getattr(line, "item_code", "")), getattr(line, "uom", None))
+def _line_key(line: Any) -> tuple[str, str | None, str | None]:
+    return (
+        str(getattr(line, "item_code", "")),
+        getattr(line, "uom", None),
+        getattr(line, "warehouse", None),
+    )
+
+
+def _compatible_group(groups: dict, line: Any) -> Any | None:
+    """Find an exact warehouse group or a unique warehouse-agnostic match."""
+    exact = groups.get(_line_key(line))
+    if exact is not None:
+        return exact
+    item_code = str(getattr(line, "item_code", ""))
+    uom = getattr(line, "uom", None)
+    candidates = [group for key, group in groups.items() if key[:2] == (item_code, uom)]
+    if len(candidates) == 1 and getattr(line, "warehouse", None) is None:
+        return candidates[0]
+    return None
 
 
 def _group_lines_by_item_and_uom(lines: list[Any]) -> dict[tuple[str, str | None], list[Any]]:
@@ -552,7 +569,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     price_tolerance_failed = False
 
     for key, invoice_group in invoice_groups.items():
-        receipt_group = receipt_groups.get(key)
+        receipt_group = _compatible_group(receipt_groups, invoice_group.lines[0])
         if receipt_group is None:
             raise PurchaseReconciliationError("No existe linea de recepcion compatible para la linea de factura.")
         if invoice_group.qty <= 0:
@@ -596,7 +613,10 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     )
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
         for invoice_item in invoice_items:
-            receipt_item = _first_available_line(receipt_groups[_line_key(invoice_item)].lines, order_mode=False)
+            receipt_group = _compatible_group(receipt_groups, invoice_item)
+            if receipt_group is None:
+                raise PurchaseReconciliationError("No existe linea de recepcion compatible para la linea de factura.")
+            receipt_item = _first_available_line(receipt_group.lines, order_mode=False)
             if receipt_item is None:
                 raise PurchaseReconciliationError("No queda cantidad pendiente en la recepción para la factura.")
             database.session.add(
@@ -645,7 +665,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     for key, invoice_group in invoice_groups.items():
         order_group = order_groups.get(key)
         if order_group is None:
-            item_code, _uom = key
+            item_code, _uom, _warehouse = key
             raise PurchaseReconciliationError(f"No existe linea de OC compatible para el item {item_code}.")
         if invoice_group.qty <= 0:
             raise PurchaseReconciliationError("La cantidad facturada debe ser positiva.")
@@ -688,7 +708,10 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     )
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
         for invoice_item in invoice_items:
-            order_item = _first_available_line(order_groups[_line_key(invoice_item)].lines, order_mode=True)
+            order_group = _compatible_group(order_groups, invoice_item)
+            if order_group is None:
+                raise PurchaseReconciliationError("No existe linea de OC compatible para la linea de factura.")
+            order_item = _first_available_line(order_group.lines, order_mode=True)
             if order_item is None:
                 raise PurchaseReconciliationError("No queda cantidad pendiente en la orden de compra para la factura.")
             database.session.add(
