@@ -3603,9 +3603,11 @@ def _create_purchase_receipt_from_form():
         )
         _total_qty, total = _save_purchase_receipt_items(receipt.id)
         if receipt.purchase_order_id:
-            receipt_items = database.session.execute(
-                database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id)
-            ).scalars().all()
+            receipt_items = (
+                database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id))
+                .scalars()
+                .all()
+            )
             _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
         receipt.total = receipt.grand_total = total
         receipt.exchange_rate = _purchase_exchange_rate(company, posting_date, receipt.transaction_currency)
@@ -3816,9 +3818,7 @@ def compras_recepcion_duplicar(receipt_id: str):
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=duplicada.id))
 
 
-def _validate_purchase_source_link(
-    document: Any, source_type: str, source_id: str, items: list[Any] | None = None
-) -> Any:
+def _validate_purchase_source_link(document: Any, source_type: str, source_id: str, items: list[Any] | None = None) -> Any:
     """Valida estado, compañía, proveedor y relaciones de un origen S2P."""
     source_models = {"purchase_order": PurchaseOrder, "purchase_receipt": PurchaseReceipt}
     source_model = source_models.get(source_type)
@@ -3852,9 +3852,11 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
     """Valida que las cantidades recibidas no excedan las ordenadas en la OC."""
     receipt = database.session.get(PurchaseReceipt, receipt_id)
     if receipt and receipt.purchase_order_id:
-        receipt_items = database.session.execute(
-            database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt_id)
-        ).scalars().all()
+        receipt_items = (
+            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt_id))
+            .scalars()
+            .all()
+        )
         _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
         purchase_order = database.session.get(PurchaseOrder, receipt.purchase_order_id)
         if purchase_order and purchase_order.supplier_id != receipt.supplier_id:
@@ -3899,9 +3901,11 @@ def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
     """
     invoice = database.session.get(PurchaseInvoice, invoice_id)
     if invoice:
-        invoice_items = database.session.execute(
-            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)
-        ).scalars().all()
+        invoice_items = (
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id))
+            .scalars()
+            .all()
+        )
         if invoice.purchase_receipt_id:
             _validate_purchase_source_link(invoice, "purchase_receipt", invoice.purchase_receipt_id, invoice_items)
         elif invoice.purchase_order_id:
@@ -4540,9 +4544,11 @@ def _create_purchase_invoice_from_request():
             naming_series_id=request.form.get("naming_series") or None,
         )
         _total_qty, total = _save_purchase_invoice_items(factura.id)
-        invoice_items = database.session.execute(
-            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id)
-        ).scalars().all()
+        invoice_items = (
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id))
+            .scalars()
+            .all()
+        )
         if factura.purchase_receipt_id:
             _validate_purchase_source_link(factura, "purchase_receipt", factura.purchase_receipt_id, invoice_items)
         elif factura.purchase_order_id:
