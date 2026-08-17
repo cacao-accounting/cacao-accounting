@@ -3418,6 +3418,9 @@ def _create_gl_reversals(
 
 def _cancel_stock_movements_if_needed(document: Any, company: str, voucher_type: str, voucher_id: str) -> None:
     """Cancela movimientos de inventario si el documento tiene stock."""
+    if isinstance(document, (PurchaseInvoice, ImportLandedCost)):
+        _cancel_landed_cost_valuations(document, company, voucher_type, voucher_id)
+        return
     if not isinstance(document, (StockEntry, PurchaseReceipt, DeliveryNote)):
         return
 
@@ -3442,6 +3445,59 @@ def _cancel_stock_movements_if_needed(document: Any, company: str, voucher_type:
         stock_reversals.append(_create_stock_reversal(document, movement))
         movement.is_cancelled = True
     database.session.add_all(stock_reversals)
+
+
+def _cancel_landed_cost_valuations(document: Any, company: str, voucher_type: str, voucher_id: str) -> None:
+    """Revierte ajustes de valoración capitalizados por una factura o landed cost."""
+    allocations = (
+        database.session.execute(
+            select(LandedCostAllocation).filter_by(
+                company=company,
+                document_type=voucher_type,
+                document_id=voucher_id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for allocation in allocations:
+        amount = _decimal_value(allocation.allocated_amount)
+        if amount <= 0 or not allocation.warehouse:
+            continue
+        layer = database.session.get(StockValuationLayer, allocation.stock_valuation_layer_id)
+        if layer is None:
+            raise PostingError("El costo capitalizable no tiene capa de valoración para reversar.")
+
+        bin_row = _stock_bin_for(company, allocation.item_code, allocation.warehouse)
+        if bin_row is None:
+            raise PostingError("El costo capitalizable no tiene saldo de inventario para reversar.")
+        _upsert_stock_bin(
+            company=company,
+            item_code=allocation.item_code,
+            warehouse=allocation.warehouse,
+            qty_change=Decimal("0"),
+            valuation_rate=_decimal_value(bin_row.valuation_rate),
+            value_change=-amount,
+        )
+        database.session.flush()
+        updated_bin = _stock_bin_for(company, allocation.item_code, allocation.warehouse)
+        database.session.add(
+            StockValuationLayer(
+                item_code=allocation.item_code,
+                warehouse=allocation.warehouse,
+                company=company,
+                qty=Decimal("0"),
+                rate=_decimal_value(updated_bin.valuation_rate) if updated_bin else Decimal("0"),
+                stock_value_difference=-amount,
+                remaining_qty=max(_decimal_value(updated_bin.actual_qty) if updated_bin else Decimal("0"), Decimal("0")),
+                remaining_stock_value=max(
+                    _decimal_value(updated_bin.stock_value) if updated_bin else Decimal("0"), Decimal("0")
+                ),
+                voucher_type=voucher_type,
+                voucher_id=voucher_id,
+                posting_date=_posting_date_for(document),
+            )
+        )
 
 
 def _emit_cancel_events(document: Any, voucher_id: str, company: str) -> None:
