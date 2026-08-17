@@ -2905,9 +2905,11 @@ def _create_purchase_order_from_request(form: dict):
                 PurchaseQuotation: "purchase_quotation",
                 SupplierQuotation: "supplier_quotation",
             }[type(source)]
-            order_items = database.session.execute(
-                database.select(PurchaseOrderItem).filter_by(purchase_order_id=orden.id)
-            ).scalars().all()
+            order_items = (
+                database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=orden.id))
+                .scalars()
+                .all()
+            )
             _validate_purchase_source_link(orden, source_type, source.id, order_items)
         orden.total_qty = total_qty
         orden.total = total
@@ -3166,9 +3168,11 @@ def _create_purchase_quotation_from_request():
         )
         _qty, total = _save_purchase_quotation_items(cotizacion.id)
         if source:
-            quotation_items = database.session.execute(
-                database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=cotizacion.id)
-            ).scalars().all()
+            quotation_items = (
+                database.session.execute(database.select(PurchaseQuotationItem).filter_by(purchase_quotation_id=cotizacion.id))
+                .scalars()
+                .all()
+            )
             _validate_purchase_source_link(cotizacion, "purchase_request", source.id, quotation_items)
         cotizacion.total = total
         cotizacion.base_total = total
@@ -3460,9 +3464,7 @@ def compras_orden_compra_submit(order_id: str):
             .all()
         )
         for item in items:
-            item_obj = (
-                database.session.execute(database.select(Item).filter_by(code=item.item_code)).scalar_one_or_none()
-            )
+            item_obj = database.session.execute(database.select(Item).filter_by(code=item.item_code)).scalar_one_or_none()
             if not item_obj or not item_obj.is_active or not item_obj.is_purchase_item:
                 raise ValueError(f"El item {item.item_code} no está habilitado para compra.")
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)

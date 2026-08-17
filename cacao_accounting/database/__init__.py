@@ -1542,9 +1542,7 @@ def _reject_ledger_mutation(mapper, connection, target) -> None:
     """Keep append-only ledger rows immutable except for cancellation state."""
     state = inspect(target)
     changed = [
-        attribute.key
-        for attribute in state.attrs
-        if attribute.key != "is_cancelled" and attribute.history.has_changes()
+        attribute.key for attribute in state.attrs if attribute.key != "is_cancelled" and attribute.history.has_changes()
     ]
     if changed:
         raise ValueError("Las líneas del ledger son inmutables; use una reversa append-only.")

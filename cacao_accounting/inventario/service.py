@@ -180,9 +180,7 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False)
         raise InventoryServiceError("El serial ya fue entregado.")
 
 
-def validate_batch_serial(
-    line: Any, *, outgoing: bool, warehouse: str | None = None, allow_transfer: bool = False
-) -> None:
+def validate_batch_serial(line: Any, *, outgoing: bool, warehouse: str | None = None, allow_transfer: bool = False) -> None:
     """Valida obligatoriedad y disponibilidad de lote/serial en una linea."""
     item = database.session.get(Item, getattr(line, "item_code", None))
     if not item or not item.is_stock_item:

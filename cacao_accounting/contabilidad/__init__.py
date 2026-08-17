@@ -109,6 +109,8 @@ def enforce_close_and_recurring_company_access():
         if template:
             exige_acceso_compania("accounting", template.company, "autorizar" if request.method == "POST" else "consultar")
     return None
+
+
 LISTA_ENTIDADES = redirect("/accounting/entity/list")
 
 CONTABILIDAD_LIBROS = "contabilidad.libros"
@@ -2614,9 +2616,11 @@ def asistente_cierre_mensual():
 
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     authorized_books = permisos.obtener_libros_autorizados("can_read")
-    companies = database.session.execute(
-        database.select(Book.entity).where(Book.id.in_(authorized_books)).distinct()
-    ).scalars().all() if authorized_books else []
+    companies = (
+        database.session.execute(database.select(Book.entity).where(Book.id.in_(authorized_books)).distinct()).scalars().all()
+        if authorized_books
+        else []
+    )
 
     runs = (
         database.session.execute(

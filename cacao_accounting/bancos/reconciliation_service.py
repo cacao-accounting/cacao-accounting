@@ -210,10 +210,12 @@ def _company_currency(company: str) -> str | None:
 
 def _allocated_for_source(bank_transaction_id: str) -> Decimal:
     value = database.session.execute(
-        select(func.coalesce(func.sum(ReconciliationItem.allocated_amount), 0)).filter_by(
+        select(func.coalesce(func.sum(ReconciliationItem.allocated_amount), 0))
+        .filter_by(
             source_type="bank_transaction",
             source_id=bank_transaction_id,
-        ).where(ReconciliationItem.status != "cancelled")
+        )
+        .where(ReconciliationItem.status != "cancelled")
     ).scalar_one()
     return _decimal_value(value)
 
