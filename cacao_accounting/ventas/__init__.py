@@ -44,6 +44,7 @@ from cacao_accounting.document_flow import (
     DocumentFlowError,
     create_document_relation,
     refresh_source_caches_for_target,
+    require_line_relations,
     revert_relations_for_target,
     validate_submit_prerequisites,
 )
@@ -1775,21 +1776,54 @@ def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[
             )
 
 
-def _validate_sales_order_requirement(invoice: SalesInvoice) -> None:
+def _validate_sales_source_link(
+    document: Any, source_type: str, source_id: str, items: Sequence[Any] | None = None
+) -> Any:
+    """Valida estado, compañía, cliente y relaciones de un origen O2C."""
+    source_models = {"sales_order": SalesOrder, "delivery_note": DeliveryNote}
+    source_model = source_models.get(source_type)
+    source = database.session.get(source_model, source_id) if source_model else None
+    if not source:
+        raise ValueError(f"El documento origen '{source_id}' no existe.")
+    if source.docstatus != 1:
+        raise ValueError(f"El documento origen '{source_id}' debe estar aprobado.")
+    if source.company != document.company:
+        raise ValueError("El documento origen y el documento destino deben pertenecer a la misma compañía.")
+    if source.customer_id and source.customer_id != document.customer_id:
+        raise ValueError("El documento origen y el documento destino deben pertenecer al mismo cliente.")
+    target_currency = getattr(document, "transaction_currency", None)
+    if target_currency and effective_currency(source) != target_currency:
+        raise ValueError("El documento origen y el documento destino deben usar la misma moneda.")
+    if source_type == "delivery_note" and getattr(document, "sales_order_id", None):
+        if source.sales_order_id != document.sales_order_id:
+            raise ValueError("La nota de entrega no pertenece a la orden de venta indicada.")
+    if items is not None:
+        require_line_relations(
+            target_type="sales_invoice" if isinstance(document, SalesInvoice) else "delivery_note",
+            target_id=document.id,
+            source_type=source_type,
+            source_id=source_id,
+            items=list(items),
+        )
+    return source
+
+
+def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any] | None = None) -> None:
     """Rechaza facturas sin orden de venta cuando la compañía lo exige."""
     if invoice.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or invoice.is_return:
         return
+    if invoice.sales_order_id:
+        _validate_sales_source_link(invoice, "sales_order", invoice.sales_order_id, items)
+        return
+    if invoice.delivery_note_id:
+        delivery_note = _validate_sales_source_link(invoice, "delivery_note", invoice.delivery_note_id, items)
+        if delivery_note.sales_order_id:
+            return
     config = database.session.execute(
         database.select(SalesMatchingConfig).filter_by(company=invoice.company)
     ).scalar_one_or_none()
     if not config or not config.require_sales_order:
         return
-    if invoice.sales_order_id:
-        return
-    if invoice.delivery_note_id:
-        delivery_note = database.session.get(DeliveryNote, invoice.delivery_note_id)
-        if delivery_note and delivery_note.sales_order_id:
-            return
     linked_order = database.session.execute(
         database.select(DocumentRelation.id)
         .where(
@@ -2662,6 +2696,11 @@ def ventas_entrega_nuevo():
                 naming_series_id=request.form.get("naming_series") or None,
             )
             _total_qty, total = _save_delivery_note_items(entrega.id)
+            if entrega.sales_order_id:
+                delivery_items = database.session.execute(
+                    database.select(DeliveryNoteItem).filter_by(delivery_note_id=entrega.id)
+                ).scalars().all()
+                _validate_sales_source_link(entrega, "sales_order", entrega.sales_order_id, delivery_items)
             entrega.total = total
             entrega.grand_total = total
             log_create(entrega)
@@ -2894,6 +2933,8 @@ def ventas_entrega_submit(note_id: str):
             require_rate_positive=True,
             require_amount_nonzero=True,
         )
+        if registro.sales_order_id:
+            _validate_sales_source_link(registro, "sales_order", registro.sales_order_id, items)
         _validate_sales_invoice_line_amounts(registro, items)
         _validate_delivery_quantities_against_so(note_id)
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -3107,6 +3148,10 @@ def _create_sales_invoice_from_form():
         items = (
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=factura.id)).scalars().all()
         )
+        if factura.sales_order_id:
+            _validate_sales_source_link(factura, "sales_order", factura.sales_order_id, items)
+        elif factura.delivery_note_id:
+            _validate_sales_source_link(factura, "delivery_note", factura.delivery_note_id, items)
         grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
         factura.total = factura.base_total = total
         factura.grand_total = factura.base_grand_total = grand_total
@@ -3438,7 +3483,7 @@ def ventas_factura_venta_submit(invoice_id: str):
             _validate_credit_limit_and_overdue(
                 registro.company, registro.customer_id, registro.grand_total or Decimal("0"), current_document=registro
             )
-        _validate_sales_order_requirement(registro)
+        _validate_sales_order_requirement(registro, items)
         _validate_sales_invoice_quantities(invoice_id)
         _validate_sales_invoice_line_amounts(registro, items)
         warnings = _validate_invoice_prices_against_source(registro)

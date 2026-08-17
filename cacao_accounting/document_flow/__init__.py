@@ -26,7 +26,7 @@ from cacao_accounting.document_flow.payment import (
 )
 from cacao_accounting.document_flow.status import calculate_document_status
 from cacao_accounting.document_flow.tracing import get_create_actions
-from cacao_accounting.document_flow.validation import validate_submit_prerequisites
+from cacao_accounting.document_flow.validation import require_line_relations, validate_submit_prerequisites
 
 __all__ = [
     "DocumentFlowError",
@@ -47,6 +47,7 @@ __all__ = [
     "payment_reconciliation_candidates",
     "refresh_outstanding_amount_cache",
     "refresh_source_caches_for_target",
+    "require_line_relations",
     "revert_relations_for_target",
     "validate_submit_prerequisites",
 ]
