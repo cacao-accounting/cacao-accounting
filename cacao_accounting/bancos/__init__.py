@@ -860,9 +860,18 @@ def bancos_reglas_matching():
     if request.method == "POST":
         company = request.form.get("company") or ""
         exige_acceso_compania("cash", company, "editar")
+        bank_account_id = request.form.get("bank_account_id") or None
+        if bank_account_id:
+            bank_account = database.session.get(BankAccount, bank_account_id)
+            if not bank_account:
+                flash(_("La cuenta bancaria seleccionada no existe."), "danger")
+                return redirect(url_for("bancos.bancos_reglas_matching"))
+            if bank_account.company != company:
+                flash(_("La cuenta bancaria no pertenece a la compañía de la regla."), "danger")
+                return redirect(url_for("bancos.bancos_reglas_matching"))
         rule = BankMatchingRule(
             company=company,
-            bank_account_id=request.form.get("bank_account_id") or None,
+            bank_account_id=bank_account_id,
             name=request.form.get("name") or "",
             days_tolerance=int(request.form.get("days_tolerance") or 7),
             amount_tolerance=Decimal(request.form.get("amount_tolerance") or "0"),
@@ -890,9 +899,16 @@ def bancos_regla_matching_ejecutar(rule_id: str):
         if not rule:
             raise BankStatementError("La regla de matching no existe.")
         exige_acceso_compania("cash", rule.company, "editar")
+        bank_account_id = request.form.get("bank_account_id") or ""
+        if bank_account_id:
+            bank_account = database.session.get(BankAccount, bank_account_id)
+            if not bank_account:
+                raise BankStatementError("La cuenta bancaria indicada no existe.")
+            if bank_account.company != rule.company:
+                raise BankStatementError("La cuenta bancaria no pertenece a la compañía de la regla.")
         date_from = date.fromisoformat(request.form.get("date_from") or date.today().isoformat())
         date_to = date.fromisoformat(request.form.get("date_to") or date.today().isoformat())
-        result = apply_bank_matching_rule(rule_id, request.form.get("bank_account_id") or "", (date_from, date_to))
+        result = apply_bank_matching_rule(rule_id, bank_account_id, (date_from, date_to))
         flash(
             _("Regla ejecutada: {count} transacciones evaluadas.").format(count=len(result.candidates_by_transaction)),
             "success",
