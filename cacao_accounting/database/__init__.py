@@ -1538,6 +1538,27 @@ class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
     created_by = database.Column(database.String(26), nullable=True)
 
 
+def _reject_ledger_mutation(mapper, connection, target) -> None:
+    """Keep append-only ledger rows immutable except for cancellation state."""
+    state = inspect(target)
+    changed = [
+        attribute.key
+        for attribute in state.attrs
+        if attribute.key != "is_cancelled" and attribute.history.has_changes()
+    ]
+    if changed:
+        raise ValueError("Las líneas del ledger son inmutables; use una reversa append-only.")
+
+
+def _reject_ledger_delete(mapper, connection, target) -> None:
+    """Prevent physical deletion of financial or inventory ledger evidence."""
+    raise ValueError("Las líneas del ledger no se pueden eliminar; use una reversa.")
+
+
+event.listens_for(StockLedgerEntry, "before_update")(_reject_ledger_mutation)
+event.listens_for(StockLedgerEntry, "before_delete")(_reject_ledger_delete)
+
+
 class StockBin(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Snapshot de stock por item y almacen (optimizacion de performance)."""
 
@@ -3589,6 +3610,10 @@ class DimensionValue(database.Model, BaseTabla):  # type: ignore[name-defined]
         database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
+
+
+event.listens_for(GLEntry, "before_update")(_reject_ledger_mutation)
+event.listens_for(GLEntry, "before_delete")(_reject_ledger_delete)
 
 
 class GLEntryDimension(database.Model, BaseTabla):  # type: ignore[name-defined]
