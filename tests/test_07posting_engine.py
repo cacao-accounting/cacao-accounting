@@ -3884,6 +3884,75 @@ def test_cancel_landed_cost_reverses_capitalized_inventory_value(app_ctx):
     ).scalar_one_or_none() is not None
 
 
+def test_stock_reconciliation_reduction_preserves_fifo_and_value_adjustment(app_ctx):
+    """Una reducción FIFO conserva el costo consumido y el ajuste de valor objetivo."""
+    from cacao_accounting.contabilidad.posting import _create_stock_reconciliation_movement
+    from cacao_accounting.database import Item, StockBin, StockEntry, StockEntryItem, StockValuationLayer, UOM, Warehouse, database
+
+    database.session.add_all(
+        [
+            UOM(code="EA-502", name="Each 502"),
+            Item(code="ITEM-502", name="Item 502", item_type="goods", is_stock_item=True, default_uom="EA-502"),
+            Warehouse(code="WH-502", name="Bodega 502", company="cacao"),
+            StockBin(
+                company="cacao",
+                item_code="ITEM-502",
+                warehouse="WH-502",
+                actual_qty=Decimal("100"),
+                stock_value=Decimal("1000"),
+                valuation_rate=Decimal("10"),
+            ),
+        ]
+    )
+    entry = StockEntry(id="ST-502", company="cacao", posting_date=date(2026, 5, 2), purpose="stock_reconciliation")
+    database.session.add(entry)
+    database.session.flush()
+    database.session.add(
+        StockValuationLayer(
+            id="SVL-502-ORIG",
+            item_code="ITEM-502",
+            warehouse="WH-502",
+            company="cacao",
+            qty=Decimal("100"),
+            rate=Decimal("10"),
+            stock_value_difference=Decimal("1000"),
+            remaining_qty=Decimal("100"),
+            remaining_stock_value=Decimal("1000"),
+            voucher_type="purchase_receipt",
+            voucher_id="PR-502",
+            posting_date=date(2026, 5, 1),
+        )
+    )
+    line = StockEntryItem(
+        stock_entry_id=entry.id,
+        item_code="ITEM-502",
+        target_warehouse="WH-502",
+        counted_qty=Decimal("80"),
+        target_stock_value=Decimal("1200"),
+    )
+    database.session.add(line)
+    database.session.flush()
+
+    movement = _create_stock_reconciliation_movement(entry, line)
+
+    assert movement is not None
+    assert movement.qty_change == Decimal("-20")
+    assert movement.stock_value_difference == Decimal("200")
+    layers = (
+        database.session.execute(
+            database.select(StockValuationLayer)
+            .filter_by(company="cacao", item_code="ITEM-502", warehouse="WH-502")
+            .order_by(StockValuationLayer.created, StockValuationLayer.id)
+        )
+        .scalars()
+        .all()
+    )
+    assert sorted(layer.stock_value_difference for layer in layers if layer.voucher_id == entry.id) == [
+        Decimal("-200"),
+        Decimal("400"),
+    ]
+
+
 def test_payment_debit_note_creates_balanced_gl_entries(app_ctx):
     """Verifica que una nota de debito bancaria (PaymentEntry) genera GL balanceado."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl

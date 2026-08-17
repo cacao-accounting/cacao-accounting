@@ -2252,12 +2252,12 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
     if current_qty <= 0 and counted_qty <= 0 and value_change != 0:
         raise PostingError("No se puede ajustar valor sin stock positivo o cantidad contada positiva.")
 
+    fifo_value_change = value_change
     if qty_change < 0:
-        valuation_rate, _fifo_value_change = _consume_reconciliation_stock(
+        valuation_rate, fifo_value_change = _consume_reconciliation_stock(
             document, line, warehouse, qty_change, target_value, counted_qty
         )
-        valuation_rate = abs(value_change) / abs(qty_change) if qty_change else Decimal("0")
-        line._inventory_cost_amount = abs(value_change)
+        line._inventory_cost_amount = abs(fifo_value_change)
     else:
         valuation_rate = value_change / qty_change if qty_change != 0 else Decimal("0")
     line.current_qty = current_qty
@@ -2280,21 +2280,48 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
         value_change=value_change,
     )
     valuation_rate_after = stock_value_after / qty_after if qty_after > 0 else Decimal("0")
-    database.session.add(
-        StockValuationLayer(
-            item_code=line.item_code,
-            warehouse=warehouse,
-            company=document.company,
-            qty=qty_change,
-            rate=valuation_rate,
-            stock_value_difference=value_change,
-            remaining_qty=max(qty_after, Decimal("0")),
-            remaining_stock_value=max(stock_value_after, Decimal("0")),
-            voucher_type=_get_voucher_type(document),
-            voucher_id=_get_voucher_id(document),
-            posting_date=document.posting_date,
+    layer_kwargs = {
+        "item_code": line.item_code,
+        "warehouse": warehouse,
+        "company": document.company,
+        "voucher_type": _get_voucher_type(document),
+        "voucher_id": _get_voucher_id(document),
+        "posting_date": document.posting_date,
+    }
+    if qty_change < 0:
+        database.session.add(
+            StockValuationLayer(
+                **layer_kwargs,
+                qty=qty_change,
+                rate=valuation_rate,
+                stock_value_difference=fifo_value_change,
+                remaining_qty=max(qty_after, Decimal("0")),
+                remaining_stock_value=max(current_value + fifo_value_change, Decimal("0")),
+            )
         )
-    )
+        value_adjustment = value_change - fifo_value_change
+        if value_adjustment:
+            database.session.add(
+                StockValuationLayer(
+                    **layer_kwargs,
+                    qty=Decimal("0"),
+                    rate=stock_value_after / qty_after if qty_after > 0 else Decimal("0"),
+                    stock_value_difference=value_adjustment,
+                    remaining_qty=max(qty_after, Decimal("0")),
+                    remaining_stock_value=max(stock_value_after, Decimal("0")),
+                )
+            )
+    else:
+        database.session.add(
+            StockValuationLayer(
+                **layer_kwargs,
+                qty=qty_change,
+                rate=valuation_rate,
+                stock_value_difference=value_change,
+                remaining_qty=max(qty_after, Decimal("0")),
+                remaining_stock_value=max(stock_value_after, Decimal("0")),
+            )
+        )
     return StockLedgerEntry(
         posting_date=document.posting_date,
         item_code=line.item_code,
