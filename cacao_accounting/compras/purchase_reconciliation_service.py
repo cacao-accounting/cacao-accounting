@@ -516,9 +516,12 @@ def reconcile_purchase_invoice(purchase_invoice_id: str) -> PurchaseReconciliati
 def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
     """Match purchase receipt vs invoice validating received quantities."""
     receipt = _load_purchase_receipt_for_invoice(invoice)
-    has_po = bool(getattr(invoice, "purchase_order_id", None) or getattr(receipt, "purchase_order_id", None))
-    if config.require_purchase_order and not has_po:
+    invoice_po_id = getattr(invoice, "purchase_order_id", None)
+    receipt_po_id = getattr(receipt, "purchase_order_id", None)
+    if config.require_purchase_order and not (invoice_po_id and receipt_po_id):
         raise PurchaseReconciliationError("La configuración de la compañía requiere una orden de compra para la conciliación.")
+    if invoice_po_id and receipt_po_id and invoice_po_id != receipt_po_id:
+        raise PurchaseReconciliationError("La factura y la recepción deben pertenecer a la misma orden de compra.")
     receipt_items = _purchase_receipt_items(receipt.id)
     invoice_items = _invoice_items(invoice.id)
     if not receipt_items or not invoice_items:
@@ -528,7 +531,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
 
     reconciliation = PurchaseReconciliation(
         company=invoice.company,
-        purchase_order_id=getattr(invoice, "purchase_order_id", None),
+        purchase_order_id=invoice_po_id or receipt_po_id,
         purchase_receipt_id=receipt.id,
         purchase_invoice_id=invoice.id,
         matching_type=MatchingType.THREE_WAY,
