@@ -45,8 +45,20 @@ class CashForecastEntryAdapter(BaseImportAdapter):
         return errors
 
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
-        """Validate the full cash forecast entry document."""
-        return []
+        """Validate that every forecast belongs to the import company."""
+        company_id = (context or {}).get("company_id") or ""
+        errors: list[str] = []
+        checked_forecasts: dict[str, CashForecast | None] = {}
+        for row in document_data:
+            forecast_id = str(row.get("forecast_id", ""))
+            if forecast_id not in checked_forecasts:
+                checked_forecasts[forecast_id] = database.session.get(CashForecast, forecast_id)
+            forecast = checked_forecasts[forecast_id]
+            if forecast and forecast.company != company_id:
+                errors.append(
+                    f"El pronóstico {forecast_id} pertenece a la compañía {forecast.company}, no a {company_id}."
+                )
+        return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
         """Build cash forecast entries from the imported data."""
@@ -65,6 +77,7 @@ class CashForecastEntryAdapter(BaseImportAdapter):
                     "estimated_date": estimated_date,
                     "notes": str(row.get("notes", "")).strip(),
                     "created_by": context.get("created_by"),
+                    "company_id": context.get("company_id"),
                 }
             )
         return entries
@@ -72,6 +85,14 @@ class CashForecastEntryAdapter(BaseImportAdapter):
     def persist_document(self, document: Any) -> None:
         """Persist cash forecast entries to the database."""
         for entry_data in document:
+            forecast = database.session.get(CashForecast, entry_data["forecast_id"])
+            company_id = entry_data.get("company_id")
+            if forecast is None:
+                raise ValueError(f"Pronóstico no encontrado: {entry_data['forecast_id']}")
+            if company_id and forecast.company != company_id:
+                raise ValueError(
+                    f"El pronóstico {forecast.id} pertenece a la compañía {forecast.company}, no a {company_id}."
+                )
             entry = CashForecastEntry(
                 forecast_id=entry_data["forecast_id"],
                 type=entry_data["type"],
