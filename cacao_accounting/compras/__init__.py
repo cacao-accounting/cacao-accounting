@@ -120,6 +120,7 @@ from cacao_accounting.decorators import (  # noqa: F401
 from cacao_accounting.document_flow import (
     DocumentFlowError,
     create_document_relation,
+    get_target_line_source,
     get_create_actions,
     refresh_source_caches_for_target,
     require_line_relations,
@@ -938,6 +939,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                **get_target_line_source("supplier_quotation", item.id),
             }
             for item in lineas
         ],
@@ -2803,6 +2805,7 @@ def _purchase_order_transaction_config(
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                **get_target_line_source("purchase_order", item.id),
             }
             for item in lineas
         ],
@@ -3291,6 +3294,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                **get_target_line_source("purchase_quotation", item.id),
             }
             for item in lineas
         ],
@@ -3744,6 +3748,7 @@ def compras_recepcion_editar(receipt_id: str):
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
                 "warehouse": item.warehouse or "",
+                **get_target_line_source("purchase_receipt", item.id),
             }
             for item in lineas
         ],
@@ -4723,6 +4728,7 @@ def compras_factura_compra_editar(invoice_id: str):
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                **get_target_line_source("purchase_invoice", item.id),
             }
             for item in lineas
         ],

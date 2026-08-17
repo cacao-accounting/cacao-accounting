@@ -2803,7 +2803,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
         update_serial_state(
             movement,
             outgoing=qty_change < 0,
-            warehouse=movement.warehouse if qty_change > 0 else movement.warehouse,
+            warehouse=movement.warehouse,
         )
     return StockLedgerEntry(
         posting_date=posting_date,

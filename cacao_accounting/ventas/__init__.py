@@ -43,6 +43,7 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 from cacao_accounting.document_flow import (
     DocumentFlowError,
     create_document_relation,
+    get_target_line_source,
     refresh_source_caches_for_target,
     require_line_relations,
     revert_relations_for_target,
@@ -719,6 +720,7 @@ def ventas_pedido_venta_editar(request_id: str):
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                **get_target_line_source("sales_request", item.id),
             }
             for item in lineas
         ],
@@ -1865,16 +1867,26 @@ def _validate_sales_source_link(document: Any, source_type: str, source_id: str,
     return source
 
 
+def _validate_sales_invoice_source_links(invoice: SalesInvoice, items: Sequence[Any] | None = None) -> Any | None:
+    """Valida y reconcilia los vínculos de orden y nota de entrega."""
+    order = None
+    delivery = None
+    if invoice.sales_order_id:
+        order = _validate_sales_source_link(invoice, "sales_order", invoice.sales_order_id, items)
+    if invoice.delivery_note_id:
+        delivery = _validate_sales_source_link(invoice, "delivery_note", invoice.delivery_note_id, items)
+    if order is not None and delivery is not None and delivery.sales_order_id != order.id:
+        raise ValueError("La orden y la nota de entrega de la factura no pertenecen al mismo flujo.")
+    return order or delivery
+
+
 def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any] | None = None) -> None:
     """Rechaza facturas sin orden de venta cuando la compañía lo exige."""
     if invoice.document_type in {"sales_credit_note", "sales_debit_note", "sales_return"} or invoice.is_return:
         return
-    if invoice.sales_order_id:
-        _validate_sales_source_link(invoice, "sales_order", invoice.sales_order_id, items)
-        return
-    if invoice.delivery_note_id:
-        delivery_note = _validate_sales_source_link(invoice, "delivery_note", invoice.delivery_note_id, items)
-        if delivery_note.sales_order_id:
+    if invoice.sales_order_id or invoice.delivery_note_id:
+        source = _validate_sales_invoice_source_links(invoice, items)
+        if invoice.sales_order_id or getattr(source, "sales_order_id", None):
             return
     config = database.session.execute(
         database.select(SalesMatchingConfig).filter_by(company=invoice.company)
@@ -2185,6 +2197,7 @@ def ventas_orden_venta_editar(order_id: str):
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
                 "warehouse": item.warehouse or "",
+                **get_target_line_source("sales_order", item.id),
             }
             for item in lineas
         ],
@@ -2442,6 +2455,7 @@ def ventas_cotizacion_editar(quotation_id: str):
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                **get_target_line_source("sales_quotation", item.id),
             }
             for item in lineas
         ],
@@ -2898,6 +2912,7 @@ def ventas_entrega_editar(note_id: str):
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
                 "warehouse": item.warehouse or "",
+                **get_target_line_source("delivery_note", item.id),
             }
             for item in lineas
         ],
@@ -3223,6 +3238,8 @@ def _create_sales_invoice_from_form():
             source = database.session.get(SalesOrder, factura.sales_order_id)
         if not source and factura.delivery_note_id:
             source = database.session.get(DeliveryNote, factura.delivery_note_id)
+        if not source and reversal_of:
+            source = database.session.get(SalesInvoice, reversal_of)
         _copy_sales_logistics(factura, source, request.form)
         database.session.add(factura)
         database.session.flush()
@@ -3236,10 +3253,7 @@ def _create_sales_invoice_from_form():
         items = (
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=factura.id)).scalars().all()
         )
-        if factura.sales_order_id:
-            _validate_sales_source_link(factura, "sales_order", factura.sales_order_id, items)
-        elif factura.delivery_note_id:
-            _validate_sales_source_link(factura, "delivery_note", factura.delivery_note_id, items)
+        source = _validate_sales_invoice_source_links(factura, items) or source
         grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
         _set_sales_invoice_totals(factura, total, grand_total, source)
         if reversal_of:
@@ -3402,6 +3416,7 @@ def ventas_factura_venta_editar(invoice_id: str):
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                **get_target_line_source("sales_invoice", item.id),
             }
             for item in lineas
         ],
@@ -3459,10 +3474,9 @@ def _handle_sales_invoice_edit_post(registro):
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars().all()
         )
         source = None
-        if registro.sales_order_id:
-            source = _validate_sales_source_link(registro, "sales_order", registro.sales_order_id, items)
-        elif registro.delivery_note_id:
-            source = _validate_sales_source_link(registro, "delivery_note", registro.delivery_note_id, items)
+        source = _validate_sales_invoice_source_links(registro, items)
+        if source is None and registro.reversal_of:
+            source = database.session.get(SalesInvoice, registro.reversal_of)
         grand_total = calculate_document_total_with_taxes(registro, total, items, request.form.get("tax_summary_payload"))
         _set_sales_invoice_totals(registro, total, grand_total, source)
         if registro.reversal_of:
