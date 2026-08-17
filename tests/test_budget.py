@@ -499,6 +499,25 @@ def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
         document_no="cacao-JOU-TEST",
     )
     database.session.add(gl_entry)
+    closing_entry = GLEntry(
+        company="cacao",
+        ledger_id=book.id,
+        account_id=acc.id,
+        account_code=acc.code,
+        cost_center_code=cc.code,
+        unit_code=unit.code,
+        project_code=project.code,
+        accounting_period_id=per.id,
+        posting_date=per.start,
+        debit=Decimal("999"),
+        credit=Decimal("0"),
+        is_cancelled=False,
+        is_fiscal_year_closing=True,
+        voucher_type="journal_entry",
+        voucher_id="JRN-CLOSING-REPORT-TEST",
+        document_no="cacao-JOU-CLOSING-REPORT-TEST",
+    )
+    database.session.add(closing_entry)
     database.session.commit()
 
     report = BudgetReportService().get_real_vs_budget_report(

@@ -405,6 +405,7 @@ class BudgetService:
                 GLEntry.account_id == resolved_account_id,
                 GLEntry.is_cancelled.is_(False),
                 GLEntry.is_reversal.is_(False),
+                GLEntry.is_fiscal_year_closing.is_(False),
             )
         )
         if resolved_ledger_id:
