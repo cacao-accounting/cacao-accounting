@@ -1320,6 +1320,13 @@ def _apply_payment_target_line(
         raise _document_flow_error("Factura origen no encontrada.", 404)
     if company and getattr(invoice, "company", None) and getattr(invoice, "company") != company:
         raise _document_flow_error("No se pueden mezclar companias incompatibles.", 409)
+    if getattr(invoice, "docstatus", 0) != 1:
+        raise _document_flow_error("La factura origen debe estar aprobada.", 409)
+    expected_party_type, expected_party_id = _payment_reference_party(invoice, reference_type)
+    if payment.party_type != expected_party_type or payment.party_id != expected_party_id:
+        raise _document_flow_error("La factura origen no coincide con el tercero del pago.", 409)
+    if not _payment_type_matches_source(payment.payment_type, reference_type):
+        raise _document_flow_error("El tipo de pago no corresponde con la factura origen.", 409)
 
     allocated = decimal_or_zero(selected.get("qty") or selected.get("allocated_amount"))
     _validate_payment_currency_match(payment, invoice, infer_missing=True)
