@@ -129,22 +129,22 @@ class ExchangeRevaluationService:
             candidates = self._open_candidates(company, period.end, summary_ledger.id)
 
             run = ExchangeRevaluation(
-            company=company,
-            posting_date=period.end,
-            document_date=period.end,
-            run_date=period.end,
-            year=year,
-            month=month,
-            status=EXCHANGE_REVALUATION_STATUS_NO_CHANGES,
-            docstatus=1,
-            created_by=user_id,
-            processed_documents_count=len(candidates),
-            affected_documents_count=0,
-            total_gain=Decimal("0"),
-            total_loss=Decimal("0"),
-            currency=summary_ledger.currency,
-            generated_journal=False,
-            voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
+                company=company,
+                posting_date=period.end,
+                document_date=period.end,
+                run_date=period.end,
+                year=year,
+                month=month,
+                status=EXCHANGE_REVALUATION_STATUS_NO_CHANGES,
+                docstatus=1,
+                created_by=user_id,
+                processed_documents_count=len(candidates),
+                affected_documents_count=0,
+                total_gain=Decimal("0"),
+                total_loss=Decimal("0"),
+                currency=summary_ledger.currency,
+                generated_journal=False,
+                voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
             )
             database.session.add(run)
             database.session.flush()
@@ -170,20 +170,22 @@ class ExchangeRevaluationService:
             run.journal_entry_id = journal.id
             run.affected_documents_count = len(affected)
             run.total_gain = sum(
-            (
-                self._decimal(entry.credit)
-                for entry in entries
-                if entry.ledger_id == summary_ledger.id and entry.account_id == defaults.unrealized_exchange_gain_account_id
-            ),
-            Decimal("0"),
+                (
+                    self._decimal(entry.credit)
+                    for entry in entries
+                    if entry.ledger_id == summary_ledger.id
+                    and entry.account_id == defaults.unrealized_exchange_gain_account_id
+                ),
+                Decimal("0"),
             )
             run.total_loss = sum(
-            (
-                self._decimal(entry.debit)
-                for entry in entries
-                if entry.ledger_id == summary_ledger.id and entry.account_id == defaults.unrealized_exchange_loss_account_id
-            ),
-            Decimal("0"),
+                (
+                    self._decimal(entry.debit)
+                    for entry in entries
+                    if entry.ledger_id == summary_ledger.id
+                    and entry.account_id == defaults.unrealized_exchange_loss_account_id
+                ),
+                Decimal("0"),
             )
             log_submit(run)
             database.session.commit()
