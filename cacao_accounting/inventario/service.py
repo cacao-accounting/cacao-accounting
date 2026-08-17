@@ -137,13 +137,27 @@ def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -
     raise InventoryServiceError("No existe conversion UOM para el item.")
 
 
-def _validate_batch(line, item):
+def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None = None) -> None:
     batch_id = getattr(line, "batch_id", None)
     if not batch_id:
         raise InventoryServiceError("El item requiere lote.")
     batch = database.session.get(Batch, batch_id)
     if not batch or batch.item_code != item.code or not batch.is_active:
         raise InventoryServiceError("El lote no existe, esta inactivo o no pertenece al item.")
+    if outgoing:
+        if not warehouse:
+            raise InventoryServiceError("La salida por lote requiere bodega.")
+        balance = database.session.execute(
+            select(func.coalesce(func.sum(StockLedgerEntry.qty_change), 0)).where(
+                StockLedgerEntry.item_code == item.code,
+                StockLedgerEntry.batch_id == batch_id,
+                StockLedgerEntry.warehouse == warehouse,
+                StockLedgerEntry.is_cancelled.is_(False),
+            )
+        ).scalar_one()
+        requested = Decimal(str(getattr(line, "qty", 0) or 0))
+        if Decimal(str(balance or 0)) < requested:
+            raise InventoryServiceError("El lote no tiene saldo suficiente en la bodega de salida.")
 
 
 def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False):
@@ -170,7 +184,7 @@ def validate_batch_serial(
     if not item or not item.is_stock_item:
         return
     if item.has_batch:
-        _validate_batch(line, item)
+        _validate_batch(line, item, outgoing=outgoing, warehouse=warehouse)
     if item.has_serial_no:
         _validate_serial(line, item, outgoing, warehouse, allow_transfer)
 

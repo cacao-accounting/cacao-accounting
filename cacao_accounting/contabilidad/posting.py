@@ -2148,7 +2148,12 @@ def _create_stock_movement(
     if not warehouse:
         raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
     try:
-        validate_batch_serial(line, outgoing=qty_change < 0)
+        validate_batch_serial(
+            line,
+            outgoing=qty_change < 0,
+            warehouse=warehouse,
+            allow_transfer=getattr(document, "purpose", None) == "material_transfer",
+        )
     except InventoryServiceError as exc:
         raise PostingError(str(exc)) from exc
     # INV-01: Falso positivo - La verificacion de stock negativo (allow_negative_stock)
