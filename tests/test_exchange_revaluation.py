@@ -355,6 +355,24 @@ def test_service_raises_controlled_error_when_closing_rate_is_missing(app_ctx):
         ExchangeRevaluationService().run(company="cacao", year=2026, month=5, user_id="admin")
 
 
+def test_failed_revaluation_rerun_preserves_previous_posted_run(app_ctx):
+    """Una reejecución fallida no debe anular la corrida publicada anterior."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationError, ExchangeRevaluationService
+    from cacao_accounting.database import ExchangeRate, database
+
+    _create_sales_invoice()
+    service = ExchangeRevaluationService()
+    previous = service.run(company="cacao", year=2026, month=5, user_id="admin")
+    database.session.execute(database.delete(ExchangeRate).where(ExchangeRate.destination == "NIO"))
+    database.session.commit()
+
+    with pytest.raises(ExchangeRevaluationError, match="Falta tasa de cierre"):
+        service.run(company="cacao", year=2026, month=5, user_id="admin")
+
+    database.session.refresh(previous)
+    assert previous.status == "posted"
+
+
 def test_service_excludes_draft_invoices(app_ctx):
     """Draft documents are not accounting records and cannot be revalued."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService

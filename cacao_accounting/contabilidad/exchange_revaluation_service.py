@@ -117,16 +117,18 @@ class ExchangeRevaluationService:
             .scalars()
             .all()
         )
-        for previous_run in previous_runs:
-            self.void(
-                run_id=str(previous_run.id),
-                user_id=user_id,
-                reason="Reejecucion de revalorizacion del periodo",
-            )
+        try:
+            for previous_run in previous_runs:
+                self.void(
+                    run_id=str(previous_run.id),
+                    user_id=user_id,
+                    reason="Reejecucion de revalorizacion del periodo",
+                    commit=False,
+                )
 
-        candidates = self._open_candidates(company, period.end, summary_ledger.id)
+            candidates = self._open_candidates(company, period.end, summary_ledger.id)
 
-        run = ExchangeRevaluation(
+            run = ExchangeRevaluation(
             company=company,
             posting_date=period.end,
             document_date=period.end,
@@ -143,51 +145,61 @@ class ExchangeRevaluationService:
             currency=summary_ledger.currency,
             generated_journal=False,
             voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
-        )
-        database.session.add(run)
-        database.session.flush()
-        self._assign_identifier(run)
-        log_create(run)
+            )
+            database.session.add(run)
+            database.session.flush()
+            self._assign_identifier(run)
+            log_create(run)
 
-        drafts = self._calculate_lines(candidates, ledgers, period.end)
-        affected = [draft for draft in drafts if draft.exchange_difference != 0]
-        if not affected:
-            database.session.commit()
-            return run
+            drafts = self._calculate_lines(candidates, ledgers, period.end)
+            affected = [draft for draft in drafts if draft.exchange_difference != 0]
+            if not affected:
+                database.session.commit()
+                return run
 
-        journal = self._create_journal(run, user_id)
-        entries, items = self._build_entries_and_items(run, journal, affected, defaults)
-        self._validate_entries(entries)
-        database.session.add_all(entries)
-        database.session.flush()
-        self._link_items_to_entries(items, entries)
-        database.session.add_all(items)
+            journal = self._create_journal(run, user_id)
+            entries, items = self._build_entries_and_items(run, journal, affected, defaults)
+            self._validate_entries(entries)
+            database.session.add_all(entries)
+            database.session.flush()
+            self._link_items_to_entries(items, entries)
+            database.session.add_all(items)
 
-        run.status = EXCHANGE_REVALUATION_STATUS_POSTED
-        run.generated_journal = True
-        run.journal_entry_id = journal.id
-        run.affected_documents_count = len(affected)
-        run.total_gain = sum(
+            run.status = EXCHANGE_REVALUATION_STATUS_POSTED
+            run.generated_journal = True
+            run.journal_entry_id = journal.id
+            run.affected_documents_count = len(affected)
+            run.total_gain = sum(
             (
                 self._decimal(entry.credit)
                 for entry in entries
                 if entry.ledger_id == summary_ledger.id and entry.account_id == defaults.unrealized_exchange_gain_account_id
             ),
             Decimal("0"),
-        )
-        run.total_loss = sum(
+            )
+            run.total_loss = sum(
             (
                 self._decimal(entry.debit)
                 for entry in entries
                 if entry.ledger_id == summary_ledger.id and entry.account_id == defaults.unrealized_exchange_loss_account_id
             ),
             Decimal("0"),
-        )
-        log_submit(run)
-        database.session.commit()
-        return run
+            )
+            log_submit(run)
+            database.session.commit()
+            return run
+        except Exception:
+            database.session.rollback()
+            raise
 
-    def void(self, *, run_id: str, user_id: str | None = None, reason: str | None = None) -> ExchangeRevaluation:
+    def void(
+        self,
+        *,
+        run_id: str,
+        user_id: str | None = None,
+        reason: str | None = None,
+        commit: bool = True,
+    ) -> ExchangeRevaluation:
         """Anula una revalorizacion contabilizada mediante reversos GL."""
         run = database.session.get(ExchangeRevaluation, run_id)
         if run is None:
@@ -247,7 +259,8 @@ class ExchangeRevaluationService:
         run.voided_at = datetime.now(UTC).replace(tzinfo=None)
         run.void_reason = reason
         log_cancel(run)
-        database.session.commit()
+        if commit:
+            database.session.commit()
         return run
 
     def list_runs(self) -> list[ExchangeRevaluation]:
