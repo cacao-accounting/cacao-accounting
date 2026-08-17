@@ -355,6 +355,14 @@ def _validate_relation_documents(source_key, source_id, source_item_id, target_k
         raise DocumentFlowError("Linea destino no encontrada.", 404)
     if source_item and get_item_parent_id(get_document_type(source_key), source_item) != source_id:
         raise DocumentFlowError("La linea origen no pertenece al documento indicado.", 409)
+    if target_item and get_item_parent_id(get_document_type(target_key), target_item) != target_id:
+        raise DocumentFlowError("La linea destino no pertenece al documento indicado.", 409)
+    source_item_code = getattr(source_item, "item_code", None) if source_item else None
+    target_item_code = getattr(target_item, "item_code", None) if target_item else None
+    if source_item_code and target_item_code and source_item_code != target_item_code:
+        raise DocumentFlowError(
+            "La linea destino usa un articulo distinto al de la linea origen de la relacion.", 409
+        )
     return source_item, target_item
 
 
