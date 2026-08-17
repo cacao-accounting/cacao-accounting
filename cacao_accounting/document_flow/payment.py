@@ -1273,9 +1273,7 @@ def _build_payment_target_payment(company: str | None, posting_date: Any, payloa
     return payment
 
 
-def _resolve_payment_target_gl_accounts(
-    company: str | None, payload: dict[str, Any]
-) -> tuple[str | None, str | None]:
+def _resolve_payment_target_gl_accounts(company: str | None, payload: dict[str, Any]) -> tuple[str | None, str | None]:
     """Resuelve y valida las cuentas GL de una transferencia interna destino.
 
     El flujo documental no pasa por el formulario bancario, por lo que debe
