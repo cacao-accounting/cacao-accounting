@@ -1431,6 +1431,7 @@ def inventario_entrada_duplicar(entry_id: str):
     origen = database.session.get(StockEntry, entry_id)
     if not origen:
         abort(404)
+    exige_acceso_compania("inventory", origen.company, "crear")
     if origen.docstatus == 2:
         abort(400)
 
