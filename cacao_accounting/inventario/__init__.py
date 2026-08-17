@@ -341,6 +341,7 @@ def inventario_salida_inventario_lista():
 @inventario.route("/item/new", methods=["GET", "POST"])
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "crear")
 def inventario_articulo_nuevo():
     """Formulario para crear un nuevo artículo (codigo auto-generado)."""
     from cacao_accounting.inventario.forms import FormularioArticulo
@@ -435,6 +436,7 @@ def _item_params_from_form(form) -> ItemParams:
 @inventario.route("/item/<item_id>/edit", methods=["GET", "POST"])
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "editar")
 def inventario_articulo_editar(item_id):
     """Formulario para editar un artículo existente."""
     from cacao_accounting.inventario.forms import FormularioArticulo
@@ -557,6 +559,7 @@ def inventario_articulo(item_id):
 @inventario.route("/uom/new", methods=["GET", "POST"])
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "crear")
 def inventario_uom_nuevo():
     """Formulario para crear una nueva unidad de medida."""
     from cacao_accounting.inventario.forms import FormularioUOM
@@ -686,6 +689,7 @@ def inventario_uom(uom_id):
 @inventario.route("/warehouse/new", methods=["GET", "POST"])
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "crear")
 def inventario_bodega_nuevo():
     """Formulario para crear una nueva bodega."""
     from cacao_accounting.inventario.forms import FormularioBodega
@@ -698,6 +702,8 @@ def inventario_bodega_nuevo():
         company_rows = [row for row in warehouse_company_rows if row["company"]]
         try:
             _validate_warehouse_company_rows(company_rows)
+            for row in company_rows:
+                exige_acceso_compania("inventory", row["company"], "crear")
         except ValueError as exc:
             flash_error(exc)
             return render_template(
