@@ -58,8 +58,18 @@ def iter_active_relations_for_source(
     source_id: str,
     source_item_id: str | None,
     target_type: str | None = None,
+    *,
+    exclude_draft_targets: bool = False,
+    include_target_id: str | None = None,
 ) -> list[DocumentRelation]:
-    """Devuelve relaciones cuyo target no esta cancelado."""
+    """Devuelve relaciones cuyo target no esta cancelado.
+
+    Por defecto incluye todos los destinos no cancelados para conservar las
+    validaciones de submit y la trazabilidad. Con ``exclude_draft_targets``
+    se omiten los destinos en borrador (docstatus=0) salvo el documento
+    identificado por ``include_target_id``, evitando que borradores
+    abandonados consuman la disponibilidad del origen.
+    """
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type) if target_type else None
     query = database.select(DocumentRelation).filter_by(
@@ -76,6 +86,9 @@ def iter_active_relations_for_source(
     for relation in relations:
         target = get_document(relation.target_type, relation.target_id)
         if target and getattr(target, "docstatus", 0) != 2:
+            docstatus = getattr(target, "docstatus", 0)
+            if exclude_draft_targets and docstatus == 0 and relation.target_id != include_target_id:
+                continue
             active.append(relation)
     return active
 
@@ -85,19 +98,30 @@ def consumed_qty_for_source(
     source_id: str,
     source_item_id: str | None,
     target_type: str | None = None,
+    *,
+    exclude_draft_targets: bool = False,
+    include_target_id: str | None = None,
 ) -> Decimal:
     """Suma la cantidad consumida por relaciones activas.
 
     Normaliza el consumo a la UOM base del artículo origen: si la relación
     guarda ``qty_in_base_uom`` usa ese valor; en caso contrario (datos
-    históricos) recurre a ``qty``.
+    históricos) recurre a ``qty``. Con ``exclude_draft_targets`` no se
+    consumen destinos en borrador salvo el indicado por ``include_target_id``.
     """
     return sum(
         (
             decimal_or_zero(relation.qty_in_base_uom)
             if relation.qty_in_base_uom is not None
             else decimal_or_zero(relation.qty)
-            for relation in iter_active_relations_for_source(source_type, source_id, source_item_id, target_type)
+            for relation in iter_active_relations_for_source(
+                source_type,
+                source_id,
+                source_item_id,
+                target_type,
+                exclude_draft_targets=exclude_draft_targets,
+                include_target_id=include_target_id,
+            )
         ),
         Decimal("0"),
     )
@@ -157,7 +181,13 @@ def recompute_line_flow_state(
         state.company = company
 
     state.source_qty = source_qty
-    state.processed_qty = consumed_qty_for_source(source_key, source_id, source_item_id, target_key)
+    state.processed_qty = consumed_qty_for_source(
+        source_key,
+        source_id,
+        source_item_id,
+        target_key,
+        exclude_draft_targets=True,
+    )
     cancelled = decimal_or_zero(state.cancelled_qty)
     closed = decimal_or_zero(state.closed_qty)
     pending = source_qty - decimal_or_zero(state.processed_qty) - cancelled - closed

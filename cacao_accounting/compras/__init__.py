@@ -126,6 +126,7 @@ from cacao_accounting.document_flow import (
 )
 from cacao_accounting.document_flow.context import company_currency, effective_currency, validate_immutable_header
 from cacao_accounting.document_flow.repository import consumed_qty_for_source, has_active_source_relations
+from cacao_accounting.document_flow.service import _relation_qty_in_base_uom
 from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
@@ -2345,6 +2346,7 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 rate=rate,
                 amount=amount,
             )
+            linea.qty_in_base_uom = _relation_qty_in_base_uom(linea, qty, uom)
             database.session.add(linea)
             database.session.flush()
             _create_line_relation(i, "purchase_order", order_id, linea.id, qty, uom, rate, amount)
@@ -3827,7 +3829,14 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
         po_item = database.session.get(PurchaseOrderItem, rel.source_item_id)
         if not po_item:
             continue
-        consumed = consumed_qty_for_source("purchase_order", rel.source_id, rel.source_item_id, "purchase_receipt")
+        consumed = consumed_qty_for_source(
+            "purchase_order",
+            rel.source_id,
+            rel.source_item_id,
+            "purchase_receipt",
+            exclude_draft_targets=True,
+            include_target_id=receipt_id,
+        )
         ordered = (
             Decimal(str(po_item.qty_in_base_uom))
             if po_item.qty_in_base_uom is not None
@@ -3856,10 +3865,10 @@ def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
     ).scalars()
     for rel in relations:
         if rel.source_item_id:
-            _validate_purchase_invoice_relation(rel)
+            _validate_purchase_invoice_relation(rel, invoice_id=invoice_id)
 
 
-def _validate_purchase_invoice_relation(relation: DocumentRelation) -> None:
+def _validate_purchase_invoice_relation(relation: DocumentRelation, invoice_id: str | None = None) -> None:
     """Valida una relación de factura de compra contra su fuente."""
     sources = {"purchase_receipt": (PurchaseReceiptItem, "recibida"), "purchase_order": (PurchaseOrderItem, "ordenada")}
     source = sources.get(relation.source_type)
@@ -3868,7 +3877,14 @@ def _validate_purchase_invoice_relation(relation: DocumentRelation) -> None:
     item: Any = database.session.get(source[0], relation.source_item_id)
     if not item:
         return
-    consumed = consumed_qty_for_source(relation.source_type, relation.source_id, relation.source_item_id, "purchase_invoice")
+    consumed = consumed_qty_for_source(
+        relation.source_type,
+        relation.source_id,
+        relation.source_item_id,
+        "purchase_invoice",
+        exclude_draft_targets=True,
+        include_target_id=invoice_id,
+    )
     available = (
         Decimal(str(item.qty_in_base_uom))
         if getattr(item, "qty_in_base_uom", None) is not None
