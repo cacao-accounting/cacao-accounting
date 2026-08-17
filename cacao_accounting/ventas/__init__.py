@@ -1825,7 +1825,12 @@ def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[
 
 def _validate_sales_source_link(document: Any, source_type: str, source_id: str, items: Sequence[Any] | None = None) -> Any:
     """Valida estado, compañía, cliente y relaciones de un origen O2C."""
-    source_models = {"sales_order": SalesOrder, "delivery_note": DeliveryNote}
+    source_models = {
+        "sales_request": SalesRequest,
+        "sales_quotation": SalesQuotation,
+        "sales_order": SalesOrder,
+        "delivery_note": DeliveryNote,
+    }
     source_model = source_models.get(source_type)
     source = database.session.get(source_model, source_id) if source_model else None
     if not source:
@@ -1843,8 +1848,14 @@ def _validate_sales_source_link(document: Any, source_type: str, source_id: str,
         if source.sales_order_id != document.sales_order_id:
             raise ValueError("La nota de entrega no pertenece a la orden de venta indicada.")
     if items is not None:
+        target_types = {
+            SalesQuotation: "sales_quotation",
+            SalesOrder: "sales_order",
+            DeliveryNote: "delivery_note",
+            SalesInvoice: "sales_invoice",
+        }
         require_line_relations(
-            target_type="sales_invoice" if isinstance(document, SalesInvoice) else "delivery_note",
+            target_type=target_types[type(document)],
             target_id=document.id,
             source_type=source_type,
             source_id=source_id,
@@ -1971,16 +1982,26 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
         customer_id = request.form.get("customer_id") or None
         customer = database.session.get(Party, customer_id) if customer_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
+        source_type = "sales_quotation" if from_quotation_id else "sales_request" if from_request_id else None
+        source_id = from_quotation_id or from_request_id
+        source = database.session.get(SalesQuotation, from_quotation_id) if from_quotation_id else None
+        source = database.session.get(SalesRequest, from_request_id) if from_request_id else source
+        company, transaction_currency = validate_immutable_header(
+            source,
+            request.form.get("company") or None,
+            request.form.get("currency") or request.form.get("transaction_currency") or None,
+        )
         orden = SalesOrder(
             customer_id=customer_id,
             customer_name=customer.name if customer else None,
             sales_quotation_id=from_quotation_id or None,
-            company=request.form.get("company") or None,
+            company=company,
             posting_date=posting_date,
+            transaction_currency=transaction_currency,
+            base_currency=company_currency(company),
             remarks=request.form.get("remarks"),
             docstatus=0,
         )
-        source = database.session.get(SalesQuotation, from_quotation_id) if from_quotation_id else None
         _copy_sales_logistics(orden, source, request.form)
         database.session.add(orden)
         database.session.flush()
@@ -1991,6 +2012,11 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
             naming_series_id=request.form.get("naming_series") or None,
         )
         _total_qty, total = _save_sales_order_items(orden.id)
+        if source_type and source_id:
+            order_items = database.session.execute(
+                database.select(SalesOrderItem).filter_by(sales_order_id=orden.id)
+            ).scalars().all()
+            _validate_sales_source_link(orden, source_type, source_id, order_items)
         orden.total = total
         orden.base_total = total
         orden.grand_total = total
@@ -2318,6 +2344,11 @@ def ventas_cotizacion_nueva():
                 naming_series_id=request.form.get("naming_series") or None,
             )
             _total_qty, total = _save_sales_quotation_items(cotizacion.id)
+            quotation_items = database.session.execute(
+                database.select(SalesQuotationItem).filter_by(sales_quotation_id=cotizacion.id)
+            ).scalars().all()
+            if from_request_id:
+                _validate_sales_source_link(cotizacion, "sales_request", from_request_id, quotation_items)
             cotizacion.total = total
             cotizacion.base_total = total
             cotizacion.grand_total = total
@@ -2526,6 +2557,8 @@ def ventas_cotizacion_submit(quotation_id: str):
         validate_submit_prerequisites(
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )
+        if registro.sales_request_id:
+            _validate_sales_source_link(registro, "sales_request", registro.sales_request_id, items)
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Cotización de venta"):
@@ -2595,6 +2628,8 @@ def ventas_orden_venta_submit(order_id: str):
         validate_submit_prerequisites(
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )
+        if registro.sales_quotation_id:
+            _validate_sales_source_link(registro, "sales_quotation", registro.sales_quotation_id, items)
         if not getattr(registro, "is_return", False):
             _validate_credit_limit_and_overdue(
                 registro.company, registro.customer_id, registro.grand_total or Decimal("0"), current_document=registro
