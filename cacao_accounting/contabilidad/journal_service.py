@@ -568,6 +568,12 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     if books is None and (book := _optional_text(payload.get("book"))):
         books = [book]
     transaction_currency, lines = _normalize_transaction_currency(_optional_text(payload.get("transaction_currency")), lines)
+    if transaction_currency is None:
+        company_currency = database.session.execute(database.select(Entity.currency).filter_by(code=company)).scalar_one()
+        if not company_currency:
+            raise JournalValidationError("La compañía no tiene moneda funcional configurada.")
+        transaction_currency = str(company_currency)
+        lines = _apply_currency_to_lines(lines, transaction_currency)
     _validate_active_transaction_currency(transaction_currency)
     exchange_rate = _optional_decimal(payload.get("exchange_rate"))
     if exchange_rate is not None and exchange_rate <= 0:
