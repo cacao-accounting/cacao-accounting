@@ -1904,6 +1904,23 @@ Durante la continuación se añadieron además los commits firmados:
 bloque, respectivamente. La suite completa se deja ejecutándose en
 `/tmp/cacao-issues-full.log`; no se hizo push.
 
+Posteriormente se creó `2f6ac620 fix(accounting): isolate cash flow and
+company operations` (`Closes #462, #467, #479`), que clasifica las líneas
+bancarias de pagos en Cash Forecast y restringe presupuestos, cierres y
+plantillas recurrentes a libros/compañías autorizados. El bloque pasó 23
+pruebas focales. `c83d2ac6 ci(security): audit javascript dependencies`
+(`Closes #443`) añadió `npm audit --audit-level=high` al workflow; la auditoría
+local no pudo consultar el registry por DNS, por lo que la resolución de
+vulnerabilidades transitivas requiere verificación en CI con red.
+
+El commit `6a39b6a3 fix(currency): persist functional currency for journals`
+(`Closes #394`) infiere la moneda funcional de la compañía cuando un journal
+manual no declara moneda, y la persiste/aplica a sus líneas. Las pruebas
+multimoneda pasaron; un fallo aislado del cierre fiscal sigue siendo el fixture
+existente fuera de contexto Flask. El commit `d191128f fix(types): align
+warehouse matching key annotations` corrige las anotaciones de mypy del
+matching por bodega.
+
 ## 2026-08-17 — Validación de orígenes upstream O2C/S2P #463/#464/#474/#475
 
 Los comentarios de los issues indicaban que el bypass también existía en los
