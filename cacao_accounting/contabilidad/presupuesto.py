@@ -475,6 +475,7 @@ def reporte():
     projects = []
 
     if company_id:
+        exige_acceso_compania("accounting", company_id, "consultar")
         books = database.session.query(Book).filter_by(entity=company_id).all()
         fiscal_years = database.session.query(FiscalYear).filter_by(entity=company_id).all()
         budgets = database.session.query(Budget).filter_by(company=company_id).all()

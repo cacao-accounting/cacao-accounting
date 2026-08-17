@@ -29,15 +29,15 @@ app = create_app(
 )
 
 
-def test_document_total_uses_tax_summary_without_template():
-    """Conserva el grand total del snapshot fiscal manual de la factura."""
+def test_document_total_ignores_tax_summary_without_template():
+    """No permite que el resumen fiscal del navegador altere el subtotal."""
     total = calculate_document_total_with_taxes(
         type("Document", (), {"tax_template_id": None})(),
         Decimal("100"),
         [],
         '{"grand_total": "115.00"}',
     )
-    assert total == Decimal("115.00")
+    assert total == Decimal("100")
 
 
 @pytest.fixture(scope="module", autouse=True)

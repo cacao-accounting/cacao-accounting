@@ -19,7 +19,7 @@ from cacao_accounting.exceptions import flash_error
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request
 from flask.helpers import url_for
 from flask_login import current_user, login_required
-from sqlalchemy import or_
+from sqlalchemy import false, or_
 
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
     from flask_babel import gettext as _babel_gettext
@@ -2604,17 +2604,30 @@ def cancelar_plantilla_recurrente(identifier: str):
 @verifica_acceso("accounting")
 def asistente_cierre_mensual():
     """Lista de ejecuciones de cierre mensual."""
-    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database import AccountingPeriod, Book, PeriodCloseRun
+
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    authorized_books = permisos.obtener_libros_autorizados("can_read")
+    companies = database.session.execute(
+        database.select(Book.entity).where(Book.id.in_(authorized_books)).distinct()
+    ).scalars().all() if authorized_books else []
 
     runs = (
         database.session.execute(
-            database.select(PeriodCloseRun).order_by(PeriodCloseRun.created.desc(), PeriodCloseRun.id.desc())
+            database.select(PeriodCloseRun)
+            .where(PeriodCloseRun.company.in_(companies) if companies else false())
+            .order_by(PeriodCloseRun.created.desc(), PeriodCloseRun.id.desc())
         )
         .scalars()
         .all()
     )
     periods = (
-        database.session.execute(database.select(AccountingPeriod).where(AccountingPeriod.is_closed.is_(False)))
+        database.session.execute(
+            database.select(AccountingPeriod)
+            .where(AccountingPeriod.is_closed.is_(False))
+            .where(AccountingPeriod.entity.in_(companies) if companies else false())
+        )
         .scalars()
         .all()
     )

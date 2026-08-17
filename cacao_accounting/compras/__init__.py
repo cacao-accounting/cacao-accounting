@@ -106,6 +106,7 @@ from ulid import ULID
 # Recursos locales
 from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
+from cacao_accounting.contabilidad.budget_service import BudgetError
 from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.auth.permisos import Permisos
@@ -661,7 +662,7 @@ def compras_solicitud_compra_submit(request_id: str):
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
-    except ValueError as exc:
+    except (ValueError, BudgetError) as exc:
         database.session.rollback()
         flash_error(exc)
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
@@ -3477,7 +3478,7 @@ def compras_orden_compra_submit(order_id: str):
         registro.docstatus = 1
         log_submit(registro)
         database.session.commit()
-    except ValueError as exc:
+    except (ValueError, BudgetError) as exc:
         database.session.rollback()
         flash_error(exc)
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
