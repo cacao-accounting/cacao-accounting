@@ -1055,6 +1055,50 @@ class TestCreatePaymentTarget:
                 }
             )
 
+    def test_create_payment_rejects_unapproved_invoice(self, app_ctx):
+        """Un target payment no debe aplicar saldo de una factura en borrador."""
+        from cacao_accounting.document_flow.service import create_target_document
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        si = _make_customer_invoice(grand_total=Decimal("1000"))
+        si.docstatus = 0
+        database.session.commit()
+
+        with pytest.raises(ValueError, match="aprobada"):
+            create_target_document(
+                {
+                    "target_document_type": "payment_entry",
+                    "company": "cacao",
+                    "posting_date": date.today(),
+                    "payment_type": "receive",
+                    "party_type": "customer",
+                    "party_id": customer.id,
+                    "lines": [{"source_document_type": "sales_invoice", "source_document_id": si.id, "qty": 1000}],
+                }
+            )
+
+    def test_create_payment_rejects_invoice_from_another_party(self, app_ctx):
+        """Un target payment no debe aplicar facturas de otro cliente."""
+        from cacao_accounting.document_flow.service import create_target_document
+
+        customers = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().all()
+        if len(customers) < 2:
+            pytest.skip("La base de pruebas requiere dos clientes")
+        si = _make_customer_invoice(grand_total=Decimal("1000"))
+
+        with pytest.raises(ValueError, match="tercero"):
+            create_target_document(
+                {
+                    "target_document_type": "payment_entry",
+                    "company": "cacao",
+                    "posting_date": date.today(),
+                    "payment_type": "receive",
+                    "party_type": "customer",
+                    "party_id": customers[1].id if customers[0].id == si.customer_id else customers[0].id,
+                    "lines": [{"source_document_type": "sales_invoice", "source_document_id": si.id, "qty": 1000}],
+                }
+            )
+
     def test_create_payment_infers_currency_from_first_invoice(self, app_ctx):
         from cacao_accounting.document_flow.service import create_target_document
 
