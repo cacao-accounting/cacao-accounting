@@ -15,10 +15,12 @@ from cacao_accounting.database import (
     CompanyParty,
     PurchaseInvoice,
     PurchaseInvoiceItem,
+    DocumentRelation,
     User,
 )
 from cacao_accounting.document_flow.payment import compute_outstanding_amount, refresh_outstanding_amount_cache
 from cacao_accounting.compras import (
+    _has_active_purchase_reversal_notes,
     _validate_purchase_reversal_of,
     _persist_purchase_reversal_relation,
 )
@@ -148,6 +150,51 @@ def test_purchase_credit_note_exceeds_source_balance(app_ctx):
         document_type="purchase_credit_note",
         posting_date=date.today(),
     )
+
+
+def test_purchase_invoice_cannot_cancel_with_active_reversal_note(app_ctx):
+    """Una factura con NC/NDto activa no puede quedar como origen cancelado."""
+    supplier = _ensure_supplier("SUPLR-AP-NOTE-CANCEL", "Proveedor AP Note Cancel")
+    source = PurchaseInvoice(
+        id="PINV-ORIG-CANCEL",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="purchase_invoice",
+        grand_total=Decimal("500"),
+    )
+    note = PurchaseInvoice(
+        id="PINV-CN-CANCEL",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="purchase_credit_note",
+        reversal_of=source.id,
+        grand_total=Decimal("100"),
+    )
+    database.session.add_all([source, note])
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="purchase_invoice",
+            source_id=source.id,
+            target_type="purchase_credit_note",
+            target_id=note.id,
+            relation_type="invoice_reversal",
+            company="cacao",
+            qty=Decimal("1"),
+            amount=Decimal("100"),
+            status="active",
+        )
+    )
+    database.session.flush()
+
+    assert _has_active_purchase_reversal_notes(source.id) is True
+    note.docstatus = 2
+    database.session.flush()
+    assert _has_active_purchase_reversal_notes(source.id) is False
 
 
 def test_purchase_debit_note_revalidates_source_party_and_company(app_ctx):
