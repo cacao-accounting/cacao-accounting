@@ -11,6 +11,7 @@ from cacao_accounting import create_app
 from cacao_accounting.database import (
     Book,
     CompanyParty,
+    DeliveryNote,
     PaymentTerms,
     Item,
     Party,
@@ -20,7 +21,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
-from cacao_accounting.ventas import _validate_credit_limit_and_overdue
+from cacao_accounting.ventas import _approved_customer_order_exposure, _validate_credit_limit_and_overdue
 
 
 @pytest.fixture()
@@ -165,6 +166,47 @@ def test_route_submit_credit_limit_blocks(app_ctx):
     # The submission should fail and keep the document in draft (docstatus=0)
     database.session.refresh(so)
     assert so.docstatus == 0
+
+
+def test_credit_exposure_deducts_invoice_created_from_delivery_note(app_ctx):
+    """Una factura ligada a una nota de entrega cubre su orden de venta."""
+    customer, _cp = _ensure_customer("CUST-DN-EXPOSURE", "Cliente factura desde DN")
+    order = SalesOrder(
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        grand_total=Decimal("100"),
+    )
+    database.session.add(order)
+    database.session.flush()
+    delivery_note = DeliveryNote(
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        sales_order_id=order.id,
+        posting_date=date.today(),
+        docstatus=1,
+        grand_total=Decimal("100"),
+    )
+    database.session.add(delivery_note)
+    database.session.flush()
+    database.session.add(
+        SalesInvoice(
+            customer_id=customer.id,
+            customer_name=customer.name,
+            company="cacao",
+            delivery_note_id=delivery_note.id,
+            posting_date=date.today(),
+            docstatus=1,
+            grand_total=Decimal("100"),
+            outstanding_amount=Decimal("100"),
+        )
+    )
+    database.session.commit()
+
+    assert _approved_customer_order_exposure("cacao", customer.id) == Decimal("0")
 
 
 def test_skip_credit_limit_on_return(app_ctx):

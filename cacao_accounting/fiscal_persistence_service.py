@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import select
@@ -15,6 +15,35 @@ from cacao_accounting.accounting_engine.common.context import TaxRuleContext
 from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
 from cacao_accounting.database import DocumentTaxLine, DocumentTaxSummary, TaxRule, database
 from cacao_accounting.document_flow.status import _
+
+
+def calculate_document_total_with_taxes(
+    document: Any, subtotal: Decimal, items: list[Any], summary_payload: Any = None
+) -> Decimal:
+    """Calcula el total persistible de una factura con impuestos server-side.
+
+    Cuando existe una plantilla fiscal, ésta es la fuente de verdad y evita
+    confiar en totales manipulables del navegador. El resumen enviado por la
+    interfaz se usa sólo para documentos sin plantilla, donde conserva el
+    snapshot fiscal manual capturado por el formulario.
+    """
+    template_id = getattr(document, "tax_template_id", None)
+    if template_id:
+        from cacao_accounting.tax_pricing_service import calculate_taxes
+
+        setattr(document, "_tax_items", items)
+        tax_result = calculate_taxes(document, template_id)
+        return abs(subtotal + tax_result.payable_delta)
+
+    if summary_payload:
+        try:
+            summary = json.loads(summary_payload) if isinstance(summary_payload, str) else summary_payload
+            grand_total = summary.get("grand_total") if isinstance(summary, dict) else None
+            if grand_total not in (None, ""):
+                return abs(Decimal(str(grand_total)))
+        except (InvalidOperation, TypeError, ValueError):
+            pass
+    return abs(subtotal)
 
 
 def persist_document_fiscal_snapshot(
