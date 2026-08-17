@@ -366,7 +366,12 @@ class BudgetService:
 
     @staticmethod
     def _sum_budget_amount(
-        budget_ids: list, resolved_account_id: str, resolved_cost_center_id: str, period_id: str
+        budget_ids: list,
+        resolved_account_id: str,
+        resolved_cost_center_id: str,
+        period_id: str,
+        business_unit_id: str | None = None,
+        project_id: str | None = None,
     ) -> Decimal:
         """Suma los montos de las líneas de presupuesto para una combinación dada."""
         if not budget_ids:
@@ -381,9 +386,12 @@ class BudgetService:
                 BudgetLine.cost_center_id == resolved_cost_center_id,
                 BudgetLine.period_id == period_id,
             )
-            .all()
         )
-        return sum(line.amount for line in lines)
+        if business_unit_id is not None:
+            lines = lines.filter(BudgetLine.business_unit_id == business_unit_id)
+        if project_id is not None:
+            lines = lines.filter(BudgetLine.project_id == project_id)
+        return sum(line.amount for line in lines.all())
 
     @staticmethod
     def _compute_committed_amount(
@@ -392,6 +400,8 @@ class BudgetService:
         resolved_account_id: str,
         resolved_ledger_id: str | None,
         cost_center_code: str | None,
+        unit_code: str | None = None,
+        project_code: str | None = None,
     ) -> Decimal:
         """Calcula el monto comprometido a partir de asientos contables reales."""
         from cacao_accounting.database import Accounts, GLEntry
@@ -412,6 +422,10 @@ class BudgetService:
             gl_query = gl_query.filter(GLEntry.ledger_id == resolved_ledger_id)
         if cost_center_code:
             gl_query = gl_query.filter(GLEntry.cost_center_code == cost_center_code)
+        if unit_code:
+            gl_query = gl_query.filter(GLEntry.unit_code == unit_code)
+        if project_code:
+            gl_query = gl_query.filter(GLEntry.project_code == project_code)
 
         committed = Decimal("0")
         for entry in gl_query.all():
@@ -432,6 +446,8 @@ class BudgetService:
         document_id: str,
         document_type: str,
         ledger_id: str | None = None,
+        business_unit_id: str | None = None,
+        project_id: str | None = None,
     ) -> Dict[str, Any]:
         """Valida si una transacción excede el presupuesto disponible.
 
@@ -458,6 +474,12 @@ class BudgetService:
         resolved_account_id = self._resolve_account_id(company, account_id)
         resolved_cost_center_id = self._resolve_cost_center_id(company, cost_center_id)
         resolved_ledger_id = self._resolve_primary_ledger(company, ledger_id)
+        unit = database.session.get(Unit, business_unit_id) if business_unit_id else None
+        project = database.session.get(Project, project_id) if project_id else None
+        if business_unit_id and (not unit or unit.entity != company):
+            raise BudgetError("Unidad de negocio no válida.")
+        if project_id and (not project or project.entity != company):
+            raise BudgetError("Proyecto no válido.")
 
         budgets = database.session.query(Budget).filter_by(
             company=company, fiscal_year_id=period.fiscal_year_id, status="approved"
@@ -466,11 +488,19 @@ class BudgetService:
             budgets = budgets.filter_by(ledger_id=resolved_ledger_id)
         budget_ids = [b.id for b in budgets.all()]
 
-        budget_amount = self._sum_budget_amount(budget_ids, resolved_account_id, resolved_cost_center_id, period.id)
+        budget_amount = self._sum_budget_amount(
+            budget_ids, resolved_account_id, resolved_cost_center_id, period.id, business_unit_id, project_id
+        )
 
         cc = database.session.get(CostCenter, resolved_cost_center_id)
         committed_amount = self._compute_committed_amount(
-            company, period.id, resolved_account_id, resolved_ledger_id, cc.code if cc else None
+            company,
+            period.id,
+            resolved_account_id,
+            resolved_ledger_id,
+            cc.code if cc else None,
+            unit.code if unit else None,
+            project.code if project else None,
         )
 
         available_amount = budget_amount - committed_amount

@@ -1631,9 +1631,10 @@ def _payment_reference_date(document: object) -> date | None:
 def _flow_source_type(reference_type: str, document: object, line: dict) -> str:
     """Resuelve el tipo lógico de origen que debe conservarse en trazabilidad."""
     explicit = str(line.get("flow_source_type") or "").strip().lower()
-    if explicit:
-        return normalize_doctype(explicit)
-    return normalize_doctype(str(getattr(document, "document_type", None) or reference_type))
+    document_type = normalize_doctype(str(getattr(document, "document_type", None) or reference_type))
+    if explicit and normalize_doctype(explicit) != document_type:
+        raise ValueError(_("El tipo de flujo no coincide con el tipo documental referenciado."))
+    return document_type
 
 
 def _physical_reference_type(reference_type: str, flow_source_type: str) -> str:

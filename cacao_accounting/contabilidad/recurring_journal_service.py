@@ -149,6 +149,8 @@ def apply_recurring_template(
         raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
     if template.status != "approved":
         raise RecurringJournalError("Solo se pueden aplicar plantillas aprobadas.")
+    if not template.start_date <= application_date <= template.end_date:
+        raise RecurringJournalError("La fecha de aplicación está fuera de la vigencia de la plantilla.")
 
     # Verificar si ya fue aplicada
     existing = (
