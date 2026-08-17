@@ -1252,6 +1252,7 @@ def _load_payment_bank_account(payload: dict[str, Any]) -> Any:
 
 def _build_payment_target_payment(company: str | None, posting_date: Any, payload: dict[str, Any]) -> PaymentEntry:
     """Construye el pago destino a partir del payload validado."""
+    paid_from_account_id, paid_to_account_id = _resolve_payment_target_gl_accounts(company, payload)
     payment = PaymentEntry(
         company=company,
         docstatus=0,
@@ -1263,11 +1264,49 @@ def _build_payment_target_payment(company: str | None, posting_date: Any, payloa
         currency=payload.get("currency"),
         base_currency=payload.get("base_currency"),
         exchange_rate=payload.get("exchange_rate"),
+        paid_from_account_id=paid_from_account_id,
+        paid_to_account_id=paid_to_account_id,
         remarks=payload.get("remarks"),
     )
     database.session.add(payment)
     database.session.flush()
     return payment
+
+
+def _resolve_payment_target_gl_accounts(
+    company: str | None, payload: dict[str, Any]
+) -> tuple[str | None, str | None]:
+    """Resuelve y valida las cuentas GL de una transferencia interna destino.
+
+    El flujo documental no pasa por el formulario bancario, por lo que debe
+    aplicar aquí la misma garantía: cada pata usa la cuenta GL de su cuenta
+    bancaria y ambas cuentas pertenecen a la compañía del pago.
+    """
+    if str(payload.get("payment_type") or "") != "internal_transfer":
+        return None, None
+
+    from cacao_accounting.database import BankAccount
+
+    source_id = payload.get("bank_account_id")
+    target_id = payload.get("target_bank_account_id")
+    source_bank = database.session.get(BankAccount, source_id) if source_id else None
+    target_bank = database.session.get(BankAccount, target_id) if target_id else None
+    if not source_bank or not target_bank:
+        raise _document_flow_error("La transferencia interna requiere cuentas bancarias válidas.", 409)
+    if source_bank.id == target_bank.id:
+        raise _document_flow_error("La cuenta bancaria de origen y destino deben ser distintas.", 409)
+    if company and (source_bank.company != company or target_bank.company != company):
+        raise _document_flow_error("Las cuentas bancarias deben pertenecer a la compañía del pago.", 409)
+
+    source_account_id = payload.get("paid_from_account_id") or source_bank.gl_account_id
+    target_account_id = payload.get("paid_to_account_id") or target_bank.gl_account_id
+    if not source_account_id or not target_account_id:
+        raise _document_flow_error("Ambas cuentas bancarias deben tener una cuenta contable configurada.", 409)
+    if payload.get("paid_from_account_id") and payload["paid_from_account_id"] != source_bank.gl_account_id:
+        raise _document_flow_error("La cuenta contable de origen no coincide con la cuenta bancaria.", 409)
+    if payload.get("paid_to_account_id") and payload["paid_to_account_id"] != target_bank.gl_account_id:
+        raise _document_flow_error("La cuenta contable de destino no coincide con la cuenta bancaria.", 409)
+    return str(source_account_id), str(target_account_id)
 
 
 def assign_payment_identifier(
