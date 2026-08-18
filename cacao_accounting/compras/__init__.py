@@ -10,7 +10,7 @@ import json
 from datetime import date
 from decimal import Decimal
 from logging import getLogger
-from typing import Any
+from typing import Any, Sequence
 
 from sqlalchemy import update
 
@@ -3857,7 +3857,7 @@ def compras_recepcion_duplicar(receipt_id: str):
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=duplicada.id))
 
 
-def _validate_purchase_source_link(document: Any, source_type: str, source_id: str, items: list[Any] | None = None) -> Any:
+def _validate_purchase_source_link(document: Any, source_type: str, source_id: str, items: Sequence[Any] | None = None) -> Any:
     """Valida estado, compañía, proveedor y relaciones de un origen S2P."""
     source_models = {
         "purchase_request": PurchaseRequest,
@@ -3881,7 +3881,7 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
     if target_currency and effective_currency(source) != target_currency:
         raise ValueError("El documento origen y el documento destino deben usar la misma moneda.")
     if source_type == "purchase_receipt" and getattr(document, "purchase_order_id", None):
-        if source.purchase_order_id != document.purchase_order_id:
+        if getattr(source, "purchase_order_id", None) != document.purchase_order_id:
             raise ValueError("La recepción no pertenece a la orden de compra indicada.")
     if items is not None:
         target_types = {

@@ -1840,13 +1840,14 @@ def _validate_sales_source_link(document: Any, source_type: str, source_id: str,
         raise ValueError(f"El documento origen '{source_id}' debe estar aprobado.")
     if source.company != document.company:
         raise ValueError("El documento origen y el documento destino deben pertenecer a la misma compañía.")
-    if source.customer_id and source.customer_id != document.customer_id:
+    customer_id = getattr(source, "customer_id", None)
+    if customer_id and customer_id != document.customer_id:
         raise ValueError("El documento origen y el documento destino deben pertenecer al mismo cliente.")
     target_currency = getattr(document, "transaction_currency", None)
     if target_currency and effective_currency(source) != target_currency:
         raise ValueError("El documento origen y el documento destino deben usar la misma moneda.")
     if source_type == "delivery_note" and getattr(document, "sales_order_id", None):
-        if source.sales_order_id != document.sales_order_id:
+        if getattr(source, "sales_order_id", None) != document.sales_order_id:
             raise ValueError("La nota de entrega no pertenece a la orden de venta indicada.")
     if items is not None:
         target_types = {
@@ -3764,8 +3765,9 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
     ).scalars()
     exposure = Decimal("0")
     current_order_id = getattr(current_document, "sales_order_id", None)
-    if not current_order_id and getattr(current_document, "delivery_note_id", None):
-        delivery_note = database.session.get(DeliveryNote, current_document.delivery_note_id)
+    current_dn_id = getattr(current_document, "delivery_note_id", None) if current_document else None
+    if not current_order_id and current_dn_id:
+        delivery_note = database.session.get(DeliveryNote, current_dn_id)
         current_order_id = delivery_note.sales_order_id if delivery_note else None
     for order in orders:
         order_total = Decimal(str(order.grand_total or "0"))
