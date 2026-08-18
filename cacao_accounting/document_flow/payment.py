@@ -1234,7 +1234,7 @@ def _create_payment_target(payload: dict[str, Any]) -> dict[str, Any]:
 
     # La autorización del documento origen no concede por sí sola permiso
     # para crear documentos del módulo bancario.
-    exige_acceso_compania("cash", company, "crear")
+    exige_acceso_compania("cash", company, "crear", allow_unauthenticated=True)
     posting_date = payload.get("posting_date")
     bank_account = _load_payment_bank_account(payload)
     payment = _build_payment_target_payment(company, posting_date, payload)

@@ -3874,7 +3874,8 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
         raise ValueError(f"El documento origen '{source_id}' debe estar aprobado.")
     if source.company != document.company:
         raise ValueError("El documento origen y el documento destino deben pertenecer a la misma compañía.")
-    if source.supplier_id and source.supplier_id != document.supplier_id:
+    supplier_id = getattr(source, "supplier_id", None)
+    if supplier_id and supplier_id != getattr(document, "supplier_id", None):
         raise ValueError("El documento origen y el documento destino deben pertenecer al mismo proveedor.")
     target_currency = getattr(document, "transaction_currency", None)
     if target_currency and effective_currency(source) != target_currency:

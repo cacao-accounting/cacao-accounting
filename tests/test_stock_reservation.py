@@ -240,6 +240,43 @@ def _make_dn(
         warehouse=warehouse,
     )
     database.session.add(dn_item)
+    database.session.flush()
+    if sales_order_id:
+        so_item = (
+            database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=sales_order_id))
+            .scalars()
+            .first()
+        )
+        if so_item:
+            existing_rel = (
+                database.session.execute(
+                    database.select(DocumentRelation).filter_by(
+                        source_type="sales_order",
+                        source_id=sales_order_id,
+                        source_item_id=so_item.id,
+                        target_type="delivery_note",
+                        target_id=dn.id,
+                        target_item_id=dn_item.id,
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if not existing_rel:
+                database.session.add(
+                    DocumentRelation(
+                        source_type="sales_order",
+                        source_id=sales_order_id,
+                        source_item_id=so_item.id,
+                        target_type="delivery_note",
+                        target_id=dn.id,
+                        target_item_id=dn_item.id,
+                        company=company,
+                        qty=qty,
+                        relation_type="fulfillment",
+                        status="active",
+                    )
+                )
     database.session.commit()
     return dn
 
@@ -472,22 +509,6 @@ class TestReservaNotaEntrega:
         bin_row = _get_bin()
         bin_row.reserved_qty = Decimal("10")
         dn = _make_dn("DN-RES-WH", Decimal("10"), warehouse="WH-OTHER", sales_order_id=so.id, docstatus=1)
-        dn_item = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalar_one()
-        so_item = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalar_one()
-        database.session.add(
-            DocumentRelation(
-                source_type="sales_order",
-                source_id=so.id,
-                source_item_id=so_item.id,
-                target_type="delivery_note",
-                target_id=dn.id,
-                target_item_id=dn_item.id,
-                qty=Decimal("10"),
-                relation_type="fulfillment",
-                status="active",
-            )
-        )
-        database.session.commit()
 
         _release_reservation_for_delivery_note(dn)
         database.session.commit()

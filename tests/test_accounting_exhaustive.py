@@ -115,13 +115,28 @@ def test_rbac_manager_vs_auxiliar_vs_user(client, app):
         # contaj (accounting_auxiliar) can create but not submit/cancel
         # usuario (accounting_user) can only view
 
-        from cacao_accounting.database import User, database
+        from cacao_accounting.database import Book, User, UserBookAccess, database
 
+        books = database.session.execute(database.select(Book)).scalars().all()
         for uname in ["conta", "contaj", "usuario"]:
             u = database.session.execute(database.select(User).filter_by(user=uname)).scalar_one()
             u.active = True
             if u.user != "admin":
                 u.classification = "system"
+            for book in books:
+                if not database.session.execute(
+                    database.select(UserBookAccess).filter_by(user_id=u.id, book_id=book.id)
+                ).first():
+                    database.session.add(
+                        UserBookAccess(
+                            user_id=u.id,
+                            book_id=book.id,
+                            can_read=True,
+                            can_write=True,
+                            can_approve=True,
+                            can_cancel=True,
+                        )
+                    )
         database.session.commit()
 
         # 1. Auxiliar (contaj) creates draft

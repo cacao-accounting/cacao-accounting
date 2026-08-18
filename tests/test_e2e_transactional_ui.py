@@ -4,7 +4,6 @@
 import os
 import tempfile
 import threading
-import time
 import pytest
 
 try:
@@ -37,14 +36,16 @@ def flask_server():
     with app.app_context():
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=True)
 
-    def run_app():
-        app.run(port=5008, debug=False, use_reloader=False)
+    from werkzeug.serving import make_server
 
-    server_thread = threading.Thread(target=run_app)
+    server = make_server("127.0.0.1", 0, app)
+    port = server.socket.getsockname()[1]
+    server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()
-    time.sleep(2)
-    yield "http://localhost:5008"
+    yield f"http://localhost:{port}"
+    server.shutdown()
+    server_thread.join(timeout=5)
     with app.app_context():
         database.session.remove()
         database.engine.dispose()
