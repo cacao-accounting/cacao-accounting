@@ -220,6 +220,21 @@ def test_sales_quotation_workflow(app_ctx):
         amount=Decimal("1500"),
     )
     database.session.add(sq_item)
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_request",
+            source_id=sr.id,
+            source_item_id=sr_item.id,
+            target_type="sales_quotation",
+            target_id=sq.id,
+            target_item_id=sq_item.id,
+            qty=Decimal("10"),
+            amount=Decimal("1500"),
+            relation_type="fulfillment",
+            status="active",
+        )
+    )
     database.session.commit()
 
     # Aprobar Cotización

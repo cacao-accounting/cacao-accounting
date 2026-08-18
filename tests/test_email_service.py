@@ -12,6 +12,8 @@ import pytest
 # Mock email_validator module to avoid environment dependency errors in WTForms Email validator
 sys.modules["email_validator"] = mock.MagicMock()
 
+sys.path.insert(0, os.path.dirname(__file__))
+
 from cacao_accounting import create_app  # noqa: E402
 from cacao_accounting.database import CacaoConfig, User, database  # noqa: E402
 from cacao_accounting.messaging.email import (  # noqa: E402

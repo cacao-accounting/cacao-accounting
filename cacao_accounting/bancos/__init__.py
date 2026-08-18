@@ -2124,7 +2124,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
     )
     # La compañía enviada por el cliente no es una autorización.  Bloquear
     # antes de crear y hacer flush evita dejar borradores cross-company.
-    exige_acceso_compania("cash", str(company), "crear")
+    exige_acceso_compania("cash", str(company), "crear", allow_unauthenticated=True)
 
     paid_from_account_id, paid_to_account_id = _resolve_gl_accounts(
         payload, payment_type, bank_account_id, target_bank_account_id

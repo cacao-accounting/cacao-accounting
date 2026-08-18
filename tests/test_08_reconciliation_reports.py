@@ -3586,7 +3586,7 @@ def test_bank_reconciliation_panel_ignores_invalid_historical_transaction(app_ct
     account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta histórica")
     database.session.add(account)
     database.session.flush()
-    transaction = BankTransaction(bank_account_id=account.id, posting_date=date(2026, 5, 5))
+    transaction = BankTransaction(bank_account_id=account.id, posting_date=date(2026, 5, 5), deposit=Decimal("100.00"))
     database.session.add(transaction)
     database.session.commit()
 
@@ -4752,15 +4752,18 @@ def test_three_way_rejects_receipt_from_another_purchase_order(app_ctx):
             amount=Decimal("10"),
         )
     )
-    config = database.session.execute(
-        database.select(PurchaseMatchingConfig).filter_by(company="cacao")
-    ).scalar_one()
+    config = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company="cacao")).scalar_one()
     config.require_purchase_order = True
     database.session.commit()
 
     with pytest.raises(PurchaseReconciliationError, match="misma orden"):
         reconcile_purchase_invoice(invoice.id)
-    assert database.session.execute(database.select(PurchaseReconciliation).filter_by(purchase_invoice_id=invoice.id)).scalar_one_or_none() is None
+    assert (
+        database.session.execute(
+            database.select(PurchaseReconciliation).filter_by(purchase_invoice_id=invoice.id)
+        ).scalar_one_or_none()
+        is None
+    )
 
 
 def test_partial_invoice_price_variance_scaling(app_ctx):
@@ -5079,6 +5082,7 @@ def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
             database.select(GLEntry).filter(
                 GLEntry.voucher_type == "journal_entry",
                 GLEntry.account_id.in_([bank_gl.id, difference.id]),
+                GLEntry.is_cancelled.is_(False),
             )
         )
         .scalars()
@@ -5101,11 +5105,7 @@ def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
     ).scalar_one()
     assert deposit_difference_item.amount == Decimal("10")
     assert deposit_difference_item.allocated_amount == Decimal("10")
-
-    # Clear GL entries for next test
-    for entry in entries_dep:
-        database.session.delete(entry)
-    database.session.commit()
+    deposit_voucher_id = bank_entry.voucher_id
 
     # 2. Test Withdrawal Case
     withdrawal_txn = BankTransaction(
@@ -5137,6 +5137,7 @@ def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
         database.session.execute(
             database.select(GLEntry).filter(
                 GLEntry.voucher_type == "journal_entry",
+                GLEntry.voucher_id != deposit_voucher_id,
                 GLEntry.account_id.in_([bank_gl.id, difference.id]),
             )
         )
