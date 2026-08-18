@@ -3553,9 +3553,6 @@ def ventas_factura_venta_duplicar(invoice_id: str):
             amount=item.amount,
             warehouse=getattr(item, "warehouse", None),
             income_account_id=getattr(item, "income_account_id", None),
-            cost_center_id=getattr(item, "cost_center_id", None),
-            business_unit_id=getattr(item, "business_unit_id", None),
-            project_id=getattr(item, "project_id", None),
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
