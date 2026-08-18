@@ -26,9 +26,9 @@ from cacao_accounting.contabilidad.fiscal_year_closing import (
 from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal, cancel_submitted_journal
 
 
-def test_closing_payload_omits_zero_net_retained_earnings_line():
+def test_closing_payload_omits_zero_net_retained_earnings_line(app):
     """Un libro con resultado neto cero no genera una línea sin importe."""
-    fiscal_year = type("FiscalYearStub", (), {"name": "2024"})()
+    fiscal_year = type("FiscalYearStub", (), {"name": "2024", "id": "FY2024", "year_end_date": date(2024, 12, 31)})()
     payload = _build_closing_voucher_payload(
         company="CMP",
         fiscal_year=fiscal_year,

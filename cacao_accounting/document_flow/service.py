@@ -12,7 +12,7 @@ Convencion de naming para referencias de pago:
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Sequence
 
 from flask_login import current_user
 from sqlalchemy import select
@@ -543,7 +543,7 @@ def revert_relations_for_target(target_type: str, target_id: str, reason: str = 
             before,
             {"status": relation.status, "reason": reason},
         )
-    downstream = []
+    downstream: Sequence[DocumentRelation] = []
     if reason != "draft_edited":
         downstream = (
             database.session.execute(

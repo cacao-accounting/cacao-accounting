@@ -70,7 +70,8 @@ class BankStatementAdapter(BaseImportAdapter):
                 amounts[field] = None
                 errors.append(f"Monto bancario inválido en columna '{field}': {row_data.get(field)}")
             else:
-                if amounts[field] is not None and amounts[field] < 0:
+                amt = amounts[field]
+                if amt is not None and amt < 0:
                     errors.append(f"El monto bancario en columna '{field}' no puede ser negativo.")
         if (
             amounts["deposit"] is None
