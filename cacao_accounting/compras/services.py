@@ -2371,6 +2371,9 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
         if qty < 0 or rate < 0:
             raise ValueError("La cantidad y la tarifa de un costo de importación no pueden ser negativas.")
         amount = qty * rate
+        exchange_rate = Decimal(str(registro.exchange_rate or "1"))
+        base_rate = (rate * exchange_rate).quantize(Decimal("0.0001"))
+        base_amount = (amount * exchange_rate).quantize(Decimal("0.0001"))
         total += amount
         database.session.add(
             ImportLandedCostItem(
@@ -2381,8 +2384,8 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
                 uom=data.get("uom", ""),
                 rate=rate,
                 amount=amount,
-                base_rate=rate,
-                base_amount=amount,
+                base_rate=base_rate,
+                base_amount=base_amount,
                 warehouse=data.get("warehouse", ""),
             )
         )
@@ -2400,6 +2403,8 @@ def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
         amount = Decimal(str(data.get("amount", "0")))
         if amount < 0:
             raise ValueError("El importe de un cargo de importación no puede ser negativo.")
+        exchange_rate = Decimal(str(registro.exchange_rate or "1"))
+        base_amount = (amount * exchange_rate).quantize(Decimal("0.0001"))
         total += amount
         database.session.add(
             ImportLandedCostCharge(
@@ -2407,7 +2412,7 @@ def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
                 concept=concept,
                 charge_type=data.get("charge_type", "charge"),
                 amount=amount,
-                base_amount=amount,
+                base_amount=base_amount,
                 allocation_method=None,
                 account_id=data.get("account_id"),
             )
@@ -2448,6 +2453,24 @@ def _link_landed_cost_to_invoice(
             )
 
 
+def _landed_cost_currency_context(
+    source_invoice: PurchaseInvoice | None,
+    company: str,
+    posting_date: date,
+) -> tuple[str | None, str | None, Decimal]:
+    """Resolve the transaction currency and functional rate for landed costs."""
+    base_currency = company_currency(company)
+    transaction_currency = effective_currency(source_invoice) if source_invoice else base_currency
+    if transaction_currency == base_currency:
+        return transaction_currency, base_currency, Decimal("1")
+
+    source_rate = getattr(source_invoice, "exchange_rate", None) if source_invoice else None
+    exchange_rate = Decimal(str(source_rate)) if source_rate is not None else Decimal("0")
+    if exchange_rate <= 0:
+        exchange_rate = _purchase_exchange_rate(company, posting_date, transaction_currency)
+    return transaction_currency, base_currency, exchange_rate
+
+
 def _create_import_landed_cost_from_request():
     """Crea un documento de costo de importacion desde el formulario."""
     company = request.form.get("company", "").strip()
@@ -2475,6 +2498,11 @@ def _create_import_landed_cost_from_request():
             return None
 
     supplier_id, supplier_name = _resolve_supplier_from_invoice(from_invoice_id)
+    transaction_currency, base_currency, exchange_rate = _landed_cost_currency_context(
+        source_invoice if from_invoice_id else None,
+        company,
+        posting_date,
+    )
 
     registro = ImportLandedCost(
         company=company,
@@ -2486,6 +2514,9 @@ def _create_import_landed_cost_from_request():
         supplier_id=supplier_id,
         supplier_name=supplier_name,
         remarks=remarks,
+        transaction_currency=transaction_currency,
+        base_currency=base_currency,
+        exchange_rate=exchange_rate,
     )
     database.session.add(registro)
     database.session.flush()
@@ -2499,7 +2530,16 @@ def _create_import_landed_cost_from_request():
     database.session.flush()
 
     total_item_amount = _save_import_landed_cost_items(registro)
-    registro.total_base_amount = total_item_amount
+    total_item_base_amount = sum(
+        (
+            Decimal(str(item.base_amount or "0"))
+            for item in database.session.execute(
+                database.select(ImportLandedCostItem).filter_by(import_landed_cost_id=registro.id)
+            ).scalars()
+        ),
+        Decimal("0"),
+    )
+    registro.total_base_amount = total_item_base_amount
     registro.grand_total = total_item_amount
 
     total_charges = _save_import_landed_cost_charges(registro)

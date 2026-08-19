@@ -22,6 +22,7 @@ Cubre toda la lógica de negocio y ciclo de vida de compras:
 from datetime import date
 from decimal import Decimal
 import pytest
+from flask import current_app
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -52,6 +53,9 @@ from cacao_accounting.database import (
     PurchaseReceiptItem,
     PurchaseInvoice,
     PurchaseInvoiceItem,
+    ImportLandedCost,
+    ImportLandedCostCharge,
+    ImportLandedCostItem,
     PaymentEntry,
     PaymentReference,
     StockLedgerEntry,
@@ -189,6 +193,72 @@ def _setup_base_data():
         ]
     )
     database.session.commit()
+
+
+def test_import_landed_cost_preserves_invoice_currency_and_base_amounts(app_ctx):
+    """Los landed costs conservan la tasa de la factura y calculan sus bases."""
+    from cacao_accounting.compras.services import (
+        _landed_cost_currency_context,
+        _save_import_landed_cost_charges,
+        _save_import_landed_cost_items,
+    )
+
+    source_invoice = PurchaseInvoice(
+        supplier_id="SUP-S2P-01",
+        company="cacao",
+        posting_date=date.today(),
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+    )
+    database.session.add(source_invoice)
+    database.session.flush()
+
+    currency, base_currency, exchange_rate = _landed_cost_currency_context(
+        source_invoice,
+        "cacao",
+        date.today(),
+    )
+    assert (currency, base_currency, exchange_rate) == ("USD", "NIO", Decimal("36"))
+
+    document = ImportLandedCost(
+        company="cacao",
+        posting_date=date.today(),
+        purchase_invoice_id=source_invoice.id,
+        transaction_currency=currency,
+        base_currency=base_currency,
+        exchange_rate=exchange_rate,
+    )
+    database.session.add(document)
+    database.session.flush()
+
+    with current_app.test_request_context(
+        "/buying/import-landed-cost/new",
+        method="POST",
+        data={
+            "item_item_code_0": "ITEM-S2P-01",
+            "item_item_name_0": "Laptop Pro",
+            "item_qty_0": "2",
+            "item_rate_0": "10",
+            "item_uom_0": "UND",
+            "charge_concept_0": "Flete",
+            "charge_amount_0": "5",
+            "charge_type_0": "charge",
+        },
+    ):
+        assert _save_import_landed_cost_items(document) == Decimal("20")
+        assert _save_import_landed_cost_charges(document) == Decimal("5")
+
+    item = database.session.execute(
+        database.select(ImportLandedCostItem).filter_by(import_landed_cost_id=document.id)
+    ).scalar_one()
+    charge = database.session.execute(
+        database.select(ImportLandedCostCharge).filter_by(import_landed_cost_id=document.id)
+    ).scalar_one()
+    assert item.base_rate == Decimal("360.0000")
+    assert item.base_amount == Decimal("720.0000")
+    assert charge.base_amount == Decimal("180.0000")
 
 
 def test_s2p_sourcing_and_negotiation_rounds(app_ctx):
