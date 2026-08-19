@@ -117,6 +117,21 @@ LABEL_FACTURA_VENTA = "Factura de Venta"
 
 PAYMENT_TYPES = ("pay", "receive", "internal_transfer", "debit_note", "credit_note")
 
+
+def _cash_accessible_companies():
+    """Return the companies readable by the current cash-management user."""
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("cash"),
+        usuario=current_user.id,
+    )
+    if permissions.administrador:
+        return None
+    book_ids = permissions.obtener_libros_autorizados("can_read")
+    if not book_ids:
+        return database.select(Book.entity).where(database.false())
+    return database.select(Book.entity).where(Book.id.in_(book_ids))
+
+
 from cacao_accounting.bancos import cash_forecast as _cf  # noqa: F401, E402
 
 
@@ -501,11 +516,13 @@ def bancos_extracto_importar():
 @login_required
 def bancos_reglas_matching():
     """Administra reglas de matching bancario."""
-    accounts = (
-        database.session.execute(database.select(BankAccount).filter_by(is_active=True).order_by(BankAccount.account_name))
-        .scalars()
-        .all()
-    )
+    company_scope = _cash_accessible_companies()
+    accounts_query = database.select(BankAccount).filter_by(is_active=True)
+    rules_query = database.select(BankMatchingRule)
+    if company_scope is not None:
+        accounts_query = accounts_query.where(BankAccount.company.in_(company_scope))
+        rules_query = rules_query.where(BankMatchingRule.company.in_(company_scope))
+    accounts = database.session.execute(accounts_query.order_by(BankAccount.account_name)).scalars().all()
     if request.method == "POST":
         company = request.form.get("company") or ""
         exige_acceso_compania("cash", company, "editar")
@@ -532,7 +549,7 @@ def bancos_reglas_matching():
         database.session.commit()
         flash(_("Regla de matching creada correctamente."), "success")
         return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
-    rules = database.session.execute(database.select(BankMatchingRule).order_by(BankMatchingRule.priority)).scalars().all()
+    rules = database.session.execute(rules_query.order_by(BankMatchingRule.priority)).scalars().all()
     return render_template(
         "bancos/reglas_matching.html", accounts=accounts, rules=rules, titulo=_("Reglas de Matching Bancario")
     )
