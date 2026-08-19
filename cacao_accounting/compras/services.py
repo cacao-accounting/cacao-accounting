@@ -2226,9 +2226,10 @@ def _create_purchase_invoice_from_request():
             .scalars()
             .all()
         )
-        if factura.purchase_receipt_id:
+        is_invoice_reversal = document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE)
+        if factura.purchase_receipt_id and not is_invoice_reversal:
             _validate_purchase_source_link(factura, "purchase_receipt", factura.purchase_receipt_id, invoice_items)
-        elif factura.purchase_order_id:
+        elif factura.purchase_order_id and not is_invoice_reversal:
             _validate_purchase_source_link(factura, "purchase_order", factura.purchase_order_id, invoice_items)
         factura.total = total
         # S2P-09: Aplicar tipo de cambio si transaction_currency está definida

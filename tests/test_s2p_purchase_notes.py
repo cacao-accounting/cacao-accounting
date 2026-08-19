@@ -5,7 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import pytest
 
 from cacao_accounting import create_app
@@ -15,6 +15,7 @@ from cacao_accounting.database import (
     CompanyParty,
     PurchaseInvoice,
     PurchaseInvoiceItem,
+    PurchaseReceipt,
     DocumentRelation,
     User,
 )
@@ -110,6 +111,95 @@ def test_purchase_credit_note_reduces_outstanding_balance(app_ctx):
     # The outstanding amount on the source invoice should have been reduced to 600.00
     assert compute_outstanding_amount(source_invoice) == Decimal("600.00")
     assert source_invoice.outstanding_amount == Decimal("600.00")
+
+
+def test_purchase_note_from_reconciled_invoice_skips_upstream_receipt_matching(app_ctx):
+    """Una nota desde factura no exige repetir el matching contra la recepción."""
+    from flask import current_app
+
+    from cacao_accounting.compras.services import _create_purchase_invoice_from_request
+
+    supplier = _ensure_supplier("SUPLR-AP-NOTE-RECEIPT", "Proveedor AP Note Receipt")
+    receipt = PurchaseReceipt(
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    source_invoice = PurchaseInvoice(
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="purchase_invoice",
+        purchase_receipt_id=receipt.id,
+        grand_total=Decimal("100"),
+        outstanding_amount=Decimal("100"),
+    )
+    database.session.add(source_invoice)
+    database.session.commit()
+
+    def save_note_items(invoice_id):
+        database.session.add(
+            PurchaseInvoiceItem(
+                purchase_invoice_id=invoice_id,
+                item_code="ITEM-NOTE-RECEIPT",
+                qty=Decimal("1"),
+                rate=Decimal("10"),
+                amount=Decimal("10"),
+            )
+        )
+        database.session.flush()
+        return Decimal("1"), Decimal("10")
+
+    with current_app.test_request_context(
+        "/buying/purchase-invoice/new",
+        method="POST",
+        data={
+            "company": "cacao",
+            "supplier_id": supplier.id,
+            "posting_date": date.today().isoformat(),
+            "from_invoice": source_invoice.id,
+            "item_code_0": "ITEM-NOTE-RECEIPT",
+            "qty_0": "1",
+            "rate_0": "10",
+            "amount_0": "10",
+        },
+    ):
+        with patch.multiple(
+            "cacao_accounting.compras.services",
+            exige_acceso_compania=lambda *args, **kwargs: None,
+            _validate_supplier_company_membership=lambda *args, **kwargs: None,
+            _validate_supplier_invoice_flags=lambda *args, **kwargs: None,
+            _validate_duplicate_supplier_invoice=lambda *args, **kwargs: None,
+            _validate_purchase_reversal_of=lambda *args, **kwargs: None,
+            _validate_purchase_source_link=Mock(
+                side_effect=AssertionError("no debe revalidar la recepción")
+            ),
+            _save_purchase_invoice_items=save_note_items,
+            _purchase_exchange_rate=lambda *args, **kwargs: Decimal("1"),
+            company_currency=lambda *args, **kwargs: "NIO",
+            calculate_document_total_with_taxes=lambda *args, **kwargs: Decimal("10"),
+            persist_document_fiscal_snapshot=lambda *args, **kwargs: None,
+            assign_document_identifier=lambda *args, **kwargs: None,
+            log_create=lambda *args, **kwargs: None,
+        ):
+            result = _create_purchase_invoice_from_request()
+
+    assert result is not None
+    note = (
+        database.session.execute(
+            database.select(PurchaseInvoice)
+            .where(PurchaseInvoice.document_type == "purchase_credit_note")
+            .order_by(PurchaseInvoice.created.desc())
+        )
+        .scalars()
+        .first()
+    )
+    assert note is not None
+    assert note.purchase_receipt_id == receipt.id
 
 
 def test_purchase_credit_note_exceeds_source_balance(app_ctx):
