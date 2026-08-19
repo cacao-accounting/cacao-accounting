@@ -657,8 +657,14 @@ def _capture_stock_entry_state(registro: StockEntry) -> dict:
 
 def _update_stock_entry_from_form(registro: StockEntry) -> None:
     """Actualiza campos del registro desde el formulario."""
-    registro.purpose = _validate_stock_entry_purpose(request.form.get("purpose") or registro.purpose)
-    registro.company = _validate_stock_entry_company(request.form.get("company"), "editar")
+    purpose = _validate_stock_entry_purpose(request.form.get("purpose") or registro.purpose)
+    company = _validate_stock_entry_company(request.form.get("company"), "editar")
+    if purpose != registro.purpose:
+        raise ValueError("No se puede cambiar el propósito de una entrada de almacén existente.")
+    if company != registro.company:
+        raise ValueError("No se puede cambiar la compañía de una entrada de almacén existente.")
+    registro.purpose = purpose
+    registro.company = company
     registro.posting_date = _validate_stock_entry_posting_date(request.form)
     registro.from_warehouse = request.form.get("from_warehouse") or None
     registro.to_warehouse = request.form.get("to_warehouse") or None
