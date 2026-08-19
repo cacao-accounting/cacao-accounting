@@ -1382,13 +1382,19 @@ def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any
 
 def _validate_sales_invoice_relation(relation: DocumentRelation, invoice_id: str | None = None) -> None:
     """Valida una relación de factura contra su documento fuente."""
-    sources = {"delivery_note": (DeliveryNoteItem, "entregada"), "sales_order": (SalesOrderItem, "ordenada")}
+    sources = {
+        "delivery_note": (DeliveryNoteItem, "entregada"),
+        "sales_order": (SalesOrderItem, "ordenada"),
+        "sales_invoice": (SalesInvoiceItem, "facturada"),
+    }
     source = sources.get(relation.source_type)
     if not source or not relation.source_item_id:
         return
     item: Any = database.session.get(source[0], relation.source_item_id)
     if not item:
         return
+    if relation.source_type == "sales_invoice" and item.sales_invoice_id != relation.source_id:
+        raise ValueError("La línea de la factura origen no pertenece al documento indicado.")
     consumed = consumed_qty_for_source(
         relation.source_type,
         relation.source_id,
