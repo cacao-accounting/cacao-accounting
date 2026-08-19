@@ -36,7 +36,7 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
     validate_template_balance(items)
     company = data["company"]
     books = _authorized_template_books(company, data.get("books"), user_id, "crear")
-    ledger_id = data.get("ledger_id")
+    ledger_id = _canonical_book_reference(company, data.get("ledger_id"))
     if ledger_id and ledger_id not in (books or []):
         raise RecurringJournalError("El libro principal debe pertenecer a los libros autorizados seleccionados.")
 
@@ -299,7 +299,11 @@ def _authorized_template_books(company: str, requested: Any, user_id: str, actio
     active_codes = [book.code for book in active]
     if not active_codes:
         raise RecurringJournalError("El usuario no tiene libros contables autorizados para la compañía.")
-    selected = _normalize_requested_books(requested) or active_codes
+    active_books = database.session.execute(
+        database.select(Book).where(Book.entity == company).where((Book.status == "activo") | Book.status.is_(None))
+    ).scalars()
+    references = {str(value): book.code for book in active_books for value in (book.id, book.code)}
+    selected = [references.get(str(value), str(value)) for value in (_normalize_requested_books(requested) or active_codes)]
     invalid = set(selected) - set(active_codes)
     if invalid:
         raise RecurringJournalError(f"El usuario no tiene acceso al libro contable {sorted(invalid)[0]}.")
@@ -321,6 +325,16 @@ def _normalize_requested_books(value: Any) -> list[str] | None:
 def _validate_template_access(template: RecurringJournalTemplate, user_id: str, action: str) -> None:
     """Revalida compañía y todos los libros antes de una transición."""
     _authorized_template_books(template.company, _deserialize_book_codes(template.book_codes), user_id, action)
+
+
+def _canonical_book_reference(company: str, value: Any) -> str | None:
+    """Convierte id o código de libro a su código canónico."""
+    if not value:
+        return None
+    book = database.session.execute(
+        database.select(Book).where(Book.entity == company).where((Book.id == str(value)) | (Book.code == str(value)))
+    ).scalar_one_or_none()
+    return book.code if book else str(value)
 
 
 def _deserialize_book_codes(value: str | None) -> list[str] | None:
