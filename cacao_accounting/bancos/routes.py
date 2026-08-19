@@ -675,6 +675,7 @@ def bancos_banco(bank_id):
 @bancos.route("/bank-account/new", methods=["GET", "POST"])
 @modulo_activo("cash")
 @login_required
+@verifica_permiso("cash", "crear")
 def bancos_cuenta_bancaria_nuevo():
     """Formulario para crear una nueva cuenta bancaria."""
     from cacao_accounting.bancos.forms import FormularioCuentaBancaria
@@ -690,6 +691,7 @@ def bancos_cuenta_bancaria_nuevo():
         company = request.form.get("company")
         default_naming_series_id = request.form.get("default_naming_series_id") or None
         default_external_counter_id = request.form.get("default_external_counter_id") or None
+        exige_acceso_compania("cash", company, "crear")
         if gl_account_id:
             gl_account = database.session.get(Accounts, gl_account_id)
             if not gl_account or gl_account.entity != company or gl_account.account_type != "bank":
