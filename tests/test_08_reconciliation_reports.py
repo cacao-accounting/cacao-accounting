@@ -3444,9 +3444,9 @@ def test_bank_statement_import_preview_and_matching_rule(app_ctx):
         "withdrawal": "withdrawal",
     }
 
-    preview = import_bank_statement(StringIO(csv_data), mapping, account.id, preview=True)
-    imported = import_bank_statement(StringIO(csv_data), mapping, account.id, preview=False)
-    duplicate = import_bank_statement(StringIO(csv_data), mapping, account.id, preview=True)
+    preview = import_bank_statement(StringIO(csv_data), mapping, account.id, company="cacao", preview=True)
+    imported = import_bank_statement(StringIO(csv_data), mapping, account.id, company="cacao", preview=False)
+    duplicate = import_bank_statement(StringIO(csv_data), mapping, account.id, company="cacao", preview=True)
     rule = BankMatchingRule(company="cacao", bank_account_id=account.id, name="Referencia", reference_contains="REF")
     database.session.add(rule)
     database.session.commit()
@@ -3457,6 +3457,43 @@ def test_bank_statement_import_preview_and_matching_rule(app_ctx):
     assert duplicate.duplicate_count == 1
     assert database.session.execute(database.select(BankTransaction)).scalars().first()
     assert run.candidates_by_transaction
+
+
+def test_bank_statement_import_requires_company_and_detects_missing_reference(app_ctx):
+    """El importador ata la cuenta a su compañía y no omite referencias nulas."""
+    from io import StringIO
+
+    from cacao_accounting.bancos.statement_service import BankStatementError, import_bank_statement
+    from cacao_accounting.database import Bank, BankAccount, database
+
+    bank = Bank(name="Banco ownership")
+    database.session.add(bank)
+    database.session.flush()
+    account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta ownership")
+    database.session.add(account)
+    database.session.commit()
+    mapping = {
+        "date": "date",
+        "reference": "reference",
+        "description": "description",
+        "deposit": "deposit",
+        "withdrawal": "withdrawal",
+    }
+
+    with pytest.raises(BankStatementError, match="no pertenece"):
+        import_bank_statement(
+            StringIO("date,reference,description,deposit,withdrawal\n2026-05-05,,Ingreso,25.00,\n"),
+            mapping,
+            account.id,
+            company="other",
+            preview=True,
+        )
+
+    csv_data = "date,reference,description,deposit,withdrawal\n2026-05-05,,Ingreso,25.00,\n"
+    imported = import_bank_statement(StringIO(csv_data), mapping, account.id, company="cacao", preview=False)
+    duplicate = import_bank_statement(StringIO(csv_data), mapping, account.id, company="cacao", preview=True)
+    assert imported.imported_count == 1
+    assert duplicate.duplicate_count == 1
 
 
 def test_bank_statement_withdrawal_only_is_reconcilable(app_ctx):
