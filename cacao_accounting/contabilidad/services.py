@@ -623,6 +623,7 @@ def _apply_recurring_templates(
     period_name: str,
     application_date: date,
     user_id: str,
+    company: str | None = None,
 ) -> tuple[int, list[str]]:
     from cacao_accounting.contabilidad.recurring_journal_service import (
         RecurringJournalError,
@@ -639,6 +640,7 @@ def _apply_recurring_templates(
                 period_name=period_name,
                 application_date=application_date,
                 user_id=user_id,
+                company=company,
             )
             success_count += 1
         except RecurringJournalError as exc:

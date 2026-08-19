@@ -142,11 +142,14 @@ def apply_recurring_template(
     period_name: str,
     application_date: date,
     user_id: str,
+    company: str | None = None,
 ) -> RecurringJournalApplication:
     """Aplica una plantilla recurrente a un periodo específico."""
     template = database.session.get(RecurringJournalTemplate, template_id, with_for_update=True)
     if not template:
         raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
+    if company is not None and template.company != company:
+        raise RecurringJournalError("La plantilla recurrente no pertenece a la compañía del cierre.")
     if template.status != "approved":
         raise RecurringJournalError("Solo se pueden aplicar plantillas aprobadas.")
     if not template.start_date <= application_date <= template.end_date:

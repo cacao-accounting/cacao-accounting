@@ -156,6 +156,16 @@ def test_fiscal_year_closing_cycle(app, setup_data):
         fy.is_closed = True
         database.session.commit()
 
+        with pytest.raises(Exception, match="período.*abierto"):
+            create_fiscal_year_closing_voucher("CMP", setup_data["fiscal_year_id"], setup_data["admin_user_id"])
+
+        period = database.session.execute(
+            database.select(AccountingPeriod).filter_by(fiscal_year_id=setup_data["fiscal_year_id"])
+        ).scalar_one()
+        period.is_closed = True
+        period.enabled = False
+        database.session.commit()
+
         # 2. Create Closing Voucher (auto-submitted)
         closing_journal = create_fiscal_year_closing_voucher("CMP", setup_data["fiscal_year_id"], setup_data["admin_user_id"])
         assert closing_journal.status == "submitted"
@@ -273,6 +283,11 @@ def test_multiannual_balance_sheet_balanced(app, setup_data):
         # Close 2024 fiscal year
         fy2024 = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
         fy2024.is_closed = True
+        period2024 = database.session.execute(
+            database.select(AccountingPeriod).filter_by(fiscal_year_id=setup_data["fiscal_year_id"])
+        ).scalar_one()
+        period2024.is_closed = True
+        period2024.enabled = False
         database.session.commit()
 
         # Create Fiscal Year Closing for 2024
