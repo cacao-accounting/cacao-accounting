@@ -111,6 +111,18 @@ def _inventory_company_scoped_select(model: type[Any]):
     return query.where(model.company.in_(accessible_companies))
 
 
+def _inventory_writable_company_select():
+    """Build a query for companies with inventory write access."""
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("inventory"),
+        usuario=current_user.id,
+    )
+    book_ids = permissions.obtener_libros_autorizados("can_write")
+    if not book_ids:
+        return database.select(Entity.code).where(database.false())
+    return database.select(Book.entity).where(Book.id.in_(book_ids))
+
+
 def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:
     """Construye las opciones de series activas para un doctype y compania."""
     if not company:
@@ -199,9 +211,14 @@ def _item_uom_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[str, 
 
 def _company_choices() -> list[tuple[str, str]]:
     """Devuelve companias disponibles para el formulario de item."""
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-
-    return obtener_lista_entidades_por_id_razonsocial()
+    entities = (
+        database.session.execute(
+            database.select(Entity).where(Entity.code.in_(_inventory_writable_company_select())).order_by(Entity.code)
+        )
+        .scalars()
+        .all()
+    )
+    return [("", "")] + [(entity.code, entity.name) for entity in entities]
 
 
 def _account_choices() -> list[dict[str, str]]:
@@ -210,6 +227,7 @@ def _account_choices() -> list[dict[str, str]]:
         database.session.execute(
             database.select(Accounts)
             .filter_by(active=True, enabled=True, group=False)
+            .where(Accounts.entity.in_(_inventory_writable_company_select()))
             .order_by(Accounts.entity, Accounts.code)
         )
         .scalars()
@@ -224,6 +242,7 @@ def _cost_center_choices() -> list[dict[str, str]]:
         database.session.execute(
             database.select(CostCenter)
             .filter_by(active=True, enabled=True, group=False)
+            .where(CostCenter.entity.in_(_inventory_writable_company_select()))
             .order_by(CostCenter.entity, CostCenter.code)
         )
         .scalars()
@@ -560,9 +579,7 @@ def _validate_stock_entry_warehouses(entry: StockEntry, *line_warehouses: str | 
         *line_warehouses,
     }
     for warehouse_code in filter(None, warehouse_codes):
-        warehouse = database.session.execute(
-            database.select(Warehouse).filter_by(code=warehouse_code)
-        ).scalar_one_or_none()
+        warehouse = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
         if not warehouse or warehouse.company != entry.company:
             raise ValueError(f"La bodega {warehouse_code} no pertenece a la compañía {entry.company}.")
         if not warehouse.is_active:

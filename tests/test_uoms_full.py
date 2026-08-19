@@ -264,7 +264,9 @@ def test_service_item_requires_company_expense_account(app_ctx):
 
 
 def test_service_item_requires_company_cost_center(app_ctx):
-    from cacao_accounting.database import Accounts, database
+    from flask_login import login_user
+
+    from cacao_accounting.database import Accounts, User, database
     from cacao_accounting.inventario.service import ItemAccountRow, ItemParams, create_item_with_uoms
 
     expense_account = (
@@ -291,12 +293,16 @@ def test_service_item_requires_company_cost_center(app_ctx):
             )
         ],
     )
-    with pytest.raises(ValueError, match="centro de costo predeterminado por compañia"):
-        create_item_with_uoms(params, code="SERV-ITEM-003")
+    with app_ctx.test_request_context():
+        login_user(database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one())
+        with pytest.raises(ValueError, match="centro de costo predeterminado por compañia"):
+            create_item_with_uoms(params, code="SERV-ITEM-003")
 
 
 def test_service_item_persists_company_accounts(app_ctx):
-    from cacao_accounting.database import Accounts, CostCenter, ItemAccount, database
+    from flask_login import login_user
+
+    from cacao_accounting.database import Accounts, CostCenter, ItemAccount, User, database
     from cacao_accounting.inventario.service import ItemAccountRow, ItemParams, create_item_with_uoms
 
     expense_account = (
@@ -324,7 +330,9 @@ def test_service_item_persists_company_accounts(app_ctx):
             )
         ],
     )
-    create_item_with_uoms(params, code="SERV-ITEM-002")
+    with app_ctx.test_request_context():
+        login_user(database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one())
+        create_item_with_uoms(params, code="SERV-ITEM-002")
     database.session.commit()
 
     mapping = database.session.execute(
@@ -367,9 +375,7 @@ def test_average_cost(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
     stock_entry_series = (
-        database.session.execute(
-            database.select(NamingSeries).filter_by(entity_type="stock_entry", is_active=True)
-        )
+        database.session.execute(database.select(NamingSeries).filter_by(entity_type="stock_entry", is_active=True))
         .scalars()
         .first()
     )

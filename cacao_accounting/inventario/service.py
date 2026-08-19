@@ -35,6 +35,8 @@ from cacao_accounting.database import (
     obtiene_texto_unico,
 )
 
+from cacao_accounting.decorators import exige_acceso_compania
+
 
 class InventoryServiceError(ValueError):
     """Error controlado de servicios de inventario."""
@@ -322,7 +324,12 @@ def update_item_with_uoms(
     resolved_item_type = params.item_type or "goods"
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
-    validate_item_account_rows(resolved_item_type, resolved_stock_flag, resolved_account_rows)
+    validate_item_account_rows(
+        resolved_item_type,
+        resolved_stock_flag,
+        resolved_account_rows,
+        action="editar",
+    )
     item.name = params.name
     item.description = params.description
     item.item_type = resolved_item_type
@@ -438,6 +445,7 @@ def create_item_with_uoms(
         resolved_item_type,
         resolved_stock_flag,
         resolved_account_rows,
+        action="crear",
     )
     item_id = obtiene_texto_unico()
     if code is None:
@@ -546,6 +554,8 @@ def validate_item_account_rows(
     item_type: str,
     is_stock_item: bool,
     rows: list[ItemAccountRow],
+    *,
+    action: str = "crear",
 ) -> None:
     """Valida la configuracion contable del item por compania."""
     requires_expense_by_company = item_type == "service" or not is_stock_item
@@ -556,6 +566,7 @@ def validate_item_account_rows(
 
     seen_companies: set[str] = set()
     for row in rows:
+        exige_acceso_compania("inventory", row.company, action)
         _validate_single_item_account_row(row, requires_expense_by_company, seen_companies)
         seen_companies.add(row.company)
 
