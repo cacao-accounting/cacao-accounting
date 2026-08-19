@@ -355,7 +355,7 @@ def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: 
         return qty
     from cacao_accounting.database import Item
 
-    item = database.session.get(Item, item_code)
+    item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
     base_uom = getattr(item, "default_uom", None) if item else None
     from_uom = presentation_uom or getattr(source_item, "uom", None) or base_uom
     if not base_uom or not from_uom or base_uom == from_uom:
