@@ -87,8 +87,9 @@
         <tbody>
           {% for row in display_rows %}
           <tr>
+            {% set row_index = loop.index0 %}
             {% for column in columns %}
-            <td class="{% if column in right_align_columns %}text-end{% endif %}">{{ row.get(column, "—") }}</td>
+            <td class="{% if column in right_align_columns %}text-end{% endif %}">{% set target_url = drill_down_urls[row_index].get(column) %}{% if target_url %}<a href="{{ target_url }}" class="link-primary">{{ row.get(column, "—") }}</a>{% else %}{{ row.get(column, "—") }}{% endif %}</td>
             {% endfor %}
           </tr>
           {% else %}
@@ -97,6 +98,13 @@
         </tbody>
       </table>
     </div>
+    {% if total_pages > 1 %}
+    <nav class="d-flex justify-content-between align-items-center px-3 py-2" aria-label="{{ _('Paginación de reporte') }}">
+      {% if previous_page_url %}<a class="btn btn-sm btn-outline-secondary" href="{{ previous_page_url }}">{{ _('Anterior') }}</a>{% else %}<span></span>{% endif %}
+      <span class="small text-muted">{{ _('Página') }} {{ page }} / {{ total_pages }} · {{ total_rows }} {{ _('registros') }}</span>
+      {% if next_page_url %}<a class="btn btn-sm btn-outline-secondary" href="{{ next_page_url }}">{{ _('Siguiente') }}</a>{% else %}<span></span>{% endif %}
+    </nav>
+    {% endif %}
     <div class="ca-report-totals-sticky">
       {% for key, value in totals.items() %}
       <div class="ca-total-item">
