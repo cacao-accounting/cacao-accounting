@@ -119,6 +119,31 @@ from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, ve
 
 from cacao_accounting.list_filters import apply_list_filters
 
+
+def _accounting_company_scope(query, company_column, action: str = "consultar"):
+    """Limit an accounting master-data query to companies covered by book ACLs."""
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database import Book
+
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    if permissions.administrador:
+        return query
+    book_action = {"consultar": "can_read", "crear": "can_write", "editar": "can_write"}.get(action, "can_read")
+    authorized_books = permissions.obtener_libros_autorizados(book_action)
+    if not authorized_books:
+        return query.where(false())
+    return query.where(company_column.in_(database.select(Book.entity).where(Book.id.in_(authorized_books))))
+
+
+def _accounting_entity_choices(action: str = "consultar") -> list[tuple[str, str]]:
+    """Build company choices using the accounting book ACL."""
+    from cacao_accounting.database import Entity
+
+    entities = database.session.execute(
+        _accounting_company_scope(database.select(Entity), Entity.code, action)
+    ).scalars()
+    return [("", "")] + [(entity.code, entity.name) for entity in entities]
+
 from cacao_accounting.version import APPNAME
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
@@ -1724,7 +1749,7 @@ def fiscal_year_list():
     """Listado de años fiscales."""
     from cacao_accounting.database import FiscalYear
 
-    query = database.select(FiscalYear)
+    query = _accounting_company_scope(database.select(FiscalYear), FiscalYear.entity)
     search = request.args.get("search")
     if search:
         query = query.filter(or_(FiscalYear.name.ilike(f"%{search}%"), FiscalYear.entity.ilike(f"%{search}%")))
@@ -1754,7 +1779,7 @@ def fiscal_year_new():
     from cacao_accounting.database import FiscalYear
 
     formulario = FormularioFiscalYear()
-    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.entidad.choices = _accounting_entity_choices("crear")
     TITULO = "Contabilidad | Nuevo Año Fiscal - " + APPNAME
 
     if formulario.validate_on_submit():
@@ -1765,6 +1790,7 @@ def fiscal_year_new():
             year_end_date=formulario.fin.data,
             is_closed=bool(formulario.cerrado.data),
         )
+        exige_acceso_compania("accounting", DATA.entity, "crear")
         database.session.add(DATA)
         database.session.commit()
         return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
@@ -1788,10 +1814,11 @@ def fiscal_year_edit(fy_id):
     fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(id=fy_id)).scalar_one_or_none()
     if fiscal_year is None:
         return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
+    exige_acceso_compania("accounting", fiscal_year.entity, "consultar")
 
     formulario = FormularioFiscalYear(obj=fiscal_year)
     formulario.id.data = fiscal_year.name
-    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.entidad.choices = _accounting_entity_choices("editar")
     if request.method != "POST":
         formulario.entidad.data = fiscal_year.entity
         formulario.inicio.data = fiscal_year.year_start_date
@@ -1802,7 +1829,11 @@ def fiscal_year_edit(fy_id):
 
     if formulario.validate_on_submit():
         try:
-            _validate_active_entity_submission(request.form.get("entidad", fiscal_year.entity))
+            requested_entity = request.form.get("entidad", fiscal_year.entity)
+            _validate_active_entity_submission(requested_entity)
+            if requested_entity != fiscal_year.entity:
+                raise ValueError("La compañía del año fiscal no puede cambiarse.")
+            exige_acceso_compania("accounting", fiscal_year.entity, "editar")
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -1844,6 +1875,7 @@ def fiscal_year_detail(fy_id):
     if registro is None:
         flash(_("El año fiscal indicado no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
+    exige_acceso_compania("accounting", registro.entity, "consultar")
 
     return render_template(
         "contabilidad/fiscal_year.html",
@@ -1863,6 +1895,7 @@ def fiscal_year_delete(fy_id):
 
     fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(id=fy_id)).scalar_one_or_none()
     if fiscal_year:
+        exige_acceso_compania("accounting", fiscal_year.entity, "eliminar")
         if fiscal_year.financial_closed or _reject_delete_with_dependencies(
             f"el año fiscal {fiscal_year.name}",
             [
@@ -1894,16 +1927,23 @@ def accounting_period_new():
     from cacao_accounting.database import AccountingPeriod, FiscalYear
 
     formulario = FormularioAccountingPeriod()
-    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.entidad.choices = _accounting_entity_choices("crear")
     formulario.fiscal_year.choices = [("", "Seleccione un año fiscal")]
-    fiscal_years = database.session.execute(database.select(FiscalYear)).scalars().all()
+    fiscal_years = database.session.execute(
+        _accounting_company_scope(database.select(FiscalYear), FiscalYear.entity, "crear")
+    ).scalars().all()
     formulario.fiscal_year.choices += [(fy.id, fy.name) for fy in fiscal_years]
     no_fiscal_years = len(fiscal_years) == 0
     TITULO = "Contabilidad | Nuevo Período Contable - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
-            _validate_active_entity_submission(request.form.get("entidad", ""))
+            requested_entity = request.form.get("entidad", "")
+            _validate_active_entity_submission(requested_entity)
+            selected_fiscal_year = database.session.get(FiscalYear, request.form.get("fiscal_year"))
+            if not selected_fiscal_year or selected_fiscal_year.entity != requested_entity:
+                raise ValueError("El año fiscal debe pertenecer a la compañía del período.")
+            exige_acceso_compania("accounting", requested_entity, "crear")
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -1946,12 +1986,15 @@ def accounting_period_edit(period_id):
     period = database.session.execute(database.select(AccountingPeriod).filter_by(id=period_id)).scalar_one_or_none()
     if period is None:
         return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
+    exige_acceso_compania("accounting", period.entity, "consultar")
 
     formulario = FormularioAccountingPeriod(obj=period)
     formulario.id.data = period.name
-    fiscal_years = database.session.execute(database.select(FiscalYear)).scalars().all()
+    fiscal_years = database.session.execute(
+        _accounting_company_scope(database.select(FiscalYear), FiscalYear.entity, "editar")
+    ).scalars().all()
     formulario.fiscal_year.choices = [(fy.id, fy.name) for fy in fiscal_years]
-    formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.entidad.choices = _accounting_entity_choices("editar")
     if request.method != "POST":
         formulario.entidad.data = period.entity
         formulario.fiscal_year.data = str(period.fiscal_year_id) if period.fiscal_year_id is not None else ""
@@ -1965,7 +2008,11 @@ def accounting_period_edit(period_id):
 
     if formulario.validate_on_submit():
         try:
-            _validate_active_entity_submission(request.form.get("entidad", period.entity))
+            requested_entity = request.form.get("entidad", period.entity)
+            _validate_active_entity_submission(requested_entity)
+            if requested_entity != period.entity:
+                raise ValueError("La compañía del período no puede cambiarse.")
+            exige_acceso_compania("accounting", period.entity, "editar")
             fiscal_year_id = request.form.get("fiscal_year", period.fiscal_year_id)
             selected_fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
             if not selected_fiscal_year or selected_fiscal_year.entity != period.entity:
@@ -2009,6 +2056,7 @@ def accounting_period_delete(period_id):
 
     period = database.session.execute(database.select(AccountingPeriod).filter_by(id=period_id)).scalar_one_or_none()
     if period:
+        exige_acceso_compania("accounting", period.entity, "eliminar")
         if _reject_delete_with_dependencies(
             f"el período {period.name}",
             [
@@ -2051,6 +2099,7 @@ def accounting_period_detail(period_id):
     if registro is None:
         flash(_("El período contable indicado no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
+    exige_acceso_compania("accounting", registro.entity, "consultar")
 
     return render_template(
         "contabilidad/periodo.html",
@@ -2248,7 +2297,7 @@ def periodo_contable():
     """Lista de periodos contables."""
     from cacao_accounting.database import AccountingPeriod
 
-    query = database.select(AccountingPeriod)
+    query = _accounting_company_scope(database.select(AccountingPeriod), AccountingPeriod.entity)
     search = request.args.get("search")
     if search:
         query = query.filter(or_(AccountingPeriod.name.ilike(f"%{search}%"), AccountingPeriod.entity.ilike(f"%{search}%")))
