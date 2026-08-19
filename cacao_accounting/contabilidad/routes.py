@@ -2442,6 +2442,7 @@ def aplicar_recurrentes_cierre(identifier: str):
         period_name=period.name,
         application_date=period.end,
         user_id=str(current_user.id),
+        company=close_run.company,
     )
 
     _record_check_result(close_run.id, success_count, errors)
@@ -3554,6 +3555,7 @@ def fiscal_year_closing_new():
     if request.method == "POST":
         company = request.form.get("company")
         fiscal_year_id = request.form.get("fiscal_year_id")
+        exige_acceso_compania("accounting", company, "autorizar")
         try:
             create_fiscal_year_closing_voucher(company, fiscal_year_id, user_id=str(current_user.id))
             flash("Cierre de año fiscal ejecutado correctamente.", "success")
@@ -3588,8 +3590,13 @@ def fiscal_year_closing_reverse(fy_id):
         FiscalYearClosingError,
         reverse_fiscal_year_closing,
     )
+    from cacao_accounting.database import FiscalYear
 
     try:
+        fiscal_year = database.session.get(FiscalYear, fy_id)
+        if not fiscal_year:
+            raise FiscalYearClosingError("Año fiscal no encontrado.")
+        exige_acceso_compania("accounting", fiscal_year.entity, "autorizar")
         reverse_fiscal_year_closing(fy_id, user_id=str(current_user.id))
         flash("Cierre de año fiscal revertido correctamente.", "success")
     except FiscalYearClosingError as exc:

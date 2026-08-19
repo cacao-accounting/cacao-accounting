@@ -207,6 +207,18 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     if fiscal_year.entity != company:
         raise FiscalYearClosingError("La compañía no coincide con la entidad del año fiscal.")
 
+    from cacao_accounting.database import AccountingPeriod
+
+    open_periods = database.session.execute(
+        select(AccountingPeriod.id)
+        .where(AccountingPeriod.fiscal_year_id == fiscal_year.id)
+        .where((AccountingPeriod.is_closed.is_(False)) | (AccountingPeriod.enabled.is_(True)))
+    ).all()
+    if open_periods:
+        raise FiscalYearClosingError(
+            f"No se puede cerrar el año fiscal: hay {len(open_periods)} período(s) contable(s) abierto(s)."
+        )
+
     if not fiscal_year.is_closed:
         raise FiscalYearClosingError("El año fiscal debe estar cerrado administrativamente antes del cierre contable.")
     if fiscal_year.financial_closed:
@@ -251,7 +263,7 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
 
 def reverse_fiscal_year_closing(fiscal_year_id: str, user_id: str) -> None:
     """Revierte el cierre contable de un año fiscal."""
-    fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
+    fiscal_year = database.session.get(FiscalYear, fiscal_year_id, with_for_update=True)
     if not fiscal_year:
         raise FiscalYearClosingError("Año fiscal no encontrado.")
     if not fiscal_year.financial_closed or not fiscal_year.closing_voucher_id:
