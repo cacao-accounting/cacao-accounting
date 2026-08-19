@@ -2204,6 +2204,7 @@ def _build_actual_query(
         GLEntry.posting_date <= period_end,
         GLEntry.is_cancelled.is_(False),
         GLEntry.is_reversal.is_(False),
+        GLEntry.is_fiscal_year_closing.is_(False),
     )
     if cost_center and cost_center.code:
         actual_query = actual_query.where(GLEntry.cost_center_code == cost_center.code)

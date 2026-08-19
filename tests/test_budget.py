@@ -559,5 +559,13 @@ def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
     assert row["budget"] == Decimal("250")
     assert row["actual"] == Decimal("300")
     assert row["variance"] == Decimal("50")
+
+    from cacao_accounting.reportes.services import FinancialReportFilters, get_budget_variance
+
+    service.approve_budget(budget.id, str(admin_user.id))
+    variance = get_budget_variance(
+        FinancialReportFilters(company="cacao", ledger=book.code, accounting_period=per.name)
+    )
+    assert variance.totals["actual"] == Decimal("300")
     assert report.totals["budget"] == Decimal("250")
     assert report.totals["actual"] == Decimal("300")
