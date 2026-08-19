@@ -165,7 +165,23 @@ def _sales_exchange_rate(company: str | None, posting_date: Any, transaction_cur
 
     # Una tasa faltante debe impedir el posting: usar 1:1 altera el libro
     # funcional y oculta una configuración cambiaria incompleta.
-    return _lookup_exchange_rate(transaction_currency, base_currency, posting_date)
+    exchange_rate = _lookup_exchange_rate(transaction_currency, base_currency, posting_date)
+    if exchange_rate is None or Decimal(str(exchange_rate)) <= 0:
+        raise ValueError(f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}.")
+    return Decimal(str(exchange_rate))
+
+
+def _set_sales_document_totals(document: Any, total: Decimal) -> None:
+    """Calcula totales funcionales de un documento comercial de ventas."""
+    transaction_currency = getattr(document, "transaction_currency", None) or company_currency(document.company)
+    document.transaction_currency = transaction_currency
+    document.base_currency = company_currency(document.company)
+    document.exchange_rate = _sales_exchange_rate(document.company, document.posting_date, transaction_currency)
+    document.total = total
+    document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))
+    document.grand_total = total
+    if hasattr(document, "base_grand_total"):
+        document.base_grand_total = document.base_total
 
 
 def _sales_invoice_currency_and_rate(
@@ -655,15 +671,17 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
-    registro.company = form.get("company") or None
+    requested_company = form.get("company") or registro.company
+    if requested_company != registro.company:
+        database.session.rollback()
+        flash("La compañía de un documento existente no puede cambiarse.", "danger")
+        return redirect(url_for(endpoint, request_id=request_id))
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
     for item in database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars():
         database.session.delete(item)
     _total_qty, total = _save_sales_request_items(registro.id)
-    registro.total = total
-    registro.base_total = total
-    registro.grand_total = total
+    _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -680,15 +698,17 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
-    registro.company = form.get("company") or None
+    requested_company = form.get("company") or registro.company
+    if requested_company != registro.company:
+        database.session.rollback()
+        flash("La compañía de un documento existente no puede cambiarse.", "danger")
+        return redirect(url_for(endpoint, order_id=order_id))
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
     for item in database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars():
         database.session.delete(item)
     _total_qty, total = _save_sales_order_items(registro.id)
-    registro.total = total
-    registro.base_total = total
-    registro.grand_total = total
+    _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -743,9 +763,13 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
+    seen_item_codes: set[str] = set()
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
+            if item_code in seen_item_codes:
+                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+            seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
@@ -785,9 +809,13 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
+    seen_item_codes: set[str] = set()
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
+            if item_code in seen_item_codes:
+                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+            seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
@@ -819,9 +847,13 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
+    seen_item_codes: set[str] = set()
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
+            if item_code in seen_item_codes:
+                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+            seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
@@ -853,9 +885,13 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
+    seen_item_codes: set[str] = set()
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
+            if item_code in seen_item_codes:
+                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+            seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
@@ -896,9 +932,13 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     total_qty = Decimal("0")
     total = Decimal("0")
     line_count = 0
+    seen_item_codes: set[str] = set()
     while request.form.get(f"item_code_{i}"):
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
+            if item_code in seen_item_codes:
+                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+            seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
@@ -978,11 +1018,31 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
             warehouse=warehouse,
         )
         database.session.add(dn_item)
+        database.session.flush()
+        source_relation = database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                target_type="sales_invoice", target_id=invoice.id, target_item_id=si_item.id, status="active"
+            )
+        ).scalar_one_or_none()
+        if source_relation:
+            create_document_relation(
+                source_type=source_relation.source_type,
+                source_id=source_relation.source_id,
+                source_item_id=source_relation.source_item_id,
+                target_type="delivery_note",
+                target_id=dn.id,
+                target_item_id=dn_item.id,
+                qty=si_item.qty,
+                uom=si_item.uom,
+                rate=si_item.rate or Decimal("0"),
+                amount=si_item.amount or Decimal("0"),
+            )
         total += si_item.amount or Decimal("0")
 
     dn.total = total
     dn.grand_total = total
 
+    _validate_delivery_quantities_against_so(dn.id)
     submit_document(dn)  # type: ignore[misc]
     _release_reservation_for_delivery_note(dn)
     log_submit(dn)
@@ -1449,9 +1509,7 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
                 database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=orden.id)).scalars().all()
             )
             _validate_sales_source_link(orden, source_type, source_id, order_items)
-        orden.total = total
-        orden.base_total = total
-        orden.grand_total = total
+        _set_sales_document_totals(orden, total)
         database.session.commit()
         flash("Orden de venta creada correctamente.", "success")
         return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=orden.id))
@@ -1474,7 +1532,11 @@ def _handle_sales_quotation_edit_post(registro):
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
-    registro.company = request.form.get("company") or None
+    requested_company = request.form.get("company") or registro.company
+    if requested_company != registro.company:
+        database.session.rollback()
+        flash("La compañía de un documento existente no puede cambiarse.", "danger")
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
     for item in database.session.execute(
@@ -1482,9 +1544,7 @@ def _handle_sales_quotation_edit_post(registro):
     ).scalars():
         database.session.delete(item)
     _total_qty, total = _save_sales_quotation_items(registro.id)
-    registro.total = total
-    registro.base_total = total
-    registro.grand_total = total
+    _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -1500,14 +1560,17 @@ def _handle_delivery_note_edit_post(registro):
     customer = database.session.get(Party, customer_id) if customer_id else None
     registro.customer_id = customer_id
     registro.customer_name = customer.name if customer else None
-    registro.company = request.form.get("company") or None
+    requested_company = request.form.get("company") or registro.company
+    if requested_company != registro.company:
+        database.session.rollback()
+        flash("La compañía de un documento existente no puede cambiarse.", "danger")
+        return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
     for item in database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars():
         database.session.delete(item)
     _total_qty, total = _save_delivery_note_items(registro.id)
-    registro.total = total
-    registro.grand_total = total
+    _set_sales_document_totals(registro, total)
     after_state = _capture_sales_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -1784,9 +1847,15 @@ def _validate_credit_limit_and_overdue(
     if company_party.block_overdue:
         _reject_overdue_invoices(invoices, company_party.payment_terms_id, compute_outstanding_amount)
     if company_party.credit_limit is not None:
-        outstanding = sum((compute_outstanding_amount(inv) for inv in invoices), Decimal("0"))
+        outstanding = sum(
+            (_sales_base_amount(inv, compute_outstanding_amount(inv)) for inv in invoices),
+            Decimal("0"),
+        )
         order_exposure = _approved_customer_order_exposure(company, customer_id, current_document)
-        exposure = outstanding + order_exposure + current_doc_total
+        current_doc_base = (
+            _sales_base_amount(current_document, current_doc_total) if current_document is not None else current_doc_total
+        )
+        exposure = outstanding + order_exposure + current_doc_base
         limit = Decimal(str(company_party.credit_limit))
         if exposure > limit:
             raise ValueError(
@@ -1807,6 +1876,26 @@ def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInv
     return list(database.session.execute(query).scalars().all())
 
 
+def _sales_base_amount(document: Any, amount: Decimal) -> Decimal:
+    """Convierte un monto comercial a la moneda funcional del documento."""
+    base_amount = getattr(document, "base_grand_total", None)
+    if base_amount is None:
+        base_amount = getattr(document, "base_total", None)
+    if base_amount is not None:
+        return Decimal(str(base_amount))
+    transaction_currency = effective_currency(document) or company_currency(getattr(document, "company", None))
+    base_currency = company_currency(getattr(document, "company", None))
+    if not transaction_currency or transaction_currency == base_currency:
+        return Decimal(str(amount))
+    exchange_rate = getattr(document, "exchange_rate", None)
+    if exchange_rate is None or Decimal(str(exchange_rate)) <= 0:
+        raise ValueError(
+            f"El documento {getattr(document, 'document_no', None) or getattr(document, 'id', '')} "
+            f"no tiene una tasa válida para {transaction_currency} -> {base_currency}."
+        )
+    return (Decimal(str(amount)) * Decimal(str(exchange_rate))).quantize(Decimal("0.0001"))
+
+
 def _approved_customer_order_exposure(company: str, customer_id: str, current_document: Any | None = None) -> Decimal:
     """Calculate approved sales-order value not yet covered by invoices."""
     orders = database.session.execute(
@@ -1819,10 +1908,10 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
         delivery_note = database.session.get(DeliveryNote, current_dn_id)
         current_order_id = delivery_note.sales_order_id if delivery_note else None
     for order in orders:
-        order_total = Decimal(str(order.grand_total or "0"))
+        order_total = _sales_base_amount(order, Decimal(str(order.grand_total or "0")))
         delivery_note_ids = database.select(DeliveryNote.id).filter_by(sales_order_id=order.id)
-        billed_total = database.session.execute(
-            database.select(database.func.coalesce(database.func.sum(SalesInvoice.grand_total), 0)).where(
+        billed_invoices = database.session.execute(
+            database.select(SalesInvoice).where(
                 SalesInvoice.company == company,
                 SalesInvoice.customer_id == customer_id,
                 SalesInvoice.docstatus == 1,
@@ -1832,10 +1921,17 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
                     SalesInvoice.delivery_note_id.in_(delivery_note_ids),
                 ),
             )
-        ).scalar_one()
-        pending = max(Decimal("0"), order_total - Decimal(str(billed_total or "0")))
+        ).scalars()
+        billed_total = sum(
+            (_sales_base_amount(invoice, Decimal(str(invoice.grand_total or "0"))) for invoice in billed_invoices),
+            Decimal("0"),
+        )
+        pending = max(Decimal("0"), order_total - billed_total)
         if order.id == current_order_id:
-            pending = max(Decimal("0"), pending - Decimal(str(getattr(current_document, "grand_total", 0) or 0)))
+            pending = max(
+                Decimal("0"),
+                pending - _sales_base_amount(current_document, Decimal(str(getattr(current_document, "grand_total", 0) or 0))),
+            )
         exposure += pending
     return exposure
 
