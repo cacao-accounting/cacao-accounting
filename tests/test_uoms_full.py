@@ -84,8 +84,16 @@ def assert_no_danger(response, msg=""):
 
 
 def test_uom_conversion_cycle(app_ctx):
+    from cacao_accounting.database import NamingSeries
+
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
+    stock_entry_series = (
+        database.session.execute(database.select(NamingSeries).filter_by(entity_type="stock_entry", is_active=True))
+        .scalars()
+        .first()
+    )
+    assert stock_entry_series is not None
 
     # 1. Buy 2 BOX (Should be 100 UND in inventory)
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
@@ -129,6 +137,7 @@ def test_uom_conversion_cycle(app_ctx):
     mt_data = {
         "company": "cacao",
         "purpose": "material_transfer",
+        "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
         "remarks": "UOM TRANSFER TEST",
         "from_warehouse": "PRINCIPAL",
@@ -352,10 +361,19 @@ def test_item_default_uom_is_locked_after_usage(app_ctx):
 
 
 def test_average_cost(app_ctx):
+    from cacao_accounting.database import NamingSeries
     from tests.test_e2e_modules import check_ledger_entries
 
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
+    stock_entry_series = (
+        database.session.execute(
+            database.select(NamingSeries).filter_by(entity_type="stock_entry", is_active=True)
+        )
+        .scalars()
+        .first()
+    )
+    assert stock_entry_series is not None
 
     # 1. Create a new item with Moving Average valuation
     item_avg = Item(
@@ -372,6 +390,7 @@ def test_average_cost(app_ctx):
     mr1_data = {
         "company": "cacao",
         "purpose": "material_receipt",
+        "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
         "remarks": "AVG COST TEST 1",
         "to_warehouse": "PRINCIPAL",
@@ -410,6 +429,7 @@ def test_average_cost(app_ctx):
     mr2_data = {
         "company": "cacao",
         "purpose": "material_receipt",
+        "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
         "remarks": "AVG COST TEST 2",
         "to_warehouse": "PRINCIPAL",

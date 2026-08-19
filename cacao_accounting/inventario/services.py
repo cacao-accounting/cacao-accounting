@@ -100,9 +100,9 @@ def _inventory_company_scoped_select(model: type[Any]):
 def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:
     """Construye las opciones de series activas para un doctype y compania."""
     if not company:
-        return [("", "")]
+        return []
 
-    return [("", "")] + [
+    return [
         (str(series.id), f"{series.name} ({series.prefix_template})")
         for series in get_active_naming_series(entity_type=entity_type, company=company)
     ]
