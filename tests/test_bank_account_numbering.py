@@ -348,7 +348,9 @@ def test_bank_account_new_rejects_cross_company_or_non_checkbook_counter(app_ctx
             "default_naming_series_id": series.id,
             "default_external_counter_id": counter.id,
         }
-        monkeypatch.setattr(import_module("cacao_accounting.bancos.routes"), "exige_acceso_compania", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            import_module("cacao_accounting.bancos.routes"), "exige_acceso_compania", lambda *args, **kwargs: None
+        )
         with app_ctx.test_request_context("/cash_management/bank-account/new", method="POST", data=data):
             unwrap(bancos_cuenta_bancaria_nuevo)()
 
