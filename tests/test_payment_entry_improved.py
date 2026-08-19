@@ -219,7 +219,7 @@ def test_payment_line_cannot_exceed_individual_outstanding(app_ctx):
         posting_date=date.today(),
         document_type="sales_invoice",
         docstatus=1,
-        grand_total=1000,
+        grand_total=100,
         outstanding_amount=100,
         base_outstanding_amount=100,
     )
