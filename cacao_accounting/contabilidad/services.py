@@ -159,6 +159,13 @@ def enforce_close_and_recurring_company_access():
         template = database.session.get(RecurringJournalTemplate, identifier)
         if template:
             exige_acceso_compania("accounting", template.company, "autorizar" if request.method == "POST" else "consultar")
+    elif request.path.startswith("/accounting/exchange-revaluation/"):
+        from cacao_accounting.database import ExchangeRevaluation
+
+        run = database.session.get(ExchangeRevaluation, identifier)
+        if run:
+            action = "anular" if request.path.endswith("/void") else "consultar"
+            exige_acceso_compania("accounting", run.company, action)
     return None
 
 
@@ -717,6 +724,7 @@ def _handle_exchange_revaluation_post() -> "Any":
     if not company:
         flash("La compañía es requerida.", "danger")
         return None
+    exige_acceso_compania("accounting", company, "autorizar")
 
     if not fiscal_year_id and year and month:
         resolved_fiscal_year_id, resolved_period_id = _resolve_period_from_date(company, year, month)
