@@ -153,6 +153,46 @@ def test_item_account_rows_require_company_write_access(app_ctx):
             )
 
 
+def test_default_warehouse_requires_company_write_access(app_ctx):
+    """An item cannot select a default warehouse from another company."""
+    from flask_login import login_user
+    from werkzeug.exceptions import Forbidden
+
+    from cacao_accounting.database import (
+        Book,
+        Modules,
+        Roles,
+        RolesAccess,
+        RolesUser,
+        User,
+        UserBookAccess,
+        Warehouse,
+        database,
+    )
+    from cacao_accounting.inventario.service import validate_default_warehouse
+
+    viewer = database.session.execute(database.select(User).filter_by(user="viewer")).scalar_one()
+    module = database.session.execute(database.select(Modules).filter_by(module="inventory")).scalar_one()
+    role = Roles(name="inventory_warehouse_writer", note="Inventory warehouse writer")
+    book = Book(code="CACAO-WAREHOUSE", name="Cacao warehouse book", entity="cacao", is_primary=True)
+    warehouse = Warehouse(code="CAFE-WH", name="Cafe warehouse", company="cafe")
+    database.session.add_all([role, book, warehouse])
+    database.session.flush()
+    database.session.add_all(
+        [
+            RolesUser(user_id=viewer.id, role_id=role.id, active=True),
+            RolesAccess(rol_id=role.id, module_id=module.id, access=True, view=True, create=True, edit=True),
+            UserBookAccess(user_id=viewer.id, book_id=book.id, can_read=True, can_write=True),
+        ]
+    )
+    database.session.commit()
+
+    with app_ctx.test_request_context():
+        login_user(viewer)
+        with pytest.raises(Forbidden):
+            validate_default_warehouse(warehouse.code)
+
+
 def test_stock_entry_header_rejects_missing_or_invalid_date(app_ctx):
     """Draft creation rejects missing and malformed posting dates server-side."""
     from flask_login import login_user
