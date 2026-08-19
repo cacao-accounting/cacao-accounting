@@ -2896,6 +2896,42 @@ def test_expired_batch_is_rejected_by_stock_posting(app_ctx):
         )
 
 
+def test_normal_receipt_rejects_an_available_serial(app_ctx):
+    """A normal receipt cannot move an existing serial without a transfer."""
+    from cacao_accounting.database import Item, SerialNumber, StockEntryItem, UOM, database
+    from cacao_accounting.inventario.service import InventoryServiceError, validate_batch_serial
+
+    database.session.add_all(
+        [
+            UOM(code="EA-SERIAL-GUARD", name="Each"),
+            Item(
+                code="ITEM-SERIAL-GUARD",
+                name="Serial guard",
+                item_type="goods",
+                is_stock_item=True,
+                has_serial_no=True,
+                default_uom="EA-SERIAL-GUARD",
+            ),
+            SerialNumber(
+                item_code="ITEM-SERIAL-GUARD",
+                serial_no="SN-AVAILABLE",
+                serial_status="available",
+                warehouse="WH-ORIGIN",
+            ),
+        ]
+    )
+    database.session.flush()
+    line = StockEntryItem(
+        item_code="ITEM-SERIAL-GUARD",
+        serial_no="SN-AVAILABLE",
+        qty=Decimal("1"),
+        uom="EA-SERIAL-GUARD",
+    )
+
+    with pytest.raises(InventoryServiceError, match="transferencia"):
+        validate_batch_serial(line, outgoing=False, warehouse="WH-TARGET")
+
+
 def test_reconciliation_requires_batch_or_serial_identifiers(app_ctx):
     """Quantity reconciliation cannot bypass tracking for controlled items."""
     from cacao_accounting.contabilidad.posting_service import PostingError, _create_stock_reconciliation_movement
