@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from flask import current_app, has_request_context, request
@@ -326,8 +327,8 @@ class PrintService:
 
         def percent_filter(value: Any) -> str:
             try:
-                return f"{float(value or 0):.2f}%"
-            except (ValueError, TypeError):
+                return f"{Decimal(str(value or 0)).quantize(Decimal('0.01'))}%"
+            except (InvalidOperation, ValueError, TypeError):
                 return "0.00%"
 
         def default_text_filter(value: Any, default: str = "-") -> Any:

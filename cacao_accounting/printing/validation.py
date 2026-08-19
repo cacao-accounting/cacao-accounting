@@ -57,7 +57,7 @@ class PublicValidationView:
     document_number: str
     document_date: date | str | None
     currency: str | None
-    total: float
+    total: Decimal
     document_status: str
     validation_time: datetime
 
@@ -172,7 +172,7 @@ class ValidationService:
             document_number=str(record.document_number or data.get("document_number") or ""),
             document_date=data.get("document_date") or record.document_date,
             currency=data.get("currency"),
-            total=float(data.get("grand_total") or 0),
+            total=Decimal(str(data.get("grand_total") or 0)),
             document_status=str(data.get("status") or record.document_status),
             validation_time=datetime.now(),
         )

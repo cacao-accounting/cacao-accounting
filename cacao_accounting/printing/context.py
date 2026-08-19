@@ -78,8 +78,8 @@ def build_journal_entry_print_context(
                 "account_code": line.account or "",
                 "account_name": account_names.get(line.account, ""),
                 "description": line.memo or line.line_memo or "",
-                "debit": float(debit),
-                "credit": float(credit),
+                "debit": debit,
+                "credit": credit,
             }
         )
     context["journal_entry"] = {
@@ -89,8 +89,8 @@ def build_journal_entry_print_context(
         "currency": _text(document, "transaction_currency", context["company"]["default_currency"]),
         "memo": _text(document, "memo", ""),
         "items": items,
-        "total_debit": float(total_debit),
-        "total_credit": float(total_credit),
+        "total_debit": total_debit,
+        "total_credit": total_credit,
     }
     return context
 
