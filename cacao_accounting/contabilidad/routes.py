@@ -978,6 +978,40 @@ def editar_libro(id_libro):
                 edit=True,
                 entity_initial_label=entity_initial_label,
             )
+        from cacao_accounting.database import (
+            Budget,
+            ComprobanteContable,
+            ExchangeRevaluationItem,
+            GLEntry,
+            PeriodCloseRun,
+            RecurringJournalApplication,
+            RecurringJournalTemplate,
+        )
+
+        history_queries = (
+            database.select(GLEntry.id).filter_by(ledger_id=libro.id),
+            database.select(ExchangeRevaluationItem.id).filter_by(ledger_id=libro.id),
+            database.select(Budget.id).filter_by(ledger_id=libro.id),
+            database.select(RecurringJournalTemplate.id).filter_by(ledger_id=libro.id),
+            database.select(RecurringJournalApplication.id).filter_by(ledger_id=libro.id),
+            database.select(ComprobanteContable.id).filter_by(book=libro.code),
+            database.select(PeriodCloseRun.id).filter_by(company=libro.entity),
+        )
+        if any(database.session.execute(query.limit(1)).scalar_one_or_none() for query in history_queries):
+            flash(
+                _(
+                    "No se puede cambiar compañía o moneda de un libro con historial contable; "
+                    "cree un libro nuevo para ese contexto."
+                ),
+                "danger",
+            )
+            return render_template(
+                _TPL_BOOK_CREAR,
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+            )
         libro.name = formulario.nombre.data
         libro.entity = formulario.entidad.data
         libro.currency = formulario.moneda.data
@@ -2160,12 +2194,43 @@ def editar_tasa_cambio(rate_id):
         elif formulario.rate.data is None or formulario.rate.data <= 0:
             flash(_("La tasa debe ser mayor a cero."), "danger")
         else:
-            registro.origin = formulario.origin.data
-            registro.destination = formulario.destination.data
-            registro.rate = formulario.rate.data
-            registro.date = formulario.date.data
-            database.session.commit()
-            return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro.id))
+            from cacao_accounting.database import ExchangeRevaluation, ExchangeRevaluationItem, GLEntry
+
+            used_by_gl = database.session.execute(
+                database.select(GLEntry.id)
+                .where(
+                    GLEntry.posting_date == registro.date,
+                    GLEntry.account_currency == registro.origin,
+                    GLEntry.company_currency == registro.destination,
+                    GLEntry.exchange_rate.is_not(None),
+                )
+                .limit(1)
+            ).scalar_one_or_none()
+            used_by_revaluation = database.session.execute(
+                database.select(ExchangeRevaluationItem.id)
+                .join(ExchangeRevaluation, ExchangeRevaluation.id == ExchangeRevaluationItem.revaluation_id)
+                .where(
+                    ExchangeRevaluation.run_date == registro.date,
+                    ExchangeRevaluationItem.original_currency_id == registro.origin,
+                    ExchangeRevaluationItem.ledger_currency_id == registro.destination,
+                )
+                .limit(1)
+            ).scalar_one_or_none()
+            if used_by_gl or used_by_revaluation:
+                flash(
+                    _(
+                        "No se puede editar una tasa que ya fue utilizada en contabilidad; "
+                        "registre una nueva tasa correctiva."
+                    ),
+                    "danger",
+                )
+            else:
+                registro.origin = formulario.origin.data
+                registro.destination = formulario.destination.data
+                registro.rate = formulario.rate.data
+                registro.date = formulario.date.data
+                database.session.commit()
+                return redirect(url_for("contabilidad.tipo_cambio", rate_id=registro.id))
 
     return render_template(
         _TPL_TC_CREAR,
