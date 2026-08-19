@@ -200,6 +200,7 @@ def _create_and_submit_stock_entry(
     adjustment_account_id: str | None = None,
     counted_qty: Decimal | None = None,
     target_stock_value: Decimal | None = None,
+    target_valuation_rate: Decimal | None = None,
 ) -> StockEntry:
     """Helper para crear y aprobar una entrada de stock."""
     se = StockEntry(
@@ -230,6 +231,8 @@ def _create_and_submit_stock_entry(
         item_kwargs["counted_qty"] = counted_qty
     if target_stock_value is not None:
         item_kwargs["target_stock_value"] = target_stock_value
+    if target_valuation_rate is not None:
+        item_kwargs["target_valuation_rate"] = target_valuation_rate
 
     database.session.add(StockEntryItem(**item_kwargs))
     database.session.commit()
@@ -500,6 +503,7 @@ def test_07_ajustes_por_inventario(app):
             qty=Decimal("2.0"),
             counted_qty=Decimal("12.0"),
             target_stock_value=Decimal("1320.00"),
+            target_valuation_rate=Decimal("110.00"),
             target_warehouse="WH-MAIN",
             adjustment_account_id="5200-ADJ",
         )
