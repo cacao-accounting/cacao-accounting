@@ -27,6 +27,7 @@ from cacao_accounting.bancos.statement_service import (
 
 from cacao_accounting.database import (
     BankAccount,
+    Accounts,
     BankAccountNumberingConfig,
     BankTransaction,
     Book,
@@ -1368,6 +1369,14 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
     paid_from_account_id, paid_to_account_id = _resolve_gl_accounts(
         payload, payment_type, bank_account_id, target_bank_account_id
     )
+    _validate_payment_gl_accounts(
+        company=str(company),
+        payment_type=payment_type,
+        bank_account_id=bank_account_id,
+        target_bank_account_id=target_bank_account_id,
+        paid_from_account_id=paid_from_account_id,
+        paid_to_account_id=paid_to_account_id,
+    )
     reference_date = _parse_reference_date(payload.get("reference_date"))
     payment_currency = _get_payment_currency(bank_account_id)
     target_bank = database.session.get(BankAccount, target_bank_account_id) if target_bank_account_id else None
@@ -1414,6 +1423,33 @@ def _resolve_gl_accounts(
             paid_to_account_id = target_bank.gl_account_id
 
     return paid_from_account_id, paid_to_account_id
+
+
+def _validate_payment_gl_accounts(
+    *,
+    company: str,
+    payment_type: str,
+    bank_account_id: str | None,
+    target_bank_account_id: str | None,
+    paid_from_account_id: str | None,
+    paid_to_account_id: str | None,
+) -> None:
+    """Ensure explicit payment accounts belong to the payment company."""
+    for account_id in (paid_from_account_id, paid_to_account_id):
+        if not account_id:
+            continue
+        account = database.session.get(Accounts, account_id)
+        if account is None or account.entity != company:
+            raise ValueError("La cuenta GL del pago debe pertenecer a la compañía del documento.")
+
+    if payment_type != "internal_transfer":
+        return
+    source_bank = database.session.get(BankAccount, bank_account_id) if bank_account_id else None
+    target_bank = database.session.get(BankAccount, target_bank_account_id) if target_bank_account_id else None
+    if source_bank and source_bank.gl_account_id != paid_from_account_id:
+        raise ValueError("La cuenta GL de origen debe coincidir con la cuenta bancaria de origen.")
+    if target_bank and target_bank.gl_account_id != paid_to_account_id:
+        raise ValueError("La cuenta GL destino debe coincidir con la cuenta bancaria destino.")
 
 
 def _parse_reference_date(reference_date_raw: str | None) -> date | None:
