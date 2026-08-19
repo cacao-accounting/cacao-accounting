@@ -134,6 +134,7 @@ def nuevo():
 
     if form.validate_on_submit():
         try:
+            _enforce_budget_company_access(form.company.data, "crear")
             budget = BudgetService().create_budget(form.data, str(current_user.id))
             flash("Presupuesto creado exitosamente.", "success")
             return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget.id))
