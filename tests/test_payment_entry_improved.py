@@ -1712,6 +1712,46 @@ def test_internal_transfer_preserves_source_and_target_nominals(app_ctx, monkeyp
     assert payment.base_received_amount is None
 
 
+def test_payment_rejects_gl_account_from_another_company(app_ctx):
+    """Explicit payment GL accounts must belong to the payment company."""
+    from cacao_accounting.bancos import _build_payment_from_payload
+
+    source = (
+        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+    )
+    target = (
+        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
+    )
+    assert source is not None
+    assert target is not None
+    foreign_account = Accounts(
+        entity="cafe",
+        code="FOREIGN-PAYMENT-ACCOUNT",
+        name="Foreign payment account",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="bank",
+    )
+    database.session.add(foreign_account)
+    database.session.flush()
+
+    with pytest.raises(ValueError, match="pertenecer a la compañía"):
+        _build_payment_from_payload(
+            {
+                "payment_type": "internal_transfer",
+                "company": "cacao",
+                "bank_account_id": source.id,
+                "target_bank_account_id": target.id,
+                "paid_from_account_id": foreign_account.id,
+                "paid_to_account_id": target.gl_account_id,
+                "posting_date": "2026-05-05",
+                "paid_amount": "100",
+                "exchange_rate": "36",
+            }
+        )
+
+
 def test_payment_uses_default_external_counter_for_check(app_ctx):
     """Cheque usa la chequera default de la cuenta bancaria cuando no se envía una explícita."""
     client = app_ctx.test_client()
