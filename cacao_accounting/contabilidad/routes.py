@@ -119,6 +119,8 @@ from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, ve
 
 from cacao_accounting.list_filters import apply_list_filters
 
+from cacao_accounting.version import APPNAME
+
 
 def _accounting_company_scope(query, company_column, action: str = "consultar"):
     """Limit an accounting master-data query to companies covered by book ACLs."""
@@ -139,12 +141,9 @@ def _accounting_entity_choices(action: str = "consultar") -> list[tuple[str, str
     """Build company choices using the accounting book ACL."""
     from cacao_accounting.database import Entity
 
-    entities = database.session.execute(
-        _accounting_company_scope(database.select(Entity), Entity.code, action)
-    ).scalars()
+    entities = database.session.execute(_accounting_company_scope(database.select(Entity), Entity.code, action)).scalars()
     return [("", "")] + [(entity.code, entity.name) for entity in entities]
 
-from cacao_accounting.version import APPNAME
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 
@@ -1929,9 +1928,11 @@ def accounting_period_new():
     formulario = FormularioAccountingPeriod()
     formulario.entidad.choices = _accounting_entity_choices("crear")
     formulario.fiscal_year.choices = [("", "Seleccione un año fiscal")]
-    fiscal_years = database.session.execute(
-        _accounting_company_scope(database.select(FiscalYear), FiscalYear.entity, "crear")
-    ).scalars().all()
+    fiscal_years = (
+        database.session.execute(_accounting_company_scope(database.select(FiscalYear), FiscalYear.entity, "crear"))
+        .scalars()
+        .all()
+    )
     formulario.fiscal_year.choices += [(fy.id, fy.name) for fy in fiscal_years]
     no_fiscal_years = len(fiscal_years) == 0
     TITULO = "Contabilidad | Nuevo Período Contable - " + APPNAME
@@ -1990,9 +1991,11 @@ def accounting_period_edit(period_id):
 
     formulario = FormularioAccountingPeriod(obj=period)
     formulario.id.data = period.name
-    fiscal_years = database.session.execute(
-        _accounting_company_scope(database.select(FiscalYear), FiscalYear.entity, "editar")
-    ).scalars().all()
+    fiscal_years = (
+        database.session.execute(_accounting_company_scope(database.select(FiscalYear), FiscalYear.entity, "editar"))
+        .scalars()
+        .all()
+    )
     formulario.fiscal_year.choices = [(fy.id, fy.name) for fy in fiscal_years]
     formulario.entidad.choices = _accounting_entity_choices("editar")
     if request.method != "POST":

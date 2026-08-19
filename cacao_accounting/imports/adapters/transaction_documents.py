@@ -163,11 +163,12 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         first_row = document_data[0]
         posting_date = date.fromisoformat(str(first_row.get("fecha")))
         source = self._source_document(first_row.get("documento_origen"))
+        company_id = str(context.get("company_id") or "")
         transaction_currency, base_currency, exchange_rate = self._currency_and_rate(
-            first_row, source, context.get("company_id"), posting_date
+            first_row, source, company_id, posting_date
         )
         header = self.config.header_model(
-            company=context.get("company_id"),
+            company=company_id,
             posting_date=posting_date,
             document_date=posting_date,
             docstatus=0,

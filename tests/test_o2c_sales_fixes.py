@@ -126,9 +126,11 @@ def test_sales_document_totals_convert_transaction_currency(app_ctx):
         transaction_currency="USD",
     )
     _set_sales_document_totals(order, Decimal("100"))
-    expected_rate = database.session.execute(
-        database.select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date.today())
-    ).scalar_one().rate
+    expected_rate = (
+        database.session.execute(database.select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date.today()))
+        .scalar_one()
+        .rate
+    )
 
     assert order.base_currency == "NIO"
     assert order.exchange_rate == expected_rate

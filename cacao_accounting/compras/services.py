@@ -776,7 +776,8 @@ def _create_line_relation(
         raise DocumentFlowError("La línea origen no pertenece al documento indicado.", 400)
     if source.company != target.company:
         raise DocumentFlowError("El documento origen debe pertenecer a la misma compañía.", 400)
-    if getattr(source, "supplier_id", None) and source.supplier_id != getattr(target, "supplier_id", None):
+    source_supplier_id = getattr(source, "supplier_id", None)
+    if source_supplier_id and source_supplier_id != getattr(target, "supplier_id", None):
         raise DocumentFlowError("El documento origen debe pertenecer al mismo proveedor.", 400)
     if effective_currency(source) != effective_currency(target):
         raise DocumentFlowError("El documento origen y destino deben usar la misma moneda.", 400)
