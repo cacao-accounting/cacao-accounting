@@ -607,6 +607,7 @@ def inventario_bodega(warehouse_id):
 @inventario.route("/stock-entry/inventory-issue/new", methods=["GET", "POST"])
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "crear")
 def inventario_entrada_nuevo():
     """Formulario para crear una entrada de almacén."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
