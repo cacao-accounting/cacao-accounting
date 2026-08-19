@@ -20,15 +20,22 @@ from cacao_accounting.database import (
     ItemAccount,
     ItemUOMConversion,
     PurchaseInvoiceItem,
+    PurchaseInvoice,
+    PurchaseOrder,
     PurchaseOrderItem,
+    PurchaseReceipt,
     PurchaseReceiptItem,
     SalesInvoiceItem,
+    SalesInvoice,
+    SalesOrder,
     SalesOrderItem,
     SerialNumber,
     StockBin,
     StockLedgerEntry,
     StockValuationLayer,
     StockEntryItem,
+    StockEntry,
+    DeliveryNote,
     DeliveryNoteItem,
     database,
     UOM,
@@ -655,21 +662,50 @@ def default_uom_change_allowed(item_code: str, new_default_uom: str) -> bool:
 
 
 def _item_has_records(item_code: str) -> bool:
-    """Detecta si el item ya participa en documentos operativos o de stock."""
-    tables = (
-        StockLedgerEntry.__table__,
-        StockEntryItem.__table__,
-        PurchaseOrderItem.__table__,
-        PurchaseReceiptItem.__table__,
-        PurchaseInvoiceItem.__table__,
-        SalesOrderItem.__table__,
-        DeliveryNoteItem.__table__,
-        SalesInvoiceItem.__table__,
+    """Detect active stock usage or a positive migrated stock snapshot."""
+    stock_statement = (
+        select(1)
+        .select_from(StockLedgerEntry)
+        .where(StockLedgerEntry.item_code == item_code, StockLedgerEntry.is_cancelled.is_(False))
+        .limit(1)
     )
-    for table in tables:
-        if table.c.get("item_code") is None:
+    if database.session.execute(stock_statement).first():
+        return True
+
+    bin_statement = (
+        select(1)
+        .select_from(StockBin)
+        .where(
+            StockBin.item_code == item_code,
+            (StockBin.actual_qty > 0) | (StockBin.stock_value > 0),
+        )
+        .limit(1)
+    )
+    if database.session.execute(bin_statement).first():
+        return True
+
+    document_lines = (
+        (StockEntryItem, StockEntry, "stock_entry_id"),
+        (PurchaseOrderItem, PurchaseOrder, "purchase_order_id"),
+        (PurchaseReceiptItem, PurchaseReceipt, "purchase_receipt_id"),
+        (PurchaseInvoiceItem, PurchaseInvoice, "purchase_invoice_id"),
+        (SalesOrderItem, SalesOrder, "sales_order_id"),
+        (DeliveryNoteItem, DeliveryNote, "delivery_note_id"),
+        (SalesInvoiceItem, SalesInvoice, "sales_invoice_id"),
+    )
+    for line_model, document_model, foreign_key in document_lines:
+        line_table = line_model.__table__
+        document_table = document_model.__table__
+        line_reference = line_table.c.get(foreign_key)
+        if line_reference is None:
             continue
-        statement = select(1).select_from(table).where(table.c.item_code == item_code).limit(1)
+        statement = (
+            select(1)
+            .select_from(line_table)
+            .join(document_table, line_reference == document_table.c.id)
+            .where(line_table.c.item_code == item_code, document_table.c.docstatus != 2)
+            .limit(1)
+        )
         if database.session.execute(statement).first():
             return True
     return False
