@@ -853,7 +853,13 @@ def inventario_entrada_submit(entry_id: str):
         abort(400)
     try:
         items = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=registro.id)).scalars().all()
-        validate_submit_prerequisites(registro, items=items, require_party=False, require_warehouse=True)
+        validate_submit_prerequisites(
+            registro,
+            items=items,
+            require_party=False,
+            require_warehouse=True,
+            require_qty_positive=registro.purpose != "stock_reconciliation",
+        )
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Movimiento de inventario"):
