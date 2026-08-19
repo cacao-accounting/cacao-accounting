@@ -38,7 +38,7 @@ def test_transaction_document_naming_series_selectors_are_required() -> None:
     for template_path in direct_templates:
         source = template_path.read_text()
         assert 'doctype: "naming_series"' in source
-        assert "placeholder=\"{{ _('Secuencia...') }}\" required" in source or "messages.placeholder\" required" in source
+        assert "placeholder=\"{{ _('Secuencia...') }}\" required" in source or 'messages.placeholder" required' in source
 
 
 def test_smart_select_fetch_options_uses_active_company_filter() -> None:
