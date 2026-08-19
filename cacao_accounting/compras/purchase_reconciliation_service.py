@@ -958,7 +958,7 @@ def get_purchase_reconciliation_pending(company: str, as_of_date: date | None = 
             PurchaseReceiptItem,
             PurchaseReceiptItem.purchase_receipt_id == PurchaseReceipt.id,
         )
-        .filter(PurchaseReceipt.company == company)
+        .filter(PurchaseReceipt.company == company, PurchaseReceipt.docstatus == 1)
     )
     if as_of_date is not None:
         query = query.where(PurchaseReceipt.posting_date <= as_of_date)

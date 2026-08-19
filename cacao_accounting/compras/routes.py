@@ -18,6 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from flask_login import current_user, login_required
 
 from cacao_accounting.compras.purchase_reconciliation_service import (
+    emit_goods_received_cancelled,
     get_purchase_order_status_report,
     get_purchase_reconciliation_panel_groups,
     get_purchase_reconciliation_pending,
@@ -115,7 +116,7 @@ from cacao_accounting.document_flow import (
     validate_submit_prerequisites,
 )
 
-from cacao_accounting.document_flow.context import effective_currency
+from cacao_accounting.document_flow.context import company_currency, effective_currency
 
 from cacao_accounting.document_flow.repository import has_active_source_relations
 
@@ -191,6 +192,8 @@ from cacao_accounting.compras.services import (
     _handle_purchase_quotation_edit_post,
     _create_purchase_receipt_from_form,
     _handle_purchase_receipt_edit_post,
+    _set_purchase_document_totals,
+    _set_purchase_receipt_totals,
     _validate_receipt_quantities_against_po,
     _validate_invoice_quantities_against_receipt,
     _validate_invoice_requires_supplier_link,
@@ -370,6 +373,8 @@ def compras_solicitud_compra_nueva():
             solicitud = PurchaseRequest(
                 requested_by=getattr(current_user, "user", None) or str(current_user.id),
                 company=request.form.get("company") or None,
+                transaction_currency=request.form.get("transaction_currency") or request.form.get("currency") or None,
+                base_currency=company_currency(request.form.get("company") or None),
                 posting_date=posting_date,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
@@ -384,14 +389,12 @@ def compras_solicitud_compra_nueva():
                 naming_series_id=request.form.get("naming_series") or None,
             )
             _qty, total = _save_purchase_request_items(solicitud.id)
-            solicitud.total = total
-            solicitud.base_total = total
-            solicitud.grand_total = total
+            _set_purchase_document_totals(solicitud, total)
             log_create(solicitud)
             database.session.commit()
             flash("Solicitud de compra creada correctamente.", "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=solicitud.id))
-        except (IdentifierConfigurationError, DocumentFlowError) as exc:
+        except (IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -551,6 +554,9 @@ def compras_solicitud_compra_duplicar(request_id: str):
     duplicada = PurchaseRequest(
         requested_by=getattr(current_user, "user", None) or str(current_user.id),
         company=origen.company,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         docstatus=0,
@@ -579,9 +585,7 @@ def compras_solicitud_compra_duplicar(request_id: str):
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
-    duplicada.total = total
-    duplicada.base_total = total
-    duplicada.grand_total = total
+    _set_purchase_document_totals(duplicada, total)
     log_create(duplicada)
     database.session.commit()
     flash("Solicitud de compra duplicada como nuevo borrador.", "success")
@@ -853,6 +857,9 @@ def compras_cotizacion_proveedor_duplicar(quotation_id: str):
         supplier_name=origen.supplier_name,
         purchase_quotation_id=None,
         company=origen.company,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         docstatus=0,
@@ -882,9 +889,7 @@ def compras_cotizacion_proveedor_duplicar(quotation_id: str):
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
-    duplicada.total = total
-    duplicada.base_total = total
-    duplicada.grand_total = total
+    _set_purchase_document_totals(duplicada, total)
     log_create(duplicada)
     database.session.commit()
     flash(_("Cotizacion de proveedor duplicada como nuevo borrador."), "success")
@@ -2188,6 +2193,9 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
         supplier_id=origen.supplier_id,
         supplier_name=origen.supplier_name,
         company=origen.company,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         docstatus=0,
@@ -2216,9 +2224,7 @@ def compras_solicitud_cotizacion_duplicar(quotation_id: str):
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
-    duplicada.total = total
-    duplicada.base_total = total
-    duplicada.grand_total = total
+    _set_purchase_document_totals(duplicada, total)
     log_create(duplicada)
     database.session.commit()
     flash(_("Solicitud de cotizacion duplicada como nuevo borrador."), "success")
@@ -2592,6 +2598,9 @@ def compras_recepcion_duplicar(receipt_id: str):
         supplier_id=origen.supplier_id,
         supplier_name=origen.supplier_name,
         company=origen.company,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         docstatus=0,
@@ -2622,8 +2631,7 @@ def compras_recepcion_duplicar(receipt_id: str):
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
-    duplicada.total = total
-    duplicada.grand_total = total
+    _set_purchase_receipt_totals(duplicada, total)
     log_create(duplicada)
     database.session.commit()
     flash(_("Recepcion de compra duplicada como nuevo borrador."), "success")
@@ -2650,6 +2658,14 @@ def compras_recepcion_submit(receipt_id: str):
         )
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         _validate_receipt_quantities_against_po(receipt_id)
+        check_budget_control(
+            company=registro.company,
+            posting_date=registro.posting_date,
+            supplier_id=registro.supplier_id,
+            document_id=registro.id,
+            document_type="purchase_receipt",
+            items=items,
+        )
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Recepción de compra"):
@@ -2659,7 +2675,7 @@ def compras_recepcion_submit(receipt_id: str):
         log_submit(registro)
         database.session.commit()
         flash("Recepcion de compra aprobada.", "success")
-    except ValueError as exc:
+    except (ValueError, BudgetError) as exc:
         database.session.rollback()
         flash_error(exc)
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
@@ -2693,6 +2709,7 @@ def compras_recepcion_cancel(receipt_id: str):
         flash_error(exc)
     try:
         cancel_document(registro)  # type: ignore[misc]
+        emit_goods_received_cancelled(receipt_id, registro.company)
         revert_relations_for_target("purchase_receipt", receipt_id)
         refresh_source_caches_for_target("purchase_receipt", receipt_id)
         log_cancel(registro)

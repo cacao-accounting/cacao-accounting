@@ -375,14 +375,12 @@ def _create_supplier_quotation_from_request():
             naming_series_id=request.form.get("naming_series") or None,
         )
         _qty, total = _save_supplier_quotation_items(cotizacion.id)
-        cotizacion.total = total
-        cotizacion.base_total = total
-        cotizacion.grand_total = total
+        _set_purchase_document_totals(cotizacion, total)
         log_create(cotizacion)
         database.session.commit()
         flash("Cotización de proveedor creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
-    except (IdentifierConfigurationError, DocumentFlowError, PurchaseSourcingError) as exc:
+    except (IdentifierConfigurationError, DocumentFlowError, PurchaseSourcingError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
     return None
@@ -498,7 +496,18 @@ def _handle_supplier_quotation_update(registro: SupplierQuotation, form: dict, q
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     registro.supplier_id = supplier_id
     registro.supplier_name = supplier.name if supplier else None
-    registro.company = form.get("company") or None
+    requested_company = form.get("company") or registro.company
+    if requested_company != registro.company:
+        database.session.rollback()
+        flash("La compañía de una cotización existente no puede cambiarse.", "danger")
+        return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
+    if registro.purchase_quotation_id:
+        source = database.session.get(PurchaseQuotation, registro.purchase_quotation_id)
+        if source and source.company != requested_company:
+            database.session.rollback()
+            flash("La compañía debe coincidir con la solicitud de cotización origen.", "danger")
+            return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
+    registro.company = requested_company
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
     _copy_logistics(registro, form=form)
@@ -508,9 +517,7 @@ def _handle_supplier_quotation_update(registro: SupplierQuotation, form: dict, q
     ).scalars():
         database.session.delete(item)
     _qty, total = _save_supplier_quotation_items(registro.id)
-    registro.total = total
-    registro.base_total = total
-    registro.grand_total = total
+    _set_purchase_document_totals(registro, total)
     after_state = _capture_purchase_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -735,6 +742,43 @@ def _create_line_relation(
     source_item_id = request.form.get(f"source_item_id_{index}")
     if not (source_type and source_id and source_item_id):
         return
+    allowed_source_types = {
+        "purchase_order": {"purchase_request", "purchase_quotation", "supplier_quotation"},
+        "purchase_quotation": {"purchase_request"},
+        "supplier_quotation": {"purchase_request", "purchase_quotation"},
+        "purchase_receipt": {"purchase_order"},
+        "purchase_invoice": {"purchase_order", "purchase_receipt"},
+    }
+    if source_type not in allowed_source_types.get(target_type, set()):
+        raise DocumentFlowError("El tipo de documento origen no es válido para este flujo.", 400)
+    target_models = {
+        "purchase_order": PurchaseOrder,
+        "purchase_quotation": PurchaseQuotation,
+        "supplier_quotation": SupplierQuotation,
+        "purchase_receipt": PurchaseReceipt,
+        "purchase_invoice": PurchaseInvoice,
+    }
+    source_models = {
+        "purchase_request": (PurchaseRequest, PurchaseRequestItem, "purchase_request_id"),
+        "purchase_quotation": (PurchaseQuotation, PurchaseQuotationItem, "purchase_quotation_id"),
+        "supplier_quotation": (SupplierQuotation, SupplierQuotationItem, "supplier_quotation_id"),
+        "purchase_order": (PurchaseOrder, PurchaseOrderItem, "purchase_order_id"),
+        "purchase_receipt": (PurchaseReceipt, PurchaseReceiptItem, "purchase_receipt_id"),
+    }
+    target = database.session.get(target_models[target_type], target_id)
+    source_model, source_item_model, source_parent_field = source_models[source_type]
+    source = database.session.get(source_model, source_id)
+    source_item = database.session.get(source_item_model, source_item_id)
+    if not target or not source or not source_item or getattr(source, "docstatus", 0) != 1:
+        raise DocumentFlowError("El documento origen y su línea deben existir y estar aprobados.", 400)
+    if getattr(source_item, source_parent_field) != source.id:
+        raise DocumentFlowError("La línea origen no pertenece al documento indicado.", 400)
+    if source.company != target.company:
+        raise DocumentFlowError("El documento origen debe pertenecer a la misma compañía.", 400)
+    if getattr(source, "supplier_id", None) and source.supplier_id != getattr(target, "supplier_id", None):
+        raise DocumentFlowError("El documento origen debe pertenecer al mismo proveedor.", 400)
+    if effective_currency(source) != effective_currency(target):
+        raise DocumentFlowError("El documento origen y destino deben usar la misma moneda.", 400)
     create_document_relation(
         source_type=source_type,
         source_id=source_id,
@@ -965,7 +1009,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             warehouse_code = (
                 request.form.get(f"warehouse_{i}") or request.form.get("to_warehouse") or request.form.get("warehouse") or None
             )
-            _validate_receipt_warehouse(warehouse_code)
+            _validate_receipt_warehouse(warehouse_code, item_code)
             linea = PurchaseReceiptItem(
                 purchase_receipt_id=receipt_id,
                 item_code=item_code,
@@ -988,8 +1032,11 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
     return total_qty, total
 
 
-def _validate_receipt_warehouse(warehouse_code: str | None) -> None:
+def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | None = None) -> None:
     """Valida la bodega indicada en una recepción."""
+    item = database.session.get(Item, item_code) if item_code else None
+    if not warehouse_code and item is not None and item.is_stock_item:
+        raise DocumentFlowError(f"El item de inventario '{item_code}' requiere una bodega.", 400)
     if not warehouse_code:
         return
     from cacao_accounting.database import Warehouse
@@ -1272,6 +1319,18 @@ def _create_purchase_order_from_request(form: dict):
 
 def _update_purchase_order_from_request(registro: PurchaseOrder):
     """Actualiza una orden de compra desde el formulario enviado."""
+    has_source = (
+        bool(registro.purchase_award_id)
+        or database.session.execute(
+            database.select(DocumentRelation.id)
+            .where(
+                DocumentRelation.target_type == "purchase_order",
+                DocumentRelation.target_id == registro.id,
+                DocumentRelation.status == "active",
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+    )
     before_state = _capture_purchase_state(registro)
     revert_relations_for_target("purchase_order", registro.id, reason="draft_edited")
     refresh_source_caches_for_target("purchase_order", registro.id)
@@ -1279,12 +1338,20 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     registro.supplier_id = supplier_id
     registro.supplier_name = supplier.name if supplier else None
-    registro.company = request.form.get("company") or None
+    requested_company = request.form.get("company") or registro.company
+    requested_currency = (
+        request.form.get("transaction_currency") or request.form.get("currency") or registro.transaction_currency
+    )
+    if has_source and (requested_company != registro.company or requested_currency != registro.transaction_currency):
+        database.session.rollback()
+        flash("La compañía y moneda de una orden derivada no pueden cambiarse.", "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
+    registro.company = requested_company
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
     _copy_logistics(registro, form=request.form)
     registro.landed_cost_estimates_json = _landed_cost_snapshot(form=request.form)
-    registro.transaction_currency = request.form.get("transaction_currency") or None
+    registro.transaction_currency = requested_currency
     for item in database.session.execute(
         database.select(PurchaseOrderItem).filter_by(purchase_order_id=registro.id)
     ).scalars():
@@ -1393,14 +1460,12 @@ def _create_purchase_quotation_from_request():
                 .all()
             )
             _validate_purchase_source_link(cotizacion, "purchase_request", source.id, quotation_items)
-        cotizacion.total = total
-        cotizacion.base_total = total
-        cotizacion.grand_total = total
+        _set_purchase_document_totals(cotizacion, total)
         log_create(cotizacion)
         database.session.commit()
         flash("Solicitud de cotización creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=cotizacion.id))
-    except (IdentifierConfigurationError, DocumentFlowError) as exc:
+    except (IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
     return None
@@ -1416,7 +1481,23 @@ def _handle_purchase_quotation_edit_post(registro):
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     registro.supplier_id = supplier_id
     registro.supplier_name = supplier.name if supplier else None
-    registro.company = request.form.get("company") or None
+    requested_company = request.form.get("company") or registro.company
+    source_relation = database.session.execute(
+        database.select(DocumentRelation)
+        .where(
+            DocumentRelation.target_type == "purchase_quotation",
+            DocumentRelation.target_id == registro.id,
+            DocumentRelation.source_type == "purchase_request",
+            DocumentRelation.status == "active",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    source = database.session.get(PurchaseRequest, source_relation.source_id) if source_relation else None
+    if requested_company != registro.company or (source and source.company != requested_company):
+        database.session.rollback()
+        flash("La compañía debe permanecer alineada con el documento origen.", "danger")
+        return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
+    registro.company = requested_company
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
     _copy_logistics(registro, form=request.form)
@@ -1425,9 +1506,7 @@ def _handle_purchase_quotation_edit_post(registro):
     ).scalars():
         database.session.delete(item)
     _qty, total = _save_purchase_quotation_items(registro.id)
-    registro.total = total
-    registro.base_total = total
-    registro.grand_total = total
+    _set_purchase_document_totals(registro, total)
     after_state = _capture_purchase_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
@@ -1445,6 +1524,7 @@ def _create_purchase_receipt_from_form():
         company, transaction_currency = _validate_purchase_flow_header(source)
         supplier_id = supplier_id or getattr(source, "supplier_id", None)
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        _validate_supplier_company_membership(supplier_id, company)
         receipt = PurchaseReceipt(
             supplier_id=supplier_id,
             supplier_name=supplier.name if supplier else None,
@@ -1478,7 +1558,7 @@ def _create_purchase_receipt_from_form():
         database.session.commit()
         flash("Recepción de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt.id))
-    except (DocumentFlowError, IdentifierConfigurationError) as exc:
+    except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
         database.session.rollback()
         flash_error(exc)
         return None
@@ -1515,6 +1595,16 @@ def _set_purchase_receipt_totals(receipt: PurchaseReceipt, total: Decimal) -> No
     receipt.base_currency = company_currency(receipt.company)
     receipt.exchange_rate = _purchase_exchange_rate(receipt.company, receipt.posting_date, receipt.transaction_currency)
     receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
+
+
+def _set_purchase_document_totals(document: Any, total: Decimal) -> None:
+    """Recalcula totales transaccionales y funcionales de documentos de compras."""
+    document.total = total
+    if hasattr(document, "grand_total"):
+        document.grand_total = total
+    document.base_currency = company_currency(document.company)
+    document.exchange_rate = _purchase_exchange_rate(document.company, document.posting_date, document.transaction_currency)
+    document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))
 
 
 def _validate_purchase_source_link(document: Any, source_type: str, source_id: str, items: Sequence[Any] | None = None) -> Any:
@@ -1729,7 +1819,7 @@ def _purchase_invoice_document_type(source_ids: dict[str, str | None]) -> str:
         doc_type = PURCHASE_RETURN
     elif source_ids.get("from_invoice_id"):
         doc_type = PURCHASE_CREDIT_NOTE
-    return request.args.get("document_type") or request.form.get("document_type") or doc_type
+    return doc_type
 
 
 def _purchase_invoice_sources(
@@ -1789,9 +1879,7 @@ def _compute_base_amounts(amount: Decimal, exchange_rate: Decimal | None = None)
 def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_currency: str | None) -> Decimal:
     """S2P-09: Resuelve tipo de cambio para documento de compra.
 
-    Devuelve ``Decimal("1")`` (tasa 1:1) cuando no se puede determinar la
-    moneda base de la compania o no existe una tasa registrada, asumiendo la
-    moneda de transaccion equivalente a la moneda local.
+    Devuelve ``Decimal("1")`` únicamente para documentos sin moneda extranjera.
     """
     if not company or not transaction_currency:
         return Decimal("1")
@@ -1805,10 +1893,14 @@ def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_
     from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 
     try:
-        return _lookup_exchange_rate(transaction_currency, entity.currency, posting_date)
-    except PostingError:  # type: ignore[misc]
-        logger.warning("No exchange rate found for %s -> %s on %s", transaction_currency, entity.currency, posting_date)
-        return Decimal("1")
+        exchange_rate = _lookup_exchange_rate(transaction_currency, entity.currency, posting_date)
+    except PostingError as exc:  # type: ignore[misc]
+        raise ValueError(
+            f"No existe tipo de cambio para {transaction_currency} -> {entity.currency} en {posting_date}."
+        ) from exc
+    if exchange_rate <= 0:
+        raise ValueError(f"El tipo de cambio para {transaction_currency} -> {entity.currency} debe ser positivo.")
+    return exchange_rate
 
 
 def _capture_purchase_state(registro: Any) -> dict[str, Any]:
@@ -1886,6 +1978,17 @@ def _validate_supplier_invoice_flags(
         matching_config = get_matching_config(company)
         if matching_config.require_purchase_order:
             raise ValueError("La configuración de la compañía requiere una orden de compra para las facturas de compra.")
+
+
+def _validate_supplier_company_membership(supplier_id: str | None, company: str | None) -> None:
+    """Require an active supplier-company relationship for purchase documents."""
+    if not supplier_id or not company:
+        return
+    settings = database.session.execute(
+        database.select(CompanyParty).filter_by(party_id=supplier_id, company=company, is_active=True)
+    ).scalar_one_or_none()
+    if settings is None:
+        raise ValueError("El proveedor no está habilitado para la compañía seleccionada.")
 
 
 def _validate_purchase_tax_template(company: str, template_id: str | None, currency: str | None) -> None:
@@ -2043,7 +2146,6 @@ def _has_active_purchase_reversal_notes(invoice_id: str) -> bool:
 def _create_purchase_invoice_from_request():
     """Create a purchase invoice from the submitted form."""
     try:
-        document_type = request.form.get("document_type") or PURCHASE_INVOICE
         posting_date = _parse_date(request.form.get("posting_date"))
         supplier_id = request.form.get("supplier_id") or None
         company = request.form.get("company") or None
@@ -2054,6 +2156,11 @@ def _create_purchase_invoice_from_request():
             if receipt:
                 from_order = receipt.purchase_order_id
         from_invoice = request.form.get("from_invoice") or request.form.get("from_return") or None
+        document_type = PURCHASE_INVOICE
+        if from_receipt:
+            document_type = PURCHASE_RETURN
+        elif from_invoice:
+            document_type = PURCHASE_CREDIT_NOTE
         source_order, source_receipt, source_invoice = _purchase_invoice_sources(
             {
                 "from_order_id": from_order,
@@ -2071,6 +2178,7 @@ def _create_purchase_invoice_from_request():
         supplier_id = supplier_id or getattr(source, "supplier_id", None)
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
         transaction_currency = transaction_currency or request.form.get("transaction_currency") or None
+        _validate_supplier_company_membership(supplier_id, company)
         _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt, document_type)
         _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
         reversal_of = (
@@ -2254,7 +2362,9 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
             continue
         qty = Decimal(str(data.get("qty", "1")))
         rate = Decimal(str(data.get("rate", "0")))
-        amount = Decimal(str(data.get("amount", str(qty * rate))))
+        if qty < 0 or rate < 0:
+            raise ValueError("La cantidad y la tarifa de un costo de importación no pueden ser negativas.")
+        amount = qty * rate
         total += amount
         database.session.add(
             ImportLandedCostItem(
@@ -2282,6 +2392,8 @@ def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
         if not concept:
             continue
         amount = Decimal(str(data.get("amount", "0")))
+        if amount < 0:
+            raise ValueError("El importe de un cargo de importación no puede ser negativo.")
         total += amount
         database.session.add(
             ImportLandedCostCharge(
@@ -2523,7 +2635,6 @@ def _log_budget_exceeded(
         ),
     )
     database.session.add(log_entry)
-    database.session.commit()
 
 
 def _execute_budget_policy(action_policy: str, message: str) -> None:
