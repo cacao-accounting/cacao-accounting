@@ -73,6 +73,42 @@ def test_operational_modules_do_not_validate_ledger_access(client):
     assert response.status_code == 200
 
 
+def test_journal_acl_fails_closed_for_unknown_user(app):
+    """Un actor inexistente no puede usar el servicio como bypass interno."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, _authorized_journal_books
+
+    with app.app_context(), pytest.raises(JournalValidationError, match="usuario indicado no existe"):
+        _authorized_journal_books("cacao", ["FISC"], "UNKNOWN-USER", "crear")
+
+
+def test_recurring_template_validates_legacy_primary_ledger(app):
+    """Una plantilla legacy sin book_codes también protege su ledger principal."""
+    from cacao_accounting.contabilidad.recurring_journal_service import (
+        RecurringJournalError,
+        validate_recurring_template_access,
+    )
+    from cacao_accounting.database import RecurringJournalTemplate
+
+    with app.app_context():
+        template = RecurringJournalTemplate(company="cacao", ledger_id="MGMT", book_codes=None)
+        with pytest.raises(RecurringJournalError, match="no tiene acceso al libro contable MGMT"):
+            validate_recurring_template_access(template, "USER-ACCOUNTING", "consultar")
+
+
+def test_recurring_template_rejects_missing_canonical_books(app):
+    """Una plantilla legacy sin ningún libro no se expande implícitamente."""
+    from cacao_accounting.contabilidad.recurring_journal_service import (
+        RecurringJournalError,
+        validate_recurring_template_access,
+    )
+    from cacao_accounting.database import RecurringJournalTemplate
+
+    with app.app_context():
+        template = RecurringJournalTemplate(company="cacao", ledger_id=None, book_codes=None)
+        with pytest.raises(RecurringJournalError, match="selección canónica"):
+            validate_recurring_template_access(template, "USER-ACCOUNTING", "consultar")
+
+
 def _seed_book_access_data() -> None:
     """Inserta modulos, usuario y accesos de libro para las pruebas."""
     database.session.add_all(

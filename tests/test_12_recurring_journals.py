@@ -51,7 +51,7 @@ def app_ctx():
                     enabled=True,
                 ),
                 Modules(module="accounting", default=True, enabled=True),
-                User(user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Book(entity="abc", code="L01", name="Libro principal", status="activo", is_primary=True),
                 Book(entity="abc", code="L02", name="Libro secundario", status="activo"),

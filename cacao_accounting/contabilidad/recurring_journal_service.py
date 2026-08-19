@@ -285,9 +285,14 @@ def _authorized_template_books(company: str, requested: Any, user_id: str, actio
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
-        return _normalize_requested_books(requested)
+        raise RecurringJournalError("El usuario indicado no existe o no puede autorizar libros contables.")
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
-    granular_action = {"autorizar": "can_approve", "anular": "can_cancel"}.get(action, "can_write")
+    granular_action = {
+        "autorizar": "can_approve",
+        "anular": "can_cancel",
+        "consultar": "can_read",
+        "listar": "can_read",
+    }.get(action, "can_write")
     authorized = permissions.obtener_libros_autorizados(granular_action, company=company, return_codes=True)
     active = database.session.execute(
         database.select(Book)
@@ -324,7 +329,34 @@ def _normalize_requested_books(value: Any) -> list[str] | None:
 
 def _validate_template_access(template: RecurringJournalTemplate, user_id: str, action: str) -> None:
     """Revalida compañía y todos los libros antes de una transición."""
-    _authorized_template_books(template.company, _deserialize_book_codes(template.book_codes), user_id, action)
+    validate_recurring_template_access(template, user_id, action)
+
+
+def validate_recurring_template_access(
+    template: RecurringJournalTemplate,
+    user_id: str,
+    action: str = "consultar",
+) -> None:
+    """Valida todos los libros persistidos, incluido el principal legacy."""
+    selected = _deserialize_book_codes(template.book_codes) or []
+    if template.ledger_id and template.ledger_id not in selected:
+        selected.append(str(template.ledger_id))
+    if not selected:
+        raise RecurringJournalError("La plantilla no tiene una selección canónica de libros contables.")
+    _authorized_template_books(template.company, selected, user_id, action)
+
+
+def accessible_recurring_template_ids(user_id: str) -> list[str]:
+    """Retorna plantillas cuyos libros completos son legibles por el usuario."""
+    templates = database.session.execute(database.select(RecurringJournalTemplate)).scalars()
+    accessible: list[str] = []
+    for template in templates:
+        try:
+            validate_recurring_template_access(template, user_id, "listar")
+        except RecurringJournalError:
+            continue
+        accessible.append(str(template.id))
+    return accessible
 
 
 def _canonical_book_reference(company: str, value: Any) -> str | None:

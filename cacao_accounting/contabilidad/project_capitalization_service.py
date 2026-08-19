@@ -226,5 +226,5 @@ class ProjectCapitalizationService:
         orig_journal.capitalized_by_id = cap_journal.id
         database.session.add(orig_journal)
 
-        submit_journal(cap_journal.id)
+        submit_journal(cap_journal.id, user_id=user_id)
         return True

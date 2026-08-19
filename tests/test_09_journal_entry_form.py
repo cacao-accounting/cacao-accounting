@@ -31,7 +31,7 @@ def app_ctx():
             [
                 Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO", enabled=True),
                 Modules(module="accounting", default=True, enabled=True),
-                User(user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                User(id="user-1", user="admin", name="Admin", password=b"x", classification="admin", active=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
             ]
         )

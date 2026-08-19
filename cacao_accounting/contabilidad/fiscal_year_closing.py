@@ -257,7 +257,7 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
         allow_closing=True,
         allow_fiscal_year_closing=True,
     )
-    submit_journal(journal.id)
+    submit_journal(journal.id, user_id=user_id)
     return journal
 
 

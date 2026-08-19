@@ -48,7 +48,15 @@ def app_ctx():
                     status="default",
                 ),
                 Modules(module="accounting", default=True, enabled=True),
-                User(user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                User(
+                    id="user-1",
+                    user="service-user",
+                    name="Service User",
+                    password=b"x",
+                    classification="admin",
+                    active=True,
+                ),
             ]
         )
         database.session.commit()

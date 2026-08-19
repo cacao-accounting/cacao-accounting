@@ -224,6 +224,7 @@ def create_bank_difference_journal(
     amount: Decimal,
     account_id: str | None = None,
     transaction_id: str | None = None,
+    user_id: str | None = None,
 ) -> ComprobanteContable:
     """Crea un comprobante de ajuste por diferencia bancaria."""
     reconciliation = database.session.get(Reconciliation, reconciliation_id)
@@ -272,6 +273,7 @@ def create_bank_difference_journal(
         date=reconciliation.recon_date,
         memo="Ajuste de diferencia bancaria",
         status="draft",
+        user_id=user_id,
         voucher_type="journal_entry",
         book=books[0].code if books else None,
         book_codes=json.dumps([book.code for book in books]) if books else None,

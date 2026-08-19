@@ -31,7 +31,7 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, database
+        from cacao_accounting.database import Entity, Modules, User, database
 
         database.create_all()
         database.session.add(
@@ -51,6 +51,12 @@ def app_ctx():
                 tax_id="J0002",
                 currency="USD",
             )
+        )
+        database.session.add_all(
+            [
+                Modules(module="accounting", default=True, enabled=True),
+                User(id="user-1", user="admin", password=b"x", classification="admin", active=True),
+            ]
         )
         database.session.commit()
         yield app
