@@ -1418,13 +1418,17 @@ def _validate_sales_invoice_relation(relation: DocumentRelation, invoice_id: str
 
 def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:
     """Persist the editable fiscal snapshot captured in the form."""
+    items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars()
+    subtotal = sum((Decimal(str(item.amount or "0")) for item in items), Decimal("0"))
     persist_document_fiscal_snapshot(
         company=str(invoice.company or ""),
         document_type=invoice.document_type or "sales_invoice",
         document_id=invoice.id,
-        currency=None,
+        currency=effective_currency(invoice),
         tax_lines=request.form.get("tax_lines_payload"),
         tax_summary=request.form.get("tax_summary_payload"),
+        server_subtotal=subtotal,
+        server_total=Decimal(str(invoice.grand_total or "0")),
     )
 
 
@@ -1882,12 +1886,16 @@ def _validate_credit_limit_and_overdue(
 
 def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInvoice]:
     """Obtiene facturas aprobadas del cliente y compañía."""
-    query = database.select(SalesInvoice).filter_by(
-        company=company,
-        customer_id=customer_id,
-        docstatus=1,
-        is_return=False,
-    ).where(SalesInvoice.document_type != "sales_debit_note")
+    query = (
+        database.select(SalesInvoice)
+        .filter_by(
+            company=company,
+            customer_id=customer_id,
+            docstatus=1,
+            is_return=False,
+        )
+        .where(SalesInvoice.document_type != "sales_debit_note")
+    )
     return list(database.session.execute(query).scalars().all())
 
 

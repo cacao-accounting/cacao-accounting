@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
 from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
-from cacao_accounting.database import DocumentTaxLine, DocumentTaxSummary, TaxRule, database
+from cacao_accounting.database import Accounts, DocumentTaxLine, DocumentTaxSummary, TaxRule, database
 from cacao_accounting.document_flow.status import _
 
 
@@ -49,10 +49,16 @@ def persist_document_fiscal_snapshot(
     currency: str | None,
     tax_lines: Any,
     tax_summary: Any,
+    server_subtotal: Decimal | None = None,
+    server_total: Decimal | None = None,
 ) -> None:
     """Reemplaza el snapshot fiscal persistido de un documento."""
     lines_payload = _normalize_lines_payload(tax_lines)
     summary_payload = _normalize_summary_payload(tax_summary)
+    if server_subtotal is not None:
+        summary_payload["subtotal"] = str(server_subtotal)
+    if server_total is not None:
+        summary_payload["grand_total"] = str(server_total)
     _delete_document_fiscal_snapshot(document_type=document_type, document_id=document_id)
     if not lines_payload and not summary_payload:
         return
@@ -65,7 +71,12 @@ def persist_document_fiscal_snapshot(
     )
     database.session.add(summary_row)
     database.session.flush()
-    _persist_document_tax_lines(company=company, summary_id=summary_row.id, lines_payload=lines_payload)
+    _persist_document_tax_lines(
+        company=company,
+        summary_id=summary_row.id,
+        lines_payload=lines_payload,
+        server_subtotal=server_subtotal,
+    )
 
 
 def build_tax_rule_contexts_from_snapshot(
@@ -134,41 +145,57 @@ def _build_document_tax_line(
     summary_id: str,
     index: int,
     line_payload: dict[str, Any],
+    server_subtotal: Decimal | None = None,
+    concept_amounts: dict[str, Decimal] | None = None,
 ) -> DocumentTaxLine:
-    accounting_treatment = _document_tax_line_accounting_treatment(line_payload)
+    rule_id = _document_tax_line_rule_id(line_payload)
+    tax_rule = _matching_tax_rule(company=company, rule_id=rule_id)
+    canonical_payload = _canonical_tax_line_payload(
+        company=company,
+        line_payload=line_payload,
+        tax_rule=tax_rule,
+        server_subtotal=server_subtotal,
+        concept_amounts=concept_amounts or {},
+    )
+    accounting_treatment = _document_tax_line_accounting_treatment(canonical_payload)
     return DocumentTaxLine(
         document_tax_summary_id=summary_id,
         line_index=index,
-        rule_id=_document_tax_line_rule_id(line_payload),
-        concept=_document_tax_line_concept(index, line_payload),
-        tax_type=_document_tax_line_tax_type(line_payload),
-        calculation_method=_document_tax_line_calculation_method(line_payload),
-        base_amount=_decimal_or_none(line_payload.get("base_amount")),
-        rate=_decimal_or_none(line_payload.get("rate")),
-        amount=_decimal_or_none(line_payload.get("amount")) or Decimal("0"),
+        rule_id=_document_tax_line_rule_id(canonical_payload),
+        concept=_document_tax_line_concept(index, canonical_payload),
+        tax_type=_document_tax_line_tax_type(canonical_payload),
+        calculation_method=_document_tax_line_calculation_method(canonical_payload),
+        base_amount=_decimal_or_none(canonical_payload.get("base_amount")),
+        rate=_decimal_or_none(canonical_payload.get("rate")),
+        amount=_decimal_or_none(canonical_payload.get("amount")) or Decimal("0"),
         accounting_treatment=accounting_treatment,
-        account_id=_clean_optional_id(line_payload.get("account_id")),
+        account_id=_validated_tax_account_id(company, canonical_payload.get("account_id")),
         affects_inventory=affects_inventory_from_treatment(accounting_treatment),
-        affects_document_total=bool(line_payload.get("affects_document_total", True)),
-        included_in_price=bool(line_payload.get("included_in_price")),
-        notes=str(line_payload.get("notes") or ""),
-        allocation_method=_clean_optional_id(line_payload.get("allocation_method")),
-        metadata_json=_document_tax_line_metadata_json(line_payload),
-        rule_snapshot_json=_document_tax_line_snapshot_json(company=company, line_payload=line_payload),
+        affects_document_total=bool(canonical_payload.get("affects_document_total", True)),
+        included_in_price=bool(canonical_payload.get("included_in_price")),
+        notes=str(canonical_payload.get("notes") or ""),
+        allocation_method=_clean_optional_id(canonical_payload.get("allocation_method")),
+        metadata_json=_document_tax_line_metadata_json(canonical_payload),
+        rule_snapshot_json=_document_tax_line_snapshot_json(company=company, line_payload=canonical_payload),
         source_payload_json=json.dumps(line_payload, ensure_ascii=False),
     )
 
 
-def _persist_document_tax_lines(*, company: str, summary_id: str, lines_payload: list[dict[str, Any]]) -> None:
+def _persist_document_tax_lines(
+    *, company: str, summary_id: str, lines_payload: list[dict[str, Any]], server_subtotal: Decimal | None = None
+) -> None:
+    concept_amounts: dict[str, Decimal] = {}
     for index, line_payload in enumerate(lines_payload, start=1):
-        database.session.add(
-            _build_document_tax_line(
-                company=company,
-                summary_id=summary_id,
-                index=index,
-                line_payload=line_payload,
-            )
+        row = _build_document_tax_line(
+            company=company,
+            summary_id=summary_id,
+            index=index,
+            line_payload=line_payload,
+            server_subtotal=server_subtotal,
+            concept_amounts=concept_amounts,
         )
+        concept_amounts[row.concept] = _to_decimal(row.amount)
+        database.session.add(row)
 
 
 def _load_document_tax_lines(summary_id: str) -> list[DocumentTaxLine]:
@@ -219,6 +246,101 @@ def _document_tax_line_rule_id(line_payload: dict[str, Any]) -> str | None:
     return str(line_payload.get("source_rule_id") or line_payload.get("rule_id") or "").strip() or None
 
 
+def _canonical_tax_line_payload(
+    *,
+    company: str,
+    line_payload: dict[str, Any],
+    tax_rule: TaxRule | None,
+    server_subtotal: Decimal | None,
+    concept_amounts: dict[str, Decimal],
+) -> dict[str, Any]:
+    """Build a fiscal line from the stored rule or a validated manual line."""
+    rule_id = _document_tax_line_rule_id(line_payload)
+    is_manual = bool(line_payload.get("manual")) or str(rule_id or "").startswith("MANUAL-")
+    if tax_rule is None and not is_manual:
+        raise ValueError(f"La regla fiscal '{rule_id or 'sin identificador'}' no es válida para la compañía.")
+
+    if tax_rule is not None:
+        base_amount = _canonical_tax_rule_base(tax_rule, server_subtotal, concept_amounts, line_payload)
+        rate = _to_decimal(tax_rule.rate)
+        amount = _canonical_tax_rule_amount(tax_rule, base_amount, rate)
+        if amount < 0:
+            raise ValueError(f"La regla fiscal '{tax_rule.id}' produjo un importe negativo.")
+        return {
+            "source_rule_id": tax_rule.id,
+            "concept": tax_rule.concept,
+            "type": tax_rule.tax_type,
+            "calculation_method": tax_rule.calculation_method,
+            "base_amount": str(base_amount),
+            "rate": str(rate),
+            "amount": str(amount),
+            "accounting_treatment": tax_rule.accounting_treatment,
+            "affects_document_total": bool(tax_rule.affects_document_total),
+            "included_in_price": bool(getattr(tax_rule, "included_in_price", False)),
+            "allocation_method": tax_rule.allocation_method,
+            "account_id": tax_rule.account_id,
+            "notes": line_payload.get("notes") or "",
+        }
+
+    base_amount = _decimal_or_none(line_payload.get("base_amount")) or Decimal("0")
+    rate = _decimal_or_none(line_payload.get("rate")) or Decimal("0")
+    amount = _decimal_or_none(line_payload.get("amount")) or Decimal("0")
+    if base_amount < 0 or rate < 0 or amount < 0:
+        raise ValueError("Las líneas fiscales manuales no pueden contener importes negativos.")
+    return {
+        **line_payload,
+        "source_rule_id": rule_id or f"MANUAL-{line_payload.get('concept') or 'LINE'}",
+        "manual": True,
+        "base_amount": str(base_amount),
+        "rate": str(rate),
+        "amount": str(amount),
+        "account_id": _clean_optional_id(line_payload.get("account_id")),
+    }
+
+
+def _canonical_tax_rule_base(
+    tax_rule: TaxRule,
+    server_subtotal: Decimal | None,
+    concept_amounts: dict[str, Decimal],
+    line_payload: dict[str, Any],
+) -> Decimal:
+    """Resolve a rule base from server totals and previously canonical lines."""
+    if server_subtotal is None:
+        base_amount = _decimal_or_none(line_payload.get("base_amount")) or Decimal("0")
+    elif tax_rule.base_mode == "accumulated" and tax_rule.include_concepts:
+        included = _as_list(tax_rule.include_concepts)
+        excluded = _as_list(tax_rule.exclude_concepts)
+        base_amount = server_subtotal
+        if included:
+            base_amount = sum((concept_amounts.get(concept, Decimal("0")) for concept in included), Decimal("0"))
+        base_amount -= sum((concept_amounts.get(concept, Decimal("0")) for concept in excluded), Decimal("0"))
+    else:
+        base_amount = server_subtotal
+    if base_amount < 0:
+        raise ValueError(f"La regla fiscal '{tax_rule.id}' produjo una base negativa.")
+    return base_amount
+
+
+def _canonical_tax_rule_amount(tax_rule: TaxRule, base_amount: Decimal, rate: Decimal) -> Decimal:
+    """Calculate the persisted amount from canonical rule values."""
+    if tax_rule.calculation_method == "percentage":
+        return base_amount * rate / Decimal("100")
+    if tax_rule.calculation_method in {"fixed", "manual"}:
+        return _to_decimal(tax_rule.amount)
+    return Decimal("0")
+
+
+def _validated_tax_account_id(company: str, account_id: Any) -> str | None:
+    """Validate that a fiscal account belongs to the document company."""
+    cleaned = _clean_optional_id(account_id)
+    if not cleaned:
+        return None
+    account = database.session.get(Accounts, cleaned)
+    if account is None or account.entity != company:
+        raise ValueError("La cuenta fiscal debe pertenecer a la compañía del documento.")
+    return cleaned
+
+
 def _document_tax_line_concept(index: int, line_payload: dict[str, Any]) -> str:
     return str(line_payload.get("concept") or f"line_{index}")
 
@@ -261,9 +383,6 @@ def _delete_document_fiscal_snapshot(*, document_type: str, document_id: str) ->
 
 
 def _resolve_rule_snapshot(*, company: str, rule_id: str | None, line_payload: dict[str, Any]) -> dict[str, Any]:
-    payload_snapshot = line_payload.get("rule_snapshot")
-    if isinstance(payload_snapshot, dict):
-        return payload_snapshot
     tax_rule = _matching_tax_rule(company=company, rule_id=rule_id)
     if tax_rule:
         return _tax_rule_snapshot(tax_rule)
@@ -274,7 +393,7 @@ def _matching_tax_rule(*, company: str, rule_id: str | None) -> TaxRule | None:
     if not rule_id:
         return None
     tax_rule = database.session.get(TaxRule, rule_id)
-    if tax_rule and (tax_rule.company is None or tax_rule.company == company):
+    if tax_rule and tax_rule.is_active and (tax_rule.company is None or tax_rule.company == company):
         return tax_rule
     return None
 

@@ -362,7 +362,8 @@ def test_document_tax_snapshot_is_persisted_and_loaded_for_invoice(app_ctx: Flas
         currency="USD",
         tax_lines=[
             {
-                "source_rule_id": "RULE-SNAPSHOT-001",
+                "source_rule_id": "MANUAL-SNAPSHOT-001",
+                "manual": True,
                 "concept": "IVA",
                 "type": "tax",
                 "base_amount": "100.00",
@@ -392,6 +393,112 @@ def test_document_tax_snapshot_is_persisted_and_loaded_for_invoice(app_ctx: Flas
     assert persisted_lines[0].account_id is None
 
 
+def test_document_tax_snapshot_uses_canonical_rule_values(app_ctx: Flask) -> None:
+    """Browser values cannot replace a stored rule's amount, rate, or account."""
+    from cacao_accounting.database import Accounts, PurchaseInvoice, TaxRule, database
+
+    account = Accounts(
+        id="ACC-TAX-CANONICAL",
+        entity="cacao",
+        code="ACC-TAX-CANONICAL",
+        name="Impuesto canónico",
+        active=True,
+        enabled=True,
+        group=False,
+    )
+    rule = TaxRule(
+        company="cacao",
+        name="IVA canónico",
+        concept="IVA",
+        tax_type="tax",
+        calculation_method="percentage",
+        rate=Decimal("15"),
+        amount=Decimal("0"),
+        base_mode="goods",
+        accounting_treatment="separate_tax_account",
+        recognition_event="purchase_invoice_confirmed",
+        account_id=account.id,
+        is_active=True,
+    )
+    invoice = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 3), document_type="purchase_invoice")
+    database.session.add_all([account, rule, invoice])
+    database.session.flush()
+
+    persist_document_fiscal_snapshot(
+        company="cacao",
+        document_type="purchase_invoice",
+        document_id=invoice.id,
+        currency="NIO",
+        tax_lines=[
+            {
+                "source_rule_id": rule.id,
+                "concept": "Manipulado",
+                "base_amount": "999",
+                "rate": "99",
+                "amount": "999",
+                "account_id": "ACCOUNT-ATTACK",
+                "rule_snapshot": {"rate": "999", "account_id": "ACCOUNT-ATTACK"},
+            }
+        ],
+        tax_summary={"subtotal": "999", "grand_total": "1998"},
+        server_subtotal=Decimal("100"),
+        server_total=Decimal("115"),
+    )
+
+    persisted_line = load_document_fiscal_lines("purchase_invoice", invoice.id)[0]
+    assert persisted_line.concept == "IVA"
+    assert persisted_line.base_amount == Decimal("100.000000000")
+    assert persisted_line.rate == Decimal("15.000000000")
+    assert persisted_line.amount == Decimal("15.0000")
+    assert persisted_line.account_id == account.id
+    assert '"rate": "15"' in persisted_line.rule_snapshot_json
+
+
+def test_manual_tax_snapshot_rejects_cross_company_account(app_ctx: Flask) -> None:
+    """Manual fiscal lines cannot post to an account outside their company."""
+    from cacao_accounting.database import Accounts, Entity, PurchaseInvoice, database
+
+    other_entity = Entity(
+        code="cafe",
+        name="Cafe",
+        company_name="Cafe",
+        tax_id="J0002",
+        currency="NIO",
+        enabled=True,
+    )
+    other_account = Accounts(
+        id="ACC-TAX-CAFE",
+        entity="cafe",
+        code="ACC-TAX-CAFE",
+        name="Impuesto Cafe",
+        active=True,
+        enabled=True,
+        group=False,
+    )
+    database.session.add_all([other_entity, other_account])
+    invoice = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 4), document_type="purchase_invoice")
+    database.session.add(invoice)
+    database.session.flush()
+
+    with pytest.raises(ValueError, match="pertenecer a la compañía"):
+        persist_document_fiscal_snapshot(
+            company="cacao",
+            document_type="purchase_invoice",
+            document_id=invoice.id,
+            currency="NIO",
+            tax_lines=[
+                {
+                    "source_rule_id": "MANUAL-FREIGHT",
+                    "manual": True,
+                    "concept": "Flete",
+                    "amount": "10",
+                    "account_id": other_account.id,
+                }
+            ],
+            tax_summary={"subtotal": "100", "grand_total": "110"},
+        )
+
+
 def test_document_tax_snapshot_derives_inventory_impact_from_treatment(app_ctx: Flask) -> None:
     """Legacy inventory flags cannot override the accounting treatment."""
     from cacao_accounting.database import PurchaseInvoice, database
@@ -406,7 +513,8 @@ def test_document_tax_snapshot_derives_inventory_impact_from_treatment(app_ctx: 
         currency="USD",
         tax_lines=[
             {
-                "source_rule_id": "RULE-EXPENSE-001",
+                "source_rule_id": "MANUAL-EXPENSE-001",
+                "manual": True,
                 "concept": "Flete no capitalizable",
                 "type": "charge",
                 "amount": "20.00",
@@ -444,7 +552,8 @@ def test_payment_context_uses_persisted_fiscal_snapshot(app_ctx: Flask) -> None:
         currency="USD",
         tax_lines=[
             {
-                "source_rule_id": "RULE-WHT-001",
+                "source_rule_id": "MANUAL-WHT-001",
+                "manual": True,
                 "concept": "RETENCION",
                 "type": "withholding",
                 "base_amount": "120.00",

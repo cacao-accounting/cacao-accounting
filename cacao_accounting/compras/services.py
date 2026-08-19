@@ -1087,13 +1087,17 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
 
 def _persist_purchase_invoice_fiscal_snapshot(invoice: PurchaseInvoice) -> None:
     """Persist the editable fiscal snapshot captured in the form."""
+    items = database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)).scalars()
+    subtotal = sum((Decimal(str(item.amount or "0")) for item in items), Decimal("0"))
     persist_document_fiscal_snapshot(
         company=str(invoice.company or ""),
         document_type=invoice.document_type or PURCHASE_INVOICE,
         document_id=invoice.id,
-        currency=None,
+        currency=effective_currency(invoice),
         tax_lines=request.form.get("tax_lines_payload"),
         tax_summary=request.form.get("tax_summary_payload"),
+        server_subtotal=subtotal,
+        server_total=Decimal(str(invoice.grand_total or "0")),
     )
 
 

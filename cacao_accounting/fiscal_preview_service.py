@@ -285,7 +285,11 @@ def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
             "affects_inventory": affects_inventory_from_treatment(line.accounting_treatment),
             "affects_document_total": bool(line.affects_document_total),
             "included_in_price": bool(line.included_in_price),
-            "account_id": _line_account_id(payload, line.source_rule_id, line.account_id),
+            "account_id": (
+                line.account_id
+                if not _is_manual_rule_id(line.source_rule_id)
+                else _line_account_id(payload, line.source_rule_id, line.account_id)
+            ),
             "notes": _line_note(payload, line.source_rule_id),
         }
         for line in result.tax_lines
@@ -424,9 +428,8 @@ def _is_manual_tax_line(raw_line: Any) -> bool:
     """Identifica líneas fiscales creadas manualmente por el usuario."""
     if not isinstance(raw_line, dict):
         return False
-    return bool(raw_line.get("manual")) or _is_manual_rule_id(
-        str(raw_line.get("source_rule_id") or raw_line.get("rule_id") or "")
-    )
+    rule_id = str(raw_line.get("source_rule_id") or raw_line.get("rule_id") or "")
+    return _is_manual_rule_id(rule_id) or (bool(raw_line.get("manual")) and not rule_id)
 
 
 def _is_manual_rule_id(rule_id: str) -> bool:
