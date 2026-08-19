@@ -285,6 +285,10 @@ IMPORT_LANDED_COST = "import_landed_cost"
 
 IMPORT_LANDED_COST_LABEL = "Costo de Importación"
 
+COMPARATIVO_OFERTAS_TITULO = "Comparativo de Ofertas - "
+
+COMPRAS_COMPARATIVO_ORDENES = "compras.compras_comparativo_ordenes"
+
 DOCUMENT_TYPE_LABELS: dict[str, str] = {
     PURCHASE_INVOICE: FACTURA_DE_COMPRA,
     PURCHASE_DEBIT_NOTE: "Nota de Débito de Compra",
@@ -977,7 +981,7 @@ def compras_comparativo_ofertas_lista():
         ).scalars()
         for comparison in comparisons:
             comparisons_by_request.setdefault(comparison.purchase_request_id, comparison)
-    titulo = "Comparativo de Ofertas - " + APPNAME
+    titulo = COMPARATIVO_OFERTAS_TITULO + APPNAME
     return render_template(
         "compras/comparativo_ofertas_lista.html",
         consulta=consulta,
@@ -1019,7 +1023,7 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
         try:
             comparison = create_purchase_request_comparison(purchase_request, participant_ids, current_user.id)
             database.session.commit()
-            return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
+            return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
         except (IdentifierConfigurationError, SQLAlchemyError) as exc:
             database.session.rollback()
             flash_error(exc)
@@ -1055,7 +1059,7 @@ def compras_comparativo_guardar_borrador(comparison_id: str):
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
-    return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
+    return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison_id))
 
 
 @compras.route("/request-for-quotation/comparison/<comparison_id>/negotiation-round", methods=["POST"])
@@ -1089,7 +1093,7 @@ def compras_comparativo_solicitud_abrir_ronda(comparison_id: str):
     except (PurchaseSourcingError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
-    return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
+    return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison_id))
 
 
 @compras.route("/request-for-quotation/comparison/<comparison_id>/finalize", methods=["POST"])
@@ -1121,7 +1125,7 @@ def compras_comparativo_finalizar(comparison_id: str):
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
-    return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
+    return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison_id))
 
 
 @compras.route("/request-for-quotation/comparison/<comparison_id>/place-purchase-orders", methods=["POST"])
@@ -1140,7 +1144,7 @@ def compras_comparativo_colocar_ordenes_solicitud(comparison_id: str):
     except (DocumentFlowError, IdentifierConfigurationError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
-    return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))
+    return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison_id))
 
 
 @compras.route("/request-for-quotation/comparison/<comparison_id>/round", methods=["POST"])
@@ -1162,16 +1166,16 @@ def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
     participant_ids = set(request.form.getlist("participant_ids"))
     if not participant_ids.issubset(candidate_ids):
         flash_error("Seleccione únicamente órdenes de compra de la misma Solicitud de Compra.")
-        return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
+        return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
     try:
         round_record = open_purchase_order_comparison_round(comparison, purchase_request, participant_ids, current_user.id)
         database.session.commit()
         flash("Nueva ronda de negociación abierta.", "success")
-        return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id, round_id=round_record.id))
+        return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id, round_id=round_record.id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
-        return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
+        return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
 
 
 @compras.route("/request-for-quotation/comparison/<comparison_id>")
@@ -1217,7 +1221,7 @@ def compras_comparativo_ordenes(comparison_id: str):
             comparison_lines=comparison_lines,
             negotiation_rfqs=negotiation_rfqs,
             is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
-            titulo="Comparativo de Ofertas - " + (request_comparison.document_no or request_comparison.id or ""),
+            titulo=COMPARATIVO_OFERTAS_TITULO + (request_comparison.document_no or request_comparison.id or ""),
         )
 
     if not comparison:
@@ -1289,7 +1293,7 @@ def compras_comparativo_ordenes(comparison_id: str):
         participant_order_ids=participant_order_ids,
         rounds=rounds,
         selected_round=selected_round,
-        titulo="Comparativo de Ofertas - " + (comparison.id or ""),
+        titulo=COMPARATIVO_OFERTAS_TITULO + (comparison.id or ""),
     )
 
 
@@ -1321,7 +1325,7 @@ def compras_comparativo_ofertas(rfq_id: str):
         if award
         else []
     )
-    titulo = "Comparativo de Ofertas - " + (registro.document_no or rfq_id)
+    titulo = COMPARATIVO_OFERTAS_TITULO + (registro.document_no or rfq_id)
     return render_template(
         "compras/comparativo_ofertas.html",
         registro=registro,

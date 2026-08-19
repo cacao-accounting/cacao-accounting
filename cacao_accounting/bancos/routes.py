@@ -105,6 +105,8 @@ BANCOS_BANCOS_PAGO = "bancos.bancos_pago"
 
 BANCOS_CONCILIACION_ENDPOINT = "bancos.bancos_conciliacion_bancaria"
 
+BANCOS_REGLAS_MATCHING_ENDPOINT = "bancos.bancos_reglas_matching"
+
 COMPRAS_FACTURA_COMPRA_ROUTE = "compras.compras_factura_compra"
 
 VENTAS_FACTURA_VENTA_ROUTE = "ventas.ventas_factura_venta"
@@ -512,10 +514,10 @@ def bancos_reglas_matching():
             bank_account = database.session.get(BankAccount, bank_account_id)
             if not bank_account:
                 flash(_("La cuenta bancaria seleccionada no existe."), "danger")
-                return redirect(url_for("bancos.bancos_reglas_matching"))
+                return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
             if bank_account.company != company:
                 flash(_("La cuenta bancaria no pertenece a la compañía de la regla."), "danger")
-                return redirect(url_for("bancos.bancos_reglas_matching"))
+                return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
         rule = BankMatchingRule(
             company=company,
             bank_account_id=bank_account_id,
@@ -529,7 +531,7 @@ def bancos_reglas_matching():
         database.session.add(rule)
         database.session.commit()
         flash(_("Regla de matching creada correctamente."), "success")
-        return redirect(url_for("bancos.bancos_reglas_matching"))
+        return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
     rules = database.session.execute(database.select(BankMatchingRule).order_by(BankMatchingRule.priority)).scalars().all()
     return render_template(
         "bancos/reglas_matching.html", accounts=accounts, rules=rules, titulo=_("Reglas de Matching Bancario")
@@ -562,7 +564,7 @@ def bancos_regla_matching_ejecutar(rule_id: str):
         )
     except BankStatementError as exc:
         flash(_(str(exc)), "danger")
-    return redirect(url_for("bancos.bancos_reglas_matching"))
+    return redirect(url_for(BANCOS_REGLAS_MATCHING_ENDPOINT))
 
 
 @bancos.route("/payment/debit-note/new", methods=["GET", "POST"])
