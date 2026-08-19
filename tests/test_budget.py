@@ -63,7 +63,7 @@ def test_budget_lifecycle(app_ctx):
         "fiscal_year_id": fy.id,
         "budget_code": "TEST-2026",
         "name": "Presupuesto de Prueba",
-        "currency_id": "NIO",
+        "currency_id": book.currency or "NIO",
     }
     budget = service.create_budget(data, str(admin_user.id))
     assert budget.status == "draft"
@@ -107,7 +107,7 @@ def test_duplicate_budget_code(app_ctx):
         "fiscal_year_id": fy.id,
         "budget_code": "DUP-CODE",
         "name": "P1",
-        "currency_id": "NIO",
+        "currency_id": book.currency or "NIO",
     }
     service.create_budget(data, str(admin_user.id))
 
@@ -156,7 +156,7 @@ def test_budget_import(app_ctx):
             "fiscal_year_id": fy.id,
             "budget_code": "IMPORT-TEST",
             "name": "Import Test",
-            "currency_id": "NIO",
+            "currency_id": book.currency or "NIO",
         },
         str(admin_user.id),
     )
@@ -197,7 +197,7 @@ def test_budget_import_route_uses_shared_template(app_ctx, monkeypatch):
             "fiscal_year_id": fy.id,
             "budget_code": "ROUTE-IMPORT-TEST",
             "name": "Route Import Test",
-            "currency_id": "NIO",
+            "currency_id": book.currency or "NIO",
         },
         str(admin_user.id),
     )
@@ -241,7 +241,7 @@ def test_budget_uniqueness_validation(app_ctx):
             "fiscal_year_id": fy.id,
             "budget_code": "UNIQUE-TEST",
             "name": "Unique Test",
-            "currency_id": "NIO",
+            "currency_id": book.currency or "NIO",
         },
         str(admin_user.id),
     )
@@ -269,7 +269,7 @@ def test_budget_line_validation_rejects_invalid_dimensions(app_ctx):
             "fiscal_year_id": fy.id,
             "budget_code": "VALIDATION-TEST",
             "name": "Validation Test",
-            "currency_id": "NIO",
+            "currency_id": book.currency or "NIO",
         },
         str(admin_user.id),
     )
@@ -359,7 +359,7 @@ def test_budget_import_rollback(app_ctx):
             "fiscal_year_id": fy.id,
             "budget_code": "ROLLBACK-TEST",
             "name": "Rollback Test",
-            "currency_id": "NIO",
+            "currency_id": book.currency or "NIO",
         },
         str(admin_user.id),
     )
@@ -406,7 +406,7 @@ def test_budget_import_unknown_column(app_ctx):
             "fiscal_year_id": fy.id,
             "budget_code": "UNKNOWN-COL",
             "name": "Unknown Col",
-            "currency_id": "NIO",
+            "currency_id": book.currency or "NIO",
         },
         str(admin_user.id),
     )
@@ -432,7 +432,7 @@ def test_budget_report_filters_with_dimension_ids(app_ctx):
             "fiscal_year_id": fy.id,
             "budget_code": "FILTER-ID-TEST",
             "name": "Filtro por ID",
-            "currency_id": "NIO",
+            "currency_id": book.currency or "NIO",
         },
         str(admin_user.id),
     )
