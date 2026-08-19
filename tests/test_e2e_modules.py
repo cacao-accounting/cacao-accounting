@@ -754,7 +754,17 @@ def test_returns(app_ctx):
     # 2. Purchase Return
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     pi = PurchaseInvoice(
-        company="cacao", supplier_id=supplier.id, posting_date=date.today(), document_type="purchase_invoice", docstatus=1
+        company="cacao",
+        supplier_id=supplier.id,
+        posting_date=date.today(),
+        document_type="purchase_invoice",
+        total=500,
+        grand_total=500,
+        outstanding_amount=500,
+        base_total=500,
+        base_grand_total=500,
+        base_outstanding_amount=500,
+        docstatus=1,
     )
     database.session.add(pi)
     database.session.flush()
@@ -769,7 +779,7 @@ def test_returns(app_ctx):
         "company": "cacao",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
-        "document_type": "purchase_return",
+        "document_type": "purchase_credit_note",
         "from_invoice": pi.id,
         "item_code_0": "ART-001",
         "qty_0": "10",
@@ -784,7 +794,7 @@ def test_returns(app_ctx):
     pr = (
         database.session.execute(
             database.select(PurchaseInvoice)
-            .filter_by(document_type="purchase_return")
+            .filter_by(document_type="purchase_credit_note")
             .order_by(PurchaseInvoice.created.desc())
         )
         .scalars()
