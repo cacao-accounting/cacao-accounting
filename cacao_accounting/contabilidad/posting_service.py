@@ -2295,6 +2295,11 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
     qty_change = counted_qty - current_qty
     current_value = _decimal_value(current_bin.stock_value) if current_bin else Decimal("0")
     target_value = _decimal_value(line.target_stock_value)
+    if line.target_valuation_rate is None and target_value != 0:
+        raise PostingError("La conciliación requiere tasa de valuación objetivo.")
+    target_rate = _decimal_value(line.target_valuation_rate)
+    if abs(target_value - counted_qty * target_rate) > Decimal("0.01"):
+        raise PostingError("El valor objetivo de la conciliación no coincide con cantidad por tasa.")
     value_change = target_value - current_value
     if qty_change == 0 and value_change == 0:
         return None
