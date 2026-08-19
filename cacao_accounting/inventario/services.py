@@ -46,6 +46,7 @@ from cacao_accounting.document_flow.status import _
 
 from cacao_accounting.document_identifiers import assign_document_identifier
 
+from cacao_accounting.decorators import exige_acceso_compania
 
 from cacao_accounting.version import APPNAME
 
@@ -561,11 +562,20 @@ def _validate_stock_entry_purpose(value: Any) -> str:
     return purpose
 
 
+def _validate_stock_entry_company(value: Any, action: str) -> str:
+    """Validate company presence and the user's inventory ACL."""
+    company = str(value or "").strip()
+    if not company:
+        raise ValueError("La compañía es obligatoria.")
+    exige_acceso_compania("inventory", company, action)
+    return company
+
+
 def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
     try:
         posting_date = _validate_stock_entry_posting_date(form_data)
         posted_purpose = _validate_stock_entry_purpose(form_data.get("purpose") or "material_receipt")
-        company = form_data.get("company") or None
+        company = _validate_stock_entry_company(form_data.get("company"), "crear")
         entry = StockEntry(
             purpose=posted_purpose,
             company=company,
@@ -648,7 +658,7 @@ def _capture_stock_entry_state(registro: StockEntry) -> dict:
 def _update_stock_entry_from_form(registro: StockEntry) -> None:
     """Actualiza campos del registro desde el formulario."""
     registro.purpose = _validate_stock_entry_purpose(request.form.get("purpose") or registro.purpose)
-    registro.company = request.form.get("company") or None
+    registro.company = _validate_stock_entry_company(request.form.get("company"), "editar")
     registro.posting_date = _validate_stock_entry_posting_date(request.form)
     registro.from_warehouse = request.form.get("from_warehouse") or None
     registro.to_warehouse = request.form.get("to_warehouse") or None
