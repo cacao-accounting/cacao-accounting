@@ -103,8 +103,6 @@ LABEL_FACTURA_VENTA = "Factura de Venta"
 
 PAYMENT_TYPES = ("pay", "receive", "internal_transfer", "debit_note", "credit_note")
 
-from cacao_accounting.bancos import cash_forecast as _cf  # noqa: F401, E402
-
 
 def _safe_bank_reconciliation_candidates(transaction: BankTransaction) -> list[Any]:
     """Obtiene sugerencias sin romper el panel por datos bancarios históricos inválidos."""

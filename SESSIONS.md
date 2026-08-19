@@ -3,6 +3,30 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-19 — Estabilización del import de Bancos tras refactorización
+
+### Petición
+
+Resolver el `ImportError` al cargar `create_app` y durante la colección de
+`tests/test_update_inventory.py`, causado por la refactorización del módulo de
+Bancos.
+
+### Implementación
+
+1. Se identificó un ciclo: `bancos.services` importaba `cash_forecast` durante
+   su inicialización y `cash_forecast` importaba el blueprint desde la fachada
+   parcialmente inicializada.
+2. `cash_forecast` ahora importa el blueprint directamente desde
+   `bancos.routes`, donde ya fue creado antes de registrar esas rutas.
+3. Se retiró el import duplicado e innecesario de `cash_forecast` en
+   `bancos.services`.
+
+### Validación
+
+`from cacao_accounting import create_app` carga correctamente. Black, Ruff y
+Flake8 pasan sobre los archivos modificados; `tests/test_update_inventory.py`
+finaliza con **4 passed**.
+
 ## 2026-08-17 — Verificación de fixes en issues abiertos vía `gh`
 
 ### Petición
