@@ -748,7 +748,7 @@ def _create_line_relation(
         "purchase_quotation": {"purchase_request"},
         "supplier_quotation": {"purchase_request", "purchase_quotation"},
         "purchase_receipt": {"purchase_order"},
-        "purchase_invoice": {"purchase_order", "purchase_receipt"},
+        "purchase_invoice": {"purchase_order", "purchase_receipt", "purchase_invoice"},
     }
     if source_type not in allowed_source_types.get(target_type, set()):
         raise DocumentFlowError("El tipo de documento origen no es válido para este flujo.", 400)
@@ -765,6 +765,7 @@ def _create_line_relation(
         "supplier_quotation": (SupplierQuotation, SupplierQuotationItem, "supplier_quotation_id"),
         "purchase_order": (PurchaseOrder, PurchaseOrderItem, "purchase_order_id"),
         "purchase_receipt": (PurchaseReceipt, PurchaseReceiptItem, "purchase_receipt_id"),
+        "purchase_invoice": (PurchaseInvoice, PurchaseInvoiceItem, "purchase_invoice_id"),
     }
     target = database.session.get(target_models[target_type], target_id)
     source_model, source_item_model, source_parent_field = source_models[source_type]
