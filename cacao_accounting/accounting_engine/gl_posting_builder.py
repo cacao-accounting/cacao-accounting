@@ -14,13 +14,13 @@ from sqlalchemy import select
 from cacao_accounting.accounting_engine.common.context import CalculationContext, JournalEntryProforma
 from cacao_accounting.contabilidad.posting import (
     GLEntryParams,
-    LedgerContext,
     PostingError,
     _add_entries,
     _create_gl_entry,
     _document_contexts,
     _lookup_exchange_rate,
 )
+from cacao_accounting.contabilidad.posting_service import LedgerContext
 from cacao_accounting.database import (
     BankAccount,
     GLEntry,
