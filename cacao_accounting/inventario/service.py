@@ -199,8 +199,8 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False)
             raise InventoryServiceError("El serial no esta disponible para salida.")
         if warehouse and serial.warehouse != warehouse:
             raise InventoryServiceError("El serial no se encuentra en la bodega de salida.")
-    elif serial and serial.serial_status == "delivered" and not allow_transfer:
-        raise InventoryServiceError("El serial ya fue entregado.")
+    elif serial and not allow_transfer:
+        raise InventoryServiceError("El serial ya existe y solo puede cambiar de bodega mediante una transferencia.")
 
 
 def validate_batch_serial(
