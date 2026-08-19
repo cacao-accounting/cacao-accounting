@@ -47,7 +47,7 @@
         ) }}
       </div>
       <div class="col-md-4">
-        <label class="form-label" for="naming_series">{{ _("Secuencia") }}</label>
+        <label class="form-label" for="naming_series">{{ _("Secuencia") }} <span class="text-danger">*</span></label>
         {{ tf_macros.smart_select(
             doctype="naming_series",
             name="naming_series",
@@ -56,7 +56,8 @@
             filter_sources=["#company"],
             required_filters=["company"],
             auto_select_default=True,
-            load_on_filter_change=True
+            load_on_filter_change=True,
+            required=True
         ) }}
       </div>
       <div class="col-md-4">
