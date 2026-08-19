@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from cacao_accounting.database import (
     Accounts,
+    Book,
     Entity,
     GLEntry,
     PurchaseInvoice,
@@ -71,6 +72,13 @@ def _gl_totals(company: str, start: date, end: date) -> dict[str, Decimal]:
     )
     ledger_id = primary_ledger_id(company)
     if ledger_id:
+        ledger = database.session.get(Book, ledger_id)
+        company_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
+        if ledger is not None and ledger.currency and company_currency and ledger.currency != company_currency:
+            raise ValueError(
+                "Los KPI no pueden mezclar la moneda funcional de la compañía "
+                "con la moneda del libro primario sin una conversión explícita."
+            )
         query = query.where(GLEntry.ledger_id == ledger_id)
     totals = {"income": Decimal("0"), "cost": Decimal("0"), "expense": Decimal("0")}
     for entry, account in database.session.execute(query).all():

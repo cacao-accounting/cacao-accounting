@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     CompanyParty,
     CostCenter,
     DocumentRelation,
+    Entity,
     FiscalYear,
     GLEntry,
     Item,
@@ -431,6 +432,17 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
+    company_currency = database.session.execute(
+        select(Entity.currency).where(Entity.code == filters.company)
+    ).scalar_one_or_none()
+    if selected_ledger.currency and company_currency and selected_ledger.currency != company_currency:
+        raise ValueError(
+            "La matriz no puede comparar submayores en moneda funcional con un libro "
+            "de moneda distinta sin conversión histórica explícita."
+        )
+    if filters.currency and selected_ledger.currency and filters.currency != selected_ledger.currency:
+        raise ValueError("La moneda solicitada debe coincidir con la moneda del libro seleccionado.")
+    comparison_currency = filters.currency or selected_ledger.currency
     _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
     as_of_date = filters.as_of_date or period_end or date.today()
     defaults = database.session.execute(
@@ -456,7 +468,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
                 selected_ledger.id,
                 [ar_account] if ar_account else [],
                 date_to=as_of_date,
-                currency=filters.currency,
+                currency=comparison_currency,
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
@@ -473,7 +485,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
                 selected_ledger.id,
                 [ap_account] if ap_account else [],
                 date_to=as_of_date,
-                currency=filters.currency,
+                currency=comparison_currency,
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
@@ -505,7 +517,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
             inventory_accounts,
             inventory_subledger,
             _reconciliation_gl_amount(
-                filters.company, selected_ledger.id, inventory_accounts, date_to=as_of_date, currency=filters.currency
+                filters.company, selected_ledger.id, inventory_accounts, date_to=as_of_date, currency=comparison_currency
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
@@ -526,7 +538,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
                 selected_ledger.id,
                 [bridge_account] if bridge_account else [],
                 date_to=as_of_date,
-                currency=filters.currency,
+                currency=comparison_currency,
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
@@ -573,7 +585,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
             tax_accounts,
             purchase_tax - sales_tax,
             _reconciliation_gl_amount(
-                filters.company, selected_ledger.id, tax_accounts, date_to=as_of_date, currency=filters.currency
+                filters.company, selected_ledger.id, tax_accounts, date_to=as_of_date, currency=comparison_currency
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
@@ -613,7 +625,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
                 selected_ledger.id,
                 [str(account) for account in bank_accounts],
                 date_to=as_of_date,
-                currency=filters.currency,
+                currency=comparison_currency,
             ),
             basis="statement_movement",
             currency=selected_ledger.currency,
