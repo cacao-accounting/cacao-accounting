@@ -2857,6 +2857,48 @@ def test_inventory_line_rate_rejects_amount_without_quantity(app_ctx):
         _line_rate_generic(line)
 
 
+def test_item_cogs_account_is_used_for_delivery_posting(app_ctx):
+    """COGS resolution prefers the item's company-specific account."""
+    from cacao_accounting.contabilidad.posting_service import _account_id_for_item
+    from cacao_accounting.database import Accounts, Item, ItemAccount, database
+
+    item_cogs = Accounts(
+        entity="cacao",
+        code="COGS-ITEM-GUARD",
+        name="Item COGS",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="cogs",
+    )
+    company_cogs = Accounts(
+        entity="cacao",
+        code="COGS-COMPANY-GUARD",
+        name="Company COGS",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="cogs",
+    )
+    database.session.add_all(
+        [
+            item_cogs,
+            company_cogs,
+            Item(code="ITEM-COGS-GUARD", name="COGS item", item_type="goods", is_stock_item=True, default_uom="UND"),
+        ]
+    )
+    database.session.flush()
+    database.session.add(ItemAccount(item_code="ITEM-COGS-GUARD", company="cacao", cogs_account_id=item_cogs.id))
+    database.session.commit()
+
+    class Line:
+        """Minimal delivery line for account resolution."""
+
+        item_code = "ITEM-COGS-GUARD"
+
+    assert _account_id_for_item(Line(), "cacao", "cogs") == item_cogs.id
+
+
 def test_reconciliation_rejects_inconsistent_target_value(app_ctx):
     """Posting rejects a target value that disagrees with count times rate."""
     from cacao_accounting.contabilidad.posting_service import (

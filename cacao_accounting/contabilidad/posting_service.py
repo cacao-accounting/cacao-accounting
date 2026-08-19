@@ -366,6 +366,7 @@ def _resolve_item_account_id(item_code: str | None, company: str, account_type: 
             mapped = {
                 "income": mapping.income_account_id,
                 "expense": mapping.expense_account_id,
+                "cogs": mapping.cogs_account_id,
                 "stock_adjustment": mapping.stock_adjustment_account_id,
                 "inventory_adjustment": mapping.stock_adjustment_account_id,
             }.get(account_type)
