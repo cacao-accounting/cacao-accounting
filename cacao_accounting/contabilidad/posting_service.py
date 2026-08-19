@@ -2532,8 +2532,16 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
     qty = _line_qty(line)
 
     if purpose in ("material_receipt", "adjustment_positive", "stock_adjustment", "manufacture", "repack"):
-        valuation_rate = _line_rate(line)
-        value = _decimal_value(line.amount) or (qty * valuation_rate)
+        amount = _decimal_value(line.amount)
+        if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount > 0:
+            # A positive adjustment can change value without changing quantity.
+            # It must bypass _line_rate, whose zero-quantity guard protects
+            # quantity-bearing movements from silently using a zero rate.
+            valuation_rate = _decimal_value(line.valuation_rate or line.basic_rate)
+            value = amount
+        else:
+            valuation_rate = _line_rate(line)
+            value = amount or (qty * valuation_rate)
         line._inventory_cost_amount = value
         return [
             _create_stock_movement(
