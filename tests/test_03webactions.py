@@ -420,7 +420,7 @@ def test_purchase_invoice_document_type_helper_prefers_sources_and_ignores_untru
 
         source_ids = {"from_receipt_id": None, "from_invoice_id": "PINV-1"}
         with app.test_request_context("/buying/purchase-invoice/new"):
-            assert _purchase_invoice_document_type(source_ids) == PURCHASE_INVOICE
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_CREDIT_NOTE
 
         source_ids = {"from_receipt_id": None, "from_invoice_id": None}
         with app.test_request_context("/buying/purchase-invoice/new"):
@@ -431,7 +431,7 @@ def test_purchase_invoice_document_type_helper_prefers_sources_and_ignores_untru
             method="POST",
             data={"document_type": PURCHASE_CREDIT_NOTE},
         ):
-            assert _purchase_invoice_document_type(source_ids) == PURCHASE_CREDIT_NOTE
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_INVOICE
 
 
 def test_sales_credit_note_list_route(request):
@@ -1090,6 +1090,7 @@ def test_transaccional_full_transition_routes_get_post(request):
                             "uom_0": "UND",
                             "rate_0": "1",
                             "amount_0": "1",
+                            "warehouse_0": "PRINCIPAL",
                         },
                     ),
                     (
