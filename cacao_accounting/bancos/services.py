@@ -484,16 +484,31 @@ def _save_numbering_configs(bank_account: BankAccount) -> dict[str, str]:
     if not configs or not isinstance(configs, list):
         return {"status": "ok"}
 
+    validated: list[tuple[dict[str, Any], str | None, str | None]] = []
     for entry in configs:
         if not isinstance(entry, dict):
             continue
         payment_type = entry.get("payment_type")
         if payment_type not in PAYMENT_TYPES:
             continue
+        naming_series_id = entry.get("naming_series_id") or None
+        external_counter_id = entry.get("external_counter_id") or None
+        if naming_series_id:
+            series = database.session.get(NamingSeries, naming_series_id)
+            if not series or series.company not in (None, bank_account.company):
+                raise IdentifierConfigurationError("La serie de numeración no pertenece a la compañía de la cuenta bancaria.")
+        if entry.get("use_external_counter") and external_counter_id:
+            counter = database.session.get(ExternalCounter, external_counter_id)
+            if not counter or counter.company != bank_account.company:
+                raise IdentifierConfigurationError("La chequera no pertenece a la compañía de la cuenta bancaria.")
+        validated.append((entry, naming_series_id, external_counter_id))
+
+    for entry, naming_series_id, external_counter_id in validated:
+        payment_type = entry["payment_type"]
         config = _get_or_create_numbering_config(bank_account.id, payment_type)
-        config.naming_series_id = entry.get("naming_series_id") or None
+        config.naming_series_id = naming_series_id
         config.use_external_counter = bool(entry.get("use_external_counter"))
-        config.external_counter_id = entry.get("external_counter_id") or None if config.use_external_counter else None
+        config.external_counter_id = external_counter_id if config.use_external_counter else None
 
     database.session.commit()
     return {"status": "ok"}
@@ -572,6 +587,7 @@ def _invoice_outstanding(invoice) -> Decimal:
         return computed
     if cached < computed:
         refresh_outstanding_amount_cache(invoice)
+        return computed
     return min(computed, cached)
 
 
