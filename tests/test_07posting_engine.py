@@ -2683,8 +2683,8 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
     assert len(valuation_layers) == 1
 
 
-def test_stock_transfer_creates_stock_ledger_without_gl(app_ctx):
-    from cacao_accounting.contabilidad.posting import post_document_to_gl
+def test_stock_transfer_rejects_missing_inventory_accounts(app_ctx):
+    from cacao_accounting.contabilidad.posting import PostingError, post_document_to_gl
     from cacao_accounting.database import (
         Item,
         StockBin,
@@ -2765,17 +2765,68 @@ def test_stock_transfer_creates_stock_ledger_without_gl(app_ctx):
     )
     database.session.commit()
 
-    entries = post_document_to_gl(entry)
-    database.session.commit()
+    with pytest.raises(PostingError, match="ambas bodegas"):
+        post_document_to_gl(entry)
 
     stock_entries = (
         database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_type="stock_entry", voucher_id=entry.id))
         .scalars()
         .all()
     )
-    assert entries == []
-    assert len(stock_entries) == 2
-    assert sorted(line.qty_change for line in stock_entries) == [Decimal("-2.000000000"), Decimal("2.000000000")]
+    assert stock_entries == []
+
+
+def test_stock_transfer_rejects_one_sided_inventory_account(app_ctx, monkeypatch):
+    """A transfer cannot post physical stock when only one warehouse has GL."""
+    from cacao_accounting.contabilidad import posting_service
+    from cacao_accounting.contabilidad.posting_service import PostingError, _validate_material_transfer_accounts
+    from cacao_accounting.database import Item, StockEntry, StockEntryItem, UOM, Warehouse, database
+
+    database.session.add_all(
+        [
+            UOM(code="EA-ONE-SIDED", name="Each"),
+            Item(
+                code="ITEM-ONE-SIDED",
+                name="Item one sided",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="EA-ONE-SIDED",
+            ),
+            Warehouse(code="WH-ONE-SIDED-A", name="Source", company="cacao"),
+            Warehouse(code="WH-ONE-SIDED-B", name="Target", company="cacao"),
+        ]
+    )
+    entry = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="material_transfer",
+        from_warehouse="WH-ONE-SIDED-A",
+        to_warehouse="WH-ONE-SIDED-B",
+        docstatus=1,
+    )
+    database.session.add(entry)
+    database.session.flush()
+    database.session.add(
+        StockEntryItem(
+            stock_entry_id=entry.id,
+            item_code="ITEM-ONE-SIDED",
+            source_warehouse="WH-ONE-SIDED-A",
+            target_warehouse="WH-ONE-SIDED-B",
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom="EA-ONE-SIDED",
+            amount=Decimal("1"),
+        )
+    )
+    database.session.commit()
+    monkeypatch.setattr(
+        posting_service,
+        "warehouse_inventory_account_id",
+        lambda warehouse, company: "SOURCE-ACCOUNT" if warehouse == "WH-ONE-SIDED-A" else None,
+    )
+
+    with pytest.raises(PostingError, match="ambas bodegas"):
+        _validate_material_transfer_accounts(entry, "cacao")
 
 
 def test_inventory_line_rate_rejects_amount_without_quantity(app_ctx):
@@ -2905,6 +2956,7 @@ def test_stock_transfer_rejects_warehouse_from_other_company(app_ctx):
 def test_stock_transfer_allows_negative_stock_when_item_is_configured(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
+        Accounts,
         Item,
         StockBin,
         StockEntry,
@@ -2913,9 +2965,21 @@ def test_stock_transfer_allows_negative_stock_when_item_is_configured(app_ctx):
         StockValuationLayer,
         UOM,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
 
+    inventory_account = Accounts(
+        entity="cacao",
+        code="INV-NEG-TR",
+        name="Inventory negative transfer",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="inventory",
+    )
+    database.session.add(inventory_account)
+    database.session.flush()
     database.session.add_all(
         [
             UOM(code="EA-NEG-TR", name="Each"),
@@ -2965,6 +3029,12 @@ def test_stock_transfer_allows_negative_stock_when_item_is_configured(app_ctx):
             ),
         ]
     )
+    database.session.add_all(
+        [
+            WarehouseCompanyAccount(warehouse_code="WH-NEG-A", company="cacao", inventory_account_id=inventory_account.id),
+            WarehouseCompanyAccount(warehouse_code="WH-NEG-B", company="cacao", inventory_account_id=inventory_account.id),
+        ]
+    )
     entry = StockEntry(
         company="cacao",
         posting_date=date(2026, 5, 4),
@@ -3003,6 +3073,7 @@ def test_stock_transfer_preserves_valuation_cost_from_source(app_ctx):
     no la tasa ingresada por el usuario."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
+        Accounts,
         Item,
         StockBin,
         StockEntry,
@@ -3011,9 +3082,21 @@ def test_stock_transfer_preserves_valuation_cost_from_source(app_ctx):
         StockValuationLayer,
         UOM,
         Warehouse,
+        WarehouseCompanyAccount,
         database,
     )
 
+    inventory_account = Accounts(
+        entity="cacao",
+        code="INV-COST-TR",
+        name="Inventory cost transfer",
+        active=True,
+        enabled=True,
+        classification="asset",
+        account_type="inventory",
+    )
+    database.session.add(inventory_account)
+    database.session.flush()
     database.session.add_all(
         [
             UOM(code="EA", name="Each"),
@@ -3060,6 +3143,12 @@ def test_stock_transfer_preserves_valuation_cost_from_source(app_ctx):
                 valuation_rate=Decimal("10.00"),
                 stock_value=Decimal("100.00"),
             ),
+        ]
+    )
+    database.session.add_all(
+        [
+            WarehouseCompanyAccount(warehouse_code="WH-A-COST", company="cacao", inventory_account_id=inventory_account.id),
+            WarehouseCompanyAccount(warehouse_code="WH-B-COST", company="cacao", inventory_account_id=inventory_account.id),
         ]
     )
     entry = StockEntry(

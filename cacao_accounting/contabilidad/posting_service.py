@@ -3112,9 +3112,12 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
 
-    movements = _create_stock_ledger(document)
-    purpose = getattr(document, "purpose", "").lower()
     company = _company_for(document)
+    purpose = getattr(document, "purpose", "").lower()
+    if purpose == "material_transfer":
+        _validate_material_transfer_accounts(document, company)
+
+    movements = _create_stock_ledger(document)
 
     if purpose == "stock_reconciliation":
         _validate_stock_reconciliation_dimensions(document, company)
@@ -3131,6 +3134,21 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
     if not movements and not entries:
         raise PostingError("No se generan movimientos para este documento de inventario.")
     return entries
+
+
+def _validate_material_transfer_accounts(document: StockEntry, company: str) -> None:
+    """Require both warehouse inventory accounts before moving physical stock."""
+    if document.purpose != "material_transfer":
+        return
+    items = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars().all()
+    for line in items:
+        _validate_stock_entry_warehouses(document, line)
+        source_warehouse = line.source_warehouse or document.from_warehouse
+        target_warehouse = line.target_warehouse or document.to_warehouse
+        source_acc = warehouse_inventory_account_id(source_warehouse, company)
+        target_acc = warehouse_inventory_account_id(target_warehouse, company)
+        if not source_acc or not target_acc:
+            raise PostingError("La transferencia requiere cuenta de inventario en ambas bodegas.")
 
 
 def _is_cross_account_transfer(document: StockEntry, company: str) -> bool:
