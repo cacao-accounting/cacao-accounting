@@ -192,7 +192,7 @@
       ) }}
     </div>
     <div class="col-md-6">
-      <label class="form-label" for="naming_series">{{ _('Secuencia') }}</label>
+      <label class="form-label" for="naming_series">{{ _('Secuencia') }} <span class="text-danger">*</span></label>
       {{ smart_select(
           doctype="naming_series",
           name="naming_series",
@@ -203,6 +203,7 @@
           auto_select_default=True,
           load_on_filter_change=True,
           default_after_ms=1500,
+          required=True,
           x_model="header.naming_series"
       ) }}
     </div>

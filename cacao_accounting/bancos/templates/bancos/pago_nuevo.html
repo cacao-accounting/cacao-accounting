@@ -611,7 +611,7 @@
         </div>
       </div>
       <div class="col-md-3">
-        <label class="form-label text-muted small mb-1">{{ _('Secuencia') }}</label>
+        <label class="form-label text-muted small mb-1">{{ _('Secuencia') }} <span class="text-danger">*</span></label>
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "naming_series",
             name: "naming_series_id",
@@ -624,7 +624,7 @@
             autoSelectDefault: true
           })'>
           <input type="hidden" x-model="selectedValue" x-effect="header.naming_series_id = selectedValue">
-          <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}">
+          <input class="form-control bg-light" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" placeholder="{{ _('Secuencia...') }}" required>
           <div class="ca-smart-select-menu" x-show="open" x-cloak>
             <template x-for="opt in options" :key="opt.value">
               <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(opt)" x-text="opt.display_name"></button>

@@ -740,7 +740,7 @@
         </div>
       </div>
       <div class="col-md-6">
-        <label class="form-label" for="naming_series_id">{{ _('Secuencia') }}</label>
+        <label class="form-label" for="naming_series_id">{{ _('Secuencia') }} <span class="text-danger">*</span></label>
         <div class="ca-smart-select" x-data='smartSelect({
             doctype: "naming_series",
             name: "naming_series_id",
@@ -766,7 +766,7 @@
           <input type="hidden" id="naming_series_id" name="naming_series_id" x-model="selectedValue">
           <div class="ca-smart-select-input-wrap">
             <input class="form-control ca-smart-select-input" type="text" x-model="search" @input="onInput"
-              @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+              @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
             <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
               :title="messages.clear">×</button>
           </div>

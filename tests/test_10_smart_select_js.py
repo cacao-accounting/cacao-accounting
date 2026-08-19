@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 
 SMART_SELECT_FILE = Path(__file__).resolve().parents[1] / "cacao_accounting" / "static" / "js" / "smart-select.js"
+PACKAGE_ROOT = SMART_SELECT_FILE.parents[2]
+TEMPLATE_ROOT = PACKAGE_ROOT / "templates"
 
 
 def _run_node_script(script_body: str) -> None:
@@ -18,6 +20,25 @@ def _run_node_script(script_body: str) -> None:
     )
     if process.returncode != 0:
         raise AssertionError(process.stderr or process.stdout)
+
+
+def test_transaction_document_naming_series_selectors_are_required() -> None:
+    """Las pantallas documentales no deben permitir una serie de numeración vacía."""
+    transaction_macro = (TEMPLATE_ROOT / "transaction_form_macros.html").read_text()
+    assert "auto_select_default=True" in transaction_macro
+    assert "required=True" in transaction_macro
+
+    direct_templates = (
+        PACKAGE_ROOT / "bancos" / "templates" / "bancos" / "pago_nuevo.html",
+        PACKAGE_ROOT / "bancos" / "templates" / "bancos" / "nota_nueva.html",
+        PACKAGE_ROOT / "bancos" / "templates" / "bancos" / "transferencia_nueva.html",
+        PACKAGE_ROOT / "contabilidad" / "templates" / "contabilidad" / "journal_nuevo.html",
+        PACKAGE_ROOT / "contabilidad" / "templates" / "contabilidad" / "recurring_journal_nuevo.html",
+    )
+    for template_path in direct_templates:
+        source = template_path.read_text()
+        assert 'doctype: "naming_series"' in source
+        assert "placeholder=\"{{ _('Secuencia...') }}\" required" in source or "messages.placeholder\" required" in source
 
 
 def test_smart_select_fetch_options_uses_active_company_filter() -> None:
