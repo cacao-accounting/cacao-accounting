@@ -749,18 +749,6 @@ class ExchangeRevaluationService:
             )
             if before is not None:
                 return self._decimal(before.rate)
-            after = (
-                database.session.execute(
-                    select(ExchangeRate)
-                    .filter_by(origin=origin, destination=destination)
-                    .where(ExchangeRate.date >= target_date)
-                    .order_by(ExchangeRate.date.asc())
-                )
-                .scalars()
-                .first()
-            )
-            if after is not None:
-                return self._decimal(after.rate)
             return None
 
         rate_val = _rate(origin, destination, closing_date)
