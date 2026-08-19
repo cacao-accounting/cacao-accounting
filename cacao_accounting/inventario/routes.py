@@ -766,7 +766,9 @@ def inventario_entrada_editar(entry_id: str):
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
     if request.method == "POST":
-        return _handle_stock_entry_edit_post(registro)
+        if formulario.validate():
+            return _handle_stock_entry_edit_post(registro)
+        flash("Revise los datos de la entrada de almacén.", "danger")
 
     if registro.purpose == "stock_reconciliation":
         return _render_stock_reconciliation_edit_form(registro, items_disponibles, uoms_disponibles)
