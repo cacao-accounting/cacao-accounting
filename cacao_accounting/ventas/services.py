@@ -1881,7 +1881,7 @@ def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInv
         customer_id=customer_id,
         docstatus=1,
         is_return=False,
-    )
+    ).where(SalesInvoice.document_type != "sales_debit_note")
     return list(database.session.execute(query).scalars().all())
 
 
@@ -1925,6 +1925,7 @@ def _approved_customer_order_exposure(company: str, customer_id: str, current_do
                 SalesInvoice.customer_id == customer_id,
                 SalesInvoice.docstatus == 1,
                 SalesInvoice.is_return.is_(False),
+                SalesInvoice.document_type != "sales_debit_note",
                 or_(
                     SalesInvoice.sales_order_id == order.id,
                     SalesInvoice.delivery_note_id.in_(delivery_note_ids),

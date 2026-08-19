@@ -12,6 +12,7 @@ from cacao_accounting.database import (
     Book,
     CompanyParty,
     DeliveryNote,
+    DocumentRelation,
     PaymentTerms,
     Item,
     Party,
@@ -217,3 +218,56 @@ def test_skip_credit_limit_on_return(app_ctx):
 
     # Even though -100 is passed, or if the document is a return, it should not raise an error
     _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("-100"))
+
+
+def test_debit_note_is_not_counted_twice_in_credit_exposure(app_ctx):
+    """Una nota de débito afecta el saldo origen, pero no se suma otra vez."""
+    from cacao_accounting.document_flow.payment import compute_outstanding_amount
+
+    customer, company_party = _ensure_customer("CUST-DEBIT-EXPOSURE", "Cliente Nota Débito")
+    company_party.credit_limit = Decimal("1000")
+    source = SalesInvoice(
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="sales_invoice",
+        grand_total=Decimal("800"),
+        outstanding_amount=Decimal("800"),
+        base_outstanding_amount=Decimal("800"),
+    )
+    database.session.add(source)
+    database.session.flush()
+    debit_note = SalesInvoice(
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="sales_debit_note",
+        is_return=False,
+        reversal_of=source.id,
+        grand_total=Decimal("100"),
+        outstanding_amount=Decimal("100"),
+        base_outstanding_amount=Decimal("100"),
+    )
+    database.session.add(debit_note)
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=source.id,
+            target_type="sales_debit_note",
+            target_id=debit_note.id,
+            relation_type="invoice_reversal",
+            company="cacao",
+            qty=Decimal("1"),
+            amount=Decimal("100"),
+            status="active",
+        )
+    )
+    database.session.commit()
+
+    assert compute_outstanding_amount(source) == Decimal("900.0000")
+    _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("100"))
