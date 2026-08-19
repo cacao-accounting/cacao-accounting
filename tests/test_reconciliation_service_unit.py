@@ -137,6 +137,22 @@ def test_target_amounts_and_company_validation_raise_controlled_errors(monkeypat
         service._target_company("gl_entry", "missing")
 
 
+def test_cancelled_or_secondary_ledger_gl_entries_are_not_eligible(monkeypatch) -> None:
+    """Bank reconciliation rejects cancelled, reversed and secondary-ledger GL."""
+    cancelled = SimpleNamespace(company="cacao", is_cancelled=True, is_reversal=False, ledger_id="PRIMARY")
+    with pytest.raises(service.BankReconciliationError, match="cancelada"):
+        service._validate_gl_entry_eligibility(cancelled)
+
+    reversed_entry = SimpleNamespace(company="cacao", is_cancelled=False, is_reversal=True, ledger_id="PRIMARY")
+    with pytest.raises(service.BankReconciliationError, match="cancelada"):
+        service._validate_gl_entry_eligibility(reversed_entry)
+
+    monkeypatch.setattr(service, "primary_ledger_id", lambda company: "PRIMARY")
+    secondary = SimpleNamespace(company="cacao", is_cancelled=False, is_reversal=False, ledger_id="SECONDARY")
+    with pytest.raises(service.BankReconciliationError, match="libro primario"):
+        service._validate_gl_entry_eligibility(secondary)
+
+
 def test_payment_link_population_only_sets_empty_bank_transaction() -> None:
     """Relaciona una transacción con pago una sola vez."""
     transaction = SimpleNamespace(payment_entry_id=None)
