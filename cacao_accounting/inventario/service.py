@@ -202,13 +202,30 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False)
         raise InventoryServiceError("El serial ya fue entregado.")
 
 
-def validate_batch_serial(line: Any, *, outgoing: bool, warehouse: str | None = None, allow_transfer: bool = False) -> None:
+def validate_batch_serial(
+    line: Any,
+    *,
+    outgoing: bool,
+    warehouse: str | None = None,
+    allow_transfer: bool = False,
+    posting_date: date | None = None,
+) -> None:
     """Valida obligatoriedad y disponibilidad de lote/serial en una linea."""
-    item = database.session.get(Item, getattr(line, "item_code", None))
+    item_code = getattr(line, "item_code", None)
+    item = database.session.get(Item, item_code)
+    if item is None and item_code:
+        item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
     if not item or not item.is_stock_item:
         return
-    if item.has_batch:
+    if item.has_batch or item.has_expiry_date:
         _validate_batch(line, item, outgoing=outgoing, warehouse=warehouse)
+    if item.has_expiry_date:
+        batch = database.session.get(Batch, getattr(line, "batch_id", None))
+        if batch is None or batch.expiry_date is None:
+            raise InventoryServiceError("El lote requiere una fecha de vencimiento.")
+        line.expiry_date = batch.expiry_date
+        if posting_date and batch.expiry_date <= posting_date:
+            raise InventoryServiceError("El lote está vencido para la fecha de contabilización.")
     if item.has_serial_no:
         _validate_serial(line, item, outgoing, warehouse, allow_transfer)
 

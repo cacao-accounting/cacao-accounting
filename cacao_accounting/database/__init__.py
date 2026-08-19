@@ -1470,6 +1470,7 @@ class StockEntryItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     batch_id = database.Column(
         database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    expiry_date = database.Column(database.Date(), nullable=True)
     serial_no = database.Column(database.String(100), nullable=True)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     current_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
