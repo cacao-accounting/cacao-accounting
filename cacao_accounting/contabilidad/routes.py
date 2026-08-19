@@ -200,6 +200,19 @@ _TPL_PERIODO_CREAR = "contabilidad/periodo_crear.html"
 _TPL_TC_CREAR = "contabilidad/tc_crear.html"
 
 
+def _reject_delete_with_dependencies(label: str, checks: list[tuple[str, Any]]) -> bool:
+    """Bloquea eliminaciones cuando existe cualquier registro dependiente."""
+    dependencies = [name for name, query in checks if database.session.execute(query.limit(1)).first()]
+    if not dependencies:
+        return False
+    flash(
+        f"No se puede eliminar {label}: existen dependencias ({', '.join(dependencies)}). "
+        "Desactive el registro para conservar la trazabilidad.",
+        "danger",
+    )
+    return True
+
+
 @contabilidad.route("/currency/list")
 @login_required
 @modulo_activo("accounting")
@@ -538,9 +551,42 @@ def editar_entidad(id_entidad):
 @verifica_acceso("accounting")
 def eliminar_entidad(id_entidad):
     """Elimina una entidad de sistema."""
-    from cacao_accounting.database import Entity
+    from cacao_accounting.database import (
+        Accounts,
+        AccountingPeriod,
+        BankAccount,
+        Book,
+        Budget,
+        ComprobanteContable,
+        CostCenter,
+        Entity,
+        FiscalYear,
+        GLEntry,
+        Project,
+        Unit,
+    )
 
     ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
+    if ENTIDAD is None:
+        return LISTA_ENTIDADES
+    company = ENTIDAD[0].code
+    if _reject_delete_with_dependencies(
+        f"la entidad {company}",
+        [
+            ("años fiscales", database.select(FiscalYear.id).filter_by(entity=company)),
+            ("períodos contables", database.select(AccountingPeriod.id).filter_by(entity=company)),
+            ("libros", database.select(Book.id).filter_by(entity=company)),
+            ("cuentas", database.select(Accounts.id).filter_by(entity=company)),
+            ("centros de costo", database.select(CostCenter.id).filter_by(entity=company)),
+            ("unidades", database.select(Unit.id).filter_by(entity=company)),
+            ("proyectos", database.select(Project.id).filter_by(entity=company)),
+            ("presupuestos", database.select(Budget.id).filter_by(company=company)),
+            ("comprobantes", database.select(ComprobanteContable.id).filter_by(entity=company)),
+            ("entradas GL", database.select(GLEntry.id).filter_by(company=company)),
+            ("cuentas bancarias", database.select(BankAccount.id).filter_by(company=company)),
+        ],
+    ):
+        return redirect(url_for("contabilidad.entidad", entidad_id=company))
     database.session.delete(ENTIDAD[0])
     database.session.commit()
 
@@ -666,6 +712,18 @@ def eliminar_unidad(id_unidad):
     if unidad:
         if len(unidad.children) > 0:
             flash("No se puede eliminar la unidad porque tiene unidades hijas asignadas (RN-006).", "danger")
+            return redirect(url_for(CONTABILIDAD_UNIDADES))
+        from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
+
+        if _reject_delete_with_dependencies(
+            f"la unidad {id_unidad}",
+            [
+                ("presupuestos", database.select(BudgetLine.id).filter_by(business_unit_id=unidad.id)),
+                ("entradas GL", database.select(GLEntry.id).filter_by(unit_code=unidad.code)),
+                ("comprobantes", database.select(ComprobanteContableDetalle.id).filter_by(unit=unidad.code)),
+                ("movimientos de inventario", database.select(StockEntry.id).filter_by(unit_code=unidad.code)),
+            ],
+        ):
             return redirect(url_for(CONTABILIDAD_UNIDADES))
         database.session.delete(unidad)
         database.session.commit()
@@ -839,6 +897,28 @@ def eliminar_libro(id_unidad):
 
     libro = database.session.execute(database.select(Book).filter_by(code=id_unidad)).scalar_one_or_none()
     if libro:
+        from cacao_accounting.database import (
+            Budget,
+            ComprobanteContable,
+            GLEntry,
+            RecurringJournalApplication,
+            RecurringJournalTemplate,
+        )
+
+        if _reject_delete_with_dependencies(
+            f"el libro {id_unidad}",
+            [
+                ("presupuestos", database.select(Budget.id).filter_by(ledger_id=libro.id)),
+                ("comprobantes", database.select(ComprobanteContable.id).filter_by(book=libro.code)),
+                ("entradas GL", database.select(GLEntry.id).filter_by(ledger_id=libro.id)),
+                ("plantillas recurrentes", database.select(RecurringJournalTemplate.id).filter_by(ledger_id=libro.id)),
+                (
+                    "aplicaciones recurrentes",
+                    database.select(RecurringJournalApplication.id).filter_by(ledger_id=libro.id),
+                ),
+            ],
+        ):
+            return redirect(url_for(CONTABILIDAD_LIBROS))
         database.session.delete(libro)
         database.session.commit()
     return redirect(url_for(CONTABILIDAD_LIBROS))
@@ -1398,6 +1478,18 @@ def eliminar_centro_costo(id_cc):
 
     registro = database.session.execute(database.select(CostCenter).filter_by(code=id_cc)).scalar_one_or_none()
     if registro:
+        from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
+
+        if _reject_delete_with_dependencies(
+            f"el centro de costo {id_cc}",
+            [
+                ("presupuestos", database.select(BudgetLine.id).filter_by(cost_center_id=registro.id)),
+                ("entradas GL", database.select(GLEntry.id).filter_by(cost_center_code=registro.code)),
+                ("comprobantes", database.select(ComprobanteContableDetalle.id).filter_by(cost_center=registro.code)),
+                ("movimientos de inventario", database.select(StockEntry.id).filter_by(cost_center_code=registro.code)),
+            ],
+        ):
+            return redirect(url_for(CONTABILIDAD_CCOSTOS))
         database.session.delete(registro)
         database.session.commit()
     return redirect(url_for(CONTABILIDAD_CCOSTOS))
@@ -1573,6 +1665,18 @@ def eliminar_proyecto(project_id):
         if len(proyecto.children) > 0:
             flash("No se puede eliminar el proyecto porque tiene proyectos hijos asignados (RN-006).", "danger")
             return redirect(url_for(CONTABILIDAD_PROYECTOS))
+        from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
+
+        if _reject_delete_with_dependencies(
+            f"el proyecto {project_id}",
+            [
+                ("presupuestos", database.select(BudgetLine.id).filter_by(project_id=proyecto.id)),
+                ("entradas GL", database.select(GLEntry.id).filter_by(project_code=proyecto.code)),
+                ("comprobantes", database.select(ComprobanteContableDetalle.id).filter_by(project=proyecto.code)),
+                ("movimientos de inventario", database.select(StockEntry.id).filter_by(project_code=proyecto.code)),
+            ],
+        ):
+            return redirect(url_for(CONTABILIDAD_PROYECTOS))
         database.session.delete(proyecto)
         database.session.commit()
     return redirect(url_for(CONTABILIDAD_PROYECTOS))
@@ -1678,7 +1782,6 @@ def fiscal_year_edit(fy_id):
             flash("No se puede abrir un año con cierre contable realizado.", "danger")
             return redirect(url_for("contabilidad.fiscal_year_edit", fy_id=fy_id))
 
-        fiscal_year.entity = request.form.get("entidad", fiscal_year.entity)
         fiscal_year.name = request.form.get("id", fiscal_year.name)
         fiscal_year.year_start_date = formulario.inicio.data
         fiscal_year.year_end_date = formulario.fin.data
@@ -1722,10 +1825,26 @@ def fiscal_year_detail(fy_id):
 @verifica_acceso("accounting")
 def fiscal_year_delete(fy_id):
     """Elimina un año fiscal."""
-    from cacao_accounting.database import FiscalYear
+    from cacao_accounting.database import AccountingPeriod, Budget, CashForecast, ComprobanteContable, FiscalYear, GLEntry
 
     fiscal_year = database.session.execute(database.select(FiscalYear).filter_by(id=fy_id)).scalar_one_or_none()
     if fiscal_year:
+        if fiscal_year.financial_closed or _reject_delete_with_dependencies(
+            f"el año fiscal {fiscal_year.name}",
+            [
+                ("períodos contables", database.select(AccountingPeriod.id).filter_by(fiscal_year_id=fiscal_year.id)),
+                ("presupuestos", database.select(Budget.id).filter_by(fiscal_year_id=fiscal_year.id)),
+                ("pronósticos de caja", database.select(CashForecast.id).filter_by(fiscal_year_id=fiscal_year.id)),
+                ("comprobantes", database.select(ComprobanteContable.id).filter_by(fiscal_year_id=fiscal_year.id)),
+                ("entradas GL", database.select(GLEntry.id).filter_by(fiscal_year_id=fiscal_year.id)),
+            ],
+        ):
+            (
+                flash("No se puede eliminar un año fiscal cerrado financieramente.", "danger")
+                if fiscal_year.financial_closed
+                else None
+            )
+            return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
         database.session.delete(fiscal_year)
         database.session.commit()
     return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_LIST))
@@ -1813,6 +1932,10 @@ def accounting_period_edit(period_id):
     if formulario.validate_on_submit():
         try:
             _validate_active_entity_submission(request.form.get("entidad", period.entity))
+            fiscal_year_id = request.form.get("fiscal_year", period.fiscal_year_id)
+            selected_fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
+            if not selected_fiscal_year or selected_fiscal_year.entity != period.entity:
+                raise ValueError("El año fiscal debe pertenecer a la compañía del período.")
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -1822,8 +1945,7 @@ def accounting_period_edit(period_id):
                 edit=True,
                 entity_initial_label=entity_initial_label,
             )
-        period.entity = request.form.get("entidad", period.entity)
-        period.fiscal_year_id = request.form.get("fiscal_year", period.fiscal_year_id)
+        period.fiscal_year_id = fiscal_year_id
         period.name = request.form.get("nombre", period.name)
         period.status = _accounting_period_status_label(bool(formulario.habilitado.data), bool(formulario.cerrado.data))
         period.enabled = bool(formulario.habilitado.data)
@@ -1849,10 +1971,35 @@ def accounting_period_edit(period_id):
 @verifica_acceso("accounting")
 def accounting_period_delete(period_id):
     """Elimina un período contable."""
-    from cacao_accounting.database import AccountingPeriod
+    from cacao_accounting.database import AccountingPeriod, BudgetLine, ComprobanteContable, GLEntry, PeriodCloseRun
 
     period = database.session.execute(database.select(AccountingPeriod).filter_by(id=period_id)).scalar_one_or_none()
     if period:
+        if _reject_delete_with_dependencies(
+            f"el período {period.name}",
+            [
+                ("presupuesto", database.select(BudgetLine.id).filter_by(period_id=period.id)),
+                ("cierre mensual", database.select(PeriodCloseRun.id).filter_by(period_id=period.id)),
+                ("entradas GL", database.select(GLEntry.id).filter_by(accounting_period_id=period.id)),
+                (
+                    "entradas GL por fecha",
+                    database.select(GLEntry.id).filter(
+                        GLEntry.company == period.entity,
+                        GLEntry.posting_date >= period.start,
+                        GLEntry.posting_date <= period.end,
+                    ),
+                ),
+                (
+                    "comprobantes",
+                    database.select(ComprobanteContable.id).filter(
+                        ComprobanteContable.entity == period.entity,
+                        ComprobanteContable.date >= period.start,
+                        ComprobanteContable.date <= period.end,
+                    ),
+                ),
+            ],
+        ):
+            return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
         database.session.delete(period)
         database.session.commit()
     return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
