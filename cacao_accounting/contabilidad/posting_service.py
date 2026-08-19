@@ -666,8 +666,15 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> D
 
 
 def _add_entries(entries: list[GLEntry]) -> list[GLEntry]:
+    """Valida, mapea y persiste líneas GL balanceadas."""
     if not entries:
         return []
+    from cacao_accounting.contabilidad.ledger_mapping_service import LedgerMappingError, apply_ledger_mappings
+
+    try:
+        entries = apply_ledger_mappings(entries)
+    except LedgerMappingError as exc:
+        raise PostingError(str(exc)) from exc
     _assert_entries_balance(entries)
     for entry in entries:
         try:
