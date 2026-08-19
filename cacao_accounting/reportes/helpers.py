@@ -976,15 +976,30 @@ def _render_operational_framework(
     export_response = _export_operational_report(report, report_code, report_title, filter_state)
     if export_response is not None:
         return export_response
-    rows = getattr(report, "rows", [])
+    rows = list(getattr(report, "rows", []))
     totals_raw = getattr(report, "totals", {})
     ledger_currency = getattr(report, "ledger_currency", None)
     columns = getattr(report, "columns", None) or (list(rows[0].values.keys()) if rows else [])
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
+    page_size = min(max(request.args.get("page_size", 100, type=int) or 100, 1), 500)
+    total_rows = getattr(report, "total_rows", 0) or len(rows)
+    page_rows = rows[(page - 1) * page_size : page * page_size]
     display_headers = {column: _column_label(column, ledger_currency) for column in columns}
     display_rows = [
-        {column: _format_cell(column, row.values.get(column), ledger_currency) for column in columns} for row in rows
+        {column: _format_cell(column, row.values.get(column), ledger_currency) for column in columns} for row in page_rows
+    ]
+    drill_down_urls = [
+        {column: _build_voucher_url(row.values) for column in ("document_no", "voucher_id")} for row in page_rows
     ]
     totals = {key: _format_cell(key, value, ledger_currency) for key, value in totals_raw.items()}
+    query = request.args.to_dict(flat=True)
+
+    def _page_url(target_page: int) -> str:
+        query["page"] = str(target_page)
+        query["page_size"] = str(page_size)
+        return url_for(request.endpoint or "reportes.account_summary", **query)
+
+    total_pages = max((total_rows + page_size - 1) // page_size, 1)
     return render_template(
         "reportes/operational_report.html",
         titulo=f"{report_title} - {APPNAME}",
@@ -993,7 +1008,13 @@ def _render_operational_framework(
         columns=columns,
         display_headers=display_headers,
         display_rows=display_rows,
+        drill_down_urls=drill_down_urls,
         totals=totals,
+        page=page,
+        total_pages=total_pages,
+        total_rows=total_rows,
+        previous_page_url=_page_url(page - 1) if page > 1 else None,
+        next_page_url=_page_url(page + 1) if page < total_pages else None,
         filter_mode=filter_mode,
         filter_state=filter_state,
         context_summary=context_summary,
