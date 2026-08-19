@@ -152,6 +152,39 @@ jobs:
           SECRET_KEY=ASD123klj+aAddS LOGURU_LEVEL=WARNING cacaoctl db reset --force
           SECRET_KEY=ASD123klj+aAddS LOGURU_LEVEL=WARNING python -m pytest tests/test_04database_schema.py --tb=line --quiet
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies and Chromium
+        run: |
+          python -m pip install --upgrade pip==26.1.2 setuptools==83.0.0
+          { sed '/^odfpy==/d' requirements.txt; sed '/^-r requirements.txt/d' development.txt; } > /tmp/development-binary.txt
+          python -m pip install --only-binary=:all: -r /tmp/development-binary.txt
+          python -m pip install --no-binary=:all: odfpy==1.4.1
+          python -m pip install --only-binary=:all: -e .[cloud]
+          python -m playwright install --with-deps chromium
+      - name: Run Playwright end-to-end tests
+        env:
+          CACAO_TEST: "True"
+          LOGURU_LEVEL: "WARNING"
+          SECRET_KEY: "ASD123kljaAddS"
+        run: |
+          python -m pytest tests/test_e2e_playwright_accounting.py tests/test_e2e_playwright_document_flow.py --tb=line --quiet
+      - name: Upload Playwright diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-diagnostics
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+
   desktop:
     runs-on: ubuntu-latest
     steps:
