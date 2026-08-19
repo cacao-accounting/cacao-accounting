@@ -117,11 +117,15 @@ def consumed_qty_for_source(
             return decimal_or_zero(relation.qty_in_base_uom)
         from cacao_accounting.document_flow.service import _relation_qty_in_base_uom
 
-        return _relation_qty_in_base_uom(
+        normalized = _relation_qty_in_base_uom(
             source_item,
             decimal_or_zero(relation.qty),
             getattr(relation, "uom", None),
         )
+        # Keep the read path compatible with databases predating the backfill
+        # migration; the next transaction persists the normalized value.
+        relation.qty_in_base_uom = normalized
+        return normalized
 
     return sum(
         (

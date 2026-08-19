@@ -89,6 +89,56 @@ def test_document_flow_tracks_partial_pending_qty(app_ctx):
     assert order_item.received_qty == Decimal("0")
 
 
+def test_legacy_relation_persists_normalized_base_quantity(app_ctx):
+    """Las relaciones legacy se normalizan y quedan listas para el backfill."""
+    from cacao_accounting.database import (
+        DocumentRelation,
+        ItemUOMConversion,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        UOM,
+        database,
+    )
+    from cacao_accounting.document_flow.repository import consumed_qty_for_source
+
+    order_item = _seed_purchase_order(app_ctx)
+    database.session.add_all(
+        [
+            UOM(code="BOX", name="Caja"),
+            ItemUOMConversion(item_code="ART-001", from_uom="BOX", to_uom="UND", conversion_factor=10),
+        ]
+    )
+    receipt = PurchaseReceipt(id="PR-LEGACY", company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id="PR-LEGACY",
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("1"),
+        uom="BOX",
+        rate=Decimal("50"),
+        amount=Decimal("50"),
+    )
+    relation = DocumentRelation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id="PR-LEGACY",
+        target_item_id=receipt_item.id,
+        company="cacao",
+        qty=Decimal("1"),
+        qty_in_base_uom=None,
+        uom="BOX",
+        relation_type="receipt",
+        status="active",
+    )
+    database.session.add_all([receipt, receipt_item, relation])
+    database.session.flush()
+
+    assert consumed_qty_for_source("purchase_order", "PO-001", order_item.id, "purchase_receipt") == Decimal("10")
+    assert relation.qty_in_base_uom == Decimal("10")
+
+
 def test_document_flow_blocks_overconsumption(app_ctx):
     from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
     from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
