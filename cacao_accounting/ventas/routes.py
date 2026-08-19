@@ -242,6 +242,7 @@ def ventas_pedido_venta_nuevo():
                 request.form.get("company") or None,
                 request.form.get("currency") or request.form.get("transaction_currency") or None,
             )
+            exige_acceso_compania("sales", company, "crear")
             pedido = SalesRequest(
                 customer_id=customer_id,
                 customer_name=customer.name if customer else None,
@@ -1084,6 +1085,7 @@ def ventas_cotizacion_nueva():
                 request.form.get("company") or None,
                 request.form.get("currency") or request.form.get("transaction_currency") or None,
             )
+            exige_acceso_compania("sales", company, "crear")
             cotizacion = SalesQuotation(
                 customer_id=customer_id,
                 customer_name=customer.name if customer else None,
@@ -1495,6 +1497,7 @@ def ventas_entrega_nuevo():
                 request.form.get("company") or None,
                 request.form.get("currency") or request.form.get("transaction_currency") or None,
             )
+            exige_acceso_compania("sales", company, "crear")
             customer_id = customer_id or getattr(source, "customer_id", None)
             customer = database.session.get(Party, customer_id) if customer_id else None
             entrega = DeliveryNote(

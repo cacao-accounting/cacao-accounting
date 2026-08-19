@@ -1483,6 +1483,7 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
             request.form.get("company") or None,
             request.form.get("currency") or request.form.get("transaction_currency") or None,
         )
+        exige_acceso_compania("sales", company, "crear")
         orden = SalesOrder(
             customer_id=customer_id,
             customer_name=customer.name if customer else None,
@@ -1638,6 +1639,14 @@ def _create_sales_invoice_from_form():
         document_type = request.form.get("document_type") or "sales_invoice"
         posting_date = _parse_date(request.form.get("posting_date"))
         reversal_of = _sales_reversal_source(document_type)
+        source_company = request.form.get("company") or None
+        source_id = request.form.get("from_order") or request.form.get("from_note") or reversal_of
+        source_model = (
+            SalesOrder if request.form.get("from_order") else DeliveryNote if request.form.get("from_note") else SalesInvoice
+        )
+        source_document = database.session.get(source_model, source_id) if source_id else None
+        source_company = getattr(source_document, "company", None) or source_company
+        exige_acceso_compania("sales", source_company, "crear")
         if reversal_of:
             _validate_reversal_of(reversal_of, request.form.get("customer_id"), request.form.get("company"))
         factura = SalesInvoice(

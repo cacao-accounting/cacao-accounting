@@ -340,6 +340,7 @@ def _create_supplier_quotation_from_request():
             raise DocumentFlowError("No se pueden combinar dos documentos origen.", 400)
         source = _supplier_quotation_origin(from_request_id, from_rfq_id)
         company, transaction_currency = _validate_supplier_quotation_header(source)
+        exige_acceso_compania("purchases", company, "crear")
         negotiation_round_id = request.form.get("negotiation_round_id") or None
         if negotiation_round_id:
             negotiation_round = database.session.get(PurchaseNegotiationRound, negotiation_round_id)
@@ -1252,6 +1253,7 @@ def _create_purchase_order_from_request(form: dict):
     if context is None:
         return None
     award_id, supplier_id, supplier, posting_date, company, transaction_currency, comparison_open = context
+    exige_acceso_compania("purchases", company, "crear")
     orden = PurchaseOrder(
         supplier_id=supplier_id,
         supplier_name=supplier.name if supplier else None,
@@ -1433,6 +1435,7 @@ def _create_purchase_quotation_from_request():
         from_request_id = _purchase_quotation_origin_id()
         source = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
         company, transaction_currency = _validate_purchase_flow_header(source)
+        exige_acceso_compania("purchases", company, "crear")
         cotizacion = PurchaseQuotation(
             supplier_id=supplier_id,
             supplier_name=supplier.name if supplier else None,
@@ -1524,6 +1527,7 @@ def _create_purchase_receipt_from_form():
         company, transaction_currency = _validate_purchase_flow_header(source)
         supplier_id = supplier_id or getattr(source, "supplier_id", None)
         supplier = database.session.get(Party, supplier_id) if supplier_id else None
+        exige_acceso_compania("purchases", company, "crear")
         _validate_supplier_company_membership(supplier_id, company)
         receipt = PurchaseReceipt(
             supplier_id=supplier_id,
@@ -2173,6 +2177,7 @@ def _create_purchase_invoice_from_request():
             from_order = from_order or source_invoice.purchase_order_id
             from_receipt = from_receipt or source_invoice.purchase_receipt_id
         company, transaction_currency = _validate_purchase_flow_header(source)
+        exige_acceso_compania("purchases", company, "crear")
         tax_template_id = request.form.get("tax_template_id") or getattr(source, "tax_template_id", None)
         _validate_purchase_tax_template(company, tax_template_id, transaction_currency)
         supplier_id = supplier_id or getattr(source, "supplier_id", None)
