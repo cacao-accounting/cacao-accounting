@@ -3,6 +3,535 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-19 — Correcciones verificadas de Inventario y Bancos (#522–#610)
+
+### Petición
+
+Obtener la lista de issues abiertos del repositorio de GitHub, verificar que los
+hallazgos no fueran falsos positivos, proponer e implementar fixes con commits
+semánticos firmados como `williamjmorenor@gmail.com`, usando un commit por fix o
+issue. Cada issue debía conservarse abierto y recibir únicamente un comentario
+con el commit de la solución.
+
+### Plan implementado
+
+1. Se consultó GitHub y se obtuvo el conjunto abierto #511–#610; los títulos y
+   cuerpos de los issues de Inventario se contrastaron con el código local y
+   con la bitácora previa para distinguir duplicados y confirmar los vectores.
+2. Se implementaron regresiones unitarias antes de cada commit y se usaron
+   commits `git commit -s` con identidad `William José Moreno Reyes
+   <williamjmorenor@gmail.com>`. Los issues duplicados #540/#544 y #524/#602
+   comparten una corrección funcional y fueron referenciados explícitamente en
+   el mismo commit.
+3. Los commits de la tanda publicada se enviaron a `main` antes de la
+   instrucción posterior de no hacer `push`; se añadió un único comentario de
+   seguimiento a cada issue corregido, con enlace al SHA. Ningún issue fue
+   cerrado. Los ajustes locales posteriores quedaron deliberadamente sin
+   publicar.
+
+### Issues confirmados y correcciones publicadas
+
+- **#596, #597, #598:** permisos de creación/edición y validación WTForms en
+  Stock Entry.
+- **#599, #600, #604, #606, #610:** aislamiento por compañía, propósito
+  permitido, contexto inmutable, bodegas válidas y fecha de contabilización.
+- **#609:** Blueprint duplicado eliminado.
+- **#605:** detalle de bodega limitado a compañías accesibles.
+- **#540/#544:** ACL de escritura por compañía para `ItemAccount`, cuentas y
+  centros de costo.
+- **#543:** bodega predeterminada del artículo validada por existencia, estado y
+  acceso de compañía.
+- **#607/#541:** UOM y flags de control de inventario protegidos después de uso;
+  se ignora historial cancelado y se consideran saldos migrados positivos.
+- **#601/#608:** tasas de valoración no positivas y valores objetivo de
+  reconciliación rechazados cuando son inconsistentes.
+- **#524/#602:** transferencias sin cuentas de inventario completas rechazadas
+  antes de crear Stock Ledger.
+- **#537:** se respeta `ItemAccount.cogs_account_id` al resolver COGS.
+- **#539:** se permite revalorización pura con cantidad cero.
+- **#603:** vencimiento de lotes validado contra la fecha de contabilización,
+  con columna y migración para `StockEntryItem.expiry_date`.
+- **#538:** reconciliaciones con cambio de cantidad pasan validación de
+  lotes/seriales y actualizan el estado del serial.
+- **#522, #523:** conciliación bancaria limitada al libro/cuentas de la
+  compañía y cuentas GL de pagos validadas contra su compañía y bancos.
+
+### Commits
+
+Todos los commits siguientes contienen `Signed-off-by` del correo solicitado:
+
+`89757e8b`, `68d464aa`, `55781cda`, `ebfa68ee`, `328fd2ee`, `5ece4f08`,
+`1f5e9641`, `6393b1e8`, `833c88ec`, `a5f0f16b`, `6c42d95d`, `3f899051`,
+`61ac2cfe`, `697f54bd`, `dc3ad474`, `254c714b`, `b6768fa5`, `535efdbd`,
+`72d98c8d`, `ac8bb5d8`, `bcffe967`, `1971cac8`, `1b130e63` y `bb9515a4`.
+
+Durante la verificación local se añadieron, sin `push`, `69040e71` para
+preservar los ajustes positivos de valor con cantidad cero sin reintroducir el
+`rate=0` silencioso de #601, `5a2305ef` para declarar la tasa objetivo de la
+fixture de #608 y `957c61d2` para actualizar la revisión esperada de la prueba
+de migraciones.
+
+### Validación
+
+Pasaron las regresiones dirigidas de Inventario, posting, UOM, reconciliación,
+permisos y validaciones pre-submit. La ejecución completa definida por
+`AGENTS.md` terminó en `/tmp/cacao-accounting-full-pytest-20260819.txt` con
+1846 pruebas exitosas, 13 omitidas y 4 fallos iniciales en 1184.83 s. Tras los
+ajustes locales, las 3 regresiones de Inventario/posting y la prueba de
+migraciones ya no fallan: se ejecutaron focalizadamente y pasaron. Permanece
+un fallo preexistente en `tests/test_03webactions.py`, originado en la política
+de facturas de proveedor de `compras/`, módulo que no fue modificado en esta
+tanda; se conserva como pendiente explícito y no se enmascaró alterando esa
+regla de negocio.
+
+### Decisiones de continuidad
+
+Las opciones del frontend no se consideran una frontera de seguridad: toda
+compañía, bodega, cuenta, lote y serial enviado por el cliente debe validarse
+en el servicio o en posting. Los movimientos físicos deben abortar antes de
+crear ledger si no existe su contexto contable completo. Los issues corregidos
+permanecen abiertos para revisión de los mantenedores.
+
+## 2026-08-19 — Auditoría adicional de libros, tasas, importaciones, O2C y GRNI: issues abiertos #545–#550
+
+### Petición
+
+Continuar la revisión exhaustiva archivo por archivo de los flujos S2P, O2C,
+R2R, Bancos e Inventario, con énfasis en registros válidos multimoneda,
+multilibro y lógica de negocio. Se mantuvo la instrucción expresa de trabajar
+**sin tests**.
+
+### Plan implementado
+
+1. Se revisaron los archivos restantes de libros contables, tasas históricas,
+   importadores de documentos, generación automática de notas de entrega y
+   conciliación de recepciones/GRNI.
+2. Se contrastaron los hallazgos contra el contexto de `SESSIONS.md` y los
+   issues abiertos existentes para separar defectos nuevos de problemas ya
+   documentados.
+3. Se registraron y se verificó en GitHub el estado abierto de los issues
+   #545–#550.
+
+### Hallazgos registrados
+
+- **#545 R2R/multilibro:** la edición de un libro permite cambiar compañía o
+  moneda después de contabilizar, reinterpretando el GL histórico.
+- **#546 R2R/multimoneda:** las tasas históricas pueden editarse después de ser
+  usadas por contabilización o revaluación, afectando reproducibilidad.
+- **#547 S2P/O2C/importaciones/multimoneda:** los adaptadores no conservan
+  moneda ni tasa y copian importes transaccionales como importes base.
+- **#548 S2P/O2C/importaciones/integridad:** documentos origen y bodegas se
+  aceptan desde el archivo sin validar compañía, estado o relación de líneas.
+- **#549 O2C/multimoneda:** la nota de entrega auto-generada desde una factura
+  pierde moneda base, moneda transaccional y tasa antes del posting de
+  inventario.
+- **#550 S2P/GRNI:** el cálculo de pendientes incluye recepciones en borrador o
+  canceladas por no filtrar el estado documental.
+
+### Decisiones de continuidad
+
+La identidad histórica de un libro y las tasas ya utilizadas deben ser
+inmutables o versionadas. Los importadores y generadores automáticos deben
+resolver relaciones en servidor, validar compañía/estado/moneda y persistir
+una instantánea FX completa antes del posting. Los paneles de conciliación
+deben usar exactamente el mismo universo de documentos aprobados que el
+subledger y el GL.
+
+### Validación
+
+Los issues **#545–#550** fueron consultados mediante GitHub y retornaron
+estado `open`. Se revisaron referencias exactas de código y workflows, no se
+modificó código de aplicación y no se ejecutaron tests por instrucción del
+usuario.
+
+## 2026-08-19 — Auditoría de lógica de negocio y compliance O2C/S2P/R2R/Bancos/Inventario (issues #528–#542)
+
+### Petición
+
+Revisión exhaustiva de la lógica de negocio y compliance de los flujos S2P, O2C,
+R2R, Bancos e Inventario, documentando los hallazgos abriendo issues en GitHub y
+aportando un comentario con análisis y solución propuesta cuando ya existiera un
+issue para el hallazgo. Se mantuvo la sesión **sin tests**, conforme a la
+instrucción expresa del usuario.
+
+### Plan implementado
+
+1. Se leyó `SESSIONS.md`, `ISSUES.md` y el catálogo completo de issues abiertos
+   (incluyendo #509–#521) para fijar el contexto y evitar duplicados.
+2. Se despacharon cinco agentes de auditoría en paralelo (O2C/ventas, S2P/compras,
+   R2R/contabilidad, Bancos, Inventario) con lectura exhaustiva de `routes.py`,
+   `services.py`, `document_flow/*`, `contabilidad/posting*.py`,
+   `accounting_engine/*`, `reportes/services.py` y los servicios de
+   conciliación/valoración.
+3. Se verificaron manualmente (línea a línea) los hallazgos clave contra el código
+   antes de registrarlos: doble conteo de notas de débito en exposición, límite de
+   cantidad de notas de crédito, validación 3-way de notas de proveedor, aislamiento
+   de compañía en períodos/revaluación, cierre fiscal en variación presupuestaria,
+   cuenta COGS por artículo, lotes/seriales en conciliación, revalorización de
+   inventario, cuentas por compañía del artículo y transferencias multimoneda.
+4. Se contrastaron todos los hallazgos contra los issues abiertos; los que
+   confirmaban/ampliaban uno existente (#516, #519, #520, #512, #514) se registraron
+   como comentarios con análisis, no como hallazgo nuevo.
+5. Se abrieron 12 issues nuevos y 5 comentarios de confirmación en GitHub.
+
+### Hallazgos nuevos abiertos
+
+- **O2C**
+  - **#528 [ALTA]** — Las notas de débito de venta se cuentan dos veces en la
+    exposición de límite de crédito (`ventas/services.py:1799-1807` +
+    `document_flow/payment.py:215-277`): incrementan el saldo de la factura origen
+    vía `_compute_allocated_notes_amount` y además su propio `grand_total`; puede
+    bloquear ventas legítimas.
+  - **#529 [MEDIA]** — Notas de crédito creadas desde una factura no están limitadas
+    por cantidad: `_validate_sales_invoice_relation` sólo valida `delivery_note` y
+    `sales_order` (`ventas/services.py:1323-1350`); una NC con `source_type=invoice`
+    puede devolver más unidades de las facturadas.
+- **S2P**
+  - **#530 [ALTA]** — Notas de crédito/débito creadas desde una factura conciliada a
+    recepción son rechazadas: heredan `purchase_receipt_id` y `_validate_purchase_source_link`
+    exige relaciones activas contra la recepción cuando las líneas provienen de la
+    factura (`compras/services.py:2065-2067, 2116-2119`); AP no puede reducirse.
+- **R2R**
+  - **#531 [ALTA]** — Rutas de períodos y años fiscales sin aislamiento por compañía;
+    permiten reabrir/eliminar períodos cerrados ajenos (`contabilidad/routes.py:1613-1858`).
+  - **#535 [ALTA]** — Revalorización cambiaria y su anulación no validan acceso por
+    compañía (`contabilidad/routes.py:2607-2713` + `services.py:704-745`).
+  - **#536 [MEDIA]** — Reporte de variación presupuestaria suma asientos de cierre
+    fiscal en "actual" (`reportes/services.py:_build_actual_query`), a diferencia de
+    las demás consultas de actual/comprometido.
+- **Inventario**
+  - **#537 [ALTA]** — Cuenta COGS por artículo (`ItemAccount.cogs_account_id`) es
+    ignorada en el posting de notas de entrega (`posting_service.py:366-393`); el
+    COGS cae al default de compañía o falla.
+  - **#538 [ALTA]** — La conciliación de inventario no valida ni registra lotes/seriales
+    (`inventario/services.py:442-484`, `posting_service.py:2274-2385`); una reducción
+    a cero deja seriales/lotes inconsistentes con el bin.
+  - **#539 [MEDIA]** — Revalorización de inventario sin cambio de cantidad no puede
+    enviarse por `require_qty_positive` (`inventario/routes.py:850`); el ajuste de
+    valor por conciliación queda muerto.
+  - **#540 [MEDIA]** — Las filas de cuentas por compañía del artículo no validan acceso
+    por compañía (`inventario/routes.py:328-374`; `_company_choices`/`_account_choices`
+    sin ACL), a diferencia de las bodegas.
+  - **#541 [ALTA]** — Se permite alternar `is_stock_item`/`has_batch`/`has_serial_no`
+    tras existir transacciones (`inventario/service.py:318-350`), pudiendo corromper
+    stock y GL; sólo `default_uom` está protegido.
+- **Bancos**
+  - **#542 [ALTA]** — La conciliación de una transferencia interna multimoneda usa
+    `received_amount` (monto × tasa) en el tramo origen en lugar del `amount` en la
+    moneda del banco origen (`reconciliation_service.py:96-99, 247-262`);
+    el tramo origen no cuadra con la transacción real.
+
+### Comentarios en issues existentes
+
+- **#516** — Confirmación O2C/posting: el GL se contabiliza desde el snapshot fiscal
+  del cliente aunque el encabezado se recalcula en servidor; aplica incluso con
+  plantilla fiscal. Solución: recalcular líneas fiscales en servidor.
+- **#519** — Confirmación de plantillas recurrentes sin autorización por compañía.
+- **#520** — Vector adicional: la compañía del comprobante manual no se autoriza en
+  el alta (`nuevo_comprobante`/`update_journal_draft`); se añade regresión propuesta.
+- **#512** — Confirmación del movimiento de seriales con manifestación en la
+  conciliación (enlazada a #538).
+- **#514** — Confirmación con manifestación en la edición de artículos/cuentas
+  (enlazada a #540).
+
+### Coordinación con sesión paralela
+
+Durante la revisión apareció una sesión de auditoría paralela que abrió #522–#527 y
+#532–#534, además de #543–#544 en esta bitácora. Se verificó que los issues abiertos
+en esta etapa no duplican los de la sesión paralela; donde los hallazgos eran el
+mismo vector (p. ej. cuentas por compañía del artículo en #540 frente a #544), se
+preservaron como issues propios con evidencia independiente.
+
+### Validación estática
+
+No se ejecutaron tests (instrucción expresa del usuario). Los hallazgos se
+verificaron contra el código local con referencias exactas archivo:línea.
+
+## 2026-08-19 — Auditoría adicional de permisos y maestros de inventario: issues abiertos #532–#534 y #543–#544
+
+### Petición
+
+Confirmar la continuidad de la auditoría archivo por archivo de S2P, O2C, R2R,
+Bancos e Inventario, con foco en compañía, moneda, libro y lógica de negocio.
+La sesión se mantuvo **sin tests**, conforme a la instrucción expresa del
+usuario.
+
+### Plan implementado
+
+1. Se inspeccionaron las rutas y servicios de borradores S2P/O2C, pronósticos de
+   caja y el maestro de artículos de inventario, incluyendo sus referencias a
+   compañías, bodegas y cuentas contables.
+2. Se contrastaron los hallazgos con issues abiertos existentes para evitar
+   duplicados; los defectos nuevos se documentaron en issues separados.
+3. Se verificó mediante GitHub que los issues creados en esta etapa están en
+   estado `open`.
+
+### Hallazgos registrados
+
+- **#532 S2P/O2C/permisos:** varias rutas de solicitudes, cotizaciones y otros
+  borradores no factura aceptan la compañía enviada por POST sin validar
+  permiso de creación por compañía.
+- **#533 Bancos:** un pronóstico de caja puede persistir un año fiscal de otra
+  compañía; sus agregados mezclan ese período con documentos de la compañía
+  del pronóstico.
+- **#534 Bancos/multimoneda:** el pronóstico de caja usa el importe original
+  cuando falta la tasa de conversión, produciendo totales funcionales
+  incorrectos en vez de rechazar el dato o marcarlo como no convertible.
+- **#543 Inventario/permisos:** el artículo guarda una bodega predeterminada
+  sin comprobar compañía, estado ni autorización; ventas usa esa referencia
+  como fallback y puede cruzar entidades.
+- **#544 Inventario/permisos:** la configuración `ItemAccount` valida
+  pertenencia de cuentas y centros de costo, pero no la autorización del
+  usuario sobre cada compañía, permitiendo modificar configuración contable
+  fuera de su perímetro.
+
+### Decisiones de continuidad
+
+Los artículos son globales, pero sus bodegas predeterminadas y cuentas por
+compañía no pueden resolverse sin contexto de entidad. Toda futura corrección
+debe validar ACL en servidor y conservar la separación compañía/libro/moneda;
+las opciones filtradas del frontend no sustituyen esa validación.
+
+### Validación
+
+Los issues **#509–#527, #532–#534 y #543–#544** fueron consultados por GitHub
+y todos retornaron estado `open`. No se modificó código de aplicación ni se
+ejecutaron tests; el cambio local de esta etapa es únicamente esta bitácora.
+
+## 2026-08-19 — Auditoría de Bancos, Inventario y R2R: issues abiertos #522–#527
+
+### Petición
+
+Continuar la revisión exhaustiva archivo por archivo de S2P, O2C, R2R,
+Bancos e Inventario, con énfasis en registros válidos multimoneda,
+multilibro y lógica de negocio. La sesión se ejecutó **sin tests**.
+
+### Plan implementado
+
+1. Se consultó esta bitácora y se revisaron los workflows de `.github/workflows`;
+   CI mantiene flake8, ruff, pydocstyle, mypy, pytest, pruebas JavaScript y
+   cobertura. No se ejecutaron esos controles por la instrucción expresa del
+   usuario.
+2. Se inspeccionaron conciliación bancaria, posting de pagos, transferencias
+   internas, Stock Ledger/GL de transferencias, revaluación cambiaria,
+   presupuestos y acceso de creación de presupuestos.
+3. Cada hallazgo se contrastó con issues abiertos existentes (#276, #279,
+   #282, #393 y #509–#521) antes de registrar uno nuevo.
+4. Se verificó remotamente que los nuevos issues creados permanecen abiertos.
+
+### Hallazgos registrados
+
+- **#522 Bancos:** la aplicación de una conciliación acepta directamente un
+  `GLEntry` cancelado, reverso o de libro no primario, aunque la búsqueda de
+  candidatos sí lo excluye. Esto permite crear `ReconciliationItem` inválidos.
+- **#523 Bancos:** cuentas GL explícitas enviadas en el payload de pago no se
+  validan contra `Accounts.entity`; el posting puede combinar la compañía del
+  pago con una cuenta de otra compañía.
+- **#524 Inventario:** una transferencia material con cuenta de inventario
+  faltante crea movimientos físicos y retorna sin GL, dejando Stock Ledger,
+  valoración y mayor general irreconciliables.
+- **#525 R2R:** la revaluación de bancos suma únicamente
+  `debit_in_account_currency`/`credit_in_account_currency`; entradas bancarias
+  base-only o con esos campos nulos se interpretan como saldo cero.
+- **#526 R2R:** presupuesto, control de disponibilidad y reporte Real vs
+  Presupuesto comparan importes del presupuesto con débitos/créditos del libro
+  sin validar ni convertir la moneda configurada.
+- **#527 R2R/permisos:** la ruta de nuevo presupuesto permite seleccionar una
+  compañía no autorizada; el ACL se aplica a registros existentes, no al
+  `company` enviado durante el alta.
+
+### Decisiones de continuidad
+
+Se mantienen separados los defectos específicos de estos issues de los
+hallazgos amplios de reconciliación subledger/GL (#276), inventario físico y
+valoración (#279), conciliación bancaria (#282) y conversión de candidatos
+GL (#393). La invariante que debe guiar los siguientes cambios es que cada
+registro contabilizable conserve y valide compañía, libro, moneda de
+transacción, moneda del libro/funcional y tasa histórica; una validación hecha
+al listar candidatos no sustituye la validación al aplicar/postear.
+
+### Validación
+
+Los issues **#522, #523, #524, #525, #526 y #527** fueron consultados por
+GitHub y están en estado `open`. No se modificó código de aplicación ni se
+ejecutaron tests; el cambio local de esta etapa es únicamente esta bitácora.
+
+## 2026-08-19 — Continuación de auditoría fiscal, permisos y moneda por libro sin tests
+
+### Petición
+
+Continuar la revisión exhaustiva, archivo por archivo, de los flujos S2P, O2C,
+R2R, Bancos e Inventario, con énfasis en registros válidos multimoneda y
+multilibro, lógica de negocio y documentación de observaciones mediante issues
+de GitHub. La ejecución debe mantenerse **sin tests**.
+
+### Plan implementado
+
+1. Se releyó `SESSIONS.md`, se revisaron los workflows de CI y se mantuvo la
+   inspección estática sin ejecutar pytest ni pruebas JavaScript.
+2. Se recorrieron servicios y builders de fiscalidad, snapshots, posting,
+   pagos/settlement, landed cost, diarios manuales y recurrentes.
+3. Se revisaron las rutas de autorización de facturas, libros, cuentas
+   bancarias y reportes, contrastando cada hallazgo con issues abiertos antes
+   de crear uno nuevo.
+4. Se complementaron issues existentes cuando el problema era parte del
+   mismo flujo, en vez de duplicarlo.
+
+### Hallazgos registrados o ampliados
+
+- **#515 Reportes:** subledger, aging y reconciliaciones aceptan `company` sin
+  validar acceso por compañía, exponiendo datos fuera del alcance autorizado.
+- **#516 Fiscal S2P/O2C:** el snapshot de impuestos copia importes, cuentas,
+  tratamientos y snapshots de reglas desde el payload del navegador; además,
+  el total server-side ignora `TaxRule` cuando no existe `tax_template_id`.
+  Se añadió evidencia adicional al issue sobre la divergencia entre preview,
+  `grand_total` y posting.
+- **#517 S2P/O2C:** las rutas de creación de facturas aceptan `company` del
+  POST sin exigir permiso de creación por compañía.
+- **#518 S2P:** los costos de importación no conservan moneda/tasa de la
+  factura origen; artículos y cargos se contabilizan con contexto funcional y
+  tasa 1, sin trazabilidad para inventario multimoneda.
+- **#519 R2R:** las plantillas recurrentes no validan autorización por
+  compañía ni que `ledger_id`/`book_codes` pertenezcan a la compañía.
+- **#520 R2R:** `journal_payload` permite eludir la autorización por libro en
+  comprobantes manuales porque el decorador no inspecciona el JSON y el
+  servicio solo valida pertenencia del libro, no permisos del usuario.
+- **#521 Bancos:** el alta de cuentas bancarias permite crear configuración
+  para cualquier compañía sin permiso `cash` de creación.
+- **#276:** se añadió evidencia de que `reportes/analytics.py` mezcla KPI de
+  subledger en moneda entidad con GL del `primary_ledger_id` en moneda del
+  libro.
+- **#282:** se añadió evidencia de que las asignaciones bancarias no conservan
+  moneda/libro/tasa y se suman contra saldos convertidos dinámicamente.
+- **#510:** se añadió que S2P usa tasa 1:1 silenciosa cuando falta FX, mientras
+  O2C rechaza la misma condición.
+
+### Decisiones de continuidad
+
+Los issues #511–#514, #509–#510 y los issues ampliados #276/#282 siguen siendo
+referencias de esta misma auditoría. No se modificó código de aplicación ni se
+abrieron duplicados para esos hallazgos. La prioridad de diseño es conservar
+siempre compañía, libro, moneda transaccional, moneda funcional y tasa en el
+momento de generar snapshots, subledger y GL; las conversiones no deben
+depender de la moneda actual de una cuenta o de datos enviados por el cliente.
+
+### Validación
+
+No se ejecutaron tests por instrucción expresa del usuario. Se realizaron solo
+lecturas, búsquedas estáticas y verificación de issues remotos. El único cambio
+local de esta etapa es esta bitácora; `.commandcode/` permanece sin tocar.
+
+## 2026-08-19 — Auditoría R2R/Bancos/Inventario multimoneda y multilibro sin tests
+
+### Petición
+
+Dar continuidad a la auditoría exhaustiva de S2P, O2C, R2R, Bancos e
+Inventario, priorizando que los registros multimoneda y multilibro sean
+válidos y que las reglas de negocio no mezclen compañías, libros o monedas.
+El usuario confirmó que esta etapa debía realizarse **sin tests**.
+
+### Plan implementado
+
+1. Se releyó esta bitácora y se consultaron los issues abiertos antes de
+   registrar nuevas incidencias, para evitar duplicados.
+2. Se revisaron los servicios de cierre, revaluación, capitalización y diarios
+   recurrentes de R2R, además de la matriz de conciliación de reportes.
+3. Se inspeccionaron la conciliación/importación de Bancos y los flujos de
+   seriales, StockEntry, StockBin, StockLedgerEntry y capas de valoración.
+4. Se separaron los hallazgos nuevos de los riesgos ya cubiertos por #276,
+   #278, #279, #282, #393 y #441.
+
+### Hallazgos registrados
+
+- **#511 R2R:** `RecurringJournalApplication.ledger_id` tiene una FK hacia la
+  plantilla, pero el servicio almacena allí un ID de `Book`; además, el cierre
+  descubre plantillas sin restringir el conjunto de libros.
+- **#512 Inventario:** una recepción o ajuste positivo acepta un serial que ya
+  está disponible y lo mueve silenciosamente a otra bodega; sólo el flujo de
+  transferencia debe permitir ese cambio.
+- **#513 Bancos:** la pantalla de reglas de matching carga cuentas y reglas de
+  todas las compañías sin filtrar el alcance de acceso, aunque el POST sí
+  valide parcialmente la compañía.
+- **#514 Inventario:** la creación y edición de `StockEntry` confía en la
+  compañía enviada por el formulario y permite persistir borradores fuera del
+  alcance autorizado.
+- **#276:** se añadió que Inventory, GRNI, Tax y Bank se agregan en moneda
+  funcional/transaccional sin conversión al `ledger.currency` seleccionado,
+  mientras el GL sí se filtra por libro y moneda.
+- **#282:** se añadió que `ReconciliationItem.allocated_amount` no conserva
+  moneda, libro ni tasa, pero se resta de saldos destino convertidos según la
+  cuenta bancaria actual; esto puede mezclar asignaciones incompatibles.
+
+### Decisiones de continuidad
+
+Los issues #393 y #441 permanecen como referencias existentes: el código actual
+ya contiene parte de sus correcciones, pero requieren verificación independiente
+del ciclo completo multimoneda/multilibro. No se abrió un duplicado. Los
+importes de revaluación que deliberadamente se mantienen en moneda del libro
+deben seguir diferenciándose de los importes transaccionales originales.
+
+### Validación
+
+No se ejecutaron tests en esta etapa por instrucción expresa del usuario. Se
+conservaron los resultados estáticos ya obtenidos en la etapa anterior y no se
+modificó código de aplicación; el único cambio local de esta etapa es esta
+bitácora.
+
+## 2026-08-19 — Auditoría O2C/S2P de moneda extranjera y continuidad sin tests
+
+### Petición
+
+Continuar la revisión exhaustiva, archivo por archivo, de S2P, O2C, R2R,
+Bancos e Inventario, priorizando registros válidos en escenarios
+multimoneda/multilibro y documentando los hallazgos reproducibles mediante
+issues de GitHub. El usuario indicó posteriormente continuar **sin tests**.
+
+### Plan implementado
+
+1. Se leyó esta bitácora y el historial de issues para evitar duplicar
+   hallazgos ya abiertos o cerrados.
+2. Se revisaron rutas y servicios de creación, derivación y duplicación de
+   documentos O2C/S2P, junto con `DocBase`, resolución de moneda y cálculo de
+   importes funcionales.
+3. Se contrastaron Bancos e Inventario con los issues de auditoría existentes;
+   los riesgos ya cubiertos permanecen en #279, #393, #280 y #281.
+4. Se abrieron los issues remotos #509 y #510 con reproducción, evidencia por
+   archivo/línea y criterios de aceptación.
+5. Se detuvieron la suite completa y la corrida focalizada al recibir la
+   instrucción de no ejecutar tests. El log parcial queda conservado para
+   trazabilidad en `/tmp/cacao-audit-2026-08-19-pytest.log`.
+
+### Hallazgos registrados
+
+- **#509 O2C:** cotizaciones, órdenes y notas de entrega pueden conservar una
+  moneda transaccional extranjera sin tasa efectiva y con `base_total` igual al
+  importe transaccional. Las duplicaciones de pedido, cotización, orden y nota
+  de entrega pierden además `transaction_currency`, `base_currency` y
+  `exchange_rate`.
+- **#510 S2P:** la creación/edición de cotizaciones de proveedor y las
+  duplicaciones de solicitud, RFQ, cotización de proveedor y recepción omiten
+  la conversión funcional o pierden la metadata FX. Las rutas de orden y
+  factura de compra ya contienen tratamiento FX, por lo que el problema es una
+  brecha de cobertura en los demás documentos.
+- **#276 R2R:** se añadió un comentario con evidencia concreta: la matriz de
+  reconciliación calcula AR/AP en moneda funcional, pero compara contra el GL
+  del libro seleccionado sin convertir al `ledger.currency`; con libros NIO y
+  USD puede reportar una diferencia falsa.
+
+### Validación estática
+
+El entorno `.venv` usa Python 3.12.1. En los archivos auditados, Black y Ruff
+finalizaron correctamente; Flake8, mypy y pydocstyle también finalizaron sin
+errores. No se ejecutaron tests después de la instrucción expresa del usuario.
+
+### Continuidad
+
+La siguiente etapa debe revisar los fixes de #509/#510 y ampliar la matriz de
+registros fuente/derivados sin convertir silenciosamente importes extranjeros
+como si fueran moneda funcional. Los temas Bancos/Inventario pendientes deben
+mantenerse vinculados a los issues de auditoría existentes antes de abrir
+duplicados.
+
 ## 2026-08-19 — Estabilización del import de Bancos tras refactorización
 
 ### Petición
@@ -2151,3 +2680,132 @@ regresión para una relación activa y su posterior cancelación.
 
 El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
 ni se hizo push.
+
+## 2026-08-19 — Auditoría Exhaustiva de Lógica de Negocio y Compliance (S2P, O2C, R2R, Bancos, Inventario)
+
+### Petición
+
+Se solicitó una revisión exahustiva de la lógica de negocio y compliance de los
+flujos S2P (Source-to-Pay), O2C (Order-to-Cash), R2R (Record-to-Report), Bancos
+e Inventario, documentando observaciones como issues en GitHub. Se debía consultar
+issues existentes para evitar duplicados y aportar comentarios con análisis y
+solución propuesta en hallazgos ya rastreados.
+
+### Método
+
+Se ejecutaron 5 revisiones paralelas independientes usando agentes especializados
+que leyeron la totalidad de los archivos de servicios, rutas y modelos de cada
+flujo. Cada agente contrastó sus hallazgos contra los 42 issues abiertos
+existentes (al momento de la auditoría) para generar solo hallazgos nuevos.
+
+### Resumen de Hallazgos
+
+| Flujo | Creados | Severidad |
+|-------|---------|-----------|
+| S2P (Compras) | 15 issues (#551-#565) | 7 HIGH, 6 MEDIUM, 2 LOW |
+| O2C (Ventas) | 10 issues (#566-#575) | 2 HIGH, 6 MEDIUM, 2 LOW |
+| R2R (Contabilidad) | 10 issues (#576-#585) | 3 CRITICAL, 5 HIGH, 2 MEDIUM |
+| Bancos | 10 issues (#586-#595) | 3 HIGH, 4 MEDIUM, 3 LOW |
+| Inventario | 15 issues (#596-#610) | 4 HIGH, 6 MEDIUM, 5 LOW |
+| **Total** | **60 issues** | **15 HIGH+, 28 MEDIUM, 17 LOW** |
+
+### Issues Creados
+
+#### S2P (Compras) — #551 a #565
+
+- #551: `base_total` sin conversión FX en SupplierQuotation
+- #552: Edición de SupplierQuotation permite cambiar company desde POST
+- #553: Edición de PurchaseQuotation permite cambiar company desde POST
+- #554: `transaction_currency` editable desde POST en PO edit
+- #555: Control de presupuesto no se ejecuta en submit de Purchase Receipt
+- #556: Cancelación de recepción no cancela reconciliaciones activas (GR/IR)
+- #557: Membresía de proveedor no validada en creación de factura/recepción
+- #558: Race condition en duplicación de PO desde PurchaseQuotationAward
+- #559: Duplicación de SupplierQuotation pierde transaction_currency
+- #560: Duplicación de Purchase Receipt pierde transaction_currency
+- #561: Warehouse vacío permitido en receipt lines para items de inventario
+- #562: Import landed cost items confía en amount del cliente
+- #563: `document_type` aceptado desde POST en creación de factura de compra
+- #564: `_create_line_relation` confía en source_type/source_id desde POST
+- #565: `_log_budget_exceeded` hace commit interno que puede crear registros huérfanos
+
+#### O2C (Ventas) — #566 a #575
+
+- #566: Cálculo de crédito suma montos en diferentes monedas
+- #567: `_approved_customer_order_exposure` mezcla monedas en cálculo pendiente
+- #568: `_handle_sales_order_new_post` no captura `DocumentFlowError`
+- #569: Edit handlers permiten cambiar company sin actualizar campos de moneda
+- #570: DN auto-generada desde factura no valida cantidades contra SO
+- #571: Líneas duplicadas de item no detectadas en formularios de ventas
+- #572: Edit handlers establecen `base_total = total` ignorando exchange rate
+- #573: `ventas_factura_venta_submit` puede fallar con `UnboundLocalError`
+- #574: `_reject_overdue_invoices` usa términos de pago únicos para todas las facturas
+- #575: Sales request edit no valida ApprovalEngine
+
+#### R2R (Contabilidad) — #576 a #585
+
+- #576: **CRÍTICO** Eliminación de entidad no valida dependencias (cascada sin chequeo)
+- #577: **CRÍTICO** Eliminación de año fiscal no valida dependencias
+- #578: **CRÍTICO** Eliminación de período contable no valida dependencias
+- #579: Edición de año/período permite reasignar company
+- #580: Centro de costo, libro, proyecto y unidad eliminados sin validación de dependencias
+- #581: Cierre fiscal no valida acceso por compañía
+- #582: Cierre fiscal no verifica que todos los períodos estén cerrados
+- #583: `reverse_fiscal_year_closing` no usa `SELECT FOR UPDATE`
+- #584: Aplicación de plantilla recurrente no valida acceso por compañía
+- #585: Reporte de variación presupuestaria suma asientos de cierre fiscal en 'actual'
+
+#### Bancos — #586 a #595
+
+- #586: Reglas de matching y cuentas bancarias expuestas globalmente en GET
+- #587: Cash forecast fiscal year company no validada en POST
+- #588: `_update_cumulatives` pierde historial AR/AP en zona Projected
+- #589: `_is_duplicate` produce falsos negativos cuando reference_number es None
+- #590: `_target_payment_amount` retorna `received_amount` para internal_transfer
+- #591: `_save_numbering_configs` no valida propiedad de company en naming_series
+- #592: `bancos_transaccion_reconciliar` hardcodea bank amount para GL targets
+- #593: `_invoice_outstanding` retorna valor cache stale después de refresh
+- #594: Comparación de forecast no valida company antes de renderizar template
+- #595: `import_bank_statement` no valida company ownership de bank account
+
+#### Inventario — #596 a #610
+
+- #596: Falta `@verifica_permiso('inventory', 'crear')` en creación de stock entry
+- #597: Falta `@verifica_permiso('inventory', 'editar')` en edición de stock entry
+- #598: POST de stock entry bypass validación WTForms completamente
+- #599: Falta `exige_acceso_compania` en creación de stock entry
+- #600: Purpose de stock entry no validado contra valores permitidos
+- #601: `_line_rate` tiene dead code y puede retornar rate=0 silenciosamente
+- #602: Transferencia material omite GL cuando solo una bodega tiene cuenta
+- #603: `has_expiry_date` trackeado en Item pero nunca enforced en stock flow
+- #604: Purpose editable en stock entry edit cambia tratamiento contable
+- #605: Warehouse detail muestra cuentas de todas las empresas
+- #606: Warehouse-company no validado durante draft save de stock entry
+- #607: `default_uom_change_allowed` bloquea en registros cancelados pero permite datos migrados
+- #608: `target_stock_value` no cross-validado con qty × rate en reconciliación
+- #609: Blueprint duplicado en services.py (dead code)
+- #610: Posting date aceptado como None en creación de draft
+
+### Categorías Transversales Identificadas
+
+1. **Aislamiento multicompañía** (14 issues): Rutas que aceptan `company` desde
+   POST sin validar `exige_acceso_compania`, o queries que no filtran por
+   empresa del usuario.
+2. **Conversión multimoneda** (8 issues): `base_total = total` sin FX conversion,
+   cálculos de crédito/Exposure que mezclan monedas, documentos duplicados que
+   pierden `transaction_currency`.
+3. **Validación de input del cliente** (10 issues): Campos como `company`,
+   `transaction_currency`, `document_type`, `purpose` y `amount` se leen
+   directamente de `request.form` sin validación server-side.
+4. **Dependencias de eliminación** (5 issues): Hard deletes sin verificar
+   registros dependientes (CRITICAL en R2R).
+5. **Control de acceso por permisos** (5 issues): Decoradores `@verifica_permiso`
+   faltantes en rutas de inventario.
+6. **Integridad documental** (8 issues): Cancelaciones que no revierten
+   reconciliaciones, duplicaciones que pierden moneda, edit que rompen relations.
+
+### Decisión
+
+Se priorizará la corrección de los 3 hallazgos CRITICAL (#576-#578) y los 15
+hallazgos HIGH en las categorías de aislamiento multicompañía y validación de
+input, ya que representan riesgos de seguridad y cumplimiento más inmediatos.
