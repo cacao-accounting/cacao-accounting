@@ -93,6 +93,19 @@ class TestValidateSubmitPrerequisites:
         registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
         validate_submit_prerequisites(registro, items=items, require_qty_positive=False)
 
+    def test_allows_zero_qty_for_reconciliation_value_adjustment(self):
+        """Pure valuation adjustments may submit with zero quantity."""
+        items = [MockItem(qty=0, warehouse="WH-001", amount=20)]
+        registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8))
+        registro.purpose = "stock_reconciliation"
+        validate_submit_prerequisites(
+            registro,
+            items=items,
+            require_party=False,
+            require_warehouse=True,
+            require_qty_positive=registro.purpose != "stock_reconciliation",
+        )
+
     def test_rejects_missing_warehouse_when_required(self):
         items = [MockItem(qty=1, warehouse=None, item_code="ITEM-001")]
         registro = MockRegistro(company="cacao", posting_date=date(2026, 7, 8), supplier_id="SUP-001")
