@@ -2200,6 +2200,7 @@ def _create_stock_movement(
             outgoing=qty_change < 0,
             warehouse=warehouse,
             allow_transfer=getattr(document, "purpose", None) == "material_transfer",
+            posting_date=getattr(document, "posting_date", None),
         )
     except InventoryServiceError as exc:
         raise PostingError(str(exc)) from exc
@@ -2620,7 +2621,12 @@ def _create_stock_ledger_for_document(
         if not warehouse:
             raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
         try:
-            validate_batch_serial(line, outgoing=True, warehouse=warehouse)
+            validate_batch_serial(
+                line,
+                outgoing=True,
+                warehouse=warehouse,
+                posting_date=getattr(document, "posting_date", None),
+            )
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc
         try:
@@ -2653,6 +2659,7 @@ def _create_stock_ledger_for_document(
                 outgoing=False,
                 warehouse=warehouse,
                 allow_transfer=getattr(document, "purpose", None) == "material_transfer",
+                posting_date=getattr(document, "posting_date", None),
             )
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc

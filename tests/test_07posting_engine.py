@@ -2857,6 +2857,45 @@ def test_inventory_line_rate_rejects_amount_without_quantity(app_ctx):
         _line_rate_generic(line)
 
 
+def test_expired_batch_is_rejected_by_stock_posting(app_ctx):
+    """Items with expiry control cannot post a batch expired at posting time."""
+    from cacao_accounting.database import Batch, Item, StockEntryItem, UOM, database
+    from cacao_accounting.inventario.service import InventoryServiceError, validate_batch_serial
+
+    database.session.add_all(
+        [
+            UOM(code="EA-EXPIRY-GUARD", name="Each"),
+            Item(
+                code="ITEM-EXPIRY-GUARD",
+                name="Expiry guard",
+                item_type="goods",
+                is_stock_item=True,
+                has_batch=True,
+                has_expiry_date=True,
+                default_uom="EA-EXPIRY-GUARD",
+            ),
+        ]
+    )
+    database.session.flush()
+    batch = Batch(item_code="ITEM-EXPIRY-GUARD", batch_no="EXPIRED", expiry_date=date(2026, 5, 1), is_active=True)
+    database.session.add(batch)
+    database.session.flush()
+    line = StockEntryItem(
+        item_code="ITEM-EXPIRY-GUARD",
+        batch_id=batch.id,
+        qty=Decimal("1"),
+        uom="EA-EXPIRY-GUARD",
+    )
+
+    with pytest.raises(InventoryServiceError, match="vencido"):
+        validate_batch_serial(
+            line,
+            outgoing=False,
+            warehouse=None,
+            posting_date=date(2026, 5, 4),
+        )
+
+
 def test_item_cogs_account_is_used_for_delivery_posting(app_ctx):
     """COGS resolution prefers the item's company-specific account."""
     from cacao_accounting.contabilidad.posting_service import _account_id_for_item
