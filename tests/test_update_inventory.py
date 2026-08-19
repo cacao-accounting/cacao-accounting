@@ -5,6 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 import pytest
 
@@ -45,6 +46,7 @@ def app_ctx():
             [
                 ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.0273224044"), date=date(2026, 5, 1)),
                 ExchangeRate(origin="NIO", destination="EUR", rate=Decimal("0.0245"), date=date(2026, 5, 1)),
+                ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.5"), date=date(2026, 5, 1)),
             ]
         )
         database.session.commit()
@@ -163,6 +165,49 @@ def test_submit_with_update_inventory_creates_delivery_note(app_ctx):
     assert dn is not None
     assert dn.docstatus == 1
     assert dn.customer_id == customer.id
+
+
+def test_auto_delivery_note_copies_invoice_currency_context(app_ctx):
+    """La DN automática conserva la moneda y la tasa de la factura."""
+    from cacao_accounting.ventas.services import _create_delivery_note_from_invoice
+
+    warehouse, item, _cogs_account, _inventory_account = _setup_inventory_context()
+    _ensure_default_warehouse(item, warehouse)
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    invoice = SalesInvoice(
+        id="SI-INV-FX-DN",
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        document_type="sales_invoice",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36.5"),
+        docstatus=0,
+    )
+    invoice_item = SalesInvoiceItem(
+        sales_invoice_id=invoice.id,
+        item_code=item.code,
+        item_name=item.name,
+        qty=Decimal("1"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("10"),
+        warehouse=warehouse.code,
+    )
+    database.session.add_all([invoice, invoice_item])
+    database.session.flush()
+
+    with (
+        patch("cacao_accounting.ventas.services.submit_document"),
+        patch("cacao_accounting.ventas.services._release_reservation_for_delivery_note"),
+    ):
+        delivery_note = _create_delivery_note_from_invoice(invoice)
+
+    assert delivery_note.transaction_currency == "USD"
+    assert delivery_note.base_currency == "NIO"
+    assert delivery_note.exchange_rate == Decimal("36.5")
 
 
 def test_submit_without_update_inventory_does_not_create_dn(app_ctx):
