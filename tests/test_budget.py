@@ -115,6 +115,27 @@ def test_duplicate_budget_code(app_ctx):
         service.create_budget(data, str(admin_user.id))
 
 
+def test_budget_currency_must_match_ledger(app_ctx):
+    """A budget cannot label ledger amounts with a different currency."""
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    book = database.session.query(Book).filter_by(entity="cacao").first()
+
+    with pytest.raises(BudgetError, match="moneda del presupuesto"):
+        service.create_budget(
+            {
+                "company": "cacao",
+                "ledger_id": book.id,
+                "fiscal_year_id": fy.id,
+                "budget_code": "CURRENCY-MISMATCH",
+                "name": "Presupuesto incompatible",
+                "currency_id": "USD" if book.currency != "USD" else "NIO",
+            },
+            str(admin_user.id),
+        )
+
+
 def test_budget_import(app_ctx):
     from cacao_accounting.contabilidad.budget_import_service import BudgetImportService
     from cacao_accounting.database import BudgetImportLine
@@ -462,7 +483,7 @@ def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
             "fiscal_year_id": fy.id,
             "budget_code": "REPORT-MAP-TEST",
             "name": "Reporte Real vs Presupuesto",
-            "currency_id": "NIO",
+            "currency_id": book.currency or database.session.get(Entity, "cacao").currency,
         },
         str(admin_user.id),
     )

@@ -170,12 +170,16 @@ class BudgetService:
 
     def _validate_header_data(self, data: Dict[str, Any], exclude_id: Optional[str] = None):
         """Valida datos del encabezado."""
-        if not database.session.execute(database.select(Entity).filter_by(code=data["company"])).first():
+        entity = database.session.execute(database.select(Entity).filter_by(code=data["company"])).scalar_one_or_none()
+        if entity is None:
             raise BudgetError("Compañía no válida.")
 
         ledger = database.session.get(Book, data["ledger_id"])
         if not ledger or ledger.entity != data["company"]:
             raise BudgetError("Libro contable no válido para la compañía.")
+        ledger_currency = ledger.currency or entity.currency
+        if data.get("currency_id") != ledger_currency:
+            raise BudgetError("La moneda del presupuesto debe coincidir con la moneda del libro contable.")
 
         fy = database.session.get(FiscalYear, data["fiscal_year_id"])
         if not fy or fy.entity != data["company"]:
