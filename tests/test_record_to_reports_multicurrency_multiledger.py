@@ -366,6 +366,7 @@ def test_cash_forecast_uses_base_legacy_balance_and_nets_returns():
             posting_date=date(2026, 8, 1),
             outstanding_amount=Decimal("10"),
             base_outstanding_amount=None,
+            transaction_currency="USD",
             exchange_rate=Decimal("36"),
             is_return=False,
         ),
