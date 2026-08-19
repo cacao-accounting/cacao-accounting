@@ -10,7 +10,7 @@ from typing import Any, Mapping
 
 from cacao_accounting.exceptions import flash_error
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import flash, redirect, render_template, request, url_for
 
 from flask_login import current_user
 
@@ -61,8 +61,6 @@ from cacao_accounting.inventario.service import (
 )
 
 logger = logging.getLogger(__name__)
-
-inventario = Blueprint("inventario", __name__, template_folder="templates")
 
 INVENTARIO_INVENTARIO_ENTRADA_NUEVO = "inventario.inventario_entrada_nuevo"
 
