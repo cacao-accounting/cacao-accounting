@@ -93,10 +93,25 @@ def _bank_direction(transaction: BankTransaction) -> str | None:
     return None
 
 
-def _payment_amount(payment: PaymentEntry) -> Decimal:
+def _payment_amount(payment: PaymentEntry, bank_account_id: str | None = None) -> Decimal:
+    """Return the payment amount for the bank leg being reconciled."""
     if payment.payment_type in ("pay", "debit_note"):
         return _decimal_value(payment.paid_amount)
+    if payment.payment_type == "internal_transfer" and bank_account_id:
+        if payment.bank_account_id == bank_account_id:
+            return _decimal_value(payment.paid_amount)
+        if payment.target_bank_account_id == bank_account_id:
+            return _decimal_value(payment.received_amount or payment.paid_amount)
     return _decimal_value(payment.received_amount or payment.paid_amount)
+
+
+def _payment_base_amount(payment: PaymentEntry, bank_account_id: str | None = None) -> Decimal | None:
+    """Return a functional-currency amount for the bank leg being reconciled."""
+    if payment.payment_type in ("pay", "debit_note"):
+        return payment.base_paid_amount
+    if payment.payment_type == "internal_transfer" and bank_account_id == payment.bank_account_id:
+        return payment.base_paid_amount
+    return payment.base_received_amount
 
 
 def _payment_direction(payment: PaymentEntry, transaction: BankTransaction) -> str | None:
@@ -238,13 +253,19 @@ def _target_amount(target_type: str, target_id: str, transaction: BankTransactio
     company = _bank_company(transaction) if transaction else None
     company_currency = _company_currency(company) if company else None
     if target_type == "payment_entry":
-        return _target_payment_amount(target_id, bank_currency, company_currency)
+        bank_account_id = transaction.bank_account_id if transaction else None
+        return _target_payment_amount(target_id, bank_currency, company_currency, bank_account_id)
     if target_type == "gl_entry":
         return _target_gl_amount(target_id, bank_currency, company_currency)
     raise BankReconciliationError(UNSUPPORTED_TARGET_TYPE_ERROR)
 
 
-def _target_payment_amount(target_id: str, bank_currency: str | None, company_currency: str | None) -> Decimal:
+def _target_payment_amount(
+    target_id: str,
+    bank_currency: str | None,
+    company_currency: str | None,
+    bank_account_id: str | None = None,
+) -> Decimal:
     """Resolve a payment amount in the bank transaction currency."""
     payment = database.session.get(PaymentEntry, target_id)
     if not payment:
@@ -253,10 +274,10 @@ def _target_payment_amount(target_id: str, bank_currency: str | None, company_cu
         raise BankReconciliationError("La entrada de pago debe estar aprobada para conciliarse.")
     payment_currency = str(payment.currency) if payment.currency else company_currency
     if not bank_currency or payment_currency == bank_currency:
-        return _payment_amount(payment)
+        return _payment_amount(payment, bank_account_id)
     if bank_currency != company_currency:
         raise BankReconciliationError("La moneda del pago no coincide con la cuenta bancaria.")
-    base_amount = payment.base_paid_amount if payment.payment_type in ("pay", "debit_note") else payment.base_received_amount
+    base_amount = _payment_base_amount(payment, bank_account_id)
     if base_amount is None:
         raise BankReconciliationError("El pago no tiene monto en moneda funcional para conciliarse.")
     return _decimal_value(base_amount)
@@ -389,11 +410,9 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool 
         if bank_currency and payment_currency != bank_currency and bank_currency != company_currency:
             continue
         if not bank_currency or payment_currency == bank_currency:
-            payment_amount = _payment_amount(payment)
+            payment_amount = _payment_amount(payment, transaction.bank_account_id)
         else:
-            base_amount = (
-                payment.base_paid_amount if payment.payment_type in ("pay", "debit_note") else payment.base_received_amount
-            )
+            base_amount = _payment_base_amount(payment, transaction.bank_account_id)
             if base_amount is None:
                 continue
             payment_amount = _decimal_value(base_amount)
