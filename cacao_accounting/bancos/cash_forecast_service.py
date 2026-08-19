@@ -25,6 +25,10 @@ from cacao_accounting.ledger_queries import primary_ledger_id
 _EPOCH_DATE = date(1900, 1, 1)
 
 
+class CashForecastConversionError(ValueError):
+    """Indica que una proyección no puede convertirse de forma segura."""
+
+
 def _generate_monthly_periods(start: date, end: date) -> list[dict]:
     """Genera períodos mensuales dentro de un rango de fechas."""
     periods: list[dict] = []
@@ -84,19 +88,11 @@ def get_base_amount(amount, currency_code, company_currency, target_date):
         return Decimal(str(amount))
     try:
         rate = _lookup_exchange_rate(currency_code, company_currency, target_date)
-        if rate:
+        if rate is not None and Decimal(str(rate)) > 0:
             return Decimal(str(amount)) * Decimal(str(rate))
     except (ValueError, SQLAlchemyError):
-        from cacao_accounting.logs import log
-
-        log.warning(
-            "No se pudo convertir {} {} a {} usando tasa del {}, usando monto original",
-            amount,
-            currency_code,
-            company_currency,
-            target_date,
-        )
-    return Decimal(str(amount))
+        pass
+    raise CashForecastConversionError(f"No existe tipo de cambio para {currency_code} -> {company_currency} en {target_date}.")
 
 
 def _resolve_company_currency(company: str) -> str:
@@ -181,7 +177,12 @@ def _compute_real_movements(
     return real_inflow, real_outflow, real_other
 
 
-def _sum_invoice_amount(invoices: list, start_date: date, end_date: date) -> Decimal:
+def _sum_invoice_amount(
+    invoices: list,
+    start_date: date,
+    end_date: date,
+    company_currency: str = "NIO",
+) -> Decimal:
     """Suma saldos pendientes usando la fecha de vencimiento del documento."""
     total = Decimal("0")
     for inv in invoices:
@@ -189,7 +190,18 @@ def _sum_invoice_amount(invoices: list, start_date: date, end_date: date) -> Dec
         if start_date <= flow_date <= end_date:
             amount = inv.base_outstanding_amount
             if amount is None:
-                amount = Decimal(str(inv.outstanding_amount or 0)) * Decimal(str(inv.exchange_rate or 1))
+                transaction_currency = getattr(inv, "transaction_currency", None) or company_currency
+                outstanding = Decimal(str(inv.outstanding_amount or 0))
+                if transaction_currency == company_currency:
+                    exchange_rate = Decimal("1")
+                else:
+                    exchange_rate = getattr(inv, "exchange_rate", None)
+                    if exchange_rate is None or Decimal(str(exchange_rate)) <= 0:
+                        raise CashForecastConversionError(
+                            f"No existe tipo de cambio para {transaction_currency} -> {company_currency} " f"en {flow_date}."
+                        )
+                    exchange_rate = Decimal(str(exchange_rate))
+                amount = outstanding * exchange_rate
             if getattr(inv, "is_return", False):
                 amount = -Decimal(str(amount))
             total += Decimal(str(amount))
@@ -202,14 +214,18 @@ def _compute_ar_ap_projections(
     ap_invoices: list,
     start_date: date,
     end_date: date,
+    company_currency: str,
 ) -> tuple[Decimal, Decimal]:
     """Calcula proyecciones AR/AP según la zona temporal."""
     if zone == "Current":
-        ar_total = _sum_invoice_amount(ar_invoices, _EPOCH_DATE, end_date)
-        ap_total = _sum_invoice_amount(ap_invoices, _EPOCH_DATE, end_date)
+        ar_total = _sum_invoice_amount(ar_invoices, _EPOCH_DATE, end_date, company_currency)
+        ap_total = _sum_invoice_amount(ap_invoices, _EPOCH_DATE, end_date, company_currency)
         return ar_total, ap_total
     if zone == "Projected":
-        return _sum_invoice_amount(ar_invoices, start_date, end_date), _sum_invoice_amount(ap_invoices, start_date, end_date)
+        return (
+            _sum_invoice_amount(ar_invoices, start_date, end_date, company_currency),
+            _sum_invoice_amount(ap_invoices, start_date, end_date, company_currency),
+        )
     return Decimal("0"), Decimal("0")
 
 
@@ -284,8 +300,8 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         raise ValueError("El pronóstico no pertenece a la compañía solicitada.")
 
     fiscal_year = database.session.get(FiscalYear, forecast.fiscal_year_id)
-    if not fiscal_year:
-        return []
+    if not fiscal_year or fiscal_year.entity != company:
+        raise ValueError("El año fiscal no pertenece a la compañía del pronóstico.")
 
     company_currency = _resolve_company_currency(company)
     periods = generate_periods(fiscal_year, forecast.periodicity)
@@ -327,7 +343,14 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
             limit_end = min(end_date, today_date)
             real_inflow, real_outflow, real_other = _compute_real_movements(company, account_ids, start_date, limit_end)
 
-        proj_ar, proj_ap = _compute_ar_ap_projections(zone, ar_invoices, ap_invoices, start_date, end_date)
+        proj_ar, proj_ap = _compute_ar_ap_projections(
+            zone,
+            ar_invoices,
+            ap_invoices,
+            start_date,
+            end_date,
+            company_currency,
+        )
         manual_inflow, manual_outflow = _compute_manual_projections(
             manual_entries, start_date, end_date, zone, today_date, company_currency
         )

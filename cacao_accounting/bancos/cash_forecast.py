@@ -23,6 +23,7 @@ from cacao_accounting.contabilidad.auxiliares import (
     obtener_lista_monedas,
 )
 from cacao_accounting.bancos.cash_forecast_service import (
+    CashForecastConversionError,
     get_cash_forecast_matrix,
     get_forecast_comparison,
 )
@@ -141,6 +142,11 @@ def _handle_cash_forecast_new_post(company: str):
         flash("Todos los campos obligatorios deben ser completados.", "danger")
         return None
 
+    fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
+    if not fiscal_year or fiscal_year.entity != company:
+        flash("El año fiscal seleccionado no pertenece a la compañía indicada.", "danger")
+        return None
+
     existing = (
         database.session.query(CashForecast).filter_by(company=company, fiscal_year_id=fiscal_year_id, version=version).first()
     )
@@ -180,7 +186,11 @@ def cash_forecast_detail(forecast_id):
     currencies = obtener_lista_monedas()
 
     # Obtener matriz de flujo
-    matrix = get_cash_forecast_matrix(forecast.company, forecast.id)
+    try:
+        matrix = get_cash_forecast_matrix(forecast.company, forecast.id)
+    except CashForecastConversionError as exc:
+        flash(str(exc), "danger")
+        matrix = []
 
     # Obtener entradas manuales de este forecast
     entries = (
@@ -416,8 +426,13 @@ def cash_forecast_compare():
     if base_id and compare_id:
         base_forecast = database.session.get(CashForecast, base_id)
         compare_forecast = database.session.get(CashForecast, compare_id)
+        if (base_forecast and base_forecast.company != company) or (compare_forecast and compare_forecast.company != company):
+            abort(404)
         if base_forecast and compare_forecast:
-            comparison = get_forecast_comparison(company, base_id, compare_id)
+            try:
+                comparison = get_forecast_comparison(company, base_id, compare_id)
+            except CashForecastConversionError as exc:
+                flash(str(exc), "danger")
 
     return render_template(
         "bancos/cash_forecast_comparar.html",

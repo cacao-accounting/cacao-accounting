@@ -16,10 +16,13 @@ from cacao_accounting.database import (
     database as db,
     CashForecast,
     CashForecastEntry,
+    Entity,
     FiscalYear,
 )
 from cacao_accounting.bancos.cash_forecast_service import (
+    CashForecastConversionError,
     generate_periods,
+    get_base_amount,
     get_cash_forecast_matrix,
     get_forecast_comparison,
 )
@@ -705,3 +708,54 @@ def test_budget_desktop_mode_redirect(monkeypatch):
         assert response.status_code == 200
         # Check that we redirected back to contabilidad dashboard and warning is flashed
         assert b"Gesti\xc3\xb3n de presupuesto no disponible en modo DESKTOP" in response.data
+
+
+def test_cash_forecast_rejects_foreign_fiscal_year_and_matrix_relation():
+    """El POST y el cálculo deben impedir años fiscales de otra compañía."""
+    with test_app.app_context():
+        other = db.session.query(Entity).filter_by(code="cash-other").first()
+        if other is None:
+            other = Entity(
+                code="cash-other",
+                name="Cash Other",
+                company_name="Cash Other",
+                tax_id="CASH-OTHER",
+                currency="NIO",
+            )
+            db.session.add(other)
+            db.session.flush()
+        fiscal_year = FiscalYear(
+            entity=other.code,
+            name="2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+            is_closed=False,
+        )
+        db.session.add(fiscal_year)
+        db.session.flush()
+        foreign_year_id = fiscal_year.id
+
+        forecast = CashForecast(
+            version="FOREIGN-FY-MATRIX",
+            fiscal_year_id=foreign_year_id,
+            company="cacao",
+            periodicity="monthly",
+            status="Draft",
+        )
+        db.session.add(forecast)
+        db.session.commit()
+        forecast_id = forecast.id
+
+        with pytest.raises(ValueError, match="no pertenece"):
+            get_cash_forecast_matrix("cacao", forecast_id, today_date=date(2026, 7, 1))
+
+        db.session.delete(forecast)
+        db.session.delete(fiscal_year)
+        db.session.delete(other)
+        db.session.commit()
+
+
+def test_cash_forecast_foreign_currency_without_rate_is_explicit_error():
+    """Una entrada extranjera sin tasa no se suma como si fuera moneda funcional."""
+    with test_app.app_context(), pytest.raises(CashForecastConversionError, match="USD -> NIO"):
+        get_base_amount(Decimal("10"), "USD", "NIO", date(2099, 8, 19))
