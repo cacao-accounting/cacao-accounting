@@ -31,6 +31,15 @@ def test_amount_and_direction_helpers_cover_bank_payment_and_gl_cases() -> None:
     assert service._payment_amount(pay) == Decimal("50")
     assert service._payment_amount(credit) == Decimal("60")
     assert service._payment_amount(debit) == Decimal("70")
+    transfer_amounts = SimpleNamespace(
+        payment_type="internal_transfer",
+        bank_account_id="source",
+        target_bank_account_id="target",
+        paid_amount=Decimal("100"),
+        received_amount=Decimal("110"),
+    )
+    assert service._payment_amount(transfer_amounts, "source") == Decimal("100")
+    assert service._payment_amount(transfer_amounts, "target") == Decimal("110")
     assert service._payment_direction(receive, deposit) == "deposit"
     assert service._payment_direction(pay, withdrawal) == "withdrawal"
     assert service._payment_direction(transfer_out, SimpleNamespace(bank_account_id="source")) == "withdrawal"
