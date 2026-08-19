@@ -67,10 +67,11 @@ class FormularioEntradaAlmacen(FlaskForm):
             ("adjustment_negative", "Ajuste Negativo"),
             ("stock_reconciliation", "Conciliación de Inventario"),
         ],
+        validators=[DataRequired()],
     )
-    company = SelectField("Compañía", choices=[])
-    naming_series = SelectField("Serie", choices=[])
-    posting_date = StringField("Fecha")
-    from_warehouse = SelectField("Bodega Origen", choices=[])
-    to_warehouse = SelectField("Bodega Destino", choices=[])
+    company = SelectField("Compañía", choices=[], validators=[DataRequired()])
+    naming_series = SelectField("Serie", choices=[], validators=[DataRequired()])
+    posting_date = StringField("Fecha", validators=[DataRequired()])
+    from_warehouse = SelectField("Bodega Origen", choices=[], validators=[Optional()])
+    to_warehouse = SelectField("Bodega Destino", choices=[], validators=[Optional()])
     remarks = TextAreaField("Observaciones")

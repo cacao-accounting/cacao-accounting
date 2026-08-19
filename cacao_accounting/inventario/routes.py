@@ -646,7 +646,9 @@ def inventario_entrada_nuevo():
         ],
     }
     if request.method == "POST":
-        return _handle_stock_entry_new_post(request.form)
+        if formulario.validate():
+            return _handle_stock_entry_new_post(request.form)
+        flash("Revise los datos de la entrada de almacén.", "danger")
 
     if purpose == "stock_reconciliation":
         return render_template(

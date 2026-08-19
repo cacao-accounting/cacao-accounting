@@ -600,13 +600,22 @@ def test_sales_happy_path(app_ctx):
 
 
 def test_inventory_cycle(app_ctx):
+    from cacao_accounting.database import NamingSeries
+
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
+    stock_entry_series = (
+        database.session.execute(database.select(NamingSeries).filter_by(entity_type="stock_entry", is_active=True))
+        .scalars()
+        .first()
+    )
+    assert stock_entry_series is not None
 
     # 1. Material Receipt
     mr_data = {
         "company": "cacao",
         "purpose": "material_receipt",
+        "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
         "to_warehouse": "PRINCIPAL",
         "item_code_0": "ART-001",
@@ -633,6 +642,7 @@ def test_inventory_cycle(app_ctx):
     mt_data = {
         "company": "cacao",
         "purpose": "material_transfer",
+        "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
         "from_warehouse": "PRINCIPAL",
         "to_warehouse": "SUCURSAL",
@@ -663,6 +673,7 @@ def test_inventory_cycle(app_ctx):
     mi_data = {
         "company": "cacao",
         "purpose": "material_issue",
+        "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
         "from_warehouse": "SUCURSAL",
         "item_code_0": "ART-001",
