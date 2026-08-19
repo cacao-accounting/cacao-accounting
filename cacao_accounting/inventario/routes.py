@@ -729,6 +729,7 @@ def inventario_entrada(entry_id):
 @inventario.route("/stock-entry/<entry_id>/edit", methods=["GET", "POST"])
 @modulo_activo("inventory")
 @login_required
+@verifica_permiso("inventory", "editar")
 def inventario_entrada_editar(entry_id: str):
     """Edita un movimiento de inventario en borrador."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
