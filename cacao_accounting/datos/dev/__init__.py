@@ -175,17 +175,29 @@ def cargar_comprobantes():
     """Crea y contabiliza comprobantes de demostración."""
     from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
 
+    user_id = _demo_admin_user_id()
     for c in _make_comprobantes_contables():
-        journal = create_journal_draft(c, user_id="admin")
-        submit_journal(journal.id)
+        journal = create_journal_draft(c, user_id=user_id)
+        submit_journal(journal.id, user_id=user_id)
 
 
 def cargar_plantillas_recurrentes():
     """Crea plantillas recurrentes de demostración."""
     from cacao_accounting.contabilidad.recurring_journal_service import create_recurring_template
 
+    user_id = _demo_admin_user_id()
     for t in _make_recurring_templates():
-        create_recurring_template(t["data"], t["items"], user_id="admin")
+        create_recurring_template(t["data"], t["items"], user_id=user_id)
+
+
+def _demo_admin_user_id() -> str:
+    """Resuelve el ID persistido del usuario administrador de demostración."""
+    from cacao_accounting.database import User
+
+    user = database.session.execute(database.select(User).filter_by(user="admin")).scalars().first()
+    if user is None:
+        raise RuntimeError("El usuario administrador de demostración no existe.")
+    return str(user.id)
 
 
 def tasas_de_cambio():

@@ -490,7 +490,12 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
             transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)
             if transaction is None:
                 raise BankReconciliationError("La transaccion bancaria no existe.")
-            _post_bank_difference_adjustment(reconciliation.id, transaction, difference)
+            _post_bank_difference_adjustment(
+                reconciliation.id,
+                transaction,
+                difference,
+                user_id=str(current_user.id),
+            )
         database.session.commit()
         flash(_("Conciliación bancaria y diferencia aplicadas correctamente."), "success")
     except BankReconciliationError as exc:

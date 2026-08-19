@@ -41,6 +41,17 @@ def app_ctx():
         yield app
 
 
+def _seed_accounting_admin() -> None:
+    """Crea un actor persistido para servicios de posting fail-closed."""
+    from cacao_accounting.database import Modules, User, database
+
+    if database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one_or_none() is None:
+        database.session.add(Modules(module="accounting", default=True, enabled=True))
+    if database.session.get(User, "admin") is None:
+        database.session.add(User(id="admin", user="acl-admin", password=b"x", classification="admin", active=True))
+    database.session.commit()
+
+
 def test_purchase_reconciliation_line_matching_supports_partial_and_completion(app_ctx):
     from cacao_accounting.compras.purchase_reconciliation_service import (
         get_purchase_reconciliation_pending,
@@ -1076,6 +1087,7 @@ def test_financial_reports_ignore_inactive_ledgers(app_ctx):
 
 
 def test_bank_difference_journal_uses_account_codes_and_each_book_currency(app_ctx):
+    _seed_accounting_admin()
     """El ajuste bancario se contabiliza en la moneda del banco y se convierte por libro."""
     from cacao_accounting.bancos.statement_service import create_bank_difference_journal
     from cacao_accounting.contabilidad.journal_service import submit_journal
@@ -1146,7 +1158,7 @@ def test_bank_difference_journal_uses_account_codes_and_each_book_currency(app_c
     )
     database.session.commit()
 
-    journal = create_bank_difference_journal(reconciliation.id, Decimal("5"))
+    journal = create_bank_difference_journal(reconciliation.id, Decimal("5"), user_id="admin")
     database.session.commit()
     submit_journal(journal.id)
 
@@ -4950,6 +4962,7 @@ def test_partial_invoice_price_variance_scaling(app_ctx):
 
 def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
     """Test that a bank reconciliation difference posting is atomic and commits only at the end."""
+    _seed_accounting_admin()
     from cacao_accounting.bancos.reconciliation_service import (
         BankReconciliationMatch,
         BankReconciliationRequest,
@@ -5028,7 +5041,7 @@ def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
     )
     from cacao_accounting.bancos import _post_bank_difference_adjustment
 
-    _post_bank_difference_adjustment(reconciliation.id, transaction, Decimal("5.00"))
+    _post_bank_difference_adjustment(reconciliation.id, transaction, Decimal("5.00"), user_id="admin")
 
     # The failure happens after the adjustment journal and reconciliation item exist.
     try:
@@ -5049,6 +5062,7 @@ def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
 
 def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
     """Verify that bank difference adjustments derive their sign based on deposit vs withdrawal."""
+    _seed_accounting_admin()
     from cacao_accounting.bancos import _post_bank_difference_adjustment
     from cacao_accounting.database import (
         Accounts,
@@ -5109,7 +5123,7 @@ def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
     )
     database.session.commit()
 
-    _post_bank_difference_adjustment(reconciliation_dep.id, deposit_txn, Decimal("10"))
+    _post_bank_difference_adjustment(reconciliation_dep.id, deposit_txn, Decimal("10"), user_id="admin")
     database.session.commit()
 
     # Find the GL entries for the deposit adjustment
@@ -5165,7 +5179,7 @@ def test_post_bank_difference_deposit_and_withdrawal(app_ctx):
     )
     database.session.commit()
 
-    _post_bank_difference_adjustment(reconciliation_with.id, withdrawal_txn, Decimal("15"))
+    _post_bank_difference_adjustment(reconciliation_with.id, withdrawal_txn, Decimal("15"), user_id="admin")
     database.session.commit()
 
     # Find the GL entries for the withdrawal adjustment

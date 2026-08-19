@@ -732,7 +732,7 @@ class ApprovalEngine:
         if doctype == "journal_entry":
             from cacao_accounting.contabilidad.journal_service import submit_journal
 
-            submit_journal(document.id)
+            submit_journal(document.id, user_id=str(user.id))
             return
 
         if doctype in {

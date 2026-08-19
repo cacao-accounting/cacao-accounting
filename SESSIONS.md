@@ -3,6 +3,54 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-19 — Corrección fail-closed de ACL contable (#519 y #520)
+
+### Petición
+
+Corregir prioritariamente los hallazgos de seguridad #519 y #520 y crear un
+commit semántico firmado como `williamjmorenor@gmail.com`, sin ejecutar tests
+ni hacer push.
+
+### Implementado
+
+- La creación y contabilización de comprobantes falla si el actor no existe o
+  no tiene libros autorizados; desaparece el bypass legacy por `user_id`
+  inexistente.
+- `submit_journal` revalida siempre el conjunto canónico de libros y los flujos
+  de aprobación, cierre fiscal, capitalización y ajustes bancarios propagan el
+  usuario responsable.
+- Las plantillas recurrentes fallan cerradas, incluyen el `ledger_id` de
+  registros legacy en la revalidación y restringen listado/detalle a plantillas
+  cuyos libros completos son legibles por el usuario.
+- Se añadieron regresiones focales para usuario inexistente y plantilla legacy
+  con libro no autorizado. No se ejecutó pytest por instrucción explícita.
+
+## 2026-08-19 — Revisión de fixes locales etiquetados needs-review
+
+### Petición
+
+Confirmar si los fixes propuestos localmente para los issues `needs-review`
+son válidos y corrigen completamente el reporte. Cerrar los correctos; cambiar
+los incompletos o incorrectos a `needs-work` y comentar la revisión.
+
+### Resultado
+
+La revisión estática de #246, #251, #256, #276, #278, #282, #283, #284,
+#519 y #520 concluyó que ninguno cumple todavía todo el alcance del issue.
+Algunos commits corrigen subcasos válidos (#278, #282, #283 y #284), pero no
+los criterios de aceptación completos. Se encontraron además defectos
+concretos en #251 (paginación aplicada después de una posible paginación del
+servicio), #256 (artefactos escritos en `/home/jules`, no portable en CI) y
+#519/#520 (bypass cuando el usuario no existe y submit desde approval engine
+sin contexto de usuario).
+
+### Decisión
+
+- No cerrar ninguno de los diez issues.
+- Reemplazar `needs-review` por `needs-work` y documentar en cada issue los
+  cambios necesarios.
+- No ejecutar tests ni modificar los fixes durante esta etapa de revisión.
+
 ## 2026-08-19 — Triage de issues abiertos en GitHub
 
 ### Petición

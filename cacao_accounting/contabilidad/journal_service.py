@@ -213,13 +213,15 @@ def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = N
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError("Solo se puede contabilizar un comprobante en borrador.")
 
-    if user_id:
-        _validate_journal_book_access(
-            journal.entity,
-            _selected_books_for_journal(journal),
-            user_id,
-            "autorizar",
-        )
+    actor_id = user_id or journal.user_id
+    if not actor_id:
+        raise JournalValidationError("El comprobante requiere un usuario autorizado para contabilizarse.")
+    _validate_journal_book_access(
+        journal.entity,
+        _selected_books_for_journal(journal),
+        str(actor_id),
+        "autorizar",
+    )
 
     fiscal_year = _validate_fiscal_year_closing(journal)
 
@@ -699,14 +701,13 @@ def _authorized_journal_books(
 ) -> list[str] | None:
     """Canonicaliza libros de un borrador contra el ACL del usuario.
 
-    Los llamadores internos antiguos pueden no tener un usuario persistido;
-    en ese caso se conserva el comportamiento interno y las rutas HTTP siguen
-    siendo la frontera autorizada.
+    La validación falla cerrada: los flujos internos también deben transportar
+    un usuario persistido y auditable.
     """
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
-        return requested_books
+        raise JournalValidationError("El usuario indicado no existe o no puede autorizar libros contables.")
     authorized = _authorized_book_codes(company, user_id, action)
     if not authorized:
         raise JournalValidationError("El usuario no tiene libros contables autorizados para la compañía.")
@@ -723,6 +724,8 @@ def _authorized_journal_books(
 
 def _validate_journal_book_access(company: str, books: list[str] | None, user_id: str, action: str) -> None:
     """Valida libros persistidos antes de una transición que afecta el GL."""
+    if not books:
+        raise JournalValidationError("El comprobante no tiene una selección canónica de libros contables.")
     _authorized_journal_books(company, books, user_id, action)
 
 

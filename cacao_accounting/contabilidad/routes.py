@@ -2368,8 +2368,13 @@ def listar_comprobantes():
 @verifica_acceso("accounting")
 def comprobantes_recurrentes():
     """Lista de plantillas de comprobantes recurrentes."""
+    from cacao_accounting.contabilidad.recurring_journal_service import accessible_recurring_template_ids
+
+    accessible_ids = accessible_recurring_template_ids(str(current_user.id))
     query = apply_list_filters(
-        database.select(RecurringJournalTemplate).order_by(RecurringJournalTemplate.code),
+        database.select(RecurringJournalTemplate)
+        .where(RecurringJournalTemplate.id.in_(accessible_ids) if accessible_ids else false())
+        .order_by(RecurringJournalTemplate.code),
         RecurringJournalTemplate,
         (
             RecurringJournalTemplate.code,
@@ -2455,12 +2460,20 @@ def nuevo_comprobante_recurrente():
 @verifica_acceso("accounting")
 def ver_plantilla_recurrente(identifier: str):
     """Ver detalle de plantilla recurrente."""
+    from cacao_accounting.contabilidad.recurring_journal_service import (
+        RecurringJournalError,
+        validate_recurring_template_access,
+    )
     from cacao_accounting.database import RecurringJournalTemplate, RecurringJournalItem, RecurringJournalApplication
 
     plantilla = database.session.get(RecurringJournalTemplate, identifier)
     if not plantilla:
         flash("Plantilla no encontrada.", "warning")
         return redirect(url_for("contabilidad.comprobantes_recurrentes"))
+    try:
+        validate_recurring_template_access(plantilla, str(current_user.id), "consultar")
+    except RecurringJournalError:
+        abort(403)
 
     lineas = database.session.query(RecurringJournalItem).filter_by(template_id=plantilla.id).all()
     aplicaciones = (
