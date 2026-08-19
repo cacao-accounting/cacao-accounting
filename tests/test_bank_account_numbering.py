@@ -234,6 +234,35 @@ def _make_bank_account(series, counter, currency: str = "NIO"):
     return account
 
 
+def test_numbering_config_rejects_cross_company_references(app_ctx):
+    """La configuración por cuenta no puede enlazar series ni chequeras ajenas."""
+    from cacao_accounting.bancos.services import _save_numbering_configs
+    from cacao_accounting.document_identifiers import IdentifierConfigurationError
+
+    own_series = _make_payment_series()
+    own_counter = _make_checkbook()
+    account = _make_bank_account(own_series, own_counter)
+    foreign_series = _make_payment_series(company="other", entity_type="bank_payment")
+    foreign_counter = _make_checkbook(company="other")
+
+    with (
+        app_ctx.test_request_context(
+            json={
+                "configs": [
+                    {
+                        "payment_type": "pay",
+                        "naming_series_id": foreign_series.id,
+                        "use_external_counter": True,
+                        "external_counter_id": foreign_counter.id,
+                    }
+                ]
+            }
+        ),
+        pytest.raises(IdentifierConfigurationError, match="no pertenece"),
+    ):
+        _save_numbering_configs(account)
+
+
 def test_bank_account_new_saves_payment_series_and_checkbook(app_ctx):
     from cacao_accounting.bancos import bancos_cuenta_bancaria_nuevo
     from cacao_accounting.database import Bank, BankAccount, SeriesExternalCounterMap, database
