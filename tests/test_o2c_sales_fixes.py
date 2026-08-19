@@ -25,6 +25,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
+from cacao_accounting.document_flow import DocumentFlowError
 
 
 @pytest.fixture()
@@ -113,6 +114,54 @@ def test_sales_order_new_handles_unexpected_error(app_ctx):
             # No debe propagar la excepcion (500); debe capturarla y retornar None.
             result = _handle_sales_order_new_post(None, None)
     assert result is None
+
+
+def test_sales_document_totals_convert_transaction_currency(app_ctx):
+    """Los documentos comerciales conservan la moneda transaccional y su base funcional."""
+    from cacao_accounting.ventas import _sales_base_amount, _set_sales_document_totals
+
+    order = SalesOrder(
+        company="cacao",
+        posting_date=date.today(),
+        transaction_currency="USD",
+    )
+    _set_sales_document_totals(order, Decimal("100"))
+    expected_rate = database.session.execute(
+        database.select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date.today())
+    ).scalar_one().rate
+
+    assert order.base_currency == "NIO"
+    assert order.exchange_rate == expected_rate
+    assert order.base_total == (Decimal("100") * expected_rate).quantize(Decimal("0.0001"))
+    assert _sales_base_amount(order, Decimal("100")) == order.base_total
+
+
+def test_sales_order_items_reject_duplicate_item_codes(app_ctx):
+    """Una misma referencia no puede ocupar dos líneas del mismo documento."""
+    from cacao_accounting.ventas import _save_sales_order_items
+
+    order = SalesOrder(company="cacao", posting_date=date.today(), docstatus=0)
+    database.session.add(order)
+    database.session.flush()
+    _ensure_item("ART-O2C-DUP")
+
+    with app_ctx.test_request_context(
+        "/sales/sales-order/new",
+        method="POST",
+        data={
+            "item_code_0": "ART-O2C-DUP",
+            "qty_0": "1",
+            "rate_0": "10",
+            "amount_0": "10",
+            "item_code_1": "ART-O2C-DUP",
+            "qty_1": "2",
+            "rate_1": "10",
+            "amount_1": "20",
+        },
+    ):
+        with pytest.raises(DocumentFlowError, match="no puede repetirse"):
+            _save_sales_order_items(order.id)
+    database.session.rollback()
 
 
 O2C_BILLING_SCENARIOS = [

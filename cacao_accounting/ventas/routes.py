@@ -118,6 +118,7 @@ from cacao_accounting.ventas.services import (
     _handle_sales_order_new_post,
     _handle_sales_quotation_edit_post,
     _handle_delivery_note_edit_post,
+    _set_sales_document_totals,
     _execute_delivery_note_cancellation,
     _sales_invoice_sources_and_type,
     _sales_invoice_catalogs,
@@ -236,10 +237,17 @@ def ventas_pedido_venta_nuevo():
             customer_id = request.form.get("customer_id") or None
             customer = database.session.get(Party, customer_id) if customer_id else None
             posting_date = _parse_date(request.form.get("posting_date"))
+            company, transaction_currency = validate_immutable_header(
+                None,
+                request.form.get("company") or None,
+                request.form.get("currency") or request.form.get("transaction_currency") or None,
+            )
             pedido = SalesRequest(
                 customer_id=customer_id,
                 customer_name=customer.name if customer else None,
-                company=request.form.get("company") or None,
+                company=company,
+                transaction_currency=transaction_currency,
+                base_currency=company_currency(company),
                 posting_date=posting_date,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
@@ -253,13 +261,11 @@ def ventas_pedido_venta_nuevo():
                 naming_series_id=request.form.get("naming_series") or None,
             )
             _total_qty, total = _save_sales_request_items(pedido.id)
-            pedido.total = total
-            pedido.base_total = total
-            pedido.grand_total = total
+            _set_sales_document_totals(pedido, total)
             database.session.commit()
             flash("Pedido de venta creado correctamente.", "success")
             return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=pedido.id))
-        except IdentifierConfigurationError as exc:
+        except (IdentifierConfigurationError, ValueError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -301,6 +307,12 @@ def ventas_pedido_venta_editar(request_id: str):
     if not registro:
         abort(404)
     _require_sales_document_access(registro, "editar")
+    from cacao_accounting.approval_engine import ApprovalEngine
+
+    try:
+        ApprovalEngine.ensure_document_editable(registro)
+    except ValueError:
+        abort(409)
     if registro.docstatus != 0:
         abort(400)
 
@@ -376,6 +388,9 @@ def ventas_pedido_venta_duplicar(request_id: str):
         customer_id=origen.customer_id,
         customer_name=origen.customer_name,
         company=origen.company,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         docstatus=0,
@@ -401,9 +416,7 @@ def ventas_pedido_venta_duplicar(request_id: str):
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
-    duplicado.total = total
-    duplicado.base_total = total
-    duplicado.grand_total = total
+    _set_sales_document_totals(duplicado, total)
     database.session.commit()
     flash(_("Pedido de venta duplicado como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=duplicado.id))
@@ -968,6 +981,9 @@ def ventas_orden_venta_duplicar(order_id: str):
         customer_id=origen.customer_id,
         customer_name=origen.customer_name,
         company=origen.company,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         docstatus=0,
@@ -993,9 +1009,7 @@ def ventas_orden_venta_duplicar(order_id: str):
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
-    duplicado.total = total
-    duplicado.base_total = total
-    duplicado.grand_total = total
+    _set_sales_document_totals(duplicado, total)
     database.session.commit()
     flash(_("Orden de venta duplicada como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=duplicado.id))
@@ -1098,13 +1112,11 @@ def ventas_cotizacion_nueva():
             )
             if from_request_id:
                 _validate_sales_source_link(cotizacion, "sales_request", from_request_id, quotation_items)
-            cotizacion.total = total
-            cotizacion.base_total = total
-            cotizacion.grand_total = total
+            _set_sales_document_totals(cotizacion, total)
             database.session.commit()
             flash("Cotización creada correctamente.", "success")
             return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=cotizacion.id))
-        except IdentifierConfigurationError as exc:
+        except (IdentifierConfigurationError, ValueError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -1225,6 +1237,9 @@ def ventas_cotizacion_duplicar(quotation_id: str):
         customer_id=origen.customer_id,
         customer_name=origen.customer_name,
         company=origen.company,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         docstatus=0,
@@ -1252,9 +1267,7 @@ def ventas_cotizacion_duplicar(quotation_id: str):
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
-    duplicado.total = total
-    duplicado.base_total = total
-    duplicado.grand_total = total
+    _set_sales_document_totals(duplicado, total)
     database.session.commit()
     flash(_("Cotización de venta duplicada como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=duplicado.id))
@@ -1511,13 +1524,12 @@ def ventas_entrega_nuevo():
                     .all()
                 )
                 _validate_sales_source_link(entrega, "sales_order", entrega.sales_order_id, delivery_items)
-            entrega.total = total
-            entrega.grand_total = total
+            _set_sales_document_totals(entrega, total)
             log_create(entrega)
             database.session.commit()
             flash("Nota de entrega creada correctamente.", "success")
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=entrega.id))
-        except (DocumentFlowError, IdentifierConfigurationError) as exc:
+        except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -1658,6 +1670,9 @@ def ventas_entrega_duplicar(note_id: str):
         customer_id=origen.customer_id,
         customer_name=origen.customer_name,
         company=origen.company,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         docstatus=0,
@@ -1684,8 +1699,7 @@ def ventas_entrega_duplicar(note_id: str):
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
-    duplicado.total = total
-    duplicado.grand_total = total
+    _set_sales_document_totals(duplicado, total)
     database.session.commit()
     flash(_("Nota de entrega duplicada como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=duplicado.id))
