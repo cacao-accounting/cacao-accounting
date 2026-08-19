@@ -1870,7 +1870,14 @@ def _validate_credit_limit_and_overdue(
         _reject_overdue_invoices(invoices, company_party.payment_terms_id, compute_outstanding_amount)
     if company_party.credit_limit is not None:
         outstanding = sum(
-            (_sales_base_amount(inv, compute_outstanding_amount(inv)) for inv in invoices),
+            (
+                _sales_base_amount(
+                    inv,
+                    compute_outstanding_amount(inv),
+                    use_stored_total=False,
+                )
+                for inv in invoices
+            ),
             Decimal("0"),
         )
         order_exposure = _approved_customer_order_exposure(company, customer_id, current_document)
@@ -1902,13 +1909,20 @@ def _approved_customer_invoices(company: str, customer_id: str) -> list[SalesInv
     return list(database.session.execute(query).scalars().all())
 
 
-def _sales_base_amount(document: Any, amount: Decimal) -> Decimal:
-    """Convierte un monto comercial a la moneda funcional del documento."""
-    base_amount = getattr(document, "base_grand_total", None)
-    if base_amount is None:
-        base_amount = getattr(document, "base_total", None)
-    if base_amount is not None:
-        return Decimal(str(base_amount))
+def _sales_base_amount(document: Any, amount: Decimal, *, use_stored_total: bool = True) -> Decimal:
+    """Convierte un monto comercial a la moneda funcional del documento.
+
+    Los totales base almacenados representan el documento completo y no deben
+    sustituir un monto parcial calculado, como el saldo pendiente de una
+    factura. ``use_stored_total=False`` fuerza la conversión del monto recibido
+    usando la tasa histórica del documento.
+    """
+    if use_stored_total:
+        base_amount = getattr(document, "base_grand_total", None)
+        if base_amount is None:
+            base_amount = getattr(document, "base_total", None)
+        if base_amount is not None:
+            return Decimal(str(base_amount))
     transaction_currency = effective_currency(document) or company_currency(getattr(document, "company", None))
     base_currency = company_currency(getattr(document, "company", None))
     if not transaction_currency or transaction_currency == base_currency:
