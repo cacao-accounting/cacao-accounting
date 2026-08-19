@@ -622,3 +622,60 @@ def test_over_billing_validation(app_ctx):
     with pytest.raises(ValueError) as excinfo:
         _validate_sales_invoice_quantities(si2.id)
     assert "Sobre-facturación" in str(excinfo.value)
+
+    # Flow 3: a credit note created directly from an invoice must also respect
+    # the quantity invoiced by the source line.
+    source_invoice = SalesInvoice(
+        customer_id=customer.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="sales_invoice",
+        grand_total=Decimal("100"),
+    )
+    database.session.add(source_invoice)
+    database.session.flush()
+    source_invoice_item = SalesInvoiceItem(
+        sales_invoice_id=source_invoice.id,
+        item_code="ART-RESERVE",
+        qty=Decimal("1"),
+        rate=Decimal("100"),
+    )
+    credit_note = SalesInvoice(
+        customer_id=customer.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=0,
+        document_type="sales_credit_note",
+        is_return=True,
+        reversal_of=source_invoice.id,
+        grand_total=Decimal("50"),
+    )
+    database.session.add_all([source_invoice_item, credit_note])
+    database.session.flush()
+    credit_note_item = SalesInvoiceItem(
+        sales_invoice_id=credit_note.id,
+        item_code="ART-RESERVE",
+        qty=Decimal("50"),
+        rate=Decimal("1"),
+    )
+    database.session.add(credit_note_item)
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="sales_invoice",
+            source_id=source_invoice.id,
+            source_item_id=source_invoice_item.id,
+            target_type="sales_invoice",
+            target_id=credit_note.id,
+            target_item_id=credit_note_item.id,
+            qty=Decimal("50"),
+            relation_type="fulfillment",
+            status="active",
+        )
+    )
+    database.session.commit()
+
+    with pytest.raises(ValueError) as excinfo:
+        _validate_sales_invoice_quantities(credit_note.id)
+    assert "Sobre-facturación" in str(excinfo.value)
