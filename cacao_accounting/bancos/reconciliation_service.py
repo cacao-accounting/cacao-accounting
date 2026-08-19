@@ -247,6 +247,40 @@ def _allocated_for_target(target_type: str, target_id: str) -> Decimal:
     return _decimal_value(value)
 
 
+def _validate_target_allocation_currency(
+    target_type: str,
+    target_id: str,
+    transaction: BankTransaction,
+) -> None:
+    """Rechaza asignaciones históricas del destino en otra moneda bancaria.
+
+    ``ReconciliationItem`` no conserva moneda propia; la moneda fiable de una
+    asignación existente es la cuenta bancaria de su transacción fuente. Sin
+    esta comprobación, el saldo pendiente mezcla cantidades incompatibles.
+    """
+    current_currency = _bank_currency(transaction)
+    if not current_currency:
+        return
+    source_ids = database.session.execute(
+        select(ReconciliationItem.source_id).where(
+            ReconciliationItem.target_type == target_type,
+            ReconciliationItem.target_id == target_id,
+            ReconciliationItem.source_type == "bank_transaction",
+            ReconciliationItem.status != "cancelled",
+        )
+    ).scalars()
+    for source_id in source_ids:
+        source = database.session.get(BankTransaction, source_id)
+        if source is None:
+            continue
+        source_currency = _bank_currency(source)
+        if source_currency and source_currency != current_currency:
+            raise BankReconciliationError(
+                "El destino ya tiene asignaciones en otra moneda bancaria; "
+                "convierta o revierta la asignación anterior antes de continuar."
+            )
+
+
 def _target_amount(target_type: str, target_id: str, transaction: BankTransaction | None = None) -> Decimal:
     """Return a target amount expressed in the bank transaction currency."""
     bank_currency = _bank_currency(transaction) if transaction else None
@@ -616,6 +650,7 @@ def _reconciliation_pending_amounts(
 ) -> tuple[Decimal, Decimal]:
     """Calcula saldos pendientes source/target considerando asignaciones previas."""
     target_key = (target_type, target_id)
+    _validate_target_allocation_currency(target_type, target_id, transaction)
     existing_source_allocations.setdefault(transaction.id, _allocated_for_source(transaction.id))
     existing_target_allocations.setdefault(target_key, _allocated_for_target(target_type, target_id))
     source_pending = (
