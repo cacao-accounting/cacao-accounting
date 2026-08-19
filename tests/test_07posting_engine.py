@@ -3821,9 +3821,7 @@ def test_line_amount_ignores_client_supplied_total(app_ctx):
     from cacao_accounting.inventario import _line_amount as inventory_line_amount
     from cacao_accounting.ventas import _line_amount as sales_line_amount
 
-    with app_ctx.test_request_context(
-        data={"qty_0": "10", "rate_0": "5", "amount_0": "5000"}
-    ):
+    with app_ctx.test_request_context(data={"qty_0": "10", "rate_0": "5", "amount_0": "5000"}):
         assert sales_line_amount(0) == Decimal("50")
         assert purchase_line_amount(0) == Decimal("50")
         assert inventory_line_amount(0) == Decimal("50")
@@ -3921,17 +3919,29 @@ def test_cancel_landed_cost_reverses_capitalized_inventory_value(app_ctx):
         database.select(StockBin).filter_by(company="cacao", item_code="ITEM-503", warehouse="WH-503")
     ).scalar_one()
     assert bin_row.stock_value == Decimal("100.0000")
-    assert database.session.execute(
-        database.select(StockValuationLayer).filter_by(
-            voucher_type="import_landed_cost", voucher_id=document.id, stock_value_difference=Decimal("-20")
-        )
-    ).scalar_one_or_none() is not None
+    assert (
+        database.session.execute(
+            database.select(StockValuationLayer).filter_by(
+                voucher_type="import_landed_cost", voucher_id=document.id, stock_value_difference=Decimal("-20")
+            )
+        ).scalar_one_or_none()
+        is not None
+    )
 
 
 def test_stock_reconciliation_reduction_preserves_fifo_and_value_adjustment(app_ctx):
     """Una reducción FIFO conserva el costo consumido y el ajuste de valor objetivo."""
     from cacao_accounting.contabilidad.posting import _create_stock_reconciliation_movement
-    from cacao_accounting.database import Item, StockBin, StockEntry, StockEntryItem, StockValuationLayer, UOM, Warehouse, database
+    from cacao_accounting.database import (
+        Item,
+        StockBin,
+        StockEntry,
+        StockEntryItem,
+        StockValuationLayer,
+        UOM,
+        Warehouse,
+        database,
+    )
 
     database.session.add_all(
         [

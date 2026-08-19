@@ -295,20 +295,24 @@ def test_api_document_email_send_reports_partial_delivery(mock_send_email, app_c
     assert "failed@test.com" in data["errors"][0]
 
     with app_ctx.app_context():
-        logs = database.session.execute(
-            database.select(AuditTrail).where(
-                AuditTrail.document_id == "PO-EMAIL-001", AuditTrail.action == "email_sent"
+        logs = (
+            database.session.execute(
+                database.select(AuditTrail).where(AuditTrail.document_id == "PO-EMAIL-001", AuditTrail.action == "email_sent")
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert len(logs) == 1
         assert "ok@test.com" in logs[0].comment
         assert "failed@test.com" not in logs[0].comment
 
-        queue_items = database.session.execute(
-            database.select(EmailQueue)
-            .where(EmailQueue.document_id == "PO-EMAIL-001")
-            .order_by(EmailQueue.recipient)
-        ).scalars().all()
+        queue_items = (
+            database.session.execute(
+                database.select(EmailQueue).where(EmailQueue.document_id == "PO-EMAIL-001").order_by(EmailQueue.recipient)
+            )
+            .scalars()
+            .all()
+        )
         assert [(item.recipient, item.status) for item in queue_items] == [
             ("failed@test.com", "failed"),
             ("ok@test.com", "sent"),

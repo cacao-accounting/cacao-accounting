@@ -1688,7 +1688,7 @@ def test_internal_transfer_preserves_source_and_target_nominals(app_ctx, monkeyp
     assert target is not None
 
     monkeypatch.setattr(
-        sys.modules["cacao_accounting.bancos"],
+        sys.modules["cacao_accounting.bancos.services"],
         "_lookup_exchange_rate",
         lambda currency, company_currency, posting_date: Decimal("36"),
     )

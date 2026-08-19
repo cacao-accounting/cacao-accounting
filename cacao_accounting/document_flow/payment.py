@@ -1041,7 +1041,7 @@ def _post_advance_settlement_journal(
         exchange_gain_account_id=exchange_gain_account_id,
         exchange_loss_account_id=exchange_loss_account_id,
     )
-    post_comprobante_contable(journal, ledger_code=[book.code for book in books] or None)
+    post_comprobante_contable(journal, ledger_code=[book.code for book in books] or None)  # type: ignore[misc]
     journal.status = "submitted"
     database.session.add(journal)
 
@@ -1085,7 +1085,7 @@ def _fallback_settlement_value(
         return amount * exchange_rate
     from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 
-    return amount * _lookup_exchange_rate(source_currency, book.currency, allocation_date)
+    return amount * _lookup_exchange_rate(source_currency, book.currency, allocation_date)  # type: ignore[misc]
 
 
 def _allocated_carrying_value(

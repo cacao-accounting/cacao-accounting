@@ -3,6 +3,30 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-19 — Estabilización del import de Bancos tras refactorización
+
+### Petición
+
+Resolver el `ImportError` al cargar `create_app` y durante la colección de
+`tests/test_update_inventory.py`, causado por la refactorización del módulo de
+Bancos.
+
+### Implementación
+
+1. Se identificó un ciclo: `bancos.services` importaba `cash_forecast` durante
+   su inicialización y `cash_forecast` importaba el blueprint desde la fachada
+   parcialmente inicializada.
+2. `cash_forecast` ahora importa el blueprint directamente desde
+   `bancos.routes`, donde ya fue creado antes de registrar esas rutas.
+3. Se retiró el import duplicado e innecesario de `cash_forecast` en
+   `bancos.services`.
+
+### Validación
+
+`from cacao_accounting import create_app` carga correctamente. Black, Ruff y
+Flake8 pasan sobre los archivos modificados; `tests/test_update_inventory.py`
+finaliza con **4 passed**.
+
 ## 2026-08-17 — Verificación de fixes en issues abiertos vía `gh`
 
 ### Petición
@@ -1874,6 +1898,28 @@ línea excede la tolerancia. Se añadió regresión para diferencias opuestas.
 
 El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
 ni se hizo push.
+
+## 2026-08-19 — Estabilización SonarCloud del refactor modular
+
+Se revisaron los issues abiertos de SonarCloud para el PR #508 de la rama
+`refactor-monolithic-modules-5707940737891599974`. Se eliminaron manejadores de
+excepción redundantes, se extrajeron constantes repetidas de rutas y títulos, y
+se separó la resolución de documentos origen en ventas para reducir complejidad
+sin cambiar el flujo funcional. En contabilidad, los contextos de moneda para
+transferencias internas se construyen ahora con un retorno explícitamente
+tipado, eliminando las advertencias de Sonar sobre `dataclasses.replace`.
+
+La pasada completa de pytest reportada por el usuario tuvo 1,826 éxitos, 11
+saltadas y 10 fallos. Los fallos se debían a pruebas que aplicaban mocks o
+inspeccionaban las fachadas `__init__.py` anteriores al refactor; se ajustaron
+para usar los módulos `routes.py` y `services.py` que contienen las
+implementaciones. La reproducción dirigida de esas diez pruebas pasó. También
+pasaron Black, Ruff y Flake8 para los archivos modificados. Mypy conserva cinco
+errores preexistentes en `accounting_engine/gl_posting_builder.py`, fuera de
+estos cambios.
+
+Los commits de esta etapa llevan sign-off de `williamjmorenor@gmail.com`:
+`5d09acc7`, `8d6b949f`, `689f4d60`, `ee8222be` y `a2101d61`. No se hizo push.
 
 ## 2026-08-17 — Revisión de comentarios y snapshots multimoneda #481/#482
 

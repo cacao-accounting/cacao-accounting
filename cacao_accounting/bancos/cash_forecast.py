@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlsplit
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
-from cacao_accounting.bancos import bancos
+from cacao_accounting.bancos.routes import bancos
 from cacao_accounting.database import (
     database,
     CashForecast,
