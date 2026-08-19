@@ -382,7 +382,7 @@ def _create_supplier_quotation_from_request():
         database.session.commit()
         flash("Cotización de proveedor creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
-    except (IdentifierConfigurationError, DocumentFlowError, PurchaseSourcingError, ValueError) as exc:
+    except (IdentifierConfigurationError, DocumentFlowError, PurchaseSourcingError) as exc:
         database.session.rollback()
         flash_error(exc)
     return None
@@ -1264,7 +1264,7 @@ def _create_purchase_order_from_request(form: dict):
                 "warning",
             )
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
-    except (IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:
+    except (IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
         flash_error(exc)
         return None
@@ -1478,7 +1478,7 @@ def _create_purchase_receipt_from_form():
         database.session.commit()
         flash("Recepción de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt.id))
-    except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
+    except (DocumentFlowError, IdentifierConfigurationError) as exc:
         database.session.rollback()
         flash_error(exc)
         return None

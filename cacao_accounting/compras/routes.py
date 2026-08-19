@@ -1020,7 +1020,7 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
             comparison = create_purchase_request_comparison(purchase_request, participant_ids, current_user.id)
             database.session.commit()
             return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison.id))
-        except (IdentifierConfigurationError, ValueError, SQLAlchemyError) as exc:
+        except (IdentifierConfigurationError, SQLAlchemyError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -1137,7 +1137,7 @@ def compras_comparativo_colocar_ordenes_solicitud(comparison_id: str):
         orders = create_purchase_orders_from_comparison(comparison)
         database.session.commit()
         flash(_("Se crearon {} Órdenes de Compra correctamente.").format(len(orders)), "success")
-    except (ValueError, DocumentFlowError, IdentifierConfigurationError, SQLAlchemyError) as exc:
+    except (DocumentFlowError, IdentifierConfigurationError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
     return redirect(url_for("compras.compras_comparativo_ordenes", comparison_id=comparison_id))

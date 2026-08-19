@@ -259,7 +259,7 @@ def ventas_pedido_venta_nuevo():
             database.session.commit()
             flash("Pedido de venta creado correctamente.", "success")
             return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=pedido.id))
-        except (IdentifierConfigurationError, ValueError) as exc:
+        except IdentifierConfigurationError as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -1517,7 +1517,7 @@ def ventas_entrega_nuevo():
             database.session.commit()
             flash("Nota de entrega creada correctamente.", "success")
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=entrega.id))
-        except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
+        except (DocumentFlowError, IdentifierConfigurationError) as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
