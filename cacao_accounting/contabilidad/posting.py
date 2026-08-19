@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from cacao_accounting.contabilidad import posting_service as _posting_service
-from cacao_accounting.contabilidad.posting_service import LedgerContext
 
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
 _ERROR_INVENTARIO_REQUIERE_ALMACEN = "La linea de inventario requiere almacen."
