@@ -2806,6 +2806,59 @@ def test_inventory_line_rate_rejects_amount_without_quantity(app_ctx):
         _line_rate_generic(line)
 
 
+def test_reconciliation_rejects_inconsistent_target_value(app_ctx):
+    """Posting rejects a target value that disagrees with count times rate."""
+    from cacao_accounting.contabilidad.posting_service import (
+        PostingError,
+        _create_stock_reconciliation_movement,
+    )
+    from cacao_accounting.database import Item, StockBin, StockEntry, StockEntryItem, UOM, Warehouse, database
+
+    database.session.add_all(
+        [
+            UOM(code="EA-RECON-GUARD", name="Each"),
+            Item(
+                code="ITEM-RECON-GUARD",
+                name="Reconciliation guard",
+                item_type="goods",
+                is_stock_item=True,
+                default_uom="EA-RECON-GUARD",
+            ),
+            Warehouse(code="WH-RECON-GUARD", name="Reconciliation warehouse", company="cacao"),
+            StockBin(
+                company="cacao",
+                item_code="ITEM-RECON-GUARD",
+                warehouse="WH-RECON-GUARD",
+                actual_qty=Decimal("5"),
+                stock_value=Decimal("50"),
+            ),
+        ]
+    )
+    entry = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="stock_reconciliation",
+        docstatus=1,
+    )
+    database.session.add(entry)
+    database.session.flush()
+    line = StockEntryItem(
+        stock_entry_id=entry.id,
+        item_code="ITEM-RECON-GUARD",
+        target_warehouse="WH-RECON-GUARD",
+        qty=Decimal("5"),
+        uom="EA-RECON-GUARD",
+        counted_qty=Decimal("5"),
+        target_valuation_rate=Decimal("10"),
+        target_stock_value=Decimal("60"),
+    )
+    database.session.add(line)
+    database.session.commit()
+
+    with pytest.raises(PostingError, match="cantidad por tasa"):
+        _create_stock_reconciliation_movement(entry, line)
+
+
 def test_stock_transfer_rejects_warehouse_from_other_company(app_ctx):
     from cacao_accounting.contabilidad.posting import PostingError, post_document_to_gl
     from cacao_accounting.database import Entity, Item, StockEntry, StockEntryItem, UOM, Warehouse, database
@@ -4012,6 +4065,7 @@ def test_stock_reconciliation_reduction_preserves_fifo_and_value_adjustment(app_
         qty=Decimal("20"),
         uom="EA-502",
         counted_qty=Decimal("80"),
+        target_valuation_rate=Decimal("15"),
         target_stock_value=Decimal("1200"),
     )
     database.session.add(line)
