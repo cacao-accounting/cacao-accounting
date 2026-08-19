@@ -700,9 +700,25 @@ class ExchangeRevaluationService:
             .scalars()
             .all()
         )
-        debit = sum((self._decimal(entry.debit_in_account_currency) for entry in entries), Decimal("0"))
-        credit = sum((self._decimal(entry.credit_in_account_currency) for entry in entries), Decimal("0"))
-        return (debit - credit).quantize(Decimal("0.0001"))
+        balance = Decimal("0")
+        company_currency = self._document_currency(account, account.company)
+        for entry in entries:
+            debit_in_account = self._decimal(entry.debit_in_account_currency)
+            credit_in_account = self._decimal(entry.credit_in_account_currency)
+            if debit_in_account != 0 or credit_in_account != 0:
+                balance += debit_in_account - credit_in_account
+                continue
+
+            functional_amount = self._decimal(entry.debit) - self._decimal(entry.credit)
+            if functional_amount == 0:
+                continue
+            source_currency = str(entry.company_currency or company_currency or "")
+            if not source_currency or source_currency == account.currency:
+                balance += functional_amount
+                continue
+            rate = self._closing_rate(source_currency, str(account.currency), entry.posting_date)
+            balance += functional_amount * rate
+        return balance.quantize(Decimal("0.0001"))
 
     def _closing_rate(self, origin: str, destination: str, closing_date: date) -> Decimal:
         if origin == destination:
