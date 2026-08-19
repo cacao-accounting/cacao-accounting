@@ -231,9 +231,7 @@ def _lock_receipt_items(receipt_id: str) -> list[PurchaseReceiptItem]:
     """Carga y bloquea líneas de recepción durante un matching."""
     return list(
         database.session.execute(
-            select(PurchaseReceiptItem)
-            .where(PurchaseReceiptItem.purchase_receipt_id == receipt_id)
-            .with_for_update()
+            select(PurchaseReceiptItem).where(PurchaseReceiptItem.purchase_receipt_id == receipt_id).with_for_update()
         )
         .scalars()
         .all()
@@ -806,9 +804,7 @@ def _lock_purchase_order_items(purchase_order_id: str) -> list[Any]:
 
     return list(
         database.session.execute(
-            select(PurchaseOrderItem)
-            .where(PurchaseOrderItem.purchase_order_id == purchase_order_id)
-            .with_for_update()
+            select(PurchaseOrderItem).where(PurchaseOrderItem.purchase_order_id == purchase_order_id).with_for_update()
         )
         .scalars()
         .all()

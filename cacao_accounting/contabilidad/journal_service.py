@@ -710,7 +710,11 @@ def _authorized_journal_books(
     authorized = _authorized_book_codes(company, user_id, action)
     if not authorized:
         raise JournalValidationError("El usuario no tiene libros contables autorizados para la compañía.")
-    selected = requested_books or authorized
+    active_books = database.session.execute(
+        select(Book).where(Book.entity == company).where((Book.status == "activo") | Book.status.is_(None))
+    ).scalars()
+    references = {str(value): book.code for book in active_books for value in (book.id, book.code)}
+    selected = [references.get(str(value), str(value)) for value in (requested_books or authorized)]
     invalid = set(selected) - set(authorized)
     if invalid:
         raise JournalValidationError(f"El usuario no tiene acceso al libro contable {sorted(invalid)[0]}.")
