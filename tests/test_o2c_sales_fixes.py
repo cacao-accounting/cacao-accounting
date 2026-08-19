@@ -544,6 +544,7 @@ def test_over_delivery_validation(app_ctx):
         )
     ).scalar_one()
     rel.qty = Decimal("10")
+    rel.qty_in_base_uom = Decimal("10")
     database.session.commit()
 
     # This should not raise any exceptions
