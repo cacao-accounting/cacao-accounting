@@ -271,9 +271,20 @@ def _target_gl_amount(target_id: str, bank_currency: str | None, company_currenc
     entry = database.session.get(GLEntry, target_id)
     if not entry:
         raise BankReconciliationError("La entrada GL a conciliar no existe.")
+    _validate_gl_entry_eligibility(entry)
     if bank_currency:
         return _convert_gl_amount_to_bank_currency(entry, bank_currency, company_currency)
     return _gl_amount(entry)
+
+
+def _validate_gl_entry_eligibility(entry: GLEntry) -> None:
+    """Require an active entry from the primary ledger for bank matching."""
+    if getattr(entry, "is_cancelled", False) or getattr(entry, "is_reversal", False):
+        raise BankReconciliationError("La entrada GL está cancelada o es una reversa.")
+    if hasattr(entry, "ledger_id"):
+        primary_id = primary_ledger_id(str(entry.company))
+        if primary_id and entry.ledger_id != primary_id:
+            raise BankReconciliationError("La entrada GL no pertenece al libro primario.")
 
 
 def _target_company(target_type: str, target_id: str) -> str:
@@ -554,6 +565,7 @@ def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: s
         bank_gl_account_id = _bank_gl_account_id(transaction)
         if not entry or not bank_gl_account_id or entry.account_id != bank_gl_account_id:
             raise BankReconciliationError("La entrada GL no pertenece a la cuenta bancaria conciliada.")
+        _validate_gl_entry_eligibility(entry)
     elif match.target_type == "payment_entry":
         payment = database.session.get(PaymentEntry, match.target_id)
         if not payment or not _payment_belongs_to_bank(payment, transaction.bank_account_id):
