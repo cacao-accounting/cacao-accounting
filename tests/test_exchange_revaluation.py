@@ -471,6 +471,55 @@ def test_service_revalues_foreign_currency_bank_balance(app_ctx):
     assert bank_line.exchange_difference == Decimal("10.0000")
 
 
+def test_bank_balance_converts_functional_only_gl_amounts(app_ctx):
+    """Bank revaluation falls back to functional GL amounts when needed."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import Accounts, Bank, BankAccount, GLEntry, database
+
+    bank_account_id = database.session.execute(
+        database.select(Accounts.id).filter_by(entity="cacao", code="1005")
+    ).scalar_one()
+    bank = Bank(name="Banco funcional")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta funcional",
+        account_no="NIO-BASE-1",
+        currency="USD",
+        gl_account_id=bank_account_id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 5, 1),
+            company="cacao",
+            ledger_id=_book("NIO").id,
+            account_id=bank_account_id,
+            account_code="1005",
+            debit=Decimal("720.00"),
+            credit=Decimal("0"),
+            debit_in_account_currency=None,
+            credit_in_account_currency=None,
+            account_currency="USD",
+            company_currency="NIO",
+            exchange_rate=Decimal("36.00"),
+            bank_account_id=bank_account.id,
+            voucher_type="payment_entry",
+            voucher_id="PAY-BASE-ONLY",
+        )
+    )
+    database.session.commit()
+
+    balance = ExchangeRevaluationService()._bank_original_balance(
+        bank_account, date(2026, 5, 31), _book("NIO").id
+    )
+
+    assert balance == Decimal("20.0000")
+
+
 def test_revaluation_uses_credit_note_nature_for_open_ar_and_ap(app_ctx):
     """Open credit notes must revalue with the opposite subledger nature."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
