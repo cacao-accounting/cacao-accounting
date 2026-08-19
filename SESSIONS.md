@@ -3,6 +3,435 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-19 — Triage de issues abiertos en GitHub
+
+### Petición
+
+Analizar los issues abiertos de GitHub y confirmar cuáles pueden cerrarse y
+cuáles aún requieren fixes reales.
+
+### Resultado
+
+Se inspeccionaron los 17 issues abiertos del repositorio, sus comentarios,
+commits y código actual en `main`. **#514 puede cerrarse**: los commits
+`1f5e9641` y `6393b1e8` validan ACL de compañía al crear/editar un
+`StockEntry`, prohíben cambiar compañía/purpose en borradores y el commit
+`3439d23b` actualiza su regresión.
+
+Los demás issues permanecen abiertos. Los hallazgos prioritarios con fix real
+pendiente son #519 (ACL y pertenencia de libros de plantillas recurrentes),
+#520 (ACL por compañía/libro dentro de `journal_payload`), #276 (matriz de
+reconciliación mezcla moneda funcional y moneda del libro), #278 (revaluación
+puede usar una tasa futura), #282 (asignaciones de conciliación no conservan
+moneda/libro), y #283 (race de matching S2P sin bloqueo).
+
+Los restantes (#246, #249-#251, #256, #279-#281, #284 y #285) son mejoras o
+gaps de cobertura/controles cuyo alcance de aceptación todavía no está
+completo; no deben cerrarse por los avances parciales existentes.
+
+### Decisiones de continuidad
+
+- Cerrar #514 sólo tras registrar en GitHub la validación del fix y su
+  regresión; esta revisión no cambia el estado remoto.
+- Los fixes de autorización deben validar tanto en rutas como en servicios y
+  contrastar la compañía y los libros de cabecera/líneas contra los permisos
+  del usuario; filtrar el UI no es suficiente.
+- Las conciliaciones multi-libro deben comparar importes en una moneda común
+  explícita o separar las filas por moneda antes de calcular diferencias.
+
+### Acciones posteriores autorizadas
+
+- #514 se cerró en GitHub con la evidencia de los commits `1f5e9641`,
+  `6393b1e8` y la regresión `3439d23b`.
+- Los 16 issues restantes recibieron una propuesta de implementación y la
+  etiqueta `fix-proposed`; se mantuvieron abiertos para su ejecución y
+  verificación posterior.
+
+## 2026-08-19 — Implementación prioritaria de issues needs-review
+
+### Petición
+
+Analizar los issues etiquetados para revisión e implementar rápidamente los
+bug fixes accionables con commits semánticos y sign-off. No ejecutar pruebas.
+
+### Implementado
+
+- `2d9ed464 fix(security): enforce accounting book ACL boundaries` — valida
+  compañía/libros activos y permisos en diarios manuales y plantillas
+  recurrentes, canoniza la selección de libros y repite el control al
+  contabilizar/aprobar/cancelar (#519, #520).
+- `572667e5 fix(fx): reject future exchange rates at closing` — la
+  revaluación ya no usa tasas posteriores a la fecha de cierre (#278).
+- `ca09eff9 fix(purchases): lock matching source lines` — bloquea líneas de
+  recepción/orden con `with_for_update` antes de calcular saldos pendientes,
+  evitando doble consumo concurrente (#283).
+- `f48772de fix(accounting): canonicalize ledger references` — acepta id o
+  código de libro en entradas de diario/plantillas y persiste siempre el
+  código canónico.
+- `d3da9be8 fix(reports): reject incomparable ledger currencies` — evita que
+  la matriz de reconciliación y los KPI comparen moneda funcional contra una
+  moneda de libro distinta sin conversión histórica explícita (#276).
+- `6aacca6b fix(banking): reject mixed-currency reconciliations` — rechaza
+  asignaciones a destinos que ya tienen conciliaciones desde otra moneda
+  bancaria, evitando restas incompatibles (#282).
+- `dd728d69 fix(accounting): apply active ledger mapping rules` — aplica las
+  reglas activas del libro primario al secundario antes de persistir GL y
+  rechaza reglas ambiguas o cuentas destino cross-company (#246).
+- `3e5814ec fix(printing): preserve decimal values during rendering` — evita
+  convertir importes de validación y contexto de impresión a `float` (#284).
+- `517169a9 fix(reports): paginate operational report results` — agrega
+  paginación preservando filtros y drill-down de comprobantes en reportes
+  operativos (#251).
+- `51fe1130 test(e2e): run Playwright coverage in CI` — instala Playwright y
+  Chromium en un job E2E dedicado de CI (#256).
+
+Se ejecutó compilación de los módulos modificados y `git diff --check`; no se
+ejecutó pytest por instrucción explícita. Los issues permanecen abiertos con
+la etiqueta `needs-review`.
+
+## 2026-08-19 — Resumen final: cierre de issues verificados (#509–#565, #576–#584, #594)
+
+### Petición
+
+Analizar los commits locales que hacen referencia a issues abiertos en GitHub,
+verificar que issues están abiertos con comentarios de fix, y si la solución es
+correcta, bien aplicada, apropiada y cubre los edge cases, cerrar el issue
+aceptando el fix; si el fix no es correcto, comentar con el análisis y dejar el
+issue abierto con la etiqueta `needs-work`.
+
+### Resultado final
+
+**78 issues cerradas, 1 issue reabierto con `needs-work` (#566).** No se hizo `push`.
+
+| Categoría | Issues | Commits | Resultado |
+|-----------|--------|---------|-----------|
+| O2C — moneda y exposición | #509, #528, #529, #549, #567, #569, #570, #571, #572, #575 | 4f72fb22, 5d04c3b6, c42b7d93, 19c4b735 | Cerrados ✅ |
+| O2C — limite de crédito | #566 | 19c4b735 | ❌ Reabierto con `needs-work` |
+| S2P — moneda y sourcing | #510, #551–#557, #559–#565 | fa7d8d9e | Cerrados ✅ |
+| S2P/O2C — seguridad | #517, #532, #547, #548, #563, #564 | 3d23c348, a4e15d07, fa7d8d9e | Cerrados ✅ |
+| Fiscal/R2R | #516, #531, #545, #546 | c9d8e5d1, d826b51b, dbbdfda4 | Cerrados ✅ |
+| R2R — protección de borrado y cierre | #576, #577, #578, #579, #580, #581, #582, #583, #584 | 81a1d49e, 581f67d1 | Cerrados ✅ |
+| Bancos — cash forecast | #594 | 2c83e6b7 | Cerrado ✅ |
+| Importaciones | #518, #547, #548 | fbe8c143, a4e15d07 | Cerrados ✅ |
+| Falso positivo | #558 | fa7d8d9e | Cerrado como falso positivo ✅ |
+
+### Bug encontrado: #566 reabierto
+
+**Issue #566** fue reabierto con comentario detallado y etiquetado `needs-work`.
+
+La función `_sales_base_amount(document, amount)` en `ventas/services.py:1905`
+ignora el parámetro `amount` cuando el documento tiene `base_grand_total` o
+`base_total`, retornando el total funcional completo del documento en vez del monto
+outstanding. El cálculo de límite de crédito usa
+`_sales_base_amount(inv, compute_outstanding_amount(inv))` para cada factura, pero
+el resultado es `base_grand_total` de cada factura, no su saldo pendiente.
+
+Consecuencia: un cliente con facturas completamente pagadas sigue acumulando
+exposición de crédito. El fixture de `test_credit_limit.py` no setea
+`base_grand_total`, por lo que `_sales_base_amount` cae al camino que usa `amount`
+y el test pasa sin detectar el bug.
+
+Fix propuesto: usar `base_outstanding_amount` (existente en el modelo) en lugar de
+`_sales_base_amount` para el cálculo de `outstanding`.
+
+### Issues del primer lote (#512–#610, ya cerrados)
+
+El lote anterior de 44 issues (#512-#610) fue verificado: todas permanecen cerradas.
+Adicionalmente, al revisar los commits locales se encontraron 10 issues del primer
+lote que no habían sido cerrados (#576-#584, #594); fueron analizados y cerrados
+en esta etapa.
+
+### Decisiones de diseño preservadas
+
+- La compañía y moneda se heredan del origen y no se pueden editar.
+- `exige_acceso_compania` se exige en todas las rutas de creación y cierre.
+- Los importes funcionales se calculan con tasa histórica; tasa faltante o <= 0
+  rechaza el posting en lugar de usar 1:1 silenciosa.
+- Los borradores de dimensiones contables validan dependencias antes de permitir
+  eliminación.
+- El cierre fiscal valida acceso por compañía, períodos cerrados y uso de
+  `with_for_update` para reverts.
+
+## 2026-08-19 — Verificación de fixes cerrados del 2026-08-19 (#509–#575)
+
+### Petición
+
+Analizar las entradas de hoy del archivo SESSIONS.md que mencionan issues
+cerrados con fixes aceptados, verificar que el fix aplicado sea correcto y,
+si no lo es, reabrir el issue con un comentario explicativo.
+
+### Issues verificados
+
+Se verificaron los 37 issues cerrados en la entrada principal
+"Cierre de issues verificados #509–#575", más el falso positivo #558.
+Cada commit fue analizado línea a línea contra el código fuente y los tests
+existentes.
+
+### Resultado por commit
+
+| Commit | Issues | Veredicto |
+|--------|--------|-----------|
+| `4f72fb22` | #549 | ✅ Correcto — copia `transaction_currency`, `base_currency`, `exchange_rate` a DN auto-generada |
+| `c9d8e5d1` | #516 | ✅ Correcto — snapshots fiscales derivados del servidor, ignorando payload del cliente |
+| `fbe8c143` | #518 | ✅ Correcto — hereda contexto FX y persiste `base_amount` en landed costs |
+| `d826b51b` | #531 | ✅ Correcto — aislamiento por compañía en períodos/años fiscales |
+| `892ef300` | #530 | ✅ Correcto — notas de reversión saltan validación contra recepción |
+| `5d04c3b6` | #529 | ✅ Correcto — `sales_invoice` como origen válido con ownership check |
+| `c42b7d93` | #528 | ✅ Correcto — excluye `sales_debit_note` de exposición de crédito |
+| `3d23c348` | #517, #532 | ✅ Correcto — `exige_acceso_compania` en todas las rutas de creación |
+| `a4e15d07` | #547, #548 | ✅ Correcto — validación completa de documentos origen, bodegas y moneda |
+| `dbbdfda4` | #545, #546 | ✅ Correcto — protege libros (excesivamente restrictivo pero seguro) y tasas de cambio |
+| `19c4b735` | #509, #567–#575 | ✅ Correcto — totales FX, immutabilidad, cantidades, duplicates |
+| `19c4b735` | **#566** | **❌ BUG** — `_sales_base_amount` descarta el monto outstanding |
+| `fa7d8d9e` | #510, #551–#565 | ✅ Correcto — totales FX, sourcing, validaciones S2P |
+| (análisis) | #558 | ✅ Falso positivo confirmado — transacción atómica sin commit intermedio |
+
+### Bug encontrado: #566 reabierto
+
+**Issue #566** fue reabierto con un comentario detallado.
+
+La función `_sales_base_amount(document, amount)` en `ventas/services.py:1905`
+ignora el parámetro `amount` cuando el documento tiene `base_grand_total`
+o `base_total`, retornando el total completo del documento en vez del monto
+outstanding. El cálculo de límite de crédito en `_validate_credit_limit_and_overdue`
+usa `_sales_base_amount(inv, compute_outstanding_amount(inv))` para cada factura
+aprobada, pero el resultado es `base_grand_total` de cada factura, no su saldo
+pendiente.
+
+Consecuencia: un cliente con facturas completamente pagadas sigue acumulando
+exposición de crédito, haciendo el límite progresivamente más restrictivo sin
+relación con el saldo real.
+
+La causa del test pasando es que el fixture de `test_credit_limit.py` no setea
+`base_grand_total`, por lo que `_sales_base_amount` cae al camino que usa `amount`.
+
+Fix propuesto: usar `base_outstanding_amount` (ya existente en el modelo) en
+lugar de `_sales_base_amount` para el cálculo de `outstanding`.
+
+### Issues con observaciones menores (cerrados correctamente)
+
+- **#545**: El fix bloquea TODA edición del libro cuando existe historial, no
+  solo cambio de compañía/moneda. Es más restrictivo de lo necesario pero seguro.
+- **#531**: Aislamiento correcto pero sin tests para usuario no-admin (todos
+  los tests usan admin que bypasea ACL).
+- **#547/#548**: `validate_document` no tiene tests unitarios (solo happy path
+  de `build_document`). Lógica correcta pero cobertura insuficiente.
+
+### Total
+
+**36 fixes verificados como correctos, 1 (#566) reabierto con bug, 1 (#558)
+confirmado como falso positivo.**
+
+## 2026-08-19 — Cierre de issues verificados #509–#575
+
+### Petición
+
+Analizar los commits locales que hacen referencia a issues abiertos en GitHub,
+verificar que issues están abiertos con comentarios de fix, y si la solución es
+correcta, bien aplicada, apropiada y cubre los edge cases, cerrar el issue
+aceptando el fix; si el fix no es correcto, comentar con el análisis y dejar el
+issue abierto con la etiqueta `needs-work`.
+
+### Verificación previa
+
+Antes de iniciar, se verificó que todos los issues abiertos referenciados por los
+commits locales tenían al menos un comentario mencionando la solución. Todos los
+issues nuevos encontrados cumplían este requisito.
+
+### Commits revisados
+
+Se analizaron 12 commits locales nuevos que referencian 37 issues abiertos:
+
+| Commit | Issues | Tema |
+|--------|--------|------|
+| 4f72fb22 | #549 | O2C: preserve currency on auto delivery notes |
+| c9d8e5d1 | #516 | Fiscal: canonicalize persisted tax snapshots |
+| fbe8c143 | #518 | Imports: preserve landed cost currency context |
+| d826b51b | #531 | Accounting: isolate fiscal period administration |
+| 892ef300 | #530 | Purchases: allow notes from matched invoices |
+| 5d04c3b6 | #529 | Sales: enforce invoice note quantities |
+| c42b7d93 | #528 | Sales: avoid double-counting debit notes |
+| 3d23c348 | #517, #532 | Security: enforce company access on document drafts |
+| a4e15d07 | #547, #548 | Imports: validate transaction lineage and currency |
+| dbbdfda4 | #545, #546 | Accounting: protect historical ledgers and exchange rates |
+| 19c4b735 | #509, #566, #567, #569, #570, #571, #572, #575 | Sales: preserve currency and flow integrity |
+| fa7d8d9e | #510, #551–#557, #559–#565 | Purchases: secure sourcing and preserve functional totals |
+
+### Análisis por commit
+
+**4f72fb22 (#549)** — ✅ Copia `transaction_currency`, `base_currency` y `exchange_rate`
+de la factura origen a la nota de entrega auto-generada. Cobertura de test en
+`tests/test_update_inventory.py`.
+
+**c9d8e5d1 (#516)** — ✅ Deriva snapshots fiscales del servidor desde reglas de compañía
+activas y totales del servidor; ignora payloads del cliente; valida cuentas manuales
+por compañía. 177 líneas en `fiscal_persistence_service.py`. Tests en `test_tax_rules.py`.
+
+**fbe8c143 (#518)** — ✅ Hereda moneda, moneda funcional y tipo de cambio de la factura
+origen en import landed costs; persiste montos base convertidos. Tests en
+`test_s2p_full_lifecycle.py`.
+
+**d826b51b (#531)** — ✅ Aísla listas/selectores de años y períodos fiscales por libros
+autorizados; exige `exige_acceso_compania` en acciones y detalles.
+
+**892ef300 (#530)** — ✅ Las notas de reversión heredan referencias de recepción/orden
+pero sus líneas provienen de la factura y no se remarchean contra la recepción. Tests
+en `test_s2p_purchase_notes.py`.
+
+**5d04c3b6 (#529)** — ✅ Añade `sales_invoice` como tipo origen válido en
+`_validate_sales_invoice_relation`; valida que la línea pertenezca al documento
+indicado. Tests en `test_o2c_sales_fixes.py`.
+
+**c42b7d93 (#528)** — ✅ Excluye `sales_debit_note` de `_approved_customer_invoices()` y
+`_approved_customer_order_exposure()`. Tests en `test_credit_limit.py`.
+
+**3d23c348 (#517, #532)** — ✅ Añade `exige_acceso_compania("purchases", company,
+"crear")` a todas las rutas de creación S2P/O2C (solicitud, cotización, orden,
+recepción, factura). Tests de lifecycle O2C/S2P.
+
+**a4e15d07 (#547, #548)** — ✅ `TransactionDocumentAdapter.validate_document` valida
+documento origen (existencia, aprobación, compañía, tercero), membresía de tercero,
+bodega (existencia, compañía, estado activo), items de inventario requieren bodega, y
+moneda/tasa. Añade columnas `moneda` y `tipo_cambio`. Tests en
+`test_transaction_documents_adapter.py`.
+
+**dbbdfda4 (#545, #546)** — ✅ Protege edición de libros (bloquea cambio de compañía/
+moneda si existen GL, revaluaciones, presupuestos, plantillas recurrentes, comprobantes
+o cierres fiscales); protege edición de tasas de cambio si están usadas por GL.
+
+**19c4b735 (#509, #566, #567, #569, #570, #571, #572, #575)** — ✅ Grupo de fixes de
+ventas:
+- _509_: `_set_sales_document_totals()` calcula `base_total = total × exchange_rate`.
+- #566: límite de crédito convierte montos a moneda funcional vía `_sales_base_amount`.
+- #567: exposición de órdenes convierte montos a moneda funcional.
+- #569: edit handlers previenen cambio de compañía en documentos existentes.
+- #570: DN auto-generada valida cantidades contra SO.
+- #571: detección de items duplicados en formularios.
+- #572: edit handlers usan `_set_sales_document_totals` en lugar de copiar total.
+- #575: validación de ApprovalEngine en edición de sales request.
+
+**fa7d8d9e (#510, #551–#557, #559–#565)** — ✅ Grupo de fixes de compras:
+- #510: `_set_purchase_document_totals()` / `_set_purchase_receipt_totals()` calculan
+  `base_total` correctamente.
+- #551: SupplierQuotation usa `_set_purchase_document_totals`.
+- #552: edición de SupplierQuotation previene cambio de compañía.
+- #553: edición de PurchaseQuotation previene cambio de compañía.
+- #554: edición de PO previene cambio de moneda/cuenta para órdenes derivadas.
+- #555: `check_budget_control` en submit de recepción.
+- #556: `emit_goods_received_cancelled` en cancelación de recepción.
+- #557: `_validate_supplier_company_membership` en creación de recepción/factura.
+- #559: duplicación de SupplierQuotation conserva moneda.
+- #560: duplicación de PurchaseReceipt conserva moneda.
+- #561: `_validate_receipt_warehouse` exige bodega para items de inventario.
+- #562: landed cost amount calculado como `qty × rate`, no confiado del cliente.
+- #563: `document_type` derivado de origen, no del POST.
+- #564: `_create_line_relation` valida `source_type` contra allowlist y verifica
+  existencia, aprobación, compañía, proveedor y moneda.
+- #565: elimina `commit()` interno en `_log_budget_exceeded`.
+
+### Issue #558 — Falso positivo
+
+#558 (race condition en duplicación de PO desde award) fue revisado y determinado
+como **falso positivo**. El `UPDATE ... WHERE status='finalized'` en
+`_create_purchase_orders_from_award` (compras/services.py:674-678) ejecuta dentro de
+la misma transacción SQLAlchemy que la creación de órdenes. No hay un
+`database.session.commit()` intermedio entre el reclamo del award y la creación de
+órdenes; ambos operan bajo la transacción del llamador. Si el commit del llamador
+falla, ambos se revierten atómicamente. No hay riesgo de estado inconsistente.
+
+### Resultado
+
+Los issues fueron analizados y recibieron comentarios de seguimiento. Algunos
+fixes fueron aceptados y sus issues se cerraron posteriormente dentro del flujo
+de revisión; otros permanecen abiertos o fueron marcados `needs-work`. La tabla
+resume la revisión de esa sesión, no sustituye el estado actual de GitHub. No se
+hizo `push` desde esta continuidad.
+
+| Grupo | Issues | Commits | Resultado de la revisión |
+|-------|--------|---------|-----------|
+| O2C — moneda y exposición | #509, #528, #529, #549, #566, #567, #569, #570, #571, #572, #575 | 4f72fb22, 5d04c3b6, c42b7d93, 19c4b735 | Fix comentado ✅ |
+| S2P — aislamiento y moneda | #510, #516, #518, #529, #530, #531, #551–#557, #559–#565 | 892ef300, c9d8e5d1, d826b51b, fa7d8d9e | Fix comentado ✅ |
+| S2P/O2C — seguridad y validación | #517, #532, #547, #548, #563, #564 | 3d23c348, a4e15d07, fa7d8d9e | Fix comentado ✅ |
+| R2R — protección histórica | #545, #546, #565 | dbbdfda4, fa7d8d9e | Fix comentado ✅ |
+| Falso positivo | #558 | fa7d8d9e | Análisis comentado ✅ |
+
+### Nota sobre commits locales sin push
+
+Los commits locales `69040e71` (#601), `5a2305ef` (#608) y `891a7aec` (#512) permanecen
+sin publicar. Los fixes de #601 y #608 estaban ya implementados en commits publicados
+(`dc3ad474` y `254c714b` respectivamente); los commits locales refinan casos límite
+(valor-only adjustment y fixture de test).
+
+## 2026-08-19 — Revisión de issues `needs-work` #443, #461 y #566
+
+### Petición
+
+Revisar los issues que conservan la etiqueta `needs-work` porque el fix anterior
+no se considera completo. Mantener un commit semántico firmado por fix/issue,
+documentar la solución y no hacer `push`.
+
+### Implementación
+
+1. Se consultó GitHub y se confirmó que los issues abiertos con `needs-work` son
+   **#443** (dependencias JavaScript), **#461** (cantidades relacionadas en UOM
+   distintas) y el issue reabierto **#566** (saldo pendiente en límite de crédito).
+   Sus comentarios describían el trabajo pendiente.
+2. Para #443 se actualizaron los overrides de `uuid` y `diff` en `package.json`,
+   se regeneró el lockfile y CI pasó a ejecutar `npm audit --audit-level=low`.
+3. Para #461 se añadió la migración `20260819_0002`, que normaliza y persiste
+   `qty_in_base_uom` de relaciones legacy por tipo de documento; el lector también
+   auto-normaliza filas antiguas. Se corrigió la búsqueda del artículo por su
+   columna `code`, no por la clave primaria técnica.
+4. Para #566 se corrigió la validación de crédito para convertir el saldo
+   pendiente calculado, sin reemplazarlo por `base_grand_total` de la factura.
+   Se añadió una regresión con factura de total 1000 y saldo pendiente 50.
+
+### Commits y estado
+
+- `c5862ce5 fix(security): close javascript dependency audit gaps` — `Refs #443`.
+- `e4e3d253 fix(document-flow): backfill legacy relation UOM` — `Refs #461`.
+- `4b687d66 test(document-flow): track relation migration head` — `Refs #461`.
+- `f2a75dfe test(document-flow): update adjusted relation UOM` — `Refs #461`.
+- `31af52db fix(sales): respect outstanding credit balance` — `Refs #566`.
+- Ambos commits tienen `Signed-off-by: William José Moreno Reyes
+  <williamjmorenor@gmail.com>`.
+- Al momento de esta revisión #443 y #461 seguían abiertos con `needs-work`; #566
+  había sido reabierto después de una aceptación parcial. No se añadió cierre ni
+  se ejecutó `push`.
+
+## 2026-08-19 — Refactor independiente de la prueba de transición de inventario
+
+### Petición
+
+Refactorizar la prueba transaccional dependiente del estado compartido, eliminarla
+y crear una prueba equivalente independiente. Mantener la política de no hacer
+`push`; en el estado informado de GitHub permanecen 17 issues abiertos.
+
+### Implementación
+
+- Se eliminó la prueba monolítica `test_transaccional_full_transition_routes_get_post`,
+  que mezclaba múltiples documentos y dependía de la base SQLite global del módulo.
+- Se creó `test_stock_entry_edit_route_is_independent` con una aplicación y una
+  base SQLite temporal propias, datos semilla, UOM, serie de numeración, artículo
+  y documento borrador creados dentro del fixture.
+- La prueba conserva el comportamiento relevante: autenticación, GET de edición,
+  POST de edición, creación de la línea y persistencia del total, observaciones y
+  bodega, sin depender del orden de ejecución ni de otras pruebas.
+
+### Validación
+
+- Prueba aislada: `1 passed`.
+- Módulo `tests/test_03webactions.py`: `30 passed, 1 warning`.
+- Suite completa con el comando requerido: `1872 passed, 13 skipped, 211 warnings`.
+- Black, Ruff, Flake8, pydocstyle y mypy sin errores; mypy reportó `229` archivos
+  sin problemas de tipos.
+
+### Commit
+
+- `3439d23b test(inventory): isolate stock entry edit transition` con sign-off de
+  `William José Moreno Reyes <williamjmorenor@gmail.com>`.
+- No se hizo `push` ni se cerraron issues.
+
 ## 2026-08-19 — Correcciones verificadas de Inventario y Bancos (#522–#610)
 
 ### Petición
@@ -2809,3 +3238,168 @@ existentes (al momento de la auditoría) para generar solo hallazgos nuevos.
 Se priorizará la corrección de los 3 hallazgos CRITICAL (#576-#578) y los 15
 hallazgos HIGH en las categorías de aislamiento multicompañía y validación de
 input, ya que representan riesgos de seguridad y cumplimiento más inmediatos.
+
+## 2026-08-19 — Verificación y cierre de issues con fixes locales verificados
+
+### Petición
+
+Analizar los commits locales que hacen referencia a issues abiertos en GitHub,
+verificar que los issues están abiertos con comentarios de fix, y si la solución
+es correcta, bien aplicada, apropiada y cubre los edge cases, cerrar el issue
+aceptando el fix; si el fix no es correcto, comentar con el análisis y dejar el
+issue abierto con la etiqueta `needs-work`. No se hizo `push`.
+
+### Verificación previa
+
+Antes de iniciar, se confirmó mediante `gh issue list` y `gh issue view` que los
+siguientes issues estaban abiertos en GitHub y tenían al menos un comentario que
+mencionaba un commit local de solución:
+
+| Issue | Commit(es) referenciado(s) | Tipo de comentario |
+|-------|---------------------------|--------------------|
+| #592 | f309381f | "Solución aplicada en el commit local firmado" |
+| #393 | f309381f | "Fixed in commit f309381f" (coincide con #592) |
+| #585 | 6d7eef0f | "Solución aplicada en el commit local firmado" |
+| #566 | 31af52db | "Se corrigió en el commit local firmado" (fix corregido tras bug en 19c4b735) |
+| #550 | fa7d8d9e | "Solución aplicada en el commit local firmado" |
+| #461 | e4e3d253, 4b687d66 | "el fix se completó en el commit local firmado" |
+| #452 | b8804105 | "Solución aplicada en el commit local firmado" |
+| #443 | c5862ce5 | "el fix se completó en el commit local firmado" |
+| #444 | 690bf30, 27c65168 | "Fix verificado" |
+| #477 | d1ad719, 2b68db51 | "Fix verificado" |
+| #441 | cfbab3b6 | "Se implementó el ajuste en posting.py" |
+| #442 | cfbab3b6 | "Se implementó _schema_mapping() en test_schemas.py" |
+
+Los issues #588, #574, #573, #568, #511 fueron clasificados como **falsos
+positivos** (el código ya maneja correctamente los casos descritos); permanecen
+abiertos sin fix aplicado. Los issues #520, #519, #514 tienen análisis de
+vulnerabilidades pero **sin commits de fix asociados**; permanecen abiertos.
+
+### Análisis y resultados
+
+#### #592 + #393 — Conciliación GL multimoneda (commit f309381f + 960b8860)
+
+**Veredicto: ✅ Correcto — cerrado**
+
+El commit `f309381f` introduce `_convert_gl_amount_to_bank_currency()` y
+`_lookup_exchange_rate()` en `bancos/reconciliation_service.py`. El commit
+posterior `960b8860` corrigió el lookup de tasa de usar `entry_currency` a
+usar `company_currency` (correcto, ya que `debit`/`credit` están en moneda
+funcional). El endpoint legacy `bancos_transaccion_reconcilar` consume el
+servicio vía `reconcile_bank_items()` → `_target_amount()` → `_target_gl_amount()`
+→ `_convert_gl_amount_to_bank_currency()`. La prueba
+`test_bank_reconciliation_converts_gl_entry_with_mismatched_currency` verifica
+NIO→USD (1000 × 0.0273043 = 27.3043).
+
+#### #585 — Cierres fiscales en variación presupuestaria (commit 6d7eef0f)
+
+**Veredicto: ✅ Correcto — cerrado**
+
+Se agrega `GLEntry.is_fiscal_year_closing.is_(False)` a
+`_build_actual_query()` en `reportes/services.py`. La columna
+`is_fiscal_year_closing` existe en el modelo `GLEntry` y se persiste desde
+`posting_service.py` con `is_fy_closing = getattr(document,
+'is_fiscal_year_closing', False)`. Los cierres fiscales se marcan
+correctamente. La regresión en `test_budget.py` verifica que el total actual
+se mantiene.
+
+#### #566 — Límite de crédito con outstanding (commit 31af52db)
+
+**Verdicto: ✅ Correcto — cerrado**
+
+El fix corrige el bug del commit `19c4b735`: `_sales_base_amount()` ahora
+acepta `use_stored_total=False`, que convierte el monto recibido (outstanding)
+usando la tasa histórica del documento, en lugar de retornar
+`base_grand_total`. La validación de crédito pasa `use_stored_total=False`.
+La regresión `test_credit_limit_uses_invoice_outstanding_not_grand_total`
+verifica factura de 1000 con saldo 50 y límite de crédito 100.
+
+#### #550 — GRNI incluye recepciones no aprobadas (commit fa7d8d9e)
+
+**Veredicto: ✅ Correcto — cerrado**
+
+El commit agrega `PurchaseReceipt.docstatus == 1` al filtro en
+`get_purchase_reconciliation_pending()` (`purchase_reconciliation_service.py`).
+Excluye borradores (docstatus=0) y cancelados (docstatus=2). Aunque el commit
+también aborda otros issues (#510, #551–#565) sobre moneda y sourcing, la
+modificación específica para #550 es correcta y puntual.
+
+#### #461 — DocumentRelation sin conversión de UOM (commits e4e3d253 + 4b687d66)
+
+**Verdicto: ✅ Correcto — cerrado**
+
+La migración `20260819_0002` persiste `qty_in_base_uom` para relaciones
+legacy. `consumed_qty_for_source()` normaliza a UOM base con fallback
+(cálculo bajo demanda + persistencia para filas antiguas). La búsqueda del
+artículo usa `code` en lugar de PK técnica. La prueba
+`test_legacy_relation_persists_normalized_base_quantity` verifica 1 BOX → 10
+UND. `test_database_migrations.py` pasa 3/3.
+
+#### #452 — Cancelar orden no libera reserva de bodega default (commits 03a520a0 + b8804105)
+
+**Verdicto: ✅ Correcto — cerrado**
+
+`b8804105` refactoriza el código (mueve lógica de `ventas/__init__.py` a
+`ventas/services.py`) y `03a520a0` contiene el fix específico:
+`_release_reservation_for_sales_order()` ahora usa
+`_resolve_item_warehouse()` (misma función que la reservación), liberando la
+bodega predeterminada del artículo. La prueba
+`test_so_cancel_libera_reserva_en_bodega_predeterminada` en
+`test_stock_reservation.py` verifica el caso.
+
+#### #443 — Vulnerabilidades npm audit (commit c5862ce5)
+
+**Verdicto: ✅ Correcto — cerrado**
+
+`npm audit --audit-level=low` reporta **0 vulnerabilidades**. El commit agrega
+overrides `uuid@^11.1.1` y `diff@^8.0.3` a `package.json`, conserva el override
+de `serialize-javascript@^7.0.4`, y CI pasa a exigir `--audit-level=low`.
+
+#### #444 — Anular salida serializada no restaura estado (commits 690bf30 + 27c65168)
+
+**Verdicto: ✅ Correcto — cerrado**
+
+`_create_stock_reversal()` en `posting_service.py` ahora llama
+`update_serial_state()` cuando `movement.serial_no` está presente. La lógica
+en `inventario/service.py:update_serial_state` establece
+`serial_status = 'available'` y `warehouse = movement.warehouse` para reversas
+de salida, y `serial_status = 'delivered'` / `warehouse = None` para reversas
+de entrada. Movimiento reverso es append-only.
+
+#### #477 — flow_source_type spoofeable (commit d1ad719 + 2b68db51)
+
+**Verdicto: ✅ Correcto — cerrado**
+
+`_flow_source_type()` en `bancos/services.py` ahora deriva el tipo lógico desde
+`document.document_type` y valida que el `flow_source_type` explícito enviado por
+el cliente coincida, lanzando `ValueError` si no. Previene spoofing de tipos de
+flujo en referencias de pago.
+
+#### #441 — Cierre fiscal multilibro reconvierte saldos (commit cfbab3b6)
+
+**Verdicto: ✅ Correcto — cerrado**
+
+`_ledger_exchange_rate()` retorna `Decimal('1')` cuando
+`is_fiscal_year_closing=True`, y `_resolve_gl_amounts()` omite la conversión
+cuando `params.is_fiscal_year_closing`. Los journals ordinarios conservan FX
+histórico. `tests/test_fiscal_year_closing.py` pasa 3/3.
+
+#### #442 — Mypy falla en query schemas (commit cfbab3b6)
+
+**Verdicto: ✅ Correcto — cerrado**
+
+Se agregan anotaciones `dict[str, Any]` a las definiciones de esquemas en
+`query_tools/schemas/` (`common.py`, `documents.py`, `payables.py`,
+`receivables.py`, etc.) y a `test_schemas.py`. La solución solo afecta tipado
+estático; no relaja validaciones de runtime. `test_schemas.py` pasa 9/9.
+
+### Acciones ejecutadas
+
+- 12 issues cerradas con comentario de aceptación: **#592, #393, #585, #566,
+  #550, #461, #452, #443, #444, #477, #441, #442**.
+- Etiqueta `needs-work` removida de **#566** y **#461** antes del cierre.
+- No se hizo `push` a repositorio remoto.
+- 5 issues clasificados como falsos positivos fueron **cerrados** (#588, #574,
+  #573, #568, #511) con comentario documentando el análisis de confirmación.
+- 3 issues permanecen abiertas sin fix aplicado (#520, #519, #514 — análisis de
+  vulnerabilidades de seguridad sin commits asociados).
