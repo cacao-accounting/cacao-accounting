@@ -574,7 +574,7 @@ def inventario_bodega(warehouse_id):
     titulo = registro[0].name + " - " + APPNAME
     company_accounts = (
         database.session.execute(
-            database.select(WarehouseCompanyAccount)
+            _inventory_company_scoped_select(WarehouseCompanyAccount)
             .filter_by(warehouse_code=registro[0].code)
             .order_by(WarehouseCompanyAccount.company)
         )

@@ -78,6 +78,48 @@ def test_stock_entry_creation_requires_inventory_permission(app_ctx):
     assert response.status_code == 403
 
 
+def test_warehouse_detail_hides_inaccessible_company_accounts(app_ctx):
+    """Warehouse details only expose account rows for readable companies."""
+    from cacao_accounting.database import (
+        Book,
+        Modules,
+        Roles,
+        RolesAccess,
+        RolesUser,
+        User,
+        UserBookAccess,
+        Warehouse,
+        WarehouseCompanyAccount,
+        database,
+    )
+
+    viewer = User.query.filter_by(user="viewer").first()
+    module = database.session.execute(database.select(Modules).filter_by(module="inventory")).scalar_one()
+    role = Roles(name="inventory_reader", note="Inventory reader")
+    book = Book(code="CACAO-BOOK", name="Cacao book", entity="cacao", is_primary=True)
+    warehouse = Warehouse(code="SHARED-WH", name="Shared warehouse", company="cacao")
+    database.session.add_all([role, book, warehouse])
+    database.session.flush()
+    database.session.add_all(
+        [
+            RolesUser(user_id=viewer.id, role_id=role.id, active=True),
+            RolesAccess(rol_id=role.id, module_id=module.id, access=True, view=True),
+            UserBookAccess(user_id=viewer.id, book_id=book.id, can_read=True),
+            WarehouseCompanyAccount(warehouse_code=warehouse.code, company="cacao"),
+            WarehouseCompanyAccount(warehouse_code=warehouse.code, company="cafe"),
+        ]
+    )
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, viewer.id)
+    response = client.get(f"/inventory/warehouse/{warehouse.code}")
+
+    assert response.status_code == 200
+    assert b">cacao<" in response.data
+    assert b">cafe<" not in response.data
+
+
 def test_stock_entry_header_rejects_missing_or_invalid_date(app_ctx):
     """Draft creation rejects missing and malformed posting dates server-side."""
     from flask_login import login_user
