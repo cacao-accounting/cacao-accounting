@@ -3542,7 +3542,7 @@ def test_bank_company_lists_use_authorized_book_scope(app_ctx, monkeypatch):
     import importlib
     from types import SimpleNamespace
 
-    bancos_module = importlib.import_module("cacao_accounting.bancos")
+    bancos_module = importlib.import_module("cacao_accounting.bancos.services")
     from cacao_accounting.database import Bank, BankAccount, Book, Entity, database
 
     other = Entity(code="other", name="Other", company_name="Other", tax_id="J0002", currency="NIO")

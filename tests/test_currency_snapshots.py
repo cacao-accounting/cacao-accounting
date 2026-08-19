@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 def test_purchase_receipt_totals_recalculate_functional_snapshot(monkeypatch):
     """La edición de recepción debe recalcular tasa y total funcional."""
-    compras = import_module("cacao_accounting.compras")
+    compras = import_module("cacao_accounting.compras.services")
     monkeypatch.setattr(compras, "company_currency", lambda _company: "USD")
     monkeypatch.setattr(compras, "_purchase_exchange_rate", lambda *_args: Decimal("2"))
     receipt = SimpleNamespace(company="cacao", posting_date=None, transaction_currency="EUR")
@@ -25,7 +25,7 @@ def test_purchase_receipt_totals_recalculate_functional_snapshot(monkeypatch):
 
 def test_sales_invoice_totals_preserve_source_currency_and_rate(monkeypatch):
     """Una factura derivada conserva la moneda y tasa histórica de su origen."""
-    ventas = import_module("cacao_accounting.ventas")
+    ventas = import_module("cacao_accounting.ventas.services")
     monkeypatch.setattr(ventas, "company_currency", lambda _company: "USD")
     invoice = SimpleNamespace(
         company="cacao",

@@ -169,7 +169,7 @@ def _validate_fiscal_year_closing(journal: ComprobanteContable) -> FiscalYear | 
 def _post_and_sync_journal(journal: ComprobanteContable, commit: bool) -> list[Any]:
     """Realiza la contabilización y sincronización del comprobante contable."""
     try:
-        entries = post_comprobante_contable(journal, ledger_code=_selected_books_for_journal(journal))
+        entries = post_comprobante_contable(journal, ledger_code=_selected_books_for_journal(journal))  # type: ignore[misc]
         sync_journal_document_relations(journal)
         return entries
     except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
@@ -262,7 +262,7 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
         raise JournalValidationError("Solo se puede anular un comprobante contabilizado.")
     setattr(journal, "docstatus", 1)
     try:
-        entries = cancel_document(journal)
+        entries = cancel_document(journal)  # type: ignore[misc]
         revert_relations_for_target(JOURNAL_TRANSACTION_TYPE, journal.id, reason="journal_cancelled")
     except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()

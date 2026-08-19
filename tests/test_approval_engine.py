@@ -37,7 +37,6 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.approval_engine import ApprovalEngine
 
-
 compras_module = import_module("cacao_accounting.compras")
 
 

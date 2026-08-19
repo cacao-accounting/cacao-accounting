@@ -14,13 +14,13 @@ from sqlalchemy import select
 from cacao_accounting.accounting_engine.common.context import CalculationContext, JournalEntryProforma
 from cacao_accounting.contabilidad.posting import (
     GLEntryParams,
-    LedgerContext,
     PostingError,
     _add_entries,
     _create_gl_entry,
     _document_contexts,
     _lookup_exchange_rate,
 )
+from cacao_accounting.contabilidad.posting_service import LedgerContext
 from cacao_accounting.database import (
     BankAccount,
     GLEntry,
@@ -43,9 +43,9 @@ def post_proforma_to_gl(
     if not proforma.lines:
         return []
     if not proforma.is_balanced:
-        raise PostingError("El asiento pro-forma no balancea y no puede contabilizarse.")
+        raise PostingError("El asiento pro-forma no balancea y no puede contabilizarse.")  # type: ignore[misc]
     entries: list[GLEntry] = []
-    for ledger_context in _document_contexts(document, ledger_code=ledger_code):
+    for ledger_context in _document_contexts(document, ledger_code=ledger_code):  # type: ignore[misc]
         ledger_proforma = _proforma_for_ledger(document, context, proforma, ledger_context)
         persistence_context = ledger_context
         if ledger_context.company_currency != context.company_currency:
@@ -53,12 +53,12 @@ def post_proforma_to_gl(
         for line in ledger_proforma.lines:
             account_id = str(line.account_id or "").strip()
             if not account_id:
-                raise PostingError("Falta una cuenta contable requerida para contabilizar el asiento.")
+                raise PostingError("Falta una cuenta contable requerida para contabilizar el asiento.")  # type: ignore[misc]
             debit = Decimal(line.debit or Decimal("0"))
             credit = Decimal(line.credit or Decimal("0"))
             debit_in_account_currency = line.amount_transaction_currency if debit > 0 else None
             credit_in_account_currency = line.amount_transaction_currency if credit > 0 else None
-            entry = _create_gl_entry(
+            entry = _create_gl_entry(  # type: ignore[misc]
                 context=persistence_context,
                 params=GLEntryParams(
                     account_id=account_id,
@@ -78,7 +78,7 @@ def post_proforma_to_gl(
             if entry.debit == 0 and entry.credit == 0:
                 continue
             entries.append(entry)
-    return _add_entries(entries)
+    return _add_entries(entries)  # type: ignore[misc]
 
 
 def _bank_account_id_for_line(document: Any, account_id: str) -> str | None:
@@ -111,7 +111,7 @@ def _proforma_for_ledger(
     if not isinstance(result, JournalEntryProforma) or not _is_balanced(result):
         debit = sum((line.debit for line in result.lines), Decimal("0")) if isinstance(result, JournalEntryProforma) else 0
         credit = sum((line.credit for line in result.lines), Decimal("0")) if isinstance(result, JournalEntryProforma) else 0
-        raise PostingError(
+        raise PostingError(  # type: ignore[misc]
             f"El asiento pro-forma no balancea en la moneda funcional del libro "
             f"{ledger_currency}: débitos {debit}, créditos {credit}."
         )
@@ -164,7 +164,9 @@ def _payment_open_balance_in_ledger(payment: PaymentEntry, ledger_currency: str)
     if valued_balance > 0:
         return valued_balance
     transaction_amount = Decimal(str(payment.received_amount or payment.paid_amount or 0))
-    payment_rate = _lookup_exchange_rate(str(payment.transaction_currency), ledger_currency, payment.posting_date)
+    payment_rate = _lookup_exchange_rate(
+        str(payment.transaction_currency), ledger_currency, payment.posting_date
+    )  # type: ignore[misc]
     return transaction_amount * payment_rate
 
 
@@ -183,5 +185,5 @@ def _reference_balance_in_ledger(
         return Decimal("0")
     balance = Decimal(str(reference.outstanding_amount or reference.total_amount or reference.allocated_amount or 0))
     transaction_currency = str(invoice.transaction_currency or invoice.base_currency or fallback_currency)
-    rate = _lookup_exchange_rate(transaction_currency, ledger_currency, invoice.posting_date)
+    rate = _lookup_exchange_rate(transaction_currency, ledger_currency, invoice.posting_date)  # type: ignore[misc]
     return balance * rate

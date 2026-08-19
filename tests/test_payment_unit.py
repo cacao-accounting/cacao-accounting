@@ -103,7 +103,7 @@ def test_duplicate_payment_warning_covers_receipts(app_ctx):
 
 def test_invoice_outstanding_ignores_base_currency_cache(monkeypatch):
     """El saldo aplicable no debe mezclar moneda transaccional y moneda base."""
-    bancos_module = import_module("cacao_accounting.bancos")
+    bancos_module = import_module("cacao_accounting.bancos.services")
 
     invoice = SimpleNamespace(outstanding_amount=Decimal("100"), base_outstanding_amount=Decimal("1"))
     monkeypatch.setattr(bancos_module, "compute_outstanding_amount", lambda _invoice: Decimal("100"))
@@ -1006,11 +1006,7 @@ class TestCreatePaymentTarget:
         """El target documental conserva la cuenta GL de cada pata bancaria."""
         from cacao_accounting.document_flow.payment import _build_payment_target_payment
 
-        bank_accounts = (
-            database.session.execute(database.select(BankAccount).filter_by(company="cacao"))
-            .scalars()
-            .all()
-        )
+        bank_accounts = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().all()
         eligible = [account for account in bank_accounts if account.gl_account_id]
         if len(eligible) < 2:
             pytest.skip("La fixture requiere dos cuentas bancarias con cuenta GL configurada.")
