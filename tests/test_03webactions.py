@@ -403,7 +403,7 @@ def test_purchase_debit_note_list_route(request):
                 assert "Listado de Notas de Débito de Compra" in response.get_data(as_text=True)
 
 
-def test_purchase_invoice_document_type_helper_prefers_sources_and_explicit_override(request):
+def test_purchase_invoice_document_type_helper_prefers_sources_and_ignores_untrusted_override(request):
 
     if request.config.getoption("--slow") == "True":
 
@@ -420,7 +420,7 @@ def test_purchase_invoice_document_type_helper_prefers_sources_and_explicit_over
 
         source_ids = {"from_receipt_id": None, "from_invoice_id": "PINV-1"}
         with app.test_request_context("/buying/purchase-invoice/new"):
-            assert _purchase_invoice_document_type(source_ids) == PURCHASE_CREDIT_NOTE
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_INVOICE
 
         source_ids = {"from_receipt_id": None, "from_invoice_id": None}
         with app.test_request_context("/buying/purchase-invoice/new"):
