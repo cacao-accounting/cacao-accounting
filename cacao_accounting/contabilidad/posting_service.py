@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from decimal import Decimal, InvalidOperation
 
@@ -129,6 +129,30 @@ class EnginePostingResult:
 
     entries: list[GLEntry]
     results: dict[str, Any]
+
+
+def _ledger_context_with_currency(
+    context: LedgerContext,
+    transaction_currency: str | None,
+    exchange_rate: Decimal | None,
+) -> LedgerContext:
+    """Crea un contexto GL con moneda y tasa específicas para una entrada."""
+    return LedgerContext(
+        company=context.company,
+        posting_date=context.posting_date,
+        ledger_id=context.ledger_id,
+        voucher_type=context.voucher_type,
+        voucher_id=context.voucher_id,
+        document_no=context.document_no,
+        naming_series_id=context.naming_series_id,
+        accounting_period_id=context.accounting_period_id,
+        fiscal_year_id=context.fiscal_year_id,
+        transaction_currency=transaction_currency,
+        company_currency=context.company_currency,
+        document_base_currency=context.document_base_currency,
+        exchange_rate=exchange_rate,
+        document_remarks=context.document_remarks,
+    )
 
 
 def _decimal_value(value: Any) -> Decimal:
@@ -1457,7 +1481,7 @@ def _build_fx_difference_entries(
     if not difference:
         return []
     account_id = _resolve_fx_account_id(context, difference)
-    fx_context = replace(context, transaction_currency=context.company_currency, exchange_rate=Decimal("1"))
+    fx_context = _ledger_context_with_currency(context, context.company_currency, Decimal("1"))
     debit = difference if difference > 0 else Decimal("0")
     credit = -difference if difference < 0 else Decimal("0")
     return [
@@ -1501,8 +1525,8 @@ def _create_payment_transfer_entries(
     target_amount = _decimal_value(document.received_amount or amount)
     source_company_amount = _to_company_currency(amount, source_rate)
     target_company_amount = _to_company_currency(target_amount, target_rate)
-    debit_context = replace(context, transaction_currency=target_currency, exchange_rate=target_rate)
-    credit_context = replace(context, transaction_currency=source_currency, exchange_rate=source_rate)
+    debit_context = _ledger_context_with_currency(context, target_currency, target_rate)
+    credit_context = _ledger_context_with_currency(context, source_currency, source_rate)
     entries = [
         _create_gl_entry(
             context=debit_context,
