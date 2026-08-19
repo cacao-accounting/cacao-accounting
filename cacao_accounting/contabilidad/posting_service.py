@@ -2280,6 +2280,8 @@ def _create_stock_movement(
 
 def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntryItem) -> StockLedgerEntry | None:
     """Crea movimiento de inventario para una conciliacion de cantidad/valor objetivo."""
+    from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
+
     warehouse = line.target_warehouse or line.source_warehouse or document.to_warehouse or document.from_warehouse
     if not warehouse:
         raise PostingError("La conciliación requiere bodega.")
@@ -2297,6 +2299,16 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
     qty_change = counted_qty - current_qty
     current_value = _decimal_value(current_bin.stock_value) if current_bin else Decimal("0")
     target_value = _decimal_value(line.target_stock_value)
+    if qty_change != 0:
+        try:
+            validate_batch_serial(
+                line,
+                outgoing=qty_change < 0,
+                warehouse=warehouse,
+                posting_date=getattr(document, "posting_date", None),
+            )
+        except InventoryServiceError as exc:
+            raise PostingError(str(exc)) from exc
     if line.target_valuation_rate is None and target_value != 0:
         raise PostingError("La conciliación requiere tasa de valuación objetivo.")
     target_rate = _decimal_value(line.target_valuation_rate)
@@ -2337,6 +2349,8 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
         valuation_rate=valuation_rate,
         value_change=value_change,
     )
+    if qty_change != 0:
+        update_serial_state(line, outgoing=qty_change < 0, warehouse=warehouse)
     valuation_rate_after = stock_value_after / qty_after if qty_after > 0 else Decimal("0")
     layer_kwargs = {
         "item_code": line.item_code,

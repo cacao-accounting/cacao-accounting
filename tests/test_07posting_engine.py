@@ -2896,6 +2896,57 @@ def test_expired_batch_is_rejected_by_stock_posting(app_ctx):
         )
 
 
+def test_reconciliation_requires_batch_or_serial_identifiers(app_ctx):
+    """Quantity reconciliation cannot bypass tracking for controlled items."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, _create_stock_reconciliation_movement
+    from cacao_accounting.database import Item, StockBin, StockEntry, StockEntryItem, UOM, Warehouse, database
+
+    database.session.add_all(
+        [
+            UOM(code="EA-TRACK-GUARD", name="Each"),
+            Item(
+                code="ITEM-TRACK-GUARD",
+                name="Tracking guard",
+                item_type="goods",
+                is_stock_item=True,
+                has_serial_no=True,
+                default_uom="EA-TRACK-GUARD",
+            ),
+            Warehouse(code="WH-TRACK-GUARD", name="Tracking warehouse", company="cacao"),
+            StockBin(
+                company="cacao",
+                item_code="ITEM-TRACK-GUARD",
+                warehouse="WH-TRACK-GUARD",
+                actual_qty=Decimal("1"),
+                stock_value=Decimal("10"),
+            ),
+        ]
+    )
+    entry = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="stock_reconciliation",
+        docstatus=1,
+    )
+    database.session.add(entry)
+    database.session.flush()
+    line = StockEntryItem(
+        stock_entry_id=entry.id,
+        item_code="ITEM-TRACK-GUARD",
+        target_warehouse="WH-TRACK-GUARD",
+        qty=Decimal("1"),
+        uom="EA-TRACK-GUARD",
+        counted_qty=Decimal("0"),
+        target_valuation_rate=Decimal("0"),
+        target_stock_value=Decimal("0"),
+    )
+    database.session.add(line)
+    database.session.commit()
+
+    with pytest.raises(PostingError, match="numero de serie"):
+        _create_stock_reconciliation_movement(entry, line)
+
+
 def test_item_cogs_account_is_used_for_delivery_posting(app_ctx):
     """COGS resolution prefers the item's company-specific account."""
     from cacao_accounting.contabilidad.posting_service import _account_id_for_item
