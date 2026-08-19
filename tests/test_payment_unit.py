@@ -103,7 +103,7 @@ def test_duplicate_payment_warning_covers_receipts(app_ctx):
 
 def test_invoice_outstanding_ignores_base_currency_cache(monkeypatch):
     """El saldo aplicable no debe mezclar moneda transaccional y moneda base."""
-    bancos_module = import_module("cacao_accounting.bancos")
+    bancos_module = import_module("cacao_accounting.bancos.services")
 
     invoice = SimpleNamespace(outstanding_amount=Decimal("100"), base_outstanding_amount=Decimal("1"))
     monkeypatch.setattr(bancos_module, "compute_outstanding_amount", lambda _invoice: Decimal("100"))

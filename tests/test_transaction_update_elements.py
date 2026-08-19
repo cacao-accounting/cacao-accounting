@@ -32,7 +32,7 @@ def _read(relative_path: str) -> str:
 
 def test_supplier_quotation_updates_from_purchase_quotation_doctype():
     """Cotización de Proveedor debe actualizar desde Solicitud de Cotización."""
-    routes = _read("cacao_accounting/compras/__init__.py")
+    routes = _read("cacao_accounting/compras/routes.py")
     template = _read("cacao_accounting/compras/templates/compras/cotizacion_proveedor_nueva.html")
 
     assert '"value": "purchase_request"' in routes
@@ -82,7 +82,7 @@ def test_purchase_request_list_displays_generated_document_number():
 
 def test_offer_comparison_list_keeps_requests_and_shows_comparison_status():
     """El listado conserva la solicitud y presenta el estado del comparativo."""
-    routes = _read("cacao_accounting/compras/__init__.py")
+    routes = _read("cacao_accounting/compras/routes.py")
     template = _read("cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html")
     comparison_template = _read("cacao_accounting/compras/templates/compras/comparativo_solicitud.html")
     selector = _read("cacao_accounting/compras/templates/compras/comparativo_ordenes_seleccionar.html")
@@ -175,8 +175,8 @@ def test_derived_document_pending_line_urls_are_company_scoped():
 
 def test_update_elements_sources_are_configured_for_derived_documents():
     """Documentos derivados deben ofrecer Actualizar Elementos desde su origen real."""
-    purchases = _read("cacao_accounting/compras/__init__.py")
-    sales = _read("cacao_accounting/ventas/__init__.py")
+    purchases = _read("cacao_accounting/compras/routes.py")
+    sales = _read("cacao_accounting/ventas/routes.py")
 
     assert '"value": "purchase_request"' in purchases
     assert '"value": "purchase_quotation"' in purchases

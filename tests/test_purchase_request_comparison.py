@@ -332,7 +332,7 @@ def test_supplier_quotation_origin_header_is_immutable(app_ctx, monkeypatch):
     """A supplier quotation cannot change the source RFQ company."""
     import sys
 
-    compras = sys.modules["cacao_accounting.compras"]
+    compras = sys.modules["cacao_accounting.compras.services"]
 
     with app_ctx.app_context():
         source = PurchaseQuotation(
