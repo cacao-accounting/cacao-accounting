@@ -2778,6 +2778,34 @@ def test_stock_transfer_creates_stock_ledger_without_gl(app_ctx):
     assert sorted(line.qty_change for line in stock_entries) == [Decimal("-2.000000000"), Decimal("2.000000000")]
 
 
+def test_inventory_line_rate_rejects_amount_without_quantity(app_ctx):
+    """A positive amount cannot silently produce a zero valuation rate."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, _line_rate, _line_rate_generic
+    from cacao_accounting.database import Item, StockEntryItem, UOM, database
+
+    database.session.add_all(
+        [
+            UOM(code="EA-RATE-GUARD", name="Each"),
+            Item(
+                code="ITEM-RATE-GUARD", name="Rate guard", item_type="goods", is_stock_item=True, default_uom="EA-RATE-GUARD"
+            ),
+        ]
+    )
+    database.session.flush()
+    line = StockEntryItem(
+        item_code="ITEM-RATE-GUARD",
+        qty=Decimal("0"),
+        qty_in_base_uom=Decimal("0"),
+        uom="EA-RATE-GUARD",
+        amount=Decimal("25"),
+    )
+
+    with pytest.raises(PostingError, match="cantidad"):
+        _line_rate(line)
+    with pytest.raises(PostingError, match="cantidad"):
+        _line_rate_generic(line)
+
+
 def test_stock_transfer_rejects_warehouse_from_other_company(app_ctx):
     from cacao_accounting.contabilidad.posting import PostingError, post_document_to_gl
     from cacao_accounting.database import Entity, Item, StockEntry, StockEntryItem, UOM, Warehouse, database

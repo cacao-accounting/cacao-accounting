@@ -1652,13 +1652,15 @@ def _line_rate(line: StockEntryItem) -> Decimal:
     qty_in_base_uom = _line_qty(line)
     raw_qty = _decimal_value(line.qty)
     amount = _decimal_value(line.amount)
+    if amount > 0 and qty_in_base_uom <= 0:
+        raise PostingError(f"La linea de inventario {line.item_code} requiere cantidad para valorar el monto.")
     if rate > 0 and raw_qty > 0 and raw_qty != qty_in_base_uom:
         rate = rate * raw_qty / qty_in_base_uom
     if amount > 0 and qty_in_base_uom > 0:
         rate = amount / qty_in_base_uom
     if rate <= 0 and amount > 0 and qty_in_base_uom > 0:
         rate = amount / qty_in_base_uom
-    if rate <= 0 and qty_in_base_uom > 0:
+    if rate <= 0:
         raise PostingError(f"La linea de inventario {line.item_code} requiere tasa de valuacion.")
     return rate
 
@@ -1699,13 +1701,16 @@ def _line_rate_generic(line: Any) -> Decimal:
     qty_in_base_uom = _line_qty_generic(line)
     raw_qty = _decimal_value(getattr(line, "qty", None))
     amount = _decimal_value(getattr(line, "amount", None))
+    if amount > 0 and qty_in_base_uom <= 0:
+        item_code = getattr(line, "item_code", "desconocido")
+        raise PostingError(f"La linea de inventario {item_code} requiere cantidad para valorar el monto.")
     if rate > 0 and raw_qty > 0 and raw_qty != qty_in_base_uom:
         rate = rate * raw_qty / qty_in_base_uom
     if amount > 0 and qty_in_base_uom > 0:
         rate = amount / qty_in_base_uom
     if rate <= 0 and amount > 0 and qty_in_base_uom > 0:
         rate = amount / qty_in_base_uom
-    if rate <= 0 and qty_in_base_uom > 0:
+    if rate <= 0:
         item_code = getattr(line, "item_code", "desconocido")
         raise PostingError(f"La linea de inventario {item_code} requiere tasa de valuacion.")
     return rate
