@@ -26,6 +26,7 @@ from cacao_accounting.database import (
     StockEntry,
     StockEntryItem,
     UOM,
+    Warehouse,
     WarehouseCompanyAccount,
     database,
 )
@@ -375,6 +376,7 @@ def _create_line_relation(
 
 def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Decimal:
     """Create one stock movement line and its source relation."""
+    _validate_stock_entry_warehouses(entry)
     qty = _form_decimal(f"qty_{index}", "1")
     rate = _form_decimal(f"rate_{index}", "0")
     amount = _line_amount(index)
@@ -452,6 +454,7 @@ def _item_default_uom(item_code: str) -> str | None:
 
 def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: str, warehouse: str) -> Decimal:
     """Create one reconciliation line from the locked stock snapshot."""
+    _validate_stock_entry_warehouses(entry, warehouse)
     current_qty, current_rate, current_value, _reserved_qty = _stock_bin_snapshot(entry.company, item_code, warehouse)
     uom = request.form.get(f"uom_{index}") or _item_default_uom(item_code)
     if not uom:
@@ -543,6 +546,27 @@ def _stock_entry_title(purpose: str | None) -> str:
         "adjustment_negative": "Nuevo Ajuste Negativo de Inventario",
     }
     return labels.get(purpose or "", "Nueva Entrada de Almacén") + " - " + APPNAME
+
+
+def _validate_stock_entry_warehouses(entry: StockEntry, *line_warehouses: str | None) -> None:
+    """Validate draft warehouses against the entry company and active state.
+
+    Posting repeats this validation, but draft persistence must reject invalid
+    cross-company references before they can be stored or displayed.
+    """
+    warehouse_codes = {
+        entry.from_warehouse,
+        entry.to_warehouse,
+        *line_warehouses,
+    }
+    for warehouse_code in filter(None, warehouse_codes):
+        warehouse = database.session.execute(
+            database.select(Warehouse).filter_by(code=warehouse_code)
+        ).scalar_one_or_none()
+        if not warehouse or warehouse.company != entry.company:
+            raise ValueError(f"La bodega {warehouse_code} no pertenece a la compañía {entry.company}.")
+        if not warehouse.is_active:
+            raise ValueError(f"La bodega {warehouse_code} está inactiva.")
 
 
 def _validate_stock_entry_posting_date(form_data: Mapping[str, Any]) -> date:
