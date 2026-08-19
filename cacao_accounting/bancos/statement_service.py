@@ -109,8 +109,7 @@ def _is_duplicate(
     withdrawal: Decimal | None,
 ) -> bool:
     query = select(BankTransaction).filter_by(bank_account_id=bank_account_id, posting_date=posting_date)
-    if reference_number:
-        query = query.filter_by(reference_number=reference_number)
+    query = query.filter_by(reference_number=reference_number)
     if deposit is not None:
         query = query.filter_by(deposit=deposit)
     if withdrawal is not None:
@@ -118,11 +117,20 @@ def _is_duplicate(
     return database.session.execute(query).scalars().first() is not None
 
 
-def import_bank_statement(file: Any, mapping: dict[str, str], bank_account_id: str, preview: bool = False) -> BankImportResult:
-    """Importa o previsualiza un extracto CSV."""
+def import_bank_statement(
+    file: Any,
+    mapping: dict[str, str],
+    bank_account_id: str,
+    *,
+    company: str,
+    preview: bool = False,
+) -> BankImportResult:
+    """Importa o previsualiza un extracto CSV validando la compañía de la cuenta."""
     bank_account = database.session.get(BankAccount, bank_account_id)
     if not bank_account:
         raise BankStatementError("La cuenta bancaria no existe.")
+    if not company or bank_account.company != company:
+        raise BankStatementError("La cuenta bancaria no pertenece a la compañía indicada.")
     raw = file.read() if hasattr(file, "read") else str(file)
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8-sig")
