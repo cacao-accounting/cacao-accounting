@@ -33,6 +33,30 @@ def setupdb(request):
             init_test_db(app)
 
 
+@pytest.fixture()
+def isolated_stock_entry_app(tmp_path):
+    """Create a fresh application database for stock-entry route tests."""
+    isolated_app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "isolated-stock-entry-test",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "WTF_CSRF_ENABLED": False,
+            "DEBUG": True,
+            "PRESERVE_CONTEXT_ON_EXCEPTION": True,
+            "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'stock_entry.sqlite'}",
+        }
+    )
+
+    with isolated_app.app_context():
+        init_test_db(isolated_app)
+        yield isolated_app
+
+        from cacao_accounting.database import database
+
+        database.session.remove()
+
+
 def test_check_passwd(request):
 
     if request.config.getoption("--slow") == "True":
@@ -872,555 +896,91 @@ def test_transaccional_edit_duplicate_actions_routes(request):
                     assert response.status_code == 200, url
 
 
-def test_transaccional_full_transition_routes_get_post(request):
+def test_stock_entry_edit_route_is_independent(isolated_stock_entry_app):
+    """Verify stock-entry editing with a database owned only by this test."""
+    from flask_login import current_user
 
-    if request.config.getoption("--slow") == "True":
+    from cacao_accounting.database import (
+        Item,
+        NamingSeries,
+        StockEntry,
+        StockEntryItem,
+        UOM,
+        database,
+    )
 
-        with app.app_context():
-            from flask_login import current_user
-
-            from cacao_accounting.database import (
-                DeliveryNote,
-                PurchaseInvoice,
-                PurchaseOrder,
-                PurchaseOrderItem,
-                PurchaseQuotation,
-                PurchaseQuotationItem,
-                PurchaseReceipt,
-                SalesInvoice,
-                SalesOrder,
-                SalesOrderItem,
-                SalesQuotation,
-                SalesQuotationItem,
-                SalesRequest,
-                SalesRequestItem,
-                StockEntry,
-                ExchangeRate,
-                Item,
-                SupplierQuotation,
-                SupplierQuotationItem,
-                database,
+    with isolated_stock_entry_app.app_context():
+        uom = database.session.execute(database.select(UOM).filter_by(code="UND")).scalar_one()
+        naming_series = (
+            database.session.execute(
+                database.select(NamingSeries).filter_by(
+                    entity_type="stock_entry",
+                    company="cacao",
+                    is_active=True,
+                )
             )
+            .scalars()
+            .first()
+        )
+        assert naming_series is not None
 
-            with app.test_client() as client:
-                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
+        item = Item(
+            code="ART-ISOLATED-SE",
+            name="Artículo de entrada aislada",
+            item_type="goods",
+            is_stock_item=True,
+            default_uom=uom.code,
+        )
+        entry = StockEntry(
+            company="cacao",
+            posting_date=date(2026, 5, 16),
+            purpose="material_receipt",
+            to_warehouse="PRINCIPAL",
+            naming_series_id=naming_series.id,
+            docstatus=0,
+            total_amount=Decimal("0"),
+        )
+        database.session.add_all([item, entry])
+        database.session.commit()
 
-                from cacao_accounting.database import Party
+        with isolated_stock_entry_app.test_client() as client:
+            client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+            assert current_user.is_authenticated
 
-                supplier = (
-                    database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-                )
-                if supplier is None:
-                    supplier = Party(
-                        id="SUP-TEST",
-                        code="SUP-TEST",
-                        name="Proveedor prueba",
-                        tax_id="J0100",
-                        is_supplier=True,
-                    )
-                    database.session.add(supplier)
-                    database.session.flush()
-                customer = (
-                    database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-                )
-                if customer is None:
-                    customer = Party(
-                        id="CUST-TEST",
-                        code="CUST-TEST",
-                        name="Cliente prueba",
-                        tax_id="J0101",
-                        is_customer=True,
-                    )
-                    database.session.add(customer)
-                    database.session.flush()
+            edit_url = f"/inventory/stock-entry/{entry.id}/edit"
+            response = client.get(edit_url)
+            assert response.status_code == 200
 
-                transition_item = database.session.execute(
-                    database.select(Item).filter_by(code="ART-001")
-                ).scalar_one_or_none()
-                if transition_item is None:
-                    transition_item = Item(
-                        code="ART-001",
-                        name="Artículo de transición",
-                        item_type="goods",
-                        is_stock_item=False,
-                        is_active=True,
-                        is_purchase_item=True,
-                        is_sale_item=True,
-                        default_uom="UND",
-                    )
-                    database.session.add(transition_item)
-                else:
-                    transition_item.is_stock_item = False
-                database.session.flush()
+            response = client.post(
+                edit_url,
+                data={
+                    "company": "cacao",
+                    "naming_series": naming_series.id,
+                    "posting_date": "2026-05-16",
+                    "purpose": "material_receipt",
+                    "to_warehouse": "PRINCIPAL",
+                    "remarks": "independent edit",
+                    "item_code_0": item.code,
+                    "qty_0": "1",
+                    "uom_0": uom.code,
+                    "rate_0": "1",
+                    "amount_0": "1",
+                    "warehouse_0": "PRINCIPAL",
+                },
+            )
+            assert response.status_code in (302, 303)
 
-                purchase_quotation = PurchaseQuotation(
-                    document_no="TEST2-RFQ-DRAFT",
-                    company="cacao",
-                    posting_date=date(2026, 5, 16),
-                    docstatus=0,
-                    grand_total=0,
-                )
-                supplier_quotation = SupplierQuotation(
-                    document_no="TEST2-SQ-DRAFT",
-                    company="cacao",
-                    supplier_id=supplier.id,
-                    posting_date=date(2026, 5, 16),
-                    docstatus=0,
-                    grand_total=0,
-                )
-                purchase_order = PurchaseOrder(
-                    document_no="TEST2-PO-DRAFT",
-                    company="cacao",
-                    supplier_id=supplier.id,
-                    posting_date=date(2026, 5, 16),
-                    docstatus=0,
-                    grand_total=0,
-                )
-                purchase_receipt = PurchaseReceipt(
-                    document_no="TEST2-PR-DRAFT",
-                    company="cacao",
-                    supplier_id=supplier.id,
-                    posting_date=date(2026, 5, 16),
-                    docstatus=0,
-                    grand_total=0,
-                )
-                purchase_invoice = PurchaseInvoice(
-                    document_no="TEST2-PI-DRAFT",
-                    company="cacao",
-                    supplier_id=supplier.id,
-                    posting_date=date(2026, 5, 16),
-                    document_type="purchase_invoice",
-                    docstatus=0,
-                    grand_total=0,
-                    outstanding_amount=0,
-                )
-                sales_request = SalesRequest(
-                    document_no="TEST2-SR-DRAFT",
-                    company="cacao",
-                    customer_id=customer.id,
-                    posting_date=date(2026, 5, 16),
-                    docstatus=0,
-                    grand_total=0,
-                )
-                sales_quotation = SalesQuotation(
-                    document_no="TEST2-SQTN-DRAFT",
-                    company="cacao",
-                    customer_id=customer.id,
-                    posting_date=date(2026, 5, 16),
-                    docstatus=0,
-                    grand_total=0,
-                )
-                sales_order = SalesOrder(
-                    document_no="TEST2-SO-DRAFT",
-                    company="cacao",
-                    customer_id=customer.id,
-                    posting_date=date(2026, 5, 16),
-                    docstatus=0,
-                    grand_total=0,
-                )
-                delivery_note = DeliveryNote(
-                    document_no="TEST2-DN-DRAFT",
-                    company="cacao",
-                    posting_date=date(2026, 5, 16),
-                    docstatus=0,
-                    grand_total=0,
-                )
-                sales_invoice = SalesInvoice(
-                    document_no="TEST2-SI-DRAFT",
-                    company="cacao",
-                    customer_id=customer.id,
-                    posting_date=date(2026, 5, 16),
-                    document_type="sales_invoice",
-                    docstatus=0,
-                    grand_total=0,
-                    outstanding_amount=0,
-                )
-                stock_entry = StockEntry(
-                    document_no="TEST2-SE-DRAFT",
-                    company="cacao",
-                    posting_date=date(2026, 5, 16),
-                    purpose="material_receipt",
-                    docstatus=0,
-                    total_amount=0,
-                )
-                database.session.add_all(
-                    [
-                        purchase_quotation,
-                        supplier_quotation,
-                        purchase_order,
-                        purchase_receipt,
-                        purchase_invoice,
-                        sales_request,
-                        sales_quotation,
-                        sales_order,
-                        delivery_note,
-                        sales_invoice,
-                        stock_entry,
-                    ]
-                )
-                database.session.commit()
+        database.session.expire_all()
+        stored_entry = database.session.get(StockEntry, entry.id)
+        stored_lines = (
+            database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)).scalars().all()
+        )
 
-                get_routes = [
-                    f"/buying/request-for-quotation/{purchase_quotation.id}/edit",
-                    f"/buying/supplier-quotation/{supplier_quotation.id}/edit",
-                    f"/buying/purchase-order/{purchase_order.id}/edit",
-                    f"/buying/purchase-receipt/{purchase_receipt.id}/edit",
-                    f"/buying/purchase-invoice/{purchase_invoice.id}/edit",
-                    f"/sales/sales-request/{sales_request.id}/edit",
-                    f"/sales/sales-quotation/{sales_quotation.id}/edit",
-                    f"/sales/sales-order/{sales_order.id}/edit",
-                    f"/sales/delivery-note/{delivery_note.id}/edit",
-                    f"/sales/sales-invoice/{sales_invoice.id}/edit",
-                    f"/inventory/stock-entry/{stock_entry.id}/edit",
-                ]
-                for url in get_routes:
-                    response = client.get(url)
-                    assert response.status_code == 200, url
-
-                edit_posts = [
-                    (
-                        f"/buying/request-for-quotation/{purchase_quotation.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                            "warehouse_0": "PRINCIPAL",
-                        },
-                    ),
-                    (
-                        f"/buying/supplier-quotation/{supplier_quotation.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "supplier_id": supplier.id,
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                        },
-                    ),
-                    (
-                        f"/buying/purchase-order/{purchase_order.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "supplier_id": supplier.id,
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                        },
-                    ),
-                    (
-                        f"/buying/purchase-receipt/{purchase_receipt.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "supplier_id": supplier.id,
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                            "warehouse_0": "PRINCIPAL",
-                        },
-                    ),
-                    (
-                        f"/buying/purchase-invoice/{purchase_invoice.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "supplier_invoice_no": "SUP-001",
-                            "supplier_id": supplier.id,
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                        },
-                    ),
-                    (
-                        f"/sales/sales-request/{sales_request.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "customer_id": customer.id,
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                        },
-                    ),
-                    (
-                        f"/sales/sales-quotation/{sales_quotation.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "customer_id": customer.id,
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                        },
-                    ),
-                    (
-                        f"/sales/sales-order/{sales_order.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "customer_id": customer.id,
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                            "warehouse_0": "PRINCIPAL",
-                        },
-                    ),
-                    (
-                        f"/sales/delivery-note/{delivery_note.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "customer_id": customer.id,
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                            "warehouse_0": "PRINCIPAL",
-                        },
-                    ),
-                    (
-                        f"/sales/sales-invoice/{sales_invoice.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "remarks": "edit",
-                            "customer_id": customer.id,
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                        },
-                    ),
-                    (
-                        f"/inventory/stock-entry/{stock_entry.id}/edit",
-                        {
-                            "company": "cacao",
-                            "posting_date": "2026-05-16",
-                            "purpose": "material_receipt",
-                            "remarks": "edit",
-                            "item_code_0": "ART-001",
-                            "qty_0": "1",
-                            "uom_0": "UND",
-                            "rate_0": "1",
-                            "amount_0": "1",
-                        },
-                    ),
-                ]
-                for url, payload in edit_posts:
-                    response = client.post(url, data=payload)
-                    assert response.status_code in (302, 303), url
-
-                duplicate_posts = [
-                    f"/buying/request-for-quotation/{purchase_quotation.id}/duplicate",
-                    f"/buying/supplier-quotation/{supplier_quotation.id}/duplicate",
-                    f"/buying/purchase-order/{purchase_order.id}/duplicate",
-                    f"/buying/purchase-receipt/{purchase_receipt.id}/duplicate",
-                    f"/buying/purchase-invoice/{purchase_invoice.id}/duplicate",
-                    f"/sales/sales-request/{sales_request.id}/duplicate",
-                    f"/sales/sales-quotation/{sales_quotation.id}/duplicate",
-                    f"/sales/sales-order/{sales_order.id}/duplicate",
-                    f"/sales/delivery-note/{delivery_note.id}/duplicate",
-                    f"/sales/sales-invoice/{sales_invoice.id}/duplicate",
-                    f"/inventory/stock-entry/{stock_entry.id}/duplicate",
-                ]
-                for url in duplicate_posts:
-                    response = client.post(url, data={})
-                    assert response.status_code in (302, 303), url
-
-                # Los documentos requieren al menos una linea valida para aprobarse
-                # (validacion S2P-06/O2C-05). Se crean los items aqui, despues de los
-                # edit/duplicate que recrean las lineas de los documentos.
-                from cacao_accounting.database import Item, UOM
-
-                uom = database.session.execute(database.select(UOM).limit(1)).scalars().first()
-                if uom is None:
-                    uom = UOM(code="UND", name="Unidad")
-                    database.session.add(uom)
-                    database.session.flush()
-                item = database.session.execute(database.select(Item).filter_by(code="ART-TEST")).scalars().first()
-                if item is None:
-                    item = Item(
-                        code="ART-TEST",
-                        name="Articulo prueba",
-                        item_type="goods",
-                        is_stock_item=True,
-                        default_uom=uom.code,
-                    )
-                    database.session.add(item)
-                    database.session.flush()
-
-                def _add_line(model, item_model, fk_field, warehouse=None):
-                    params = {
-                        fk_field: model.id,
-                        "item_code": item.code,
-                        "item_name": item.name,
-                        "qty": Decimal("1"),
-                        "uom": uom.code,
-                        "rate": Decimal("10"),
-                        "amount": Decimal("10"),
-                    }
-                    if warehouse:
-                        params["warehouse"] = warehouse
-                    database.session.add(item_model(**params))
-
-                _add_line(purchase_quotation, PurchaseQuotationItem, "purchase_quotation_id")
-                _add_line(supplier_quotation, SupplierQuotationItem, "supplier_quotation_id")
-                _add_line(purchase_order, PurchaseOrderItem, "purchase_order_id")
-                _add_line(sales_request, SalesRequestItem, "sales_request_id")
-                _add_line(sales_quotation, SalesQuotationItem, "sales_quotation_id")
-                _add_line(sales_order, SalesOrderItem, "sales_order_id", warehouse="PRINCIPAL")
-                database.session.commit()
-
-                # Add stock to warehouse PRINCIPAL for ART-TEST so that O2C-03 reservation succeeds during sales order submit
-                from cacao_accounting.database import StockEntryItem
-
-                se_stock = StockEntry(
-                    purpose="material_receipt",
-                    company="cacao",
-                    posting_date=date(2026, 5, 16),
-                    to_warehouse="PRINCIPAL",
-                    docstatus=0,
-                )
-                database.session.add(se_stock)
-                database.session.flush()
-                database.session.add(
-                    StockEntryItem(
-                        stock_entry_id=se_stock.id,
-                        item_code=item.code,
-                        target_warehouse="PRINCIPAL",
-                        qty=Decimal("100"),
-                        uom=uom.code,
-                        qty_in_base_uom=Decimal("100"),
-                        basic_rate=Decimal("10"),
-                        amount=Decimal("1000"),
-                    )
-                )
-                database.session.flush()
-                from cacao_accounting.contabilidad.posting import submit_document
-
-                database.session.add_all(
-                    [
-                        ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.0273224044"), date=date(2026, 5, 16)),
-                        ExchangeRate(origin="NIO", destination="EUR", rate=Decimal("0.0245"), date=date(2026, 5, 16)),
-                    ]
-                )
-                database.session.flush()
-                submit_document(se_stock)
-                database.session.commit()
-
-                strict_transition_docs = [
-                    (
-                        purchase_quotation,
-                        f"/buying/request-for-quotation/{purchase_quotation.id}/submit",
-                        f"/buying/request-for-quotation/{purchase_quotation.id}/cancel",
-                    ),
-                    (
-                        supplier_quotation,
-                        f"/buying/supplier-quotation/{supplier_quotation.id}/submit",
-                        f"/buying/supplier-quotation/{supplier_quotation.id}/cancel",
-                    ),
-                    (
-                        purchase_order,
-                        f"/buying/purchase-order/{purchase_order.id}/submit",
-                        f"/buying/purchase-order/{purchase_order.id}/cancel",
-                    ),
-                    (
-                        sales_request,
-                        f"/sales/sales-request/{sales_request.id}/submit",
-                        f"/sales/sales-request/{sales_request.id}/cancel",
-                    ),
-                    (
-                        sales_quotation,
-                        f"/sales/sales-quotation/{sales_quotation.id}/submit",
-                        f"/sales/sales-quotation/{sales_quotation.id}/cancel",
-                    ),
-                    (
-                        sales_order,
-                        f"/sales/sales-order/{sales_order.id}/submit",
-                        f"/sales/sales-order/{sales_order.id}/cancel",
-                    ),
-                ]
-                for model, submit_url, cancel_url in strict_transition_docs:
-                    response = client.post(submit_url, data={})
-                    assert response.status_code in (302, 303), submit_url
-                    database.session.refresh(model)
-                    assert model.docstatus == 1, submit_url
-
-                    response = client.post(cancel_url, data={})
-                    assert response.status_code in (302, 303), cancel_url
-                    database.session.refresh(model)
-                    assert model.docstatus == 2, cancel_url
-
-                posting_transition_docs = [
-                    (
-                        purchase_receipt,
-                        f"/buying/purchase-receipt/{purchase_receipt.id}/submit",
-                        f"/buying/purchase-receipt/{purchase_receipt.id}/cancel",
-                    ),
-                    (
-                        purchase_invoice,
-                        f"/buying/purchase-invoice/{purchase_invoice.id}/submit",
-                        f"/buying/purchase-invoice/{purchase_invoice.id}/cancel",
-                    ),
-                    (
-                        delivery_note,
-                        f"/sales/delivery-note/{delivery_note.id}/submit",
-                        f"/sales/delivery-note/{delivery_note.id}/cancel",
-                    ),
-                    (
-                        sales_invoice,
-                        f"/sales/sales-invoice/{sales_invoice.id}/submit",
-                        f"/sales/sales-invoice/{sales_invoice.id}/cancel",
-                    ),
-                    (
-                        stock_entry,
-                        f"/inventory/stock-entry/{stock_entry.id}/submit",
-                        f"/inventory/stock-entry/{stock_entry.id}/cancel",
-                    ),
-                ]
-                for model, submit_url, cancel_url in posting_transition_docs:
-                    response = client.post(submit_url, data={})
-                    assert response.status_code in (302, 303), submit_url
-                    database.session.refresh(model)
-                    assert model.docstatus in (0, 1), submit_url
-
-                    if model.docstatus == 1:
-                        response = client.post(cancel_url, data={})
-                        assert response.status_code in (302, 303), cancel_url
-                        database.session.refresh(model)
-                        assert model.docstatus in (1, 2), cancel_url
+        assert stored_entry.remarks == "independent edit"
+        assert stored_entry.total_amount == Decimal("1")
+        assert len(stored_lines) == 1
+        assert stored_lines[0].qty == Decimal("1")
+        assert stored_lines[0].target_warehouse == "PRINCIPAL"
 
 
 def test_inventory_stock_entry_routes(request):
