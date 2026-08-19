@@ -243,7 +243,7 @@ def test_stock_entry_edit_keeps_company_and_purpose_immutable(app_ctx):
 
 def test_stock_entry_draft_rejects_cross_company_warehouse(app_ctx):
     """A draft cannot persist a warehouse belonging to another company."""
-    from cacao_accounting.database import StockEntry, User, Warehouse, database
+    from cacao_accounting.database import StockEntry, Warehouse, database
     from cacao_accounting.inventario.services import _validate_stock_entry_warehouses
 
     database.session.add_all(
