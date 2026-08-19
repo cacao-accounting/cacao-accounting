@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from inspect import unwrap
+from importlib import import_module
 import json
 
 import pytest
@@ -263,7 +264,7 @@ def test_numbering_config_rejects_cross_company_references(app_ctx):
         _save_numbering_configs(account)
 
 
-def test_bank_account_new_saves_payment_series_and_checkbook(app_ctx):
+def test_bank_account_new_saves_payment_series_and_checkbook(app_ctx, monkeypatch):
     from cacao_accounting.bancos import bancos_cuenta_bancaria_nuevo
     from cacao_accounting.database import Bank, BankAccount, SeriesExternalCounterMap, database
 
@@ -282,6 +283,7 @@ def test_bank_account_new_saves_payment_series_and_checkbook(app_ctx):
         "default_naming_series_id": series.id,
         "default_external_counter_id": counter.id,
     }
+    monkeypatch.setattr(import_module("cacao_accounting.bancos.routes"), "exige_acceso_compania", lambda *args, **kwargs: None)
     with app_ctx.test_request_context("/cash_management/bank-account/new", method="POST", data=data):
         response = unwrap(bancos_cuenta_bancaria_nuevo)()
 
@@ -299,7 +301,7 @@ def test_bank_account_new_saves_payment_series_and_checkbook(app_ctx):
     assert account.id in (mapping.condition_json or "")
 
 
-def test_bank_account_new_rejects_non_payment_series(app_ctx):
+def test_bank_account_new_rejects_non_payment_series(app_ctx, monkeypatch):
     from cacao_accounting.bancos import bancos_cuenta_bancaria_nuevo
     from cacao_accounting.database import Bank, BankAccount, database
 
@@ -317,6 +319,7 @@ def test_bank_account_new_rejects_non_payment_series(app_ctx):
         "default_naming_series_id": series.id,
         "default_external_counter_id": counter.id,
     }
+    monkeypatch.setattr(import_module("cacao_accounting.bancos.routes"), "exige_acceso_compania", lambda *args, **kwargs: None)
     with app_ctx.test_request_context("/cash_management/bank-account/new", method="POST", data=data):
         unwrap(bancos_cuenta_bancaria_nuevo)()
 
@@ -324,7 +327,7 @@ def test_bank_account_new_rejects_non_payment_series(app_ctx):
     assert account is None
 
 
-def test_bank_account_new_rejects_cross_company_or_non_checkbook_counter(app_ctx):
+def test_bank_account_new_rejects_cross_company_or_non_checkbook_counter(app_ctx, monkeypatch):
     from cacao_accounting.bancos import bancos_cuenta_bancaria_nuevo
     from cacao_accounting.database import Bank, BankAccount, database
 
@@ -345,6 +348,7 @@ def test_bank_account_new_rejects_cross_company_or_non_checkbook_counter(app_ctx
             "default_naming_series_id": series.id,
             "default_external_counter_id": counter.id,
         }
+        monkeypatch.setattr(import_module("cacao_accounting.bancos.routes"), "exige_acceso_compania", lambda *args, **kwargs: None)
         with app_ctx.test_request_context("/cash_management/bank-account/new", method="POST", data=data):
             unwrap(bancos_cuenta_bancaria_nuevo)()
 
