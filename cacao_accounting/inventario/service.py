@@ -32,6 +32,7 @@ from cacao_accounting.database import (
     DeliveryNoteItem,
     database,
     UOM,
+    Warehouse,
     obtiene_texto_unico,
 )
 
@@ -40,6 +41,18 @@ from cacao_accounting.decorators import exige_acceso_compania
 
 class InventoryServiceError(ValueError):
     """Error controlado de servicios de inventario."""
+
+
+def validate_default_warehouse(warehouse_code: str | None, action: str = "crear") -> None:
+    """Validate the default warehouse and the user's company access."""
+    if not warehouse_code:
+        return
+    warehouse = database.session.execute(select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
+    if warehouse is None:
+        raise InventoryServiceError("La bodega predeterminada no existe.")
+    if not warehouse.is_active:
+        raise InventoryServiceError("La bodega predeterminada está inactiva.")
+    exige_acceso_compania("inventory", warehouse.company, action)
 
 
 @dataclass(frozen=True)
@@ -324,6 +337,7 @@ def update_item_with_uoms(
     resolved_item_type = params.item_type or "goods"
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
+    validate_default_warehouse(params.default_warehouse_id, action="editar")
     validate_item_account_rows(
         resolved_item_type,
         resolved_stock_flag,
@@ -441,6 +455,7 @@ def create_item_with_uoms(
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
     resolved_item_type = params.item_type or "goods"
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
+    validate_default_warehouse(params.default_warehouse_id, action="crear")
     validate_item_account_rows(
         resolved_item_type,
         resolved_stock_flag,
