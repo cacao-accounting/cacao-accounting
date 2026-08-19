@@ -1899,6 +1899,28 @@ línea excede la tolerancia. Se añadió regresión para diferencias opuestas.
 El commit tiene sign-off de `williamjmorenor@gmail.com`. No se ejecutaron tests
 ni se hizo push.
 
+## 2026-08-19 — Estabilización SonarCloud del refactor modular
+
+Se revisaron los issues abiertos de SonarCloud para el PR #508 de la rama
+`refactor-monolithic-modules-5707940737891599974`. Se eliminaron manejadores de
+excepción redundantes, se extrajeron constantes repetidas de rutas y títulos, y
+se separó la resolución de documentos origen en ventas para reducir complejidad
+sin cambiar el flujo funcional. En contabilidad, los contextos de moneda para
+transferencias internas se construyen ahora con un retorno explícitamente
+tipado, eliminando las advertencias de Sonar sobre `dataclasses.replace`.
+
+La pasada completa de pytest reportada por el usuario tuvo 1,826 éxitos, 11
+saltadas y 10 fallos. Los fallos se debían a pruebas que aplicaban mocks o
+inspeccionaban las fachadas `__init__.py` anteriores al refactor; se ajustaron
+para usar los módulos `routes.py` y `services.py` que contienen las
+implementaciones. La reproducción dirigida de esas diez pruebas pasó. También
+pasaron Black, Ruff y Flake8 para los archivos modificados. Mypy conserva cinco
+errores preexistentes en `accounting_engine/gl_posting_builder.py`, fuera de
+estos cambios.
+
+Los commits de esta etapa llevan sign-off de `williamjmorenor@gmail.com`:
+`5d09acc7`, `8d6b949f`, `689f4d60`, `ee8222be` y `a2101d61`. No se hizo push.
+
 ## 2026-08-17 — Revisión de comentarios y snapshots multimoneda #481/#482
 
 La revisión de los issues abiertos confirmó que #481 seguía dejando el
