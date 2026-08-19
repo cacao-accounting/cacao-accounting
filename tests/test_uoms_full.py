@@ -368,6 +368,54 @@ def test_item_default_uom_is_locked_after_usage(app_ctx):
         database.session.commit()
 
 
+def test_item_default_uom_ignores_cancelled_records_and_detects_migrated_stock(app_ctx):
+    """Cancelled history is ignored while a positive migrated bin remains a lock."""
+    from cacao_accounting.database import Item, PurchaseReceipt, PurchaseReceiptItem, StockBin, database
+    from cacao_accounting.inventario.service import default_uom_change_allowed
+
+    cancelled_item = Item(
+        code="UOM-CANCELLED-001",
+        name="Cancelled history",
+        item_type="goods",
+        is_stock_item=True,
+        default_uom="UND",
+    )
+    database.session.add(cancelled_item)
+    database.session.add(PurchaseReceipt(id="PR-UOM-CANCELLED", company="cacao", posting_date=date.today(), docstatus=2))
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id="PR-UOM-CANCELLED",
+            item_code=cancelled_item.code,
+            item_name=cancelled_item.name,
+            qty=Decimal("1"),
+            uom="UND",
+            rate=Decimal("1"),
+            amount=Decimal("1"),
+        )
+    )
+    migrated_item = Item(
+        code="UOM-MIGRATED-001",
+        name="Migrated stock",
+        item_type="goods",
+        is_stock_item=True,
+        default_uom="UND",
+    )
+    database.session.add(migrated_item)
+    database.session.add(
+        StockBin(
+            item_code=migrated_item.code,
+            warehouse="PRINCIPAL",
+            company="cacao",
+            actual_qty=Decimal("5"),
+            stock_value=Decimal("50"),
+        )
+    )
+    database.session.commit()
+
+    assert default_uom_change_allowed(cancelled_item.code, "BOX") is True
+    assert default_uom_change_allowed(migrated_item.code, "BOX") is False
+
+
 def test_average_cost(app_ctx):
     from cacao_accounting.database import NamingSeries
     from tests.test_e2e_modules import check_ledger_entries
