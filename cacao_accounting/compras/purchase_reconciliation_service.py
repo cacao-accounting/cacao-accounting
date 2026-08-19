@@ -227,6 +227,19 @@ def _receipt_items(receipt_id: str) -> list[PurchaseReceiptItem]:
     )
 
 
+def _lock_receipt_items(receipt_id: str) -> list[PurchaseReceiptItem]:
+    """Carga y bloquea líneas de recepción durante un matching."""
+    return list(
+        database.session.execute(
+            select(PurchaseReceiptItem)
+            .where(PurchaseReceiptItem.purchase_receipt_id == receipt_id)
+            .with_for_update()
+        )
+        .scalars()
+        .all()
+    )
+
+
 def _invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
     return list(
         database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)).scalars().all()
@@ -547,7 +560,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
         raise PurchaseReconciliationError("La configuración de la compañía requiere una orden de compra para la conciliación.")
     if invoice_po_id and receipt_po_id and invoice_po_id != receipt_po_id:
         raise PurchaseReconciliationError("La factura y la recepción deben pertenecer a la misma orden de compra.")
-    receipt_items = _purchase_receipt_items(receipt.id)
+    receipt_items = _lock_receipt_items(receipt.id)
     invoice_items = _invoice_items(invoice.id)
     if not receipt_items or not invoice_items:
         raise PurchaseReconciliationError("La conciliacion 3-way requiere lineas de recepcion y factura.")
@@ -641,7 +654,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
 def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
     """Match purchase order vs invoice without requiring a receipt."""
     purchase_order_id, _ = _load_purchase_order_for_invoice(invoice)
-    order_items = _purchase_order_items(purchase_order_id)
+    order_items = _lock_purchase_order_items(purchase_order_id)
     invoice_items = _invoice_items(invoice.id)
     if not order_items or not invoice_items:
         raise PurchaseReconciliationError("La conciliacion 2-way requiere lineas de OC y factura.")
@@ -784,6 +797,21 @@ def _purchase_order_items(purchase_order_id: str) -> list[Any]:
 
     return list(
         database.session.execute(select(PurchaseOrderItem).filter_by(purchase_order_id=purchase_order_id)).scalars().all()
+    )
+
+
+def _lock_purchase_order_items(purchase_order_id: str) -> list[Any]:
+    """Carga y bloquea líneas de orden durante un matching."""
+    from cacao_accounting.database import PurchaseOrderItem
+
+    return list(
+        database.session.execute(
+            select(PurchaseOrderItem)
+            .where(PurchaseOrderItem.purchase_order_id == purchase_order_id)
+            .with_for_update()
+        )
+        .scalars()
+        .all()
     )
 
 
