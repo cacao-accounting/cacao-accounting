@@ -370,11 +370,13 @@ def compras_solicitud_compra_nueva():
     if request.method == "POST":
         try:
             posting_date = _parse_date(request.form.get("posting_date"))
+            company = request.form.get("company") or None
+            exige_acceso_compania("purchases", company, "crear")
             solicitud = PurchaseRequest(
                 requested_by=getattr(current_user, "user", None) or str(current_user.id),
-                company=request.form.get("company") or None,
+                company=company,
                 transaction_currency=request.form.get("transaction_currency") or request.form.get("currency") or None,
-                base_currency=company_currency(request.form.get("company") or None),
+                base_currency=company_currency(company),
                 posting_date=posting_date,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
