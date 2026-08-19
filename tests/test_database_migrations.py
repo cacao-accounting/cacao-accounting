@@ -63,9 +63,7 @@ def test_db_init_and_migrate_record_a_real_revision(tmp_path: Path) -> None:
         purchase_order_columns = {column[1] for column in connection.execute("PRAGMA table_info(purchase_order)")}
         purchase_request_columns = {column[1] for column in connection.execute("PRAGMA table_info(purchase_request)")}
         purchase_receipt_columns = {column[1] for column in connection.execute("PRAGMA table_info(purchase_receipt)")}
-        document_relation_columns = {
-            column[1] for column in connection.execute("PRAGMA table_info(document_relation)")
-        }
+        document_relation_columns = {column[1] for column in connection.execute("PRAGMA table_info(document_relation)")}
 
     assert next(column[3] for column in entity_code if column[1] == "code") == 1
     assert next(column[3] for column in book_code if column[1] == "code") == 1

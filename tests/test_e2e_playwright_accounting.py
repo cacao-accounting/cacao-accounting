@@ -3,14 +3,13 @@
 
 import os
 import re
-
-os.environ["CACAO_ACCOUNTING_DESKTOP"] = "False"
-
 import tempfile
 import threading
-import time
+
 import pytest
 from werkzeug.serving import make_server
+
+os.environ["CACAO_ACCOUNTING_DESKTOP"] = "False"
 
 try:
     from playwright.sync_api import expect, sync_playwright
@@ -19,9 +18,9 @@ try:
 except ImportError:
     HAS_PLAYWRIGHT = False
 
-from cacao_accounting import create_app
-from cacao_accounting.database.helpers import inicia_base_de_datos
-from cacao_accounting.config import configuracion
+from cacao_accounting import create_app  # noqa: E402
+from cacao_accounting.config import configuracion  # noqa: E402
+from cacao_accounting.database.helpers import inicia_base_de_datos  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -82,13 +81,13 @@ def flask_server():
                         database.session.add(access)
         database.session.commit()
 
-    server = make_server("127.0.0.1", 5006, app)
+    server = make_server("127.0.0.1", 0, app)
+    port = server.socket.getsockname()[1]
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()
 
-    time.sleep(2)
-    yield "http://localhost:5006"
+    yield f"http://localhost:{port}"
 
     server.shutdown()
     server_thread.join(timeout=5)

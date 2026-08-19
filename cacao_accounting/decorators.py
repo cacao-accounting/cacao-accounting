@@ -102,7 +102,12 @@ def exige_acceso_compania(
                                Must be explicitly set; default is False to prevent
                                accidental privilege escalation.
     """
-    if not current_user.is_authenticated:
+    try:
+        is_auth = bool(current_user and getattr(current_user, "is_authenticated", False))
+    except Exception:
+        is_auth = False
+
+    if not is_auth:
         if not allow_unauthenticated:
             abort(403)
         return

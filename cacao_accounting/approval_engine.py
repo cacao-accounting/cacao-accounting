@@ -71,7 +71,7 @@ def _cancel_posted_document(doctype: str, document: Any) -> None:
         from cacao_accounting.ventas import _cancel_linked_delivery_note
 
         _cancel_linked_delivery_note(document)
-    cancel_document(document)
+    cancel_document(document)  # type: ignore[misc]
     log_cancel(document)
     target_type = getattr(document, "document_type", None) or doctype
     revert_relations_for_target(target_type, document.id)
@@ -95,7 +95,7 @@ def _cancel_payment_or_stock(doctype: str, document: Any) -> None:
     from cacao_accounting.audit_trail_service import log_cancel
     from cacao_accounting.contabilidad.posting import cancel_document
 
-    cancel_document(document)
+    cancel_document(document)  # type: ignore[misc]
     if doctype == "payment_entry":
         from cacao_accounting.bancos import _apply_payment_cancellation_hooks
 
@@ -760,7 +760,7 @@ class ApprovalEngine:
         if doctype == "delivery_note":
             from cacao_accounting.ventas import _release_reservation_for_delivery_note
 
-            submit_document(document)
+            submit_document(document)  # type: ignore[misc]
             _release_reservation_for_delivery_note(document)
             log_submit(document)
             return
@@ -768,7 +768,7 @@ class ApprovalEngine:
         if doctype == "sales_invoice":
             from cacao_accounting.ventas import _create_delivery_note_from_invoice, _persist_sales_reversal_relation
 
-            submit_document(document)
+            submit_document(document)  # type: ignore[misc]
             _persist_sales_reversal_relation(document)
             if document.update_inventory and not document.delivery_note_id:
                 _create_delivery_note_from_invoice(document)
@@ -778,13 +778,13 @@ class ApprovalEngine:
         if doctype == "purchase_invoice":
             from cacao_accounting.compras import _persist_purchase_reversal_relation
 
-            submit_document(document)
+            submit_document(document)  # type: ignore[misc]
             _persist_purchase_reversal_relation(document)
             log_submit(document)
             return
 
         if doctype in {"purchase_receipt", "payment_entry", "stock_entry"}:
-            submit_document(document)
+            submit_document(document)  # type: ignore[misc]
             log_submit(document)
 
     @classmethod

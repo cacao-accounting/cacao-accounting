@@ -24,7 +24,7 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, Modules, User, database
+        from cacao_accounting.database import Currency, Entity, Modules, User, database
 
         database.create_all()
         database.session.add_all(
@@ -32,6 +32,7 @@ def app_ctx():
                 Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO", enabled=True),
                 Modules(module="accounting", default=True, enabled=True),
                 User(user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
             ]
         )
         database.session.commit()
@@ -752,15 +753,11 @@ def test_entity_creation_uses_setup_defaults_and_creates_required_book_cost_cent
         Book,
         CompanyDefaultAccount,
         CostCenter,
-        Currency,
         Entity,
         NamingSeries,
         User,
         database,
     )
-
-    database.session.add(Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True))
-    database.session.commit()
 
     user = database.session.execute(database.select(User).filter_by(user="admin")).scalar_one()
     client = app_ctx.test_client()
@@ -810,11 +807,8 @@ def test_entity_creation_uses_setup_defaults_and_creates_required_book_cost_cent
 def test_search_select_supports_journal_doctypes_and_filters(app_ctx):
     from cacao_accounting.database import AccountingPeriod, Book, CostCenter, Project, Unit, User, database
 
-    from cacao_accounting.database import Currency
-
     database.session.add_all(
         [
-            Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
             Book(code="FISC", name="Fiscal", entity="cacao", is_primary=True),
             AccountingPeriod(
                 entity="cacao",
@@ -962,15 +956,13 @@ def test_reject_journal_draft_changes_status_without_gl_entries(app_ctx):
 
 def test_journal_detail_shows_readable_labels_and_detail_action(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft
-    from cacao_accounting.database import Accounts, Book, CostCenter, Currency, User, database
+    from cacao_accounting.database import Accounts, Book, CostCenter, User, database
 
     debit_account = Accounts(entity="cacao", code="11.01.001.001", name="Caja General", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="31.01", name="Capital Social", active=True, enabled=True, group=False)
     center = CostCenter(entity="cacao", code="ADM", name="Administración", active=True, enabled=True, group=False)
     fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
-    database.session.add_all(
-        [debit_account, credit_account, center, fiscal_book, Currency(code="NIO", name="Cordoba", decimals=2, active=True)]
-    )
+    database.session.add_all([debit_account, credit_account, center, fiscal_book])
     database.session.commit()
 
     journal = create_journal_draft(
