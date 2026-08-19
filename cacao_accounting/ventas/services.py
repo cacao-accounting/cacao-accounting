@@ -1399,16 +1399,25 @@ def _build_sales_order_transaction_config(
     return transaction_config
 
 
+def _sales_order_source(
+    from_quotation_id: str | None, from_request_id: str | None
+) -> tuple[str | None, str | None, SalesQuotation | SalesRequest | None]:
+    """Resuelve el tipo, identificador y documento origen de una orden de venta."""
+    source_type = _sales_order_initial_source_type(from_request_id, from_quotation_id) or None
+    source_id = from_quotation_id or from_request_id
+    source = database.session.get(SalesQuotation, from_quotation_id) if from_quotation_id else None
+    if from_request_id:
+        source = database.session.get(SalesRequest, from_request_id)
+    return source_type, source_id, source
+
+
 def _handle_sales_order_new_post(from_quotation_id, from_request_id):
 
     try:
         customer_id = request.form.get("customer_id") or None
         customer = database.session.get(Party, customer_id) if customer_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
-        source_type = "sales_quotation" if from_quotation_id else "sales_request" if from_request_id else None
-        source_id = from_quotation_id or from_request_id
-        source = database.session.get(SalesQuotation, from_quotation_id) if from_quotation_id else None
-        source = database.session.get(SalesRequest, from_request_id) if from_request_id else source
+        source_type, source_id, source = _sales_order_source(from_quotation_id, from_request_id)
         company, transaction_currency = validate_immutable_header(
             source,
             request.form.get("company") or None,
@@ -1549,6 +1558,16 @@ def _sales_invoice_catalogs() -> tuple[list[dict[str, str | None]], list[dict[st
     return items, uoms
 
 
+def _sales_invoice_source(invoice: SalesInvoice, reversal_of: str | None) -> SalesOrder | DeliveryNote | SalesInvoice | None:
+    """Obtiene el primer documento origen asociado a una factura de venta."""
+    source = database.session.get(SalesOrder, invoice.sales_order_id) if invoice.sales_order_id else None
+    if not source and invoice.delivery_note_id:
+        source = database.session.get(DeliveryNote, invoice.delivery_note_id)
+    if not source and reversal_of:
+        source = database.session.get(SalesInvoice, reversal_of)
+    return source
+
+
 def _create_sales_invoice_from_form():
     """Crea una factura de venta desde los datos del formulario."""
     factura = None
@@ -1573,13 +1592,7 @@ def _create_sales_invoice_from_form():
             remarks=request.form.get("remarks"),
             docstatus=0,
         )
-        source = None
-        if factura.sales_order_id:
-            source = database.session.get(SalesOrder, factura.sales_order_id)
-        if not source and factura.delivery_note_id:
-            source = database.session.get(DeliveryNote, factura.delivery_note_id)
-        if not source and reversal_of:
-            source = database.session.get(SalesInvoice, reversal_of)
+        source = _sales_invoice_source(factura, reversal_of)
         _copy_sales_logistics(factura, source, request.form)
         database.session.add(factura)
         database.session.flush()
