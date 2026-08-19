@@ -984,6 +984,9 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         company=invoice.company,
         posting_date=invoice.posting_date,
         sales_order_id=invoice.sales_order_id,
+        transaction_currency=invoice.transaction_currency or company_currency(invoice.company),
+        base_currency=invoice.base_currency or company_currency(invoice.company),
+        exchange_rate=invoice.exchange_rate or Decimal("1"),
         remarks=f"Nota de Entrega auto-generada desde factura {invoice.document_no or invoice.id}",
         docstatus=0,
     )
