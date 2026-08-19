@@ -3050,7 +3050,7 @@ def contabilizar_comprobante(identifier: str):
                 flash("Comprobante contable enviado para aprobación (Pendiente de Aprobación).", "info")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
-        submit_journal(identifier)
+        submit_journal(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
         flash_error(exc)
     else:

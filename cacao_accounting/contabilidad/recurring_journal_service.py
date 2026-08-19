@@ -10,6 +10,7 @@ from sqlalchemy import or_, select
 from cacao_accounting.audit_trail_service import log_create, log_submit
 from cacao_accounting.database import (
     Accounts,
+    Book,
     database,
     RecurringJournalTemplate,
     RecurringJournalItem,
@@ -17,6 +18,8 @@ from cacao_accounting.database import (
     ComprobanteContable,
     ComprobanteContableDetalle,
 )
+from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 
 class RecurringJournalError(Exception):
@@ -32,13 +35,17 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
     """Crea una nueva plantilla de comprobante recurrente."""
     validate_template_balance(items)
     company = data["company"]
+    books = _authorized_template_books(company, data.get("books"), user_id, "crear")
+    ledger_id = data.get("ledger_id")
+    if ledger_id and ledger_id not in (books or []):
+        raise RecurringJournalError("El libro principal debe pertenecer a los libros autorizados seleccionados.")
 
     template = RecurringJournalTemplate(
         code=data["code"],
         company=company,
-        ledger_id=data.get("ledger_id"),
+        ledger_id=ledger_id or (books[0] if books else None),
         naming_series_id=data.get("naming_series_id"),
-        book_codes=_serialize_book_codes(data.get("books")),
+        book_codes=_serialize_book_codes(books),
         name=data["name"],
         description=data.get("description"),
         start_date=data["start_date"],
@@ -94,6 +101,8 @@ def approve_recurring_template(template_id: str, user_id: str):
     if not template:
         raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
 
+    _validate_template_access(template, user_id, "autorizar")
+
     if template.status != "draft":
         raise RecurringJournalError("Solo se pueden aprobar plantillas en borrador.")
 
@@ -110,6 +119,8 @@ def cancel_recurring_template(template_id: str, reason: str, user_id: str):
     template = database.session.get(RecurringJournalTemplate, template_id)
     if not template:
         raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
+
+    _validate_template_access(template, user_id, "anular")
 
     template.status = "cancelled"
     template.docstatus = 2
@@ -148,6 +159,7 @@ def apply_recurring_template(
     template = database.session.get(RecurringJournalTemplate, template_id, with_for_update=True)
     if not template:
         raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
+    _validate_template_access(template, user_id, "autorizar")
     if company is not None and template.company != company:
         raise RecurringJournalError("La plantilla recurrente no pertenece a la compañía del cierre.")
     if template.status != "approved":
@@ -266,3 +278,57 @@ def _serialize_book_codes(books: Any) -> str | None:
         normalized = [str(book) for book in books if str(book)]
         return json.dumps(normalized) if normalized else None
     return None
+
+
+def _authorized_template_books(company: str, requested: Any, user_id: str, action: str) -> list[str] | None:
+    """Canonicaliza libros de una plantilla contra el ACL contable."""
+    from cacao_accounting.database import User
+
+    if database.session.get(User, user_id) is None:
+        return _normalize_requested_books(requested)
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
+    granular_action = {"autorizar": "can_approve", "anular": "can_cancel"}.get(action, "can_write")
+    authorized = permissions.obtener_libros_autorizados(granular_action, company=company, return_codes=True)
+    active = database.session.execute(
+        database.select(Book)
+        .where(Book.entity == company)
+        .where((Book.status == "activo") | Book.status.is_(None))
+        .where(Book.code.in_(authorized))
+        .order_by(Book.is_primary.desc(), Book.code)
+    ).scalars()
+    active_codes = [book.code for book in active]
+    if not active_codes:
+        raise RecurringJournalError("El usuario no tiene libros contables autorizados para la compañía.")
+    selected = _normalize_requested_books(requested) or active_codes
+    invalid = set(selected) - set(active_codes)
+    if invalid:
+        raise RecurringJournalError(f"El usuario no tiene acceso al libro contable {sorted(invalid)[0]}.")
+    return [code for code in active_codes if code in selected]
+
+
+def _normalize_requested_books(value: Any) -> list[str] | None:
+    """Normaliza códigos de libros recibidos desde formularios o servicios."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return [value] if value else None
+    if isinstance(value, (list, tuple, set)):
+        values = [str(item) for item in value if str(item)]
+        return values or None
+    raise RecurringJournalError("La selección de libros no tiene un formato válido.")
+
+
+def _validate_template_access(template: RecurringJournalTemplate, user_id: str, action: str) -> None:
+    """Revalida compañía y todos los libros antes de una transición."""
+    _authorized_template_books(template.company, _deserialize_book_codes(template.book_codes), user_id, action)
+
+
+def _deserialize_book_codes(value: str | None) -> list[str] | None:
+    """Lee la selección persistida de libros."""
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise RecurringJournalError("La selección persistida de libros no es válida.") from exc
+    return _normalize_requested_books(parsed)

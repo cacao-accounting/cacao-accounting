@@ -48,6 +48,8 @@ from cacao_accounting.database import (
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier, parse_posting_date
 from cacao_accounting.document_flow import DocumentFlowError, create_document_relation, revert_relations_for_target
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_doctype
+from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 JOURNAL_ENTITY_TYPE = "journal_entry"
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
@@ -123,6 +125,10 @@ def create_journal_draft(
         raise JournalValidationError("El cierre fiscal solo puede crearse desde el servicio de cierre.")
     if data.is_fiscal_year_closing and not data.is_closing:
         raise JournalValidationError("El cierre fiscal debe marcarse también como comprobante de cierre.")
+    data = replace(
+        data,
+        books=_authorized_journal_books(data.company, data.books, user_id, "crear"),
+    )
     _validate_balanced_lines(data.company, data.lines)
     _validate_line_books(data.company, data.books, data.lines)
     primary_book = data.books[0] if data.books else None
@@ -199,13 +205,21 @@ def _process_recurrent_application(journal: ComprobanteContable, commit: bool) -
     database.session.add(application)
 
 
-def submit_journal(journal_id: str, commit: bool = True) -> list[Any]:
+def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = None) -> list[Any]:
     """Contabiliza un comprobante manual en borrador."""
     journal = get_journal(journal_id)
     if journal is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
         raise JournalValidationError("Solo se puede contabilizar un comprobante en borrador.")
+
+    if user_id:
+        _validate_journal_book_access(
+            journal.entity,
+            _selected_books_for_journal(journal),
+            user_id,
+            "autorizar",
+        )
 
     fiscal_year = _validate_fiscal_year_closing(journal)
 
@@ -423,6 +437,10 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     data = _normalize_journal_payload(payload)
     if data.is_closing != bool(journal.is_closing) or data.is_fiscal_year_closing != bool(journal.is_fiscal_year_closing):
         raise JournalValidationError("Los flags de cierre no pueden cambiarse al editar un borrador.")
+    data = replace(
+        data,
+        books=_authorized_journal_books(data.company, data.books, user_id, "editar"),
+    )
     _validate_balanced_lines(data.company, data.lines)
     _validate_line_books(data.company, data.books, data.lines)
     primary_book = data.books[0] if data.books else None
@@ -671,6 +689,52 @@ def _validate_line_books(company: str, books: list[str] | None, lines: list[Jour
     requested_ids = {book_ids[value] for value in requested}
     if selected_ids and not requested_ids.issubset(selected_ids):
         raise JournalValidationError("Las líneas por libro deben pertenecer a los libros seleccionados.")
+
+
+def _authorized_journal_books(
+    company: str,
+    requested_books: list[str] | None,
+    user_id: str,
+    action: str,
+) -> list[str] | None:
+    """Canonicaliza libros de un borrador contra el ACL del usuario.
+
+    Los llamadores internos antiguos pueden no tener un usuario persistido;
+    en ese caso se conserva el comportamiento interno y las rutas HTTP siguen
+    siendo la frontera autorizada.
+    """
+    from cacao_accounting.database import User
+
+    if database.session.get(User, user_id) is None:
+        return requested_books
+    authorized = _authorized_book_codes(company, user_id, action)
+    if not authorized:
+        raise JournalValidationError("El usuario no tiene libros contables autorizados para la compañía.")
+    selected = requested_books or authorized
+    invalid = set(selected) - set(authorized)
+    if invalid:
+        raise JournalValidationError(f"El usuario no tiene acceso al libro contable {sorted(invalid)[0]}.")
+    return [code for code in authorized if code in selected]
+
+
+def _validate_journal_book_access(company: str, books: list[str] | None, user_id: str, action: str) -> None:
+    """Valida libros persistidos antes de una transición que afecta el GL."""
+    _authorized_journal_books(company, books, user_id, action)
+
+
+def _authorized_book_codes(company: str, user_id: str, action: str) -> list[str]:
+    """Obtiene códigos activos autorizados para una compañía y acción."""
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
+    granular_action = "can_approve" if action in {"autorizar", "validar"} else "can_write"
+    codes = permissions.obtener_libros_autorizados(granular_action, company=company, return_codes=True)
+    active_books = database.session.execute(
+        select(Book)
+        .where(Book.entity == company)
+        .where((Book.status == "activo") | Book.status.is_(None))
+        .where(Book.code.in_(codes))
+        .order_by(Book.is_primary.desc(), Book.code)
+    ).scalars()
+    return [book.code for book in active_books]
 
 
 def _line_model(
