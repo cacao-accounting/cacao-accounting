@@ -345,6 +345,15 @@ def update_item_with_uoms(
     resolved_stock_flag = params.is_stock_item if resolved_item_type != "service" else False
     validate_item_uom_rows(params.default_uom, resolved_uom_rows)
     validate_default_warehouse(params.default_warehouse_id, action="editar")
+    if _item_has_records(item_code) and any(
+        (
+            item.is_stock_item != resolved_stock_flag,
+            item.has_batch != params.has_batch,
+            item.has_serial_no != params.has_serial_no,
+            item.has_expiry_date != params.has_expiry_date,
+        )
+    ):
+        raise InventoryServiceError("No se pueden cambiar los controles de inventario después de usar el item.")
     validate_item_account_rows(
         resolved_item_type,
         resolved_stock_flag,

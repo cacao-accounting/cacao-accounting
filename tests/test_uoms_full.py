@@ -416,6 +416,39 @@ def test_item_default_uom_ignores_cancelled_records_and_detects_migrated_stock(a
     assert default_uom_change_allowed(migrated_item.code, "BOX") is False
 
 
+def test_inventory_flags_are_locked_after_stock_usage(app_ctx):
+    """Stock-control flags cannot change after a ledger transaction exists."""
+    from cacao_accounting.database import Item, StockLedgerEntry, database
+    from cacao_accounting.inventario.service import InventoryServiceError, ItemParams, update_item_with_uoms
+
+    item = Item(code="FLAGS-LOCK-001", name="Flags locked", item_type="goods", is_stock_item=True, default_uom="UND")
+    database.session.add(item)
+    database.session.add(
+        StockLedgerEntry(
+            posting_date=date.today(),
+            item_code=item.code,
+            warehouse="PRINCIPAL",
+            company="cacao",
+            qty_change=Decimal("1"),
+            qty_after_transaction=Decimal("1"),
+            voucher_type="test",
+            voucher_id="FLAGS-LEDGER-001",
+            is_cancelled=False,
+        )
+    )
+    database.session.commit()
+
+    params = ItemParams(
+        name=item.name,
+        item_type="goods",
+        is_stock_item=True,
+        default_uom="UND",
+        has_batch=True,
+    )
+    with pytest.raises(InventoryServiceError, match="controles de inventario"):
+        update_item_with_uoms(item.code, params)
+
+
 def test_average_cost(app_ctx):
     from cacao_accounting.database import NamingSeries
     from tests.test_e2e_modules import check_ledger_entries
