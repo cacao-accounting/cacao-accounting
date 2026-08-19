@@ -532,13 +532,23 @@ def _stock_entry_title(purpose: str | None) -> str:
     return labels.get(purpose or "", "Nueva Entrada de Almacén") + " - " + APPNAME
 
 
-def _handle_stock_entry_new_post(form_data):
+def _validate_stock_entry_posting_date(form_data: Mapping[str, Any]) -> date:
+    """Validate and return the posting date before saving a stock entry draft."""
+    posting_date_raw = form_data.get("posting_date")
+    posting_date = _parse_date(str(posting_date_raw).strip() if posting_date_raw is not None else "")
+    if posting_date is None:
+        raise ValueError("La fecha de contabilización es obligatoria y debe tener formato YYYY-MM-DD.")
+    return posting_date
+
+
+def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
     try:
-        posting_date = _parse_date(form_data.get("posting_date"))
+        posting_date = _validate_stock_entry_posting_date(form_data)
         posted_purpose = form_data.get("purpose") or "material_receipt"
+        company = form_data.get("company") or None
         entry = StockEntry(
             purpose=posted_purpose,
-            company=form_data.get("company") or None,
+            company=company,
             posting_date=posting_date,
             from_warehouse=form_data.get("from_warehouse") or None,
             to_warehouse=form_data.get("to_warehouse") or None,
@@ -585,14 +595,18 @@ def _source_context(source_type: str | None, source_id: str | None) -> tuple[str
 
 def _handle_stock_entry_edit_post(registro: StockEntry):
     """Procesa el POST para editar entrada de inventario."""
-    before_state = _capture_stock_entry_state(registro)
-    _update_stock_entry_from_form(registro)
-    _delete_and_resave_stock_entry_items(registro)
-    after_state = _capture_stock_entry_state(registro)
-    log_update(registro, before=before_state, after=after_state)
-    database.session.commit()
-    flash(_("Movimiento de inventario actualizado correctamente."), "success")
-    return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=registro.id))
+    try:
+        before_state = _capture_stock_entry_state(registro)
+        _update_stock_entry_from_form(registro)
+        _delete_and_resave_stock_entry_items(registro)
+        after_state = _capture_stock_entry_state(registro)
+        log_update(registro, before=before_state, after=after_state)
+        database.session.commit()
+        flash(_("Movimiento de inventario actualizado correctamente."), "success")
+        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=registro.id))
+    except ValueError as exc:
+        database.session.rollback()
+        flash_error(exc)
 
 
 def _capture_stock_entry_state(registro: StockEntry) -> dict:
@@ -615,7 +629,7 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
     """Actualiza campos del registro desde el formulario."""
     registro.purpose = request.form.get("purpose") or registro.purpose
     registro.company = request.form.get("company") or None
-    registro.posting_date = _parse_date(request.form.get("posting_date"))
+    registro.posting_date = _validate_stock_entry_posting_date(request.form)
     registro.from_warehouse = request.form.get("from_warehouse") or None
     registro.to_warehouse = request.form.get("to_warehouse") or None
     registro.adjustment_account_id = request.form.get("adjustment_account_id") or None
