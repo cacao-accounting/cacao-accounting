@@ -15,7 +15,7 @@ from flask import Blueprint, render_template, request
 from flask_login import login_required
 
 
-from cacao_accounting.decorators import modulo_activo, verifica_acceso
+from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_acceso
 
 from cacao_accounting.reportes.services import (
     AgingFilters,
@@ -315,9 +315,11 @@ def balance_sheet():
 @reportes.route("/reports/subledger")
 @login_required
 @modulo_activo("accounting")
+@verifica_acceso("accounting")
 def subledger():
     """Report AR/AP subledger by document."""
-    company = request.args.get("company", "cacao")
+    company = _resolve_company(request.args.get("company", "cacao"))
+    exige_acceso_compania("accounting", company, "consultar")
     party_type = request.args.get("party_type", "customer")
     report = get_ar_ap_subledger(
         SubledgerFilters(
@@ -339,9 +341,11 @@ def subledger():
 @reportes.route("/reports/aging")
 @login_required
 @modulo_activo("accounting")
+@verifica_acceso("accounting")
 def aging():
     """Report AR/AP aging."""
-    company = request.args.get("company", "cacao")
+    company = _resolve_company(request.args.get("company", "cacao"))
+    exige_acceso_compania("accounting", company, "consultar")
     party_type = request.args.get("party_type", "customer")
     report = get_aging_report(
         AgingFilters(
@@ -435,10 +439,13 @@ def inventory_existence():
 @reportes.route("/reports/reconciliations")
 @login_required
 @modulo_activo("accounting")
+@verifica_acceso("accounting")
 def reconciliations():
     """Report reconciliations."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    exige_acceso_compania("accounting", company, "consultar")
     report = get_reconciliation_report(
-        company=request.args.get("company", "cacao"),
+        company=company,
         as_of_date=_date_arg("as_of_date"),
     )
     return render_template(
