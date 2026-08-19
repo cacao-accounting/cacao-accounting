@@ -96,6 +96,33 @@ def test_credit_limit_validation(app_ctx):
     assert "límite de crédito" in str(excinfo.value).lower()
 
 
+def test_credit_limit_uses_invoice_outstanding_not_grand_total(app_ctx, monkeypatch):
+    """Un saldo parcial no debe sustituirse por el total base de la factura."""
+    customer, company_party = _ensure_customer("CUST-PARTIAL-OUTSTANDING", "Cliente saldo parcial")
+    company_party.credit_limit = Decimal("100")
+    invoice = SalesInvoice(
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="sales_invoice",
+        grand_total=Decimal("1000"),
+        base_grand_total=Decimal("1000"),
+        outstanding_amount=Decimal("50"),
+        base_outstanding_amount=Decimal("50"),
+    )
+    database.session.add(invoice)
+    database.session.commit()
+
+    monkeypatch.setattr(
+        "cacao_accounting.document_flow.service.compute_outstanding_amount",
+        lambda _document: Decimal("50"),
+    )
+
+    _validate_credit_limit_and_overdue("cacao", customer.id, Decimal("0"))
+
+
 def test_block_overdue_validation(app_ctx):
     customer, cp = _ensure_customer("CUST-OVERDUE-1", "Cliente Overdue")
     _ensure_item("ART-O2C")
