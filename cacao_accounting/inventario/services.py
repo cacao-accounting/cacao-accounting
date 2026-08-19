@@ -72,6 +72,18 @@ _INVENTORY_STOCK_ENTRY = "inventory.stock_entry"
 
 _LABEL_DOCUMENTO_ORIGEN = "documento origen"
 
+STOCK_ENTRY_PURPOSES = frozenset(
+    {
+        "material_receipt",
+        "material_issue",
+        "material_transfer",
+        "stock_adjustment",
+        "stock_reconciliation",
+        "adjustment_positive",
+        "adjustment_negative",
+    }
+)
+
 
 def _parse_date(value: str | None) -> date | None:
     """Parsea una fecha en formato ISO."""
@@ -541,10 +553,18 @@ def _validate_stock_entry_posting_date(form_data: Mapping[str, Any]) -> date:
     return posting_date
 
 
+def _validate_stock_entry_purpose(value: Any) -> str:
+    """Validate the accounting treatment selected for a stock entry."""
+    purpose = str(value or "").strip()
+    if purpose not in STOCK_ENTRY_PURPOSES:
+        raise ValueError("El propósito de la entrada de almacén no es válido.")
+    return purpose
+
+
 def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
     try:
         posting_date = _validate_stock_entry_posting_date(form_data)
-        posted_purpose = form_data.get("purpose") or "material_receipt"
+        posted_purpose = _validate_stock_entry_purpose(form_data.get("purpose") or "material_receipt")
         company = form_data.get("company") or None
         entry = StockEntry(
             purpose=posted_purpose,
@@ -627,7 +647,7 @@ def _capture_stock_entry_state(registro: StockEntry) -> dict:
 
 def _update_stock_entry_from_form(registro: StockEntry) -> None:
     """Actualiza campos del registro desde el formulario."""
-    registro.purpose = request.form.get("purpose") or registro.purpose
+    registro.purpose = _validate_stock_entry_purpose(request.form.get("purpose") or registro.purpose)
     registro.company = request.form.get("company") or None
     registro.posting_date = _validate_stock_entry_posting_date(request.form)
     registro.from_warehouse = request.form.get("from_warehouse") or None

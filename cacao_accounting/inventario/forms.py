@@ -63,6 +63,7 @@ class FormularioEntradaAlmacen(FlaskForm):
             ("material_receipt", "Recepción de Material"),
             ("material_issue", "Salida de Material"),
             ("material_transfer", "Transferencia"),
+            ("stock_adjustment", "Ajuste de Inventario"),
             ("adjustment_positive", "Ajuste Positivo"),
             ("adjustment_negative", "Ajuste Negativo"),
             ("stock_reconciliation", "Conciliación de Inventario"),
