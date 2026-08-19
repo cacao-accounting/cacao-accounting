@@ -11,8 +11,10 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from cacao_accounting.database import (
+    CompanyParty,
     DeliveryNote,
     DeliveryNoteItem,
+    Item,
     Party,
     PurchaseInvoice,
     PurchaseInvoiceItem,
@@ -34,9 +36,11 @@ from cacao_accounting.database import (
     SalesRequestItem,
     SupplierQuotation,
     SupplierQuotationItem,
+    Warehouse,
     database,
 )
 from cacao_accounting.document_identifiers import assign_document_identifier
+from cacao_accounting.document_flow.context import company_currency, effective_currency
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.imports.utils.validation import is_period_open
 
@@ -65,6 +69,8 @@ class TransactionDocumentAdapter(BaseImportAdapter):
     columns = [
         "document_ref",
         "fecha",
+        "moneda",
+        "tipo_cambio",
         "tercero",
         "documento_origen",
         "producto",
@@ -94,7 +100,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         return errors
 
     def validate_document(self, document_data: list[dict[str, Any]], context: dict[str, Any] | None = None) -> list[str]:
-        """Valida fecha, período y tercero requerido por el documento."""
+        """Valida fecha, período, origen, bodega, tercero y moneda del documento."""
         errors = []
         first_row = document_data[0]
 
@@ -110,18 +116,65 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         company_id = (context or {}).get("company_id") or ""
         if not is_period_open(company_id, posting_date):
             errors.append(f"El periodo contable para la fecha {posting_date} está cerrado o no existe.")
+        source = self._source_document(first_row.get("documento_origen"))
+        if first_row.get("documento_origen") and self.config.source_field:
+            if source is None:
+                errors.append("El documento origen no existe o no corresponde al flujo importado.")
+            elif source.docstatus != 1:
+                errors.append("El documento origen debe estar aprobado.")
+            elif source.company != company_id:
+                errors.append("El documento origen debe pertenecer a la compañía de la importación.")
+            elif self.config.party_field and getattr(source, self.config.party_field, None) != first_row.get("tercero"):
+                errors.append("El tercero del documento origen no coincide con la fila importada.")
+        if self.config.party_field and first_row.get("tercero"):
+            membership = database.session.execute(
+                database.select(CompanyParty).filter_by(party_id=first_row.get("tercero"), company=company_id, is_active=True)
+            ).scalar_one_or_none()
+            if membership is None:
+                errors.append("El tercero no está habilitado para la compañía de la importación.")
+        for row in document_data:
+            warehouse_code = row.get("bodega")
+            if warehouse_code:
+                warehouse = database.session.execute(
+                    database.select(Warehouse).filter_by(code=warehouse_code)
+                ).scalar_one_or_none()
+                if warehouse is None or warehouse.company != company_id or not warehouse.is_active:
+                    errors.append(f"La bodega '{warehouse_code}' no pertenece a la compañía o está inactiva.")
+            item = database.session.get(Item, row.get("producto"))
+            if (
+                item is not None
+                and item.is_stock_item
+                and not warehouse_code
+                and self.config.entity_type
+                in {
+                    "purchase_receipt",
+                    "delivery_note",
+                }
+            ):
+                errors.append(f"El item de inventario '{item.code}' requiere una bodega.")
+        try:
+            self._currency_and_rate(first_row, source, company_id, posting_date)
+        except ValueError as exc:
+            errors.append(str(exc))
         return errors
 
     def build_document(self, document_data: list[dict[str, Any]], context: dict[str, Any]) -> dict[str, Any]:
         """Construye encabezado e ítems desde las filas del archivo."""
         first_row = document_data[0]
         posting_date = date.fromisoformat(str(first_row.get("fecha")))
+        source = self._source_document(first_row.get("documento_origen"))
+        transaction_currency, base_currency, exchange_rate = self._currency_and_rate(
+            first_row, source, context.get("company_id"), posting_date
+        )
         header = self.config.header_model(
             company=context.get("company_id"),
             posting_date=posting_date,
             document_date=posting_date,
             docstatus=0,
             remarks=first_row.get("notas") or f"Importación masiva: {first_row.get('document_ref')}",
+            transaction_currency=transaction_currency,
+            base_currency=base_currency,
+            exchange_rate=exchange_rate,
         )
         self._apply_party(header, first_row.get("tercero"))
         self._apply_source(header, first_row.get("documento_origen"))
@@ -143,12 +196,12 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 amount=amount,
                 warehouse=row.get("bodega") or None,
             )
-            self._apply_optional_item_fields(item, amount, row)
+            self._apply_optional_item_fields(item, amount * exchange_rate, row, exchange_rate)
             items.append(item)
             total_qty += qty
             total += amount
 
-        self._apply_totals(header, total_qty, total)
+        self._apply_totals(header, total_qty, total, exchange_rate)
         return {
             "header": header,
             "items": items,
@@ -198,19 +251,67 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         if self.config.source_field and source_id:
             setattr(header, self.config.source_field, source_id)
 
-    def _apply_totals(self, header: Any, total_qty: Decimal, total: Decimal) -> None:
+    def _source_document(self, source_id: Any) -> Any | None:
+        """Resuelve el documento origen permitido por el tipo importado."""
+        if not source_id or not self.config.source_field:
+            return None
+        source_models = {
+            "supplier_quotation": PurchaseQuotation,
+            "purchase_receipt": PurchaseOrder,
+            "purchase_invoice": PurchaseOrder,
+            "sales_quotation": SalesRequest,
+            "sales_order": SalesQuotation,
+            "delivery_note": SalesOrder,
+            "sales_invoice": SalesOrder,
+        }
+        source_model = source_models.get(self.config.entity_type)
+        return database.session.get(source_model, source_id) if source_model else None
+
+    def _currency_and_rate(
+        self, first_row: dict[str, Any], source: Any | None, company: str, posting_date: date
+    ) -> tuple[str | None, str | None, Decimal]:
+        """Resuelve moneda funcional y tasa, rechazando conversiones implícitas 1:1."""
+        base_currency = company_currency(company)
+        transaction_currency = (
+            first_row.get("moneda") or first_row.get("transaction_currency") or effective_currency(source) or base_currency
+        )
+        explicit_rate = first_row.get("tipo_cambio") or first_row.get("exchange_rate")
+        if transaction_currency == base_currency or not transaction_currency or not base_currency:
+            return transaction_currency, base_currency, Decimal("1")
+        if explicit_rate not in (None, ""):
+            rate = Decimal(str(explicit_rate))
+        elif source is not None and getattr(source, "exchange_rate", None):
+            rate = Decimal(str(source.exchange_rate))
+        else:
+            from cacao_accounting.contabilidad.posting import PostingError, _lookup_exchange_rate
+
+            try:
+                rate = _lookup_exchange_rate(transaction_currency, base_currency, posting_date)
+            except PostingError as exc:
+                raise ValueError(
+                    f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}."
+                ) from exc
+        if rate <= 0:
+            raise ValueError("El tipo de cambio debe ser positivo.")
+        return transaction_currency, base_currency, rate
+
+    def _apply_totals(self, header: Any, total_qty: Decimal, total: Decimal, exchange_rate: Decimal = Decimal("1")) -> None:
         if hasattr(header, "total_qty"):
             header.total_qty = total_qty
         for field in ("total", "base_total", "net_total", "grand_total", "base_grand_total"):
             if hasattr(header, field):
-                setattr(header, field, total)
+                value = total if not field.startswith("base_") else (total * exchange_rate).quantize(Decimal("0.0001"))
+                setattr(header, field, value)
         for field in ("outstanding_amount", "base_outstanding_amount"):
             if hasattr(header, field):
-                setattr(header, field, total)
+                value = total if field == "outstanding_amount" else (total * exchange_rate).quantize(Decimal("0.0001"))
+                setattr(header, field, value)
 
-    def _apply_optional_item_fields(self, item: Any, amount: Decimal, row: dict[str, Any]) -> None:
+    def _apply_optional_item_fields(
+        self, item: Any, amount: Decimal, row: dict[str, Any], exchange_rate: Decimal = Decimal("1")
+    ) -> None:
         self._apply_item_amount_fields(item, amount)
-        self._apply_item_rate_fields(item)
+        self._apply_item_rate_fields(item, exchange_rate)
         self._apply_item_zero_fields(item, self.config.receipt_fields)
         self._apply_item_zero_fields(item, self.config.invoice_fields)
         self._apply_item_batch_serial_fields(item, row)
@@ -219,10 +320,10 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         if hasattr(item, "base_amount"):
             item.base_amount = amount
 
-    def _apply_item_rate_fields(self, item: Any) -> None:
+    def _apply_item_rate_fields(self, item: Any, exchange_rate: Decimal = Decimal("1")) -> None:
         for field in ("base_rate", "valuation_rate"):
             if hasattr(item, field):
-                setattr(item, field, item.rate)
+                setattr(item, field, (item.rate * exchange_rate).quantize(Decimal("0.0001")))
 
     def _apply_item_zero_fields(self, item: Any, fields: tuple[str, ...]) -> None:
         for field in fields:
