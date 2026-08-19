@@ -175,9 +175,7 @@ def test_purchase_note_from_reconciled_invoice_skips_upstream_receipt_matching(a
             _validate_supplier_invoice_flags=lambda *args, **kwargs: None,
             _validate_duplicate_supplier_invoice=lambda *args, **kwargs: None,
             _validate_purchase_reversal_of=lambda *args, **kwargs: None,
-            _validate_purchase_source_link=Mock(
-                side_effect=AssertionError("no debe revalidar la recepción")
-            ),
+            _validate_purchase_source_link=Mock(side_effect=AssertionError("no debe revalidar la recepción")),
             _save_purchase_invoice_items=save_note_items,
             _purchase_exchange_rate=lambda *args, **kwargs: Decimal("1"),
             company_currency=lambda *args, **kwargs: "NIO",

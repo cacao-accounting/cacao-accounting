@@ -195,12 +195,12 @@ def _sum_invoice_amount(
                 if transaction_currency == company_currency:
                     exchange_rate = Decimal("1")
                 else:
-                    exchange_rate = getattr(inv, "exchange_rate", None)
-                    if exchange_rate is None or Decimal(str(exchange_rate)) <= 0:
+                    raw_exchange_rate = getattr(inv, "exchange_rate", None)
+                    if raw_exchange_rate is None or Decimal(str(raw_exchange_rate)) <= 0:
                         raise CashForecastConversionError(
                             f"No existe tipo de cambio para {transaction_currency} -> {company_currency} " f"en {flow_date}."
                         )
-                    exchange_rate = Decimal(str(exchange_rate))
+                    exchange_rate = Decimal(str(raw_exchange_rate))
                 amount = outstanding * exchange_rate
             if getattr(inv, "is_return", False):
                 amount = -Decimal(str(amount))
