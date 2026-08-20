@@ -1278,7 +1278,7 @@ def test_payment_reference_candidates_endpoint_filters_by_party_and_company(app_
     candidate = next(item for item in items if item["document_id"] == invoice.id)
     assert candidate["model_type"] == "sales_invoice"
     assert candidate["flow_source_type"] == "sales_invoice"
-    assert candidate["pending_amount"] == 300.0
+    assert Decimal(candidate["pending_amount"]) == Decimal("300")
 
 
 def test_payment_reference_snapshot_is_persisted(app_ctx):
