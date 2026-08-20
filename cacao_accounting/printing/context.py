@@ -669,11 +669,12 @@ def _text(obj: Any, attr: str, default: Any = "") -> str:
     return str(getattr(obj, attr, default) or default or "")
 
 
-def _number(value: Any) -> float:
+def _number(value: Any) -> Decimal:
+    """Return a financial value without crossing through binary float."""
     try:
-        return float(value or 0)
-    except (TypeError, ValueError):
-        return 0.0
+        return value if isinstance(value, Decimal) else Decimal(str(value or 0))
+    except (TypeError, ValueError, ArithmeticError):
+        return Decimal("0")
 
 
 def _date_text(value: Any) -> str:
