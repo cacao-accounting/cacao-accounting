@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -532,6 +533,10 @@ def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
     if not request.matches:
         raise BankReconciliationError("La conciliacion bancaria requiere al menos una linea.")
 
+    _lock_request_transactions(request)
+    if existing := _matching_reconciliation_replay(request):
+        return existing
+
     reconciliation = Reconciliation(
         company=request.company,
         recon_date=request.reconciliation_date,
@@ -559,6 +564,44 @@ def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
     _update_reconciled_transactions(source_totals, request.matches)
 
     return reconciliation
+
+
+def _lock_request_transactions(request: BankReconciliationRequest) -> None:
+    """Lock sources in deterministic order before testing an idempotent replay."""
+    for transaction_id in sorted({match.bank_transaction_id for match in request.matches}):
+        transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)
+        if transaction is None:
+            raise BankReconciliationError("La transaccion bancaria no existe.")
+        if _bank_company(transaction) != request.company:
+            raise BankReconciliationError("La transaccion bancaria pertenece a otra compania.")
+
+
+def _matching_reconciliation_replay(request: BankReconciliationRequest) -> Reconciliation | None:
+    """Return a prior reconciliation only when the complete economic request matches."""
+    requested = Counter(
+        (match.bank_transaction_id, match.target_type, match.target_id, _decimal_value(match.allocated_amount))
+        for match in request.matches
+    )
+    candidates = database.session.execute(
+        select(Reconciliation)
+        .where(
+            Reconciliation.company == request.company,
+            Reconciliation.recon_date == request.reconciliation_date,
+            Reconciliation.recon_type == "bank",
+        )
+        .order_by(Reconciliation.created.desc())
+    ).scalars()
+    for reconciliation in candidates:
+        persisted = Counter(
+            (item.source_id, item.target_type, item.target_id, _decimal_value(item.allocated_amount or item.amount))
+            for item in database.session.execute(
+                select(ReconciliationItem).where(ReconciliationItem.reconciliation_id == reconciliation.id)
+            ).scalars()
+            if item.source_type == "bank_transaction" and item.status != "cancelled"
+        )
+        if persisted == requested:
+            return reconciliation
+    return None
 
 
 def _add_reconciliation_match(

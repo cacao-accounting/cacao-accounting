@@ -10,7 +10,7 @@ from datetime import date
 
 from typing import cast
 
-from flask import Blueprint, render_template, request
+from flask import Blueprint, abort, render_template, request
 
 from flask_login import login_required
 
@@ -465,15 +465,20 @@ def reconciliation_matrix():
     """Reconcilia AR, AP, inventario, bancos e impuestos contra GL."""
     company = _resolve_company(request.args.get("company", "cacao"))
     period = request.args.get("accounting_period") or _default_period_for_company(company)
-    report = get_reconciliation_matrix(
-        ReconciliationFilters(
-            company=company,
-            ledger=request.args.get("ledger") or _default_ledger_for_company(company),
-            accounting_period=period,
-            as_of_date=_date_arg("as_of_date"),
-            currency=request.args.get("currency") or None,
+    try:
+        report = get_reconciliation_matrix(
+            ReconciliationFilters(
+                company=company,
+                ledger=request.args.get("ledger") or _default_ledger_for_company(company),
+                accounting_period=period,
+                as_of_date=_date_arg("as_of_date"),
+                currency=request.args.get("currency") or None,
+            )
         )
-    )
+    except ValueError as exc:
+        # Currency/ledger comparisons without a historical conversion are an
+        # invalid accounting request, not a server error hidden from auditors.
+        abort(400, description=str(exc))
     return _render_operational_framework(
         "reconciliation-matrix",
         _("Matriz de Reconciliación Subledger ↔ GL"),
