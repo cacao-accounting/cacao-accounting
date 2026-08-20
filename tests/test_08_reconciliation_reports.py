@@ -644,6 +644,7 @@ def test_bank_reconciliation_converts_gl_entry_with_mismatched_currency(app_ctx)
         BankAccount,
         BankTransaction,
         Book,
+        Book,
         ExchangeRate,
         GLEntry,
         database,
@@ -4976,6 +4977,7 @@ def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
         Bank,
         BankAccount,
         BankTransaction,
+        Book,
         GLEntry,
         ReconciliationItem,
         CompanyDefaultAccount,
@@ -5006,10 +5008,14 @@ def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
         deposit=Decimal("100.00"),
     )
     database.session.add(transaction)
+    primary_book = database.session.execute(
+        database.select(Book).where(Book.entity == "cacao", Book.is_primary.is_(True))
+    ).scalar_one()
     target_entry = GLEntry(
         company="cacao",
         posting_date=date(2026, 5, 5),
         account_id=bank_gl.id,
+        ledger_id=primary_book.id,
         debit=Decimal("100.00"),
         credit=Decimal("0"),
         voucher_type="manual_test",
