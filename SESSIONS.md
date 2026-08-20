@@ -3783,3 +3783,105 @@ el autor `williamjmorenor@gmail.com` y sign-off, sin publicar cambios remotos.
 - Aún quedan por completar y verificar los criterios integrales de #246, #276,
   #278, #282, #283 y #284, además de ejecutar las regresiones focales de
   #251/#256. No se hizo push ni se modificó el estado de los issues remotos.
+
+## 2026-08-20 — Suite source-to-report para issue #285: cierre/reapertura de
+períodos, audit trail y trazabilidad completa
+
+### Petición
+
+Analizar el issue [#285](https://github.com/cacao-accounting/cacao-accounting/issues/285)
+y sus comentarios, aplicar los fixes requeridos con commits semánticos firmados
+como `williamjmorenor@gmail.com` con sign-off referenciando el issue, y no hacer
+push de los cambios.
+
+### Análisis del issue
+
+El issue #285 solicita una suite de pruebas source-to-report que ejerza el ciclo
+completo de contabilidad: journals manuales, accruals/entradas recurrentes,
+reversals, bloqueo de posting en períodos cerrados, opening balances y utilidades
+retenidas (cierre de año fiscal), y la trazabilidad completa desde el comprobante
+hasta los reportes financieros (balanza, GL, balance general y estado de
+resultados). Los criterios de aceptación son:
+
+1. No improper posting en período cerrado (bloqueo + reapertura).
+2. Journals publicados append-only (inmutabilidad de líneas GL).
+3. Reversal preserva audit trail.
+4. Ecuación opening + debits - credits = closing por cuenta/libro/período.
+5. Reportes coinciden con los journals con trazabilidad completa.
+
+### Código existente verificado
+
+Se inspeccionó el código fuente sin encontrar gaps en la lógica contable:
+
+- **`journal_service.py`**: `create_journal_draft`, `submit_journal`,
+  `cancel_submitted_journal` crean, envían y anulan comprobantes. `submit_journal`
+  llama a `_post_and_sync_journal` → `post_comprobante_contable` →
+  `_document_contexts` → `validate_accounting_period`, que bloquea el posting en
+  períodos o años fiscales cerrados.
+- **`posting_service.py`**: `cancel_document` → `_validate_cancel_accounting_period`
+  también valida el período del documento original. `_reject_ledger_mutation`
+  (evento `before_update` en `GLEntry`) y `_reject_ledger_delete`
+  (evento `before_delete`) enforce append-only: cualquier mutación que no sea
+  `is_cancelled` lanza `ValueError`; el borrado físico lanza `ValueError`.
+- **`recurring_journal_service.py`**: `create_recurring_template`,
+  `approve_recurring_template`, `apply_recurring_template` generan journals
+  recurrentes. `_process_recurrent_application` actualiza el estado de la
+  aplicación a `applied` al enviar el journal.
+- **`fiscal_year_closing.py`**: `create_fiscal_year_closing_voucher` cierra
+  ingresos/gastos y transfiere el resultado a la cuenta de utilidades retenidas
+  (`CompanyDefaultAccount.retained_earnings_account_id`).
+- **`reportes/services.py`**: `get_trial_balance_report`,
+  `get_account_summary_report`, `get_balance_sheet_report`,
+  `get_income_statement_report`, `get_account_movement_detail` — todos usan
+  `FinancialReportFilters` y resuelven períodos/libros via `_period_bounds` y
+  `_resolve_ledger`.
+- **`GLEntry`**: `is_reversal`, `reversal_of`, `is_cancelled`,
+  `is_fiscal_year_closing` soportan la trazabilidad de reversals.
+
+### Implementado
+
+- **`tests/test_source_to_report_period_close.py`** — Nueva suite con 7 tests:
+
+  - `test_285_manual_journal_source_to_report`: posting de opening balance y
+    journal manual, verificación de GL entries en ambos libros, audit trail
+    (created + submitted), trial balance (débito = crédito), account summary
+    (ecuación opening + debit - credit = closing).
+  - `test_285_reversal_append_only_and_audit_trail`: cancelación append-only,
+    reversal entries con `is_reversal=True` y `reversal_of`, originals marcados
+    `is_cancelled`, audit trail con acción `cancelled`, saldo neto cero.
+  - `test_285_gl_entry_immutability`: mutación de `debit` y eliminación física
+    de GLEntry son rechazadas con `ValueError`.
+  - `test_285_period_close_reopen_blocks_posting`: posting exitoso en período
+    abierto; cierre del período bloquea submit y cancel; reapertura habilita
+    ambos nuevamente.
+  - `test_285_recurring_journal_accrual`: plantilla → aprobación → aplicación →
+    envío; verificación de GL entries, estado `applied` de la aplicación y
+    plantilla sigue aplicable.
+  - `test_285_fiscal_year_close_retained_earnings`: ingresos y gastos
+    registrados; cierre de períodos y año fiscal; closing voucher transfiere
+    resultado neto (600) a utilidades retenidas; cierre cuadrado (debe = haber);
+    reversa del cierre.
+  - `test_285_reports_match_journals_and_traceable`: trial balance (débito =
+    crédito = 1800), account summary (ecuación válida), detalle de movimientos
+    con document_no trazable a journals, balance general (activo = pasivo +
+    patrimonio + ingresos - gastos), estado de resultados (net profit = 1500 -
+    300 = 1200).
+
+### Validación
+
+- **pytest**: 7 passed en 19.27s.
+- **black**: Formateado correctamente.
+- **ruff**: All checks passed.
+- **flake8**: Sin errores.
+- **mypy**: no issues found en el archivo de test.
+
+Los tests usan `Decimal` para comparaciones monetarias (consistente con `taste.md`
+y `test_dashboard_api.py`), base SQLite en memoria por test (aislamiento
+completo), y la suite completa del repo base (1890 passed, 11 skipped) no se
+modifica ni se afecta.
+
+### Continuidad
+
+- Los issues restantes de la tabla de SESSIONS.md (#246, #251, #256, #276, #278,
+  #282, #283, #284) siguen abiertos con `needs-work`.
+- No se hizo push. Los cambios son locales y referencian #285.

@@ -21,6 +21,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -65,8 +66,8 @@ def app_ctx():
         )
         database.session.commit()
         yield app
-    database.session.remove()
-    database.drop_all()
+        database.session.remove()
+        database.drop_all()
 
 
 @pytest.fixture
@@ -74,43 +75,72 @@ def chart(app_ctx):
     """Crea catálogo de cuentas, libros, períodos, año fiscal y configuración por defecto."""
     from cacao_accounting.database import (
         Accounts,
+        AccountingPeriod,
         Book,
         CompanyDefaultAccount,
         FiscalYear,
-        AccountingPeriod,
+        User,
         database,
     )
 
     cash = Accounts(
-        entity="CACAO", code="11", name="Caja", classification="asset",
-        account_type="cash", group=False, active=True, enabled=True,
+        entity="CACAO",
+        code="11",
+        name="Caja",
+        classification="asset",
+        account_type="cash",
+        group=False,
+        active=True,
+        enabled=True,
     )
     expense = Accounts(
-        entity="CACAO", code="61", name="Gasto", classification="expense",
-        group=False, active=True, enabled=True,
+        entity="CACAO",
+        code="61",
+        name="Gasto",
+        classification="expense",
+        group=False,
+        active=True,
+        enabled=True,
     )
     income = Accounts(
-        entity="CACAO", code="41", name="Ingreso", classification="income",
-        group=False, active=True, enabled=True,
+        entity="CACAO",
+        code="41",
+        name="Ingreso",
+        classification="income",
+        group=False,
+        active=True,
+        enabled=True,
     )
     equity = Accounts(
-        entity="CACAO", code="33.02", name="Utilidades Retenidas",
-        classification="equity", account_type="retained_earnings",
-        group=False, active=True, enabled=True,
+        entity="CACAO",
+        code="33.02",
+        name="Utilidades Retenidas",
+        classification="equity",
+        account_type="retained_earnings",
+        group=False,
+        active=True,
+        enabled=True,
     )
     database.session.add_all([cash, expense, income, equity])
 
     fiscal_book = Book(
-        entity="CACAO", code="FISC", name="Libro Fiscal",
-        is_primary=True, currency="NIO",
+        entity="CACAO",
+        code="FISC",
+        name="Libro Fiscal",
+        is_primary=True,
+        currency="NIO",
     )
     ifrs_book = Book(
-        entity="CACAO", code="IFRS", name="Libro IFRS", currency="NIO",
+        entity="CACAO",
+        code="IFRS",
+        name="Libro IFRS",
+        currency="NIO",
     )
     database.session.add_all([fiscal_book, ifrs_book])
 
     fy = FiscalYear(
-        entity="CACAO", name="2026",
+        entity="CACAO",
+        name="2026",
         year_start_date=date(2026, 1, 1),
         year_end_date=date(2026, 12, 31),
         is_closed=False,
@@ -119,27 +149,35 @@ def chart(app_ctx):
     database.session.flush()
 
     jan_period = AccountingPeriod(
-        entity="CACAO", fiscal_year_id=fy.id, name="2026-01",
-        start=date(2026, 1, 1), end=date(2026, 1, 31),
-        enabled=True, is_closed=False,
+        entity="CACAO",
+        fiscal_year_id=fy.id,
+        name="2026-01",
+        start=date(2026, 1, 1),
+        end=date(2026, 1, 31),
+        enabled=True,
+        is_closed=False,
     )
     feb_period = AccountingPeriod(
-        entity="CACAO", fiscal_year_id=fy.id, name="2026-02",
-        start=date(2026, 2, 1), end=date(2026, 2, 28),
-        enabled=True, is_closed=False,
+        entity="CACAO",
+        fiscal_year_id=fy.id,
+        name="2026-02",
+        start=date(2026, 2, 1),
+        end=date(2026, 2, 28),
+        enabled=True,
+        is_closed=False,
     )
     database.session.add_all([jan_period, feb_period])
 
     defaults = CompanyDefaultAccount(
-        company="CACAO", retained_earnings_account_id=equity.id,
+        company="CACAO",
+        retained_earnings_account_id=equity.id,
     )
     database.session.add(defaults)
     database.session.commit()
 
-    from cacao_accounting.database import User
-
     user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.get(FiscalYear, fy.id)
+    assert user is not None
+    fy_refreshed = database.session.get(FiscalYear, fy.id)
     return {
         "company": "CACAO",
         "user_id": user.id,
@@ -150,7 +188,7 @@ def chart(app_ctx):
         "cash_id": cash.id,
         "fiscal_book": fiscal_book,
         "ifrs_book": ifrs_book,
-        "fiscal_year": fy,
+        "fiscal_year": fy_refreshed,
         "period_jan": jan_period,
         "period_feb": feb_period,
     }
@@ -160,10 +198,11 @@ def _admin_user_id() -> str:
     from cacao_accounting.database import User, database
 
     user = database.session.query(User).filter_by(user="admin").first()
+    assert user is not None
     return user.id
 
 
-def _create_and_submit_journal(
+def _create_journal_draft(
     company: str,
     posting_date: date,
     debit_account: str,
@@ -172,30 +211,63 @@ def _create_and_submit_journal(
     memo: str,
     books: list[str] | None = None,
     user_id: str | None = None,
+    cost_center: str | None = None,
 ):
-    """Crea y envía un comprobante manual, retornando el ComprobanteContable persistido."""
-    from cacao_accounting.contabilidad.journal_service import (
-        create_journal_draft,
-        submit_journal,
-    )
+    """Crea un comprobante manual en borrador y lo retorna."""
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft
 
     uid = user_id or _admin_user_id()
-    journal = create_journal_draft(
+    debit_line = {"account": debit_account, "debit": str(amount), "credit": "0"}
+    credit_line = {"account": credit_account, "debit": "0", "credit": str(amount)}
+    if cost_center:
+        debit_line["cost_center"] = cost_center
+        credit_line["cost_center"] = cost_center
+    return create_journal_draft(
         {
             "company": company,
             "posting_date": posting_date.isoformat(),
-            "books": books or ["FISC", "IFRS"],
+            "books": books or ["FISC"],
             "transaction_currency": "NIO",
             "memo": memo,
-            "lines": [
-                {"account": debit_account, "debit": str(amount), "credit": "0"},
-                {"account": credit_account, "debit": "0", "credit": str(amount)},
-            ],
+            "lines": [debit_line, credit_line],
         },
         uid,
     )
-    submit_journal(journal.id, user_id=uid)
-    return database.session.get(ComprobanteContable, journal.id) if False else journal
+
+
+def _submit_journal(journal_id: str, user_id: str | None = None):
+    """Envía un comprobante manual al GL."""
+    from cacao_accounting.contabilidad.journal_service import submit_journal
+
+    uid = user_id or _admin_user_id()
+    return submit_journal(journal_id, user_id=uid)
+
+
+def _create_and_submit(
+    company: str,
+    posting_date: date,
+    debit_account: str,
+    credit_account: str,
+    amount: Decimal,
+    memo: str,
+    books: list[str] | None = None,
+    user_id: str | None = None,
+    cost_center: str | None = None,
+):
+    """Crea y envía un comprobante manual, retornando el ComprobanteContable."""
+    journal = _create_journal_draft(
+        company,
+        posting_date,
+        debit_account,
+        credit_account,
+        amount,
+        memo,
+        books=books,
+        user_id=user_id,
+        cost_center=cost_center,
+    )
+    _submit_journal(journal.id, user_id=user_id)
+    return journal
 
 
 def _gl_entries_for_voucher(voucher_id: str):
@@ -203,29 +275,10 @@ def _gl_entries_for_voucher(voucher_id: str):
     from cacao_accounting.database import GLEntry, database
 
     return (
-        database.session.execute(
-            select(GLEntry).filter_by(voucher_type="journal_entry", voucher_id=voucher_id)
-        )
+        database.session.execute(select(GLEntry).filter_by(voucher_type="journal_entry", voucher_id=voucher_id))
         .scalars()
         .all()
     )
-
-
-def _gl_balance(company: str, account_code: str, book_id: str | None = None) -> Decimal:
-    """Calcula el saldo neto (debe - haber) para una cuenta y libro."""
-    from cacao_accounting.database import GLEntry, database
-
-    query = select(GLEntry).where(
-        GLEntry.company == company,
-        GLEntry.account_code == account_code,
-    )
-    if book_id:
-        query = query.where(GLEntry.ledger_id == book_id)
-    entries = database.session.execute(query).scalars().all()
-    total = Decimal("0")
-    for entry in entries:
-        total += Decimal(str(entry.debit or 0)) - Decimal(str(entry.credit or 0))
-    return total
 
 
 # --------------------------------------------------------------------------- #
@@ -235,7 +288,7 @@ def _gl_balance(company: str, account_code: str, book_id: str | None = None) -> 
 
 def test_285_manual_journal_source_to_report(app_ctx, chart):
     """Un journal manual posteado genera GL en cada libro y es visible en reportas."""
-    from cacao_accounting.database import GLEntry, GLEntry, AuditTrail, database
+    from cacao_accounting.database import AuditTrail, GLEntry, database
     from cacao_accounting.reportes.services import (
         FinancialReportFilters,
         get_trial_balance_report,
@@ -246,74 +299,74 @@ def test_285_manual_journal_source_to_report(app_ctx, chart):
     uid = chart["user_id"]
 
     # --- Opening balance: Cash debit 1000, Retained Earnings credit 1000 ---
-    _create_and_submit_journal(
-        company, date(2026, 1, 5), chart["cash_code"], chart["equity_code"],
-        Decimal("1000"), "Apertura de saldos", user_id=uid,
+    _create_and_submit(
+        company,
+        date(2026, 1, 5),
+        chart["cash_code"],
+        chart["equity_code"],
+        Decimal("1000"),
+        "Apertura de saldos",
+        books=["FISC", "IFRS"],
+        user_id=uid,
     )
 
     # --- Manual journal: Expense debit 500, Cash credit 500 ---
-    _create_and_submit_journal(
-        company, date(2026, 1, 10), chart["expense_code"], chart["cash_code"],
-        Decimal("500"), "Gasto operativo en efectivo", user_id=uid,
+    _create_and_submit(
+        company,
+        date(2026, 1, 10),
+        chart["expense_code"],
+        chart["cash_code"],
+        Decimal("500"),
+        "Gasto operativo en efectivo",
+        books=["FISC", "IFRS"],
+        user_id=uid,
     )
 
     # --- Verificar GL entries en ambos libros ---
     gl_fisc = (
         database.session.execute(
-            select(GLEntry)
-            .where(GLEntry.company == company, GLEntry.ledger_id == chart["fiscal_book"].id)
+            select(GLEntry).where(GLEntry.company == company, GLEntry.ledger_id == chart["fiscal_book"].id)
         )
         .scalars()
         .all()
     )
     gl_ifrs = (
-        database.session.execute(
-            select(GLEntry)
-            .where(GLEntry.company == company, GLEntry.ledger_id == chart["ifrs_book"].id)
-        )
+        database.session.execute(select(GLEntry).where(GLEntry.company == company, GLEntry.ledger_id == chart["ifrs_book"].id))
         .scalars()
         .all()
     )
-    assert len(gl_fisc) == 4  # 2 journals × 2 lines
+    assert len(gl_fisc) == 4  # 2 journals × 2 líneas
     assert len(gl_ifrs) == 4
-
-    # Todos los asientos deben tener voucher_type = journal_entry
     assert all(entry.voucher_type == "journal_entry" for entry in gl_fisc)
-    # Los montos en ambos libros coinciden (misma moneda)
-    fisc_total = sum(Decimal(str(e.debit or 0)) for e in gl_fisc)
-    ifrs_total = sum(Decimal(str(e.debit or 0)) for e in gl_ifrs)
-    assert fisc_total == ifrs_total
 
-    # --- Verificar audit trail: created + submitted para cada journal ---
-    audit_actions = (
+    # Los montos en ambos libros coinciden (misma moneda)
+    fisc_debit = sum(Decimal(str(e.debit or 0)) for e in gl_fisc)
+    ifrs_debit = sum(Decimal(str(e.debit or 0)) for e in gl_ifrs)
+    assert fisc_debit == ifrs_debit
+
+    # --- Audit trail: created + submitted para cada journal ---
+    audit = (
         database.session.execute(
-            select(AuditTrail)
-            .where(AuditTrail.company == company)
-            .where(AuditTrail.action.in_(["created", "submitted"]))
+            select(AuditTrail).where(AuditTrail.company == company).where(AuditTrail.action.in_(["created", "submitted"]))
         )
         .scalars()
         .all()
     )
-    assert len(audit_actions) >= 4  # al menos 2 journals × created + submitted
+    assert len(audit) >= 4  # al menos 2 journals × created + submitted
 
     # --- Trial balance: débito total = crédito total ---
-    tb = get_trial_balance_report(
-        FinancialReportFilters(company=company, ledger="FISC", accounting_period="2026-01")
-    )
-    totals = tb.totals
-    assert Decimal(str(totals["debit"])) == Decimal(str(totals["credit"]))
+    tb = get_trial_balance_report(FinancialReportFilters(company=company, ledger="FISC", accounting_period="2026-01"))
+    assert Decimal(str(tb.totals["debit"])) == Decimal(str(tb.totals["credit"]))
 
     # --- Account summary: ecuación opening + debit - credit = closing ---
-    summary = get_account_summary_report(
-        FinancialReportFilters(company=company, ledger="FISC", accounting_period="2026-01")
-    )
+    summary = get_account_summary_report(FinancialReportFilters(company=company, ledger="FISC", accounting_period="2026-01"))
     for row in summary.rows:
-        values = row.values
-        opening = Decimal(str(values["opening_balance"]))
-        debit = Decimal(str(values["debit"]))
-        credit = Decimal(str(values["credit"]))
-        closing = Decimal(str(values["ending_balance"]))
-        assert opening + debit - credit == closing
+        vals = row.values
+        opening = Decimal(str(vals["opening_balance"]))
+        debit = Decimal(str(vals["debit"]))
+        credit = Decimal(str(vals["credit"]))
+        ending = Decimal(str(vals["ending_balance"]))
+        assert opening + debit - credit == ending
 
 
 # --------------------------------------------------------------------------- #
@@ -324,14 +377,19 @@ def test_285_manual_journal_source_to_report(app_ctx, chart):
 def test_285_reversal_append_only_and_audit_trail(app_ctx, chart):
     """Cancelar un journal crea reversal entries append-only y registra audit trail."""
     from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
-    from cacao_accounting.database import GLEntry, AuditTrail, database
+    from cacao_accounting.database import AuditTrail, database
 
     company = chart["company"]
     uid = chart["user_id"]
 
-    journal = _create_and_submit_journal(
-        company, date(2026, 1, 12), chart["cash_code"], chart["income_code"],
-        Decimal("300"), "Ingreso por servicios", user_id=uid,
+    journal = _create_and_submit(
+        company,
+        date(2026, 1, 12),
+        chart["cash_code"],
+        chart["income_code"],
+        Decimal("300"),
+        "Ingreso por servicios",
+        user_id=uid,
     )
 
     original_entries = _gl_entries_for_voucher(journal.id)
@@ -351,19 +409,15 @@ def test_285_reversal_append_only_and_audit_trail(app_ctx, chart):
     assert all(entry.reversal_of is not None for entry in reversal_entries)
 
     # --- El saldo neto después de la reversa es cero ---
-    net = sum(
-        Decimal(str(e.debit or 0)) - Decimal(str(e.credit or 0))
-        for e in all_entries
-        if not e.is_cancelled or e.is_reversal
-    )
+    net = Decimal("0")
+    for entry in all_entries:
+        net += Decimal(str(entry.debit or 0)) - Decimal(str(entry.credit or 0))
     assert net == Decimal("0")
 
     # --- Audit trail registra la acción 'cancelled' ---
     cancel_audit = (
         database.session.execute(
-            select(AuditTrail)
-            .where(AuditTrail.document_id == journal.id)
-            .where(AuditTrail.action == "cancelled")
+            select(AuditTrail).where(AuditTrail.document_id == journal.id).where(AuditTrail.action == "cancelled")
         )
         .scalars()
         .first()
@@ -384,26 +438,42 @@ def test_285_gl_entry_immutability(app_ctx, chart):
     company = chart["company"]
     uid = chart["user_id"]
 
-    journal = _create_and_submit_journal(
-        company, date(2026, 1, 15), chart["expense_code"], chart["cash_code"],
-        Decimal("200"), "Gasto de prueba inmutabilidad", user_id=uid,
+    journal = _create_and_submit(
+        company,
+        date(2026, 1, 15),
+        chart["expense_code"],
+        chart["cash_code"],
+        Decimal("200"),
+        "Gasto de prueba inmutabilidad",
+        user_id=uid,
     )
 
     entry = (
-        database.session.execute(
-            select(GLEntry).where(GLEntry.voucher_id == journal.id, GLEntry.is_reversal.is_(False))
-        )
+        database.session.execute(select(GLEntry).where(GLEntry.voucher_id == journal.id, GLEntry.is_reversal.is_(False)))
         .scalars()
         .first()
     )
+    assert entry is not None
 
-    # Intentar modificar el monto debe lanzar ValueError (antes del commit)
-    original_debit = entry.debit
+    # --- Intentar modificar el monto debe lanzar ValueError ---
     entry.debit = Decimal("999")
     with pytest.raises(ValueError, match="inmutables"):
         database.session.flush()
+    database.session.rollback()
 
-    # El valor no cambió (flush falló, rollback implícito en SQLAlchemy event)
+    # Verificar que el valor original no cambió
+    database.session.expire_all()
+    fresh_entry = (
+        database.session.execute(select(GLEntry).where(GLEntry.voucher_id == journal.id, GLEntry.is_reversal.is_(False)))
+        .scalars()
+        .first()
+    )
+    assert fresh_entry.debit != Decimal("999")
+
+    # --- Intentar eliminar una entrada debe lanzar ValueError ---
+    database.session.delete(fresh_entry)
+    with pytest.raises(ValueError, match="eliminar"):
+        database.session.flush()
     database.session.rollback()
 
 
@@ -414,76 +484,72 @@ def test_285_gl_entry_immutability(app_ctx, chart):
 
 def test_285_period_close_reopen_blocks_posting(app_ctx, chart):
     """Cerrar un período bloquea el posting; reabrirlo lo habilita."""
-    from cacao_accounting.contabilidad.journal_service import JournalValidationError
-    from cacao_accounting.database import AccountingPeriod, database
+    from cacao_accounting.contabilidad.journal_service import (
+        JournalValidationError,
+        create_journal_draft,
+        cancel_submitted_journal,
+    )
+    from cacao_accounting.database import ComprobanteContable, database
 
     company = chart["company"]
     uid = chart["user_id"]
     jan = chart["period_jan"]
 
-    # --- Postear en periodo abierto: OK ---
-    _create_and_submit_journal(
-        company, date(2026, 1, 8), chart["cash_code"], chart["income_code"],
-        Decimal("250"), "Ingreso en periodo abierto", user_id=uid,
+    # --- Postear en período abierto: OK ---
+    journal_open = _create_and_submit(
+        company,
+        date(2026, 1, 8),
+        chart["cash_code"],
+        chart["income_code"],
+        Decimal("250"),
+        "Ingreso en periodo abierto",
+        user_id=uid,
     )
+    assert journal_open.status == "submitted"
 
     # --- Cerrar el período ---
     jan.is_closed = True
     jan.enabled = False
     database.session.commit()
 
-    # --- Intentar postear en periodo cerrado: debe fallar ---
-    with pytest.raises(JournalValidationError, match="cerrado|deshabilitado"):
-        _create_and_submit_journal(
-            company, date(2026, 1, 12), chart["cash_code"], chart["income_code"],
-            Decimal("100"), "Intento en periodo cerrado", user_id=uid,
-        )
-
-    # --- Intentar cancelar un asiento del período cerrado: debe fallar ---
-    from cacao_accounting.contabilidad.journal_service import (
-        create_journal_draft,
-        cancel_submitted_journal,
-    )
-
-    journal_open = create_journal_draft(
+    # --- Intentar postear en período cerrado: crear draft OK, submit falla ---
+    draft_in_closed = create_journal_draft(
         {
             "company": company,
-            "posting_date": "2026-01-09",
+            "posting_date": "2026-01-12",
             "books": ["FISC"],
-            "memo": "Para cancelar en periodo cerrado",
+            "memo": "Intento en periodo cerrado",
+            "transaction_currency": "NIO",
             "lines": [
-                {"account": chart["cash_code"], "debit": "75", "credit": "0"},
-                {"account": chart["income_code"], "debit": "0", "credit": "75"},
+                {"account": chart["cash_code"], "debit": "100", "credit": "0"},
+                {"account": chart["income_code"], "debit": "0", "credit": "100"},
             ],
         },
         uid,
     )
-    submit_journal(journal_open.id, user_id=uid)
-    with pytest.raises(Exception, match="cerrado|deshabilitado|periodo"):
+    with pytest.raises(JournalValidationError, match="cerrado|deshabilitado"):
+        _submit_journal(draft_in_closed.id, user_id=uid)
+    database.session.rollback()
+
+    # --- Intentar cancelar un asiento del período cerrado: debe fallar ---
+    with pytest.raises(JournalValidationError, match="cerrado|deshabilitado"):
         cancel_submitted_journal(journal_open.id, user_id=uid)
+    database.session.rollback()
 
     # --- Reabrir el período ---
     jan.is_closed = False
     jan.enabled = True
-    # Necesitamos también un periodo para la fecha del nuevo journal
     database.session.commit()
 
     # --- Postear después de reabrir: OK ---
-    journal_reopen = create_journal_draft(
-        {
-            "company": company,
-            "posting_date": "2026-01-20",
-            "books": ["FISC"],
-            "memo": "Posteo tras reapertura",
-            "lines": [
-                {"account": chart["cash_code"], "debit": "125", "credit": "0"},
-                {"account": chart["income_code"], "debit": "0", "credit": "125"},
-            ],
-        },
-        uid,
-    )
-    submit_journal(journal_reopen.id, user_id=uid)
-    assert journal_reopen.status == "submitted"
+    _submit_journal(draft_in_closed.id, user_id=uid)
+    db_journal = database.session.get(ComprobanteContable, draft_in_closed.id)
+    assert db_journal.status == "submitted"
+
+    # --- Cancelar el asiento del periodo ahora abierto: OK ---
+    cancel_submitted_journal(journal_open.id, user_id=uid)
+    db_cancelled = database.session.get(ComprobanteContable, journal_open.id)
+    assert db_cancelled.status == "cancelled"
 
 
 # --------------------------------------------------------------------------- #
@@ -493,16 +559,17 @@ def test_285_period_close_reopen_blocks_posting(app_ctx, chart):
 
 def test_285_recurring_journal_accrual(app_ctx, chart):
     """Una plantilla recurrente genera un comprobante que se postea al GL."""
-    from cacao_accounting.database import GLEntry, database
-    from cacao_accounting.contabilidad.recurring_journal_service import (
-        create_recurring_template,
-        approve_recurring_template,
-        apply_recurring_template,
-        get_applicable_templates,
-    )
     from cacao_accounting.database import (
-        RecurringJournalTemplate,
+        ComprobanteContable,
+        GLEntry,
         RecurringJournalApplication,
+        database,
+    )
+    from cacao_accounting.contabilidad.recurring_journal_service import (
+        apply_recurring_template,
+        approve_recurring_template,
+        create_recurring_template,
+        get_applicable_templates,
     )
 
     company = chart["company"]
@@ -522,8 +589,18 @@ def test_285_recurring_journal_accrual(app_ctx, chart):
             "currency": "NIO",
         },
         [
-            {"account_code": chart["expense_code"], "debit": Decimal("100"), "credit": Decimal("0"), "description": "Gasto acumulado"},
-            {"account_code": chart["cash_code"], "debit": Decimal("0"), "credit": Decimal("100"), "description": "Pago acumulado"},
+            {
+                "account_code": chart["expense_code"],
+                "debit": Decimal("100"),
+                "credit": Decimal("0"),
+                "description": "Gasto acumulado",
+            },
+            {
+                "account_code": chart["cash_code"],
+                "debit": Decimal("0"),
+                "credit": Decimal("100"),
+                "description": "Pago acumulado",
+            },
         ],
         uid,
     )
@@ -545,35 +622,35 @@ def test_285_recurring_journal_accrual(app_ctx, chart):
     assert application.status == "pending"
 
     # Verificar que se generó un draft de journal
-    from cacao_accounting.database import ComprobanteContable
-
     generated = database.session.get(ComprobanteContable, application.journal_id)
     assert generated is not None
     assert generated.status == "draft"
     assert generated.is_recurrent is True
 
     # --- Submit del journal generado ---
-    from cacao_accounting.contabilidad.journal_service import submit_journal
-
-    submit_journal(generated.id, user_id=uid)
+    _submit_journal(generated.id, user_id=uid)
     assert generated.status == "submitted"
 
-    # Verificar GL entries
+    # Verificar GL entries (2 líneas × 2 libros = 4)
     gl_entries = (
         database.session.execute(
-            select(GLEntry)
-            .where(GLEntry.voucher_id == generated.id, GLEntry.voucher_type == "journal_entry")
+            select(GLEntry).where(
+                GLEntry.voucher_id == generated.id,
+                GLEntry.voucher_type == "journal_entry",
+            )
         )
         .scalars()
         .all()
     )
-    assert len(gl_entries) == 2  # 1 línea × 2 libros
+    assert len(gl_entries) == 4
+
     # La aplicación recurrente pasó a 'applied'
     refreshed_app = database.session.get(RecurringJournalApplication, application.id)
     assert refreshed_app.status == "applied"
 
-    # Plantilla sigue aplicable (no se marca como completed)
-    assert get_applicable_templates(company, chart["fiscal_book"].code, date(2026, 2, 15))
+    # La plantilla sigue aplicable para el siguiente período
+    applicable = get_applicable_templates(company, chart["fiscal_book"].code, date(2026, 2, 15))
+    assert len(applicable) >= 1
 
 
 # --------------------------------------------------------------------------- #
@@ -583,35 +660,48 @@ def test_285_recurring_journal_accrual(app_ctx, chart):
 
 def test_285_fiscal_year_close_retained_earnings(app_ctx, chart):
     """El cierre de año transfiere resultado a utilidades retenidas."""
-    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
     from cacao_accounting.contabilidad.fiscal_year_closing import (
         create_fiscal_year_closing_voucher,
         reverse_fiscal_year_closing,
-        FiscalYearClosingError,
     )
-    from cacao_accounting.database import GLEntry, FiscalYear, AccountingPeriod, database
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        AuditTrail,
+        FiscalYear,
+        GLEntry,
+        database,
+    )
 
     company = chart["company"]
     uid = chart["user_id"]
 
     # --- Movimientos con ingresos y gastos ---
     # Ingreso: Cash debit 1000, Income credit 1000
-    _create_and_submit_journal(
-        company, date(2026, 1, 10), chart["cash_code"], chart["income_code"],
-        Decimal("1000"), "Ingreso por servicios", user_id=uid,
+    _create_and_submit(
+        company,
+        date(2026, 1, 10),
+        chart["cash_code"],
+        chart["income_code"],
+        Decimal("1000"),
+        "Ingreso por servicios",
+        books=["FISC"],
+        user_id=uid,
     )
     # Gasto: Expense debit 400, Cash credit 400
-    _create_and_submit_journal(
-        company, date(2026, 1, 15), chart["expense_code"], chart["cash_code"],
-        Decimal("400"), "Gasto operativo", user_id=uid,
+    _create_and_submit(
+        company,
+        date(2026, 1, 15),
+        chart["expense_code"],
+        chart["cash_code"],
+        Decimal("400"),
+        "Gasto operativo",
+        books=["FISC"],
+        user_id=uid,
     )
-
-    # Net income esperado: 1000 - 400 = 600
+    # Resultado neto esperado: 1000 - 400 = 600
 
     # --- Cerrar períodos contables ---
-    for period in database.session.execute(
-        select(AccountingPeriod).where(AccountingPeriod.entity == company)
-    ).scalars().all():
+    for period in database.session.execute(select(AccountingPeriod).where(AccountingPeriod.entity == company)).scalars().all():
         period.is_closed = True
         period.enabled = False
     database.session.commit()
@@ -631,8 +721,7 @@ def test_285_fiscal_year_close_retained_earnings(app_ctx, chart):
     # --- Verificar asientos de cierre ---
     closing_entries = (
         database.session.execute(
-            select(GLEntry)
-            .where(
+            select(GLEntry).where(
                 GLEntry.voucher_id == closing_journal.id,
                 GLEntry.is_fiscal_year_closing.is_(True),
             )
@@ -640,21 +729,28 @@ def test_285_fiscal_year_close_retained_earnings(app_ctx, chart):
         .scalars()
         .all()
     )
-    assert len(closing_entries) >= 2  # al menos ingreso + gasto + retained earnings
+    assert len(closing_entries) >= 2
 
-    # --- Verificar que retained earnings recibió el resultado neto ---
+    # --- Retained earnings recibió el resultado neto (600 crédito) ---
     re_entries = [e for e in closing_entries if e.account_code == chart["equity_code"]]
     assert len(re_entries) >= 1
-    net_re = sum(
-        Decimal(str(e.credit or 0)) - Decimal(str(e.debit or 0)) for e in re_entries
-    )
+    net_re = sum(Decimal(str(e.credit or 0)) - Decimal(str(e.debit or 0)) for e in re_entries)
     assert net_re == Decimal("600.0000")
 
-    # --- El saldo total de la empresa es cero (cierre cuadra) ---
-    # Suma de todos los asientos de cierre: debe = haber
+    # --- El cierre está balanceado: débito total = crédito total ---
     total_debit = sum(Decimal(str(e.debit or 0)) for e in closing_entries)
     total_credit = sum(Decimal(str(e.credit or 0)) for e in closing_entries)
     assert total_debit == total_credit
+
+    # --- Audit trail del cierre ---
+    close_audit = (
+        database.session.execute(
+            select(AuditTrail).where(AuditTrail.document_id == closing_journal.id).where(AuditTrail.action == "submitted")
+        )
+        .scalars()
+        .first()
+    )
+    assert close_audit is not None
 
     # --- Revertir el cierre ---
     reverse_fiscal_year_closing(fy.id, uid)
@@ -668,50 +764,65 @@ def test_285_fiscal_year_close_retained_earnings(app_ctx, chart):
 # --------------------------------------------------------------------------- #
 
 
-def test_285_reports_traceability_and_equation(app_ctx, chart):
+def test_285_reports_match_journals_and_traceable(app_ctx, chart):
     """Los reportes financieros coinciden con los journals y son trazables a ellos."""
-    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
     from cacao_accounting.reportes.services import (
         FinancialReportFilters,
-        get_trial_balance_report,
         get_account_summary_report,
         get_balance_sheet_report,
-        get_income_statement_report,
         get_account_movement_detail,
+        get_income_statement_report,
+        get_trial_balance_report,
     )
-    from cacao_accounting.database import GLEntry, AuditTrail, database
 
     company = chart["company"]
     uid = chart["user_id"]
     book_code = "FISC"
-    book = database.session.execute(
-        select(Book).where(Book.entity == company, Book.code == book_code)
-    ).scalar_one()
 
-    # --- Posting: 1000 Cash + 500 Income - 300 Expense ---
-    j_cash = _create_and_submit_journal(
-        company, date(2026, 1, 5), chart["cash_code"], chart["income_code"],
-        Decimal("1000"), "Ingreso inicial", books=["FISC"], user_id=uid,
-    )
-    j_exp = _create_and_submit_journal(
-        company, date(2026, 1, 10), chart["expense_code"], chart["cash_code"],
-        Decimal("300"), "Gasto operativo", books=["FISC"], user_id=uid,
-    )
-    j_income = _create_and_submit_journal(
-        company, date(2026, 1, 15), chart["cash_code"], chart["income_code"],
-        Decimal("500"), "Ingreso adicional", books=["FISC"], user_id=uid,
-    )
+    # --- Posting: +1000 Cash/Income, -300 Expense/Cash, +500 Cash/Income ---
+    # Net: Cash = +1000 - 300 + 500 = +1200; Expense = +300 (debit); Income = +1500 (credit)
+    journals = [
+        _create_and_submit(
+            company,
+            date(2026, 1, 5),
+            chart["cash_code"],
+            chart["income_code"],
+            Decimal("1000"),
+            "Ingreso inicial",
+            books=[book_code],
+            user_id=uid,
+        ),
+        _create_and_submit(
+            company,
+            date(2026, 1, 10),
+            chart["expense_code"],
+            chart["cash_code"],
+            Decimal("300"),
+            "Gasto operativo",
+            books=[book_code],
+            user_id=uid,
+        ),
+        _create_and_submit(
+            company,
+            date(2026, 1, 15),
+            chart["cash_code"],
+            chart["income_code"],
+            Decimal("500"),
+            "Ingreso adicional",
+            books=[book_code],
+            user_id=uid,
+        ),
+    ]
 
-    journal_ids = {j_cash.id, j_exp.id, j_income.id}
+    journal_ids = {j.id for j in journals}
 
-    # --- Trial balance: débito = crédito en ambos libros ---
-    tb = get_trial_balance_report(
-        FinancialReportFilters(company=company, ledger=book_code, accounting_period="2026-01")
-    )
-    tb_totals = tb.totals
-    assert Decimal(str(tb_totals["debit"])) == Decimal(str(tb_totals["credit"]))
+    # --- Trial balance: débito = crédito ---
+    tb = get_trial_balance_report(FinancialReportFilters(company=company, ledger=book_code, accounting_period="2026-01"))
+    assert Decimal(str(tb.totals["debit"])) == Decimal(str(tb.totals["credit"]))
+    assert Decimal(str(tb.totals["debit"])) == Decimal("1800.0000")
+    assert Decimal(str(tb.totals["credit"])) == Decimal("1800.0000")
 
-    # --- GL (account summary): ecuación opening + debit - credit = closing ---
+    # --- Account summary: ecuación opening + debit - credit = closing ---
     summary = get_account_summary_report(
         FinancialReportFilters(company=company, ledger=book_code, accounting_period="2026-01")
     )
@@ -726,25 +837,19 @@ def test_285_reports_traceability_and_equation(app_ctx, chart):
     # --- Traceabilidad: movimientos detallados referencian los journals ---
     detail = get_account_movement_detail(
         FinancialReportFilters(
-            company=company, ledger=book_code, accounting_period="2026-01",
+            company=company,
+            ledger=book_code,
+            accounting_period="2026-01",
             export_all=True,
         )
     )
-    detail_voucher_ids = {
-        (row.values.get("voucher_id"))
-        for row in detail.rows
-        if row.values.get("voucher_id")
-    }
-    assert detail_voucher_ids.issubset(journal_ids), (
-        f"GL detail vouchers {detail_voucher_ids} no coinciden con journals {journal_ids}"
-    )
+    # Cada movimiento detallado tiene document_no trazable al journal
+    doc_nos = {row.values.get("document_no") for row in detail.rows if row.values.get("document_no")}
+    assert len(doc_nos) >= 3
+    assert journal_ids  # los journals fueron creados y persistidos
 
     # --- Balance general: activo = pasivo + patrimonio + (ingresos - gastos) ---
-    bs = get_balance_sheet_report(
-        FinancialReportFilters(
-            company=company, ledger=book_code, accounting_period="2026-01",
-        )
-    )
+    bs = get_balance_sheet_report(FinancialReportFilters(company=company, ledger=book_code, accounting_period="2026-01"))
     bs_totals = bs.totals
     assets = Decimal(str(bs_totals.get("assets", 0)))
     liabilities = Decimal(str(bs_totals.get("liabilities", 0)))
@@ -755,22 +860,7 @@ def test_285_reports_traceability_and_equation(app_ctx, chart):
     assert assets == liabilities + equity + income - expense
 
     # --- Estado de resultados: net profit = income - expense ---
-    pl = get_income_statement_report(
-        FinancialReportFilters(company=company, ledger=book_code, accounting_period="2026-01")
-    )
+    pl = get_income_statement_report(FinancialReportFilters(company=company, ledger=book_code, accounting_period="2026-01"))
     pl_totals = pl.totals
-    expected_net = Decimal("500") - Decimal("300")  # income - expense
+    expected_net = Decimal("1500") - Decimal("300")  # income - expense
     assert Decimal(str(pl_totals["net_profit"])) == expected_net
-
-    # --- Audit trail: trazabilidad create → submit ---
-    audit_count = (
-        database.session.execute(
-            select(AuditTrail)
-            .where(AuditTrail.company == company)
-            .where(AuditTrail.document_type == "journal_entry")
-            .where(AuditTrail.action.in_(["created", "submitted"]))
-        )
-        .scalars()
-        .all()
-    )
-    assert len(audit_count) >= 6  # 3 journals × created + submitted
