@@ -379,7 +379,7 @@ def test_downstream_desde_sales_invoice_incluye_pagos(app):
     # Los pagos deben tener applied_amount
     for node in downstream:
         if node.get("document_type") == "payment_entry":
-            assert node["applied_amount"] >= 0
+            assert Decimal(node["applied_amount"]) >= 0
 
 
 def test_downstream_desde_payment_entry_incluye_referencias(app):
@@ -395,7 +395,7 @@ def test_downstream_desde_payment_entry_incluye_referencias(app):
     refs = [n for n in downstream if n.get("document_type") == "sales_invoice"]
     assert len(refs) == 1
     assert refs[0]["document_id"] == "SINV-001"
-    assert refs[0]["applied_amount"] == pytest.approx(300.0)
+    assert refs[0]["applied_amount"] == "300"
 
 
 # ---------------------------------------------------------------------------
@@ -479,7 +479,7 @@ def test_journal_entry_registrado_y_relacionado(app):
     journal_tree = build_document_flow_tree("journal_entry", "JRN-001", direction="upstream")
     assert journal_tree["current"]["posting_date"] == "2026-05-06"
     assert journal_tree["current"]["currency"] == "NIO"
-    assert journal_tree["current"]["total"] == pytest.approx(500.0)
+    assert journal_tree["current"]["total"] == "500"
     assert journal_tree["upstream"][0]["document_type"] == "sales_invoice"
     assert journal_tree["upstream"][0]["document_id"] == "SINV-001"
 

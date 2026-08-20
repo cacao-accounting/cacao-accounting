@@ -361,17 +361,17 @@ class TestToJsonNumber:
     def test_decimal_value(self):
         from cacao_accounting.document_flow.payment import _to_json_number
 
-        assert _to_json_number(Decimal("123.45")) == 123.45
+        assert _to_json_number(Decimal("123.45")) == "123.45"
 
     def test_none_returns_zero(self):
         from cacao_accounting.document_flow.payment import _to_json_number
 
-        assert _to_json_number(None) == 0.0
+        assert _to_json_number(None) == "0"
 
     def test_zero(self):
         from cacao_accounting.document_flow.payment import _to_json_number
 
-        assert _to_json_number(Decimal("0")) == 0.0
+        assert _to_json_number(Decimal("0")) == "0"
 
 
 class TestDocumentExchangeRate:

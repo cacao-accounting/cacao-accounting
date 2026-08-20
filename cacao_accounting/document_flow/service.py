@@ -69,9 +69,14 @@ class DocumentFlowError(ValueError):
         self.status_code = status_code
 
 
-def _to_json_number(value: Any) -> float:
-    """Convierte Decimal/None a float para JSON y templates."""
-    return float(decimal_or_zero(value))
+def _to_json_number(value: Any) -> str:
+    """Serializa montos exactos sin convertirlos a ``float``.
+
+    Los consumidores web ya aceptan cadenas numéricas y las convierten solo
+    para operaciones visuales. Mantener la representación decimal en el
+    límite HTTP evita perder centavos por redondeos binarios.
+    """
+    return str(decimal_or_zero(value))
 
 
 def _current_user_id() -> str | None:
