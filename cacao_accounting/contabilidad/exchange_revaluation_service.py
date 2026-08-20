@@ -733,7 +733,7 @@ class ExchangeRevaluationService:
                 .first()
             )
             if rate is not None:
-                return self._decimal(rate.rate)
+                return _validated_rate(self._decimal(rate.rate))
             return None
 
         def _nearest_rate(origin: str, destination: str, target_date: date) -> Decimal | None:
@@ -748,8 +748,14 @@ class ExchangeRevaluationService:
                 .first()
             )
             if before is not None:
-                return self._decimal(before.rate)
+                return _validated_rate(self._decimal(before.rate))
             return None
+
+        def _validated_rate(value: Decimal) -> Decimal:
+            """Reject invalid historical rates instead of creating false FX gains."""
+            if not value.is_finite() or value <= 0:
+                raise ExchangeRevaluationError("El tipo de cambio debe ser un número positivo y finito.")
+            return value
 
         rate_val = _rate(origin, destination, closing_date)
         if rate_val is not None:
@@ -761,14 +767,10 @@ class ExchangeRevaluationService:
 
         rate_val = _rate(destination, origin, closing_date)
         if rate_val is not None:
-            if rate_val == 0:
-                raise ExchangeRevaluationError("El tipo de cambio no puede ser cero.")
             return (Decimal("1") / rate_val).quantize(Decimal("0.000000001"))
 
         rate_val = _nearest_rate(destination, origin, closing_date)
         if rate_val is not None:
-            if rate_val == 0:
-                raise ExchangeRevaluationError("El tipo de cambio no puede ser cero.")
             return (Decimal("1") / rate_val).quantize(Decimal("0.000000001"))
 
         raise ExchangeRevaluationError(f"Falta tasa de cierre para {origin} -> {destination} en {closing_date}.")

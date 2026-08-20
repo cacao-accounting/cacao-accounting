@@ -76,20 +76,21 @@ class TestHelperFunctions:
     def test_number_converts_valid_value(self):
         from cacao_accounting.printing.context import _number
 
-        assert _number(100) == 100.0
-        assert _number("123.45") == 123.45
-        assert _number(Decimal("99.99")) == 99.99
+        assert _number(100) == Decimal("100")
+        assert _number("123.45") == Decimal("123.45")
+        assert _number(Decimal("99.99")) == Decimal("99.99")
 
     def test_number_returns_zero_for_none(self):
         from cacao_accounting.printing.context import _number
 
-        assert _number(None) == 0.0
+        assert _number(None) == Decimal("0")
 
     def test_number_returns_zero_for_invalid(self):
         from cacao_accounting.printing.context import _number
 
-        assert _number("invalid") == 0.0
-        assert _number(object()) == 0.0
+        assert _number("invalid") == Decimal("0")
+        assert _number(object()) == Decimal("0")
+        assert _number("NaN") == Decimal("0")
 
     def test_date_text_formats_date_object(self):
         from cacao_accounting.printing.context import _date_text
@@ -337,8 +338,8 @@ class TestSamplePartyAndLineHelpers:
 
         line = _sample_line()
         assert line["line_number"] == 1
-        assert line["quantity"] == 2.0
-        assert line["unit_price"] == 500.0
-        assert line["subtotal"] == 1000.0
-        assert line["taxes"] == 150.0
-        assert line["line_total"] == 1150.0
+        assert line["quantity"] == Decimal("2")
+        assert line["unit_price"] == Decimal("500")
+        assert line["subtotal"] == Decimal("1000")
+        assert line["taxes"] == Decimal("150")
+        assert line["line_total"] == Decimal("1150")
