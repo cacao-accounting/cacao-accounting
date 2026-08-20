@@ -881,9 +881,12 @@ def bancos_pago_nuevo():
                     "reference_date": reference_date_value.isoformat() if reference_date_value else "",
                     "currency": effective_currency(document) or "",
                     "reference_label": row.get("label", ""),
-                    "total_amount": float(document.grand_total or 0),
-                    "outstanding_amount": float(outstanding),
-                    "allocated_amount": float(outstanding),
+                    # JSON/Alpine must receive the exact decimal representation;
+                    # converting to float here loses financial precision before
+                    # the user can confirm the allocation.
+                    "total_amount": str(Decimal(str(document.grand_total or 0))),
+                    "outstanding_amount": str(Decimal(str(outstanding))),
+                    "allocated_amount": str(Decimal(str(outstanding))),
                 }
             )
 
@@ -894,7 +897,7 @@ def bancos_pago_nuevo():
             "party_type": party_type,
             "payment_type": payment_type,
             "currency": effective_currency(first) or "",
-            "paid_amount": float(initial_amount),
+            "paid_amount": str(initial_amount),
             "lines": lines,
             "advance_mode": any(row["reference_type"] in ("purchase_order", "sales_order") for row in source_rows),
         }
