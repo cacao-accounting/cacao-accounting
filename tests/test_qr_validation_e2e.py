@@ -7,14 +7,17 @@ import pytest
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     Accounts,
+    Book,
     CacaoConfig,
     ComprobanteContable,
     ComprobanteContableDetalle,
     Entity,
+    Modules,
     PaymentEntry,
     PaymentReference,
     SalesInvoice,
     SalesInvoiceItem,
+    User,
     database,
 )
 from cacao_accounting.contabilidad.journal_service import submit_journal
@@ -57,7 +60,10 @@ def test_qr_validation_lifecycle(app):
             currency="NIO",
             enabled=True,
         )
-        database.session.add(entity)
+        module = Modules(module="accounting", default=True, enabled=True)
+        user = User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True)
+        book = Book(entity="VALTEST", code="LOCAL", name="Local", status="activo", is_primary=True)
+        database.session.add_all([entity, module, user, book])
 
         acc1 = Accounts(entity="VALTEST", code="1101", name="Cash", account_type="asset", enabled=True)
         acc2 = Accounts(
@@ -73,6 +79,9 @@ def test_qr_validation_lifecycle(app):
         # 2. Create a journal entry (Draft)
         journal = ComprobanteContable(
             entity="VALTEST",
+            user_id="admin",
+            book="LOCAL",
+            book_codes='["LOCAL"]',
             date=date(2026, 5, 26),
             status="draft",
             voucher_type="journal_entry",
@@ -107,7 +116,7 @@ def test_qr_validation_lifecycle(app):
         assert val_rec is None
 
         # 3. Submit journal (Trigger token generation)
-        submit_journal(journal.id)
+        submit_journal(journal.id, user_id="admin")
 
         val_rec = database.session.execute(
             database.select(PublicDocumentValidation).filter_by(document_id=journal.id)

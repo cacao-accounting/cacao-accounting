@@ -260,9 +260,9 @@ def test_o2c_sales_order_to_invoice_relation_manual_balances(app_ctx, ordered_qt
     ).scalar_one()
     assert relation.qty == Decimal(billed_qty)
     if expected_pending:
-        assert source_rows[0]["source_qty"] == Decimal(ordered_qty)
-        assert source_rows[0]["consumed_qty"] == Decimal(billed_qty)
-        assert source_rows[0]["pending_qty"] == expected_pending
+        assert Decimal(source_rows[0]["source_qty"]) == Decimal(ordered_qty)
+        assert Decimal(source_rows[0]["consumed_qty"]) == Decimal(billed_qty)
+        assert Decimal(source_rows[0]["pending_qty"]) == expected_pending
         assert Decimal(str(source_rows[0]["amount"])) == expected_pending * rate
     else:
         assert source_rows == []

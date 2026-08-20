@@ -1158,6 +1158,7 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
             recurring_journal = RecurringJournalTemplate(
                 code="FILTER-REC-01",
                 company="cacao",
+                book_codes='["LOCAL"]',
                 name="Plantilla Filtro",
                 description="Descripcion Filtro",
                 start_date=date(2026, 6, 27),

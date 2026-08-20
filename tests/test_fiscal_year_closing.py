@@ -12,6 +12,7 @@ from cacao_accounting.database import (
     FiscalYear,
     Accounts,
     CompanyDefaultAccount,
+    Modules,
     User,
     AccountingPeriod,
     Book,
@@ -67,7 +68,8 @@ def setup_data(app):
         entity = Entity(code="CMP", company_name="Test Company", tax_id="123", currency="USD", enabled=True)
         database.session.add(entity)
 
-        # Setup Admin User
+        # Setup Modules & Admin User
+        database.session.add(Modules(module="accounting", default=True, enabled=True))
         user = User(id="admin_user", user="admin", name="Admin", password=b"123", classification="admin", active=True)
         database.session.add(user)
 

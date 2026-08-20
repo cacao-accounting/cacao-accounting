@@ -23,7 +23,7 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, Modules, User, database
+        from cacao_accounting.database import Book, Entity, Modules, User, database
 
         database.create_all()
         database.session.add_all(
@@ -31,6 +31,7 @@ def app_ctx():
                 Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO", enabled=True),
                 Modules(module="accounting", default=True, enabled=True),
                 User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True),
+                Book(entity="cacao", code="DEFAULT_BOOK", name="Default", status="activo", is_primary=True, currency="NIO"),
             ]
         )
         database.session.commit()
