@@ -81,11 +81,11 @@ Analizar los issues de GitHub #280 (AUDIT-005: matriz O2C de pagos/créditos/rev
 - **Landed cost**: cargo capitalizable SIN `account_id` propio (si lo trae, el proforma agrega línea de gasto y desbalancea). Requiere bodega con `WarehouseCompanyAccount.inventory_account_id`, `bridge_account_id` en defaults, Item+UOM y StockBin con qty>0 para materializar la capa de valuación.
 - **Duplicados S2P-24**: `_validate_duplicate_supplier_invoice(supplier_id, supplier_invoice_no)` rechaza duplicados activos (docstatus != 2).
 - **Cancelaciones**: `cancel_document(doc)` + `_apply_payment_cancellation_hooks(payment)` (ya revierte relaciones internamente; no llamar `revert_relations_for_target` dos veces es inocuo pero redundante). Todo append-only.
-- **Observación menor pendiente**: `get_ar_ap_subledger` con `as_of_date=None` usa cortes distintos para `paid_amount` (todas las aplicaciones) vs `outstanding_amount` (`date.today()`) — reportes/services.py:333-334. Con corte explícito es consistente.
+- **Observación menor corregida**: `get_ar_ap_subledger` con `as_of_date=None` usaba cortes distintos para `paid_amount` (todas las aplicaciones) vs `outstanding_amount` (`date.today()`) — corregido en commit `1ff2d2f1`: se resuelve un corte efectivo único (`as_of_date or date.today()`) aplicado a documentos, aplicaciones y outstanding. Tests de regresión en ambas suites de auditoría (`test_280/281_subledger_columns_share_cutoff_when_no_as_of`).
 
 ### Estado y continuación
 
-- Commit: `b8241619` (rama main, sin push). Comentarios: [#280](https://github.com/cacao-accounting/cacao-accounting/issues/280#issuecomment-5363310405), [#281](https://github.com/cacao-accounting/cacao-accounting/issues/281#issuecomment-5363312902).
+- Commits: `b8241619` (suites de auditoría), `1ff2d2f1` (fix corte submayor) — rama main, sin push. Comentarios: [#280](https://github.com/cacao-accounting/cacao-accounting/issues/280#issuecomment-5363310405), [#281](https://github.com/cacao-accounting/cacao-accounting/issues/281#issuecomment-5363312902).
 - Pendiente: PR conjunto referenciando ambos issues (requiere push, no solicitado aún); opcionalmente corregir la observación de corte `as_of_date=None`.
 - Cobertura futura sugerida: dimensiones (cost_center/unit/project) contra control AP/AR agrupado — GLEntry las soporta pero facturas y líneas del motor no las propagan; hoy solo alcanzable vía ComprobanteContable manuales o vistas multi-libro.
 
