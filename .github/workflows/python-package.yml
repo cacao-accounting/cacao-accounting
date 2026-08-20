@@ -173,6 +173,7 @@ jobs:
           CACAO_TEST: "True"
           LOGURU_LEVEL: "WARNING"
           SECRET_KEY: "ASD123kljaAddS"
+          PLAYWRIGHT_ARTIFACT_DIR: test-results
         run: |
           python -m pytest tests/test_e2e_playwright_accounting.py tests/test_e2e_playwright_document_flow.py --tb=line --quiet
       - name: Upload Playwright diagnostics

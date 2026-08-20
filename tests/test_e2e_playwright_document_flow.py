@@ -4,6 +4,7 @@
 import os
 import tempfile
 import threading
+from pathlib import Path
 import pytest
 from datetime import date
 from decimal import Decimal
@@ -152,8 +153,8 @@ def browser():
     with sync_playwright() as p:
         try:
             browser = p.chromium.launch(headless=True)
-        except Exception as e:
-            pytest.skip(f"Browser launch failed: {e}")
+        except Exception as exc:
+            pytest.fail(f"Chromium no pudo iniciar: {exc}")
         yield browser
         browser.close()
 
@@ -167,8 +168,9 @@ def login(page, base_url, username, password):
 
 
 @pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
-def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser):
-    os.makedirs("/home/jules/verification", exist_ok=True)
+def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
+    artifact_dir = Path(os.environ.get("PLAYWRIGHT_ARTIFACT_DIR", str(tmp_path)))
+    artifact_dir.mkdir(parents=True, exist_ok=True)
     context = browser.new_context()
     page = context.new_page()
     base_url = flask_server
@@ -254,7 +256,7 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser):
         page.get_by_role("button", name="Aprobar").click()
         expect(page.locator(".badge.bg-success")).to_be_visible()
     except Exception as e:
-        with open("/home/jules/verification/page_error.html", "w") as f:
+        with (artifact_dir / "page_error.html").open("w", encoding="utf-8") as f:
             f.write(page.content())
         raise e
 
@@ -275,8 +277,9 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser):
     expect(page.locator(".ca-document-flow__section", has_text="Origen / Documentos aplicados")).to_be_visible()
 
     # Capture O2C flow success screenshot
-    os.makedirs("/home/jules/verification/screenshots", exist_ok=True)
-    page.screenshot(path="/home/jules/verification/screenshots/verification_o2c.png")
+    screenshots_dir = artifact_dir / "screenshots"
+    screenshots_dir.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(screenshots_dir / "verification_o2c.png"))
 
     # ==========================================
     # FLOW 2: Source to Pay (S2P) Happy Path
@@ -407,6 +410,6 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser):
     expect(page.locator(".ca-document-flow__section", has_text="Origen / Documentos aplicados")).to_be_visible()
 
     # Take second screenshot showing S2P Document Flow
-    page.screenshot(path="/home/jules/verification/screenshots/verification_s2p.png")
+    page.screenshot(path=str(screenshots_dir / "verification_s2p.png"))
 
     context.close()

@@ -110,8 +110,8 @@ def browser():
     with sync_playwright() as p:
         try:
             browser = p.chromium.launch(headless=True)
-        except Exception as e:
-            pytest.skip(f"Browser launch failed: {e}")
+        except Exception as exc:
+            pytest.fail(f"Chromium no pudo iniciar: {exc}")
         yield browser
         browser.close()
 
