@@ -290,7 +290,13 @@ def _document_sign(document: Any) -> Decimal:
 
 
 def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
-    """Devuelve subledger AR/AP basado en documentos y aplicaciones de pago."""
+    """Devuelve subledger AR/AP basado en documentos y aplicaciones de pago.
+
+    Todas las columnas comparten el mismo corte: cuando ``as_of_date`` no se
+    indica se usa ``date.today()`` de forma explicita para que documentos,
+    aplicaciones de pago y outstanding sean consistentes entre si.
+    """
+    effective_as_of = filters.as_of_date if filters.as_of_date is not None else date.today()
     if filters.party_type == "customer":
         document_type = "sales_invoice"
         document_model = SalesInvoice
@@ -308,8 +314,7 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
     else:
         raise ValueError("El subledger solo soporta customer o supplier.")
 
-    if filters.as_of_date is not None:
-        query = query.where(document_model.posting_date <= filters.as_of_date)
+    query = query.where(document_model.posting_date <= effective_as_of)
     if not filters.include_returns:
         query = query.where(document_model.is_return.is_(False))
 
@@ -330,8 +335,8 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
         sign = _document_sign(document)
         base_factor = _document_base_factor(document)
         original_original_currency = _decimal_value(document.grand_total)
-        paid_original_currency = _payment_allocations(document_type, document.id, filters.company, filters.as_of_date)
-        outstanding_original_currency = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
+        paid_original_currency = _payment_allocations(document_type, document.id, filters.company, effective_as_of)
+        outstanding_original_currency = compute_outstanding_amount(document, as_of_date=effective_as_of)
         original = sign * original_original_currency * base_factor
         paid = sign * paid_original_currency * base_factor
         outstanding = sign * outstanding_original_currency * base_factor

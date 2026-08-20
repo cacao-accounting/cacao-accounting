@@ -762,3 +762,30 @@ def test_280_multicurrency_functional_equation_and_isolation(app_ctx, chart):
     # (estado solo-factura; la liquidacion FX se reversa en el periodo siguiente).
     o2c_row = _matrix_row(chart, "AR", AS_OF)
     assert o2c_row.values["subledger_amount"] == Decimal("3600")
+
+
+def test_280_subledger_columns_share_cutoff_when_no_as_of(app_ctx, chart):
+    """Sin corte explicito, paid y outstanding comparten el mismo cutoff."""
+    from datetime import timedelta
+
+    invoice = _make_invoice(amount=Decimal("400"), posting_date=date.today())
+    _post_invoice(invoice)
+
+    future = date.today() + timedelta(days=10)
+    payment = _make_payment(amount=Decimal("150"), chart=chart, posting_date=future)
+    _apply(
+        payment,
+        [{"reference_type": "sales_invoice", "reference_id": invoice.id, "allocated_amount": 150}],
+        allocation_date=future,
+    )
+    _post_payment(payment)
+
+    # Sin corte: la aplicacion futura no aparece en paid ni reduce outstanding.
+    totals = _subledger_totals(None)
+    assert totals["paid_amount"] == Decimal("0")
+    assert totals["outstanding_amount"] == Decimal("400")
+
+    # Con corte que incluye la aplicacion ambas columnas son consistentes.
+    totals_cut = _subledger_totals(future)
+    assert totals_cut["paid_amount"] == Decimal("150")
+    assert totals_cut["outstanding_amount"] == Decimal("250")

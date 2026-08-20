@@ -785,3 +785,30 @@ def test_281_landed_cost_posts_gl_against_ap_control(app_ctx, chart):
     assert totals["original_amount"] == Decimal("1000")
 
     _assert_ap_reconciled(chart)
+
+
+def test_281_subledger_columns_share_cutoff_when_no_as_of(app_ctx, chart):
+    """Sin corte explicito, paid y outstanding comparten el mismo cutoff."""
+    from datetime import timedelta
+
+    invoice = _make_invoice(amount=Decimal("400"), chart=chart, posting_date=date.today(), supplier_invoice_no="FAC-CUT")
+    _post_invoice(invoice)
+
+    future = date.today() + timedelta(days=10)
+    payment = _make_payment(amount=Decimal("150"), chart=chart, posting_date=future)
+    _apply(
+        payment,
+        [{"reference_type": "purchase_invoice", "reference_id": invoice.id, "allocated_amount": 150}],
+        allocation_date=future,
+    )
+    _post_payment(payment)
+
+    # Sin corte: la aplicacion futura no aparece en paid ni reduce outstanding.
+    totals = _subledger_totals(None)
+    assert totals["paid_amount"] == Decimal("0")
+    assert totals["outstanding_amount"] == Decimal("400")
+
+    # Con corte que incluye la aplicacion ambas columnas son consistentes.
+    totals_cut = _subledger_totals(future)
+    assert totals_cut["paid_amount"] == Decimal("150")
+    assert totals_cut["outstanding_amount"] == Decimal("250")
