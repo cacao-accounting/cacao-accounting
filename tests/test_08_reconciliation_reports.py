@@ -43,12 +43,16 @@ def app_ctx():
 
 def _seed_accounting_admin() -> None:
     """Crea un actor persistido para servicios de posting fail-closed."""
-    from cacao_accounting.database import Modules, User, database
+    from cacao_accounting.database import Book, Modules, User, database
 
     if database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one_or_none() is None:
         database.session.add(Modules(module="accounting", default=True, enabled=True))
     if database.session.get(User, "admin") is None:
         database.session.add(User(id="admin", user="acl-admin", password=b"x", classification="admin", active=True))
+    if database.session.execute(database.select(Book).filter_by(entity="cacao")).scalar_one_or_none() is None:
+        database.session.add(
+            Book(entity="cacao", code="MAIN", name="Libro principal", status="activo", is_primary=True, currency="NIO")
+        )
     database.session.commit()
 
 

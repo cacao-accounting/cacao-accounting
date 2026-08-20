@@ -363,10 +363,11 @@ def test_service_rejects_non_positive_historical_closing_rate(app_ctx):
     )
     from cacao_accounting.database import ExchangeRate, database
 
-    rate = database.session.execute(
-        database.select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date(2026, 5, 1))
-    ).scalar_one()
-    rate.rate = Decimal("0")
+    database.session.execute(
+        database.update(ExchangeRate)
+        .where(ExchangeRate.origin == "USD", ExchangeRate.destination == "NIO")
+        .values(rate=Decimal("0"))
+    )
     database.session.commit()
 
     with pytest.raises(ExchangeRevaluationError, match="positivo y finito"):
