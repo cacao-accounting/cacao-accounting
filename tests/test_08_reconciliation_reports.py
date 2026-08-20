@@ -506,21 +506,21 @@ def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
     database.session.add_all([transaction, payment_a, payment_b])
     database.session.commit()
 
-    reconcile_bank_items(
-        BankReconciliationRequest(
-            company="cacao",
-            reconciliation_date=date(2026, 5, 5),
-            matches=[
-                BankReconciliationMatch(transaction.id, "payment_entry", payment_a.id, Decimal("60.00")),
-                BankReconciliationMatch(transaction.id, "payment_entry", payment_b.id, Decimal("40.00")),
-            ],
-        )
+    request = BankReconciliationRequest(
+        company="cacao",
+        reconciliation_date=date(2026, 5, 5),
+        matches=[
+            BankReconciliationMatch(transaction.id, "payment_entry", payment_a.id, Decimal("60.00")),
+            BankReconciliationMatch(transaction.id, "payment_entry", payment_b.id, Decimal("40.00")),
+        ],
     )
+    reconciliation = reconcile_bank_items(request)
     database.session.commit()
 
     items = database.session.execute(database.select(ReconciliationItem)).scalars().all()
     assert transaction.is_reconciled is True
     assert sum(item.allocated_amount for item in items) == Decimal("100.00")
+    assert reconcile_bank_items(request).id == reconciliation.id
     with pytest.raises(BankReconciliationError, match="excede"):
         reconcile_bank_items(
             BankReconciliationRequest(
