@@ -126,6 +126,8 @@ class ExchangeRevaluationService:
                     commit=False,
                 )
 
+            self._reverse_prior_period_runs(company, period.start, user_id)
+
             candidates = self._open_candidates(company, period.end, summary_ledger.id)
 
             run = ExchangeRevaluation(
@@ -201,6 +203,7 @@ class ExchangeRevaluationService:
         user_id: str | None = None,
         reason: str | None = None,
         commit: bool = True,
+        reversal_date: date | None = None,
     ) -> ExchangeRevaluation:
         """Anula una revalorizacion contabilizada mediante reversos GL."""
         run = database.session.get(ExchangeRevaluation, run_id)
@@ -208,18 +211,20 @@ class ExchangeRevaluationService:
             raise ExchangeRevaluationError("La revalorizacion indicada no existe.")
         if run.status != EXCHANGE_REVALUATION_STATUS_POSTED:
             raise ExchangeRevaluationError("Solo se puede anular una revalorizacion contabilizada.")
-        self._ensure_period_open(str(run.company), self._date_for(run))
+        effective_reversal_date = reversal_date or self._date_for(run)
+        self._ensure_period_open(str(run.company), effective_reversal_date)
 
-        journal = self._create_journal(run, user_id, reversal=True)
+        journal = self._create_journal(run, user_id, reversal=True, posting_date=effective_reversal_date)
         originals = self._active_run_entries(run.id)
         if not originals:
             raise ExchangeRevaluationError("La revalorizacion no tiene entradas GL activas para reversar.")
 
+        reversal_period_id, reversal_fiscal_year_id = self._period_ids(str(run.company), effective_reversal_date)
         reversals: list[GLEntry] = []
         for entry in originals:
             reversals.append(
                 GLEntry(
-                    posting_date=self._date_for(run),
+                    posting_date=effective_reversal_date,
                     company=entry.company,
                     ledger_id=entry.ledger_id,
                     account_id=entry.account_id,
@@ -239,8 +244,8 @@ class ExchangeRevaluationService:
                     voucher_id=run.id,
                     document_no=run.document_no,
                     naming_series_id=run.naming_series_id,
-                    fiscal_year_id=entry.fiscal_year_id,
-                    accounting_period_id=entry.accounting_period_id,
+                    fiscal_year_id=reversal_fiscal_year_id,
+                    accounting_period_id=reversal_period_id,
                     cost_center_code=entry.cost_center_code,
                     unit_code=entry.unit_code,
                     project_code=entry.project_code,
@@ -264,6 +269,26 @@ class ExchangeRevaluationService:
         if commit:
             database.session.commit()
         return run
+
+    def _reverse_prior_period_runs(self, company: str, reversal_date: date, user_id: str | None) -> None:
+        """Reverse outstanding unrealized FX at the opening of a new period."""
+        prior_runs = database.session.execute(
+            select(ExchangeRevaluation)
+            .where(
+                ExchangeRevaluation.company == company,
+                ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED,
+                ExchangeRevaluation.run_date < reversal_date,
+            )
+            .order_by(ExchangeRevaluation.run_date, ExchangeRevaluation.created)
+        ).scalars()
+        for prior_run in prior_runs:
+            self.void(
+                run_id=str(prior_run.id),
+                user_id=user_id,
+                reason="Reversa automática al inicio del siguiente período de revaluación",
+                commit=False,
+                reversal_date=reversal_date,
+            )
 
     def list_runs(self) -> list[ExchangeRevaluation]:
         """Lista ejecuciones recientes de revalorizacion."""
@@ -816,11 +841,18 @@ class ExchangeRevaluationService:
             return None, None
         return period.id, period.fiscal_year_id
 
-    def _create_journal(self, run: ExchangeRevaluation, user_id: str | None, *, reversal: bool = False) -> ComprobanteContable:
+    def _create_journal(
+        self,
+        run: ExchangeRevaluation,
+        user_id: str | None,
+        *,
+        reversal: bool = False,
+        posting_date: date | None = None,
+    ) -> ComprobanteContable:
         journal = ComprobanteContable(
             entity=run.company,
             user_id=user_id,
-            date=self._date_for(run),
+            date=posting_date or self._date_for(run),
             reference=run.document_no or run.id,
             memo=("Reversion " if reversal else "") + "Revalorizacion cambiaria",
             status="submitted",

@@ -326,6 +326,43 @@ def test_service_recalculates_previous_revaluation(app_ctx):
     assert second.status == "posted"
 
 
+def test_service_reverses_prior_period_unrealized_fx_at_next_period_open(app_ctx):
+    """The next close reverses prior unrealized FX before remeasuring exposure."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import AccountingPeriod, ExchangeRate, GLEntry, database
+
+    _create_sales_invoice()
+    service = ExchangeRevaluationService()
+    may_run = service.run(company="cacao", year=2026, month=5, user_id="admin")
+    database.session.add(
+        AccountingPeriod(
+            entity="cacao",
+            name="2026-06",
+            enabled=True,
+            is_closed=False,
+            start=date(2026, 6, 1),
+            end=date(2026, 6, 30),
+        )
+    )
+    database.session.add_all(
+        [
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("37"), date=date(2026, 6, 1)),
+            ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.91"), date=date(2026, 6, 1)),
+        ]
+    )
+    database.session.commit()
+
+    june_run = service.run(company="cacao", year=2026, month=6, user_id="admin")
+
+    assert may_run.status == "voided"
+    assert june_run.status == "posted"
+    reversals = database.session.execute(
+        database.select(GLEntry).where(GLEntry.exchange_revaluation_run_id == may_run.id, GLEntry.is_reversal.is_(True))
+    ).scalars()
+    assert reversals
+    assert {entry.posting_date for entry in reversals} == {date(2026, 6, 1)}
+
+
 def test_service_recalculates_partial_balance_revaluation(app_ctx):
     """A repeated run voids the prior adjustment before recalculating it."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
