@@ -355,6 +355,24 @@ def test_service_raises_controlled_error_when_closing_rate_is_missing(app_ctx):
         ExchangeRevaluationService().run(company="cacao", year=2026, month=5, user_id="admin")
 
 
+def test_service_rejects_non_positive_historical_closing_rate(app_ctx):
+    """A stored zero/negative rate must not become a fictitious FX adjustment."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import (
+        ExchangeRevaluationError,
+        ExchangeRevaluationService,
+    )
+    from cacao_accounting.database import ExchangeRate, database
+
+    rate = database.session.execute(
+        database.select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date(2026, 5, 1))
+    ).scalar_one()
+    rate.rate = Decimal("0")
+    database.session.commit()
+
+    with pytest.raises(ExchangeRevaluationError, match="positivo y finito"):
+        ExchangeRevaluationService()._closing_rate("USD", "NIO", date(2026, 5, 31))
+
+
 def test_failed_revaluation_rerun_preserves_previous_posted_run(app_ctx):
     """Una reejecución fallida no debe anular la corrida publicada anterior."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationError, ExchangeRevaluationService
@@ -513,9 +531,7 @@ def test_bank_balance_converts_functional_only_gl_amounts(app_ctx):
     )
     database.session.commit()
 
-    balance = ExchangeRevaluationService()._bank_original_balance(
-        bank_account, date(2026, 5, 31), _book("NIO").id
-    )
+    balance = ExchangeRevaluationService()._bank_original_balance(bank_account, date(2026, 5, 31), _book("NIO").id)
 
     assert balance == Decimal("20.0000")
 

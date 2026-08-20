@@ -534,14 +534,14 @@ def _sample_line() -> dict[str, Any]:
         "line_number": 1,
         "item_code": "ITEM-001",
         "description": "Example item",
-        "quantity": 2.0,
+        "quantity": Decimal("2"),
         "unit_of_measure": "UND",
-        "unit_price": 500.0,
-        "discount": 0.0,
-        "subtotal": 1000.0,
-        "taxes": 150.0,
-        "other_charges": 0.0,
-        "line_total": 1150.0,
+        "unit_price": Decimal("500"),
+        "discount": Decimal("0"),
+        "subtotal": Decimal("1000"),
+        "taxes": Decimal("150"),
+        "other_charges": Decimal("0"),
+        "line_total": Decimal("1150"),
     }
 
 
@@ -672,7 +672,8 @@ def _text(obj: Any, attr: str, default: Any = "") -> str:
 def _number(value: Any) -> Decimal:
     """Return a financial value without crossing through binary float."""
     try:
-        return value if isinstance(value, Decimal) else Decimal(str(value or 0))
+        number = value if isinstance(value, Decimal) else Decimal(str(value or 0))
+        return number if number.is_finite() else Decimal("0")
     except (TypeError, ValueError, ArithmeticError):
         return Decimal("0")
 
