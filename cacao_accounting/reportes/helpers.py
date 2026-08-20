@@ -375,10 +375,20 @@ def _build_drill_down_url(
 
 
 def _build_voucher_url(values: dict[str, object]) -> str | None:
+    """Resolve a document detail route without bypassing its own ACL checks."""
     voucher_type = str(values.get("voucher_type") or "").lower()
-    voucher_id = str(values.get("document_no") or values.get("voucher_id") or "").strip()
-    if voucher_type == "journal_entry" and voucher_id:
-        return url_for("contabilidad.ver_comprobante", identifier=voucher_id)
+    voucher_id = str(values.get("voucher_id") or values.get("document_id") or values.get("document_no") or "").strip()
+    endpoints = {
+        "journal_entry": ("contabilidad.ver_comprobante", "identifier"),
+        "payment_entry": ("bancos.bancos_pago", "payment_id"),
+        "sales_invoice": ("ventas.ventas_factura_venta", "invoice_id"),
+        "purchase_invoice": ("compras.compras_factura_compra", "invoice_id"),
+        "stock_entry": ("inventario.inventario_entrada", "entry_id"),
+    }
+    endpoint = endpoints.get(voucher_type)
+    if endpoint and voucher_id:
+        endpoint_name, identifier_name = endpoint
+        return url_for(endpoint_name, **{identifier_name: voucher_id})
     return None
 
 
@@ -980,10 +990,15 @@ def _render_operational_framework(
     totals_raw = getattr(report, "totals", {})
     ledger_currency = getattr(report, "ledger_currency", None)
     columns = getattr(report, "columns", None) or (list(rows[0].values.keys()) if rows else [])
-    page = max(request.args.get("page", 1, type=int) or 1, 1)
-    page_size = min(max(request.args.get("page_size", 100, type=int) or 100, 1), 500)
-    total_rows = getattr(report, "total_rows", 0) or len(rows)
-    page_rows = rows[(page - 1) * page_size : page * page_size]
+    requested_page = max(request.args.get("page", 1, type=int) or 1, 1)
+    requested_page_size = min(max(request.args.get("page_size", 100, type=int) or 100, 1), 500)
+    report_total_rows = getattr(report, "total_rows", 0) or 0
+    report_page_size = getattr(report, "page_size", 0) or 0
+    is_service_paginated = report_total_rows > len(rows) and report_page_size > 0
+    page = getattr(report, "page", requested_page) if is_service_paginated else requested_page
+    page_size = report_page_size if is_service_paginated else requested_page_size
+    total_rows = report_total_rows or len(rows)
+    page_rows = rows if is_service_paginated else rows[(page - 1) * page_size : page * page_size]
     display_headers = {column: _column_label(column, ledger_currency) for column in columns}
     display_rows = [
         {column: _format_cell(column, row.values.get(column), ledger_currency) for column in columns} for row in page_rows

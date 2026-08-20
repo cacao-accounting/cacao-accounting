@@ -215,6 +215,19 @@ def test_operational_report_routes_render_without_breaking_financial_reports(app
     assert 'doctype: "bank_account"' not in accounting_html
 
 
+def test_operational_voucher_urls_use_persisted_identifiers_and_supported_types(app_ctx):
+    """Operational drill-downs use IDs and delegate authorization to target routes."""
+    from cacao_accounting.reportes.helpers import _build_voucher_url
+
+    assert (
+        _build_voucher_url({"voucher_type": "payment_entry", "voucher_id": "PAY-1", "document_no": "PAY-0001"})
+        == "/payment/PAY-1"
+    )
+    assert _build_voucher_url({"voucher_type": "sales_invoice", "voucher_id": "SI-1"}) == "/sales/sales-invoice/SI-1"
+    assert _build_voucher_url({"voucher_type": "purchase_invoice", "voucher_id": "PI-1"}) == "/buying/purchase-invoice/PI-1"
+    assert _build_voucher_url({"voucher_type": "stock_entry", "voucher_id": "STE-1"}) == "/inventory/stock-entry/STE-1"
+
+
 def test_multicurrency_bank_reports(app_ctx):
     from cacao_accounting.database import Bank, BankAccount, PaymentEntry, database
     from cacao_accounting.reportes.services import BankingFilters, get_bank_movement_detail, get_bank_balance_summary
