@@ -93,7 +93,7 @@ def create_company(
     """Crea una compañia con los registros contables mínimos necesarios."""
     company_count = database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0
     if force_single_entity() and company_count >= 1:
-        raise ValueError("Esta instalaciÃ³n solo permite una compaÃ±Ã­a.")
+        raise ValueError("Esta instalación solo permite una compañía.")
 
     entity = create_default_entity(company_data, status=status, default=default)
     create_default_book(entity)
