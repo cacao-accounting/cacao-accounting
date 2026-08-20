@@ -724,6 +724,15 @@
        removeRow(i) {
          this.items.splice(i, 1);
        },
+       toCurrencyString(value) {
+         if (value === null || value === undefined || value === '') return '0';
+         const str = typeof value === 'string' ? value.trim() : String(value);
+         if (!str) return '0';
+         const num = Number(str);
+         if (Number.isNaN(num) || !Number.isFinite(num)) return '0';
+         const formatted = num.toFixed(9).replace(/\.?0+$/, '') || '0';
+         return formatted === '-0' ? '0' : formatted;
+       },
        calcAmount(i) {
          this.items[i].amount = parseFloat(this.items[i].qty || 0) * parseFloat(this.items[i].rate || 0);
        },
@@ -832,7 +841,7 @@
                        step="0.0001" @input="calcAmount(idx)" class="form-control form-control-sm"></td>
             <td>
               <span x-text="item.amount.toFixed(2)" style="font-size:.85rem;"></span>
-              <input type="hidden" :name="'amount_' + idx" :value="item.amount">
+              <input type="hidden" :name="'amount_' + idx" :value="toCurrencyString(item.amount)">
             </td>
             <td>
               <button type="button" class="btn btn-sm btn-outline-danger" @click="removeRow(idx)"

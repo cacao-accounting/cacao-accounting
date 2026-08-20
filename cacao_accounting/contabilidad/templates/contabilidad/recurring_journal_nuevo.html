@@ -144,9 +144,22 @@
       prepareSubmit: function (e) {
         if (!this.isBalanced) { e.preventDefault(); alert("{{ _('El comprobante debe estar balanceado.') }}"); return; }
         if (!this.selectedBooks.length) { e.preventDefault(); alert("{{ _('Seleccione al menos un libro contable.') }}"); return; }
-        this.payload = JSON.stringify(this.lines.filter(l => l.account_code || l.debit || l.credit));
+        this.payload = JSON.stringify(this.lines.filter(l => l.account_code || l.debit || l.credit).map(l => ({
+          ...l,
+          debit: this.toCurrencyString(l.debit),
+          credit: this.toCurrencyString(l.credit),
+        })));
       },
 
+      toCurrencyString: function (value) {
+        if (value === null || value === undefined || value === '') return '0';
+        const str = typeof value === 'string' ? value.trim() : String(value);
+        if (!str) return '0';
+        const num = Number(str);
+        if (Number.isNaN(num) || !Number.isFinite(num)) return '0';
+        const formatted = num.toFixed(9).replace(/\.?0+$/, '') || '0';
+        return formatted === '-0' ? '0' : formatted;
+      },
       formatMoney: function (val) { return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2 }).format(val); }
     };
   };

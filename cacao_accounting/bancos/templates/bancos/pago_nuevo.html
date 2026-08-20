@@ -229,6 +229,16 @@
         return Number.isFinite(parsed) ? parsed : 0;
       },
 
+      toCurrencyString: function (value) {
+        if (value === null || value === undefined || value === '') return '0';
+        const str = typeof value === 'string' ? value.trim() : String(value);
+        if (!str) return '0';
+        const num = Number(str);
+        if (Number.isNaN(num) || !Number.isFinite(num)) return '0';
+        const formatted = num.toFixed(9).replace(/\.?0+$/, '') || '0';
+        return formatted === '-0' ? '0' : formatted;
+      },
+
       formatCurrency: function (val) {
         return (this.header.currency || 'NIO') + ' ' + this.parseNumber(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       },
@@ -353,8 +363,13 @@
           posting_date: this.header.posting_date,
           party_type: this.header.party_type,
           party_id: this.header.party_id,
-          lines: [{ uid: 'PAYMENT-REF', item_code: 'PAYMENT', item_name: 'Payment', qty: 1, rate: this.header.paid_amount, amount: this.header.paid_amount }],
-          tax_lines: this.taxCharges.lines
+          lines: [{ uid: 'PAYMENT-REF', item_code: 'PAYMENT', item_name: 'Payment', qty: 1, rate: this.toCurrencyString(this.header.paid_amount), amount: this.toCurrencyString(this.header.paid_amount) }],
+          tax_lines: (this.taxCharges.lines || []).map((line) => ({
+            ...line,
+            base_amount: this.toCurrencyString(line.base_amount),
+            rate: this.toCurrencyString(line.rate),
+            amount: this.toCurrencyString(line.amount),
+          }))
         };
       },
 
@@ -482,12 +497,12 @@
         }, 0);
         const subtotal = this.parseNumber(this.header.paid_amount || 0);
         this.taxCharges.summary = {
-          subtotal: String(subtotal),
-          document_tax_total: String(documentTaxTotal),
-          capitalizable_tax_total: String(capitalizableTaxTotal),
-          separate_tax_total: String(separateTaxTotal),
-          withholding_total: String(withholdingTotal),
-          grand_total: String(subtotal + documentTaxTotal)
+          subtotal: this.toCurrencyString(subtotal),
+          document_tax_total: this.toCurrencyString(documentTaxTotal),
+          capitalizable_tax_total: this.toCurrencyString(capitalizableTaxTotal),
+          separate_tax_total: this.toCurrencyString(separateTaxTotal),
+          withholding_total: this.toCurrencyString(withholdingTotal),
+          grand_total: this.toCurrencyString(subtotal + documentTaxTotal)
         };
       },
 
@@ -508,8 +523,19 @@
 
         this.payload = JSON.stringify({
           ...this.header,
-          lines: this.lines,
-          tax_lines: this.taxCharges.lines,
+          paid_amount: this.toCurrencyString(this.header.paid_amount),
+          exchange_rate: this.toCurrencyString(this.header.exchange_rate),
+          lines: this.lines.map((line) => ({
+            ...line,
+            allocated_amount: this.toCurrencyString(line.allocated_amount),
+            outstanding_amount: this.toCurrencyString(line.outstanding_amount),
+          })),
+          tax_lines: (this.taxCharges.lines || []).map((line) => ({
+            ...line,
+            base_amount: this.toCurrencyString(line.base_amount),
+            rate: this.toCurrencyString(line.rate),
+            amount: this.toCurrencyString(line.amount),
+          })),
           tax_summary: this.taxCharges.summary
         });
       }

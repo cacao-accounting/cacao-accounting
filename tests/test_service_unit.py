@@ -319,7 +319,7 @@ class TestCloseDocumentBalances:
             reason="Saldo cancelado por proveedor",
         )
         assert len(closed) == 1
-        assert closed[0]["closed_qty"] == 10.0
+        assert Decimal(closed[0]["closed_qty"]) == Decimal("10")
 
     def test_skips_already_closed_items(self, app_ctx):
         supplier = _get_supplier()
@@ -366,7 +366,7 @@ class TestCloseDocumentBalances:
             reason="Cerrando saldo restante",
         )
         assert len(closed) == 1
-        assert closed[0]["closed_qty"] == 6.0
+        assert Decimal(closed[0]["closed_qty"]) == Decimal("6")
 
 
 class TestCloseLineBalance:
@@ -382,8 +382,8 @@ class TestCloseLineBalance:
             qty=Decimal("10"),
             reason="Proveedor no entregara el resto",
         )
-        assert result["closed_qty"] == 10.0
-        assert result["pending_qty"] == 0.0
+        assert Decimal(result["closed_qty"]) == Decimal("10")
+        assert Decimal(result["pending_qty"]) == Decimal("0")
 
     def test_close_partial(self, app_ctx):
         supplier = _get_supplier()
@@ -397,8 +397,8 @@ class TestCloseLineBalance:
             qty=Decimal("3"),
             reason="Cancelacion parcial",
         )
-        assert result["closed_qty"] == 3.0
-        assert result["pending_qty"] == 7.0
+        assert Decimal(result["closed_qty"]) == Decimal("3")
+        assert Decimal(result["pending_qty"]) == Decimal("7")
 
     def test_close_all_pending_when_qty_none(self, app_ctx):
         supplier = _get_supplier()
@@ -412,7 +412,7 @@ class TestCloseLineBalance:
             qty=None,
             reason="Cerrar todo",
         )
-        assert result["closed_qty"] == 10.0
+        assert Decimal(result["closed_qty"]) == Decimal("10")
 
     def test_empty_reason_raises(self, app_ctx):
         supplier = _get_supplier()

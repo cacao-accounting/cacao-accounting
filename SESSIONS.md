@@ -3,6 +3,90 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-20 — Fix de precisión decimal #284: parseFloat en frontend y contrato de precisión
+
+### Petición
+
+Analizar el issue [#284](https://github.com/cacao-accounting/cacao-accounting/issues/284)
+sobre pérdidas de precisión en `parseFloat` del frontend, aplicar los fixes necesarios
+dejando los cambios locales (sin push) y referenciar el issue en el commit.
+
+### Análisis de comentarios del issue
+
+El issue #284 fue revisado incluyendo todos sus comentarios. El análisis previo identificó:
+
+- **`transaction-form.js`**: `parseFloat` en `toNumber()` — la frontera pendiente. Los
+  valores monetarios se serializan como `float` en JSON y form inputs via `String(float)`,
+  produciendo ruido IEEE 754 (`0.020000000000000004`).
+- **`macros.html`**: `parseFloat` en `calcAmount` y `applySource` — multiplicación
+  `qty × rate` produce floats con ruido.
+- **`pago_nuevo.html`**: `parseNumber` con `parseFloat` — el `payload` JSON spreadea
+  montos sin formatear.
+- **`recurring_journal_nuevo.html`**: `parseFloat` en `totalDebit`/`totalCredit` y
+  `JSON.stringify` de líneas con floats.
+- **Tests existentes**: 5 tests en `test_service_unit.py` comparaban contra `float`
+  (`== 10.0`) en lugar de `Decimal`, fallando por la serialización string de
+  `_to_json_number`.
+
+### Implementado
+
+1. **`docs/precision_contract.md`** — Documento nuevo que define el contrato de
+   precisión: escalas por tipo de valor (monetario scale=4, cantidades/rates
+   scale=9), reglas de conversión Python vs JavaScript, y referencias a commits
+   previos (#284, `b227fec5`, `9095b82a`, `ac10597d`, `3e5814ec`).
+
+2. **`cacao_accounting/static/js/transaction-form.js`**:
+   - Agregada función `toCurrencyString(value)` que formatea a cadena decimal
+     limpia usando `toFixed(9)` (escala máxima del sistema) y elimina ceros
+     finales, evitando ruido IEEE 754.
+   - `_serializeLine` y `_serializeTaxLine`: `toNumber` → `toCurrencyString` para
+     `qty`, `rate`, `amount`, `base_amount` (ruta de fiscal preview API).
+   - `syncLineInputs`: campos monetarios (`qty`, `rate`, `amount`) usan
+     `toCurrencyString` en lugar de `String(value)` (ruta de form POST).
+   - `recalculateTaxSummary`: `String(...)` → `toCurrencyString(...)` para todos
+     los totales del resumen fiscal.
+   - `serializedTaxLines`: mapea líneas con `toCurrencyString` antes de
+     `JSON.stringify` (ruta de form POST para tax lines).
+
+3. **`cacao_accounting/bancos/templates/bancos/pago_nuevo.html`**:
+   - Agregado método `toCurrencyString()` al componente Alpine.
+   - `buildFiscalPayload`: `rate`/`amount` de líneas y tax_lines usan
+     `toCurrencyString`.
+   - `prepareSubmit`: `paid_amount`, `exchange_rate`, `allocated_amount`,
+     `outstanding_amount`, `base_amount`, `rate`, `amount` formateados con
+     `toCurrencyString` antes del `JSON.stringify`.
+   - `recalculateTaxSummary`: `String(...)` → `toCurrencyString(...)`.
+
+4. **`cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_nuevo.html`**:
+   - Agregada función `toCurrencyString()`.
+   - `prepareSubmit`: líneas mapeadas con `toCurrencyString` para `debit`/`credit`
+     antes de `JSON.stringify`.
+
+5. **`cacao_accounting/templates/macros.html`**:
+   - Agregada función `toCurrencyString()` al componente Alpine `lineas_items`.
+   - Input oculto `amount` usa `:value="toCurrencyString(item.amount)"` en lugar
+     de `:value="item.amount"`.
+
+6. **`tests/test_service_unit.py`**:
+   - 5 aserciones corregidas de `== X.0` (float) a
+     `Decimal(...) == Decimal("X")` (patrón `test_dashboard_api.py`).
+
+7. **`tests/test_precision_contract.py`** — Archivo nuevo con:
+   - 5 tests de edge cases para `_to_json_number`: valores exactos (`0.01`,
+     `0.1`, `0.333333`, `1.005`, `999999999.99`, `0.0001`, `36.123456789`),
+     None/vacío, strings preservados, whitespace, enteros grandes.
+   - 4 tests de contrato multi-moneda para `payment_reference_candidates`:
+     montos fraccionarios preservados (`"300.5000"`), alta precisión
+     (`"999.9999"`), exclusión de saldo cero, filtrado por compañía.
+
+### Validación
+
+- `tests/test_service_unit.py`: **30 passed** (incluye los 5 tests corregidos).
+- `tests/test_precision_contract.py`: **9 passed**.
+- `tests/test_payment_entry_improved.py::test_payment_reference_candidates_endpoint_filters_by_party_and_company`: **passed**.
+- Black, Ruff y mypy sin errores sobre archivos modificados.
+
+
 ## 2026-08-20 — Exclusión de tests Playwright de CI pre-release
 
 ### Petición

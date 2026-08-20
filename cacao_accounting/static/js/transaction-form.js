@@ -16,6 +16,23 @@
     return parsed;
   }
 
+  /** Serializa un valor financiero a cadena decimal limpia.
+   *
+   * Evita que representaciones IEEE 754 (ej. 0.020000000000000004)
+   * lleguen al backend. Usa toFixed(9) — la escala máxima del sistema —
+   * y elimina ceros finales para producir una cadena que
+   * Decimal(str(value)) en el servidor procese sin perder precisión.
+   */
+  function toCurrencyString(value) {
+    if (value === null || value === undefined || value === '') return '0';
+    const str = typeof value === 'string' ? value.trim() : String(value);
+    if (!str) return '0';
+    const num = Number(str);
+    if (Number.isNaN(num) || !Number.isFinite(num)) return '0';
+    const formatted = num.toFixed(9).replace(/\.?0+$/, '') || '0';
+    return formatted === '-0' ? '0' : formatted;
+  }
+
   function normalizeAllowedUoms(source, fallback) {
     const values = Array.isArray(source) ? [...source] : [];
     if (!values.length && fallback) values.push(fallback);
@@ -384,13 +401,15 @@
           const root = this.$root || document;
           const fields = ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount', 'warehouse', 'account',
             'cost_center', 'unit', 'project', 'remarks', 'source_type', 'source_id', 'source_item_id'];
+          const monetaryFields = new Set(['qty', 'rate', 'amount']);
           for (const [index, line] of this.lines.entries()) {
             for (const field of fields) {
               const input = root.querySelector(`[name="${field}_${index}"]`);
               if (!input) continue;
               const globalWarehouse = this.header.warehouse || this.header.from_warehouse || this.header.to_warehouse;
               const value = field === 'warehouse' && !line[field] ? globalWarehouse : line[field];
-              input.value = value === undefined || value === null ? '' : String(value);
+              const stringValue = monetaryFields.has(field) ? toCurrencyString(value) : String(value);
+              input.value = value === undefined || value === null ? '' : stringValue;
               input.dispatchEvent(new Event('input', { bubbles: true }));
               input.dispatchEvent(new Event('change', { bubbles: true }));
             }
@@ -625,10 +644,10 @@
             uid: line.uid || '',
             item_code: line.item_code || '',
             item_name: line.item_name || '',
-            qty: toNumber(line.qty),
+            qty: toCurrencyString(line.qty),
             uom: line.uom || '',
-            rate: toNumber(line.rate),
-            amount: toNumber(line.amount),
+            rate: toCurrencyString(line.rate),
+            amount: toCurrencyString(line.amount),
           };
         },
 
@@ -652,8 +671,8 @@
             base_mode: line.base_mode || 'goods',
             include_concepts: line.include_concepts || [],
             exclude_concepts: line.exclude_concepts || [],
-            rate: toNumber(line.rate),
-            amount: toNumber(line.amount),
+            rate: toCurrencyString(line.rate),
+            amount: toCurrencyString(line.amount),
             accounting_treatment: accountingTreatment,
             allocation_method: line.allocation_method || '',
             affects_inventory: accountingTreatment === 'capitalizable_inventory_cost',
@@ -824,12 +843,12 @@
           const capitalizableTaxTotal = this.calcCapitalizableTaxTotal(lines);
           const separateTaxTotal = this.calcSeparateTaxTotal(lines);
           const withholdingTotal = this.calcWithholdingTotal(lines);
-          summary.subtotal = String(this.totalAmount);
-          summary.document_tax_total = String(documentTaxTotal);
-          summary.capitalizable_tax_total = String(capitalizableTaxTotal);
-          summary.separate_tax_total = String(separateTaxTotal);
-          summary.withholding_total = String(withholdingTotal);
-          summary.grand_total = String(this.totalAmount + documentTaxTotal);
+          summary.subtotal = toCurrencyString(this.totalAmount);
+          summary.document_tax_total = toCurrencyString(documentTaxTotal);
+          summary.capitalizable_tax_total = toCurrencyString(capitalizableTaxTotal);
+          summary.separate_tax_total = toCurrencyString(separateTaxTotal);
+          summary.withholding_total = toCurrencyString(withholdingTotal);
+          summary.grand_total = toCurrencyString(this.totalAmount + documentTaxTotal);
           this.taxCharges.summary = summary;
         },
 
@@ -1062,7 +1081,14 @@
         },
 
         serializedTaxLines() {
-          return JSON.stringify(this.taxCharges.lines || []);
+          return JSON.stringify(
+            (this.taxCharges.lines || []).map((line) => ({
+              ...line,
+              base_amount: toCurrencyString(line.base_amount),
+              rate: toCurrencyString(line.rate),
+              amount: toCurrencyString(line.amount),
+            }))
+          );
         },
 
         serializedTaxSummary() {
