@@ -65,7 +65,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest --full -qq -s --exitfirst --slow=True --tb=line --ignore=tests/test_04database_schema.py
+          CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest --full -qq -s --exitfirst --slow=True --tb=line --ignore=tests/test_04database_schema.py --ignore=tests/test_e2e_playwright_accounting.py --ignore=tests/test_e2e_playwright_document_flow.py --ignore=tests/test_e2e_transactional_ui.py
       - name: Test Smart Select JavaScript
         working-directory: cacao_accounting/static
         run: npm test
@@ -219,7 +219,7 @@ jobs:
           SECRET_KEY: "ASD123kljaAddS"
           CACAO_ACCOUNTING_DESKTOP: "True"
         run: |
-          python -m pytest --full -qq -s --exitfirst --slow=True --tb=line --ignore=tests/test_04database_schema.py
+          python -m pytest --full -qq -s --exitfirst --slow=True --tb=line --ignore=tests/test_04database_schema.py --ignore=tests/test_e2e_playwright_accounting.py --ignore=tests/test_e2e_playwright_document_flow.py --ignore=tests/test_e2e_transactional_ui.py
 
   coverage:
     runs-on: ubuntu-latest
@@ -238,6 +238,6 @@ jobs:
           python -m pip install --only-binary=:all: -e .[cloud]
       - name: Test with pytest
         run: |
-          SECRET_KEY=ASD123kljaAddS LOGURU_LEVEL=ERROR CACAO_TEST=True python -m pytest --full -qq -s --slow=True --cov=cacao_accounting --ignore=tests/test_04database_schema.py
+          SECRET_KEY=ASD123kljaAddS LOGURU_LEVEL=ERROR CACAO_TEST=True python -m pytest --full -qq -s --slow=True --cov=cacao_accounting --ignore=tests/test_04database_schema.py --ignore=tests/test_e2e_playwright_accounting.py --ignore=tests/test_e2e_playwright_document_flow.py --ignore=tests/test_e2e_transactional_ui.py
       - name: Coveralls
         uses: coverallsapp/github-action@v2

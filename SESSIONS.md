@@ -3,6 +3,58 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-20 — Exclusión de tests Playwright de CI pre-release
+
+### Petición
+
+Analizar el estatus de CI en GitHub, que está fallando por errores de Playwright;
+considerando que en pre-release ni siquiera en alpha Playwright es necesario,
+excluir los tests de Playwright de `--full` y cerrar los issues abiertos relacionados.
+
+### Análisis de CI
+
+Los últimos 10 runs de CI (workflow `CI`) han fallado. Inspeccionando el run 32381023234:
+
+- **`e2e` job**: PASSED. Instala Chromium (`playwright install --with-deps chromium`)
+  y ejecuta los tests de Playwright correctamente.
+- **`lint` y `databases` jobs**: PASSED.
+- **`build` (3.12, 3.13, 3.14), `desktop`, `coverage` jobs**: FAILED in "Test with pytest".
+
+La causa raíz: el paquete Python `playwright` está instalado en todos los jobs
+(viene en `requirements.txt`), por lo que `HAS_PLAYWRIGHT=True` y los marcadores
+`@pytest.mark.skipif(not HAS_PLAYWRIGHT)` no omiten los tests. Sin embargo, el
+**binario de Chromium** solo se instala en el job `e2e`. Cuando el fixture `browser()`
+llama a `p.chromium.launch(headless=True)` falla con:
+
+```
+BrowserType.launch: Executable doesn't exist at .../chromium_headless_shell-1223/...
+```
+
+En `test_e2e_playwright_accounting.py` y `test_e2e_playwright_document_flow.py`
+el fixture captura la excepción y llama `pytest.skip()` (tests omitidos, no fallan).
+En `test_e2e_transactional_ui.py` el fixture usaba `pytest.fail()` en lugar de
+`pytest.skip()`, convirtiendo el error de browserless en un **fallo duro** que
+aborta la corrida (`--exitfirst`).
+
+### Implementado
+
+1. **`.github/workflows/python-package.yml`**: se agregaron `--ignore` para los
+   tres archivos de tests Playwright en los jobs `build`, `desktop` y `coverage`:
+   ```
+   --ignore=tests/test_e2e_playwright_accounting.py
+   --ignore=tests/test_e2e_playwright_document_flow.py
+   --ignore=tests/test_e2e_transactional_ui.py
+   ```
+   Estos tests continúan ejecutándose en el job dedicado `e2e` que instala Chromium.
+
+2. **`tests/test_e2e_transactional_ui.py`**: se corrigió `pytest.fail()` →
+   `pytest.skip()` en el fixture `browser()` (línea 64), manteniendo consistencia
+   con los otros archivos Playwright. Esto evita fallos locales cuando alguien
+   ejecuta `pytest --full` sin Chromium instalado.
+
+3. **Issue #256** (`TST-E2E-01: Ampliar cobertura de pruebas E2E/Playwright`):
+   se publicó un comentario de cierre con el análisis y se cerró el issue.
+
 ## 2026-08-20 — Verificación de fixes, cierre de issues y needs-work
 
 ### Petición
