@@ -43,16 +43,12 @@ def app_ctx():
 
 def _seed_accounting_admin() -> None:
     """Crea un actor persistido para servicios de posting fail-closed."""
-    from cacao_accounting.database import Book, Modules, User, database
+    from cacao_accounting.database import Modules, User, database
 
     if database.session.execute(database.select(Modules).filter_by(module="accounting")).scalar_one_or_none() is None:
         database.session.add(Modules(module="accounting", default=True, enabled=True))
     if database.session.get(User, "admin") is None:
         database.session.add(User(id="admin", user="acl-admin", password=b"x", classification="admin", active=True))
-    if database.session.execute(database.select(Book).filter_by(entity="cacao")).scalar_one_or_none() is None:
-        database.session.add(
-            Book(entity="cacao", code="MAIN", name="Libro principal", status="activo", is_primary=True, currency="NIO")
-        )
     database.session.commit()
 
 
@@ -4991,6 +4987,10 @@ def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
     database.session.add_all([bank_gl, difference, bank])
     database.session.flush()
 
+    primary_book = Book(entity="cacao", code="ATOM-NIO", name="Libro atom", status="activo", is_primary=True, currency="NIO")
+    database.session.add(primary_book)
+    database.session.flush()
+
     database.session.add(CompanyDefaultAccount(company="cacao", bank_difference_account_id=difference.id))
     bank_account = BankAccount(
         bank_id=bank.id,
@@ -5008,9 +5008,6 @@ def test_bank_reconciliation_atomicity_with_difference(app_ctx, monkeypatch):
         deposit=Decimal("100.00"),
     )
     database.session.add(transaction)
-    primary_book = database.session.execute(
-        database.select(Book).where(Book.entity == "cacao", Book.is_primary.is_(True))
-    ).scalar_one()
     target_entry = GLEntry(
         company="cacao",
         posting_date=date(2026, 5, 5),

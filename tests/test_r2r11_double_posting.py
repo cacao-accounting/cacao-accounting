@@ -124,3 +124,25 @@ def test_post_comprobante_contable_rejects_double_posting(app_ctx):
         .all()
     )
     assert len(posted_entries) == 2
+
+
+def test_posting_guard_locks_source_document_before_checking_gl(app_ctx, monkeypatch):
+    """El guard de posting usa la fila del documento como ancla de idempotencia."""
+    from cacao_accounting.contabilidad.posting_service import _has_active_gl_entries
+    from cacao_accounting.database import ComprobanteContable, database
+
+    journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 5), memo="Lock de posting")
+    database.session.add(journal)
+    database.session.flush()
+
+    calls: list[tuple[object, str, bool | None]] = []
+    original_get = database.session.get
+
+    def tracking_get(model, ident, **kwargs):
+        calls.append((model, ident, kwargs.get("with_for_update")))
+        return original_get(model, ident, **kwargs)
+
+    monkeypatch.setattr(database.session, "get", tracking_get)
+
+    assert _has_active_gl_entries(journal) is False
+    assert (ComprobanteContable, journal.id, True) in calls

@@ -17,6 +17,7 @@ from flask_login import current_user
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
 from openpyxl.utils import get_column_letter
+from werkzeug.routing import BuildError
 
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database import Accounts, AccountingPeriod, Book, Entity, database
@@ -388,7 +389,20 @@ def _build_voucher_url(values: dict[str, object]) -> str | None:
     endpoint = endpoints.get(voucher_type)
     if endpoint and voucher_id:
         endpoint_name, identifier_name = endpoint
-        return url_for(endpoint_name, **{identifier_name: voucher_id})
+        try:
+            return url_for(endpoint_name, **{identifier_name: voucher_id})
+        except (BuildError, RuntimeError):
+            # Unit/report builders also run inside an application context
+            # without an active request. Keep the persisted identifier and
+            # use the same detail paths that Flask generates in a request.
+            fallback_paths = {
+                "journal_entry": "/accounting/journal/{id}",
+                "payment_entry": "/payment/{id}",
+                "sales_invoice": "/sales/sales-invoice/{id}",
+                "purchase_invoice": "/buying/purchase-invoice/{id}",
+                "stock_entry": "/inventory/stock-entry/{id}",
+            }
+            return fallback_paths[voucher_type].format(id=voucher_id)
     return None
 
 

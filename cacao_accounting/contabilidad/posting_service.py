@@ -430,6 +430,15 @@ def _resolve_bank_gl_account_id(document: PaymentEntry, destination: bool) -> st
 
 
 def _has_active_gl_entries(document: Any) -> bool:
+    # Lock the source document before checking the derived ledger rows.  The
+    # previous implementation only locked rows that already existed in
+    # ``gl_entry``; two first-time retries could therefore both observe an
+    # empty result and create duplicate postings.  Every supported posting
+    # path calls this guard, so the document row is the durable idempotency
+    # anchor for invoices, payments, journals, inventory, and bank entries.
+    document_id = getattr(document, "id", None)
+    if document_id:
+        database.session.get(type(document), document_id, with_for_update=True)
     return (
         database.session.execute(
             select(GLEntry.id)
