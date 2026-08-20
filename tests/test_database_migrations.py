@@ -4,73 +4,9 @@ import os
 import sqlite3
 import subprocess
 import sys
-import importlib
-from decimal import Decimal
 from pathlib import Path
 
-import sqlalchemy as sa
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-
-def test_document_relation_uom_migration_backfills_legacy_rows() -> None:
-    """La migracion persiste cantidades legacy en la UOM base del item."""
-    migration = importlib.import_module("cacao_accounting.migrations.20260819_0002_document_relation_uom_backfill")
-    metadata = sa.MetaData()
-    sa.Table(
-        "document_relation",
-        metadata,
-        sa.Column("id", sa.String(26), primary_key=True),
-        sa.Column("source_type", sa.String(50), nullable=False),
-        sa.Column("source_item_id", sa.String(26)),
-        sa.Column("qty", sa.Numeric(20, 9), nullable=False),
-        sa.Column("qty_in_base_uom", sa.Numeric(20, 9)),
-        sa.Column("uom", sa.String(20)),
-    )
-    sa.Table(
-        "purchase_order_item",
-        metadata,
-        sa.Column("id", sa.String(26), primary_key=True),
-        sa.Column("item_code", sa.String(50)),
-        sa.Column("uom", sa.String(20)),
-    )
-    sa.Table(
-        "item",
-        metadata,
-        sa.Column("code", sa.String(50), primary_key=True),
-        sa.Column("default_uom", sa.String(20)),
-    )
-    sa.Table(
-        "item_uom_conversion",
-        metadata,
-        sa.Column("item_code", sa.String(50)),
-        sa.Column("from_uom", sa.String(20)),
-        sa.Column("to_uom", sa.String(20)),
-        sa.Column("conversion_factor", sa.Numeric(20, 9)),
-    )
-    engine = sa.create_engine("sqlite://")
-    metadata.create_all(engine)
-
-    with engine.begin() as connection:
-        connection.execute(sa.text("INSERT INTO item (code, default_uom) VALUES ('ITEM-1', 'UND')"))
-        connection.execute(sa.text("INSERT INTO purchase_order_item (id, item_code, uom) VALUES ('POI-1', 'ITEM-1', 'UND')"))
-        connection.execute(
-            sa.text(
-                "INSERT INTO item_uom_conversion (item_code, from_uom, to_uom, conversion_factor) "
-                "VALUES ('ITEM-1', 'BOX', 'UND', 10)"
-            )
-        )
-        connection.execute(
-            sa.text(
-                "INSERT INTO document_relation "
-                "(id, source_type, source_item_id, qty, qty_in_base_uom, uom) "
-                "VALUES ('REL-1', 'purchase_order', 'POI-1', 2, NULL, 'BOX')"
-            )
-        )
-        migration.backfill_document_relations(connection)
-        result = connection.execute(sa.text("SELECT qty_in_base_uom FROM document_relation WHERE id = 'REL-1'")).scalar_one()
-
-    assert result == Decimal("20.000000000")
 
 
 def test_db_init_and_migrate_record_a_real_revision(tmp_path: Path) -> None:
@@ -114,7 +50,7 @@ def test_db_init_and_migrate_record_a_real_revision(tmp_path: Path) -> None:
     with sqlite3.connect(database_path) as connection:
         revision = connection.execute("SELECT version_num FROM alembic_version").fetchall()
 
-    assert revision == [("20260819_0002",)]
+    assert revision == [("20260809_0001",)]
 
     with sqlite3.connect(database_path) as connection:
         entity_code = connection.execute("PRAGMA table_info(entity)").fetchall()

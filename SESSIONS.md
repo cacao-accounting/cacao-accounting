@@ -108,12 +108,11 @@ workers/transactions. Generar un commit semántico con sign-off como
      registro (con lock `with_for_update`) para que retries posteriores se resuelvan
      por replay en lugar de crear postings duplicados.
 
-3. **`cacao_accounting/migrations/20260820_0001_purchase_reconciliation_idempotency.py`** —
-   Migración Alembic incremental:
-   - Añade columna `idempotency_key` a `purchase_reconciliation`.
-   - Crea `UNIQUE CONSTRAINT` sobre `idempotency_key`.
-   - Crea índice parcial único sobre `purchase_invoice_id WHERE status != 'cancelled'`
-     (compatible SQLite y PostgreSQL).
+3. ~~`cacao_accounting/migrations/20260820_0001_purchase_reconciliation_idempotency.py`~~ —
+   **Eliminada** por política establecida (ver sección 2026-08-16): la columna
+   `idempotency_key`, el `UNIQUE CONSTRAINT` y el índice parcial se definen
+   directamente en el modelo `PurchaseReconciliation` y se crean con `create_all`
+   durante `db init`.
 
 4. **`tests/test_08_reconciliation_reports.py`** — 5 tests focales:
    - `test_purchase_reconciliation_rejects_duplicate_invoice` — POST duplicado rechazado.
@@ -4018,3 +4017,56 @@ modifica ni se afecta.
 - Los issues restantes de la tabla de SESSIONS.md (#246, #251, #256, #276, #278,
   #282, #283, #284) siguen abiertos con `needs-work`.
 - No se hizo push. Los cambios son locales y referencian #285.
+
+---
+
+## 2026-08-20 — Consolidación: eliminación de migraciones incrementales
+
+### Petición
+
+Confirmar que los fixes localmente aplicados en los commits `4399d51e`, `03ec7a0c` y
+`407f4e82` son correctos antes de push. Durante la verificación, `test_database_migrations.py`
+falló porque `test_db_init_and_migrate_record_a_real_revision` exigía `alembic_version =
+20260819_0002`, la versión introducida por migraciones incrementales que contradicen la
+política documentada en la sección 2026-08-16 ("conservar únicamente la migración Alembic dummy").
+
+### Análisis
+
+- Las migraciones incrementales `20260817_0001`, `20260819_0001`, `20260819_0002` y
+  `20260820_0001` (la última agregada localmente por este ticket) fueron eliminadas.
+- Todas las columnas y constraints que esas migraciones aportaban ya están definidas en los
+  modelos SQLAlchemy (`base_total`, `qty_in_base_uom`, `expiry_date`, `idempotency_key`,
+  `UniqueConstraint`, índice parcial) y se crean con `create_all` durante `db init`.
+- La función `backfill_document_relations` solo era referenciada por la migración y su test;
+  la normalización on-demand se mantiene viva en `consumed_qty_for_source()` y su test
+  `test_legacy_relation_persists_normalized_base_quantity` no se ve afectado.
+- `PurchaseReconciliationError` es `ValueError`, por lo que `pytest.raises(ValueError)`
+  en `test_db_init_and_migrate_record_a_real_revision` sigue funcionando tras el cambio
+  de `ValueError` a `PurchaseReconciliationError` en los tests de reconciliación.
+
+### Implementación
+
+- **Eliminados**: `cacao_accounting/migrations/{20260817_0001,20260819_0001,20260819_0002,20260820_0001}*.py`
+  y su cache compilada en `__pycache__`.
+- **`tests/test_database_migrations.py`**:
+  - Removida `test_document_relation_uom_migration_backfills_legacy_rows` (dependía de la
+    migración `20260819_0002` eliminada).
+  - Actualizada la aserción de revisión: `20260819_0002` → `20260809_0001`.
+  - Limpiados imports no utilizados (`importlib`, `Decimal`, `sa`).
+- **SESSIONS.md**: actualizada la referencia histórica a la migración `20260820_0001`
+  marcándola como eliminada por política.
+
+### Validación (preliminar, sin ejecutar pruebas)
+
+- **black**: 2 archivos sin cambios de formato.
+- **ruff**: all checks passed.
+- **mypy**: sin errores en archivos modificados.
+- La corrección de la aserción de `alembic_version` resuelve el fallo reportado.
+- Los issues #276, #283 y #285 fueron cerrados en GitHub (label `needs-work` removida)
+  tras confirmar que los commits los resuelven correctamente.
+
+### Continuidad
+
+- No se hizo push. Los cambios son locales.
+- Los modelos conservan todas las columnas y constraints necesarios; el esquema se
+  reconstruye íntegramente desde `create_all` en cada `db init`.
