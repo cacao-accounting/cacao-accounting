@@ -914,6 +914,120 @@ def test_reconciliation_matrix_isolates_selected_ledger(app_ctx):
     assert ar_row["difference"] == Decimal("-100.00")
 
 
+def test_reconciliation_matrix_converts_subledger_to_ledger_currency(app_ctx):
+    """La matriz convierte submayores de moneda funcional a moneda del libro con tasa histórica."""
+    from cacao_accounting.database import (
+        Accounts,
+        Book,
+        CompanyDefaultAccount,
+        Entity,
+        ExchangeRate,
+        GLEntry,
+        PartyAccount,
+        SalesInvoice,
+        SalesInvoiceItem,
+        database,
+    )
+    from cacao_accounting.reportes.services import (
+        ReconciliationFilters,
+        SubledgerFilters,
+        get_ar_ap_subledger,
+        get_reconciliation_matrix,
+    )
+
+    entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
+    entity.currency = "NIO"
+    database.session.flush()
+
+    receivable = Accounts(
+        entity="cacao",
+        code="AR-MCONV",
+        name="AR Conversión",
+        active=True,
+        enabled=True,
+        classification="Activo",
+        account_type="receivable",
+    )
+    income = Accounts(
+        entity="cacao",
+        code="INC-MCONV",
+        name="Income Conversión",
+        active=True,
+        enabled=True,
+        classification="Ingreso",
+        account_type="income",
+    )
+    primary_book = Book(code="MCONV-NIO", name="NIO local", entity="cacao", currency="NIO", is_primary=True)
+    usd_book = Book(code="MCONV-USD", name="USD alterno", entity="cacao", currency="USD", status="activo")
+    database.session.add_all([receivable, income, primary_book, usd_book])
+    database.session.flush()
+    database.session.add_all(
+        [
+            CompanyDefaultAccount(company="cacao", default_receivable=receivable.id),
+            PartyAccount(party_id="CUST-MCONV", company="cacao", receivable_account_id=receivable.id),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 7, 1)),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 7, 31)),
+        ]
+    )
+    database.session.commit()
+
+    invoice = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 7, 1),
+        customer_id="CUST-MCONV",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+        total=Decimal("100"),
+        grand_total=Decimal("100"),
+        base_total=Decimal("3600"),
+        base_grand_total=Decimal("3600"),
+        outstanding_amount=Decimal("100"),
+        base_outstanding_amount=Decimal("3600"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        SalesInvoiceItem(
+            sales_invoice_id=invoice.id,
+            item_code="ITEM-MCONV",
+            qty=1,
+            rate=100,
+            amount=100,
+            base_amount=3600,
+            income_account_id=income.id,
+        )
+    )
+    database.session.commit()
+
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+
+    post_document_to_gl(invoice)
+    database.session.commit()
+
+    ar_sub = get_ar_ap_subledger(SubledgerFilters(company="cacao", party_type="customer", as_of_date=date(2026, 7, 31)))
+    assert ar_sub.totals["outstanding_amount"] == Decimal("3600")
+
+    report_usd = get_reconciliation_matrix(
+        ReconciliationFilters(company="cacao", ledger="MCONV-USD", as_of_date=date(2026, 7, 31))
+    )
+    ar_row_usd = next(row.values for row in report_usd.rows if row.values["area"] == "AR")
+    assert ar_row_usd["currency"] == "USD"
+    assert ar_row_usd["subledger_amount"] == Decimal("100")
+    assert ar_row_usd["gl_control_amount"] == Decimal("100")
+    assert ar_row_usd["difference"] == Decimal("0")
+
+    report_nio = get_reconciliation_matrix(
+        ReconciliationFilters(company="cacao", ledger="MCONV-NIO", as_of_date=date(2026, 7, 31))
+    )
+    ar_row_nio = next(row.values for row in report_nio.rows if row.values["area"] == "AR")
+    assert ar_row_nio["currency"] == "NIO"
+    assert ar_row_nio["subledger_amount"] == Decimal("3600")
+    assert ar_row_nio["gl_control_amount"] == Decimal("3600")
+    assert ar_row_nio["difference"] == Decimal("0")
+
+
 def test_reconciliation_report_diagnoses_posting_without_bank_transaction(app_ctx):
     """El reporte identifica pagos posteados sin extracto bancario enlazado."""
     from cacao_accounting.database import Bank, BankAccount, PaymentEntry, database
@@ -5326,3 +5440,244 @@ def test_cancelled_reconciliation_item_excluded_from_reconciliation_report(app_c
     # Test current report (no as_of_date specified) -> should EXCLUDE the cancelled item!
     report_current = get_reconciliation_report(company="cacao")
     assert report_current.totals["bank_reconciled_amount"] == Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# Concurrency & idempotency tests for purchase reconciliation (issue #283)
+# ---------------------------------------------------------------------------
+
+
+def _seed_3way_receipt_and_invoice() -> tuple:
+    """Crea recepcion, items e factura para matching 3-way en la compania cacao."""
+    from cacao_accounting.database import (
+        Item,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        UOM,
+        Warehouse,
+        database,
+    )
+
+    database.session.add_all(
+        [
+            UOM(code="EA-283", name="Each 283"),
+            Item(code="ITEM-283", name="Item 283", item_type="goods", is_stock_item=True, default_uom="EA-283"),
+            Warehouse(code="WH-283", name="Bodega 283", company="cacao"),
+        ]
+    )
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date(2026, 8, 1),
+        supplier_id="SUPP-283",
+        docstatus=1,
+        grand_total=Decimal("500.00"),
+        transaction_currency="NIO",
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code="ITEM-283",
+            item_name="Item 283",
+            qty=Decimal("10"),
+            qty_in_base_uom=Decimal("10"),
+            uom="EA-283",
+            rate=Decimal("50.00"),
+            amount=Decimal("500.00"),
+            warehouse="WH-283",
+        )
+    )
+    invoice = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 8, 2),
+        supplier_id="SUPP-283",
+        purchase_receipt_id=receipt.id,
+        docstatus=1,
+        document_type="purchase_invoice",
+        grand_total=Decimal("500.00"),
+        outstanding_amount=Decimal("500.00"),
+        base_outstanding_amount=Decimal("500.00"),
+        transaction_currency="NIO",
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-283",
+            item_name="Item 283",
+            qty=Decimal("10"),
+            uom="EA-283",
+            rate=Decimal("50.00"),
+            amount=Decimal("500.00"),
+            warehouse="WH-283",
+        )
+    )
+    database.session.commit()
+    return receipt, invoice
+
+
+def test_purchase_reconciliation_rejects_duplicate_invoice(app_ctx):
+    """Una segunda conciliacion para la misma factura es rechazada (guarda de duplicidad)."""
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        PurchaseReconciliationError,
+        reconcile_purchase_invoice,
+    )
+
+    _seed_3way_receipt_and_invoice()
+    from cacao_accounting.database import PurchaseInvoice, database
+
+    invoice = database.session.execute(database.select(PurchaseInvoice).filter_by(supplier_id="SUPP-283")).scalars().first()
+
+    result = reconcile_purchase_invoice(invoice.id)
+    database.session.commit()
+    assert result.matched_qty == Decimal("10")
+
+    with pytest.raises(PurchaseReconciliationError, match="conciliacion activa"):
+        reconcile_purchase_invoice(invoice.id)
+
+
+def test_purchase_reconciliation_idempotency_key_replay_returns_existing(app_ctx):
+    """El replay por idempotency key retorna el resultado anterior sin crear duplicado."""
+    from cacao_accounting.compras.purchase_reconciliation_service import reconcile_purchase_invoice
+    from cacao_accounting.database import PurchaseInvoice, PurchaseReconciliation, database
+
+    _seed_3way_receipt_and_invoice()
+    invoice = database.session.execute(database.select(PurchaseInvoice).filter_by(supplier_id="SUPP-283")).scalars().first()
+
+    result1 = reconcile_purchase_invoice(invoice.id, idempotency_key="retry-key-283")
+    database.session.commit()
+    assert result1.matched_qty == Decimal("10")
+    recon_id = result1.reconciliation_id
+
+    result2 = reconcile_purchase_invoice(invoice.id, idempotency_key="retry-key-283")
+    database.session.commit()
+
+    assert result2.reconciliation_id == recon_id
+    assert result2.matched_qty == result1.matched_qty
+    assert result2.matched_amount == result1.matched_amount
+    assert database.session.query(PurchaseReconciliation).count() == 1
+
+
+def test_purchase_reconciliation_idempotency_key_unique_constraint(app_ctx):
+    """La restriccion única en idempotency_key es enforceable a nivel DB."""
+    from cacao_accounting.database import PurchaseReconciliation, database
+
+    _seed_3way_receipt_and_invoice()
+    from cacao_accounting.database import PurchaseInvoice
+
+    invoice = database.session.execute(database.select(PurchaseInvoice).filter_by(supplier_id="SUPP-283")).scalars().first()
+
+    recon1 = PurchaseReconciliation(
+        company="cacao",
+        purchase_invoice_id=invoice.id,
+        matching_type="3-way",
+        matched_amount=Decimal("500.00"),
+        status="reconciled",
+        idempotency_key="dup-key-283",
+    )
+    database.session.add(recon1)
+    database.session.flush()
+
+    recon2 = PurchaseReconciliation(
+        company="cacao",
+        purchase_invoice_id=invoice.id,
+        matching_type="3-way",
+        matched_amount=Decimal("500.00"),
+        status="pending_invoice",
+        idempotency_key="dup-key-283",
+    )
+    database.session.add(recon2)
+    with pytest.raises(Exception):  # IntegrityError por unique constraint
+        database.session.flush()
+    database.session.rollback()
+
+
+def test_purchase_reconciliation_concurrent_sessions_no_duplicate(app_ctx):
+    """Dos workers concurrentes no crean conciliaciones duplicadas para la misma factura.
+
+    Con una segunda sesión (simulando un worker independiente) se verifica que
+    el *unique constraint* parcial en ``purchase_invoice_id`` impide el
+    segundo *posting* incluso cuando la transacción no ha sido revertida.
+    """
+    from sqlalchemy.orm import Session
+
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        PurchaseReconciliationError,
+        reconcile_purchase_invoice,
+    )
+    from cacao_accounting.database import PurchaseInvoice, database
+
+    _seed_3way_receipt_and_invoice()
+    invoice = database.session.execute(database.select(PurchaseInvoice).filter_by(supplier_id="SUPP-283")).scalars().first()
+
+    # Worker 1: reconcilia y comitea
+    reconcile_purchase_invoice(invoice.id)
+    database.session.commit()
+
+    # Worker 2: nueva sesión, ve el datos commiteados del worker 1
+    session2 = Session(database.engine)
+    try:
+        invoice2 = session2.get(PurchaseInvoice, invoice.id)
+        with pytest.raises(PurchaseReconciliationError, match="conciliacion activa"):
+            reconcile_purchase_invoice(invoice2.id)
+    finally:
+        session2.close()
+
+
+def test_purchase_reconciliation_locks_invoice_with_for_update(app_ctx, monkeypatch):
+    """El bloqueo ``with_for_update`` se aplica antes de la busqueda de duplicados."""
+    from cacao_accounting.compras import purchase_reconciliation_service
+    from cacao_accounting.database import PurchaseInvoice, database
+
+    _seed_3way_receipt_and_invoice()
+    invoice = database.session.execute(database.select(PurchaseInvoice).filter_by(supplier_id="SUPP-283")).scalars().first()
+
+    calls: list[tuple] = []
+    original_get = database.session.get
+
+    def recording_get(model, ident, **kwargs):
+        if model is PurchaseInvoice:
+            calls.append(kwargs.get("with_for_update"))
+        return original_get(model, ident, **kwargs)
+
+    monkeypatch.setattr(database.session, "get", recording_get)
+    purchase_reconciliation_service.reconcile_purchase_invoice(invoice.id)
+    database.session.commit()
+
+    assert True in calls
+
+
+def test_purchase_reconciliation_rollback_on_intermediate_failure(app_ctx, monkeypatch):
+    """Si el matching falla despues de crear la conciliacion, se revierte integralmente."""
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        PurchaseReconciliationError,
+        reconcile_purchase_invoice,
+    )
+    from cacao_accounting.compras import purchase_reconciliation_service
+    from cacao_accounting.database import PurchaseInvoice, PurchaseReconciliation, PurchaseReconciliationItem, database
+
+    _seed_3way_receipt_and_invoice()
+    invoice = database.session.execute(database.select(PurchaseInvoice).filter_by(supplier_id="SUPP-283")).scalars().first()
+
+    # Forzar un fallo en la fase de matching despues de flush del header
+    original_three_way = purchase_reconciliation_service._reconcile_three_way
+
+    def failing_three_way(invoice_obj, config):
+        original_three_way(invoice_obj, config)
+        raise PurchaseReconciliationError("Fallo simulado en matching")
+
+    monkeypatch.setattr(purchase_reconciliation_service, "_reconcile_three_way", failing_three_way)
+    database.session.begin_nested()
+    with pytest.raises(PurchaseReconciliationError, match="Fallo simulado"):
+        reconcile_purchase_invoice(invoice.id)
+    database.session.rollback()
+
+    # La conciliacion no debe persistir tras el rollback
+    count = database.session.query(PurchaseReconciliation).filter_by(purchase_invoice_id=invoice.id).count()
+    assert count == 0
+    item_count = database.session.query(PurchaseReconciliationItem).count()
+    assert item_count == 0

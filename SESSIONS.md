@@ -3,6 +3,81 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-20 — Fix idempotencia y concurrencia de conciliación de compras #283
+
+### Petición
+
+Analizar el issue [#283](https://github.com/cacao-accounting/cacao-accounting/issues/283)
+(AUDIT-008: Probar idempotencia, retries y concurrencia de operaciones financieras)
+y sus comentarios, implementar un fix robusto con claves de idempotencia persistentes,
+restricciones únicas a nivel DB, y una batería de pruebas de concurrencia con dos
+workers/transactions. Generar un commit semántico con sign-off como
+`williamjmorenor@gmail.com`.
+
+### Análisis de comentarios del issue
+
+- **#283** es un control gap transversal: falta demostrar idempotencia, retries y
+  concurrencia para operaciones financieras críticas (invoices, payments, journals,
+  inventory, bank) con invariantes de no duplicación y atomicidad.
+- Los fixes parciales `ca09eff9` (lock matching source lines), `adb64b86` (lock invoice
+  before reconciliation lookup) y `8e77a172` (bank replays idempotent) son mejoras válidas
+  pero insuficientes: la comprobación de duplicados ocurre antes del lock, no hay
+  restricción única a nivel DB, y no hay claves de idempotencia persistentes.
+- La batería de pruebas de concurrencia (POST duplicado, network retry, job replay,
+  dos workers concurrentes) no existe.
+
+### Implementado
+
+1. **`cacao_accounting/database/__init__.py`** — Modelo `PurchaseReconciliation`:
+   - Agregada columna `idempotency_key` (String(255), nullable, index).
+   - Agregado `__table_args__` con:
+     - `UniqueConstraint("idempotency_key")` — garantiza que una clave de idempotencia
+       nunca se duplique a nivel DB.
+     - Índice parcial único `ix_purchase_recon_active_invoice` sobre
+       `purchase_invoice_id WHERE status != 'cancelled'` — previene a nivel DB que
+       dos workers creen conciliaciones simultáneas para la misma factura.
+
+2. **`cacao_accounting/compras/purchase_reconciliation_service.py`** — Servicio de matching:
+   - `reconcile_purchase_invoice` acepta `idempotency_key: str | None = None`.
+   - Agregada `_find_reconciliation_by_idempotency_key` — lookup de conciliación
+     previa por clave (replay/idempotencia para retries/replay).
+   - Agregada `_result_from_existing_reconciliation` — reconstruye
+     `PurchaseReconciliationResult` desde la conciliación previamente persistida,
+     sumando totales de los items.
+   - Agregada `_matching_result_from_status` — deriva el `matching_result` desde
+     `status`.
+   - Al crear una conciliación con `idempotency_key`, se persiste la clave en el
+     registro (con lock `with_for_update`) para que retries posteriores se resuelvan
+     por replay en lugar de crear postings duplicados.
+
+3. **`cacao_accounting/migrations/20260820_0001_purchase_reconciliation_idempotency.py`** —
+   Migración Alembic incremental:
+   - Añade columna `idempotency_key` a `purchase_reconciliation`.
+   - Crea `UNIQUE CONSTRAINT` sobre `idempotency_key`.
+   - Crea índice parcial único sobre `purchase_invoice_id WHERE status != 'cancelled'`
+     (compatible SQLite y PostgreSQL).
+
+4. **`tests/test_08_reconciliation_reports.py`** — 5 tests focales:
+   - `test_purchase_reconciliation_rejects_duplicate_invoice` — POST duplicado rechazado.
+   - `test_purchase_reconciliation_idempotency_key_replay_returns_existing` — replay
+     por idempotency key retorna el mismo resultado sin crear duplicado.
+   - `test_purchase_reconciliation_idempotency_key_unique_constraint` — restricción
+     única en DB.
+   - `test_purchase_reconciliation_concurrent_sessions_no_duplicate` — dos workers
+     (sesiones) no crean conciliaciones duplicadas.
+   - `test_purchase_reconciliation_locks_invoice_with_for_update` — verifica que
+     `with_for_update` se aplica antes del chequeo de duplicados (monkeypatch).
+   - `test_purchase_reconciliation_rollback_on_intermediate_failure` — rollback
+     integral si falla un paso intermedio del matching.
+
+### Validación
+
+- `tests/test_08_reconciliation_reports.py`: **117 passed** (112 preexistentes + 5 nuevos).
+- Black, Ruff y mypy sin errores sobre archivos modificados. Los 2 errores restantes de
+  Ruff (F811/F401) son preexistentes en líneas no modificadas.
+
+
+
 ## 2026-08-20 — Fix de precisión decimal #284: parseFloat en frontend y contrato de precisión
 
 ### Petición

@@ -516,14 +516,82 @@ def _derive_reconciliation_status(
             return "reconciled"
 
 
-def reconcile_purchase_invoice(purchase_invoice_id: str) -> PurchaseReconciliationResult:
+def _find_reconciliation_by_idempotency_key(idempotency_key: str) -> PurchaseReconciliation | None:
+    """Devuelve una conciliacion activa registrada bajo una idempotency key.
+
+    Permite que peticiones de retry, network retry o job replay retornen el
+    resultado anterior sin crear un posting duplicado.
+    """
+    return database.session.execute(
+        select(PurchaseReconciliation)
+        .filter_by(idempotency_key=idempotency_key)
+        .where(PurchaseReconciliation.status != "cancelled")
+    ).scalar_one_or_none()
+
+
+def _result_from_existing_reconciliation(reconciliation: PurchaseReconciliation) -> PurchaseReconciliationResult:
+    """Reconstruye el resultado de una conciliacion previamente registrada.
+
+    Suma los totales derivados de los items de conciliacion para devolver un
+    ``PurchaseReconciliationResult`` consistente con la conciliacion original.
+    """
+    items = (
+        database.session.execute(
+            select(PurchaseReconciliationItem).filter_by(
+                purchase_reconciliation_id=reconciliation.id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    total_qty = sum((_decimal_value(item.matched_qty) for item in items), Decimal("0"))
+    total_amount = _decimal_value(reconciliation.matched_amount)
+    total_price_difference = sum((_decimal_value(item.price_difference) for item in items), Decimal("0"))
+    return PurchaseReconciliationResult(
+        reconciliation_id=reconciliation.id,
+        matched_qty=total_qty,
+        matched_amount=total_amount,
+        price_difference=total_price_difference,
+        status=str(reconciliation.status),
+        matching_result=_matching_result_from_status(reconciliation.status, total_qty),
+    )
+
+
+def _matching_result_from_status(status: str, total_qty: Decimal) -> str:
+    """Deriva el matching_result desde el status almacenado en la conciliacion."""
+    if status == "reconciled":
+        return MatchingResult.MATCH_OK.value
+    if status == "partial":
+        return MatchingResult.MATCH_PARTIAL.value
+    if status == "disputed":
+        return MatchingResult.MATCH_FAILED.value
+    return MatchingResult.MATCH_PARTIAL.value if total_qty > 0 else MatchingResult.MATCH_FAILED.value
+
+
+def reconcile_purchase_invoice(
+    purchase_invoice_id: str,
+    idempotency_key: str | None = None,
+) -> PurchaseReconciliationResult:
     """Concilia una factura de compra segun la configuracion de matching de la compania.
 
     - **3-way**: OC → Recepcion → Factura (requiere `purchase_receipt_id` en la factura).
     - **2-way**: OC → Factura (requiere `purchase_order_id` en la factura; valida cantidades contra la OC).
 
     En ambos casos respeta las tolerancias configuradas y emite eventos economicos.
+
+    Si se proporciona ``idempotency_key``, la funcion primero busca una conciliacion
+    activa registrada bajo esa clave y retorna su resultado (replay/idempotencia).
+    Esto protege contra network retry, job replay y POST duplicado: el cliente puede
+    reenviar la misma peticion con la misma clave y obtener el mismo resultado
+    sin crear un posting duplicado.
     """
+    # Replay por idempotency key: si la peticion es un retry, devolvemos el
+    # resultado previo sin tocar la base de datos transaccional.
+    if idempotency_key is not None:
+        existing = _find_reconciliation_by_idempotency_key(idempotency_key)
+        if existing is not None:
+            return _result_from_existing_reconciliation(existing)
+
     # Lock the economic document before checking for an existing reconciliation.
     # Without this ordering two workers can both observe no row and create a
     # duplicate reconciliation for the same invoice.
@@ -543,8 +611,23 @@ def reconcile_purchase_invoice(purchase_invoice_id: str) -> PurchaseReconciliati
     config = get_matching_config(str(invoice.company))
 
     if config.matching_type == MatchingType.TWO_WAY:
-        return _reconcile_two_way(invoice, config)
-    return _reconcile_three_way(invoice, config)
+        result = _reconcile_two_way(invoice, config)
+    else:
+        result = _reconcile_three_way(invoice, config)
+
+    # Persist the idempotency key on the created reconciliation so that retries
+    # with the same key are resolved by replay instead of creating duplicates.
+    if idempotency_key is not None:
+        reconciliation = database.session.get(
+            PurchaseReconciliation,
+            result.reconciliation_id,
+            with_for_update=True,
+        )
+        if reconciliation is not None and not reconciliation.idempotency_key:
+            reconciliation.idempotency_key = idempotency_key
+        database.session.flush()
+
+    return result
 
 
 # ---------------------------------------------------------------------------

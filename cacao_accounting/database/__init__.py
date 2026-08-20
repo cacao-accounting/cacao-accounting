@@ -15,7 +15,7 @@ import hashlib
 from cuid2 import Cuid
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint, UniqueConstraint, event, inspect, select
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint, event, inspect, select, text
 from ulid import ULID
 
 # ---------------------------------------------------------------------------------------
@@ -4163,6 +4163,16 @@ class PurchaseReconciliation(database.Model, BaseTabla):  # type: ignore[name-de
     """Conciliacion de recepciones de compra con facturas de proveedor."""
 
     __tablename__ = "purchase_reconciliation"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_purchase_reconciliation_idempotency"),
+        Index(
+            "ix_purchase_recon_active_invoice",
+            "purchase_invoice_id",
+            unique=True,
+            sqlite_where=text("status != 'cancelled'"),
+            postgresql_where=text("status != 'cancelled'"),
+        ),
+    )
     company = database.Column(
         database.String(10),
         database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -4187,6 +4197,7 @@ class PurchaseReconciliation(database.Model, BaseTabla):  # type: ignore[name-de
         nullable=True,
         index=True,
     )
+    idempotency_key = database.Column(database.String(255), nullable=True, index=True)
     # matching_type snapshot from config at the time of reconciliation
     matching_type = database.Column(database.String(10), default="3-way", nullable=False)
     price_tolerance_type = database.Column(database.String(10), nullable=True)
