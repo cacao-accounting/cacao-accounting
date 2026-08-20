@@ -3451,3 +3451,101 @@ estático; no relaja validaciones de runtime. `test_schemas.py` pasa 9/9.
   #573, #568, #511) con comentario documentando el análisis de confirmación.
 - 3 issues permanecen abiertas sin fix aplicado (#520, #519, #514 — análisis de
   vulnerabilidades de seguridad sin commits asociados).
+
+## 2026-08-20 — Verificación del estado actual de issues abiertos
+
+### Petición
+
+Analizar los issues abiertos en GitHub y contrastarlos con el código local para
+determinar cuáles ya están corregidos y cuáles requieren trabajo adicional.
+
+### Método y contexto
+
+- Se consultaron los 16 issues abiertos actuales y sus criterios de aceptación.
+- Se contrastó el código de `main` en `7122753d` (idéntico a `origin/main`),
+  incluyendo los flujos de servicios, rutas, aprobación y la configuración de
+  calidad en `.github/workflows/python-package.yml`.
+- Esta fue una revisión estática; no se ejecutó pytest porque no se modificó
+  código. Las pruebas focales existentes deben ejecutarse antes de un cierre
+  remoto definitivo.
+
+### Resultado
+
+- **Corregidos en código (pendientes sólo de ejecutar la regresión focal antes
+  de cerrar): #519 y #520.** El commit `7122753d` elimina el bypass por usuario
+  inexistente, obliga a transportar el actor al submit/aprobación y valida
+  siempre los libros canónicos. Las plantillas recurrentes incluyen el
+  `ledger_id` legacy, fallan cerradas y restringen listado/detalle a lectores
+  autorizados.
+- **Requieren trabajo adicional: #246, #249, #250, #251, #256, #276, #278,
+  #279, #280, #281, #282, #283, #284 y #285.** Los commits existentes cubren
+  subcasos para #246/#251/#256/#276/#278/#282/#283/#284, pero no todos sus
+  criterios de aceptación. Los demás siguen siendo matrices de pruebas o
+  conciliaciones end-to-end aún no implementadas.
+
+### Hallazgos de continuidad
+
+- #251 conserva doble paginación potencial y el resolvedor de comprobantes no
+  es universal; #256 conserva rutas `/home/jules/verification` y fixtures que
+  hacen `pytest.skip` si no inicia Chromium.
+- #276 y #282 rechazan combinaciones de moneda inseguras, pero no entregan las
+  matrices de reconciliación/detección de huérfanos requeridas. #278 sólo evita
+  tasas futuras; #283 sólo bloquea matching S2P, sin una estrategia general de
+  idempotencia ni pruebas concurrentes transaccionales.
+- CI ya define lint con flake8/ruff/pydocstyle/mypy y ejecución de pytest en
+  Python 3.12–3.14, además de job E2E; el trabajo pendiente debe añadir sus
+  regresiones a esa estrategia.
+
+## 2026-08-20 — Remediación de fixes parciales (en curso)
+
+### Petición
+
+Completar los issues que tenían fixes parciales y crear commits semánticos con
+el autor `williamjmorenor@gmail.com` y sign-off, sin publicar cambios remotos.
+
+### Implementado hasta este punto
+
+- `e8e19a08 fix(reports): complete operational drill-down pagination` (#251,
+  #256): se evita paginar dos veces un reporte ya paginado por el servicio y
+  los drill-downs usan identificadores persistidos para comprobantes, pagos,
+  facturas de venta/compra e inventario. La infraestructura Playwright falla si
+  Chromium instalado no inicia y guarda diagnósticos en
+  `PLAYWRIGHT_ARTIFACT_DIR` en lugar de `/home/jules/verification`.
+- `9095b82a fix(precision): preserve payment decimal payloads` (#284): los
+  importes de referencias y pagos precargados para la UI se serializan como
+  texto decimal, sin una conversión previa a `float`.
+- `6cca7f1d fix(accounting): validate ledger mapping rule lifecycle` (#246):
+  el servicio valida la dirección libro primario→secundario, el aislamiento de
+  compañía de libros/cuentas, evita reglas activas duplicadas y permite
+  desactivación no destructiva.
+- `adb64b86 fix(purchases): lock invoice before reconciliation lookup` (#283):
+  bloquea la factura de compra antes de buscar conciliaciones existentes, de
+  forma que dos workers no pueden observar simultáneamente la ausencia de una
+  conciliación activa.
+- `ac10597d fix(printing): retain decimal values in contexts` (#284): elimina
+  otra conversión de valores financieros a `float` en los contextos de
+  impresión, conservándolos como `Decimal` hasta el renderizado.
+- `8e77a172 fix(reconciliation): make bank replays idempotent` (#276, #282,
+  #283): la matriz informa comparaciones moneda/libro inválidas con HTTP 400;
+  las conciliaciones bancarias bloquean las fuentes de forma determinista y un
+  replay idéntico retorna la conciliación original sin consumir saldos de nuevo.
+- `295acf71 fix(fx): validate historical revaluation rates` (#278, #284):
+  rechaza tasas de cierre cero, negativas o no finitas, y los contextos de
+  impresión/muestras conservan `Decimal` incluso ante `NaN`.
+- `ce24f5e1 fix(reports): retain legacy functional GL reconciliation` (#276):
+  las líneas GL históricas sin `company_currency` permanecen en la matriz del
+  libro funcional seleccionado, sin mezclar libros ni aceptar FX implícito.
+- `89b64e2e test(reconciliation): seed primary ledger for atomicity`: alinea
+  la regresión de ajuste bancario con la invariante de que toda GL conciliable
+  pertenezca al libro primario.
+- `2bf6d68f fix(fx): reverse unrealized balances in next period` (#278): al
+  iniciar una nueva revaluación se reversan los ajustes no realizados activos
+  de períodos anteriores en el primer día del período actual; las nuevas líneas
+  usan el período/año fiscal de la reversa y la revaluación vuelve a medir el
+  saldo abierto.
+
+### Continuidad
+
+- Aún quedan por completar y verificar los criterios integrales de #246, #276,
+  #278, #282, #283 y #284, además de ejecutar las regresiones focales de
+  #251/#256. No se hizo push ni se modificó el estado de los issues remotos.
