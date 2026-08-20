@@ -524,6 +524,13 @@ def reconcile_purchase_invoice(purchase_invoice_id: str) -> PurchaseReconciliati
 
     En ambos casos respeta las tolerancias configuradas y emite eventos economicos.
     """
+    # Lock the economic document before checking for an existing reconciliation.
+    # Without this ordering two workers can both observe no row and create a
+    # duplicate reconciliation for the same invoice.
+    invoice = database.session.get(PurchaseInvoice, purchase_invoice_id, with_for_update=True)
+    if not invoice:
+        raise PurchaseReconciliationError("La factura de compra no existe.")
+
     duplicate = database.session.execute(
         select(PurchaseReconciliation.id)
         .filter_by(purchase_invoice_id=purchase_invoice_id)
@@ -532,10 +539,6 @@ def reconcile_purchase_invoice(purchase_invoice_id: str) -> PurchaseReconciliati
     ).scalar_one_or_none()
     if duplicate:
         raise PurchaseReconciliationError("La factura de compra ya tiene una conciliacion activa.")
-
-    invoice = database.session.get(PurchaseInvoice, purchase_invoice_id)
-    if not invoice:
-        raise PurchaseReconciliationError("La factura de compra no existe.")
 
     config = get_matching_config(str(invoice.company))
 
