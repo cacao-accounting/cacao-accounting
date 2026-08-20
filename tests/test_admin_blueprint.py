@@ -92,6 +92,7 @@ def test_require_system_admin_unauthorized(app_instance):
         # Accessing system admin endpoints should abort(403)
         for endpoint in (
             "/settings/external-document-validation",
+            "/settings/language",
             "/settings/modules",
             "/settings/users",
             "/settings/users/new",
@@ -626,6 +627,8 @@ def test_admin_home_consolidates_global_configuration_sections(app_instance):
     assert response.status_code == 200
     for section in (
         "Configuración General",
+        "Correo Electrónico",
+        "Precios",
         "Compras",
         "Ventas",
         "Contabilidad",
@@ -641,11 +644,13 @@ def test_admin_home_consolidates_global_configuration_sections(app_instance):
 
 
 def test_configuration_navigation_registry_preserves_public_endpoints():
-    """El registro de navegación conserva las nueve áreas y sus endpoints."""
+    """El registro de navegación conserva las once áreas y sus endpoints."""
     from cacao_accounting.admin.navigation import CONFIGURATION_SECTIONS
 
     assert [section.label for section in CONFIGURATION_SECTIONS] == [
         "Configuración General",
+        "Correo Electrónico",
+        "Precios",
         "Compras",
         "Ventas",
         "Contabilidad",
@@ -659,6 +664,41 @@ def test_configuration_navigation_registry_preserves_public_endpoints():
     assert "admin.config_conciliacion_compras" in endpoints
     assert "admin.lista_usuarios" in endpoints
     assert "contabilidad.naming_series_list" in endpoints
+    assert "admin.configuracion_idioma" in endpoints
+    assert "admin.email_settings" in endpoints
+    assert "admin.email_log" in endpoints
+    assert "admin.lista_precios" in endpoints
+    assert "admin.precios_item" in endpoints
+
+
+def test_system_language_settings(app_instance):
+    """Verifica la configuración del idioma global del sistema desde /settings/language."""
+    from cacao_accounting.setup.service import SETUP_LANGUAGE, get_setup_value
+
+    with app_instance.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+        # GET
+        response = client.get("/settings/language")
+        assert response.status_code == 200
+        assert b"Idioma del Sistema" in response.data
+
+        # POST valid language
+        response = client.post("/settings/language", data={"language": "en"}, follow_redirects=True)
+        assert response.status_code == 200
+        assert b"actualizado correctamente" in response.data
+        with app_instance.app_context():
+            assert get_setup_value(SETUP_LANGUAGE) == "en"
+
+        # POST invalid language
+        response = client.post("/settings/language", data={"language": "invalid_lang"}, follow_redirects=True)
+        assert response.status_code == 200
+        assert b"no es" in response.data
+
+        # Reset to 'es'
+        client.post("/settings/language", data={"language": "es"}, follow_redirects=True)
+        with app_instance.app_context():
+            assert get_setup_value(SETUP_LANGUAGE) == "es"
 
 
 def test_purchase_configuration_owns_automatic_advance_setting(app_instance):

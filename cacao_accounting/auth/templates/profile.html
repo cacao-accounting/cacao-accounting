@@ -80,6 +80,13 @@
               <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
           </div>
+          <div class="col-6">
+            <label class="form-label" for="language">Idioma</label>
+            {{ profile_form.language(class="form-select form-select-sm{% if profile_form.language.errors %} is-invalid{% endif %}", id="language") }}
+            {% for error in profile_form.language.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+          </div>
         </div>
 
         <div class="mt-4">

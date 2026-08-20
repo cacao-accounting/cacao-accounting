@@ -204,6 +204,33 @@ def lista_modulos():
     )
 
 
+@admin.route("/settings/language", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def configuracion_idioma():
+    """Configuración del idioma predeterminado del sistema."""
+    _require_system_admin()
+    from cacao_accounting.setup.catalogs import LANGUAGE_CHOICES
+    from cacao_accounting.setup.service import SETUP_LANGUAGE, get_setup_value, set_setup_value
+
+    if request.method == "POST":
+        selected_lang = request.form.get("language")
+        valid_codes = [code for code, _ in LANGUAGE_CHOICES]
+        if selected_lang in valid_codes:
+            set_setup_value(SETUP_LANGUAGE, selected_lang)
+            database.session.commit()
+            flash(_("Idioma del sistema actualizado correctamente."), "success")
+            return redirect(url_for("admin.configuracion_idioma"))
+        flash(_("Idioma seleccionado no es válido."), "danger")
+
+    current_lang = get_setup_value(SETUP_LANGUAGE, "es")
+    return render_template(
+        "admin/system_language.html",
+        current_language=current_lang,
+        language_choices=LANGUAGE_CHOICES,
+    )
+
+
 @admin.route("/settings/external-document-validation", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")

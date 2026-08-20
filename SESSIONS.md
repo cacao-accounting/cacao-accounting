@@ -3,6 +3,61 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-20 — Configuración de idioma global (/settings/language) y preferencia por usuario (/auth/profile)
+
+### Petición
+
+Implementar una entrada en `/settings` para cambiar el idioma global del sistema (`SETUP_LANGUAGE`) en caso de error en el setup inicial, y permitir a cada usuario configurar su idioma preferido en su perfil (`/auth/profile`), con resolución en cascada en `_get_locale()`.
+
+### Implementado
+
+1. **`cacao_accounting/database/__init__.py`**:
+   - Se añadió la columna `language` (`VARCHAR(10)`, nullable) al modelo `User`.
+
+2. **`cacao_accounting/auth/forms.py` & `cacao_accounting/auth/__init__.py` & `cacao_accounting/auth/templates/profile.html`**:
+   - `ProfileForm` incluye campo `language` con opciones "Predeterminado del sistema" (vacío/None), "Español" (`es`), "English" (`en`).
+   - `_apply_profile_form` persiste la preferencia del usuario o la limpia a `None` para heredar la del sistema.
+   - Plantilla `profile.html` renderiza el selector de idioma.
+
+3. **`cacao_accounting/admin/navigation.py` & `cacao_accounting/admin/routes.py` & `cacao_accounting/admin/templates/admin/system_language.html`**:
+   - Enlace `admin.configuracion_idioma` añadido a "Configuración General" en `CONFIGURATION_SECTIONS`.
+   - Ruta `/settings/language` accesible para administradores de sistema, permitiendo cambiar el `SETUP_LANGUAGE` global con persistencia mediante `set_setup_value`.
+   - Plantilla `system_language.html` para la gestión del idioma del sistema.
+
+4. **`cacao_accounting/__init__.py`**:
+   - `_get_locale()` resuelve en cascada: (1) preferencia del usuario autenticado `current_user.language`, (2) idioma global del sistema `get_setup_value(SETUP_LANGUAGE)`, (3) fallback `"es"`.
+
+5. **`tests/test_language_settings.py` & `tests/test_admin_blueprint.py`**:
+   - Pruebas unitarias de actualización de perfil, configuración global en settings, control de acceso y resolución en cascada de `_get_locale()`.
+
+### Validación
+
+- `tests/test_language_settings.py`: 2 passed.
+- `tests/test_admin_blueprint.py`: 30 passed.
+- Total: **32 passed**.
+- Ruff check y ruff format verificados.
+
+## 2026-08-20 — Refactorización del menú administrativo en /settings: secciones dedicadas de Correo Electrónico y Precios
+
+### Petición
+
+Hacer un refactor del menú administrativo en `/settings` para mover las dos entradas de correo electrónico (`admin.email_settings` y `admin.email_log`) y las dos entradas de precios (`admin.lista_precios` y `admin.precios_item`) desde "Configuración General" hacia secciones dedicadas.
+
+### Implementado
+
+1. **`cacao_accounting/admin/navigation.py`**:
+   - Se removieron los enlaces de correo electrónico (`admin.email_settings` y `admin.email_log`) y precios (`admin.lista_precios` y `admin.precios_item`) de la sección `Configuración General`.
+   - Se añadió la sección dedicada `Correo Electrónico` (ícono `bi bi-envelope`) con los enlaces `admin.email_settings` (Correo electrónico) y `admin.email_log` (Bitácora de correos).
+   - Se añadió la sección dedicada `Precios` (ícono `bi bi-tags`) con los enlaces `admin.lista_precios` (Listas de precios) y `admin.precios_item` (Precios por artículo).
+
+2. **`tests/test_admin_blueprint.py`**:
+   - Se actualizaron `test_admin_home_consolidates_global_configuration_sections` y `test_configuration_navigation_registry_preserves_public_endpoints` para validar las 11 secciones funcionales y sus endpoints correspondientes.
+
+### Validación
+
+- `tests/test_admin_blueprint.py`: 29 passed.
+- Ruff format check y linting verificados.
+
 ## 2026-08-20 — Matriz de conciliación multimoneda #276: conversión histórica de submayores
 
 ### Petición
@@ -4070,3 +4125,59 @@ política documentada en la sección 2026-08-16 ("conservar únicamente la migra
 - No se hizo push. Los cambios son locales.
 - Los modelos conservan todas las columnas y constraints necesarios; el esquema se
   reconstruye íntegramente desde `create_all` en cada `db init`.
+
+---
+
+## Sesión: 2026-08-20 — Reescritura de historial git para CLA
+
+### Petición
+
+Reescribir todo el historial de git para que todos los commits tengan como
+autor y committer a `William José Moreno Reyes <williamjmorenor@gmail.com>`,
+cumpliendo con un CLA firmado físicamente. También eliminar todos los trailers
+`Co-authored-by` de los mensajes de commit.
+
+### Análisis previo
+
+- **Total de commits en el repo**: 2116
+- **Commits ya correctos**: 366 (`William José Moreno Reyes <williamjmorenor@gmail.com>`)
+- **Commits con committer incorrecto**: 1750, distribuidos en:
+  - `William Moreno Reyes` (sin "José"): 1236
+  - `GitHub <noreply@github.com>` (merge commits): 269
+  - `William Moreno <wmoreno@bmogroup.solutions>`: 87
+  - `williamjmorenor <3522386+williamjmorenor@users.noreply.github.com>`: 66
+  - `William Moreno <williamjmorenor@gmail.com>`: 46
+  - Otros (Replit, Fedora, etc.): ~46
+- **Commits con `Co-authored-by` trailers**: 148
+
+### Plan implementado
+
+1. **Backup**: Se creó la rama `backup-before-cla-rewrite-20260820` con el estado previo.
+2. **Reescritura con `git filter-branch`**:
+   - `--env-filter`: Estableció `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`,
+     `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL` a los valores del CLA en
+     todos los commits de todas las ramas (`-- --all`).
+   - `--msg-filter`: Script Python que elimina líneas `Co-authored-by`
+     (case-insensitive) y `Co-Authored-By` de los mensajes de commit.
+3. **Limpieza**: `git reflog expire --expire=now --all` + `git gc --prune=now`.
+4. Se re-ejecutó el `--msg-filter` para corregir 2 commits con capitalización
+   alternativa (`Co-Authored-By`) que el primer pase no detectó.
+
+### Resultado verificado
+
+- **Rama `main`**: 1589 commits, todos con:
+  - Author: `William José Moreno Reyes <williamjmorenor@gmail.com>`
+  - Committer: `William José Moreno Reyes <williamjmorenor@gmail.com>`
+  - Sin trailers `Co-authored-by` en ningún commit.
+- Los 3 commits específicos solicitados por el usuario fueron verificados:
+  - `bca1cf35` (antes `1c98bc8d`): `test(payment): align pending_amount...`
+  - `d09f2ec5` (antes `d17b82de`): `test: stabilize fixtures...`
+  - `182b5a7b` (antes `d1028bcc`): `fix(ci): exclude Playwright e2e tests...`
+
+### Consideraciones
+
+- Los hashes de todos los commits cambiaron (reescritura de historial).
+- Los remote tracking refs (`origin/*`) conservan hashes viejos hasta un `git fetch`.
+- La rama `backup-before-cla-rewrite-20260820` preserva el historial original.
+- **requerido**: `git push --force --all` para sincronizar el historial reescrito
+  con el remoto. Los colaboradores deberán re-clonar o `git pull --rebase`.

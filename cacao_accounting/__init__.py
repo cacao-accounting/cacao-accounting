@@ -85,9 +85,19 @@ def command() -> None:  # pragma: no cover
 def _get_locale():
     """Retorna el idioma configurado para la aplicacion."""
     from flask import has_app_context, has_request_context
+    from flask_login import current_user
 
     if not (has_app_context() or has_request_context()):
         return "es"
+
+    try:
+        if current_user and current_user.is_authenticated:
+            user_lang = getattr(current_user, "language", None)
+            if user_lang:
+                return user_lang
+    except Exception:
+        pass
+
     try:
         from cacao_accounting.setup.service import get_setup_value, SETUP_LANGUAGE
 

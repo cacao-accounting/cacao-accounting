@@ -182,6 +182,7 @@ def _apply_profile_form(profile_form: Any, email: str | None) -> None:
     current_user.last_name2 = profile_form.last_name2.data
     current_user.e_mail = email
     current_user.phone = profile_form.phone.data
+    current_user.language = profile_form.language.data or None
 
 
 def _handle_password_change(profile_form: Any, password_form: Any) -> ResponseReturnValue | None:

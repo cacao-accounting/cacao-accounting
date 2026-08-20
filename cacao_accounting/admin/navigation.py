@@ -38,10 +38,23 @@ CONFIGURATION_SECTIONS: tuple[ConfigurationSection, ...] = (
             ConfigurationLink(
                 "imports.index", "Importaciones", module="imports", required_permission="importar", cloud_only=True
             ),
+            ConfigurationLink("admin.configuracion_idioma", "Idioma del sistema"),
             ConfigurationLink("admin.external_document_validation_settings", "Validación externa de documentos"),
+            ConfigurationLink("admin.lista_grupos_terceros", "Tipos de terceros"),
+        ),
+    ),
+    ConfigurationSection(
+        label="Correo Electrónico",
+        icon="bi bi-envelope",
+        links=(
             ConfigurationLink("admin.email_settings", "Correo electrónico", cloud_only=True),
             ConfigurationLink("admin.email_log", "Bitácora de correos", cloud_only=True),
-            ConfigurationLink("admin.lista_grupos_terceros", "Tipos de terceros"),
+        ),
+    ),
+    ConfigurationSection(
+        label="Precios",
+        icon="bi bi-tags",
+        links=(
             ConfigurationLink("admin.lista_precios", "Listas de precios"),
             ConfigurationLink("admin.precios_item", "Precios por artículo"),
         ),

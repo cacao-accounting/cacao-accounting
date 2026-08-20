@@ -40,6 +40,15 @@ class ProfileForm(FlaskForm):
     last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
     e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
     phone = StringField(TELEFONO, validators=[Optional()])
+    language = SelectField(
+        "Idioma",
+        choices=[
+            ("", "Predeterminado del sistema"),
+            ("es", "Español"),
+            ("en", "English"),
+        ],
+        validators=[Optional()],
+    )
     guardar_perfil = SubmitField("Guardar cambios")
 
 

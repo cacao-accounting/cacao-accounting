@@ -296,6 +296,7 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     genre = database.Column(database.String(10))
     birthday = database.Column(database.Date())
     phone = database.Column(database.String(50))
+    language = database.Column(database.String(10), nullable=True)
     party_id = database.Column(
         database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
     )
