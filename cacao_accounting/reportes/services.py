@@ -389,7 +389,10 @@ def _reconciliation_gl_amount(
     if date_to is not None:
         query = query.where(GLEntry.posting_date <= date_to)
     if currency:
-        query = query.where(GLEntry.company_currency == currency)
+        # Legacy GL rows did not persist ``company_currency``.  They belong to
+        # the selected functional-currency ledger and must remain visible;
+        # foreign-currency ledgers are rejected by the caller before this path.
+        query = query.where(or_(GLEntry.company_currency == currency, GLEntry.company_currency.is_(None)))
     return _decimal_value(database.session.execute(query).scalar_one())
 
 
