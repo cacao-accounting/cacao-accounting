@@ -3,6 +3,58 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-20 — Pruebas de formularios bancarios nota_nueva y transferencia_nueva #249 (CAS-22)
+
+### Petición
+
+Cerrar el issue [#249](https://github.com/cacao-accounting/cacao-accounting/issues/249) (CAS-22: Pruebas de formularios bancarios nota_nueva y transferencia_nueva) agregando la cobertura de tests requerida para los formularios bancarios de nota de débito, nota de crédito y transferencia interna, y cerrar con un commit semántico firmado como `williamjmorenor@gmail.com`.
+
+### Análisis y Contexto
+
+- Los formularios bancarios `pago_nuevo` tenían cobertura indirecta a través de pruebas de numeración y preview fiscal, pero las rutas GET y plantillas dedicadas de:
+  - `bancos_nota_debito_nueva` (GET `/cash_management/payment/debit-note/new`, plantilla `nota_nueva.html` con `payment_type="debit_note"`)
+  - `bancos_nota_credito_nueva` (GET `/cash_management/payment/credit-note/new`, plantilla `nota_nueva.html` con `payment_type="credit_note"`)
+  - `bancos_transferencia_nueva` (GET `/cash_management/payment/transfer/new`, plantilla `transferencia_nueva.html` con `payment_type="internal_transfer"`)
+  carecían de pruebas unitarias específicas de renderizado y validación de campos.
+- El triage y análisis avanzado en los comentarios del issue destacaban la necesidad de cubrir:
+  1. GET rendering de `nota_nueva.html` y `transferencia_nueva.html`.
+  2. Campos específicos de cada tipo (tipo de nota, cuenta de cargo/gasto `paid_to_account_id` para ND vs abono/ingreso `paid_from_account_id` para NC, origen y destino para transferencias).
+  3. Escenarios multimoneda (transferencias entre cuentas de distinta moneda con tipo de cambio, notas de débito/crédito en cuentas extranjeras con conversión a moneda funcional).
+  4. Contador externo (cheques), series dedicadas (`bank_debit_note`, `bank_credit_note`, `bank_transfer`) y trazabilidad en `ExternalNumberUsage`.
+
+### Implementado
+
+1. **`tests/test_cas22_bank_forms.py`**:
+   - **Renderizado GET y controles de interfaz**:
+     - `test_get_debit_note_new_renders_correct_template_and_elements`: valida código 200, título, breadcrumbs, componente Alpine `bankNoteForm({ paymentType: "debit_note" })`, controles smart-select, etiquetas de cargo/gasto (`paid_to_account_id`), ausencia de campos de ingreso y enlace de cancelación hacia lista de ND.
+     - `test_get_credit_note_new_renders_correct_template_and_elements`: valida código 200, título, breadcrumbs, componente Alpine `bankNoteForm({ paymentType: "credit_note" })`, controles smart-select, etiquetas de abono/ingreso (`paid_from_account_id`), ausencia de campos de cargo y enlace de cancelación hacia lista de NC.
+     - `test_get_transfer_new_renders_correct_template_and_elements`: valida código 200, título, breadcrumbs, componente Alpine `bankTransferForm({ paymentType: "internal_transfer" })`, selectores de origen (`bank_account_id`) y destino (`target_bank_account_id`), inputs de tipo de cambio y fórmula de cálculo de destino, y enlace de cancelación.
+     - `test_bank_forms_require_authentication`: valida redirección obligatoria a login para solicitudes no autenticadas en las 3 rutas.
+   - **Campos específicos y ciclo POST**:
+     - `test_post_debit_note_creation_and_attributes`: creación exitosa de nota de débito con dimensiones (`cost_center_code`, `unit_code`, `project_code`), `paid_to_account_id`, `paid_amount`, `remarks`, `external_number`.
+     - `test_post_credit_note_creation_and_attributes`: creación exitosa de nota de crédito con `paid_from_account_id`, `received_amount`, `cost_center_code`, `remarks`.
+     - `test_post_transfer_creation_and_attributes`: creación exitosa de transferencia interna asignando cuentas GL de origen y destino correspondientes a las cuentas bancarias.
+     - `test_debit_note_rejects_cross_company_gl_account`: rechazo de cuentas contables de otras compañías en notas de débito.
+     - `test_transfer_rejects_same_source_and_target_account`: rechazo de transferencias donde origen y destino son la misma cuenta.
+     - `test_transfer_rejects_target_bank_from_different_company`: rechazo de transferencias con cuentas bancarias destino pertenecientes a otra entidad.
+     - `test_post_forms_missing_required_fields_rejected`: validaciones de campos obligatorios faltantes o montos <= 0.
+   - **Escenarios multimoneda**:
+     - `test_transfer_multicurrency_usd_to_nio`: transferencia de USD a NIO con cálculo de `received_amount` y `base_paid_amount`.
+     - `test_transfer_same_currency_preserves_unitary_exchange_rate`: transferencias en la misma moneda conservan tipo de cambio unitario.
+     - `test_transfer_multicurrency_rejects_non_positive_exchange_rate`: rechazo de tipos de cambio <= 0 en transferencias multimoneda.
+     - `test_debit_note_multicurrency_usd_bank_account`: notas de débito en cuentas extranjeras USD con conversión histórica a moneda funcional de la entidad.
+     - `test_credit_note_multicurrency_usd_bank_account`: notas de crédito en cuentas extranjeras USD con conversión histórica a moneda funcional.
+   - **Contador externo (cheques) y series de numeración**:
+     - `test_debit_note_uses_configured_bank_debit_note_naming_series`: asignación de `document_no` mediante serie dedicada `bank_debit_note`.
+     - `test_credit_note_uses_configured_bank_credit_note_naming_series`: asignación de `document_no` mediante serie dedicada `bank_credit_note`.
+     - `test_transfer_uses_configured_bank_transfer_naming_series`: asignación de `document_no` mediante serie dedicada `bank_transfer`.
+     - `test_bank_operation_with_check_mode_uses_external_counter_and_tracks_usage`: consumo secuencial de chequera externa y registro de auditoría en `ExternalNumberUsage`.
+     - `test_bank_forms_explicit_external_numbers_persisted`: preservación de número externo ingresado por el usuario en las 3 operaciones.
+
+### Validación
+
+- `tests/test_cas22_bank_forms.py`: **21 passed**.
+
 ## 2026-08-20 — Auditoría de matrices submayor↔GL: O2C (#280) y S2P/P2P (#281)
 
 ### Petición
