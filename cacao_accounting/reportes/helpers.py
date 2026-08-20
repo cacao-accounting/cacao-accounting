@@ -364,15 +364,12 @@ def _build_drill_down_url(
     account_code = values.get("account_code")
     if account_code in (None, "", _EMPTY_CELL_VALUE):
         return None
-    query: dict[str, Any] = {
-        "company": company,
-        "account_code": str(account_code),
-    }
+    kwargs: dict[str, Any] = {}
     if ledger:
-        query["ledger"] = ledger
+        kwargs["ledger"] = ledger
     if period:
-        query["accounting_period"] = period
-    return url_for("reportes.account_movement", **query)
+        kwargs["accounting_period"] = period
+    return url_for("reportes.account_movement", company=company, account_code=str(account_code), **kwargs)
 
 
 def _build_voucher_url(values: dict[str, object]) -> str | None:
@@ -390,7 +387,7 @@ def _build_voucher_url(values: dict[str, object]) -> str | None:
     if endpoint and voucher_id:
         endpoint_name, identifier_name = endpoint
         try:
-            return url_for(endpoint_name, **{identifier_name: voucher_id})
+            return url_for(endpoint_name, **{identifier_name: voucher_id})  # type: ignore[arg-type]
         except (BuildError, RuntimeError):
             # Unit/report builders also run inside an application context
             # without an active request. Keep the persisted identifier and
@@ -1026,7 +1023,8 @@ def _render_operational_framework(
     def _page_url(target_page: int) -> str:
         query["page"] = str(target_page)
         query["page_size"] = str(page_size)
-        return url_for(request.endpoint or "reportes.account_summary", **query)
+        endpoint = request.endpoint or "reportes.account_summary"
+        return str(url_for(endpoint, **query))  # type: ignore[arg-type]
 
     total_pages = max((total_rows + page_size - 1) // page_size, 1)
     return render_template(

@@ -652,7 +652,7 @@ def _sales_trend(
     company: str,
     start_date: date | None,
     end_date: date | None,
-) -> list[dict[str, float | int]]:
+) -> list[dict[str, Any]]:
     """Devuelve tendencia mensual de ventas."""
     query = (
         _document_query(SalesInvoice, company, start_date, end_date)
