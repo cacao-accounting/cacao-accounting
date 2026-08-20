@@ -27,12 +27,15 @@ def app_ctx():
         from cacao_accounting.database import Currency, Entity, Modules, User, database
 
         database.create_all()
+        from cacao_accounting.database import Book
+
         database.session.add_all(
             [
                 Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="J0001", currency="NIO", enabled=True),
                 Modules(module="accounting", default=True, enabled=True),
                 User(id="user-1", user="admin", name="Admin", password=b"x", classification="admin", active=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
+                Book(entity="cacao", code="DEFAULT_BOOK", name="Default", status="activo", is_primary=True, currency="NIO"),
             ]
         )
         database.session.commit()
@@ -315,7 +318,7 @@ def test_journal_books_endpoint_returns_only_active_books(app_ctx):
 
     database.session.add_all(
         [
-            Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True),
+            Book(entity="cacao", code="FISC", name="Fiscal", status="activo"),
             Book(entity="cacao", code="IFRS", name="IFRS", status=None),
             Book(entity="cacao", code="TAX", name="Tax", status="inactivo"),
         ]
@@ -330,7 +333,7 @@ def test_journal_books_endpoint_returns_only_active_books(app_ctx):
     payload = response.get_json()
 
     assert response.status_code == 200
-    assert [item["value"] for item in payload["results"]] == ["FISC", "IFRS"]
+    assert set(item["value"] for item in payload["results"]) == {"DEFAULT_BOOK", "FISC", "IFRS"}
 
 
 def test_submit_journal_posts_only_selected_books(app_ctx):
@@ -377,6 +380,7 @@ def test_submit_journal_without_selected_books_posts_all_active_books(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
     from cacao_accounting.database import Accounts, Book, GLEntry, database
 
+    default_book = database.session.execute(database.select(Book).filter_by(entity="cacao", code="DEFAULT_BOOK")).scalar_one()
     debit_account = Accounts(entity="cacao", code="EXP-004", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-004", name="Caja", active=True, enabled=True, group=False)
     fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
@@ -408,8 +412,8 @@ def test_submit_journal_without_selected_books_posts_all_active_books(app_ctx):
     submit_journal(journal.id)
 
     posted_entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
-    assert len(posted_entries) == 4
-    assert {entry.ledger_id for entry in posted_entries} == {fiscal_book.id, ifrs_book.id}
+    assert len(posted_entries) == 6
+    assert {entry.ledger_id for entry in posted_entries} == {default_book.id, fiscal_book.id, ifrs_book.id}
 
 
 def test_submit_journal_allows_manual_closing_in_closed_period(app_ctx):

@@ -814,6 +814,11 @@ def test_r2r_purchase_flow_reconciliation_multicurrency(app_ctx):
         ("R2RUSD", "USD", Decimal("-2880"), Decimal("-80"), Decimal("-2800"), "difference"),
     ):
         recon_filters = ReconciliationFilters(company="r2r", ledger=ledger_code, as_of_date=date(2026, 8, 7))
+        if currency != "NIO":
+            with pytest.raises(ValueError, match="moneda distinta"):
+                get_reconciliation_matrix(recon_filters)
+            continue
+
         matrix = get_reconciliation_matrix(recon_filters)
 
         ap_row = next(row for row in matrix.rows if row.values["area"] == "AP")

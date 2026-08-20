@@ -1124,7 +1124,7 @@ def test_purchase_quotation_flow_requires_lines_and_inherits_currency(app_ctx):
         f"?source_type=purchase_request&target_type=purchase_quotation&source_id={source.id}&company=cacao"
     )
     assert pending.status_code == 200
-    assert pending.get_json()["items"][0]["qty"] == 2.0
+    assert float(pending.get_json()["items"][0]["qty"]) == 2.0
     database.session.refresh(item)
     assert item.amount == Decimal("20")
 

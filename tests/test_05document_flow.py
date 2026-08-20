@@ -81,11 +81,11 @@ def test_document_flow_tracks_partial_pending_qty(app_ctx):
     items = get_source_items("purchase_order", "PO-001", "purchase_receipt")
     all_items = get_source_items("purchase_order", "PO-001")
 
-    assert items[0]["source_qty"] == 10
+    assert Decimal(items[0]["source_qty"]) == Decimal("10")
     # Los borradores no reservan el saldo del origen hasta aprobarse.
-    assert items[0]["consumed_qty"] == 0
-    assert items[0]["pending_qty"] == 10
-    assert all_items[0]["pending_qty"] == 10
+    assert Decimal(items[0]["consumed_qty"]) == Decimal("0")
+    assert Decimal(items[0]["pending_qty"]) == Decimal("10")
+    assert Decimal(all_items[0]["pending_qty"]) == Decimal("10")
     assert order_item.received_qty == Decimal("0")
 
 
@@ -212,7 +212,7 @@ def test_document_flow_releases_pending_qty_when_target_is_reverted(app_ctx):
 
     assert reverted == 1
     assert relation.status == "reverted"
-    assert items[0]["pending_qty"] == 10
+    assert Decimal(items[0]["pending_qty"]) == Decimal("10")
     assert order_item.received_qty == Decimal("0")
 
 
@@ -259,10 +259,10 @@ def test_document_flow_closes_manual_line_balance(app_ctx):
 
     items = get_source_items("purchase_order", "PO-001", "purchase_receipt")
 
-    assert state["closed_qty"] == 3
-    assert state["pending_qty"] == 7
-    assert items[0]["closed_qty"] == 3
-    assert items[0]["pending_qty"] == 7
+    assert Decimal(state["closed_qty"]) == Decimal("3")
+    assert Decimal(state["pending_qty"]) == Decimal("7")
+    assert Decimal(items[0]["closed_qty"]) == Decimal("3")
+    assert Decimal(items[0]["pending_qty"]) == Decimal("7")
 
 
 def test_draft_relation_does_not_consume_source_for_other_drafts(app_ctx):
@@ -330,9 +330,9 @@ def test_draft_relation_does_not_consume_source_for_other_drafts(app_ctx):
     )
 
     items = get_source_items("purchase_order", "PO-001", "purchase_receipt")
-    assert items[0]["source_qty"] == 10
-    assert items[0]["consumed_qty"] == 0
-    assert items[0]["pending_qty"] == 10
+    assert Decimal(items[0]["source_qty"]) == Decimal("10")
+    assert Decimal(items[0]["consumed_qty"]) == Decimal("0")
+    assert Decimal(items[0]["pending_qty"]) == Decimal("10")
 
 
 def test_document_status_uses_single_operational_badge(app_ctx):
@@ -1021,7 +1021,7 @@ def test_receipt_edit_cleans_old_relations(app_ctx):
     assert consumed == Decimal("3"), f"Esperado 3, obtenido {consumed}"
 
     items = get_source_items("purchase_order", "PO-001", "purchase_receipt")
-    assert items[0]["pending_qty"] == Decimal("10"), f"Esperado 10, obtenido {items[0]['pending_qty']}"
+    assert Decimal(items[0]["pending_qty"]) == Decimal("10"), f"Esperado 10, obtenido {items[0]['pending_qty']}"
 
 
 def test_invoice_submit_validates_against_receipt(app_ctx):
@@ -1200,7 +1200,7 @@ def test_invoice_edit_cleans_old_relations(app_ctx):
     assert consumed == Decimal("2"), f"Esperado 2, obtenido {consumed}"
 
     items = get_source_items("purchase_receipt", "PR-INV-EDIT", "purchase_invoice")
-    assert items[0]["pending_qty"] == Decimal("5"), f"Esperado 5, obtenido {items[0]['pending_qty']}"
+    assert Decimal(items[0]["pending_qty"]) == Decimal("5"), f"Esperado 5, obtenido {items[0]['pending_qty']}"
 
 
 def test_invoice_submit_rejects_over_invoice(app_ctx):

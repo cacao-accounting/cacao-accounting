@@ -33,7 +33,7 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, Modules, User, database
+        from cacao_accounting.database import Book, Entity, Modules, User, database
 
         database.create_all()
         database.session.add_all(
@@ -57,6 +57,7 @@ def app_ctx():
                     classification="admin",
                     active=True,
                 ),
+                Book(entity="cacao", code="DEFAULT_BOOK", name="Default", status="activo", is_primary=True, currency="NIO"),
             ]
         )
         database.session.commit()
@@ -3631,11 +3632,12 @@ def test_route_journal_cancel_success_flash(app_ctx):
 
 def test_route_ver_comprobante_journal_book_attribute(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft
-    from cacao_accounting.database import Accounts, ComprobanteContable, User, database
+    from cacao_accounting.database import Accounts, Book, ComprobanteContable, User, database
 
     debit = Accounts(entity="cacao", code="EXP-JBA", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-JBA", name="Caja", active=True, enabled=True)
-    database.session.add_all([debit, credit])
+    legacy_book = Book(entity="cacao", code="LEGACY", name="Legacy Book", status="activo")
+    database.session.add_all([debit, credit, legacy_book])
     database.session.commit()
 
     journal = create_journal_draft(
