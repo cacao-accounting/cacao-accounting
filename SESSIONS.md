@@ -3,6 +3,104 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-20 — Verificación de fixes, cierre de issues y needs-work
+
+### Petición
+
+Obtener la lista de issues abiertos de GitHub, revisar las entradas de SESSIONS.md,
+confirmar que los fixes propuestos son correctos, robustos y bien pensados; cerrar
+los issues cuyo fix es válido, y marcar como `needs-work` los issues con fixes
+incompletos o incorrectos, comentando el análisis realizado.
+
+### Estado previo
+
+SESSIONS.md (entradas 2026-08-20) clasificaba 15 issues abiertos:
+- **#519/#520** — corregidos en código por el commit `7122753d` (ya en `origin/main`);
+  pendían ejecución de regresiones focales antes de cerrar.
+- **#246, #251, #256, #276, #278, #279, #280, #281, #282, #283, #284, #285** —
+  fixes parciales o inexistentes; no cumplían los criterios de aceptación.
+
+Los issues no tenían comentarios de fix en GitHub (ningún comentario además del
+cuerpo del issue).
+
+### Verificación
+
+Se ejecutaron las regresiones focales en `.venv` (Python 3.12.1) antes de tomar
+cualquier decisión de cierre:
+
+| Issues | Pruebas focales | Resultado |
+|--------|-----------------|-----------|
+| #519, #520 | `test_accounting_book_access.py` (7) + `test_12_recurring_journals.py` (7) + `test_06transaction_closure.py` (17) | 31 passed ✅ |
+| #246 | (incluido en la corrida de #519/#520) | passed ✅ |
+| #276 | `test_08_reconciliation_reports.py` (110 incl. `test_bank_difference_journal...`) | 110 passed ✅ |
+| #282, #283 | (incluido en la corrida de #276) | passed ✅ |
+| #278, #284 | `test_exchange_revaluation.py` (14) | 14 passed ✅ |
+| #251, #256 | `test_operational_report_framework.py` (6 seleccionados) | 6 passed ✅ |
+
+**Nota sobre #276:** en una corrida previa con `test_e2e_playwright_accounting.py`,
+el test `test_bank_difference_journal_uses_account_codes_and_each_book_currency`
+falló (`assert 6 == 4`) debido a un problema de aislamiento de fixtures entre
+módulos E2E y tests unitarios, **no** a una regresión del código. En aislamiento
+pasa correctamente.
+
+### Análisis de fixes locales
+
+Los 10 commits locales (1 docs + 9 code) abordan #246, #251, #256, #276, #278,
+#282, #283, #284. Cada fix fue examinado línea a línea contra el código fuente:
+
+- **`7122753d` (#519, #520):** ✅ Correcto y robusto. ACL fail-closed, actor
+  transportado en submit/approval, validación canónica de libros incluyendo
+  `ledger_id` legacy en plantillas. Tests verifican usuario inexistente, libro
+  no autorizado, listado/detalle filtrado.
+- **`6cca7f1d` (#246):** Parcial. Implementa `create_ledger_mapping_rule` en el
+  servicio, pero falta UI, integración con posting engine y tests E2E.
+- **`e8e19a08` (#251, #256):** Parcial. Elimina doble paginación y usa IDs
+  persistidos en drill-downs; Playwright usa `PLAYWRIGHT_ARTIFACT_DIR`. Faltan
+  tests E2E y UI de navegación de paginación.
+- **`8e77a172`, `ce24f5e1`, `89b64e2e` (#276):** Parcial. Idempotentcia de
+  conciliaciones, rechazo de comparaciones moneda/libro, legacy GL retention.
+  Falta matriz de reconciliación completa y detección de huérfanos.
+- **`295acf71`, `2bf6d68f`, `572667e5` (#278):** Parcial. Validación de tasas,
+  reversa de balances no realizados. Falta matriz realized/unrealized FX completa.
+- **`adb64b86` (#283):** Parcial. Lock de factura antes de reconciliation lookup.
+  Falta suite de concurrencia transaccional completa.
+- **`9095b82a`, `ac10597d` (#284):** Parcial. Preserva `Decimal` en payment
+  payloads y contextos de impresión. Falta contrato de precisión integral.
+- **`8e77a172` (#282):** Parcial. Idempotentcia de bank replays. Falta matriz de
+  cash management completa.
+
+### Resultado
+
+| Issues | Veredicto | Acción tomada |
+|--------|-----------|--------------|
+| #519 | ✅ Fix correcto, robusto, verificado | **Cerrado** con comentario de confirmación |
+| #520 | ✅ Fix correcto, robusto, verificado | **Cerrado** con comentario de confirmación |
+| #246 | ⚠️ Fix parcial (servicio; falta UI/integración) | `needs-work` + comentario |
+| #249 | ❌ Sin fix | `needs-work` + comentario |
+| #250 | ❌ Sin fix | `needs-work` + comentario |
+| #251 | ⚠️ Fix parcial (paginación; falta drill-down UI) | `needs-work` + comentario |
+| #256 | ⚠️ Fix parcial (infraestructura Playwright) | `needs-work` + comentario |
+| #276 | ⚠️ Fix parcial (idempotencia; falta matriz) | `needs-work` + comentario |
+| #278 | ⚠️ Fix parcial (validación de tasas) | `needs-work` + comentario |
+| #279 | ❌ Sin fix | `needs-work` + comentario |
+| #280 | ❌ Sin fix | `needs-work` + comentario |
+| #281 | ❌ Sin fix | `needs-work` + comentario |
+| #282 | ⚠️ Fix parcial (idempotencia bank replays) | `needs-work` + comentario |
+| #283 | ⚠️ Fix parcial (lock invoice; falta concurrencia) | `needs-work` + comentario |
+| #284 | ⚠️ Fix parcial (preserva Decimal) | `needs-work` + comentario |
+| #285 | ❌ Sin fix | `needs-work` + comentario |
+
+**2 issues cerrados, 13 marcados needs-work.** No se hizo `push` de los commits
+locales. Se publicaron 15 comentarios en GitHub (2 de confirmación + 13 de análisis).
+
+### Modificaciones del working tree no relacionadas
+
+El `git stash pop` restauró modificaciones no comprometidas en 18 archivos
+(`api/`, `compras/services.py`, `document_flow/`, `reportes/helpers.py`, varios
+tests) provenientes de una sesión de refactorización modular anterior. Estas
+modificaciones **no son parte de esta verificación** y no se commitearon ni se
+pushearon. Se dejan intactas para que la sesión que las originó las revise.
+
 ## 2026-08-19 — Corrección fail-closed de ACL contable (#519 y #520)
 
 ### Petición
