@@ -3,6 +3,92 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-20 — Auditoría de matrices submayor↔GL: O2C (#280) y S2P/P2P (#281)
+
+### Petición
+
+Analizar los issues de GitHub #280 (AUDIT-005: matriz O2C de pagos/créditos/reversas) y #281 (AUDIT-006: matriz AP S2P/P2P + conciliación 3-way), proponer un plan para cerrarlos e implementar las suites de pruebas que completen sus matrices de aceptación. Restricciones acordadas: commits semánticos firmados como `williamjmorenor@gmail.com`, sin ramas nuevas ni push; NO cerrar los issues, solo comentarlos referenciando el commit; PR conjunto único para ambos.
+
+### Plan implementado
+
+1. Análisis de ambos issues y su historial de comentarios (`gh api repos/{owner}/{repo}/issues/{n}/comments`; `gh issue view --comments` falla por deprecación GraphQL de projects-classic).
+2. Exploración del código: `get_ar_ap_subledger`/`get_reconciliation_matrix` (reportes/services.py), flujo de pagos (document_flow/payment.py), motor de posting (contabilidad/posting_service.py + accounting_engine), hooks de cancelación (bancos/services.py), notas de reversa (ventas/compras services).
+3. Diseño confirmado con el usuario: write-offs vía proxy existente `discount_amount`/`gain_loss_amount` de `PaymentReference` (no hay mecanismo dedicado); entrega en 1 PR conjunto.
+4. Suite O2C: `tests/test_o2c_matrix_audit.py` (9 pruebas) y suite AP: `tests/test_s2p_ap_matrix_audit.py` (5 pruebas), con fixtures estilo manual-seed (`app_ctx` + `chart`) sobre SQLite en memoria.
+5. Validación: batería focal (suites nuevas + test_payment_entry_improved, test_payment_unit, test_07posting_engine, test_08_reconciliation_reports, test_record_to_reports_multicurrency_multiledger, test_o2c_full_cycle, test_s2p_full_lifecycle) → **358 passed, 2 skipped, 0 fallos**. Linters: black ✅, ruff ✅ (flake8/mypy rotos en el entorno local; los cubre CI).
+6. Commit conjunto `b8241619` (`test(audit): complete O2C and S2P subledger-to-GL matrix coverage`) con sign-off; comentarios en #280 y #281 referenciando el commit sin cerrarlos.
+
+### Decisiones de diseño e invariantes descubiertas (no romper)
+
+- **Orden de posting de pagos**: crear `PaymentEntry(docstatus=1)` → `apply_payment_reconciliation(...)` → `post_document_to_gl(payment)`. El motor lee las referencias al momento de contabilizar.
+- **Anticipos**: sin referencias el motor enruta la contrapartida a la cuenta de anticipo (`use_advance_as_party_balance = not settlement_references`). El neteo GL (Dr AP/Cr Anticipo) solo se publica si `CompanyDefaultAccount.apply_advances_automatically=True` y lo dispara `apply_advance_to_invoice`. `apply_payment_reconciliation` NO acepta referencias a purchase_order.
+- **Pagos FX**: la liquidación genera pares Dr/Cr de revaluación no realizada sobre AR/AP que se reversan en el período siguiente (commit `a6928587`); la igualdad estricta de matriz AR/AP se verifica al corte anterior al pago FX. Requieren cuentas `unrealized_exchange_gain/loss_account_id` configuradas.
+- **Convención de signo AP en la matriz**: `subledger_amount = -outstanding` y `gl_control_amount = Σ(debit − credit)`; pasivo expresado como crédito neto.
+- **Notas vinculadas**: las notas con `reversal_of` se excluyen de las filas del submayor; su liquidación (p. ej. reembolso) no figura en `paid_amount` del reporte aunque sí liquida el saldo a nivel documento. Nota de crédito de venta postea Cr AR directo; el reembolso re-debita AR (por eso esos escenarios asercionan submayor + balanceo global GL, no igualdad AR).
+- **Write-offs**: proxy `discount_amount`/`gain_loss_amount` en `PaymentReference`; reduce efectivo consumido. En dirección compra el descuento se ACREDITA a la cuenta de descuentos (ingreso recibido). `compute_outstanding_amount` resta el `allocated_amount` completo (el write-off va dentro de la aplicación).
+- **Landed cost**: cargo capitalizable SIN `account_id` propio (si lo trae, el proforma agrega línea de gasto y desbalancea). Requiere bodega con `WarehouseCompanyAccount.inventory_account_id`, `bridge_account_id` en defaults, Item+UOM y StockBin con qty>0 para materializar la capa de valuación.
+- **Duplicados S2P-24**: `_validate_duplicate_supplier_invoice(supplier_id, supplier_invoice_no)` rechaza duplicados activos (docstatus != 2).
+- **Cancelaciones**: `cancel_document(doc)` + `_apply_payment_cancellation_hooks(payment)` (ya revierte relaciones internamente; no llamar `revert_relations_for_target` dos veces es inocuo pero redundante). Todo append-only.
+- **Observación menor pendiente**: `get_ar_ap_subledger` con `as_of_date=None` usa cortes distintos para `paid_amount` (todas las aplicaciones) vs `outstanding_amount` (`date.today()`) — reportes/services.py:333-334. Con corte explícito es consistente.
+
+### Estado y continuación
+
+- Commit: `b8241619` (rama main, sin push). Comentarios: [#280](https://github.com/cacao-accounting/cacao-accounting/issues/280#issuecomment-5363310405), [#281](https://github.com/cacao-accounting/cacao-accounting/issues/281#issuecomment-5363312902).
+- Pendiente: PR conjunto referenciando ambos issues (requiere push, no solicitado aún); opcionalmente corregir la observación de corte `as_of_date=None`.
+- Cobertura futura sugerida: dimensiones (cost_center/unit/project) contra control AP/AR agrupado — GLEntry las soporta pero facturas y líneas del motor no las propagan; hoy solo alcanzable vía ComprobanteContable manuales o vistas multi-libro.
+
+## 2026-08-20 — Diagnóstico y revisión integral de i18n y l10n
+
+### Petición
+
+Revisar el estado actual de la internacionalización (i18n) y localización (l10n) en el proyecto Cacao Accounting.
+
+### Diagnóstico y Hallazgos
+
+1. **Infraestructura Base y Selectores (`cacao_accounting/__init__.py`)**:
+   - `Flask-Babel` (v4.0.0) y `Babel` (v2.18.0) inicializados en `iniciar_extenciones(app)`.
+   - `_get_locale()`: Resuelve en cascada (1) preferencia del usuario autenticado `current_user.language`, (2) configuración global del sistema `SETUP_LANGUAGE`, (3) fallback `"es"`.
+   - `_get_timezone()`: Resuelve zona horaria desde `SETUP_TIMEZONE` con fallback a `DEFAULT_TIMEZONE` (`"America/Managua"`).
+   - Pruebas unitarias en `tests/test_language_settings.py` (2 passed) y `tests/test_timezone_setup.py` (4 passed).
+
+2. **Textos y Catálogos de Traducción (Gettext)**:
+   - Existen más de 1,250 llamadas a `_("...")` en código Python y `{{ _('...') }}` en plantillas Jinja2 marcando cadenas traducibles.
+   - El idioma base de desarrollo es español (`es`).
+   - **Brecha identificada**: No existe archivo de configuración de extracción `babel.cfg`, ni catálogo plantilla (`messages.pot`), ni catálogos traducidos (`.po`/`.mo`) en `cacao_accounting/translations/`. Al seleccionar inglés (`en`), `Flask-Babel` no encuentra traducciones y retorna la cadena base en español.
+   - En el asistente inicial (`cacao_accounting/setup/catalogs.py` y `repository.py`), los textos sí están traducidos mediante diccionarios estáticos (`SETUP_TEXTS["en"]`, `AMERICA_COUNTRIES.name_en`, `_PARTY_GROUP_CATALOG["en"]`, `_default_uom_catalog("en")`, `_default_price_list_catalog("en")`).
+
+3. **Localización de Monedas, Números y Fechas (l10n)**:
+   - `format_money_with_currency` y `format_quantity` usan formato fijo Anglo (`f"{val:,.2f}"` y `f"{val:,.4f}"` con punto decimal y coma de miles), sin aplicar las reglas de puntuación regional del locale activo.
+   - En impresión PDF (`cacao_accounting/printing/service.py`), se usan `format_date` y `format_datetime` de `Flask-Babel`.
+   - En las vistas web Jinja2, la mayoría de fechas se imprimen directamente como objetos de fecha ISO `{{ row.date }}` sin formateador localizado.
+
+4. **Catálogos Contables y Entidades Financieras**:
+   - Soporte multilingüe para planes contables (`base_es.csv`, `base_en.csv`, `niif_pymes_es.csv`, `ifrs_smes_en.csv`, `us_gaap.csv`) en `cacao_accounting/contabilidad/ctas/` con mappings de cuentas predeterminadas.
+
+5. **Verificación de Resolución en Cascada de Fuentes (User vs Global)**:
+   - Se probó la interacción directa de `_get_locale()` y `flask_babel.get_locale()` en requests aislados:
+     - Global `es` (sin usuario): `get_locale() == 'es'`.
+     - Global `en` (sin usuario): `get_locale() == 'en'`.
+     - Usuario `es` con Global `en`: prevalece `user.language` -> `get_locale() == 'es'`.
+     - Usuario `en` con Global `es`: prevalece `user.language` -> `get_locale() == 'en'`.
+     - Usuario `None` (sin preferencia): hereda `SETUP_LANGUAGE` correctamente tanto para `es` como para `en`.
+   - Se probó el ciclo HTTP completo vía test client:
+     - POST a `/settings/language` persiste `SETUP_LANGUAGE` en la BD.
+     - POST a `/auth/profile` persiste `user.language` en la BD o lo limpia a `None` para heredar el valor global.
+
+6. **Correcciones Aplicadas**:
+   - Se corrigió el mojibake en `cacao_accounting/setup/service.py:96` reemplazando `"Esta instalaciÃ³n solo permite una compaÃ±Ã­a."` por `"Esta instalación solo permite una compañía."`.
+   - Se verificaron las pruebas en `tests/test_desktop_cloud_mode.py` (6 passed).
+   - Linters `ruff check`, `ruff format` y `flake8` verificados sin errores.
+
+7. **Oportunidades de Mejora / Acciones Recomendadas**:
+   - Configurar `babel.cfg` y pipeline de extracción (`pybabel extract`, `init`, `compile`).
+   - Generar el catálogo en inglés (`translations/en/LC_MESSAGES/messages.po`) para cubrir los textos marcados con `_()`.
+   - Estandarizar la importación de `_` a través de un único módulo utilitario común.
+
+
+
+
 ## 2026-08-20 — Configuración de idioma global (/settings/language) y preferencia por usuario (/auth/profile)
 
 ### Petición
