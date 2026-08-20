@@ -13,6 +13,7 @@ from cacao_accounting.database import (
     Accounts,
     Book,
     Entity,
+    ExchangeRate,
     GLEntry,
     PurchaseInvoice,
     SalesInvoice,
@@ -58,7 +59,40 @@ def _invoice_total(model: Any, company: str, start: date, end: date) -> Decimal:
     return sum((_invoice_base_amount(row) for row in database.session.execute(query).scalars()), Decimal("0"))
 
 
-def _gl_totals(company: str, start: date, end: date) -> dict[str, Decimal]:
+def _convert_to_ledger_currency(
+    amount: Decimal,
+    source_currency: str | None,
+    target_currency: str | None,
+    as_of_date: date,
+) -> Decimal:
+    """Convierte un importe usando la tasa histórica registrada."""
+    if not source_currency or not target_currency or source_currency == target_currency:
+        return amount
+    rate = (
+        database.session.execute(
+            select(ExchangeRate).filter_by(origin=source_currency, destination=target_currency, date=as_of_date)
+        )
+        .scalars()
+        .first()
+    )
+    if rate is not None:
+        return amount * _decimal(rate.rate)
+    inverse = (
+        database.session.execute(
+            select(ExchangeRate).filter_by(origin=target_currency, destination=source_currency, date=as_of_date)
+        )
+        .scalars()
+        .first()
+    )
+    if inverse is not None:
+        inv_value = _decimal(inverse.rate)
+        if inv_value == 0:
+            return Decimal("0")
+        return amount / inv_value
+    raise ValueError(f"No existe tipo de cambio de {source_currency} a {target_currency} en {as_of_date}.")
+
+
+def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = None) -> dict[str, Decimal]:
     query = (
         select(GLEntry, Accounts)
         .outerjoin(Accounts, (Accounts.id == GLEntry.account_id) & (Accounts.entity == company))
@@ -70,16 +104,9 @@ def _gl_totals(company: str, start: date, end: date) -> dict[str, Decimal]:
             GLEntry.is_reversal.is_(False),
         )
     )
-    ledger_id = primary_ledger_id(company)
-    if ledger_id:
-        ledger = database.session.get(Book, ledger_id)
-        company_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
-        if ledger is not None and ledger.currency and company_currency and ledger.currency != company_currency:
-            raise ValueError(
-                "Los KPI no pueden mezclar la moneda funcional de la compañía "
-                "con la moneda del libro primario sin una conversión explícita."
-            )
-        query = query.where(GLEntry.ledger_id == ledger_id)
+    effective_ledger = ledger_id or primary_ledger_id(company)
+    if effective_ledger:
+        query = query.where(GLEntry.ledger_id == effective_ledger)
     totals = {"income": Decimal("0"), "cost": Decimal("0"), "expense": Decimal("0")}
     for entry, account in database.session.execute(query).all():
         classification = (getattr(account, "classification", "") or "").lower()
@@ -122,11 +149,32 @@ def _document_base_factor(document: Any) -> Decimal:
     return rate if rate > 0 else Decimal("1")
 
 
-def get_kpi_snapshot(company: str, start: date, end: date) -> dict[str, Any]:
-    """Build a read-only KPI snapshot for a company and date range."""
-    gl = _gl_totals(company, start, end)
-    sales = _invoice_total(SalesInvoice, company, start, end)
-    purchases = _invoice_total(PurchaseInvoice, company, start, end)
+def get_kpi_snapshot(company: str, start: date, end: date, ledger: str | None = None) -> dict[str, Any]:
+    """Build a read-only KPI snapshot for a company and date range.
+
+    When *ledger* is provided the GL amounts are filtered by that book and
+    all invoice-based totals are converted to the ledger currency so that
+    metrics are expressed in a single, explicit currency.
+    """
+    base_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
+    ledger_currency = base_currency
+    if ledger:
+        book = database.session.execute(select(Book).where(Book.entity == company, Book.code == ledger)).scalars().first()
+        if book is None:
+            book = database.session.get(Book, ledger)
+        if book is not None and book.currency:
+            ledger_currency = book.currency
+    gl = _gl_totals(company, start, end, ledger_id=ledger)
+    _needs_conversion = ledger_currency and base_currency and ledger_currency != base_currency
+    _target = ledger_currency if _needs_conversion else base_currency
+
+    def _to_ledger(amount: Decimal) -> Decimal:
+        if not _needs_conversion:
+            return amount
+        return _convert_to_ledger_currency(amount, base_currency, ledger_currency, end)
+
+    sales = _to_ledger(_invoice_total(SalesInvoice, company, start, end))
+    purchases = _to_ledger(_invoice_total(PurchaseInvoice, company, start, end))
     ar_rows = database.session.execute(
         select(SalesInvoice).where(
             SalesInvoice.company == company,
@@ -141,27 +189,30 @@ def get_kpi_snapshot(company: str, start: date, end: date) -> dict[str, Any]:
             PurchaseInvoice.posting_date <= end,
         )
     ).scalars()
-    ar = sum(
-        (
-            (-1 if row.is_return else 1)
-            * _decimal(compute_outstanding_amount(row, as_of_date=end))
-            * _document_base_factor(row)
-            for row in ar_rows
-        ),
-        Decimal("0"),
+    ar = _to_ledger(
+        sum(
+            (
+                (-1 if row.is_return else 1)
+                * _decimal(compute_outstanding_amount(row, as_of_date=end))
+                * _document_base_factor(row)
+                for row in ar_rows
+            ),
+            Decimal("0"),
+        )
     )
-    ap = sum(
-        (
-            (-1 if row.is_return else 1)
-            * _decimal(compute_outstanding_amount(row, as_of_date=end))
-            * _document_base_factor(row)
-            for row in ap_rows
-        ),
-        Decimal("0"),
+    ap = _to_ledger(
+        sum(
+            (
+                (-1 if row.is_return else 1)
+                * _decimal(compute_outstanding_amount(row, as_of_date=end))
+                * _document_base_factor(row)
+                for row in ap_rows
+            ),
+            Decimal("0"),
+        )
     )
     inventory = database.session.execute(select(StockBin.stock_value).where(StockBin.company == company)).scalars()
-    inventory_value = sum((_decimal(value) for value in inventory), Decimal("0"))
-    base_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
+    inventory_value = _to_ledger(sum((_decimal(value) for value in inventory), Decimal("0")))
     return {
         "company_id": company,
         "date_from": start,
@@ -178,7 +229,7 @@ def get_kpi_snapshot(company: str, start: date, end: date) -> dict[str, Any]:
             "working_capital": ar + inventory_value - ap,
             "inventory_value": inventory_value,
         },
-        "currency": base_currency,
+        "currency": _target,
         "complete": True,
     }
 

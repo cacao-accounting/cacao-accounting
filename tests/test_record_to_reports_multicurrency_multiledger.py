@@ -811,11 +811,15 @@ def test_r2r_purchase_flow_reconciliation_multicurrency(app_ctx):
     for ledger_code, currency, expected_sub_amount, expected_gl_amount, expected_diff, expected_status in (
         ("R2RLOC", "NIO", Decimal("-2880"), Decimal("-2880"), Decimal("0"), "reconciled"),
         ("R2REUR", "EUR", Decimal("-2880"), Decimal("-72"), Decimal("-2808"), "difference"),
-        ("R2RUSD", "USD", Decimal("-2880"), Decimal("-80"), Decimal("-2800"), "difference"),
+        ("R2RUSD", "USD", Decimal("-80"), Decimal("-80"), Decimal("0"), "reconciled"),
     ):
         recon_filters = ReconciliationFilters(company="r2r", ledger=ledger_code, as_of_date=date(2026, 8, 7))
-        if currency != "NIO":
-            with pytest.raises(ValueError, match="moneda distinta"):
+        # EUR ledger has no NIO->EUR or EUR->NIO exchange rate: the subledger
+        # in company currency (NIO) cannot be converted to the ledger currency
+        # (EUR), so the matrix must fail in a controlled way instead of
+        # reporting a false difference.
+        if currency == "EUR":
+            with pytest.raises(ValueError, match="tipo de cambio"):
                 get_reconciliation_matrix(recon_filters)
             continue
 

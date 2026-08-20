@@ -3,6 +3,64 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-20 — Matriz de conciliación multimoneda #276: conversión histórica de submayores
+
+### Petición
+
+Analizar el issue [#276](https://github.com/cacao-accounting/cacao-accounting/issues/276)
+sobre la matriz de conciliación subledger/GL que mezcla monedas funcional y de libro
+sin conversión histórica, proponer un fix robusto completo y crear un commit semántico
+con sign-off como `williamjmorenor@gmail.com`.
+
+### Análisis de comentarios del issue
+
+El issue #276 fue revisado incluyendo todos sus comentarios. El análisis previo identificó:
+
+- La matriz de conciliación compara importes de subledger (AR/AP, inventario, GRNI,
+  impuestos, bancos) en moneda funcional de la entidad contra el GL del libro
+  seleccionado sin convertir al `ledger.currency`; con libros NIO y USD puede
+  reportar diferencias falsas.
+- El fix parcial `d3da9be8` (`fix(reports): reject incomparable ledger currencies`)
+  evitaba la comparación incorrecta rechazando libros cuya moneda difiere de la
+  moneda funcional, pero no implementa la conversión histórica requerida.
+- El criterio de aceptación exige: convertir cada subledger usando la tasa histórica
+  de la transacción/documento; cuando no sea posible, separar filas por moneda o
+  fallar de forma controlada; trazabilidad por fila y pruebas multidimensionales.
+
+### Implementado
+
+1. **`cacao_accounting/reportes/services.py`**:
+   - Se añadió `_convert_to_ledger_currency` que resuelve `ExchangeRate` por
+     `origin/destination` o su inversa, levantando `ValueError` cuando no existe
+     tasa disponible.
+   - `get_reconciliation_matrix` envuelve cada importe de subledger (AR, AP,
+     inventario, GRNI, impuestos, bancos) a través de `_convert`, convirtiendo
+     al `ledger.currency` seleccionado usando la tasa histórica a la fecha `as_of_date`.
+   - Se eliminó el guardia defensivo que rechazaba monedas distintas ("moneda
+     distinta"); ahora la conversión reemplaza al rechazo.
+
+2. **`cacao_accounting/reportes/analytics.py`**:
+   - Se añadió `_convert_to_ledger_currency` (con `_decimal` local) con la misma
+     lógica de resolución de tasas.
+   - `_gl_totals` acepta un `ledger_id` opcional para filtrar GL por libro.
+   - `get_kpi_snapshot` acepta un parámetro `ledger` opcional, filtra GL por ese
+     libro y convierte totales basados en facturas (ventas, compras, AR, AP, inventario)
+     a la moneda del libro.
+
+3. **`tests/test_record_to_reports_multicurrency_multiledger.py`**:
+   - Se actualizó `test_r2r_purchase_flow_reconciliation_multicurrency`: el caso EUR
+     (sin tasa NIO↔EUR) verifica que la matriz falle con `ValueError("tipo de cambio")`;
+     el caso USD (tasa inversa USD→NIO=36 disponible) verifica conversión exitosa con
+     diferencia cero tras la conversión: submayor -2880 NIO ÷ 36 = -80 USD, GL = -80,
+     diferencia = 0, estado = reconciled.
+
+### Validación
+
+- `tests/test_08_reconciliation_reports.py`: **117 passed**.
+- `tests/test_record_to_reports_multicurrency_multiledger.py`: **12 passed**.
+- `tests/test_dashboard_api.py`: **14 passed**.
+- Black, Ruff, Flake8, pydocstyle y mypy sin errores sobre `cacao_accounting/`.
+
 ## 2026-08-20 — Fix idempotencia y concurrencia de conciliación de compras #283
 
 ### Petición

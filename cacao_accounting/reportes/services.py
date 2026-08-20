@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     CostCenter,
     DocumentRelation,
     Entity,
+    ExchangeRate,
     FiscalYear,
     GLEntry,
     Item,
@@ -367,6 +368,46 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
     )
 
 
+def _convert_to_ledger_currency(
+    amount: Decimal,
+    source_currency: str | None,
+    target_currency: str | None,
+    as_of_date: date,
+) -> Decimal:
+    """Convierte un importe de ``source_currency`` a ``target_currency`` usando la tasa histórica.
+
+    Si alguna moneda es ``None`` o ambas coinciden, devuelve el importe sin
+    conversión.  Si no existe tasa registrada en la fecha exacta, busca la
+    tasa inversa y aplica su recíproco.  Si no hay tasa disponible se
+    levanta ``ValueError`` para que el llamador pueda decidir si separar
+    por moneda.
+    """
+    if not source_currency or not target_currency or source_currency == target_currency:
+        return amount
+    rate = (
+        database.session.execute(
+            select(ExchangeRate).filter_by(origin=source_currency, destination=target_currency, date=as_of_date)
+        )
+        .scalars()
+        .first()
+    )
+    if rate is not None:
+        return amount * _decimal_value(rate.rate)
+    inverse = (
+        database.session.execute(
+            select(ExchangeRate).filter_by(origin=target_currency, destination=source_currency, date=as_of_date)
+        )
+        .scalars()
+        .first()
+    )
+    if inverse is not None:
+        inverse_value = _decimal_value(inverse.rate)
+        if inverse_value == 0:
+            return Decimal("0")
+        return amount / inverse_value
+    raise ValueError(f"No existe tipo de cambio de {source_currency} a {target_currency} en {as_of_date}.")
+
+
 def _reconciliation_gl_amount(
     company: str,
     ledger_id: str,
@@ -438,19 +479,18 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     company_currency = database.session.execute(
         select(Entity.currency).where(Entity.code == filters.company)
     ).scalar_one_or_none()
-    if selected_ledger.currency and company_currency and selected_ledger.currency != company_currency:
-        raise ValueError(
-            "La matriz no puede comparar submayores en moneda funcional con un libro "
-            "de moneda distinta sin conversión histórica explícita."
-        )
-    if filters.currency and selected_ledger.currency and filters.currency != selected_ledger.currency:
-        raise ValueError("La moneda solicitada debe coincidir con la moneda del libro seleccionado.")
     comparison_currency = filters.currency or selected_ledger.currency
+    ledger_needs_conversion = selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
     _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
     as_of_date = filters.as_of_date or period_end or date.today()
     defaults = database.session.execute(
         select(CompanyDefaultAccount).where(CompanyDefaultAccount.company == filters.company)
     ).scalar_one_or_none()
+
+    def _convert(subledger_amount: Decimal, source_currency: str | None) -> Decimal:
+        if not ledger_needs_conversion:
+            return subledger_amount
+        return _convert_to_ledger_currency(subledger_amount, source_currency, selected_ledger.currency, as_of_date)
 
     rows: list[ReportRow] = []
     ar_account = str(defaults.default_receivable) if defaults and defaults.default_receivable else None
@@ -465,7 +505,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         _reconciliation_row(
             "AR",
             [ar_account] if ar_account else [],
-            ar_subledger,
+            _convert(ar_subledger, company_currency),
             _reconciliation_gl_amount(
                 filters.company,
                 selected_ledger.id,
@@ -482,7 +522,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         _reconciliation_row(
             "AP",
             [ap_account] if ap_account else [],
-            -ap_subledger,
+            _convert(-ap_subledger, company_currency),
             _reconciliation_gl_amount(
                 filters.company,
                 selected_ledger.id,
@@ -518,7 +558,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         _reconciliation_row(
             "Inventory",
             inventory_accounts,
-            inventory_subledger,
+            _convert(inventory_subledger, company_currency),
             _reconciliation_gl_amount(
                 filters.company, selected_ledger.id, inventory_accounts, date_to=as_of_date, currency=comparison_currency
             ),
@@ -535,7 +575,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         _reconciliation_row(
             "GRNI/AP 3-way",
             [bridge_account] if bridge_account else [],
-            -pending_grni,
+            _convert(-pending_grni, company_currency),
             _reconciliation_gl_amount(
                 filters.company,
                 selected_ledger.id,
@@ -586,7 +626,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         _reconciliation_row(
             "Tax",
             tax_accounts,
-            purchase_tax - sales_tax,
+            _convert(purchase_tax - sales_tax, company_currency),
             _reconciliation_gl_amount(
                 filters.company, selected_ledger.id, tax_accounts, date_to=as_of_date, currency=comparison_currency
             ),
@@ -622,7 +662,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         _reconciliation_row(
             "Bank",
             [str(account) for account in bank_accounts],
-            bank_subledger,
+            _convert(bank_subledger, company_currency),
             _reconciliation_gl_amount(
                 filters.company,
                 selected_ledger.id,
