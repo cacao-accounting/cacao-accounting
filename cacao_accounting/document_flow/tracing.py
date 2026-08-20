@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 from werkzeug.routing import BuildError
 
@@ -63,7 +64,7 @@ def _relation_payload(relation: DocumentRelation, upstream: bool) -> dict[str, A
         "relation_id": relation.id,
         "relation_type": relation.relation_type,
         "status": relation.status,
-        "qty": float(relation.qty or 0),
+        "qty": str(Decimal(str(relation.qty or 0))),
         "uom": relation.uom,
         "document": _document_payload(related_type, related_id),
     }

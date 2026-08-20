@@ -10,6 +10,7 @@ de profundidad configurable.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 from werkzeug.routing import BuildError
 
@@ -405,7 +406,7 @@ def _resolve_currency(document: Any) -> str | None:
     return None
 
 
-def _resolve_total(document: Any, spec: Any) -> float | None:
+def _resolve_total(document: Any, spec: Any) -> str | None:
     """Obtiene el monto total del documento."""
     if document is None or spec is None:
         return None
@@ -416,28 +417,28 @@ def _resolve_total(document: Any, spec: Any) -> float | None:
     if val is None:
         return None
     try:
-        return float(val)
+        return str(Decimal(str(val)))
     except (TypeError, ValueError):
         return None
 
 
-def _resolve_journal_total(document: Any) -> float | None:
+def _resolve_journal_total(document: Any) -> str | None:
     """Calcula el total visible de un comprobante contable."""
     from cacao_accounting.database import ComprobanteContableDetalle
 
     lines = database.session.execute(
         database.select(ComprobanteContableDetalle).filter_by(transaction="journal_entry", transaction_id=document.id)
     ).scalars()
-    debit = 0.0
-    credit = 0.0
+    debit = Decimal("0")
+    credit = Decimal("0")
     for line in lines:
-        value = float(getattr(line, "value", 0) or 0)
+        value = Decimal(str(getattr(line, "value", 0) or 0))
         if value >= 0:
             debit += value
         else:
             credit += abs(value)
     total = max(debit, credit)
-    return total if total else None
+    return str(total) if total else None
 
 
 def _has_cycle_flag(nodes: list[dict[str, Any]]) -> bool:
@@ -483,7 +484,7 @@ def _append_payment_reference_node(
     relation_type: str,
     related_doctype: str,
     related_id: str,
-    allocated_amount: float,
+    allocated_amount: str,
     visited: set[tuple[str, str]],
     depth: int,
     max_depth: int,
@@ -555,7 +556,7 @@ def _append_payment_reference_nodes(
                 relation_type="payment",
                 related_doctype="payment_entry",
                 related_id=ref.payment_id,
-                allocated_amount=float(ref.allocated_amount or 0),
+                allocated_amount=str(Decimal(str(ref.allocated_amount or 0))),
                 visited=visited,
                 depth=depth,
                 max_depth=max_depth,
@@ -577,7 +578,7 @@ def _append_payment_reference_nodes(
             relation_type="payment_reference",
             related_doctype=ref_type,
             related_id=ref.reference_id,
-            allocated_amount=float(ref.allocated_amount or 0),
+            allocated_amount=str(Decimal(str(ref.allocated_amount or 0))),
             visited=visited,
             depth=depth,
             max_depth=max_depth,

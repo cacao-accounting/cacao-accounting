@@ -64,9 +64,9 @@ class PaymentAllocationContext:
     outstanding: Decimal
 
 
-def _to_json_number(value: Any) -> float:
-    """Convierte Decimal/None a float para JSON y templates."""
-    return float(decimal_or_zero(value))
+def _to_json_number(value: Any) -> str:
+    """Serializa montos exactos sin convertirlos a ``float``."""
+    return str(decimal_or_zero(value))
 
 
 def _document_exchange_rate(document: Any) -> Decimal:

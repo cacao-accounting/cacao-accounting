@@ -247,9 +247,9 @@ def get_accounting_data(
         "charts": {"monthly_result": _accounting_monthly_result(company, start_date, end_date)},
         "tables": {
             "summary": [
-                {"label": "Ingresos", "amount": income, "currency": currency},
-                {"label": "Gastos", "amount": expenses, "currency": currency},
-                {"label": "Utilidad", "amount": profit, "currency": currency},
+                {"label": "Ingresos", "amount": _numeric(income), "currency": currency},
+                {"label": "Gastos", "amount": _numeric(expenses), "currency": currency},
+                {"label": "Utilidad", "amount": _numeric(profit), "currency": currency},
                 {"label": "Asientos del periodo", "amount": journal_entries, "currency": ""},
             ]
         },
@@ -353,7 +353,7 @@ def get_inventory_data(
 ) -> dict[str, Any]:
     """Obtiene métricas de inventario basadas en StockBin y StockLedgerEntry."""
     bins = database.session.query(StockBin).filter_by(company=company)
-    inventory_value = float(bins.with_entities(func.sum(StockBin.stock_value)).scalar() or 0)
+    inventory_value = Decimal(str(bins.with_entities(func.sum(StockBin.stock_value)).scalar() or 0))
     active_warehouses = database.session.query(Warehouse).filter_by(company=company, is_active=True).count()
     stocked_items = bins.filter(StockBin.actual_qty != 0).count()
     movements = _stock_movements_query(company, start_date, end_date).count()
@@ -444,7 +444,7 @@ def _income_expense_balances(
     company: str,
     start_date: date | None,
     end_date: date | None,
-) -> dict[str, float]:
+) -> dict[str, Decimal]:
     """Calcula ingresos y gastos por clasificación de cuenta."""
     query = (
         database.session.query(Accounts.classification, func.sum(GLEntry.debit - GLEntry.credit).label("balance"))
@@ -468,14 +468,14 @@ def _income_expense_balances(
             income += abs(balance)
         elif classification in EXPENSE_CLASSIFICATIONS:
             expenses += balance
-    return {"income": float(income), "expenses": float(expenses)}
+    return {"income": income, "expenses": expenses}
 
 
 def _accounting_monthly_result(
     company: str,
     start_date: date | None,
     end_date: date | None,
-) -> list[dict[str, float | int]]:
+) -> list[dict[str, str | int]]:
     """Devuelve ingresos y gastos agrupados por mes."""
     query = (
         database.session.query(
@@ -494,7 +494,7 @@ def _accounting_monthly_result(
     if start_date and end_date:
         query = query.filter(GLEntry.posting_date >= start_date, GLEntry.posting_date <= end_date)
     rows = query.group_by("month", Accounts.classification).order_by("month").all()
-    months: dict[int, dict[str, float | int]] = {}
+    months: dict[int, dict[str, str | int]] = {}
     for row in rows:
         if row.month is None:
             continue
@@ -502,17 +502,17 @@ def _accounting_monthly_result(
             month = int(float(row.month))
         except (ValueError, TypeError):
             continue
-        payload = months.setdefault(month, {"month": month, "income": 0.0, "expenses": 0.0})
-        balance = float(row.balance or 0)
+        payload = months.setdefault(month, {"month": month, "income": "0", "expenses": "0"})
+        balance = Decimal(str(row.balance or 0))
         classification = (row.classification or "").lower()
         if classification in INCOME_CLASSIFICATIONS:
-            payload["income"] = float(payload["income"]) + abs(balance)
+            payload["income"] = _numeric(Decimal(str(payload["income"])) + abs(balance))
         elif classification in EXPENSE_CLASSIFICATIONS:
-            payload["expenses"] = float(payload["expenses"]) + balance
+            payload["expenses"] = _numeric(Decimal(str(payload["expenses"])) + balance)
     return list(months.values())
 
 
-def _bank_balances(company: str, accounts: list[BankAccount]) -> dict[str | None, float]:
+def _bank_balances(company: str, accounts: list[BankAccount]) -> dict[str | None, Decimal]:
     """Obtiene saldos de GL por cuenta bancaria."""
     gl_account_ids = [account.gl_account_id for account in accounts if account.gl_account_id]
     if not gl_account_ids:
@@ -527,7 +527,7 @@ def _bank_balances(company: str, accounts: list[BankAccount]) -> dict[str | None
     if ledger_id:
         results = results.filter(GLEntry.ledger_id == ledger_id)
     results = results.all()
-    return {row[0]: float(row[1] or 0) for row in results}
+    return {row[0]: Decimal(str(row[1] or 0)) for row in results}
 
 
 def _bank_transactions_query(
@@ -557,7 +557,7 @@ def _recent_bank_movements(
         {
             "date": row.posting_date.isoformat() if row.posting_date else "",
             "description": row.description or row.reference_number or "Movimiento bancario",
-            "amount": float((row.deposit or 0) - (row.withdrawal or 0)),
+            "amount": _numeric(Decimal(str(row.deposit or 0)) - Decimal(str(row.withdrawal or 0))),
             "currency": currency,
             "status": "Conciliado" if row.is_reconciled else "Pendiente",
         }
@@ -601,8 +601,8 @@ def _purchase_invoice_payload(invoice: PurchaseInvoice, currency: str) -> dict[s
         "date": invoice.posting_date.isoformat() if invoice.posting_date else "",
         "document_no": invoice.document_no or invoice.id,
         "party": invoice.supplier_name or "Proveedor",
-        "total": sign * _numeric(invoice.base_grand_total or invoice.grand_total),
-        "outstanding": sign * _numeric(invoice.base_outstanding_amount or invoice.outstanding_amount),
+        "total": _signed_numeric(invoice.base_grand_total or invoice.grand_total, sign),
+        "outstanding": _signed_numeric(invoice.base_outstanding_amount or invoice.outstanding_amount, sign),
         "currency": currency,
     }
 
@@ -715,8 +715,8 @@ def _recent_sales_invoices(
             "date": row.posting_date.isoformat() if row.posting_date else "",
             "document_no": row.document_no or row.id,
             "party": row.customer_name or "Cliente",
-            "total": (-1 if row.is_return else 1) * _numeric(row.base_grand_total or row.grand_total),
-            "outstanding": (-1 if row.is_return else 1) * _numeric(row.base_outstanding_amount or row.outstanding_amount),
+            "total": _signed_numeric(row.base_grand_total or row.grand_total, -1 if row.is_return else 1),
+            "outstanding": _signed_numeric(row.base_outstanding_amount or row.outstanding_amount, -1 if row.is_return else 1),
             "currency": currency,
         }
         for row in rows
@@ -743,7 +743,7 @@ def _sum_document_field(
     fallback_field: str,
     *,
     include_returns: bool = True,
-) -> float:
+) -> Decimal:
     """Sum outstanding documents in the document base currency.
 
     When a document has its transaction total, compute the balance from posted
@@ -764,10 +764,10 @@ def _sum_document_field(
         else:
             amount = Decimal(str(getattr(row, base_field, None) or getattr(row, fallback_field, None) or 0))
         total += -amount if row.is_return else amount
-    return float(total)
+    return total
 
 
-def _sum_query(query: Any, expression: Any) -> float:
+def _sum_query(query: Any, expression: Any) -> str:
     """Suma una expresión sobre un query existente."""
     return _numeric(query.with_entities(func.sum(expression)).scalar())
 
@@ -780,7 +780,7 @@ def _signed_document_expression(model: Any, base_field: str | None = None, fallb
     return case((model.is_return.is_(True), -amount), else_=amount)
 
 
-def _sum_signed_documents(query: Any, model: Any) -> float:
+def _sum_signed_documents(query: Any, model: Any) -> str:
     """Sum posted document totals without treating credit notes as sales."""
     return _numeric(query.with_entities(func.sum(_signed_document_expression(model))).scalar())
 
@@ -790,9 +790,9 @@ def _count_model(model: Any, company: str, docstatus: int) -> int:
     return database.session.query(model).filter_by(company=company, docstatus=docstatus).count()
 
 
-def _money_kpi(label: str, value: float, currency: str) -> dict[str, Any]:
+def _money_kpi(label: str, value: Any, currency: str) -> dict[str, Any]:
     """Crea un KPI monetario."""
-    return {"label": label, "value": value, "format": "money", "currency": currency}
+    return {"label": label, "value": _numeric(value), "format": "money", "currency": currency}
 
 
 def _count_kpi(label: str, value: int) -> dict[str, Any]:
@@ -800,6 +800,11 @@ def _count_kpi(label: str, value: int) -> dict[str, Any]:
     return {"label": label, "value": value, "format": "count"}
 
 
-def _numeric(value: Any) -> float:
-    """Convierte valores numéricos de SQLAlchemy a float."""
-    return float(value or 0)
+def _numeric(value: Any) -> str:
+    """Serializa valores financieros como texto decimal exacto."""
+    return str(Decimal(str(value or 0)))
+
+
+def _signed_numeric(value: Any, sign: int) -> str:
+    """Serializa un importe con su signo económico sin usar ``float``."""
+    return str(Decimal(str(value or 0)) * sign)

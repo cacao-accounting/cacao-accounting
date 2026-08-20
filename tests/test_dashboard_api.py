@@ -133,19 +133,19 @@ def test_dashboard_returns_uniform_sections_and_metrics(client):
 
     accounting = data["sections"]["accounting"]
     assert accounting["visible"] is True
-    assert accounting["kpis"]["income"]["value"] == 300.0
-    assert accounting["kpis"]["expenses"]["value"] == 100.0
-    assert accounting["kpis"]["profit"]["value"] == 200.0
+    assert Decimal(str(accounting["kpis"]["income"]["value"])) == Decimal("300")
+    assert Decimal(str(accounting["kpis"]["expenses"]["value"])) == Decimal("100")
+    assert Decimal(str(accounting["kpis"]["profit"]["value"])) == Decimal("200")
     assert accounting["tables"]["summary"][3]["label"] == "Asientos del periodo"
 
     banks = data["sections"]["banks"]
     assert banks["kpis"]["accounts"]["value"] == 1
     assert banks["kpis"]["unreconciled"]["value"] == 1
-    assert banks["tables"]["account_balances"][0]["balance"] == 1000.0
+    assert Decimal(str(banks["tables"]["account_balances"][0]["balance"])) == Decimal("1000")
 
     purchases = data["sections"]["purchases"]
-    assert purchases["kpis"]["total"]["value"] == 500.0
-    assert purchases["kpis"]["outstanding"]["value"] == 150.0
+    assert Decimal(str(purchases["kpis"]["total"]["value"])) == Decimal("500")
+    assert Decimal(str(purchases["kpis"]["outstanding"]["value"])) == Decimal("150")
     assert purchases["kpis"]["open_orders"]["value"] == 1
     assert purchases["kpis"]["suppliers"]["value"] == 1
 
@@ -153,11 +153,11 @@ def test_dashboard_returns_uniform_sections_and_metrics(client):
     assert "lowest_stock_items" in inventory["tables"]
     assert "low_stock_items" not in inventory["tables"]
     assert inventory["tables"]["lowest_stock_items"][0]["item_code"] == "ITEM-LOW"
-    assert inventory["kpis"]["value"]["value"] == 125.0
+    assert Decimal(str(inventory["kpis"]["value"]["value"])) == Decimal("125")
 
     sales = data["sections"]["sales"]
-    assert sales["kpis"]["sales"]["value"] == 900.0
-    assert sales["kpis"]["receivables"]["value"] == 350.0
+    assert Decimal(str(sales["kpis"]["sales"]["value"])) == Decimal("900")
+    assert Decimal(str(sales["kpis"]["receivables"]["value"])) == Decimal("350")
     assert sales["kpis"]["customers"]["value"] == 1
     assert sales["tables"]["top_customers"][0]["name"] == "Cliente Demo"
 
@@ -177,9 +177,9 @@ def test_dashboard_excludes_cancelled_and_reversal_gl_entries(app, client):
 
     assert response.status_code == 200
     sections = response.get_json()["sections"]
-    assert sections["accounting"]["kpis"]["income"]["value"] == 300.0
+    assert Decimal(str(sections["accounting"]["kpis"]["income"]["value"])) == Decimal("300")
     assert sections["accounting"]["tables"]["summary"][3]["amount"] == 5
-    assert sections["banks"]["tables"]["account_balances"][0]["balance"] == 1000.0
+    assert Decimal(str(sections["banks"]["tables"]["account_balances"][0]["balance"])) == Decimal("1000")
 
 
 def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
@@ -234,11 +234,11 @@ def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
     response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
     assert response.status_code == 200
     sections = response.get_json()["sections"]
-    assert sections["sales"]["kpis"]["sales"]["value"] == 800.0
-    assert sections["purchases"]["kpis"]["total"]["value"] == 425.0
-    assert sections["purchases"]["kpis"]["outstanding"]["value"] == 150.0
+    assert Decimal(str(sections["sales"]["kpis"]["sales"]["value"])) == Decimal("800")
+    assert Decimal(str(sections["purchases"]["kpis"]["total"]["value"])) == Decimal("425")
+    assert Decimal(str(sections["purchases"]["kpis"]["outstanding"]["value"])) == Decimal("150")
     assert all(row["document_no"] != "PI-RETURN" for row in sections["purchases"]["tables"]["payables"])
-    assert sections["sales"]["tables"]["top_customers"][0]["total"] == 800.0
+    assert Decimal(str(sections["sales"]["tables"]["top_customers"][0]["total"])) == Decimal("800")
 
 
 def test_dashboard_hides_sales_without_permission(client):
