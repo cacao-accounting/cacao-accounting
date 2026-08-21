@@ -858,6 +858,10 @@ def test_exchange_rate_detail_shows_edit_action(app_ctx):
 )
 def test_master_lists_render_expected_controls(app_ctx, path, create_label, expect_actions):
     from cacao_accounting.database import User
+    from cacao_accounting.runtime_mode import force_single_entity
+
+    if path == "/accounting/entity/list" and force_single_entity():
+        pytest.skip("En modo escritorio el botón Nueva Entidad está oculto al permitir una sola compañía.")
 
     client = app_ctx.test_client()
     _login(client, User.query.filter_by(user="admin").first().id)

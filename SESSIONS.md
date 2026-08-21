@@ -3,6 +3,41 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-21 — Skipif MODO_ESCRITORIO para pruebas que requieren más de una compañía
+
+### Petición
+
+El job `desktop` de CI (`.github/workflows/python-package.yml`, `CACAO_ACCOUNTING_DESKTOP: "True"`) fallaba porque varias pruebas requieren crear o esperar más de una compañía, y en modo escritorio `force_single_entity()` limita la instalación a una sola compañía por tenant (`setup/service.py:96` lanza `ValueError("Esta instalación solo permite una compañía.")`). Identificar las pruebas que fallan por ese motivo y marcarlas con skip condicional cuando `MODO_ESCRITORIO == True`.
+
+### Diagnóstico
+
+Corrida completa replicando el entorno desktop (`CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=... CACAO_ACCOUNTING_DESKTOP=True pytest --full --slow=True`, excluyendo los 4 archivos ignorados por CI): **42 failed, 1666 passed, 25 skipped**. Sin la variable todo pasa (confirmado por el usuario). Clasificación por causa raíz:
+
+- **Grupo A — fallan por requerir >1 compañía (8 pruebas, corregidas aquí)**:
+  - `tests/test_08_reconciliation_reports.py`: `test_setup_with_predefined_catalog_creates_complete_company_defaults`, `test_setup_with_invalid_catalog_raises_error`, `test_setup_with_predefined_catalog_creates_bootstrap_records` (llaman `finalize_setup` → `create_company` sobre el fixture que ya siembra "cacao"), `test_example_seed_creates_company_default_accounts`, `test_example_seed_creates_company_base_records` (iteran `("cacao", "dulce", "cafe")` del seed de ejemplos).
+  - `tests/test_09_journal_entry_form.py::test_entity_creation_uses_setup_defaults_and_creates_required_book_cost_center_and_series` (POST `/accounting/entity/new` espera 302 pero recibe 200 con flash de error).
+  - `tests/test_01vistas.py::test_visit_views` (rutas de `z_static_routes.py` esperan contenido de "cafe"/"dulce" y el botón "Nueva Entidad").
+  - `tests/test_master_data_issues.py::test_master_lists_render_expected_controls[/accounting/entity/list-Nueva Entidad-True]` (el botón "Nueva Entidad" se oculta con `force_single_entity()`, ver `entidad_lista.html:25`).
+- **Grupo B — fallan por otros gates del modo escritorio, NO crean compañías (34 pruebas, pendiente decisión)**: approval engine deshabilitado en desktop (`approval_engine.py:154`) ×23; login restringido a admin (`auth/helpers.py:68`) ×4 (`test_accounting_exhaustive` ×2, `test_dashboard_api` ×2); portales deshabilitados (`portal/__init__.py:44`) ×3; gestión de segundo usuario bloqueada (`admin/services.py:195`) ×3; enlace a módulo imports oculto ×1.
+
+### Implementado
+
+1. Constante de módulo en los archivos afectados: `MODO_ESCRITORIO = detect_desktop_mode()` (en colección no hay app context, así que resuelve el env var `CACAO_ACCOUNTING_DESKTOP`, igual que el job desktop de CI) + decorador `@pytest.mark.skipif(MODO_ESCRITORIO, reason="El modo escritorio solo permite una compañía por instalación.")`.
+2. `test_08_reconciliation_reports.py`: skipif en las 5 pruebas del Grupo A.
+3. `test_09_journal_entry_form.py` y `test_01vistas.py`: skipif en sus pruebas respectivas.
+4. `test_master_data_issues.py`: skip en runtime dentro de la prueba parametrizada cuando `path == "/accounting/entity/list"` y `force_single_entity()` (los otros 9 parámetros siguen cubiertos en modo escritorio).
+
+### Validación
+
+- Modo escritorio (`CACAO_ACCOUNTING_DESKTOP=True`): Grupo A → 13 skipped (5+8), resto de los archivos seleccionados pasa.
+- Modo nube (sin variable): 5 passed (test_08) + 12 passed (test_09 + master_lists ×10 + test_01vistas).
+- `black --check` y `ruff check` sin errores en los 4 archivos modificados.
+
+### Continuidad
+
+- Pendiente de decisión: las 34 pruebas del Grupo B también fallan en el job desktop por gates de funcionalidades solo-nube (aprobaciones, portales, imports, multiusuario, login admin-only). Requieren el mismo tratamiento skipif u homologación de expectativas si se quiere el job desktop en verde.
+
+
 ## 2026-08-20 — Pruebas de formularios bancarios nota_nueva y transferencia_nueva #249 (CAS-22)
 
 ### Petición

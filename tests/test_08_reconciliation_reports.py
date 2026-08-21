@@ -12,6 +12,10 @@ from openpyxl import load_workbook
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
+from cacao_accounting.runtime_mode import detect_desktop_mode
+
+MODO_ESCRITORIO = detect_desktop_mode()
+SOLO_UNA_COMPANIA = "El modo escritorio solo permite una compañía por instalación."
 
 
 @pytest.fixture()
@@ -640,7 +644,6 @@ def test_bank_reconciliation_converts_gl_entry_with_mismatched_currency(app_ctx)
         BankAccount,
         BankTransaction,
         Book,
-        Book,
         ExchangeRate,
         GLEntry,
         database,
@@ -922,7 +925,6 @@ def test_reconciliation_matrix_converts_subledger_to_ledger_currency(app_ctx):
         CompanyDefaultAccount,
         Entity,
         ExchangeRate,
-        GLEntry,
         PartyAccount,
         SalesInvoice,
         SalesInvoiceItem,
@@ -2773,6 +2775,7 @@ def test_base_catalog_mapping_covers_required_default_accounts(app_ctx):
         assert purchase_discount["rubro"] == "Income"
 
 
+@pytest.mark.skipif(MODO_ESCRITORIO, reason=SOLO_UNA_COMPANIA)
 def test_setup_with_predefined_catalog_creates_complete_company_defaults(app_ctx):
     from cacao_accounting.contabilidad.default_accounts import DEFAULT_ACCOUNT_FIELDS
     from cacao_accounting.database import CompanyDefaultAccount, database
@@ -2804,6 +2807,7 @@ def test_setup_with_predefined_catalog_creates_complete_company_defaults(app_ctx
     assert all(getattr(defaults, field) for field in DEFAULT_ACCOUNT_FIELDS)
 
 
+@pytest.mark.skipif(MODO_ESCRITORIO, reason=SOLO_UNA_COMPANIA)
 def test_setup_with_invalid_catalog_raises_error(app_ctx):
     from cacao_accounting.setup.service import finalize_setup
 
@@ -2824,6 +2828,7 @@ def test_setup_with_invalid_catalog_raises_error(app_ctx):
         )
 
 
+@pytest.mark.skipif(MODO_ESCRITORIO, reason=SOLO_UNA_COMPANIA)
 def test_setup_with_predefined_catalog_creates_bootstrap_records(app_ctx):
     from datetime import date
 
@@ -2974,6 +2979,7 @@ def test_setup_america_country_catalog_and_fast_currency_seed():
         assert available_codes.issubset(currency_codes)
 
 
+@pytest.mark.skipif(MODO_ESCRITORIO, reason=SOLO_UNA_COMPANIA)
 def test_example_seed_creates_company_default_accounts(app_ctx):
     from cacao_accounting.contabilidad.default_accounts import DEFAULT_ACCOUNT_FIELDS
     from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -3001,6 +3007,7 @@ def test_example_seed_creates_company_default_accounts(app_ctx):
             assert all(getattr(defaults, field) for field in DEFAULT_ACCOUNT_FIELDS)
 
 
+@pytest.mark.skipif(MODO_ESCRITORIO, reason=SOLO_UNA_COMPANIA)
 def test_example_seed_creates_company_base_records(app_ctx):
     from cacao_accounting.database import (
         AccountingPeriod,

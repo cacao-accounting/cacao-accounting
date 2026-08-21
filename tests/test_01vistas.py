@@ -1,12 +1,18 @@
 import sys
 import os
 
+import pytest
+
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from z_static_routes import static_rutes
 from z_func import init_test_db
 
 from cacao_accounting import create_app
+from cacao_accounting.runtime_mode import detect_desktop_mode
+
+MODO_ESCRITORIO = detect_desktop_mode()
+SOLO_UNA_COMPANIA = "El modo escritorio solo permite una compañía por instalación."
 
 app = create_app(
     {
@@ -21,6 +27,7 @@ app = create_app(
 )
 
 
+@pytest.mark.skipif(MODO_ESCRITORIO, reason=SOLO_UNA_COMPANIA)
 def test_visit_views(request):
     from cacao_accounting.logs import log
 

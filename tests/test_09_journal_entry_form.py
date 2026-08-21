@@ -10,6 +10,10 @@ import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
+from cacao_accounting.runtime_mode import detect_desktop_mode
+
+MODO_ESCRITORIO = detect_desktop_mode()
+SOLO_UNA_COMPANIA = "El modo escritorio solo permite una compañía por instalación."
 
 
 @pytest.fixture()
@@ -751,6 +755,7 @@ def test_submit_journal_persists_advance_and_bank_account_on_gl_entries(app_ctx)
     assert debit_entry.bank_account_id == bank_account.id
 
 
+@pytest.mark.skipif(MODO_ESCRITORIO, reason=SOLO_UNA_COMPANIA)
 def test_entity_creation_uses_setup_defaults_and_creates_required_book_cost_center_and_series(app_ctx):
     from cacao_accounting.database import (
         AccountingPeriod,
