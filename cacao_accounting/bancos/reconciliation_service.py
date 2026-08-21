@@ -236,16 +236,31 @@ def _allocated_for_source(bank_transaction_id: str) -> Decimal:
     return _decimal_value(value)
 
 
-def _allocated_for_target(target_type: str, target_id: str) -> Decimal:
-    value = database.session.execute(
+def _allocated_for_target(target_type: str, target_id: str, *, bank_account_id: str | None = None) -> Decimal:
+    """Suma asignaciones activas del destino.
+
+    Con ``bank_account_id`` se limita a la pierna bancaria indicada: un
+    ``PaymentEntry`` de transferencia interna se concilia dos veces (salida
+    en la cuenta origen y entrada en la destino) y cada pierna consume su
+    propio importe sin descontar el pendiente de la otra.
+    """
+    query = (
         select(func.coalesce(func.sum(ReconciliationItem.allocated_amount), 0))
         .filter_by(
             target_type=target_type,
             target_id=target_id,
         )
         .where(ReconciliationItem.status != "cancelled")
-    ).scalar_one()
-    return _decimal_value(value)
+    )
+    if bank_account_id:
+        query = query.join(
+            BankTransaction,
+            database.and_(
+                BankTransaction.id == ReconciliationItem.source_id,
+                ReconciliationItem.source_type == "bank_transaction",
+            ),
+        ).where(BankTransaction.bank_account_id == bank_account_id)
+    return _decimal_value(database.session.execute(query).scalar_one())
 
 
 def _validate_target_allocation_currency(
@@ -256,18 +271,28 @@ def _validate_target_allocation_currency(
     """Rechaza asignaciones históricas del destino en otra moneda bancaria.
 
     ``ReconciliationItem`` no conserva moneda propia; la moneda fiable de una
-    asignación existente es la cuenta bancaria de su transacción fuente. Sin
-    esta comprobación, el saldo pendiente mezcla cantidades incompatibles.
+    asignación existente es la cuenta bancaria de su transacción fuente. La
+    validación se limita a la pierna de la misma cuenta bancaria: en una
+    transferencia interna cada pierna vive legítimamente en su propia moneda.
+    Sin esta comprobación, el saldo pendiente mezclaría cantidades incompatibles.
     """
     current_currency = _bank_currency(transaction)
     if not current_currency:
         return
     source_ids = database.session.execute(
-        select(ReconciliationItem.source_id).where(
+        select(ReconciliationItem.source_id)
+        .join(
+            BankTransaction,
+            database.and_(
+                BankTransaction.id == ReconciliationItem.source_id,
+                ReconciliationItem.source_type == "bank_transaction",
+            ),
+        )
+        .where(
             ReconciliationItem.target_type == target_type,
             ReconciliationItem.target_id == target_id,
-            ReconciliationItem.source_type == "bank_transaction",
             ReconciliationItem.status != "cancelled",
+            BankTransaction.bank_account_id == transaction.bank_account_id,
         )
     ).scalars()
     for source_id in source_ids:
@@ -314,7 +339,10 @@ def _target_payment_amount(
         raise BankReconciliationError("La moneda del pago no coincide con la cuenta bancaria.")
     base_amount = _payment_base_amount(payment, bank_account_id)
     if base_amount is None:
-        raise BankReconciliationError("El pago no tiene monto en moneda funcional para conciliarse.")
+        # Pierna receptora de una transferencia interna: ``base_received_amount``
+        # se limpia al crearse y el importe de la pierna ya esta expresado en la
+        # moneda del banco destino (igual a la funcional en este punto).
+        return _payment_amount(payment, bank_account_id)
     return _decimal_value(base_amount)
 
 
@@ -449,9 +477,14 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool 
         else:
             base_amount = _payment_base_amount(payment, transaction.bank_account_id)
             if base_amount is None:
-                continue
-            payment_amount = _decimal_value(base_amount)
-        pending = payment_amount - _allocated_for_target("payment_entry", payment.id)
+                # Pierna receptora de transferencia: el importe de la pierna ya
+                # vive en la moneda del banco destino.
+                payment_amount = _payment_amount(payment, transaction.bank_account_id)
+            else:
+                payment_amount = _decimal_value(base_amount)
+        pending = payment_amount - _allocated_for_target(
+            "payment_entry", payment.id, bank_account_id=transaction.bank_account_id
+        )
         if pending <= 0:
             continue
         _append_candidate(
@@ -694,8 +727,11 @@ def _reconciliation_pending_amounts(
     """Calcula saldos pendientes source/target considerando asignaciones previas."""
     target_key = (target_type, target_id)
     _validate_target_allocation_currency(target_type, target_id, transaction)
+    leg_account_id = transaction.bank_account_id if target_type == "payment_entry" else None
     existing_source_allocations.setdefault(transaction.id, _allocated_for_source(transaction.id))
-    existing_target_allocations.setdefault(target_key, _allocated_for_target(target_type, target_id))
+    existing_target_allocations.setdefault(
+        target_key, _allocated_for_target(target_type, target_id, bank_account_id=leg_account_id)
+    )
     source_pending = (
         _bank_amount(transaction)
         - existing_source_allocations[transaction.id]

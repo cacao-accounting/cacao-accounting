@@ -3,6 +3,39 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-21 — AUDIT-007 (#282): matriz completa de conciliación bancaria y detección de huérfanos
+
+### Petición
+
+Cerrar la matriz de cash management del issue [#282](https://github.com/cacao-accounting/cacao-accounting/issues/282) (AUDIT-007): suite de pruebas end-to-end + fixes que el análisis revelara, commit semántico firmado como `williamjmorenor@gmail.com` y comentario en el issue sin cerrarlo.
+
+### Hallazgos y fixes de producción (`bancos/reconciliation_service.py`)
+
+1. **Piernas de transferencia interna**: `_allocated_for_target` sumaba las asignaciones del `PaymentEntry` sin distinguir pierna; tras conciliar la salida, la entrada se rechazaba con "El monto excede el saldo pendiente del documento destino". Fix: parámetro opcional `bank_account_id` que filtra asignaciones por cuenta bancaria de la transacción fuente (join `BankTransaction`). Callers: candidatos de pagos y `_reconciliation_pending_amounts` (solo para `payment_entry`; `gl_entry` conserva comportamiento global).
+2. **Guard moneda mixta leg-aware**: `_validate_target_allocation_currency` ahora solo inspecciona fuentes de la MISMA cuenta bancaria; en una transferencia USD→NIO cada pierna vive legítimamente en su propia moneda.
+3. **Pierna receptora sin monto funcional**: `_apply_internal_transfer_amounts` limpia `base_received_amount`; `_target_payment_amount` y el buscador de candidatos hacían `raise/skip`. Fix: fallback al importe de la pierna (`_payment_amount`) cuando el base es None — válido porque ese branch exige moneda banco == funcional.
+
+### Suite nueva: `tests/test_bank_cash_matrix_audit.py` (13 pruebas)
+
+Fixtures estilo manual-seed (`app_ctx` + `chart`: 2 bancos NIO + 1 USD, libro primario, defaults). Helpers `_make_bank_transaction`, `_make_payment` (réplica de semántica real de transferencias: `received = paid × rate`, `base_received=None`), `_reconcile`, `_assert_cash_equation(book − statement == neto declarado)`.
+
+Escenarios: cobro+pago completo cuadra libro=extracto · reparto parcial 60/40 idempotente (statuses append-only: el item parcial conserva "partial") · transferencia misma moneda ambas piernas + aislamiento por cuenta · transferencia FX (extracto -10 USD ↔ libro -360 NIO, tasa histórica 36) · fee/interés vía `gl_entry` con dimensión bancaria · cancelación de cobro devuelto desvincula y cancela items (returned payments/reversals) · cancelado deja de ser candidato · 4 diagnósticos huérfano sin falsar pendientes · duplicados de extracto detectados una vez (`identity_key`) · libro primario + ventana ±7 días · rechazo cross-company y moneda ajena (cuenta USD vs pago EUR) · corte de período en resumen y diagnósticos.
+
+### Invariantes descubiertas (no romper)
+
+- Conciliar NO postea: extracto cubierto con pagos sin GL sigue siendo partida conciliatoria (delta libro−extracto persiste hasta contabilizar).
+- Los `ReconciliationItem.status` son append-only; `is_reconciled` de la transacción se evalúa por suma de asignaciones.
+- El saldo contable de bancos es FUNCIONAL (dimensión `bank_account_id` + libro primario); ecuación contra extracto extranjero requiere tasa histórica.
+- Moneda ajena solo se rechaza explícitamente cuando moneda banco ≠ funcional; si coincide, se concilia por monto funcional/base.
+
+### Validación
+
+Suite nueva 13 passed; regresión focal bancaria (test_08, reconciliation_service_unit, cas18, payment_unit, cas22): **251 passed, 2 skipped**. Black/ruff ✅; flake8/mypy rotos en local (cubren en CI).
+
+### Estado
+
+Commit `3d66a739` (rama main, sin push) con sign-off. Comentario en #282: [issuecomment-5375991527](https://github.com/cacao-accounting/cacao-accounting/issues/282#issuecomment-5375991527). Issue permanece abierto: falta decidir persistencia de moneda/libro/tasa en `ReconciliationItem` y migración legacy.
+
 ## 2026-08-21 — Skipif MODO_ESCRITORIO para pruebas que requieren más de una compañía
 
 ### Petición
