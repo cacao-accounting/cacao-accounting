@@ -4354,3 +4354,89 @@ cumpliendo con un CLA firmado físicamente. También eliminar todos los trailers
 - La rama `backup-before-cla-rewrite-20260820` preserva el historial original.
 - **requerido**: `git push --force --all` para sincronizar el historial reescrito
   con el remoto. Los colaboradores deberán re-clonar o `git pull --rebase`.
+
+---
+
+## 2026-08-21 — AUDIT-003 (#278): matriz realized/unrealized FX y remeasurement AR/AP
+
+### Petición
+
+Completar el issue [#278](https://github.com/cacao-accounting/cacao-accounting/issues/278):
+ciclo completo de moneda extranjera AR/AP con liquidaciones parciales a tasas
+distintos, remeasurement al cierre, reversa del período siguiente, liquidación
+posterior con realized FX exacto, sin duplicación al repetir el job. Cambios
+locales (sin push), commit semántico como `williamjmorenor@gmail.com` con
+sign-off, alcance multi-libro y multi-moneda.
+
+### Análisis previo
+
+- Revisión de los 8 comentarios del issue: fixes previos verificados
+  (`572667e5` tasa futura, `295acf71` tasas inválidas, `2bf6d68f` reversa de
+  unrealized al iniciar período, `7e8d01a` settlement engine unitario).
+  Pendiente declarado: matriz E2E completa + pruebas independientes con Decimal.
+- Experimento controlado reveló **dos gaps reales**:
+  1. `_estimated_company_open_balance` (document_builders) leía
+     `base_outstanding_amount` **post-aplicación** del pago → asientos con Cr AR
+     876 en vez de 1460, realized 596 en vez de 12, unrealized 894 en vez de 18.
+  2. `_source_gl_balance` del servicio de revaluación medía desde el prorrateo
+     histórico del comprobante de factura (2190), ignorando el par unrealized
+     del pago parcial previo (valor real 2208) → ajuste duplicado (+60 vs +42)
+     y saldo final AR ≠ tasa de cierre × saldo abierto.
+  3. Camino por libro (`_payment_open_balance_in_ledger`) usaba instantánea ×
+     tasa histórica: la segunda liquidación secuencial dejaba residuo en AR/AP.
+
+### Implementación (commit `1a319852`)
+
+- Nueva helper `_document_carrying_value_in_ledger` (document_builders.py):
+  valor en libros pre-aplicación por libro = comprobante del documento +
+  entradas GL de pagos previos prorrateadas por asignación +
+  (`include_revaluation_adjustments=True`) ajustes activos de corridas.
+  Respaldo en cascada: instantánea pre-aplicación × tasa histórica → legacy.
+- `_estimated_company_open_balance` usa la helper con libro funcional de la
+  entidad; `_payment_open_balance_in_ledger`/`_reference_carrying_in_ledger`
+  la usan con el `ledger_id` concreto de cada libro.
+- `_source_gl_balance` (exchange_revaluation_service) usa la helper con
+  `include_revaluation_adjustments=False` (los suma aparte vía
+  `_active_revaluation_balance`) para no duplicar.
+- `_assign_identifier` bajo savepoint (`begin_nested`) con respaldo manual:
+  corrige colisión UNIQUE de `generated_identifier_log.full_identifier` al
+  reejecutar el job cuando la serie global con reinicio mensual genera logs en
+  el mismo segundo (bug real de idempotencia detectado por la suite).
+
+### Suite nueva: `tests/test_fx_ar_ap_lifecycle.py` (7 pruebas)
+
+Multi-libro (NIO funcional + EUR) y multi-moneda (documentos USD); valores
+esperados calculados a mano fuera de los servicios:
+
+1. Regresión del fix: open balance = 2208/54.30 (no 2190/54.00 histórico).
+2. Ciclo AR: pagos 40 @36.80 y 60 @38.00 → realized 12+72, unrealized 18,
+   AR=0 en ambos libros; conciliación económica exacta (102 NIO / 0.8 EUR).
+3. Bill AP espejo: pérdidas/ganancias invertidas, AP=0.
+4. Cierre mayo mide carrying: ajuste +42/+0.9 (no +60/+1.2); rerun sin duplicar.
+5. Reversa de junio el día 1 (-42/-0.9) + remeasurement (+12/+0.3) + liquidación
+   posterior con realized exacto +60; AR=0; neto FX = diferencia funcional.
+6. Rerun del job tras reversa: una sola corrida posted, ajuste estable, cierre 0.
+7. Invariante documentada: igualdad estricta submayor/GL al corte anterior al
+   pago FX; después GL = outstanding base + offset no realizado.
+
+### Reglas del motor verificadas (documentar, no romper)
+
+- Libro funcional: efectivo del pago usa la tasa propia del documento;
+  libros no-funcionales valoran efectivo con la **tabla** en la fecha del pago.
+- `run.total_gain/total_loss` resumen solo el libro de la moneda de la entidad.
+- Pares unrealized de pagos remedien AR/AP a la tasa de cada liquidación;
+  la reversa automática solo cubre corridas de `ExchangeRevaluation`.
+
+### Validación
+
+- Suite nueva: 7 passed. Linters: ruff ✅; black ✅ (vía uvx, pathspec del venv
+  corrupto — preexistente); mypy ✅ en archivos modificados (2 errores
+  preexistentes en journal_service.py). Batería focal ampliada corriendo en
+  segundo plano al momento del commit.
+
+### Continuidad
+
+- Sin push. Queda pendiente confirmar resultado completo de la batería focal
+  (`/tmp/opencode/focal_results.txt`) antes de cualquier PR hacia #278.
+- El label `needs-work` del issue puede revisarse tras push: faltan los
+  criterios "matriz" como reporte UI (hoy cobertura es contable/pruebas).
