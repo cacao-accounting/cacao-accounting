@@ -84,12 +84,17 @@ def demo_usuarios():
 def demo_entidad():
     """Entidad de demostración."""
     from cacao_accounting.compras.purchase_reconciliation_service import seed_matching_config_for_company
+    from cacao_accounting.runtime_mode import force_single_entity
     from cacao_accounting.setup.service import create_company
 
     fiscal_year_start = date(date.today().year, 1, 1)
     fiscal_year_end = date(date.today().year, 12, 31)
 
-    for e in _make_entidades():
+    entidades = _make_entidades()
+    if force_single_entity():
+        entidades = entidades[:1]
+
+    for e in entidades:
         company_data = {
             "id": e.code,
             "razon_social": e.company_name,
@@ -133,9 +138,11 @@ def cargar_catalogo_de_cuentas():
     """Catalogo de cuentas de demostración."""
     from cacao_accounting.contabilidad.ctas import base, cargar_catalogos
     from cacao_accounting.contabilidad.default_accounts import apply_catalog_default_mapping
+    from cacao_accounting.runtime_mode import force_single_entity
 
     log.debug("Cargando catalogos de cuentas.")
-    for company in ("cacao", "dulce", "cafe"):
+    companies = ("cacao",) if force_single_entity() else ("cacao", "dulce", "cafe")
+    for company in companies:
         cargar_catalogos(base, company)
         apply_catalog_default_mapping(company, base.file)
 

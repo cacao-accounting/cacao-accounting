@@ -49,7 +49,9 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
         self.entity = Entity(
             code="cacao", name="Cacao Corp", company_name="Cacao Corp", tax_id="J0001", currency="NIO", enabled=True
         )
-        self.book = Book(id="NIO", code="NIO", name="Libro NIO", entity="cacao", currency="NIO", status="activo", is_primary=True)
+        self.book = Book(
+            id="NIO", code="NIO", name="Libro NIO", entity="cacao", currency="NIO", status="activo", is_primary=True
+        )
         self.period = AccountingPeriod(
             id="P2026-07",
             name="2026-07",
@@ -64,7 +66,9 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
             id="2026", name="2026", entity="cacao", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31)
         )
         self.module = Modules(module="accounting", default=True, enabled=True)
-        self.user = User(id="test_user", user="test_user", name="Test User", password=b"x", classification="admin", active=True)
+        self.user = User(
+            id="test_user", user="test_user", name="Test User", password=b"x", classification="admin", active=True
+        )
 
         # Accounts
         self.acc_expense = Accounts(
@@ -86,7 +90,9 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
             enabled=True,
         )
 
-        database.session.add_all([self.entity, self.book, self.fy, self.period, self.acc_expense, self.acc_asset, self.module, self.user])
+        database.session.add_all(
+            [self.entity, self.book, self.fy, self.period, self.acc_expense, self.acc_asset, self.module, self.user]
+        )
         database.session.commit()
 
     def tearDown(self):

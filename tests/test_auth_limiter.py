@@ -68,7 +68,8 @@ def test_init_cache_cloud_mode() -> None:
     app.config["MODO_ESCRITORIO"] = False
     app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/0"
 
-    init_cache(app)
+    with patch("cacao_accounting.cache.cache.init_app"):
+        init_cache(app)
 
     assert app.config.get("CACHE_TYPE") == "RedisCache"
     assert app.config.get("CACHE_REDIS_URL") == "redis://localhost:6379/0"
