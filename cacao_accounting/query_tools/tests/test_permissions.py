@@ -33,6 +33,7 @@ def app_instance():
             "SECRET_KEY": "permissions_test_secret_key",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "MODO_ESCRITORIO": False,
         }
     )
     with _app.app_context():
