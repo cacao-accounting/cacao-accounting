@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Sequence
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.contabilidad.default_accounts import DefaultAccountError, validate_gl_account_usage
 from cacao_accounting.database import (
@@ -648,6 +649,26 @@ class ExchangeRevaluationService:
         return (original + revaluations).quantize(Decimal("0.0001"))
 
     def _source_gl_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal:
+        """Valor en libros del documento en un libro, sin ajustes de revaluacion.
+
+        Incluye las liquidaciones parciales previas y sus pares de revaluacion
+        no realizada; medir desde otro saldo duplicaria la diferencia cambiaria
+        ya reconocida. Si no hay entradas GL de soporte se recurre al prorrateo
+        historico por proporcion.
+        """
+        from cacao_accounting.accounting_engine.document_builders import _document_carrying_value_in_ledger
+
+        carrying = _document_carrying_value_in_ledger(
+            company=str(ledger.entity),
+            document_type=candidate.source_document_type,
+            document_id=candidate.source_document_id,
+            exclude_payment_id="",
+            party_account_id=candidate.account_id,
+            ledger_id=ledger.id,
+            receivable=candidate.normal_balance == "debit",
+        )
+        if carrying is not None:
+            return carrying
         query = (
             select(GLEntry)
             .filter_by(
@@ -866,13 +887,19 @@ class ExchangeRevaluationService:
 
     def _assign_identifier(self, run: ExchangeRevaluation) -> None:
         try:
-            assign_document_identifier(
-                document=run,
-                entity_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
-                posting_date_raw=run.posting_date,
-                naming_series_id=run.naming_series_id,
-            )
-        except IdentifierConfigurationError:
+            with database.session.begin_nested():
+                assign_document_identifier(
+                    document=run,
+                    entity_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
+                    posting_date_raw=run.posting_date,
+                    naming_series_id=run.naming_series_id,
+                )
+        except (IdentifierConfigurationError, SQLAlchemyError):
+            # La reejecucion del job debe ser idempotente: si la serie global
+            # reinicia su consecutivo (politica mensual con logs generados en
+            # el mismo segundo) colisiona contra el registro unico de
+            # identificadores; se asigna entonces un numero manual
+            # deterministico por corrida sin abortar la transaccion.
             run.document_no = f"{run.company}-EXR-{run.year}-{str(run.month).zfill(2)}-{run.id[-6:]}"
 
     def _active_run_entries(self, run_id: str) -> list[GLEntry]:

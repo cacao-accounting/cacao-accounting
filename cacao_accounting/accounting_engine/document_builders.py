@@ -26,6 +26,9 @@ from cacao_accounting.database import (
     CompanyDefaultAccount,
     CompanyParty,
     Entity,
+    ExchangeRevaluation,
+    ExchangeRevaluationItem,
+    GLEntry,
     ImportLandedCost,
     ImportLandedCostCharge,
     ImportLandedCostItem,
@@ -1143,19 +1146,182 @@ def _estimated_company_open_balance(
     settlement_amount: Decimal,
     document_total: Decimal,
 ) -> Decimal:
-    """Estimate the carrying balance in company currency for settlement calculations."""
+    """Estimate the pre-allocation carrying balance in company currency.
+
+    El saldo debe corresponder al estado ANTES de aplicar el pago actual; de lo
+    contrario la diferencia cambiaria realizada y el par de revaluacion no
+    realizada se calculan sobre importes ya liquidados. Se usa primero el valor
+    en libros GL del documento (que incluye los pares de revaluacion no
+    realizada dejados por liquidaciones parciales previas) y como respaldo la
+    instantanea previa a la aplicacion por la tasa historica del documento.
+    """
     invoices = [invoice for reference in references if (invoice := _payment_reference_document(reference)) is not None]
     if not invoices:
         return settlement_amount
     total = Decimal("0")
-    for invoice in invoices:
+    for reference in references:
+        invoice = _payment_reference_document(reference)
+        if invoice is None:
+            continue
+        receivable = not str(reference.reference_type or "").startswith("purchase_")
+        party_account_id = _party_account_id(str(reference.party_id or ""), str(invoice.company), receivable=receivable)
+        carrying = _document_carrying_value_in_ledger(
+            company=str(invoice.company),
+            document_type=str(reference.reference_type or ""),
+            document_id=str(reference.reference_id or ""),
+            exclude_payment_id=str(reference.payment_id or ""),
+            party_account_id=party_account_id,
+            ledger_id=_functional_ledger_id(str(invoice.company)),
+            receivable=receivable,
+            include_revaluation_adjustments=True,
+        )
+        if carrying is not None:
+            total += carrying
+            continue
+        open_transaction = _decimal_value(reference.outstanding_amount)
+        historical_rate = _document_exchange_rate(invoice)
+        if open_transaction > 0 and historical_rate > 0:
+            total += open_transaction * historical_rate
+            continue
         base_outstanding = _decimal_value(getattr(invoice, "base_outstanding_amount", None))
         if base_outstanding > 0:
             total += base_outstanding
             continue
         outstanding = _decimal_value(getattr(invoice, "outstanding_amount", None) or getattr(invoice, "grand_total", None))
-        total += outstanding * _document_exchange_rate(invoice)
+        total += outstanding * historical_rate
     return total if total > 0 else document_total
+
+
+def _functional_ledger_id(company: str) -> str | None:
+    """Resolve the ledger whose currency matches the functional currency."""
+    from cacao_accounting.database import Book
+
+    entity = _company_entity(company)
+    functional_currency = str(getattr(entity, "currency", None) or "")
+    ledgers = (
+        database.session.execute(
+            select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.is_primary.desc(), Book.code)
+        )
+        .scalars()
+        .all()
+    )
+    for ledger in ledgers:
+        if functional_currency and str(ledger.currency or "") == functional_currency:
+            return str(ledger.id)
+    return str(ledgers[0].id) if ledgers else None
+
+
+def _document_carrying_value_in_ledger(
+    *,
+    company: str,
+    document_type: str,
+    document_id: str,
+    exclude_payment_id: str,
+    party_account_id: str | None,
+    ledger_id: str | None,
+    receivable: bool,
+    include_revaluation_adjustments: bool = False,
+) -> Decimal | None:
+    """Valor en libros previo a la aplicacion de un documento en un libro.
+
+    Suma las entradas GL del comprobante del documento y, prorrateadas por su
+    asignacion, las entradas GL de pagos anteriores que aplicaron contra el
+    mismo documento en la cuenta control del tercero. El resultado incluye los
+    pares de revaluacion no realizada acumulados, de forma que la siguiente
+    liquidacion parcial libere exactamente el valor en libros vigente.
+
+    ``include_revaluation_adjustments`` incorpora los ajustes activos de las
+    corridas de revalorizacion cambiaria sobre el documento; el servicio de
+    revalorizacion debe excluirlos porque los suma por su cuenta.
+    """
+    from sqlalchemy import func
+
+    if not party_account_id or not ledger_id:
+        return None
+    if not company or not document_type or not document_id:
+        return None
+
+    def _net(entries_net: Decimal) -> Decimal:
+        """Normalize a signed GL net to a positive carrying magnitude."""
+        return entries_net if receivable else -entries_net
+
+    def _voucher_net(voucher_type: str, voucher_ids: list[str]) -> Decimal:
+        if not voucher_ids:
+            return Decimal("0")
+        row = database.session.execute(
+            select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+                GLEntry.company == company,
+                GLEntry.ledger_id == ledger_id,
+                GLEntry.account_id == party_account_id,
+                GLEntry.voucher_type == voucher_type,
+                GLEntry.voucher_id.in_(voucher_ids),
+                GLEntry.is_cancelled.is_(False),
+            )
+        ).scalar_one()
+        return _decimal_value(row)
+
+    document_net = _voucher_net(document_type, [document_id])
+    if include_revaluation_adjustments:
+        from cacao_accounting.contabilidad.exchange_revaluation_service import EXCHANGE_REVALUATION_STATUS_POSTED
+
+        active_run_ids = (
+            select(ExchangeRevaluation.id)
+            .join(ExchangeRevaluationItem, ExchangeRevaluationItem.revaluation_id == ExchangeRevaluation.id)
+            .where(
+                ExchangeRevaluation.company == company,
+                ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED,
+                ExchangeRevaluationItem.source_document_type == document_type,
+                ExchangeRevaluationItem.source_document_id == document_id,
+            )
+        )
+        reval_row = database.session.execute(
+            select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+                GLEntry.company == company,
+                GLEntry.ledger_id == ledger_id,
+                GLEntry.account_id == party_account_id,
+                GLEntry.voucher_type == "exchange_revaluation",
+                GLEntry.voucher_id.in_(active_run_ids),
+                GLEntry.is_cancelled.is_(False),
+            )
+        ).scalar_one()
+        document_net += _decimal_value(reval_row)
+    prior_references = database.session.execute(
+        select(PaymentReference.payment_id, PaymentReference.allocated_amount).where(
+            PaymentReference.reference_type == document_type,
+            PaymentReference.reference_id == document_id,
+            PaymentReference.company == company,
+            PaymentReference.payment_id != exclude_payment_id,
+        )
+    ).all()
+    payments_net = Decimal("0")
+    if prior_references:
+        allocated_by_payment: dict[str, Decimal] = {}
+        for payment_id, _allocated in prior_references:
+            allocated_by_payment.setdefault(str(payment_id), Decimal("0"))
+        totals = database.session.execute(
+            select(PaymentReference.payment_id, func.coalesce(func.sum(PaymentReference.allocated_amount), 0))
+            .where(PaymentReference.payment_id.in_(list(allocated_by_payment)))
+            .group_by(PaymentReference.payment_id)
+        ).all()
+        payment_totals = {str(row_payment_id): _decimal_value(total) for row_payment_id, total in totals}
+        payment_ids = list(allocated_by_payment)
+        document_allocations: dict[str, Decimal] = {}
+        for payment_id, allocated in prior_references:
+            document_allocations[str(payment_id)] = document_allocations.get(str(payment_id), Decimal("0")) + _decimal_value(
+                allocated
+            )
+        payment_entries_net = _voucher_net("payment_entry", payment_ids)
+        # Prorrateo por asignacion cuando el pago toco varios documentos.
+        for payment_id, document_allocated in document_allocations.items():
+            payment_total = payment_totals.get(payment_id, Decimal("0"))
+            if payment_total <= 0:
+                continue
+            share = document_allocated / payment_total
+            payments_net += payment_entries_net * share
+    has_gl = document_net != 0 or payments_net != 0
+    if not has_gl:
+        return None
+    return (_net(document_net + payments_net)).quantize(Decimal("0.0001"))
 
 
 def _settlement_exchange_rate(

@@ -135,7 +135,7 @@ def _calculation_context_for_ledger(
     transaction_rate = ledger_context.exchange_rate or Decimal("1")
     references = context.references
     if isinstance(document, PaymentEntry):
-        open_balance = _payment_open_balance_in_ledger(document, ledger_currency)
+        open_balance = _payment_open_balance_in_ledger(document, ledger_currency, ledger_context.ledger_id)
         document_total = sum((item.net_amount for item in context.items), Decimal("0"))
         document_rate = open_balance / document_total if open_balance > 0 and document_total > 0 else transaction_rate
         custom_references = {**references.custom_references, "settlement_exchange_rate": transaction_rate}
@@ -153,21 +153,70 @@ def _calculation_context_for_ledger(
     )
 
 
-def _payment_open_balance_in_ledger(payment: PaymentEntry, ledger_currency: str) -> Decimal:
-    """Value referenced invoice balances at their historical rate for a book."""
+def _payment_open_balance_in_ledger(
+    payment: PaymentEntry,
+    ledger_currency: str,
+    ledger_id: str | None = None,
+) -> Decimal:
+    """Value referenced invoice balances at their carrying value for a book."""
     references = database.session.execute(select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
     fallback_currency = str(payment.base_currency or payment.transaction_currency or ledger_currency)
-    valued_balance = sum(
-        (_reference_balance_in_ledger(reference, ledger_currency, fallback_currency) for reference in references),
-        Decimal("0"),
+    valued_balance = Decimal("0")
+    has_carrying_value = False
+    for reference in references:
+        carrying = _reference_carrying_in_ledger(reference, ledger_currency, fallback_currency, ledger_id)
+        if carrying is not None:
+            has_carrying_value = True
+            valued_balance += carrying
+            continue
+        valued_balance += _reference_balance_in_ledger(reference, ledger_currency, fallback_currency)
+    if not has_carrying_value:
+        transaction_amount = Decimal(str(payment.received_amount or payment.paid_amount or 0))
+        payment_rate = _lookup_exchange_rate(
+            str(payment.transaction_currency), ledger_currency, payment.posting_date
+        )  # type: ignore[misc]
+        return transaction_amount * payment_rate
+    return valued_balance
+
+
+def _reference_carrying_in_ledger(
+    reference: PaymentReference,
+    ledger_currency: str,
+    fallback_currency: str,
+    ledger_id: str | None,
+) -> Decimal | None:
+    """Valor en libros previo a la aplicacion de una referencia en un libro.
+
+    Devuelve ``None`` cuando no hay entradas GL que soporten el saldo; en ese
+    caso el llamante usa el respaldo analitico por tasa historica.
+    """
+    from cacao_accounting.accounting_engine.document_builders import (
+        _document_carrying_value_in_ledger,
+        _party_account_id,
     )
-    if valued_balance > 0:
-        return valued_balance
-    transaction_amount = Decimal(str(payment.received_amount or payment.paid_amount or 0))
-    payment_rate = _lookup_exchange_rate(
-        str(payment.transaction_currency), ledger_currency, payment.posting_date
-    )  # type: ignore[misc]
-    return transaction_amount * payment_rate
+
+    del ledger_currency, fallback_currency
+    if not ledger_id:
+        return None
+    reference_type = str(reference.reference_type or "")
+    if "invoice" not in reference_type and "credit_note" not in reference_type and "debit_note" not in reference_type:
+        return None
+    model = PurchaseInvoice if reference_type.startswith("purchase_") else SalesInvoice
+    invoice = database.session.get(model, reference.reference_id)
+    if invoice is None:
+        return None
+    receivable = not reference_type.startswith("purchase_")
+    party_account_id = _party_account_id(str(reference.party_id or ""), str(invoice.company), receivable=receivable)
+    return _document_carrying_value_in_ledger(
+        company=str(invoice.company),
+        document_type=reference_type,
+        document_id=str(reference.reference_id or ""),
+        exclude_payment_id=str(reference.payment_id or ""),
+        party_account_id=party_account_id,
+        ledger_id=str(ledger_id),
+        receivable=receivable,
+        include_revaluation_adjustments=True,
+    )
 
 
 def _reference_balance_in_ledger(
