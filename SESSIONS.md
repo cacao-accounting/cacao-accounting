@@ -3,6 +3,36 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
+
+### Petición
+
+Cerrar la brecha del issue [#279](https://github.com/cacao-accounting/cacao-accounting/issues/279): falta una reconciliación independiente completa por almacén, período, moneda y libro entre inventario físico, StockBin, SLE, capas de valoración, COGS y GL.
+
+### Implementado
+
+`tests/test_audit004_inventory_reconciliation.py` (commit `da8c671c`, 18 casos = 9 escenarios × fifo/moving_average), fixtures estilo manual-seed sobre SQLite en memoria, valores esperados calculados a mano (no reutilizan funciones del motor):
+
+1. Capas múltiples + venta parcial cruzando capa (FIFO 1620 vs promedio 1800).
+2. Backdated receipt posterior a consumo: recomposición cronológica FIFO pinneada (5×85=425) vs promedio bin-based (86→430); inmutabilidad del costo ya publicado.
+3. Cancel DN / cancel receipt: restauración de bin, espejo GL, subledger==GL.
+4. Transferencia cross-account: valor migra INV-A↔INV-B sin alterar consolidado.
+5. Stock negativo permitido con cierre a cero (−3/−120 → 0/0).
+6. Conteo físico `stock_reconciliation`: true-up cantidad+valor (−255 con capa FIFO −300/+45) y ajuste puro de valor (+45).
+7. COGS por voucher y acumulado == Σ consumo; issues van a cuenta de ajuste.
+8. Matriz de conciliación `difference==0` por corte mayo y final.
+
+### Hallazgos documentados en el issue (no bloquean ecuaciones)
+
+- `_valuation_queue` reordena por fecha ante receipts retroactivos: reescribe composición histórica FIFO y puede divergir bin-vs-capas.
+- La reversa SVL de cancelaciones repliega como consumo de la capa más antigua, alterando costos FIFO posteriores.
+- El GL de salidas depende de `line._inventory_cost_amount` transitorio de la sesión de posting; sin monto explícito persistido la contrapartida no se publica (los tests siembran el costo conocido).
+
+### Validación
+
+- Suite focal: **18 passed** (11.5 s). Ruff check/format ✅ (black roto en venv local, cubre CI). Regresión completa pendiente en CI.
+- Comentario en #279 referenciando `da8c671c`, issue abierto.
+
 ## 2026-08-21 — AUDIT-007 (#282): matriz completa de conciliación bancaria y detección de huérfanos
 
 ### Petición
