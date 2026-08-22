@@ -3,6 +3,25 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — UOM fail-closed en relaciones documentales (#690)
+
+### Implementado
+
+`_relation_qty_in_base_uom` ya no devuelve la cantidad de presentación cuando
+falta una conversión hacia la UOM base. Ahora convierte el
+`InventoryServiceError` en `DocumentFlowError` HTTP 409, con una indicación de
+configurar la conversión. Esto preserva el invariante dimensional de
+`qty_in_base_uom` y evita eludir los controles de sobre-recepción y
+sobre-facturación con, por ejemplo, `1 BOX` registrado como `1 EA`.
+
+La regresión crea una relación OC→recepción en BOX sin conversión configurada
+y confirma que se rechaza antes de persistirla.
+
+### Validación
+
+- `tests/test_05document_flow.py`: **34 passed**.
+- Ruff check/format y `git diff --check`: OK.
+
 ## 2026-08-22 — Revalorización bancaria multilibro (#619, #710)
 
 ### Petición

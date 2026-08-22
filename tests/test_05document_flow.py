@@ -89,6 +89,41 @@ def test_document_flow_tracks_partial_pending_qty(app_ctx):
     assert order_item.received_qty == Decimal("0")
 
 
+def test_document_flow_rejects_relation_without_required_uom_conversion(app_ctx):
+    """Una relación no puede registrar una cantidad cruda en otra UOM."""
+    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, UOM, database
+    from cacao_accounting.document_flow import DocumentFlowError, create_document_relation
+
+    order_item = _seed_purchase_order(app_ctx)
+    database.session.add(UOM(code="BOX", name="Caja"))
+    receipt = PurchaseReceipt(id="PR-UOM-MISSING", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt.id,
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("1"),
+        uom="BOX",
+        rate=Decimal("50"),
+        amount=Decimal("50"),
+    )
+    database.session.add_all([receipt, receipt_item])
+    database.session.flush()
+
+    with pytest.raises(DocumentFlowError, match="Configure la conversión de UOM"):
+        create_document_relation(
+            source_type="purchase_order",
+            source_id="PO-001",
+            source_item_id=order_item.id,
+            target_type="purchase_receipt",
+            target_id=receipt.id,
+            target_item_id=receipt_item.id,
+            qty=Decimal("1"),
+            uom="BOX",
+            rate=Decimal("50"),
+            amount=Decimal("50"),
+        )
+
+
 def test_legacy_relation_persists_normalized_base_quantity(app_ctx):
     """Las relaciones legacy se normalizan y quedan listas para el backfill."""
     from cacao_accounting.database import (

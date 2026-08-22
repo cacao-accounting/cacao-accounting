@@ -344,8 +344,9 @@ def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: 
 
     Usa la UOM base del ítem (default_uom) como referencia dimensional para
     que el consumo/pendiente de un flujo sea comparable incluso cuando la línea
-    destino se expresa en una unidad comercial distinta. Si no hay artículo,
-    UOM o conversión configurada, conserva la cantidad tal cual.
+    destino se expresa en una unidad comercial distinta. Si falta la
+    conversión necesaria, rechaza la relación: conservar la cantidad cruda
+    permitiría eludir los límites de recepción o facturación parcial.
 
     Args:
         source_item: Línea origen del flujo documental.
@@ -369,8 +370,12 @@ def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: 
 
     try:
         return convert_item_qty(item_code, qty, from_uom, base_uom)
-    except InventoryServiceError:
-        return qty
+    except InventoryServiceError as exc:
+        raise DocumentFlowError(
+            f"No se pudo convertir {qty} {from_uom} a {base_uom} para el artículo {item_code}. "
+            "Configure la conversión de UOM antes de relacionar las líneas.",
+            409,
+        ) from exc
 
 
 def create_document_relation(
