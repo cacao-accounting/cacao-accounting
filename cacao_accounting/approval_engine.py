@@ -42,6 +42,20 @@ _RELATION_ONLY_CANCEL_DOCTYPES = frozenset(
 _POSTED_CANCEL_DOCTYPES = frozenset({"purchase_receipt", "purchase_invoice", "delivery_note", "sales_invoice"})
 
 
+def _submit_document_and_refresh_flow(doctype: str, document: Any) -> None:
+    """Post a related document and refresh source quantities after approval.
+
+    Draft targets are intentionally excluded from flow consumption.  The
+    refresh must therefore happen only after posting has made the target
+    submitted, otherwise the source cache remains at its draft value.
+    """
+    from cacao_accounting.contabilidad.posting import submit_document
+    from cacao_accounting.document_flow import refresh_source_caches_for_target
+
+    submit_document(document)  # type: ignore[misc]
+    refresh_source_caches_for_target(doctype, document.id)
+
+
 def _cancel_relation_only_document(doctype: str, document: Any) -> None:
     """Cancel a draft relation document and refresh its flow caches."""
     from cacao_accounting.audit_trail_service import log_cancel
@@ -724,7 +738,6 @@ class ApprovalEngine:
     @classmethod
     def _execute_submit(cls, doctype: str, document: Any, user: Any) -> None:
         """Ejecuta de manera segura la submision de un documento con todos sus hooks."""
-        from cacao_accounting.contabilidad.posting import submit_document
         from cacao_accounting.audit_trail_service import log_submit
 
         cls._validate_final_submission(doctype, document)
@@ -760,7 +773,7 @@ class ApprovalEngine:
         if doctype == "delivery_note":
             from cacao_accounting.ventas import _release_reservation_for_delivery_note
 
-            submit_document(document)  # type: ignore[misc]
+            _submit_document_and_refresh_flow(doctype, document)
             _release_reservation_for_delivery_note(document)
             log_submit(document)
             return
@@ -768,7 +781,7 @@ class ApprovalEngine:
         if doctype == "sales_invoice":
             from cacao_accounting.ventas import _create_delivery_note_from_invoice, _persist_sales_reversal_relation
 
-            submit_document(document)  # type: ignore[misc]
+            _submit_document_and_refresh_flow(doctype, document)
             _persist_sales_reversal_relation(document)
             if document.update_inventory and not document.delivery_note_id:
                 _create_delivery_note_from_invoice(document)
@@ -778,13 +791,13 @@ class ApprovalEngine:
         if doctype == "purchase_invoice":
             from cacao_accounting.compras import _persist_purchase_reversal_relation
 
-            submit_document(document)  # type: ignore[misc]
+            _submit_document_and_refresh_flow(doctype, document)
             _persist_purchase_reversal_relation(document)
             log_submit(document)
             return
 
         if doctype in {"purchase_receipt", "payment_entry", "stock_entry"}:
-            submit_document(document)  # type: ignore[misc]
+            _submit_document_and_refresh_flow(doctype, document)
             log_submit(document)
 
     @classmethod

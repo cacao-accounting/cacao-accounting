@@ -3,6 +3,22 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Refresh de cache al aprobar relaciones (#692)
+
+### Implementado
+
+Los destinos relacionados se excluyen correctamente mientras son borradores,
+pero ahora `_execute_submit` refresca los caches de flujo inmediatamente
+después de que `submit_document` los aprueba. El helper común cubre
+recepciones, facturas de compra, notas de entrega, facturas de venta y los
+otros destinos posteados. Así `received_qty`, `billed_qty` y los estados de
+línea pasan de su valor de draft al consumo efectivo al aprobarse.
+
+### Validación
+
+- `tests/test_05document_flow.py`: **35 passed**.
+- Ruff check/format y `git diff --check`: OK.
+
 ## 2026-08-22 — Efectivo declarado en liquidaciones (#691)
 
 ### Implementado

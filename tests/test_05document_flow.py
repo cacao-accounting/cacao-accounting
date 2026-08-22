@@ -89,6 +89,43 @@ def test_document_flow_tracks_partial_pending_qty(app_ctx):
     assert order_item.received_qty == Decimal("0")
 
 
+def test_refresh_source_cache_consumes_submitted_target(app_ctx):
+    """La aprobación de un destino actualiza el consumo cacheado del origen."""
+    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, database
+    from cacao_accounting.document_flow import create_document_relation, refresh_source_caches_for_target
+
+    order_item = _seed_purchase_order(app_ctx)
+    receipt = PurchaseReceipt(id="PR-CACHE-SUBMIT", company="cacao", posting_date=date(2026, 5, 4), docstatus=0)
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt.id,
+        item_code="ART-001",
+        item_name="Chocolate",
+        qty=Decimal("4"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("20"),
+    )
+    database.session.add_all([receipt, receipt_item])
+    database.session.flush()
+    create_document_relation(
+        source_type="purchase_order",
+        source_id="PO-001",
+        source_item_id=order_item.id,
+        target_type="purchase_receipt",
+        target_id=receipt.id,
+        target_item_id=receipt_item.id,
+        qty=Decimal("4"),
+        uom="UND",
+        rate=Decimal("5"),
+        amount=Decimal("20"),
+    )
+
+    receipt.docstatus = 1
+    refresh_source_caches_for_target("purchase_receipt", receipt.id)
+
+    assert order_item.received_qty == Decimal("4")
+
+
 def test_document_flow_rejects_relation_without_required_uom_conversion(app_ctx):
     """Una relación no puede registrar una cantidad cruda en otra UOM."""
     from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem, UOM, database
