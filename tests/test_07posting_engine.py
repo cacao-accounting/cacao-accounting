@@ -3180,7 +3180,7 @@ def test_expired_batch_is_rejected_by_stock_posting(app_ctx):
         )
 
 
-def test_outgoing_batch_validation_uses_the_locked_stock_bin(app_ctx):
+def test_outgoing_batch_validation_uses_the_locked_stock_bin(app_ctx, monkeypatch):
     """A batch issue validates availability while holding its bin lock."""
     from cacao_accounting.database import Batch, Item, StockBin, StockEntryItem, StockLedgerEntry, UOM, Warehouse, database
     from cacao_accounting.inventario.service import validate_batch_serial
@@ -3224,11 +3224,22 @@ def test_outgoing_batch_validation_uses_the_locked_stock_bin(app_ctx):
     )
     database.session.flush()
 
+    original_execute = database.session.execute
+    locked_statements: list[object] = []
+
+    def execute_with_lock_spy(statement, *args, **kwargs):
+        if getattr(statement, "_for_update_arg", None) is not None:
+            locked_statements.append(statement)
+        return original_execute(statement, *args, **kwargs)
+
+    monkeypatch.setattr(database.session, "execute", execute_with_lock_spy)
+
     validate_batch_serial(
         StockEntryItem(item_code="ITEM-BATCH-LOCK", batch_id=batch.id, qty=Decimal("2"), uom="EA-BATCH-LOCK"),
         outgoing=True,
         warehouse="WH-BATCH-LOCK",
     )
+    assert locked_statements
 
 
 def test_normal_receipt_rejects_an_available_serial(app_ctx):
