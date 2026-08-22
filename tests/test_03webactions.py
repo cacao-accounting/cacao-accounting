@@ -1231,11 +1231,14 @@ def test_modules_and_imports_are_settings_links_not_primary_sidebar_items(reques
                 client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
                 assert current_user.is_authenticated
 
+                from cacao_accounting.runtime_mode import is_desktop_mode
+
                 response = client.get("/settings")
                 html = response.get_data(as_text=True)
                 assert response.status_code == 200
                 assert 'href="/settings/modules"' in html
-                assert 'href="/imports/"' in html
+                if not is_desktop_mode():
+                    assert 'href="/imports/"' in html
 
                 response = client.get("/accounting/")
                 html = response.get_data(as_text=True)

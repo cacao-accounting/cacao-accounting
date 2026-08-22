@@ -1648,11 +1648,12 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
         if getattr(source, "purchase_order_id", None) != document.purchase_order_id:
             raise ValueError("La recepción no pertenece a la orden de compra indicada.")
     if items is not None:
+        doc_type = getattr(document, "document_type", None)
         target_types = {
             PurchaseQuotation: "purchase_quotation",
             PurchaseOrder: "purchase_order",
             PurchaseReceipt: "purchase_receipt",
-            PurchaseInvoice: PURCHASE_RETURN if document.document_type == PURCHASE_RETURN else PURCHASE_INVOICE,
+            PurchaseInvoice: PURCHASE_RETURN if doc_type == PURCHASE_RETURN else PURCHASE_INVOICE,
         }
         require_line_relations(
             target_type=target_types[type(document)],
