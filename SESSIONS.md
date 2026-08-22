@@ -3,6 +3,21 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Rama FX inalcanzable en liquidación (#669)
+
+### Implementado
+
+Se eliminó una condición redundante que comprobaba `None` después de que el
+mismo caso ya había retornado. El comportamiento heredado para tasa cero se
+mantiene explícito y cubierto, mientras que la resolución normal deriva tasas
+positivas desde los importes o la tasa documental.
+
+### Validación
+
+- Suite del motor de liquidación: **10 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Cierres completos sin año fiscal resuelto (#673)
 
 ### Implementado
@@ -88,6 +103,47 @@ bodega de destino. Los seriales disponibles u otros estados siguen rechazados.
 - Regresión de reingreso y rechazo de estado no entregado: **1 passed**.
 - Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
   dependencia `pathspec` corrupta del entorno local.
+
+## 2026-08-22 — AUDIT-003 (#278): fixture de saldo parcial y suite FX en verde
+
+### Petición
+
+Continuar #278 (AUDIT-003: realized/unrealized FX y remeasurement de AR/AP). La
+suite `tests/test_fx_ar_ap_lifecycle.py` ya estaba implementada (`1a319852`) pero
+`test_service_uses_only_open_partial_balance` de `tests/test_exchange_revaluation.py`
+fallaba desde ese commit (esperaba +40.0000, obtenía −2120.0000).
+
+### Diagnóstico
+
+El fixture sembraba el pago parcial sin contabilizarlo en GL y sin `company` en
+`PaymentReference` — estado que no ocurre en el flujo real (`PaymentEntry →
+referencia → post_document_to_gl`). Desde `1a319852` la revaluación mide el saldo
+abierto desde el valor en libros GL del documento (`_document_carrying_value_in_ledger`),
+por lo que el fixture inconsistente leía el AR completo (3600) en vez del valor
+liberado (1440) y producía una diferencia cambiaria incorrecta.
+
+### Implementado
+
+Fixture corregido para replicar el flujo real: pago contabilizado con tasa
+histórica vigente (36.00 al 15/may) y referencia con compañía. La expectativa
+del test (medir solo el saldo parcial abierto: revalued 40×37=1480 − carrying
+1440 = +40) se mantiene intacta.
+
+### Invariantes (no romper)
+
+- El servicio de revaluación mide desde el valor en libros GL por libro; los
+  fixtures deben dar soporte contable completo a liquidaciones previas.
+- `_document_carrying_value_in_ledger` prorratea pagos solo sobre referencias
+  con `company` persistida.
+- Orden de posting documentado: crear pago → aplicar reconciliación → postear a GL.
+
+### Validación
+
+- Suite focal FX completa: **22 passed** (lifecycle AUDIT-003 + exchange_revaluation).
+- Regresión amplia: 213 passed, 2 skipped; los 5 fallos de `test_07posting_engine.py`
+  verificados idénticos contra árbol limpio (preexistentes, ajenos).
+- Ruff check/format ✅; black roto en venv local (`pathspec`, cubre CI).
+- Commit `0c79188b`; comentario en #278 ([issuecomment-5377410666](https://github.com/cacao-accounting/cacao-accounting/issues/278#issuecomment-5377410666)), issue abierto.
 
 ## 2026-08-22 — Contexto contable persistido en ReconciliationItem (#282)
 

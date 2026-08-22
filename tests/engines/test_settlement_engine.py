@@ -102,6 +102,24 @@ def test_settlement_collection_exchange_gain():
     assert result.remaining_balance == Decimal("0.00")
 
 
+def test_settlement_zero_exchange_rate_keeps_carried_balance() -> None:
+    """A legacy zero rate retains the established no-FX-difference behavior."""
+    result = SettlementEngine().calculate(
+        Decimal("100"),
+        Decimal("3650"),
+        Decimal("100"),
+        [],
+        transaction_direction="sales",
+        document_currency="USD",
+        company_currency="NIO",
+        document_exchange_rate=Decimal("36.5"),
+        settlement_exchange_rate=Decimal("0"),
+    )
+
+    assert result.exchange_difference == Decimal("0")
+    assert result.remaining_balance == Decimal("0")
+
+
 def test_settlement_applies_early_payment_discount_against_cash_gap():
     """The engine should recognize an eligible discount when gross settlement exceeds cash plus withholdings."""
     engine = SettlementEngine()
