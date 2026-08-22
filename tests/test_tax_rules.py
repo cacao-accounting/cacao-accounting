@@ -75,6 +75,59 @@ def _login_admin(client) -> None:
         session["_fresh"] = True
 
 
+@pytest.mark.parametrize(
+    ("document_type", "payment_type", "expected_profile", "applies_to"),
+    [
+        ("purchase_request", None, "purchase_request", "purchase"),
+        ("purchase_order", None, "purchase_order", "purchase"),
+        ("purchase_receipt", None, "purchase_receipt", "purchase"),
+        ("purchase_invoice", None, "purchase_invoice", "purchase"),
+        ("import_landed_cost", None, "import_landed_cost", "purchase"),
+        ("sales_request", None, "sales_request", "sales"),
+        ("sales_order", None, "sales_order", "sales"),
+        ("delivery_note", None, "delivery_note", "sales"),
+        ("sales_invoice", None, "sales_invoice", "sales"),
+        ("stock_entry", None, "stock_entry", "purchase"),
+        ("payment_entry", "pay", "payment_entry", "purchase"),
+        ("payment_entry", "receive", "payment_entry", "sales"),
+        ("payment_entry", "debit_note", "bank_debit_note", "purchase"),
+        ("payment_entry", "credit_note", "bank_credit_note", "sales"),
+        ("payment_entry", "internal_transfer", "bank_transfer", "both"),
+    ],
+)
+def test_fiscal_preview_supports_each_mvp_document_profile(
+    app_ctx: Flask,
+    document_type: str,
+    payment_type: str | None,
+    expected_profile: str,
+    applies_to: str,
+) -> None:
+    """Each fiscal MVP profile must produce a server-side preview."""
+    preview = fiscal_preview(
+        {
+            "document_type": document_type,
+            "payment_type": payment_type,
+            "company": "cacao",
+            "currency": "NIO",
+            "posting_date": "2026-05-01",
+            "party_id": "PARTY-001",
+            "purpose": "material_receipt",
+            "purchase_invoice_id": "PINV-001",
+            "lines": [{"uid": "LINE-001", "item_code": "ITEM-001", "qty": "2", "rate": "10"}],
+        }
+    )
+
+    assert preview["profile"]["document_type"] == expected_profile
+    assert preview["profile"]["applies_to"] == applies_to
+    assert preview["summary"]["subtotal"] == "20"
+
+
+def test_fiscal_preview_rejects_unknown_document_profile(app_ctx: Flask) -> None:
+    """Unsupported document types must not silently receive a fiscal profile."""
+    with pytest.raises(ValueError, match="no soportado"):
+        fiscal_preview({"document_type": "unknown_document", "company": "cacao", "posting_date": "2026-05-01"})
+
+
 def test_purchase_tax_template_validation_uses_template_type_and_applies_to(app_ctx: Flask) -> None:
     """Purchase templates require buying type and purchase/both applicability."""
     from cacao_accounting.database import TaxTemplate, database
