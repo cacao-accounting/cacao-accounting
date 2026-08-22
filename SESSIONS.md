@@ -3,6 +3,20 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Sin tercero en inventario de recepción (#668)
+
+### Implementado
+
+El fallback manual de contabilización de una recepción de compra ya no propaga
+la dimensión de proveedor a las cuentas de inventario ni a la cuenta puente.
+El tercero permanece reservado para cuentas de submayor AP/AR.
+
+### Validación
+
+- Regresión del constructor de entradas de recepción: **1 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Rama FX inalcanzable en liquidación (#669)
 
 ### Implementado

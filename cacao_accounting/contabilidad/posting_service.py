@@ -2975,8 +2975,6 @@ def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id,
                     debit_account_id=inventory_account_id,
                     credit_account_id=bridge_account_id,
                     amount=value,
-                    party_type="supplier",
-                    party_id=document.supplier_id,
                     debit_remarks="Recepción de compra",
                     credit_remarks="Cuenta puente compras",
                 )
