@@ -1,5 +1,25 @@
 # SESSIONS — Bitácora de Decisiones de Diseño
 
+## 2026-08-22 — Estabilización de pruebas unitarias restantes
+
+### Petición
+
+Corregir los tests que continuaban fallando después de la estabilización inicial e incorporar todos los cambios con commits semánticos, autor y sign-off de williamjmorenor@gmail.com.
+
+### Implementado
+
+- Se corrigió el balance multianual para no duplicar el P&L de un ejercicio ya cerrado: las líneas históricas cerradas no se vuelven a sumar como resultado corriente cuando el patrimonio ya recibió la transferencia.
+- Se estabilizó la liquidación multicurrency: se propaga la diferencia cambiaria explícita, se toleran diferencias de redondeo de hasta 0.01 y se evita rechazar grupos que ya contienen una línea de diferencia cambiaria.
+- Se aisló el fixture de pagos a un libro activo para evitar contaminación entre libros durante la prueba.
+- Se mantuvo la bitácora como fuente de continuidad para las siguientes etapas.
+
+### Validación
+
+- Batería afectada: 76 passed.
+- Ruff y `git diff --check`: correctos.
+- Suite oficial completa ejecutándose en segundo plano en `/tmp/test-stability-full-final.log`; el resultado final se registrará al completar.
+
+
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
