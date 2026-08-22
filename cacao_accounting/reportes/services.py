@@ -2714,6 +2714,21 @@ def _fiscal_year_start_for_period(period: AccountingPeriod | None) -> date | Non
 _PL_CLASSIFICATIONS = frozenset({"ingreso", "income", "costo", "cost", "gasto", "expense"})
 
 
+def _prior_year_retained_earnings_contribution(
+    classification: str,
+    debit: Decimal,
+    credit: Decimal,
+    account_code: str,
+    account_name: str,
+) -> Decimal:
+    """Convierte un movimiento P&L previo en su aporte neto a patrimonio."""
+    result = _classify_income_account(classification, debit, credit, account_code, account_name)
+    if result is None:
+        return Decimal("0")
+    section, amount = result
+    return amount if section == "income" else -amount
+
+
 def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Balance general por clasificación Activo/Pasivo/Patrimonio."""
     _, period_end, period_obj = _period_bounds(filters.company, filters.accounting_period)
@@ -2748,16 +2763,13 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         # parte del patrimonio: se muestran como utilidades retenidas, no como
         # resultado del período actual.
         if classification in _PL_CLASSIFICATIONS and fiscal_year_start and entry.posting_date < fiscal_year_start:
-            prior_year_result = _classify_income_account(
+            retained_earnings += _prior_year_retained_earnings_contribution(
                 classification,
                 _decimal_value(entry.debit),
                 _decimal_value(entry.credit),
                 account.code or (entry.account_code or ""),
                 account.name,
             )
-            if prior_year_result is not None:
-                section, amount = prior_year_result
-                retained_earnings += amount if section == "income" else -amount
             continue
         debit = _decimal_value(entry.debit)
         credit = _decimal_value(entry.credit)

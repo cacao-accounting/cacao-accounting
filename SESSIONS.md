@@ -56,6 +56,21 @@ mezcla EUR/NIO con fuente inexistente · backfill restaura contexto y reporta
 - Ruff check/format ✅; black roto en venv local (`pathspec.patterns.gitignore`,
   cubre CI).
 
+## 2026-08-22 — Utilidades retenidas sin cierre previo (#683)
+
+### Implementado
+
+El balance general ya no descarta resultados de ejercicios anteriores cuando
+todavía no existe un asiento de cierre. Los clasifica como utilidades retenidas
+en patrimonio, mientras el resultado del período actual continúa mostrándose
+por separado. Esto conserva la ecuación contable sin duplicar resultados.
+
+### Validación
+
+- Regresiones de margen y capitalización de ejercicio previo: **2 passed**.
+- Ruff check/format y `git diff --check`: OK. Black sigue bloqueado por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Margen bruto consistente con P&L (#684)
 
 ### Implementado

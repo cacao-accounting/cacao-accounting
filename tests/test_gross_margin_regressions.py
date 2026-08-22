@@ -7,8 +7,13 @@ from decimal import Decimal
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
-from cacao_accounting.database import Accounts, Book, Entity, GLEntry, database
-from cacao_accounting.reportes.services import OperationalReportFilters, get_gross_margin
+from cacao_accounting.database import AccountingPeriod, Accounts, Book, Entity, FiscalYear, GLEntry, database
+from cacao_accounting.reportes.services import (
+    FinancialReportFilters,
+    OperationalReportFilters,
+    get_balance_sheet_report,
+    get_gross_margin,
+)
 
 
 def test_gross_margin_ignores_closing_entries_and_normalizes_plural_classifications() -> None:
@@ -90,3 +95,99 @@ def test_gross_margin_ignores_closing_entries_and_normalizes_plural_classificati
             "cogs": Decimal("40"),
             "gross_margin": Decimal("60"),
         }
+
+
+def test_balance_sheet_capitalizes_unclosed_prior_year_profit() -> None:
+    """Present prior unclosed P&L balances as retained earnings in the new fiscal year."""
+    app = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "TESTING": True,
+        }
+    )
+    with app.app_context():
+        database.create_all()
+        database.session.add(
+            Entity(code="retained", name="Retained", company_name="Retained", tax_id="RETAINED", currency="NIO")
+        )
+        book = Book(entity="retained", code="RETAINED", name="Retained", currency="NIO", is_primary=True, default=True)
+        income = Accounts(entity="retained", code="4.01", name="Ventas", active=True, enabled=True, classification="Ingresos")
+        expense = Accounts(entity="retained", code="5.01", name="Gastos", active=True, enabled=True, classification="Gastos")
+        cash = Accounts(entity="retained", code="1.01", name="Caja", active=True, enabled=True, classification="Activo")
+        previous_year = FiscalYear(
+            entity="retained", name="2025", year_start_date=date(2025, 1, 1), year_end_date=date(2025, 12, 31)
+        )
+        current_year = FiscalYear(
+            entity="retained", name="2026", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31)
+        )
+        database.session.add_all([book, income, expense, cash, previous_year, current_year])
+        database.session.flush()
+        current_period = AccountingPeriod(
+            entity="retained",
+            fiscal_year_id=current_year.id,
+            name="2026-01",
+            enabled=True,
+            start=date(2026, 1, 1),
+            end=date(2026, 1, 31),
+        )
+        database.session.add(current_period)
+        database.session.add_all(
+            [
+                GLEntry(
+                    posting_date=date(2025, 12, 20),
+                    company="retained",
+                    ledger_id=book.id,
+                    account_id=cash.id,
+                    account_code=cash.code,
+                    debit=Decimal("100"),
+                    credit=Decimal("0"),
+                    voucher_type="invoice",
+                    voucher_id="invoice-1",
+                ),
+                GLEntry(
+                    posting_date=date(2025, 12, 20),
+                    company="retained",
+                    ledger_id=book.id,
+                    account_id=income.id,
+                    account_code=income.code,
+                    debit=Decimal("0"),
+                    credit=Decimal("100"),
+                    voucher_type="invoice",
+                    voucher_id="invoice-1",
+                ),
+                GLEntry(
+                    posting_date=date(2025, 12, 21),
+                    company="retained",
+                    ledger_id=book.id,
+                    account_id=expense.id,
+                    account_code=expense.code,
+                    debit=Decimal("30"),
+                    credit=Decimal("0"),
+                    voucher_type="expense",
+                    voucher_id="expense-1",
+                ),
+                GLEntry(
+                    posting_date=date(2025, 12, 21),
+                    company="retained",
+                    ledger_id=book.id,
+                    account_id=cash.id,
+                    account_code=cash.code,
+                    debit=Decimal("0"),
+                    credit=Decimal("30"),
+                    voucher_type="expense",
+                    voucher_id="expense-1",
+                ),
+            ]
+        )
+        database.session.commit()
+
+        report = get_balance_sheet_report(
+            FinancialReportFilters(company="retained", ledger="RETAINED", accounting_period="2026-01")
+        )
+
+        assert report.totals["assets"] == Decimal("70")
+        assert report.totals["equity"] == Decimal("70")
+        assert report.totals["period_profit"] == Decimal("0")
+        assert report.totals["difference"] == Decimal("0")
