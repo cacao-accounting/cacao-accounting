@@ -10,6 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__)))
 from z_func import init_test_db
 
 from cacao_accounting import create_app
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 app = create_app(
     {
@@ -1220,6 +1221,7 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
                 assert 'value="cacao"' in html
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Los enlaces de módulos e imports no están disponibles en modo desktop")
 def test_modules_and_imports_are_settings_links_not_primary_sidebar_items(request):
 
     if request.config.getoption("--slow") == "True":
