@@ -1631,6 +1631,45 @@ class TestBankManagementExhaustive:
         assert bank_entry.party_type is None
         assert bank_entry.party_id is None
 
+    def test_normal_payment_entries_keep_party_off_bank_side(self, app_ctx):
+        """The shared payment helper only assigns the party to the subledger side."""
+        from cacao_accounting.contabilidad.posting import _document_contexts, _normal_entries_for_amount
+        from cacao_accounting.database import BankAccount, Party, PaymentEntry
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        defaults = _ensure_company_default_accounts("cacao", bank)
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="pay",
+            party_type="customer",
+            party_id=customer.id,
+            bank_account_id=bank.id,
+            currency="NIO",
+            paid_amount=Decimal("100"),
+            docstatus=1,
+            document_no="PAY-BANK-PARTY-01",
+        )
+        database.session.add(payment)
+        database.session.commit()
+
+        entries = _normal_entries_for_amount(
+            context=_document_contexts(payment)[0],
+            debit_account_id=defaults.default_receivable,
+            credit_account_id=bank.gl_account_id,
+            amount=Decimal("100"),
+            party_type="customer",
+            party_id=customer.id,
+            credit_bank_account_id=bank.id,
+        )
+
+        party_entry = next(entry for entry in entries if entry.account_id == defaults.default_receivable)
+        bank_entry = next(entry for entry in entries if entry.account_id == bank.gl_account_id)
+        assert party_entry.party_id == customer.id
+        assert bank_entry.party_type is None
+        assert bank_entry.party_id is None
+
     def test_bank_debit_note_uses_custom_paid_to_account(self, app_ctx):
         """A bank debit note uses paid_to_account_id when specified."""
         from cacao_accounting.contabilidad.posting import post_payment_entry

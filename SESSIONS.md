@@ -3,6 +3,21 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Helper de pago sin tercero en banco (#661)
+
+### Implementado
+
+`_normal_entries_for_amount` asigna la dimensión de tercero solo al lado que
+no representa una cuenta bancaria, en ambas direcciones del importe. Esto
+preserva el tercero en AR/AP y evita que pagos, cobros y movimientos bancarios
+lo propaguen a caja.
+
+### Validación
+
+- Regresiones de cobros y del helper con banco al crédito: **3 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Cobros sin tercero en la cuenta bancaria (#662)
 
 ### Implementado
