@@ -202,6 +202,14 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False,
     serial_no = getattr(line, "serial_no", None)
     if not serial_no:
         raise InventoryServiceError("El item requiere numero de serie.")
+    raw_quantity = getattr(line, "qty_in_base_uom", None) or getattr(line, "qty", None)
+    quantity = _decimal_value(raw_quantity) if raw_quantity is not None else Decimal("1")
+    line_uom = getattr(line, "uom", None)
+    base_uom = getattr(item, "default_uom", None)
+    if line_uom and base_uom and line_uom != base_uom:
+        quantity = convert_item_qty(item.code, quantity, line_uom, base_uom)
+    if quantity != Decimal("1"):
+        raise InventoryServiceError("Cada linea de un item serializado debe mover exactamente una unidad.")
     serial = database.session.execute(
         select(SerialNumber).filter_by(item_code=item.code, serial_no=serial_no)
     ).scalar_one_or_none()

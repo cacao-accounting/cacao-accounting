@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -56,3 +57,10 @@ def test_delivered_serial_can_only_reenter_through_a_sales_return() -> None:
         database.session.commit()
         with pytest.raises(InventoryServiceError, match="serial entregado"):
             validate_batch_serial(line, outgoing=False, warehouse="WH-RETURN", allow_return=True)
+
+        with pytest.raises(InventoryServiceError, match="exactamente una unidad"):
+            validate_batch_serial(
+                SimpleNamespace(item_code="SERIAL-ITEM", serial_no="SN-001", qty=Decimal("2"), uom="EA"),
+                outgoing=False,
+                warehouse="WH-RETURN",
+            )
