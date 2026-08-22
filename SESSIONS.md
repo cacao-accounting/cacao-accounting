@@ -3,6 +3,22 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Cobros sin tercero en la cuenta bancaria (#662)
+
+### Implementado
+
+Las líneas GL del lado bancario de un cobro ya no incluyen `party_type` ni
+`party_id`. La dimensión del tercero se conserva únicamente en la cuenta por
+cobrar o en el anticipo del cliente, evitando que los movimientos de caja se
+interpreten como saldo de submayor.
+
+### Validación
+
+- Regresiones de cobro parcialmente aplicado y anticipo sin referencias:
+  **2 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Sin tercero en inventario de recepción (#668)
 
 ### Implementado

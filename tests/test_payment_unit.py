@@ -1590,6 +1590,8 @@ class TestBankManagementExhaustive:
         debit_entry = [e for e in entries if e.debit > 0][0]
         assert debit_entry.debit_in_account_currency == Decimal("1000")
         assert debit_entry.account_id == bank.gl_account_id
+        assert debit_entry.party_type is None
+        assert debit_entry.party_id is None
 
         credits = [e for e in entries if e.credit > 0]
         assert len(credits) == 2
@@ -1598,6 +1600,36 @@ class TestBankManagementExhaustive:
 
         adv_credit = [e for e in credits if e.account_id == defaults.customer_advance_account_id][0]
         assert adv_credit.credit_in_account_currency == Decimal("300")
+
+    def test_customer_advance_bank_entry_has_no_party_dimension(self, app_ctx):
+        """A receipt without allocations keeps the customer off the bank line."""
+        from cacao_accounting.contabilidad.posting import _create_payment_receive_entries, _document_contexts
+        from cacao_accounting.database import BankAccount, Party, PaymentEntry
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        _ensure_company_default_accounts("cacao", bank)
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="receive",
+            party_type="customer",
+            party_id=customer.id,
+            party_name=customer.name,
+            bank_account_id=bank.id,
+            currency="NIO",
+            received_amount=Decimal("100"),
+            docstatus=1,
+            document_no="PAY-REC-ADVANCE-01",
+        )
+        database.session.add(payment)
+        database.session.commit()
+
+        entries = _create_payment_receive_entries(_document_contexts(payment)[0], payment, "cacao", Decimal("100"))
+        bank_entry = next(entry for entry in entries if entry.account_id == bank.gl_account_id)
+
+        assert bank_entry.party_type is None
+        assert bank_entry.party_id is None
 
     def test_bank_debit_note_uses_custom_paid_to_account(self, app_ctx):
         """A bank debit note uses paid_to_account_id when specified."""
