@@ -650,26 +650,33 @@ def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
 
 
 def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> Decimal:
+    """Resolve the latest valid historical rate on or before ``posting_date``."""
     if origin == destination:
         return Decimal("1")
-    rate = (
-        database.session.execute(select(ExchangeRate).filter_by(origin=origin, destination=destination, date=posting_date))
-        .scalars()
-        .first()
-    )
-    if rate is not None:
-        return _decimal_value(rate.rate)
 
-    inverse_rate = (
-        database.session.execute(select(ExchangeRate).filter_by(origin=destination, destination=origin, date=posting_date))
-        .scalars()
-        .first()
-    )
-    if inverse_rate is not None:
-        inverse_value = _decimal_value(inverse_rate.rate)
-        if inverse_value == 0:
-            raise PostingError("El tipo de cambio no puede ser cero.")
-        return Decimal("1") / inverse_value
+    def latest_rate(source: str, target: str) -> Decimal | None:
+        rate = (
+            database.session.execute(
+                select(ExchangeRate)
+                .where(ExchangeRate.origin == source, ExchangeRate.destination == target, ExchangeRate.date <= posting_date)
+                .order_by(ExchangeRate.date.desc())
+            )
+            .scalars()
+            .first()
+        )
+        if rate is None:
+            return None
+        value = _decimal_value(rate.rate)
+        if value <= 0:
+            raise PostingError("El tipo de cambio debe ser mayor que cero.")
+        return value
+
+    direct = latest_rate(origin, destination)
+    if direct is not None:
+        return direct
+    inverse = latest_rate(destination, origin)
+    if inverse is not None:
+        return Decimal("1") / inverse
 
     raise PostingError(f"No existe tipo de cambio registrado para {origin} -> {destination} en la fecha {posting_date}.")
 

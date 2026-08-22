@@ -148,25 +148,33 @@ def _gl_amount(entry: GLEntry) -> Decimal:
 
 
 def _lookup_exchange_rate(origin: str, destination: str, posting_date: date) -> Decimal | None:
-    """Look up a historical exchange rate, trying the inverse pair as fallback."""
+    """Look up the latest valid historical rate, including an inverse pair."""
     if origin == destination:
         return Decimal("1")
-    direct = (
-        database.session.execute(select(ExchangeRate).filter_by(origin=origin, destination=destination, date=posting_date))
-        .scalars()
-        .first()
-    )
+
+    def latest_rate(source: str, target: str) -> Decimal | None:
+        row = (
+            database.session.execute(
+                select(ExchangeRate)
+                .where(ExchangeRate.origin == source, ExchangeRate.destination == target, ExchangeRate.date <= posting_date)
+                .order_by(ExchangeRate.date.desc())
+            )
+            .scalars()
+            .first()
+        )
+        if row is None:
+            return None
+        value = _decimal_value(row.rate)
+        if value <= 0:
+            raise BankReconciliationError("El tipo de cambio debe ser mayor que cero.")
+        return value
+
+    direct = latest_rate(origin, destination)
     if direct is not None:
-        return _decimal_value(direct.rate)
-    inverse = (
-        database.session.execute(select(ExchangeRate).filter_by(origin=destination, destination=origin, date=posting_date))
-        .scalars()
-        .first()
-    )
+        return direct
+    inverse = latest_rate(destination, origin)
     if inverse is not None:
-        inverse_value = _decimal_value(inverse.rate)
-        if inverse_value > 0:
-            return Decimal("1") / inverse_value
+        return Decimal("1") / inverse
     return None
 
 

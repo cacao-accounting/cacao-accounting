@@ -23,6 +23,23 @@ Se añadió `test_service_uses_each_ledger_bank_exposure_independently`: para US
 - La suite completa se lanzó en segundo plano en `/tmp/cacao-full-tests-710.log`; su resultado debe revisarse antes de reportar cierre de validación.
 - La suite focal completa de revalorización conserva un fallo previo e independiente: `test_service_uses_only_open_partial_balance` espera `40.0000` y obtiene `-2120.0000`.
 
+## 2026-08-22 — Resolución histórica de tipos de cambio (#635, #666, #670, #694)
+
+### Petición
+
+Implementar, no solo proponer, las correcciones para los issues abiertos confirmados durante el triage.
+
+### Implementado
+
+Los resolutores de tasas en `contabilidad/posting_service.py` y `bancos/reconciliation_service.py` ahora usan la tasa más reciente cuya fecha sea menor o igual a la fecha de contabilización/conciliación. Conservan el fallback de par inverso y rechazan explícitamente valores cero o negativos. Antes ambos exigían una tasa para la fecha exacta.
+
+`tests/test_07posting_engine.py::test_exchange_rate_lookups_use_the_latest_prior_positive_rate` cubre ambos puntos de integración con tasas de 1 y 3 de mayo, y una operación al 4 de mayo que debe usar la tasa del 3.
+
+### Validación
+
+- Prueba focal: 1 passed.
+- Ruff check/format y `git diff --check`: OK.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición

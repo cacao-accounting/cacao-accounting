@@ -66,6 +66,24 @@ def test_gl_entry_constraint_rejects_unbalanced_records(app_ctx):
         database.session.commit()
 
 
+def test_exchange_rate_lookups_use_the_latest_prior_positive_rate(app_ctx):
+    """Posting and bank reconciliation share the historical nearest-rate rule."""
+    from cacao_accounting.bancos.reconciliation_service import _lookup_exchange_rate as bank_lookup_exchange_rate
+    from cacao_accounting.contabilidad.posting_service import _lookup_exchange_rate as posting_lookup_exchange_rate
+    from cacao_accounting.database import ExchangeRate, database
+
+    database.session.add_all(
+        [
+            ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.027"), date=date(2026, 5, 1)),
+            ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.028"), date=date(2026, 5, 3)),
+        ]
+    )
+    database.session.commit()
+
+    assert posting_lookup_exchange_rate("NIO", "USD", date(2026, 5, 4)) == Decimal("0.028")
+    assert bank_lookup_exchange_rate("NIO", "USD", date(2026, 5, 4)) == Decimal("0.028")
+
+
 def test_post_sales_invoice_creates_balanced_gl_entries(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
