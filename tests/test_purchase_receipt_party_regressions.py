@@ -35,9 +35,7 @@ def test_purchase_receipt_inventory_entries_do_not_receive_supplier_dimension(mo
             document_remarks=None,
         )
 
-        monkeypatch.setattr(
-            posting_service, "_document_contexts", lambda _document, ledger_code=None: [ledger_context]
-        )
+        monkeypatch.setattr(posting_service, "_document_contexts", lambda _document, ledger_code=None: [ledger_context])
         monkeypatch.setattr(posting_service, "_document_items", lambda _document: [line])
         monkeypatch.setattr(posting_service, "_should_skip_non_stock_line", lambda _line: False)
         monkeypatch.setattr(posting_service, "_line_qty_generic", lambda _line: Decimal("2"))

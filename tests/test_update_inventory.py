@@ -300,9 +300,7 @@ def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
     assert movement.stock_value_difference == Decimal("60.0000")
     assert line._inventory_cost_amount == Decimal("60.0000")
     gl_entries = _create_delivery_note_gl_entries(returned, "cacao", None)
-    assert any(
-        entry.account_id == inventory_account.id and entry.debit == Decimal("60.0000") for entry in gl_entries
-    )
+    assert any(entry.account_id == inventory_account.id and entry.debit == Decimal("60.0000") for entry in gl_entries)
     assert any(entry.account_id == cogs_account.id and entry.credit == Decimal("60.0000") for entry in gl_entries)
 
 
