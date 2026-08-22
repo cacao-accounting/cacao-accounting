@@ -757,5 +757,8 @@ def test_cash_forecast_rejects_foreign_fiscal_year_and_matrix_relation():
 
 def test_cash_forecast_foreign_currency_without_rate_is_explicit_error():
     """Una entrada extranjera sin tasa no se suma como si fuera moneda funcional."""
+    # La resolución histórica (#635) usa la tasa más reciente en fecha menor o
+    # igual al corte: una fecha previa a toda cotización sembrada es el caso
+    # sin tasa y debe fallar de forma explícita.
     with test_app.app_context(), pytest.raises(CashForecastConversionError, match="USD -> NIO"):
-        get_base_amount(Decimal("10"), "USD", "NIO", date(2099, 8, 19))
+        get_base_amount(Decimal("10"), "USD", "NIO", date(2020, 1, 1))

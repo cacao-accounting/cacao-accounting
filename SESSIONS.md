@@ -3,6 +3,36 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Confirmación de corrección de los issues abiertos (#279, #250)
+
+### Petición
+
+Confirmar que los issues abiertos en GitHub ya están corregidos.
+
+### Verificación
+
+- **Commits ancestros de HEAD**: `fa01b31e` (fix inventario #279),
+  `23374dbb` (regresiones #279) y `68e034af` (matriz fiscal #250) presentes;
+  `cc956cca` documenta ambos en esta bitácora.
+- **Código vigente**: `StockValuationLayer.source_layer_id`
+  (`database/__init__.py:1647`), `_consume_pinned_layer` /
+  `_consume_stock_valuation_layers` y `_persisted_outbound_cost`
+  (`posting_service.py:1809,3241`) operativos; comentarios de fix publicados
+  en ambos issues.
+- **Suite focal** (`/tmp/opencode/verify-279-250.log`, segundo plano):
+  **63 passed** — audit004 reconciliación **24** + matriz fiscal por doctype
+  **39**, en 48 s.
+- **Calidad**: ruff check ✅ y ruff format ✅ en los 4 archivos del fix.
+  Black sigue roto en el venv local (`pathspec.patterns.gitignore`,
+  pre-existente; cubre CI).
+
+### Conclusión
+
+Ambos issues están corregidos en HEAD y validados con pruebas; quedan abiertos
+con label `needs-review` pendiendo de revisión final/push (rama local
+ahead ~8–80 según origen). Cambios sin commitear en el árbol (fixtures libro
+activo #700, maturity #688) no tocan los módulos de estos fixes.
+
 ## 2026-08-22 — Fixes de issues abiertos #279 (AUDIT-004) y #250 (FIS-01)
 
 ### Petición
