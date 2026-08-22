@@ -134,6 +134,17 @@ Se unificó la elección del libro por defecto entre `primary_ledger_id` y `_res
 - Ruff y `git diff --check`: OK.
 - Commit funcional: `4f35d83b`.
 
+## 2026-08-22 — Deduplicación física de referencias de pago (#696)
+
+### Implementado
+
+La deduplicación de líneas de pago se hace ahora por tipo físico y `reference_id`, no por alias lógico. Una factura y una nota que residen en la misma tabla no pueden aplicarse dos veces en el mismo pago. `sales_return` también se reconoce como referencia física de factura de venta.
+
+### Validación
+
+- Regresión de aliases: 1 passed.
+- Commit funcional: `76a8abac`.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición
