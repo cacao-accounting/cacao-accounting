@@ -123,6 +123,17 @@ Las notas de entrega de devolución (`is_return`) se excluyen tanto de liberar c
 - Prueba focal: 1 passed.
 - Ruff y `git diff --check`: OK.
 
+## 2026-08-22 — Resolución consistente de libro en reportes (#701)
+
+### Implementado
+
+Se unificó la elección del libro por defecto entre `primary_ledger_id` y `_resolve_ledger`: ambos aceptan el estado legacy `NULL` como activo y ordenan por `default`, `is_primary` y código. Esto evita que módulos y reportes financieros consulten libros distintos ante la misma compañía.
+
+### Validación
+
+- Ruff y `git diff --check`: OK.
+- Commit funcional: `4f35d83b`.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición
