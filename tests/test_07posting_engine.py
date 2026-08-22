@@ -5029,7 +5029,15 @@ def test_operational_posting_multimoneda_real(app_ctx):
         .scalars()
         .all()
     )
-    assert len(entries) == 2
+    # El posting operativo afecta a todos los libros activos de la compañía.
+    from cacao_accounting.contabilidad.posting_service import _active_books
+
+    active_ledger_ids = {book.id for book in _active_books("cacao")}
+    assert {entry.ledger_id for entry in entries} == active_ledger_ids
+    for ledger_id in active_ledger_ids:
+        book_entries = [e for e in entries if e.ledger_id == ledger_id]
+        assert len(book_entries) == 2
+        assert sum(e.debit for e in book_entries) == sum(e.credit for e in book_entries)
     for entry in entries:
         assert entry.account_currency == "USD"
         assert entry.company_currency == "NIO"
