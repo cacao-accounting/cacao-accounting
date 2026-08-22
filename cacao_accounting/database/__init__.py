@@ -551,6 +551,8 @@ class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
     currency = database.Column(
         database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    # Los libros nacen activos: el estado NULL ya no se interpreta como activo.
+    status = database.Column(database.String(50), nullable=True, default="activo")
     # El libro primario es la fuente de verdad base
     is_primary = database.Column(database.Boolean(), default=False, nullable=False)
     default = database.Column(database.Boolean())

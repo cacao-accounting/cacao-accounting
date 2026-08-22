@@ -1128,7 +1128,7 @@ def journal_books():
     books = (
         database.session.execute(
             database.select(Book)
-            .where(Book.entity == company, or_(Book.status == "activo", Book.status.is_(None)))
+            .where(Book.entity == company, Book.status == "activo")
             .where(Book.code.in_(allowed_codes))
             .order_by(Book.is_primary.desc(), Book.code)
         )

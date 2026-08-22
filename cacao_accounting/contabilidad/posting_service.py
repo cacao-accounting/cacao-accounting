@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 
 from typing import Any, Sequence
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -226,7 +226,7 @@ def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) 
     selected_codes = _normalize_ledger_codes(ledger_code)
     query = select(Book).where(
         Book.entity == company,
-        or_(Book.status == "activo", Book.status.is_(None)),
+        Book.status == "activo",
     )
     if selected_codes:
         query = query.where(Book.code.in_(selected_codes))

@@ -287,13 +287,12 @@ def _subtract_late_receipt_reclassifications(
     prior_receipts: Iterable[PurchaseReceipt],
 ) -> None:
     """Subtract receipt expense reclassifications from pending invoice values."""
-    from sqlalchemy import or_
     from cacao_accounting.database import Book, GLEntry
 
     primary_book = (
         database.session.execute(
             select(Book)
-            .where(Book.entity == document.company, or_(Book.status == "activo", Book.status.is_(None)))
+            .where(Book.entity == document.company, Book.status == "activo")
             .order_by(Book.is_primary.desc(), Book.code)
         )
         .scalars()

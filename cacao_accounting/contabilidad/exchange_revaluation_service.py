@@ -363,7 +363,7 @@ class ExchangeRevaluationService:
             database.session.execute(
                 select(Book)
                 .filter(Book.entity == company)
-                .where((Book.status == "activo") | (Book.status.is_(None)))
+                .where(Book.status == "activo")
                 .order_by(Book.is_primary.desc(), Book.code)
             )
             .scalars()

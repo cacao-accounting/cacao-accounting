@@ -1940,7 +1940,7 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
 def _resolve_ledger(company: str, ledger: str | None) -> Book | None:
     query = select(Book).where(
         Book.entity == company,
-        or_(Book.status == "activo", Book.status.is_(None)),
+        Book.status == "activo",
     )
     if ledger:
         query = query.where(or_(Book.id == ledger, Book.code == ledger))
