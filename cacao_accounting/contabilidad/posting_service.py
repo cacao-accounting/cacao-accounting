@@ -595,7 +595,7 @@ def _assert_ledger_balances(ledger_entries: list[GLEntry]) -> None:
     """Assert that debit and credit totals balance for a ledger."""
     debit_total = sum((_decimal_value(entry.debit) for entry in ledger_entries), Decimal("0"))
     credit_total = sum((_decimal_value(entry.credit) for entry in ledger_entries), Decimal("0"))
-    if abs(debit_total - credit_total) > Decimal("0.01"):
+    if debit_total != credit_total:
         raise PostingError("Las entradas GL generadas no balancean por libro contable.")
 
 

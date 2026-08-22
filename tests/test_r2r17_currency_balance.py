@@ -38,6 +38,16 @@ def test_r2r17_unbalanced_company_currency():
         _assert_entries_balance(entries)
 
 
+def test_r2r17_rejects_a_one_cent_company_currency_imbalance():
+    """A per-document rounding difference must not accumulate in the ledger."""
+    entries = [
+        _make_entry(debit=Decimal("100.00"), credit=Decimal("0")),
+        _make_entry(debit=Decimal("0"), credit=Decimal("99.99")),
+    ]
+    with pytest.raises(PostingError, match="no balancean por libro"):
+        _assert_entries_balance(entries)
+
+
 def test_r2r17_balanced_transaction_currency():
     entries = [
         _make_entry(
