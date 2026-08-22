@@ -265,6 +265,7 @@
 {% endif %}
 
 {{ macros.document_flow_tree("payment_entry", registro) }}
+{{ macros.document_attachments_panel("payment_entry", registro.id) }}
 {{ macros.audit_timeline(audit_timeline) }}
 {{ macros.document_collaboration_panel("payment_entry", registro) }}
 {% endblock %}

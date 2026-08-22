@@ -1305,6 +1305,7 @@ class Item(database.Model, BaseTabla):  # type: ignore[name-defined]
     brand = database.Column(database.String(100), nullable=True)
     model_name = database.Column(database.String(100), nullable=True)
     barcode = database.Column(database.String(100), nullable=True)
+    image_path = database.Column(database.String(500), nullable=True)
     is_active = database.Column(database.Boolean(), default=True, nullable=False, index=True)
 
 
@@ -4565,6 +4566,7 @@ class File(database.Model, BaseTabla):  # type: ignore[name-defined]
     uploaded_by = database.Column(
         database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    remarks = database.Column(database.Text(), nullable=True)
 
 
 class FileAttachment(database.Model, BaseTabla):  # type: ignore[name-defined]

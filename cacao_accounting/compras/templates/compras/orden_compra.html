@@ -78,5 +78,6 @@
 
 {{ macros.lineas_tabla_lectura(items, currency_code) }}
 {{ macros.document_flow_tree("purchase_order", registro) }}
+{{ macros.document_attachments_panel("purchase_order", registro.id) }}
 {{ macros.audit_timeline(audit_timeline) }}
 {% endblock %}

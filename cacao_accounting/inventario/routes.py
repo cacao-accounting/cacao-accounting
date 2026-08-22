@@ -347,7 +347,14 @@ def inventario_articulo_nuevo():
         if formulario.validate():
             try:
                 params = _item_params_from_form(request.form)
-                create_item_with_uoms(params)
+                item = create_item_with_uoms(params)
+                image_file = request.files.get("image") or request.files.get("product_image") or request.files.get("file")
+                if image_file and image_file.filename and is_cloud_mode():
+                    try:
+                        from cacao_accounting.attachment_service import upload_item_image
+                        upload_item_image(item.code, image_file, user_id=str(current_user.id))
+                    except Exception as exc:
+                        flash(f"Imagen no subida: {exc}", "warning")
                 database.session.commit()
                 return redirect("/inventory/item/list")
             except InventoryServiceError as exc:

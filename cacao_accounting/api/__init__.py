@@ -13,8 +13,18 @@ from urllib.parse import urlparse
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, abort, current_app, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
+from cacao_accounting.attachment_service import (
+    AttachmentError,
+    delete_attachment,
+    delete_item_image,
+    get_attachment_file,
+    get_item_image_file,
+    list_attachments,
+    upload_attachment,
+    upload_item_image,
+)
 from jwt import decode
 from jwt.exceptions import PyJWTError
 from werkzeug.exceptions import Forbidden
@@ -508,6 +518,155 @@ def _date_filter(name: str):
         return date.fromisoformat(value)
     except ValueError:
         abort(400)
+
+
+@api.route("/api/attachments/<reference_type>/<reference_id>/upload", methods=["POST"])
+@login_required
+def api_upload_attachment(reference_type: str, reference_id: str):
+    """Upload a file attachment for a document or master record (Cloud mode only)."""
+    file = request.files.get("file") or request.files.get("attachment")
+    remarks = request.form.get("remarks") or request.form.get("description")
+    try:
+        result = upload_attachment(
+            reference_type,
+            reference_id,
+            file,
+            user_id=str(current_user.id),
+            remarks=remarks,
+        )
+    except AttachmentError as exc:
+        if request.form and request.referrer:
+            flash(str(exc), "danger")
+            parsed = urlparse(request.referrer)
+            if parsed.netloc == "" or parsed.netloc == request.host:
+                return redirect(request.referrer)
+            return redirect(url_for("cacao_app.pagina_inicio"))
+        return jsonify({"error": str(exc)}), exc.status_code
+
+    if request.form and request.referrer:
+        flash(_("Archivo adjuntado exitosamente."), "success")
+        parsed = urlparse(request.referrer)
+        if parsed.netloc == "" or parsed.netloc == request.host:
+            return redirect(request.referrer)
+        return redirect(url_for("cacao_app.pagina_inicio"))
+
+    return jsonify(result), 201
+
+
+@api.route("/api/attachments/<reference_type>/<reference_id>", methods=["GET"])
+@login_required
+def api_list_attachments(reference_type: str, reference_id: str):
+    """List attachments for a document or master record."""
+    attachments = list_attachments(reference_type, reference_id)
+    return jsonify(attachments)
+
+
+@api.route("/attachments/download/<file_id>", methods=["GET"])
+@login_required
+def api_download_attachment(file_id: str):
+    """Download/serve an attached file."""
+    try:
+        file_rec, path = get_attachment_file(file_id)
+        return send_file(
+            path,
+            download_name=file_rec.file_name,
+            mimetype=file_rec.mime_type or "application/octet-stream",
+            as_attachment=True,
+        )
+    except AttachmentError as exc:
+        abort(exc.status_code)
+
+
+@api.route("/api/attachments/<file_id>/delete", methods=["POST"])
+@login_required
+def api_delete_attachment(file_id: str):
+    """Delete an attachment (Cloud mode only)."""
+    payload = request.get_json(silent=True) or request.form.to_dict()
+    ref_type = payload.get("reference_type") or request.args.get("reference_type") or ""
+    ref_id = payload.get("reference_id") or request.args.get("reference_id") or ""
+    try:
+        delete_attachment(file_id, ref_type, ref_id, user_id=str(current_user.id))
+    except AttachmentError as exc:
+        if request.form and request.referrer:
+            flash(str(exc), "danger")
+            parsed = urlparse(request.referrer)
+            if parsed.netloc == "" or parsed.netloc == request.host:
+                return redirect(request.referrer)
+            return redirect(url_for("cacao_app.pagina_inicio"))
+        return jsonify({"error": str(exc)}), exc.status_code
+
+    if request.form and request.referrer:
+        flash(_("Adjunto eliminado."), "info")
+        parsed = urlparse(request.referrer)
+        if parsed.netloc == "" or parsed.netloc == request.host:
+            return redirect(request.referrer)
+        return redirect(url_for("cacao_app.pagina_inicio"))
+
+    return jsonify({"success": True})
+
+
+@api.route("/api/inventory/items/<item_id>/image", methods=["POST"])
+@login_required
+def api_upload_item_image(item_id: str):
+    """Upload product image for an item (Cloud mode only)."""
+    file = request.files.get("file") or request.files.get("product_image") or request.files.get("image")
+    try:
+        result = upload_item_image(item_id, file, user_id=str(current_user.id))
+    except AttachmentError as exc:
+        if request.form and request.referrer:
+            flash(str(exc), "danger")
+            parsed = urlparse(request.referrer)
+            if parsed.netloc == "" or parsed.netloc == request.host:
+                return redirect(request.referrer)
+            return redirect(url_for("cacao_app.pagina_inicio"))
+        return jsonify({"error": str(exc)}), exc.status_code
+
+    if request.form and request.referrer:
+        flash(_("Imagen del producto actualizada."), "success")
+        parsed = urlparse(request.referrer)
+        if parsed.netloc == "" or parsed.netloc == request.host:
+            return redirect(request.referrer)
+        return redirect(url_for("cacao_app.pagina_inicio"))
+
+    return jsonify(result), 200
+
+
+@api.route("/api/inventory/items/<item_id>/image", methods=["GET"])
+@login_required
+def api_get_item_image(item_id: str):
+    """Serve product image of an inventory item."""
+    file_rec, path = get_item_image_file(item_id)
+    if not path or not file_rec:
+        abort(404)
+    return send_file(
+        path,
+        mimetype=file_rec.mime_type or "image/png",
+    )
+
+
+@api.route("/api/inventory/items/<item_id>/image/delete", methods=["POST"])
+@login_required
+def api_delete_item_image(item_id: str):
+    """Delete product image of an inventory item (Cloud mode only)."""
+    try:
+        delete_item_image(item_id, user_id=str(current_user.id))
+    except AttachmentError as exc:
+        if request.form and request.referrer:
+            flash(str(exc), "danger")
+            parsed = urlparse(request.referrer)
+            if parsed.netloc == "" or parsed.netloc == request.host:
+                return redirect(request.referrer)
+            return redirect(url_for("cacao_app.pagina_inicio"))
+        return jsonify({"error": str(exc)}), exc.status_code
+
+    if request.form and request.referrer:
+        flash(_("Imagen eliminada."), "info")
+        parsed = urlparse(request.referrer)
+        if parsed.netloc == "" or parsed.netloc == request.host:
+            return redirect(request.referrer)
+        return redirect(url_for("cacao_app.pagina_inicio"))
+
+    return jsonify({"success": True})
 
 
 @api.route("/api/buying/purchase-order/<order_id>/items")
