@@ -221,3 +221,18 @@ def test_settlement_rejects_unallocated_cash_gap():
         "Registre la diferencia mediante un ajuste contable explícito."
     ]
     assert result.cash_amount + result.withholding_amount + result.payment_discount_amount == Decimal("98")
+
+
+def test_settlement_allows_cash_excess_for_a_separate_advance_entry():
+    """A payment surplus is balanced by the posting mapper as a party advance."""
+    result = SettlementEngine().calculate(
+        document_total=Decimal("60"),
+        open_balance=Decimal("60"),
+        settlement_amount=Decimal("60"),
+        withholding_rules=[],
+        actual_cash_amount=Decimal("100"),
+    )
+
+    assert result.cash_amount == Decimal("100")
+    assert result.gross_settlement_amount == Decimal("60")
+    assert result.errors == []

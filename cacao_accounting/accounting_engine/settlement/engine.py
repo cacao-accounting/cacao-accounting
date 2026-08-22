@@ -113,7 +113,7 @@ class SettlementEngine:
             step_counter += 1
         cash_amount = requested_cash_amount
         unallocated_difference = settlement_amount - cash_amount - withholding_total - payment_discount_amount
-        if unallocated_difference:
+        if unallocated_difference > 0:
             errors.append(
                 "El efectivo declarado, las retenciones y el descuento no cuadran con la liquidación. "
                 "Registre la diferencia mediante un ajuste contable explícito."
