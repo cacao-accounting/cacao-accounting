@@ -36,6 +36,7 @@ from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.runtime_mode import is_cloud_mode
 
 
 from cacao_accounting.document_flow import (

@@ -37,6 +37,7 @@ from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
+from cacao_accounting.runtime_mode import is_cloud_mode
 
 from cacao_accounting.list_filters import apply_list_filters
 
