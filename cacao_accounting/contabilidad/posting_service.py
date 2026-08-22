@@ -719,6 +719,9 @@ def _post_with_calculation_engine_payload(document: Any, ledger_code: str | None
     if context is None:
         return None
     results = BusinessEventOrchestrator().handle_event(context)
+    calculation_errors = [message for result in results.values() for message in getattr(result, "errors", [])]
+    if calculation_errors:
+        raise PostingError(" ".join(calculation_errors))
     proforma = results.get("proforma")
     if proforma is None:
         return None

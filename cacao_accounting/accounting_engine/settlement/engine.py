@@ -78,7 +78,7 @@ class SettlementEngine:
                     base_amount=rule_base,
                     rate=rule.rate,
                     result=amount,
-                    reason=f"Proportional withholding for {proportion*100}% of document.",
+                    reason=f"Proportional withholding for {proportion * 100}% of document.",
                 )
             )
             step_counter += 1
@@ -111,10 +111,13 @@ class SettlementEngine:
                 )
             )
             step_counter += 1
-        if actual_cash_amount is not None and actual_cash_amount <= settlement_amount:
-            cash_amount = settlement_amount - withholding_total - payment_discount_amount
-        else:
-            cash_amount = requested_cash_amount
+        cash_amount = requested_cash_amount
+        unallocated_difference = settlement_amount - cash_amount - withholding_total - payment_discount_amount
+        if unallocated_difference:
+            errors.append(
+                "El efectivo declarado, las retenciones y el descuento no cuadran con la liquidación. "
+                "Registre la diferencia mediante un ajuste contable explícito."
+            )
         if self._uses_foreign_currency(document_currency, company_currency):
             exchange_difference, carried_balance_company = self._calculate_exchange_difference(
                 open_balance=open_balance,

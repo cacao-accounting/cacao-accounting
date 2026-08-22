@@ -181,8 +181,8 @@ def test_sequential_partial_fx_settlements_reach_zero_without_duplicate_gain():
     assert first.exchange_difference + second.exchange_difference == Decimal("42.00")
 
 
-def test_settlement_discount_partial_gap_maintains_invariant():
-    """When the eligible discount is smaller than the cash gap, cash_amount must adjust to keep the components balanced."""
+def test_settlement_rejects_unallocated_cash_gap():
+    """Un descuento insuficiente no puede alterar el efectivo bancario declarado."""
     engine = SettlementEngine()
     rules = [MockRule("IR", Decimal("5"), "payment", "withholding_payable")]
 
@@ -195,7 +195,11 @@ def test_settlement_discount_partial_gap_maintains_invariant():
         eligible_discount_amount=Decimal("3"),
     )
 
-    assert result.cash_amount == Decimal("92")
+    assert result.cash_amount == Decimal("90")
     assert result.withholding_amount == Decimal("5")
     assert result.payment_discount_amount == Decimal("3")
-    assert result.cash_amount + result.withholding_amount + result.payment_discount_amount == result.gross_settlement_amount
+    assert result.errors == [
+        "El efectivo declarado, las retenciones y el descuento no cuadran con la liquidación. "
+        "Registre la diferencia mediante un ajuste contable explícito."
+    ]
+    assert result.cash_amount + result.withholding_amount + result.payment_discount_amount == Decimal("98")

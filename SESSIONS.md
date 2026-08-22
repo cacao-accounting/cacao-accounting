@@ -3,6 +3,24 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Efectivo declarado en liquidaciones (#691)
+
+### Implementado
+
+`SettlementEngine` conserva ahora el efectivo real declarado. Cuando efectivo,
+retenciones y descuento no suman el importe liquidado, emite un error en vez
+de sustituir silenciosamente el efectivo por el residual teórico. El posting
+del motor convierte errores de cálculo en `PostingError`, por lo que la
+transición atómica del documento se revierte y obliga a registrar la
+diferencia mediante un ajuste contable explícito con cuenta definida.
+
+### Validación
+
+- `tests/engines/test_settlement_engine.py`: **9 passed**.
+- Ruff check/format y `git diff --check`: OK.
+- `tests/test_payment_unit.py` alcanzó 77% sin fallos visibles, pero el runner
+  local no devolvió un resultado terminal; no se considera suite validada.
+
 ## 2026-08-22 — Validación de método de prorrateo de landed cost (#689)
 
 ### Implementado
