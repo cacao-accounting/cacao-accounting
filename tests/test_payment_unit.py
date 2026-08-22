@@ -852,6 +852,55 @@ class TestValidatePayment:
 class TestValidateAdvanceAllocation:
     """Tests for _validate_advance_allocation."""
 
+    def test_reverted_advance_references_do_not_consume_payment_balance(self, app_ctx):
+        """Only active relations count when calculating an advance remainder."""
+        from cacao_accounting.database import DocumentRelation, PaymentReference
+        from cacao_accounting.document_flow.payment import _advance_allocated_amount
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        payment = _make_open_payment(party=customer, payment_type="receive", amount=Decimal("500"))
+        active = PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id="ACTIVE",
+            allocated_amount=Decimal("100"),
+        )
+        reverted = PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            reference_id="REVERTED",
+            allocated_amount=Decimal("200"),
+        )
+        database.session.add_all([active, reverted])
+        database.session.flush()
+        database.session.add_all(
+            [
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id="ACTIVE",
+                    target_type="payment_entry",
+                    target_id=payment.id,
+                    target_item_id=active.id,
+                    qty=Decimal("1"),
+                    relation_type="payment_reference",
+                    status="active",
+                ),
+                DocumentRelation(
+                    source_type="sales_invoice",
+                    source_id="REVERTED",
+                    target_type="payment_entry",
+                    target_id=payment.id,
+                    target_item_id=reverted.id,
+                    qty=Decimal("1"),
+                    relation_type="payment_reference",
+                    status="reverted",
+                ),
+            ]
+        )
+        database.session.flush()
+
+        assert _advance_allocated_amount(payment.id) == Decimal("100")
+
     def test_company_mismatch_raises(self, app_ctx):
         from cacao_accounting.document_flow.payment import _validate_advance_allocation
 

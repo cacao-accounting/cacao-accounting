@@ -856,16 +856,29 @@ def _create_reconciliation_item(
 
 def _load_advance_invoice(invoice_id: str) -> tuple[SalesInvoice | PurchaseInvoice, str, str | None]:
     """Carga la factura de un anticipo y devuelve su tipo de referencia y tercero."""
-    invoice: SalesInvoice | PurchaseInvoice | None = database.session.get(SalesInvoice, invoice_id)
+    invoice: SalesInvoice | PurchaseInvoice | None = database.session.get(SalesInvoice, invoice_id, with_for_update=True)
     reference_type = "sales_invoice"
     party_id = getattr(invoice, "customer_id", None) if invoice else None
     if invoice is None:
-        invoice = database.session.get(PurchaseInvoice, invoice_id)
+        invoice = database.session.get(PurchaseInvoice, invoice_id, with_for_update=True)
         reference_type = "purchase_invoice"
         party_id = getattr(invoice, "supplier_id", None) if invoice else None
     if invoice is None:
         raise _document_flow_error("La factura no existe.", 404)
     return invoice, reference_type, party_id
+
+
+def _advance_allocated_amount(payment_id: str) -> Decimal:
+    """Sum active advance applications, excluding reverted document relations."""
+    allocated = database.session.execute(
+        select(func.coalesce(func.sum(PaymentReference.allocated_amount), 0))
+        .outerjoin(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
+        .where(
+            PaymentReference.payment_id == payment_id,
+            or_(DocumentRelation.id.is_(None), DocumentRelation.status == "active"),
+        )
+    ).scalar_one()
+    return decimal_or_zero(allocated)
 
 
 def _validate_advance_allocation(
@@ -880,13 +893,7 @@ def _validate_advance_allocation(
         raise _document_flow_error("El anticipo y la factura pertenecen a companias distintas.", 409)
     if payment.party_id and party_id and payment.party_id != party_id:
         raise _document_flow_error("El anticipo pertenece a otro tercero.", 409)
-    allocated_before = sum(
-        (
-            decimal_or_zero(reference.allocated_amount)
-            for reference in database.session.execute(select(PaymentReference).filter_by(payment_id=payment.id)).scalars()
-        ),
-        Decimal("0"),
-    )
+    allocated_before = _advance_allocated_amount(payment.id)
     payment_total = decimal_or_zero(payment.paid_amount or payment.received_amount)
     outstanding = compute_outstanding_amount(invoice, as_of_date=allocation_date)
     if amount <= 0:
@@ -905,9 +912,11 @@ def apply_advance_to_invoice(
     allocation_date: date,
 ) -> PaymentReference:
     """Aplica un anticipo existente contra una factura AR/AP."""
-    payment = database.session.get(PaymentEntry, payment_entry_id)
+    payment = database.session.get(PaymentEntry, payment_entry_id, with_for_update=True)
     if not payment:
         raise _document_flow_error("El pago/anticipo no existe.", 404)
+    if payment.docstatus != 1:
+        raise _document_flow_error("El pago/anticipo debe estar aprobado.", 409)
     invoice, reference_type, party_id = _load_advance_invoice(invoice_id)
     outstanding, outstanding_after = _validate_advance_allocation(payment, invoice, party_id, amount, allocation_date)
     reference = PaymentReference(

@@ -3,6 +3,21 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Aplicación segura de anticipos (#685)
+
+### Implementado
+
+`apply_advance_to_invoice` bloquea ahora tanto el anticipo como la factura,
+exige que el pago esté aprobado y suma solo referencias con relación activa
+(manteniendo referencias legacy sin relación). Así se serializan aplicaciones
+concurrentes y una aplicación revertida no consume el saldo disponible del
+anticipo.
+
+### Validación
+
+- `tests/test_payment_unit.py -k ValidateAdvanceAllocation`: **5 passed**.
+- Ruff check/format y `git diff --check`: OK.
+
 ## 2026-08-22 — Lock de líneas fuente O2C (#686)
 
 ### Implementado
