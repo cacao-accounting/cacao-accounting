@@ -126,7 +126,7 @@ def test_submit_with_update_inventory_creates_delivery_note(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    warehouse, item, cogs_account, inventory_account = _setup_inventory_context()
+    warehouse, item, _cogs_account, _inventory_account = _setup_inventory_context()
     _ensure_default_warehouse(item, warehouse)
     _seed_valuation_layer(item, warehouse)
 
@@ -173,7 +173,7 @@ def test_auto_delivery_note_copies_invoice_currency_context(app_ctx):
     """La DN automática conserva la moneda y la tasa de la factura."""
     from cacao_accounting.ventas.services import _create_delivery_note_from_invoice
 
-    warehouse, item, _cogs_account, _inventory_account = _setup_inventory_context()
+    warehouse, item, cogs_account, inventory_account = _setup_inventory_context()
     _ensure_default_warehouse(item, warehouse)
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     invoice = SalesInvoice(
@@ -249,9 +249,12 @@ def test_auto_delivery_note_rejects_default_warehouse_from_another_company(app_c
 
 def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
     """A sales return restores the original delivery cost, not the sales price."""
-    from cacao_accounting.contabilidad.posting_service import _create_stock_ledger_for_document
+    from cacao_accounting.contabilidad.posting_service import (
+        _create_delivery_note_gl_entries,
+        _create_stock_ledger_for_document,
+    )
 
-    warehouse, item, _cogs_account, _inventory_account = _setup_inventory_context()
+    warehouse, item, cogs_account, inventory_account = _setup_inventory_context()
     original = DeliveryNote(company="cacao", posting_date=date(2026, 5, 1), docstatus=1)
     database.session.add(original)
     database.session.flush()
@@ -296,6 +299,11 @@ def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
     assert movement.valuation_rate == Decimal("60")
     assert movement.stock_value_difference == Decimal("60.0000")
     assert line._inventory_cost_amount == Decimal("60.0000")
+    gl_entries = _create_delivery_note_gl_entries(returned, "cacao", None)
+    assert any(
+        entry.account_id == inventory_account.id and entry.debit == Decimal("60.0000") for entry in gl_entries
+    )
+    assert any(entry.account_id == cogs_account.id and entry.credit == Decimal("60.0000") for entry in gl_entries)
 
 
 def test_submit_without_update_inventory_does_not_create_dn(app_ctx):
