@@ -4,7 +4,7 @@ from datetime import date
 
 from decimal import Decimal
 
-from typing import Any, Sequence
+from typing import Any, NoReturn, Sequence, cast
 
 from cacao_accounting.exceptions import flash_error
 
@@ -110,6 +110,13 @@ from cacao_accounting.party_management import (  # noqa: F401
 from cacao_accounting.audit_trail_service import log_cancel, log_submit, log_update
 
 from cacao_accounting.logistics import copy_logistics, logistics_values
+
+
+def _raise_posting_error(message: str) -> NoReturn:
+    """Raise the posting error while keeping the dynamic import type-safe."""
+    error_type = cast(type[PostingError], PostingError)
+    raise error_type(message)
+
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
@@ -283,9 +290,9 @@ def _require_sales_warehouse(company: str, warehouse_code: str) -> None:
     """Require an active warehouse that belongs to the sales document company."""
     warehouse = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
     if warehouse is None or warehouse.company != company:
-        raise PostingError(f"La bodega {warehouse_code} no pertenece a la compañía {company}.")
+        _raise_posting_error(f"La bodega {warehouse_code} no pertenece a la compañía {company}.")
     if not warehouse.is_active:
-        raise PostingError(f"La bodega {warehouse_code} está inactiva.")
+        _raise_posting_error(f"La bodega {warehouse_code} está inactiva.")
 
 
 def _resolve_item_warehouse(item: SalesOrderItem, item_obj: Item | None) -> str:

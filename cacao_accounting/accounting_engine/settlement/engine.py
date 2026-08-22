@@ -175,7 +175,7 @@ class SettlementEngine:
     ) -> tuple[Decimal, Decimal]:
         """Calcula diferencia cambiaria realizada en moneda compañía."""
         del document_exchange_rate
-        if settlement_exchange_rate in (None, Decimal("0")):
+        if settlement_exchange_rate is None or settlement_exchange_rate == Decimal("0"):
             return Decimal("0"), rounding_manager.round(open_balance * proportion, context_key="accounting")
         applied_rate: Decimal = settlement_exchange_rate
         carried_balance_company = rounding_manager.round(open_balance * proportion, context_key="accounting")
