@@ -577,6 +577,32 @@ def test_validate_payment_header_rejects_invalid_target_bank_account(app_ctx):
         )
 
 
+def test_validate_payment_header_rejects_internal_transfer_target_without_currency(app_ctx):
+    """Una transferencia exige moneda explícita en su cuenta bancaria destino."""
+    from cacao_accounting.bancos import _validate_payment_header
+    from cacao_accounting.database import Bank, BankAccount, database
+
+    bank = Bank(name="Banco destino sin moneda")
+    database.session.add(bank)
+    database.session.flush()
+    source = BankAccount(bank_id=bank.id, company="cacao", account_name="Origen", currency="NIO")
+    target = BankAccount(bank_id=bank.id, company="cacao", account_name="Destino sin moneda")
+    database.session.add_all([source, target])
+    database.session.flush()
+
+    with pytest.raises(ValueError, match="destino no tiene moneda"):
+        _validate_payment_header(
+            payment_type="internal_transfer",
+            company="cacao",
+            bank_account_id=source.id,
+            posting_date_raw="2026-05-05",
+            amount=Decimal("10.00"),
+            party_type=None,
+            party_id=None,
+            target_bank_account_id=target.id,
+        )
+
+
 def test_validate_payment_header_rejects_missing_party_for_payment_and_invalid_type(app_ctx):
     """El encabezado del pago exige tercero para pagos/cobros y tipo de tercero válido."""
 

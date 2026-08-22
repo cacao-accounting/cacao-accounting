@@ -3,6 +3,20 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Moneda obligatoria en destino de transferencia (#681)
+
+### Implementado
+
+Las transferencias internas validan que la cuenta bancaria destino tenga moneda
+configurada antes de construir el pago. Esto evita interpretar el importe de la
+cuenta origen como efectivo de una cuenta destino de moneda desconocida.
+
+### Validación
+
+- Validaciones de cuenta destino inexistente y sin moneda: **2 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Reingreso de seriales por devolución de venta (#682)
 
 ### Implementado

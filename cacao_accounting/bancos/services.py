@@ -1084,6 +1084,8 @@ def _validate_payment_target_bank_account(
         source_bank_account = database.session.get(BankAccount, bank_account_id)
         if source_bank_account and source_bank_account.id == target_bank_account.id:
             raise ValueError(_("La cuenta bancaria de origen y destino deben ser distintas."))
+        if not target_bank_account.currency:
+            raise ValueError(_("La cuenta bancaria destino no tiene moneda configurada."))
 
 
 def _validate_payment_party(*, payment_type: str, party_type: str | None, party_id: str | None) -> None:
