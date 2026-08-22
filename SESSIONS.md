@@ -37,7 +37,8 @@ Corregir los tests que continuaban fallando después de la estabilización inici
 
 - Batería afectada: 76 passed.
 - Ruff y `git diff --check`: correctos.
-- Suite oficial completa ejecutándose en segundo plano en `/tmp/test-stability-full-final.log`; el resultado final se registrará al completar.
+- Suite oficial completa: **2121 passed, 11 skipped, 237 warnings** en
+  `/tmp/test-stability-full-final2.log`.
 
 
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
