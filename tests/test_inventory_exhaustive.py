@@ -47,6 +47,7 @@ from cacao_accounting.contabilidad.posting import (
 )
 from cacao_accounting.inventario.service import (
     rebuild_stock_bins,
+    rebuild_stock_valuation_layers,
 )
 
 
@@ -81,6 +82,7 @@ def _setup_inventory_test_data(app):
         database.session.query(StockEntryItem).delete()
         database.session.query(StockEntry).delete()
         database.session.commit()
+
 
         # Company
         company = database.session.get(Entity, "cacao")
@@ -245,6 +247,54 @@ def _get_bin(warehouse: str = "WH-MAIN", item_code: str = "ITEM-GOODS") -> Stock
     return database.session.execute(
         database.select(StockBin).filter_by(company="cacao", item_code=item_code, warehouse=warehouse)
     ).scalar_one()
+
+
+def test_valuation_layer_rebuild_dry_run_does_not_mutate_existing_layers(app):
+    """Dry runs must preview rebuilt layers without deleting FIFO evidence."""
+    _setup_inventory_test_data(app)
+    with app.app_context():
+        existing = StockValuationLayer(
+            id="SVL-DRY-RUN-EXISTING",
+            item_code="ITEM-GOODS",
+            warehouse="WH-MAIN",
+            company="cacao",
+            qty=Decimal("3"),
+            rate=Decimal("11"),
+            remaining_qty=Decimal("3"),
+            remaining_stock_value=Decimal("33"),
+            voucher_type="seed",
+            voucher_id="SEED-DRY-RUN",
+            posting_date=date(2026, 1, 1),
+        )
+        database.session.add_all(
+            [
+                existing,
+                StockLedgerEntry(
+                    id="SLE-DRY-RUN",
+                    company="cacao",
+                    posting_date=date(2026, 1, 1),
+                    item_code="ITEM-GOODS",
+                    warehouse="WH-MAIN",
+                    qty_change=Decimal("3"),
+                    qty_after_transaction=Decimal("3"),
+                    valuation_rate=Decimal("10"),
+                    stock_value_difference=Decimal("30"),
+                    stock_value=Decimal("30"),
+                    voucher_type="seed",
+                    voucher_id="SEED-DRY-RUN",
+                ),
+            ]
+        )
+        database.session.commit()
+
+        result = rebuild_stock_valuation_layers("cacao", item_code="ITEM-GOODS", dry_run=True)
+        layers = database.session.execute(
+            database.select(StockValuationLayer).filter_by(company="cacao", item_code="ITEM-GOODS")
+        ).scalars().all()
+
+        assert result.rebuilt_layers == 1
+        assert [layer.id for layer in layers] == [existing.id]
+        assert layers[0].rate == Decimal("11")
 
 
 def test_01_recepcion_ordenes_compra(app):
