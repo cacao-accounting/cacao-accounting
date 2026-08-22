@@ -25,6 +25,8 @@ from typing import Any
 from sqlalchemy import func, select
 
 from cacao_accounting.database import (
+    Item,
+    ItemUOMConversion,
     PurchaseEconomicEvent,
     PurchaseInvoice,
     PurchaseInvoiceItem,
@@ -244,10 +246,36 @@ def _invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
     )
 
 
+def _normalized_line_uom(line: Any) -> str | None:
+    """Return the item base UOM after validating a commercial-UOM conversion."""
+    item_code = str(getattr(line, "item_code", ""))
+    uom = getattr(line, "uom", None)
+    item = (
+        database.session.get(Item, item_code)
+        or database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
+    )
+    base_uom = getattr(item, "default_uom", None) if item else None
+    if not base_uom or not uom or uom == base_uom:
+        return uom
+    conversion = database.session.execute(
+        select(ItemUOMConversion.id).where(
+            ItemUOMConversion.item_code == item_code,
+            (
+                ((ItemUOMConversion.from_uom == uom) & (ItemUOMConversion.to_uom == base_uom))
+                | ((ItemUOMConversion.from_uom == base_uom) & (ItemUOMConversion.to_uom == uom))
+            ),
+        )
+    ).scalar_one_or_none()
+    if conversion is None:
+        raise PurchaseReconciliationError(f"No existe conversión de UOM para el artículo {item_code}: {uom} -> {base_uom}.")
+    return base_uom
+
+
 def _line_key(line: Any) -> tuple[str, str | None, str | None]:
+    """Build a matching key in the item's normalized base UOM."""
     return (
         str(getattr(line, "item_code", "")),
-        getattr(line, "uom", None),
+        _normalized_line_uom(line),
         getattr(line, "warehouse", None),
     )
 
@@ -258,7 +286,7 @@ def _compatible_group(groups: dict, line: Any) -> Any | None:
     if exact is not None:
         return exact
     item_code = str(getattr(line, "item_code", ""))
-    uom = getattr(line, "uom", None)
+    uom = _normalized_line_uom(line)
     candidates = [group for key, group in groups.items() if key[:2] == (item_code, uom)]
     if len(candidates) == 1 and getattr(line, "warehouse", None) is None:
         return candidates[0]
@@ -299,8 +327,7 @@ def _find_receipt_item_for_invoice_line(
     candidates = [
         ri
         for ri in receipt_items
-        if ri.item_code == invoice_item.item_code
-        and ri.uom == invoice_item.uom
+        if _line_key(ri)[:2] == _line_key(invoice_item)[:2]
         and (invoice_item.warehouse is None or ri.warehouse == invoice_item.warehouse)
     ]
     if not candidates:
@@ -311,11 +338,7 @@ def _find_receipt_item_for_invoice_line(
 
 
 def _find_order_item_for_invoice_line(order_items: list[Any], invoice_item: PurchaseInvoiceItem) -> Any:
-    candidates = [
-        order_item
-        for order_item in order_items
-        if order_item.item_code == invoice_item.item_code and order_item.uom == invoice_item.uom
-    ]
+    candidates = [order_item for order_item in order_items if _line_key(order_item)[:2] == _line_key(invoice_item)[:2]]
     if not candidates:
         raise PurchaseReconciliationError(f"No existe linea de OC compatible para el item {invoice_item.item_code}.")
     if len(candidates) > 1:

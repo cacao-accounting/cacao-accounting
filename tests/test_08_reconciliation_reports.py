@@ -3273,6 +3273,34 @@ def test_search_select_item_requires_registered_company_filter(app_ctx):
     assert [result["value"] for result in uom_payload["results"]] == [box_uom]
 
 
+def test_purchase_matching_normalizes_equivalent_item_uoms(app_ctx):
+    """2/3-way grouping uses base quantities when the item conversion exists."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.compras.purchase_reconciliation_service import _line_key
+    from cacao_accounting.database import Item, ItemUOMConversion, UOM, database
+
+    database.session.add_all(
+        [
+            UOM(code="EA-MATCH-UOM", name="Unidad matching"),
+            UOM(code="BOX-MATCH-UOM", name="Caja matching"),
+            Item(code="ITEM-MATCH-UOM", name="Artículo matching", item_type="goods", default_uom="EA-MATCH-UOM"),
+            ItemUOMConversion(
+                item_code="ITEM-MATCH-UOM",
+                from_uom="BOX-MATCH-UOM",
+                to_uom="EA-MATCH-UOM",
+                conversion_factor=Decimal("12"),
+            ),
+        ]
+    )
+    database.session.commit()
+
+    receipt_line = SimpleNamespace(item_code="ITEM-MATCH-UOM", uom="BOX-MATCH-UOM", warehouse="WH-MATCH")
+    invoice_line = SimpleNamespace(item_code="ITEM-MATCH-UOM", uom="EA-MATCH-UOM", warehouse="WH-MATCH")
+
+    assert _line_key(receipt_line) == _line_key(invoice_line) == ("ITEM-MATCH-UOM", "EA-MATCH-UOM", "WH-MATCH")
+
+
 def test_search_select_api_requires_login_and_returns_filtered_accounts(app_ctx):
     from cacao_accounting.database import Accounts, Modules, User, database
 
