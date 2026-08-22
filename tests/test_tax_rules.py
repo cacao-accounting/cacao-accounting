@@ -547,6 +547,56 @@ def test_sales_invoice_tax_snapshot_is_persisted_for_sales_posting(app_ctx: Flas
     assert persisted_lines[0].notes == "snapshot venta"
 
 
+def test_collection_tax_snapshot_is_persisted_for_payment_posting(app_ctx: Flask) -> None:
+    """Incoming payments retain fiscal lines for the collection event."""
+    from cacao_accounting.database import PaymentEntry, database
+
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        payment_type="receive",
+        received_amount=Decimal("98.00"),
+        base_received_amount=Decimal("98.00"),
+        party_type="customer",
+        party_id="",
+        docstatus=0,
+    )
+    database.session.add(payment)
+    database.session.flush()
+    persist_document_fiscal_snapshot(
+        company="cacao",
+        document_type="payment_entry",
+        document_id=payment.id,
+        currency="NIO",
+        tax_lines=[
+            {
+                "source_rule_id": "MANUAL-COLLECTION-WHT-001",
+                "manual": True,
+                "concept": "Retención",
+                "type": "withholding",
+                "base_amount": "100.00",
+                "rate": "2",
+                "amount": "2.00",
+                "accounting_treatment": "separate_tax_account",
+                "account_id": "",
+                "affects_inventory": False,
+                "included_in_price": False,
+                "notes": "snapshot cobro",
+            }
+        ],
+        tax_summary={"subtotal": "100.00", "document_tax_total": "-2.00", "grand_total": "98.00"},
+    )
+
+    context = _build_payment_context(payment)
+
+    assert context is not None
+    assert len(context.tax_rules) == 1
+    assert context.tax_rules[0].tax_type == "withholding"
+    assert context.tax_rules[0].amount == Decimal("2.00")
+    persisted_lines = load_document_fiscal_lines("payment_entry", payment.id)
+    assert persisted_lines[0].notes == "snapshot cobro"
+
+
 def test_document_tax_snapshot_uses_canonical_rule_values(app_ctx: Flask) -> None:
     """Browser values cannot replace a stored rule's amount, rate, or account."""
     from cacao_accounting.database import Accounts, PurchaseInvoice, TaxRule, database
