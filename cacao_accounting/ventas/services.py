@@ -33,6 +33,7 @@ from cacao_accounting.database import (
     SalesRequestItem,
     StockBin,
     UOM,
+    Warehouse,
     database,
 )
 
@@ -278,6 +279,15 @@ def _stock_bin_or_create(company: str, item_code: str, warehouse: str, for_updat
     return bin_row
 
 
+def _require_sales_warehouse(company: str, warehouse_code: str) -> None:
+    """Require an active warehouse that belongs to the sales document company."""
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
+    if warehouse is None or warehouse.company != company:
+        raise PostingError(f"La bodega {warehouse_code} no pertenece a la compañía {company}.")
+    if not warehouse.is_active:
+        raise PostingError(f"La bodega {warehouse_code} está inactiva.")
+
+
 def _resolve_item_warehouse(item: SalesOrderItem, item_obj: Item | None) -> str:
     """Resuelve el almacen para un item de orden de venta, creando si es necesario."""
     warehouse = item.warehouse
@@ -376,6 +386,7 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
         warehouse = _resolve_item_warehouse(item, item_obj)
         if not warehouse:
             raise ValueError(f"El item {item.item_code} no tiene almacen asignado en la orden de venta.")
+        _require_sales_warehouse(so.company, warehouse)
 
         bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         available = Decimal(str(bin_row.actual_qty or 0)) - Decimal(str(bin_row.reserved_qty or 0))
@@ -406,6 +417,7 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
         warehouse = _resolve_item_warehouse(item, item_obj)
         if not warehouse:
             continue
+        _require_sales_warehouse(so.company, warehouse)
 
         bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
         reserved = Decimal(str(bin_row.reserved_qty or 0))
@@ -976,8 +988,6 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     Nota de Entrega previa vinculada. La DN se crea con los mismos ítems
     de la factura, usando la bodega predeterminada de cada ítem.
     """
-    from cacao_accounting.database import Item as ItemModel
-
     items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars().all()
     if not items:
         raise PostingError("La factura no tiene ítems para crear la Nota de Entrega.")  # type: ignore[misc]
@@ -1006,13 +1016,14 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
 
     total = Decimal("0")
     for si_item in items:
-        item_obj = database.session.get(ItemModel, si_item.item_code)
+        item_obj = _item_by_code(si_item.item_code)
         warehouse = si_item.warehouse or (item_obj.default_warehouse_id if item_obj else None)
         if not warehouse:
             raise PostingError(  # type: ignore[misc]
                 f"El ítem {si_item.item_code} no tiene bodega predeterminada. "
                 "Configure la bodega del ítem o cree la nota de entrega manualmente."
             )
+        _require_sales_warehouse(invoice.company, warehouse)
         dn_item = DeliveryNoteItem(
             delivery_note_id=dn.id,
             item_code=si_item.item_code,

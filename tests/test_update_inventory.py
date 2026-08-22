@@ -210,6 +210,41 @@ def test_auto_delivery_note_copies_invoice_currency_context(app_ctx):
     assert delivery_note.exchange_rate == Decimal("36.5")
 
 
+def test_auto_delivery_note_rejects_default_warehouse_from_another_company(app_ctx):
+    """An invoice cannot use an item's default warehouse from another company."""
+    from cacao_accounting.contabilidad.posting import PostingError
+    from cacao_accounting.ventas.services import _create_delivery_note_from_invoice
+
+    warehouse, item, _cogs_account, _inventory_account = _setup_inventory_context()
+    warehouse.company = "cafe"
+    database.session.add(warehouse)
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    invoice = SalesInvoice(
+        id="SI-INV-FOREIGN-WH",
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        document_type="sales_invoice",
+        docstatus=0,
+    )
+    invoice_item = SalesInvoiceItem(
+        sales_invoice_id=invoice.id,
+        item_code=item.code,
+        item_name=item.name,
+        qty=Decimal("1"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("10"),
+    )
+    item.default_warehouse_id = warehouse.code
+    database.session.add_all([invoice, invoice_item])
+    database.session.flush()
+
+    with pytest.raises(PostingError, match="no pertenece a la compañía"):
+        _create_delivery_note_from_invoice(invoice)
+
+
 def test_submit_without_update_inventory_does_not_create_dn(app_ctx):
     """Factura con update_inventory=False no crea DN."""
     client = app_ctx.test_client()
