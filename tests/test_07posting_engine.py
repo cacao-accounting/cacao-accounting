@@ -2958,13 +2958,19 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
         .scalars()
         .all()
     )
-    assert len(gl_entries) == 4
+    active_ledger_ids = {
+        database.session.execute(database.select(Book.id).filter_by(code="PRIMARY")).scalar_one(),
+        local_book.id,
+        eur_book.id,
+    }
+    assert len(gl_entries) == 6
+    assert {line.ledger_id for line in gl_entries} == active_ledger_ids
     assert sum(line.debit for line in gl_entries if line.ledger_id == local_book.id) == Decimal("36")
     assert sum(line.debit for line in gl_entries if line.ledger_id == eur_book.id) == Decimal("0.9")
     assert {line.company_currency for line in gl_entries if line.ledger_id == local_book.id} == {"NIO"}
     assert {line.company_currency for line in gl_entries if line.ledger_id == eur_book.id} == {"EUR"}
-    for book in (local_book, eur_book):
-        book_entries = [line for line in gl_entries if line.ledger_id == book.id]
+    for ledger_id in active_ledger_ids:
+        book_entries = [line for line in gl_entries if line.ledger_id == ledger_id]
         assert sum(line.debit for line in book_entries) == sum(line.credit for line in book_entries)
     assert len(stock_entries) == 1
     assert stock_entries[0].qty_change == Decimal("3.000000000")
@@ -4937,8 +4943,9 @@ def test_operational_posting_ignores_ledger_code_and_affects_all_active_books(ap
         .scalars()
         .all()
     )
-    assert len(entries) == 4
+    assert len(entries) == 6
     ledger_ids_posted = {entry.ledger_id for entry in entries}
+    assert database.session.execute(database.select(Book.id).filter_by(code="PRIMARY")).scalar_one() in ledger_ids_posted
     assert fiscal_book.id in ledger_ids_posted
     assert ifrs_book.id in ledger_ids_posted
 
