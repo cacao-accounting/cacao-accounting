@@ -1204,6 +1204,44 @@ class TestCreatePaymentTarget:
         )
         payment = database.session.get(PaymentEntry, result["target_id"])
         assert payment.currency == "EUR"
+        assert payment.transaction_currency == "EUR"
+
+    @pytest.mark.parametrize(
+        ("payment_type", "factory", "amount_field", "base_amount_field"),
+        [
+            ("receive", _make_customer_invoice, "received_amount", "base_received_amount"),
+            ("pay", _make_supplier_invoice, "paid_amount", "base_paid_amount"),
+        ],
+    )
+    def test_create_payment_persists_foreign_currency_base_amounts(
+        self, app_ctx, payment_type, factory, amount_field, base_amount_field
+    ):
+        """Los pagos destino conservan moneda transaccional y total base convertido."""
+        from cacao_accounting.document_flow.service import create_target_document
+
+        invoice = factory(grand_total=Decimal("100"))
+        invoice.transaction_currency = "USD"
+        database.session.commit()
+
+        result = create_target_document(
+            {
+                "target_document_type": "payment_entry",
+                "company": "cacao",
+                "posting_date": date.today(),
+                "payment_type": payment_type,
+                "party_type": "customer" if payment_type == "receive" else "supplier",
+                "party_id": invoice.customer_id if payment_type == "receive" else invoice.supplier_id,
+                "currency": "USD",
+                "base_currency": "NIO",
+                "exchange_rate": "36",
+                "lines": [{"source_document_type": invoice.document_type, "source_document_id": invoice.id, "qty": 100}],
+            }
+        )
+
+        payment = database.session.get(PaymentEntry, result["target_id"])
+        assert payment.transaction_currency == "USD"
+        assert getattr(payment, amount_field) == Decimal("100")
+        assert getattr(payment, base_amount_field) == Decimal("3600")
 
     def test_create_payment_from_purchase_invoice(self, app_ctx):
         from cacao_accounting.document_flow.service import create_target_document

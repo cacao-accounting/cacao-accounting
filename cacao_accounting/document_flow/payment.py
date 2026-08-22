@@ -737,6 +737,7 @@ def _validate_payment_currency_match(payment: Any, document: Any, *, infer_missi
     document_currency = _document_transaction_currency(document)
     if infer_missing and not payment_currency and document_currency:
         payment.currency = document_currency
+        payment.transaction_currency = document_currency
         payment_currency = document_currency
     if payment_currency and document_currency and payment_currency != document_currency:
         raise _document_flow_error(
@@ -1284,6 +1285,7 @@ def _build_payment_target_payment(company: str | None, posting_date: Any, payloa
         party_id=payload.get("party_id"),
         bank_account_id=payload.get("bank_account_id"),
         currency=payload.get("currency"),
+        transaction_currency=payload.get("currency"),
         base_currency=payload.get("base_currency"),
         exchange_rate=payload.get("exchange_rate"),
         paid_from_account_id=paid_from_account_id,
@@ -1447,12 +1449,13 @@ def _persist_payment_target_allocation(
 
 def _update_payment_target_amounts(payment: PaymentEntry, total: Decimal) -> None:
     """Actualiza los importes del pago segun su direccion contable."""
+    base_total = total * (decimal_or_zero(payment.exchange_rate) or Decimal("1"))
     if payment.payment_type == "pay":
         payment.paid_amount = total
-        payment.base_paid_amount = total
+        payment.base_paid_amount = base_total
     else:
         payment.received_amount = total
-        payment.base_received_amount = total
+        payment.base_received_amount = base_total
 
 
 def _payment_target_result(payment: PaymentEntry) -> dict[str, Any]:
