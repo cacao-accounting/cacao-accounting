@@ -97,6 +97,34 @@ def test_posting_rejects_company_without_active_ledger(app_ctx):
         _active_books("cacao")
 
 
+def test_stock_reconciliation_rejects_negative_rate_from_positive_quantity_delta(app_ctx):
+    """A quantity increase cannot derive a negative valuation-layer rate."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, _create_stock_reconciliation_movement
+    from cacao_accounting.database import StockBin, StockEntry, StockEntryItem, database
+
+    database.session.add(
+        StockBin(company="cacao", item_code="RECON-NONNEG", warehouse="WH-RECON-NONNEG", actual_qty=10, stock_value=1000)
+    )
+    entry = StockEntry(company="cacao", posting_date=date(2026, 5, 4), purpose="stock_reconciliation")
+    database.session.add(entry)
+    database.session.flush()
+    line = StockEntryItem(
+        stock_entry_id=entry.id,
+        item_code="RECON-NONNEG",
+        target_warehouse="WH-RECON-NONNEG",
+        qty=Decimal("2"),
+        uom="UND",
+        counted_qty=12,
+        target_stock_value=600,
+        target_valuation_rate=50,
+    )
+    database.session.add(line)
+    database.session.commit()
+
+    with pytest.raises(PostingError, match="aumentar cantidad mientras reduce el valor"):
+        _create_stock_reconciliation_movement(entry, line)
+
+
 def test_submit_document_rolls_back_docstatus_when_posting_fails(app_ctx):
     """A failed GL posting cannot leave the operational document approved."""
     from cacao_accounting.contabilidad.posting import PostingError, submit_document

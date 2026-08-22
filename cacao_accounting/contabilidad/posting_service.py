@@ -2346,6 +2346,10 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
         raise PostingError("La conciliacion no permite cantidad o valor objetivo negativo.")
     if current_qty <= 0 and counted_qty <= 0 and value_change != 0:
         raise PostingError("No se puede ajustar valor sin stock positivo o cantidad contada positiva.")
+    if qty_change > 0 and value_change < 0:
+        raise PostingError(
+            "La conciliación no puede aumentar cantidad mientras reduce el valor; registre el ajuste de valor por separado."
+        )
 
     fifo_value_change = value_change
     if qty_change < 0:

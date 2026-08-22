@@ -79,6 +79,17 @@ Las primitivas `submit_document` y `cancel_document` ahora recargan el documento
 - Pruebas focales: 2 passed.
 - Ruff y `git diff --check`: OK.
 
+## 2026-08-22 — Conciliación de stock y capas no negativas (#698)
+
+### Implementado
+
+La conciliación de inventario rechaza el caso de aumento de cantidad con reducción de valor objetivo antes de calcular una tasa de capa negativa. El usuario debe registrar el ajuste de valor en una operación separada; así no se filtra una `IntegrityError` de base de datos ni se persiste una capa FIFO/promedio inválida. La regresión reproduce 10×100 → conteo 12 / valor 600 y exige `PostingError`.
+
+### Validación
+
+- Prueba focal: 1 passed.
+- Ruff y `git diff --check`: OK.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición
