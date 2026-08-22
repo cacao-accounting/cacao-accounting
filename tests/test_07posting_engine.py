@@ -25,7 +25,7 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, PurchaseMatchingConfig, database
+        from cacao_accounting.database import Book, Entity, PurchaseMatchingConfig, database
 
         database.create_all()
         database.session.add_all(
@@ -37,6 +37,7 @@ def app_ctx():
                     tax_id="J0001",
                     currency="NIO",
                 ),
+                Book(code="PRIMARY", name="Libro principal", entity="cacao", currency="NIO", is_primary=True),
                 # Los escenarios históricos de posting ejercitan facturas sin OC.
                 PurchaseMatchingConfig(company="cacao", require_purchase_order=False),
             ]
@@ -82,6 +83,18 @@ def test_exchange_rate_lookups_use_the_latest_prior_positive_rate(app_ctx):
 
     assert posting_lookup_exchange_rate("NIO", "USD", date(2026, 5, 4)) == Decimal("0.028")
     assert bank_lookup_exchange_rate("NIO", "USD", date(2026, 5, 4)) == Decimal("0.028")
+
+
+def test_posting_rejects_company_without_active_ledger(app_ctx):
+    """Posting cannot create GL rows that no financial report can select."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, _active_books
+    from cacao_accounting.database import Book, database
+
+    database.session.execute(database.update(Book).where(Book.entity == "cacao").values(status="inactivo"))
+    database.session.commit()
+
+    with pytest.raises(PostingError, match="no tiene libro contable activo"):
+        _active_books("cacao")
 
 
 def test_submit_document_rolls_back_docstatus_when_posting_fails(app_ctx):

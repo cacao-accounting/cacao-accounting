@@ -68,6 +68,17 @@ Las primitivas `submit_document` y `cancel_document` ahora recargan el documento
 - Regresión de fallo de submit: 1 passed.
 - Ruff y `git diff --check`: OK.
 
+## 2026-08-22 — Posting sin libro activo (#700)
+
+### Implementado
+
+`_active_books` ya no devuelve un contexto sintético con `ledger_id=None` cuando la compañía no tiene libros activos: ahora lanza `PostingError` antes de crear GL. Esto evita movimientos que ningún reporte financiero puede seleccionar. La fixture del motor de posting ahora declara su libro principal, y la regresión desactiva todos los libros para comprobar el error controlado.
+
+### Validación
+
+- Pruebas focales: 2 passed.
+- Ruff y `git diff --check`: OK.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición

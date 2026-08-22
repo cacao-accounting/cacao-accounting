@@ -222,7 +222,7 @@ def _normalize_ledger_codes(ledger_code: str | Sequence[str] | None) -> list[str
     return codes or None
 
 
-def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) -> list[Book | None]:
+def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) -> list[Book]:
     selected_codes = _normalize_ledger_codes(ledger_code)
     query = select(Book).where(
         Book.entity == company,
@@ -236,7 +236,9 @@ def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) 
         missing_codes = [code for code in selected_codes if code not in found_codes]
         if missing_codes:
             raise PostingError("Uno o más libros contables seleccionados no existen o están inactivos para la compañia.")
-    return list(books) if books else [None]
+    if not books:
+        raise PostingError("La compañía no tiene libro contable activo.")
+    return list(books)
 
 
 def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = None) -> list[LedgerContext]:
