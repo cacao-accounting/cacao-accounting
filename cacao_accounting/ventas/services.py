@@ -45,7 +45,7 @@ from ulid import ULID
 
 from cacao_accounting.database.helpers import get_active_naming_series
 
-from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
+from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document, submit_document
 
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
@@ -990,7 +990,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     """
     items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars().all()
     if not items:
-        raise PostingError("La factura no tiene ítems para crear la Nota de Entrega.")  # type: ignore[misc]
+        raise PostingError("La factura no tiene ítems para crear la Nota de Entrega.")
 
     dn = DeliveryNote(
         customer_id=invoice.customer_id,
@@ -1019,7 +1019,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         item_obj = _item_by_code(si_item.item_code)
         warehouse = si_item.warehouse or (item_obj.default_warehouse_id if item_obj else None)
         if not warehouse:
-            raise PostingError(  # type: ignore[misc]
+            raise PostingError(
                 f"El ítem {si_item.item_code} no tiene bodega predeterminada. "
                 "Configure la bodega del ítem o cree la nota de entrega manualmente."
             )
