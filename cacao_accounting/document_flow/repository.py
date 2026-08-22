@@ -221,10 +221,12 @@ def recompute_line_flow_state(
 
 
 def has_active_source_relations(source_type: str, source_id: str) -> bool:
-    """Verifica si un documento fuente tiene relaciones activas con hijos no cancelados.
+    """Verifica si un documento fuente tiene relaciones activas con hijos aprobados.
 
     Utilizada para evitar cancelar un documento cuando tiene documentos
-    descendientes activos (ej. cancelar una OC que tiene Recepciones activas).
+    descendientes aprobados (ej. cancelar una OC que tiene Recepciones activas).
+    Los borradores no producen efectos contables ni de inventario y, por ello,
+    no impiden cancelar su documento fuente.
     """
     source_key = normalize_doctype(source_type)
     relations = (
@@ -240,7 +242,7 @@ def has_active_source_relations(source_type: str, source_id: str) -> bool:
     )
     for relation in relations:
         target = get_document(relation.target_type, relation.target_id)
-        if target and getattr(target, "docstatus", 0) != 2:
+        if target and getattr(target, "docstatus", 0) == 1:
             return True
     return False
 
