@@ -3,6 +3,25 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Distribución multilínea en matching de compras (#693)
+
+### Implementado
+
+El matching 2-way y 3-way ya no persiste solamente la primera línea fuente
+compatible. `_available_line_slices` distribuye la cantidad de cada línea de
+factura por todas las líneas de recepción u OC que tengan saldo; cada tramo
+genera su `PurchaseReconciliationItem` con cantidad e importe de factura
+proporcionales. Esto alinea la suma del detalle con el matching agregado para
+líneas repetidas del mismo ítem/UOM.
+
+### Validación
+
+- `tests/test_purchase_reconciliation_service.py`: **2 passed**.
+- Ruff check/format y `git diff --check`: OK.
+- La ejecución conjunta de `test_s2p_full_lifecycle.py` tiene 3 fallos de
+  fixture preexistentes por falta de `Book` activo (`PostingError` de #700);
+  no son causados por esta distribución.
+
 ## 2026-08-22 — Refresh de cache al aprobar relaciones (#692)
 
 ### Implementado

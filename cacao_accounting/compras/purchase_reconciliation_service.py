@@ -323,13 +323,31 @@ def _find_order_item_for_invoice_line(order_items: list[Any], invoice_item: Purc
     return candidates[0]
 
 
-def _first_available_line(lines: list[Any], *, order_mode: bool) -> Any | None:
+def _available_line_slices(
+    lines: list[Any],
+    invoice_qty: Decimal,
+    *,
+    order_mode: bool,
+) -> list[tuple[Any, Decimal]]:
+    """Split an invoice quantity across every compatible source line with balance.
+
+    Group-level matching may legitimately span several receipt or purchase
+    order lines.  Persisting only the first line would make reconciliation
+    detail disagree with its aggregate header.
+    """
+    remaining_qty = invoice_qty
+    slices: list[tuple[Any, Decimal]] = []
     for line in lines:
         line_qty = _line_qty(line)
         matched_qty = _matched_qty_for_order_item(line.id) if order_mode else _matched_qty_for_receipt_item(line.id)
-        if line_qty - matched_qty > 0:
-            return line
-    return None
+        available_qty = max(Decimal("0"), line_qty - matched_qty)
+        allocated_qty = min(remaining_qty, available_qty)
+        if allocated_qty > 0:
+            slices.append((line, allocated_qty))
+            remaining_qty -= allocated_qty
+        if remaining_qty <= 0:
+            break
+    return slices
 
 
 def _within_tolerance(difference: Decimal, reference: Decimal, tolerance_type: str, tolerance_value: Decimal) -> bool:
@@ -721,17 +739,19 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
             receipt_group = _compatible_group(receipt_groups, invoice_item)
             if receipt_group is None:
                 raise PurchaseReconciliationError("No existe linea de recepcion compatible para la linea de factura.")
-            receipt_item = _first_available_line(receipt_group.lines, order_mode=False)
-            if receipt_item is None:
+            slices = _available_line_slices(receipt_group.lines, _line_qty(invoice_item), order_mode=False)
+            if not slices:
                 raise PurchaseReconciliationError("No queda cantidad pendiente en la recepción para la factura.")
-            database.session.add(
-                _three_way_reconciliation_item(
-                    reconciliation.id,
-                    receipt_item,
-                    invoice_item,
-                    status=str(reconciliation.status),
+            for receipt_item, matched_qty in slices:
+                database.session.add(
+                    _three_way_reconciliation_item(
+                        reconciliation.id,
+                        receipt_item,
+                        invoice_item,
+                        matched_qty=matched_qty,
+                        status=str(reconciliation.status),
+                    )
                 )
-            )
     return result
 
 
@@ -816,17 +836,19 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
             order_group = _compatible_group(order_groups, invoice_item)
             if order_group is None:
                 raise PurchaseReconciliationError("No existe linea de OC compatible para la linea de factura.")
-            order_item = _first_available_line(order_group.lines, order_mode=True)
-            if order_item is None:
+            slices = _available_line_slices(order_group.lines, _line_qty(invoice_item), order_mode=True)
+            if not slices:
                 raise PurchaseReconciliationError("No queda cantidad pendiente en la orden de compra para la factura.")
-            database.session.add(
-                _two_way_reconciliation_item(
-                    reconciliation.id,
-                    order_item,
-                    invoice_item,
-                    status=str(reconciliation.status),
+            for order_item, matched_qty in slices:
+                database.session.add(
+                    _two_way_reconciliation_item(
+                        reconciliation.id,
+                        order_item,
+                        invoice_item,
+                        matched_qty=matched_qty,
+                        status=str(reconciliation.status),
+                    )
                 )
-            )
     return result
 
 
@@ -902,6 +924,7 @@ def _two_way_reconciliation_item(
     order_item: Any,
     invoice_item: PurchaseInvoiceItem,
     *,
+    matched_qty: Decimal | None = None,
     status: str = "reconciled",
 ) -> PurchaseReconciliationItem:
     """Construye el detalle de conciliacion para una linea 2-way."""
@@ -910,9 +933,9 @@ def _two_way_reconciliation_item(
     order_rate = _line_rate(order_item)
     invoice_rate = _line_rate(invoice_item)
     pending_qty = max(Decimal("0"), ordered_qty - _matched_qty_for_order_item(order_item.id))
-    matched_qty = min(invoice_qty, pending_qty)
+    matched_qty = min(invoice_qty, pending_qty) if matched_qty is None else min(matched_qty, pending_qty)
     matched_amount = matched_qty * order_rate
-    invoiced_amount = invoice_qty * invoice_rate
+    invoiced_amount = matched_qty * invoice_rate
     price_difference = invoice_rate - order_rate
     return PurchaseReconciliationItem(
         purchase_reconciliation_id=reconciliation_id,
@@ -923,7 +946,7 @@ def _two_way_reconciliation_item(
         warehouse=None,
         uom=invoice_item.uom,
         received_qty=ordered_qty,  # "received" = ordered in 2-way context
-        invoiced_qty=invoice_qty,
+        invoiced_qty=matched_qty,
         matched_qty=matched_qty,
         received_amount=matched_qty * order_rate,
         invoiced_amount=invoiced_amount,
@@ -938,6 +961,7 @@ def _three_way_reconciliation_item(
     receipt_item: PurchaseReceiptItem,
     invoice_item: PurchaseInvoiceItem,
     *,
+    matched_qty: Decimal | None = None,
     status: str = "reconciled",
 ) -> PurchaseReconciliationItem:
     """Construye el detalle de conciliacion para una linea 3-way."""
@@ -946,9 +970,9 @@ def _three_way_reconciliation_item(
     receipt_rate = _line_rate(receipt_item)
     invoice_rate = _line_rate(invoice_item)
     pending_qty = max(Decimal("0"), receipt_qty - _matched_qty_for_receipt_item(receipt_item.id))
-    matched_qty = min(invoice_qty, pending_qty)
+    matched_qty = min(invoice_qty, pending_qty) if matched_qty is None else min(matched_qty, pending_qty)
     matched_amount = matched_qty * receipt_rate
-    invoiced_amount = invoice_qty * invoice_rate
+    invoiced_amount = matched_qty * invoice_rate
     price_difference = invoice_rate - receipt_rate
     return PurchaseReconciliationItem(
         purchase_reconciliation_id=reconciliation_id,
@@ -959,7 +983,7 @@ def _three_way_reconciliation_item(
         warehouse=receipt_item.warehouse,
         uom=invoice_item.uom,
         received_qty=receipt_qty,
-        invoiced_qty=invoice_qty,
+        invoiced_qty=matched_qty,
         matched_qty=matched_qty,
         received_amount=matched_qty * receipt_rate,
         invoiced_amount=invoiced_amount,
