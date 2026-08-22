@@ -320,11 +320,13 @@ def test_semantic_reports_net_returns_and_expose_base_amount(app_ctx):
             docstatus=1,
         )
 
-    sale, sale_return = invoice(SalesInvoice, "customer_id", "CUSTOMER-SEMANTIC", Decimal("10")), invoice(
-        SalesInvoice, "customer_id", "CUSTOMER-SEMANTIC", Decimal("2"), True
+    sale, sale_return = (
+        invoice(SalesInvoice, "customer_id", "CUSTOMER-SEMANTIC", Decimal("10")),
+        invoice(SalesInvoice, "customer_id", "CUSTOMER-SEMANTIC", Decimal("2"), True),
     )
-    purchase, purchase_return = invoice(PurchaseInvoice, "supplier_id", "SUPPLIER-SEMANTIC", Decimal("20")), invoice(
-        PurchaseInvoice, "supplier_id", "SUPPLIER-SEMANTIC", Decimal("5"), True
+    purchase, purchase_return = (
+        invoice(PurchaseInvoice, "supplier_id", "SUPPLIER-SEMANTIC", Decimal("20")),
+        invoice(PurchaseInvoice, "supplier_id", "SUPPLIER-SEMANTIC", Decimal("5"), True),
     )
     database.session.add_all([sale, sale_return, purchase, purchase_return])
     database.session.flush()
@@ -380,6 +382,34 @@ def test_cash_forecast_uses_base_legacy_balance_and_nets_returns():
     ]
 
     assert _sum_invoice_amount(invoices, date(2026, 8, 1), date(2026, 8, 31)) == Decimal("288")
+
+
+def test_cash_forecast_skips_only_an_invoice_without_a_conversion_rate():
+    """One incomplete foreign invoice cannot suppress other cash projections."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.bancos.cash_forecast_service import _sum_invoice_amount
+
+    invoices = [
+        SimpleNamespace(
+            posting_date=date(2026, 8, 1),
+            outstanding_amount=Decimal("10"),
+            base_outstanding_amount=None,
+            transaction_currency="USD",
+            exchange_rate=None,
+            is_return=False,
+        ),
+        SimpleNamespace(
+            posting_date=date(2026, 8, 2),
+            outstanding_amount=Decimal("5"),
+            base_outstanding_amount=Decimal("180"),
+            transaction_currency="USD",
+            exchange_rate=Decimal("36"),
+            is_return=False,
+        ),
+    ]
+
+    assert _sum_invoice_amount(invoices, date(2026, 8, 1), date(2026, 8, 31)) == Decimal("180")
 
 
 def test_semantic_reports_multicurrency(app_ctx):

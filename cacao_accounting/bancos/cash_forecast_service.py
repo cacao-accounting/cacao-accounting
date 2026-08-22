@@ -189,19 +189,25 @@ def _sum_invoice_amount(
         flow_date = getattr(inv, "due_date", None) or inv.posting_date
         if start_date <= flow_date <= end_date:
             amount = inv.base_outstanding_amount
-            if amount is None:
-                transaction_currency = getattr(inv, "transaction_currency", None) or company_currency
-                outstanding = Decimal(str(inv.outstanding_amount or 0))
-                if transaction_currency == company_currency:
-                    exchange_rate = Decimal("1")
-                else:
-                    raw_exchange_rate = getattr(inv, "exchange_rate", None)
-                    if raw_exchange_rate is None or Decimal(str(raw_exchange_rate)) <= 0:
-                        raise CashForecastConversionError(
-                            f"No existe tipo de cambio para {transaction_currency} -> {company_currency} " f"en {flow_date}."
-                        )
-                    exchange_rate = Decimal(str(raw_exchange_rate))
-                amount = outstanding * exchange_rate
+            try:
+                if amount is None:
+                    transaction_currency = getattr(inv, "transaction_currency", None) or company_currency
+                    outstanding = Decimal(str(inv.outstanding_amount or 0))
+                    if transaction_currency == company_currency:
+                        exchange_rate = Decimal("1")
+                    else:
+                        raw_exchange_rate = getattr(inv, "exchange_rate", None)
+                        if raw_exchange_rate is None or Decimal(str(raw_exchange_rate)) <= 0:
+                            raise CashForecastConversionError(
+                                f"No existe tipo de cambio para {transaction_currency} -> {company_currency} en {flow_date}."
+                            )
+                        exchange_rate = Decimal(str(raw_exchange_rate))
+                    amount = outstanding * exchange_rate
+            except CashForecastConversionError:
+                # An incomplete document must not make every other cash-flow
+                # projection unavailable. It remains excluded until its FX
+                # data is completed.
+                continue
             if getattr(inv, "is_return", False):
                 amount = -Decimal(str(amount))
             total += Decimal(str(amount))
@@ -245,7 +251,12 @@ def _compute_manual_projections(
             continue
         if zone == "Current" and entry.estimated_date <= today_date:
             continue
-        base_amt = get_base_amount(entry.amount, entry.currency, company_currency, entry.estimated_date)
+        try:
+            base_amt = get_base_amount(entry.amount, entry.currency, company_currency, entry.estimated_date)
+        except CashForecastConversionError:
+            # Skip only the incomplete manual projection; the rest of the
+            # forecast remains usable.
+            continue
         if entry.type == "Income":
             manual_inflow += base_amt
         else:
