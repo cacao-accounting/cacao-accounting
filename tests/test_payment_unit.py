@@ -1547,6 +1547,22 @@ class TestApplyAdvancePartyTypeCasing:
 
         assert reference.party_type == "supplier", f"Expected lowercase 'supplier', got '{reference.party_type}'"
 
+    def test_advance_cannot_be_applied_to_a_draft_invoice(self, app_ctx):
+        """Advance applications require an approved invoice as well as an approved payment."""
+        from cacao_accounting.document_flow.payment import apply_advance_to_invoice
+
+        invoice = _make_customer_invoice(grand_total=Decimal("500"))
+        invoice.docstatus = 0
+        database.session.commit()
+        payment = _make_open_payment(
+            party=database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first(),
+            payment_type="receive",
+            amount=Decimal("200"),
+        )
+
+        with pytest.raises(ValueError, match="factura debe estar aprobada"):
+            apply_advance_to_invoice(payment.id, invoice.id, Decimal("100"), date.today())
+
 
 # ---------------------------------------------------------------------------
 # Exhaustive Bank Management Tests (Customer/Supplier payments, Advances,

@@ -865,6 +865,8 @@ def _load_advance_invoice(invoice_id: str) -> tuple[SalesInvoice | PurchaseInvoi
         party_id = getattr(invoice, "supplier_id", None) if invoice else None
     if invoice is None:
         raise _document_flow_error("La factura no existe.", 404)
+    if invoice.docstatus != 1:
+        raise _document_flow_error("La factura debe estar aprobada para aplicar un anticipo.", 409)
     return invoice, reference_type, party_id
 
 
