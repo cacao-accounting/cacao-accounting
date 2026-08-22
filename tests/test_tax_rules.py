@@ -283,6 +283,59 @@ def test_admin_ledger_mapping_rule_create_and_deactivate(client) -> None:
     assert rule.is_active is False
 
 
+def test_ledger_mapping_rule_transforms_secondary_ledger_entries(app_ctx: Flask) -> None:
+    """Posting maps only the configured account in the secondary ledger."""
+    from cacao_accounting.contabilidad.ledger_mapping_service import apply_ledger_mappings, create_ledger_mapping_rule
+    from cacao_accounting.database import Accounts, Book, GLEntry, database
+
+    source_account = Accounts(
+        id="ACC-MAP-POSTING-SOURCE",
+        entity="cacao",
+        code="ACC-MAP-POSTING-SOURCE",
+        name="Cuenta origen posting",
+        active=True,
+        enabled=True,
+        group=False,
+    )
+    target_account = Accounts(
+        id="ACC-MAP-POSTING-TARGET",
+        entity="cacao",
+        code="ACC-MAP-POSTING-TARGET",
+        name="Cuenta destino posting",
+        active=True,
+        enabled=True,
+        group=False,
+    )
+    primary_book = Book(code="POST-PRIMARY", name="Principal", entity="cacao", is_primary=True)
+    secondary_book = Book(code="POST-IFRS", name="IFRS", entity="cacao", is_primary=False)
+    database.session.add_all([primary_book, secondary_book, source_account, target_account])
+    database.session.commit()
+    create_ledger_mapping_rule(
+        source_book=primary_book.code,
+        target_book=secondary_book.code,
+        source_account_id=source_account.id,
+        target_account_id=target_account.id,
+    )
+
+    entry = GLEntry(
+        posting_date=date(2026, 5, 1),
+        company="cacao",
+        ledger_id=secondary_book.id,
+        account_id=source_account.id,
+        account_code=source_account.code,
+        debit=Decimal("10.00"),
+        credit=Decimal("0"),
+    )
+
+    mapped = apply_ledger_mappings([entry])
+
+    assert mapped == [entry]
+    assert entry.account_id == target_account.id
+    assert entry.account_code == target_account.code
+    assert entry.debit == Decimal("10.00")
+    assert entry.credit == Decimal("0")
+
+
 def test_tax_rule_service_builds_contexts_from_db(app_ctx: Flask) -> None:
     """Persisted fiscal rules should be converted into engine contexts."""
     from cacao_accounting.database import TaxRule, database
