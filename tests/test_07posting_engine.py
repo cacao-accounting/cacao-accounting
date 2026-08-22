@@ -2263,8 +2263,14 @@ def test_valuation_queue_recovers_after_allowed_negative_stock(app_ctx):
     )
     database.session.commit()
 
-    assert _valuation_queue("cacao", "ITEM-NEG-QUEUE", "WH-NEG-QUEUE") == [(Decimal("5"), Decimal("12"))]
-    cost, rate = _consume_stock_valuation_layers("cacao", "ITEM-NEG-QUEUE", "WH-NEG-QUEUE", Decimal("5"))
+    queue = _valuation_queue("cacao", "ITEM-NEG-QUEUE", "WH-NEG-QUEUE")
+    remaining_layer = next(
+        (database.session.get(StockValuationLayer, entry[0]) for entry in queue if entry[0]),
+        None,
+    )
+    assert [(entry[1], entry[2]) for entry in queue] == [(Decimal("5"), Decimal("12"))]
+    assert remaining_layer is not None and remaining_layer.voucher_id == "QUEUE-IN-2"
+    cost, rate, _source_layer = _consume_stock_valuation_layers("cacao", "ITEM-NEG-QUEUE", "WH-NEG-QUEUE", Decimal("5"))
     assert cost == Decimal("60")
     assert rate == Decimal("12")
 
@@ -2288,6 +2294,7 @@ def test_moving_average_consumption_locks_the_stock_bin_before_valuing(app_ctx, 
     assert posting_service._consume_stock_valuation_layers("cacao", "ITEM", "WH", Decimal("2")) == (
         Decimal("20"),
         Decimal("10"),
+        None,
     )
     assert locked == [True]
 
