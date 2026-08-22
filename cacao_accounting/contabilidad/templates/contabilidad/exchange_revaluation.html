@@ -30,6 +30,7 @@
       </form>
       {% endif %}
       <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.revalorizaciones_cambiarias') }}">{{ _('Listado') }}</a>
+      {{ macros.document_print_button("exchange_revaluation", run.id) }}
     </div>
   </div>
   <div class="ca-report-context">

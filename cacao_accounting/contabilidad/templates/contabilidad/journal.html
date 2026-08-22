@@ -119,6 +119,7 @@
             <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
                 <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
             </a>
+            {{ macros.document_print_button("journal_entry", registro.id) }}
         </div>
         <div class="ca-detail-actions-menu dropdown">
             <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ _('Acciones del documento') }}">
@@ -169,6 +170,7 @@
                 <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.nuevo_comprobante') }}">
                     <i class="bi bi-plus-lg me-1"></i>{{ _('Nuevo') }}
                 </a>
+                {{ macros.document_print_button("journal_entry", registro.id) }}
             </div>
         </div>
     </div>

@@ -336,14 +336,19 @@ class PrintService:
 
         def status_label(value: Any) -> str:
             labels = {
-                "draft": "Draft",
-                "posted": "Posted",
-                "submitted": "Submitted",
-                "void": "Void",
-                "cancelled": "Cancelled",
-                "reverted": "Reverted",
+                "draft": "BORRADOR",
+                "borrador": "BORRADOR",
+                "posted": "CONTABILIZADO",
+                "submitted": "APROBADO",
+                "approved": "APROBADO",
+                "void": "ANULADO",
+                "cancelled": "ANULADO",
+                "anulado": "ANULADO",
+                "reverted": "REVERTIDO",
+                "rejected": "RECHAZADO",
+                "closed": "CERRADO",
             }
-            return labels.get(str(value).lower(), str(value).title())
+            return labels.get(str(value).lower(), str(value).upper())
 
         self.env.filters.update(
             {

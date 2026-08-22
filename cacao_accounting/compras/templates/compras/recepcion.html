@@ -45,6 +45,7 @@
 {{ macros.detail_nav_buttons(
             url_for('compras.compras_recepcion_lista'),
             url_for('compras.compras_recepcion_nuevo')) }}
+{{ macros.document_print_button("purchase_receipt", registro.id) }}
 {{ macros.document_create_actions("purchase_receipt", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}

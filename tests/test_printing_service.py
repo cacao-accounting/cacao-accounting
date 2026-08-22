@@ -103,3 +103,51 @@ def test_public_validation_endpoint(client, app):
     response = client.get("/public/validate_doc/test-token")
     assert response.status_code == 200
     assert b"JOU-1" in response.data
+
+
+def test_all_printable_documents_sample_preview_and_watermarks(app):
+    from cacao_accounting.printing.registry import PRINTABLE_DOCUMENTS
+    from cacao_accounting.printing.seed import seed_print_templates
+
+    with app.app_context():
+        seed_print_templates()
+        service = PrintService()
+
+        for doc_type in PRINTABLE_DOCUMENTS:
+            html = service.render_preview_html(
+                document_type=doc_type,
+                document_id=None,
+                user="admin",
+                company_code="cacao",
+                sample=True,
+            )
+            assert "<!doctype html>" in html
+            assert "watermark" in html or "status-badge" in html
+
+
+def test_status_watermark_rendering_for_draft_and_cancelled(app):
+    from cacao_accounting.printing.seed import seed_print_templates
+    from cacao_accounting.printing.context import build_sales_invoice_sample_context
+
+    with app.app_context():
+        seed_print_templates()
+        service = PrintService()
+
+        context_draft = build_sales_invoice_sample_context()
+        context_draft["invoice"]["status"] = "draft"
+        template = service.resolve_template("sales_invoice", "cacao")
+        rendered_draft = service.env.from_string(template.template_body).render(**context_draft)
+        assert "watermark-draft" in rendered_draft
+        assert "BORRADOR" in rendered_draft
+
+        context_cancelled = build_sales_invoice_sample_context()
+        context_cancelled["invoice"]["status"] = "cancelled"
+        rendered_cancelled = service.env.from_string(template.template_body).render(**context_cancelled)
+        assert "watermark-cancelled" in rendered_cancelled
+        assert "ANULADO" in rendered_cancelled
+
+        context_posted = build_sales_invoice_sample_context()
+        context_posted["invoice"]["status"] = "posted"
+        rendered_posted = service.env.from_string(template.template_body).render(**context_posted)
+        assert "watermark" not in rendered_posted
+        assert "status-posted" in rendered_posted

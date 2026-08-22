@@ -217,6 +217,146 @@ def build_quotation_print_context(
     )
 
 
+def build_sales_order_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a sales order."""
+    from cacao_accounting.database import SalesOrder, SalesOrderItem
+
+    return _build_line_document_context(
+        SalesOrder,
+        SalesOrderItem,
+        "sales_order_id",
+        "sales_order",
+        document_id,
+        user,
+        company_code,
+    )
+
+
+def build_sales_request_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a sales request."""
+    from cacao_accounting.database import SalesRequest, SalesRequestItem
+
+    return _build_line_document_context(
+        SalesRequest,
+        SalesRequestItem,
+        "sales_request_id",
+        "sales_request",
+        document_id,
+        user,
+        company_code,
+    )
+
+
+def build_purchase_request_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a purchase request."""
+    from cacao_accounting.database import PurchaseRequest, PurchaseRequestItem
+
+    return _build_line_document_context(
+        PurchaseRequest,
+        PurchaseRequestItem,
+        "purchase_request_id",
+        "purchase_request",
+        document_id,
+        user,
+        company_code,
+    )
+
+
+def build_supplier_quotation_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a supplier quotation."""
+    from cacao_accounting.database import SupplierQuotation, SupplierQuotationItem
+
+    return _build_line_document_context(
+        SupplierQuotation,
+        SupplierQuotationItem,
+        "supplier_quotation_id",
+        "supplier_quotation",
+        document_id,
+        user,
+        company_code,
+    )
+
+
+def build_request_for_quotation_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a request for quotation."""
+    from cacao_accounting.database import PurchaseQuotation, PurchaseQuotationItem
+
+    return _build_line_document_context(
+        PurchaseQuotation,
+        PurchaseQuotationItem,
+        "purchase_quotation_id",
+        "request_for_quotation",
+        document_id,
+        user,
+        company_code,
+    )
+
+
+def build_purchase_receipt_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a purchase receipt."""
+    from cacao_accounting.database import PurchaseReceipt, PurchaseReceiptItem
+
+    return _build_line_document_context(
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        "purchase_receipt_id",
+        "purchase_receipt",
+        document_id,
+        user,
+        company_code,
+    )
+
+
+def build_landed_cost_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a landed cost voucher."""
+    from cacao_accounting.database import ImportLandedCost, ImportLandedCostItem
+
+    return _build_line_document_context(
+        ImportLandedCost,
+        ImportLandedCostItem,
+        "landed_cost_id",
+        "landed_cost",
+        document_id,
+        user,
+        company_code,
+    )
+
+
 def build_payment_entry_print_context(
     document_id: str,
     user: Any,
@@ -351,6 +491,143 @@ def build_purchase_order_sample_context(user: Any = None, company: Any = None) -
         "currency": "NIO",
         "supplier": _sample_party(),
         "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
+        "grand_total": 1150.0,
+    }
+    return context
+
+
+def build_delivery_note_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample delivery note context."""
+    context = _sample_common_context()
+    context["receipt"] = {
+        "number": "DEL-2026-00001",
+        "date": "2026-05-26",
+        "status": "posted",
+        "currency": "NIO",
+        "customer": _sample_party(),
+        "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
+        "grand_total": 1150.0,
+    }
+    return context
+
+
+def build_sales_order_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample sales order context."""
+    context = _sample_common_context()
+    context["sales_order"] = {
+        "number": "SO-2026-00001",
+        "date": "2026-05-26",
+        "status": "posted",
+        "currency": "NIO",
+        "customer": _sample_party(),
+        "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
+        "grand_total": 1150.0,
+    }
+    return context
+
+
+def build_sales_request_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample sales request context."""
+    context = _sample_common_context()
+    context["sales_request"] = {
+        "number": "SR-2026-00001",
+        "date": "2026-05-26",
+        "status": "posted",
+        "currency": "NIO",
+        "customer": _sample_party(),
+        "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
+        "grand_total": 1150.0,
+    }
+    return context
+
+
+def build_purchase_request_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample purchase request context."""
+    context = _sample_common_context()
+    context["purchase_request"] = {
+        "number": "PR-2026-00001",
+        "date": "2026-05-26",
+        "status": "posted",
+        "currency": "NIO",
+        "supplier": _sample_party(),
+        "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
+        "grand_total": 1150.0,
+    }
+    return context
+
+
+def build_supplier_quotation_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample supplier quotation context."""
+    context = _sample_common_context()
+    context["supplier_quotation"] = {
+        "number": "SQ-2026-00001",
+        "date": "2026-05-26",
+        "status": "posted",
+        "currency": "NIO",
+        "supplier": _sample_party(),
+        "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
+        "grand_total": 1150.0,
+    }
+    return context
+
+
+def build_request_for_quotation_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample request for quotation context."""
+    context = _sample_common_context()
+    context["request_for_quotation"] = {
+        "number": "RFQ-2026-00001",
+        "date": "2026-05-26",
+        "status": "posted",
+        "currency": "NIO",
+        "supplier": _sample_party(),
+        "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
+        "grand_total": 1150.0,
+    }
+    return context
+
+
+def build_purchase_receipt_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample purchase receipt context."""
+    context = _sample_common_context()
+    context["purchase_receipt"] = {
+        "number": "REC-2026-00001",
+        "date": "2026-05-26",
+        "status": "posted",
+        "currency": "NIO",
+        "supplier": _sample_party(),
+        "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
+        "grand_total": 1150.0,
+    }
+    return context
+
+
+def build_landed_cost_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a sample landed cost voucher context."""
+    context = _sample_common_context()
+    context["landed_cost"] = {
+        "number": "LC-2026-00001",
+        "date": "2026-05-26",
+        "status": "posted",
+        "currency": "NIO",
+        "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
         "grand_total": 1150.0,
     }
     return context
@@ -378,8 +655,11 @@ def build_stock_entry_sample_context(user: Any = None, company: Any = None) -> d
         "number": "STE-2026-00001",
         "date": "2026-05-26",
         "status": "posted",
+        "currency": "NIO",
         "purpose": "receipt",
         "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
         "grand_total": 1150.0,
     }
     return context
@@ -419,6 +699,8 @@ def build_quotation_sample_context(user: Any = None, company: Any = None) -> dic
         "currency": "NIO",
         "customer": _sample_party(),
         "items": [_sample_line()],
+        "subtotal": 1000.0,
+        "taxes": 150.0,
         "grand_total": 1150.0,
     }
     return context
@@ -630,6 +912,13 @@ JOURNAL_ENTRY_PRINT_SCHEMA = {
 SALES_INVOICE_PRINT_SCHEMA = INVOICE_SCHEMA
 PURCHASE_INVOICE_PRINT_SCHEMA = INVOICE_SCHEMA
 PURCHASE_ORDER_PRINT_SCHEMA = {**COMMON_SCHEMA, "purchase_order": {_ITEMS_KEY: LINE_SCHEMA}}
+SALES_ORDER_PRINT_SCHEMA = {**COMMON_SCHEMA, "sales_order": {_ITEMS_KEY: LINE_SCHEMA}}
+SALES_REQUEST_PRINT_SCHEMA = {**COMMON_SCHEMA, "sales_request": {_ITEMS_KEY: LINE_SCHEMA}}
+PURCHASE_REQUEST_PRINT_SCHEMA = {**COMMON_SCHEMA, "purchase_request": {_ITEMS_KEY: LINE_SCHEMA}}
+SUPPLIER_QUOTATION_PRINT_SCHEMA = {**COMMON_SCHEMA, "supplier_quotation": {_ITEMS_KEY: LINE_SCHEMA}}
+REQUEST_FOR_QUOTATION_PRINT_SCHEMA = {**COMMON_SCHEMA, "request_for_quotation": {_ITEMS_KEY: LINE_SCHEMA}}
+PURCHASE_RECEIPT_PRINT_SCHEMA = {**COMMON_SCHEMA, "purchase_receipt": {_ITEMS_KEY: LINE_SCHEMA}}
+LANDED_COST_PRINT_SCHEMA = {**COMMON_SCHEMA, "landed_cost": {_ITEMS_KEY: LINE_SCHEMA}}
 DELIVERY_NOTE_PRINT_SCHEMA = {**COMMON_SCHEMA, "receipt": {_ITEMS_KEY: LINE_SCHEMA}}
 STOCK_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "adjustment": {_ITEMS_KEY: LINE_SCHEMA}}
 QUOTATION_PRINT_SCHEMA = {**COMMON_SCHEMA, "quote": {_ITEMS_KEY: LINE_SCHEMA}}
@@ -689,14 +978,14 @@ def _document_number(document: Any) -> str:
 
 
 def _document_status(document: Any) -> str:
-    status = _first_attr(document, "status")
-    if status:
-        return str(status)
-    docstatus = getattr(document, "docstatus", 0)
-    if docstatus == 1:
-        return "posted"
+    docstatus = getattr(document, "docstatus", None)
     if docstatus == 2:
         return "cancelled"
+    status = getattr(document, "status", None)
+    if status not in (None, ""):
+        return str(status)
+    if docstatus == 1:
+        return "posted"
     return "draft"
 
 
