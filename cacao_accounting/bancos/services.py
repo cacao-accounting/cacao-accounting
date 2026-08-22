@@ -1584,7 +1584,7 @@ def _validate_payment_reference_totals(amount: Decimal, ref_totals: dict[str, De
     allocated = ref_totals["allocated"]
     discount = ref_totals["discount"]
     gain_loss = ref_totals["gain_loss"]
-    if (allocated - discount - gain_loss) > amount + Decimal("0.01"):
+    if (allocated - discount - gain_loss) > amount:
         raise ValueError(_("El monto aplicado no puede ser mayor al monto total del pago."))
 
 

@@ -355,6 +355,17 @@ class TestCashConsumed:
         assert _cash_consumed(Decimal("0"), Decimal("0"), Decimal("0")) == Decimal("0")
 
 
+def test_payment_reference_totals_reject_a_one_cent_overallocation():
+    """Payment references cannot accumulate a tolerated cent above cash paid."""
+    from cacao_accounting.bancos.services import _validate_payment_reference_totals
+
+    with pytest.raises(ValueError, match="monto aplicado"):
+        _validate_payment_reference_totals(
+            Decimal("100.00"),
+            {"allocated": Decimal("100.01"), "discount": Decimal("0"), "gain_loss": Decimal("0")},
+        )
+
+
 class TestToJsonNumber:
     """Unit tests for _to_json_number."""
 
