@@ -716,9 +716,14 @@ def test_post_sales_invoice_posts_once_per_active_book(app_ctx):
         .scalars()
         .all()
     )
-    assert len(entries) == 4
-    assert {entry.ledger_id for entry in entries} == {fiscal_book.id, ifrs_book.id}
-    for ledger_id in {fiscal_book.id, ifrs_book.id}:
+    expected_ledger_ids = {
+        database.session.execute(database.select(Book.id).filter_by(code="PRIMARY")).scalar_one(),
+        fiscal_book.id,
+        ifrs_book.id,
+    }
+    assert len(entries) == 6
+    assert {entry.ledger_id for entry in entries} == expected_ledger_ids
+    for ledger_id in expected_ledger_ids:
         ledger_entries = [entry for entry in entries if entry.ledger_id == ledger_id]
         assert sum(entry.debit for entry in ledger_entries) == sum(entry.credit for entry in ledger_entries)
 
