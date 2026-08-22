@@ -1061,18 +1061,20 @@ def _validate_payment_header_required_fields(
 
 
 def _validate_payment_bank_account(*, company: str, bank_account_id: str) -> None:
-    """Validate that the payment bank account exists and belongs to the company."""
+    """Validate that the payment source bank account is active and belongs to the company."""
     bank_account = database.session.get(BankAccount, bank_account_id)
     if not bank_account:
         raise ValueError(_("La cuenta bancaria seleccionada no existe."))
     if bank_account.company != company:
         raise ValueError(_("La cuenta bancaria no pertenece a la misma compañía del pago."))
+    if not bank_account.is_active:
+        raise ValueError(_("La cuenta bancaria seleccionada está inactiva."))
 
 
 def _validate_payment_target_bank_account(
     *, company: str, bank_account_id: str, payment_type: str, target_bank_account_id: str | None
 ) -> None:
-    """Validate that the target bank account exists and belongs to the company."""
+    """Validate that the target bank account is active and belongs to the company."""
     if not target_bank_account_id:
         return
     target_bank_account = database.session.get(BankAccount, target_bank_account_id)
@@ -1080,6 +1082,8 @@ def _validate_payment_target_bank_account(
         raise ValueError(_("La cuenta bancaria destino no existe."))
     if target_bank_account.company != company:
         raise ValueError(_("La cuenta bancaria destino no pertenece a la misma compañía del pago."))
+    if not target_bank_account.is_active:
+        raise ValueError(_("La cuenta bancaria destino está inactiva."))
     if payment_type == "internal_transfer":
         source_bank_account = database.session.get(BankAccount, bank_account_id)
         if source_bank_account and source_bank_account.id == target_bank_account.id:

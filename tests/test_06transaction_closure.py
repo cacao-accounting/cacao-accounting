@@ -551,6 +551,30 @@ def test_validate_payment_header_rejects_cross_company_bank_account(app_ctx):
         )
 
 
+def test_validate_payment_header_rejects_inactive_source_bank_account(app_ctx):
+    """A disabled source bank account cannot originate a new payment."""
+    from cacao_accounting.bancos import _validate_payment_header
+    from cacao_accounting.database import Bank, BankAccount, database
+
+    bank = Bank(name="Banco inactivo origen")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(bank_id=bank.id, company="cacao", account_name="Cuenta inactiva", is_active=False)
+    database.session.add(bank_account)
+    database.session.commit()
+
+    with pytest.raises(ValueError, match="inactiva"):
+        _validate_payment_header(
+            payment_type="pay",
+            company="cacao",
+            bank_account_id=bank_account.id,
+            posting_date_raw="2026-05-05",
+            amount=Decimal("10.00"),
+            party_type="supplier",
+            party_id="SUPP-1",
+        )
+
+
 def test_validate_payment_header_rejects_invalid_target_bank_account(app_ctx):
     """El encabezado del pago exige una cuenta bancaria destino válida."""
 
@@ -574,6 +598,38 @@ def test_validate_payment_header_rejects_invalid_target_bank_account(app_ctx):
             party_type=None,
             party_id=None,
             target_bank_account_id="BANK-DESTINO",
+        )
+
+
+def test_validate_payment_header_rejects_inactive_target_bank_account(app_ctx):
+    """A disabled target bank account cannot receive an internal transfer."""
+    from cacao_accounting.bancos import _validate_payment_header
+    from cacao_accounting.database import Bank, BankAccount, database
+
+    bank = Bank(name="Banco inactivo destino")
+    database.session.add(bank)
+    database.session.flush()
+    source = BankAccount(bank_id=bank.id, company="cacao", account_name="Origen activo", currency="NIO")
+    target = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Destino inactivo",
+        currency="NIO",
+        is_active=False,
+    )
+    database.session.add_all([source, target])
+    database.session.commit()
+
+    with pytest.raises(ValueError, match="destino está inactiva"):
+        _validate_payment_header(
+            payment_type="internal_transfer",
+            company="cacao",
+            bank_account_id=source.id,
+            posting_date_raw="2026-05-05",
+            amount=Decimal("10.00"),
+            party_type=None,
+            party_id=None,
+            target_bank_account_id=target.id,
         )
 
 

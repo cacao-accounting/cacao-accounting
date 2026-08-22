@@ -3,6 +3,20 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Cuentas bancarias activas al crear pagos (#659)
+
+### Implementado
+
+La validación de encabezado de pago exige ahora que la cuenta bancaria de
+origen y, cuando aplica, la de destino estén activas. Los documentos ya
+históricos no se modifican; el control solo impide crear nuevos movimientos.
+
+### Validación
+
+- Regresiones de origen/destino inactivo y validadores adyacentes: **4 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Anticipo obligatorio para exceso de pago a proveedor (#660)
 
 ### Implementado
