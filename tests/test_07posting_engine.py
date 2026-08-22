@@ -181,6 +181,34 @@ def test_return_delivery_notes_do_not_change_sales_order_reservations(app_ctx):
     _restore_reservation_for_delivery_note(note)
 
 
+def test_payment_reference_deduplicates_invoice_aliases(app_ctx):
+    """Invoice aliases cannot apply the same physical document twice."""
+    from werkzeug.exceptions import Conflict
+
+    from cacao_accounting.bancos.services import _validate_payment_reference_line
+
+    processed: set[tuple[str, str]] = set()
+    payment = object()
+    _validate_payment_reference_line(
+        payment=payment,
+        line={"reference_type": "purchase_invoice", "reference_id": "PI-1", "allocated_amount": "1"},
+        allow_order_references=False,
+        processed_keys=processed,
+    )
+    with pytest.raises(Conflict):
+        _validate_payment_reference_line(
+            payment=payment,
+            line={
+                "reference_type": "purchase_invoice",
+                "flow_source_type": "purchase_credit_note",
+                "reference_id": "PI-1",
+                "allocated_amount": "1",
+            },
+            allow_order_references=False,
+            processed_keys=processed,
+        )
+
+
 def test_submit_document_rolls_back_docstatus_when_posting_fails(app_ctx):
     """A failed GL posting cannot leave the operational document approved."""
     from cacao_accounting.contabilidad.posting import PostingError, submit_document

@@ -736,7 +736,7 @@ def _validate_payment_reference_line(
     reference_id = line.get("reference_id", "")
     allocated = Decimal(str(line.get("allocated_amount", "0")))
     requested_flow_source_type = str(line.get("flow_source_type") or reference_type)
-    reference_key = (normalize_doctype(requested_flow_source_type), reference_id)
+    reference_key = (_physical_reference_type(reference_type, requested_flow_source_type), reference_id)
     if reference_key in processed_keys:
         from werkzeug.exceptions import Conflict
 
@@ -971,7 +971,7 @@ def _physical_reference_type(reference_type: str, flow_source_type: str) -> str:
     source_key = normalize_doctype(flow_source_type or reference_type)
     if source_key in {"purchase_credit_note", "purchase_debit_note"}:
         return "purchase_invoice"
-    if source_key in {"sales_credit_note", "sales_debit_note"}:
+    if source_key in {"sales_credit_note", "sales_debit_note", "sales_return"}:
         return "sales_invoice"
     return normalize_doctype(reference_type)
 
