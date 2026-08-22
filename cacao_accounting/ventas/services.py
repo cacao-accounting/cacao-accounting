@@ -45,7 +45,7 @@ from ulid import ULID
 
 from cacao_accounting.database.helpers import get_active_naming_series
 
-from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
+from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document, submit_document
 
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 

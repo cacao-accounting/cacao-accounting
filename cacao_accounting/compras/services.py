@@ -1829,12 +1829,12 @@ def _purchase_invoice_source_ids() -> dict[str, str | None]:
 
 def _purchase_invoice_document_type(source_ids: dict[str, str | None]) -> str:
     """Resolve the document type for the purchase invoice."""
-    doc_type = PURCHASE_INVOICE
-    if source_ids.get("from_receipt_id"):
-        doc_type = PURCHASE_RETURN
-    elif source_ids.get("from_invoice_id"):
-        doc_type = PURCHASE_CREDIT_NOTE
-    return doc_type
+    requested_type = request.args.get("document_type") or request.form.get("document_type")
+    if requested_type:
+        return requested_type
+    if source_ids.get("from_invoice_id"):
+        return PURCHASE_CREDIT_NOTE
+    return PURCHASE_INVOICE
 
 
 def _purchase_invoice_sources(
@@ -2208,11 +2208,13 @@ def _create_purchase_invoice_from_request():
             if receipt:
                 from_order = receipt.purchase_order_id
         from_invoice = request.form.get("from_invoice") or request.form.get("from_return") or None
-        document_type = PURCHASE_INVOICE
-        if from_receipt:
-            document_type = PURCHASE_RETURN
+        requested_type = request.form.get("document_type") or request.args.get("document_type")
+        if requested_type:
+            document_type = requested_type
         elif from_invoice:
             document_type = PURCHASE_CREDIT_NOTE
+        else:
+            document_type = PURCHASE_INVOICE
         source_order, source_receipt, source_invoice = _purchase_invoice_sources(
             {
                 "from_order_id": from_order,
