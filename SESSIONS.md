@@ -1,5 +1,25 @@
 # SESSIONS — Bitácora de Decisiones de Diseño
 
+## 2026-08-22 — Skip de navegación no disponible en modo desktop
+
+### Petición
+
+Omitir `test_modules_and_imports_are_settings_links_not_primary_sidebar_items`
+cuando la aplicación se ejecuta en modo desktop, donde `/imports/` no forma
+parte de la navegación disponible.
+
+### Implementado
+
+- Se añadió `pytest.mark.skipif(is_desktop_mode(), ...)` al test de webactions.
+- En modo normal el test continúa verificando los enlaces de módulos e imports;
+  en modo desktop se omite explícitamente.
+
+### Validación
+
+- Modo normal: 1 passed.
+- Modo desktop: 1 skipped.
+- Ruff y `git diff --check`: correctos.
+
 ## 2026-08-22 — Estabilización de pruebas unitarias restantes
 
 ### Petición
