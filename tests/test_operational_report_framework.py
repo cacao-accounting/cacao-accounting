@@ -224,7 +224,11 @@ def test_operational_voucher_urls_use_persisted_identifiers_and_supported_types(
         == "/payment/PAY-1"
     )
     assert _build_voucher_url({"voucher_type": "sales_invoice", "voucher_id": "SI-1"}) == "/sales/sales-invoice/SI-1"
+    assert _build_voucher_url({"voucher_type": "delivery_note", "voucher_id": "DN-1"}) == "/sales/delivery-note/DN-1"
+    assert _build_voucher_url({"voucher_type": "sales_order", "voucher_id": "SO-1"}) == "/sales/sales-order/SO-1"
     assert _build_voucher_url({"voucher_type": "purchase_invoice", "voucher_id": "PI-1"}) == "/buying/purchase-invoice/PI-1"
+    assert _build_voucher_url({"voucher_type": "purchase_receipt", "voucher_id": "PR-1"}) == "/buying/purchase-receipt/PR-1"
+    assert _build_voucher_url({"voucher_type": "purchase_order", "voucher_id": "PO-1"}) == "/buying/purchase-order/PO-1"
     assert _build_voucher_url({"voucher_type": "stock_entry", "voucher_id": "STE-1"}) == "/inventory/stock-entry/STE-1"
 
 

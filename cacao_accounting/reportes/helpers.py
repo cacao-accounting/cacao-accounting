@@ -380,7 +380,12 @@ def _build_voucher_url(values: dict[str, object]) -> str | None:
         "journal_entry": ("contabilidad.ver_comprobante", "identifier"),
         "payment_entry": ("bancos.bancos_pago", "payment_id"),
         "sales_invoice": ("ventas.ventas_factura_venta", "invoice_id"),
+        "sales_order": ("ventas.ventas_orden_venta", "order_id"),
+        "delivery_note": ("ventas.ventas_entrega", "note_id"),
+        "sales_quotation": ("ventas.ventas_cotizacion", "quotation_id"),
         "purchase_invoice": ("compras.compras_factura_compra", "invoice_id"),
+        "purchase_order": ("compras.compras_orden_compra", "order_id"),
+        "purchase_receipt": ("compras.compras_recepcion", "receipt_id"),
         "stock_entry": ("inventario.inventario_entrada", "entry_id"),
     }
     endpoint = endpoints.get(voucher_type)
@@ -396,7 +401,12 @@ def _build_voucher_url(values: dict[str, object]) -> str | None:
                 "journal_entry": "/accounting/journal/{id}",
                 "payment_entry": "/payment/{id}",
                 "sales_invoice": "/sales/sales-invoice/{id}",
+                "sales_order": "/sales/sales-order/{id}",
+                "delivery_note": "/sales/delivery-note/{id}",
+                "sales_quotation": "/sales/sales-quotation/{id}",
                 "purchase_invoice": "/buying/purchase-invoice/{id}",
+                "purchase_order": "/buying/purchase-order/{id}",
+                "purchase_receipt": "/buying/purchase-receipt/{id}",
                 "stock_entry": "/inventory/stock-entry/{id}",
             }
             return fallback_paths[voucher_type].format(id=voucher_id)
