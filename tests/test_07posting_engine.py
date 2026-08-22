@@ -84,6 +84,22 @@ def test_exchange_rate_lookups_use_the_latest_prior_positive_rate(app_ctx):
     assert bank_lookup_exchange_rate("NIO", "USD", date(2026, 5, 4)) == Decimal("0.028")
 
 
+def test_submit_document_rolls_back_docstatus_when_posting_fails(app_ctx):
+    """A failed GL posting cannot leave the operational document approved."""
+    from cacao_accounting.contabilidad.posting import PostingError, submit_document
+    from cacao_accounting.database import SalesInvoice, database
+
+    invoice = SalesInvoice(company="cacao", posting_date=date(2026, 5, 4), customer_id="UNKNOWN", docstatus=0)
+    database.session.add(invoice)
+    database.session.commit()
+
+    with pytest.raises(PostingError):
+        submit_document(invoice)
+
+    database.session.expire(invoice)
+    assert invoice.docstatus == 0
+
+
 def test_post_sales_invoice_creates_balanced_gl_entries(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (

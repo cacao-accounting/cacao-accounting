@@ -3457,12 +3457,13 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
         raise PostingError("Solo se puede aprobar un documento en borrador.")
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
-    document.docstatus = 1
-    entries = post_document_to_gl(document, ledger_code=ledger_code)
-    # QR Validation support
-    from cacao_accounting.printing.validation import ValidationService
+    with database.session.begin_nested():
+        document.docstatus = 1
+        entries = post_document_to_gl(document, ledger_code=ledger_code)
+        # QR Validation support
+        from cacao_accounting.printing.validation import ValidationService
 
-    ValidationService().update_validation_from_document(document)
+        ValidationService().update_validation_from_document(document)
     return entries
 
 
@@ -3485,15 +3486,16 @@ def cancel_document(document: Any) -> list[GLEntry]:
     voucher_id = _get_voucher_id(document)
     original_entries = _get_original_gl_entries(company, voucher_type, voucher_id, document)
 
-    document.docstatus = 2
-    _update_validation_service(document)
+    with database.session.begin_nested():
+        document.docstatus = 2
+        _update_validation_service(document)
 
-    reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id)
+        reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id)
 
-    _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id)
-    _emit_cancel_events(document, voucher_id, company)
+        _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id)
+        _emit_cancel_events(document, voucher_id, company)
 
-    return _add_entries(reversals)
+        return _add_entries(reversals)
 
 
 def _validate_cancel_accounting_period(document: Any, company: str) -> None:

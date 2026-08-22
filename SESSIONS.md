@@ -40,6 +40,23 @@ Los resolutores de tasas en `contabilidad/posting_service.py` y `bancos/reconcil
 - Prueba focal: 1 passed.
 - Ruff check/format y `git diff --check`: OK.
 
+## 2026-08-22 — Atomicidad de aprobación y anulación GL (#622, #671)
+
+### Petición
+
+Implementar los fixes de issues reales detectados, no solo proponerlos.
+
+### Implementado
+
+`submit_document` y `cancel_document` ahora ejecutan el cambio de `docstatus`, la generación/reversa de GL, las actualizaciones de validación y los hooks de cancelación dentro de un savepoint SQLAlchemy. Una excepción en cualquiera de esas operaciones revierte el bloque, por lo que la primitiva no puede dejar el documento aprobado o cancelado sin los movimientos GL correspondientes.
+
+La prueba `test_submit_document_rolls_back_docstatus_when_posting_fails` fuerza un fallo de posting y verifica que la factura sigue en borrador.
+
+### Validación
+
+- Prueba focal: 1 passed.
+- Ruff check/format y `git diff --check`: OK.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición
