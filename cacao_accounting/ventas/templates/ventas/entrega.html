@@ -36,6 +36,7 @@
 {{ macros.detail_nav_buttons(
             url_for('ventas.ventas_entrega_lista'),
             url_for('ventas.ventas_entrega_nuevo')) }}
+{{ macros.document_print_button("delivery_note", registro.id) }}
 {{ macros.document_create_actions("delivery_note", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}

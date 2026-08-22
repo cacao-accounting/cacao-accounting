@@ -42,6 +42,7 @@
       {{ macros.detail_nav_buttons(
             url_for('compras.compras_solicitud_compra_lista'),
             url_for('compras.compras_solicitud_compra_nueva')) }}
+      {{ macros.document_print_button("purchase_request", registro.id) }}
       {{ macros.document_create_actions("purchase_request", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}

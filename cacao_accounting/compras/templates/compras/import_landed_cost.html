@@ -36,6 +36,7 @@
 {{ macros.detail_nav_buttons(
             url_for('compras.compras_import_landed_cost_lista'),
             url_for('compras.compras_import_landed_cost_nuevo')) }}
+{{ macros.document_print_button("landed_cost", registro.id) }}
 {% endset %}
 
 {{ dv_macros.detail_header(
