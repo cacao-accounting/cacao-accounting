@@ -222,13 +222,22 @@ def _create_sales_invoice(open_amount: Decimal = Decimal("100.00")):
     database.session.flush()
     post_document_to_gl(invoice)
     if open_amount < Decimal("100.00"):
+        # El pago parcial se contabiliza en GL antes del cierre, igual que el
+        # flujo real (PaymentEntry -> referencia -> post_document_to_gl); el
+        # servicio mide el saldo abierto desde el valor en libros del libro
+        # funcional, por lo que el pago debe tener soporte contable.
         payment = PaymentEntry(
             company="cacao",
             posting_date=date(2026, 5, 15),
             payment_type="receive",
             party_type="customer",
             party_id="CUST-1",
-            paid_amount=Decimal("100.00") - open_amount,
+            transaction_currency="USD",
+            base_currency="NIO",
+            currency="USD",
+            exchange_rate=Decimal("36.00"),
+            received_amount=Decimal("100.00") - open_amount,
+            base_received_amount=(Decimal("100.00") - open_amount) * Decimal("36.00"),
             docstatus=1,
         )
         database.session.add(payment)
@@ -242,8 +251,10 @@ def _create_sales_invoice(open_amount: Decimal = Decimal("100.00")):
                 outstanding_amount=Decimal("100.00"),
                 allocated_amount=Decimal("100.00") - open_amount,
                 allocation_date=payment.posting_date,
+                company="cacao",
             )
         )
+        post_document_to_gl(payment)
     database.session.commit()
     return invoice
 
