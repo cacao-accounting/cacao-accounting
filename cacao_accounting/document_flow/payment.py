@@ -101,6 +101,16 @@ def _payment_candidate_date(document: Any) -> date | None:
     return value if isinstance(value, date) else None
 
 
+def _document_transaction_currency(document: Any) -> str | None:
+    """Resolve a document's currency across modern and legacy schemas."""
+    currency = (
+        getattr(document, "transaction_currency", None)
+        or getattr(document, "currency", None)
+        or getattr(document, "base_currency", None)
+    )
+    return str(currency) if currency else None
+
+
 def _payment_candidate_party(document: Any, flow_source_type: str) -> tuple[str, str | None]:
     """Resuelve tipo e id de tercero para un candidato de pago."""
     source_key = normalize_doctype(flow_source_type)
@@ -438,7 +448,7 @@ def _build_candidate_row(document: Any, flow_source_type: str, party_type: str, 
         "party_type": party_type,
         "party_id": party_id,
         "company": company,
-        "currency": getattr(document, "currency", None) or "",
+        "currency": _document_transaction_currency(document) or "",
         "grand_total": _to_json_number(getattr(document, "grand_total", None)),
         "pending_amount": _to_json_number(_payment_candidate_outstanding(document, flow_source_type)),
     }
@@ -599,7 +609,7 @@ def apply_payment_reconciliation(
     ).scalar_one()
     if latest_allocation and allocation_date < latest_allocation:
         raise _document_flow_error(
-            "La fecha de conciliación no puede ser anterior a una aplicación existente " f"({latest_allocation})."
+            f"La fecha de conciliación no puede ser anterior a una aplicación existente ({latest_allocation})."
         )
 
     reconciliation = Reconciliation(
@@ -724,7 +734,7 @@ def _get_reference_document(flow_source_type: str, document_id: str, company: st
 def _validate_payment_currency_match(payment: Any, document: Any, *, infer_missing: bool = False) -> None:
     """CAS-03: Valida que la moneda del pago coincida con la moneda del documento referenciado."""
     payment_currency = getattr(payment, "currency", None)
-    document_currency = getattr(document, "transaction_currency", None) or getattr(document, "currency", None)
+    document_currency = _document_transaction_currency(document)
     if infer_missing and not payment_currency and document_currency:
         payment.currency = document_currency
         payment_currency = document_currency
@@ -783,7 +793,7 @@ def _create_payment_reference_and_relation(
         party_type=payment.party_type,
         party_id=payment.party_id,
         company=payment.company,
-        currency=getattr(document, "currency", None) or getattr(payment, "currency", None),
+        currency=_document_transaction_currency(document) or getattr(payment, "currency", None),
         total_amount=getattr(document, "grand_total", None),
         outstanding_amount=allocation_ctx.outstanding,
         outstanding_amount_after=outstanding_after,
@@ -909,7 +919,7 @@ def apply_advance_to_invoice(
         party_type="customer" if reference_type == "sales_invoice" else "supplier",
         party_id=party_id,
         company=invoice.company,
-        currency=getattr(invoice, "currency", None) or getattr(payment, "currency", None),
+        currency=_document_transaction_currency(invoice) or getattr(payment, "currency", None),
         total_amount=getattr(invoice, "grand_total", None),
         outstanding_amount=outstanding,
         outstanding_amount_after=outstanding_after,
@@ -1057,11 +1067,7 @@ def _document_total_for_allocation(document: Any) -> Decimal:
 
 def _document_currency_for_settlement(document: Any, company: str) -> str | None:
     """Resuelve la moneda original, incluyendo columnas legacy de pagos."""
-    currency = (
-        getattr(document, "transaction_currency", None)
-        or getattr(document, "currency", None)
-        or getattr(document, "base_currency", None)
-    )
+    currency = _document_transaction_currency(document)
     if currency:
         return str(currency)
     entity = database.session.execute(select(Entity).where(Entity.code == company)).scalars().first()

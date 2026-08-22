@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from cacao_accounting.compras import purchase_reconciliation_service as service
+from cacao_accounting.document_flow import payment as payment_service
 
 
 @pytest.mark.parametrize("order_mode", [False, True])
@@ -22,3 +23,22 @@ def test_available_line_slices_distributes_invoice_across_source_lines(monkeypat
     slices = service._available_line_slices(lines, Decimal("8"), order_mode=order_mode)
 
     assert [(line.id, qty) for line, qty in slices] == [("first", Decimal("5")), ("second", Decimal("3"))]
+
+
+def test_payment_candidates_use_invoice_transaction_currency(monkeypatch):
+    """Modern invoices must not bypass payment-candidate currency filtering."""
+    invoice = SimpleNamespace(
+        id="INV-EUR",
+        posting_date=None,
+        document_no=None,
+        transaction_currency="EUR",
+        base_currency="NIO",
+        grand_total=Decimal("1000"),
+    )
+
+    monkeypatch.setattr(payment_service, "_payment_candidate_outstanding", lambda _document, _type: Decimal("1000"))
+    candidate = payment_service._build_candidate_row(invoice, "purchase_invoice", "supplier", "SUP-1", "cacao")
+
+    assert candidate["currency"] == "EUR"
+    assert payment_service._filter_candidates_by_currency([candidate], "USD") == []
+    assert payment_service._filter_candidates_by_currency([candidate], "EUR") == [candidate]

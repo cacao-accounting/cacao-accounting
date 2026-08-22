@@ -3,6 +3,21 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Moneda transaccional en candidatos de pago (#687)
+
+### Implementado
+
+Los candidatos y referencias creados desde `document_flow.payment` resuelven
+la moneda desde `transaction_currency` antes que el campo legacy `currency`,
+con fallback a `base_currency`. Así facturas modernas de compra y venta se
+filtran por su moneda real antes de que el operador las seleccione, y las
+referencias persistidas conservan la misma semántica.
+
+### Validación
+
+- `tests/test_purchase_reconciliation_service.py`: **3 passed**.
+- Ruff check/format y `git diff --check`: OK.
+
 ## 2026-08-22 — Vencimiento consistente en cartera (#688)
 
 ### Implementado
