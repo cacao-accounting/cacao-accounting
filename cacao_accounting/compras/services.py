@@ -749,6 +749,7 @@ def _create_line_relation(
         "supplier_quotation": {"purchase_request", "purchase_quotation"},
         "purchase_receipt": {"purchase_order"},
         "purchase_invoice": {"purchase_order", "purchase_receipt", "purchase_invoice"},
+        "purchase_return": {"purchase_receipt"},
     }
     if source_type not in allowed_source_types.get(target_type, set()):
         raise DocumentFlowError("El tipo de documento origen no es válido para este flujo.", 400)
@@ -758,6 +759,7 @@ def _create_line_relation(
         "supplier_quotation": SupplierQuotation,
         "purchase_receipt": PurchaseReceipt,
         "purchase_invoice": PurchaseInvoice,
+        "purchase_return": PurchaseInvoice,
     }
     source_models = {
         "purchase_request": (PurchaseRequest, PurchaseRequestItem, "purchase_request_id"),
@@ -1053,6 +1055,8 @@ def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | Non
 
 def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una factura de compra desde el formulario."""
+    invoice = database.session.get(PurchaseInvoice, invoice_id)
+    target_type = PURCHASE_RETURN if invoice and invoice.document_type == PURCHASE_RETURN else PURCHASE_INVOICE
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -1077,7 +1081,7 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
             )
             database.session.add(linea)
             database.session.flush()
-            _create_line_relation(i, "purchase_invoice", invoice_id, linea.id, qty, uom, rate, amount)
+            _create_line_relation(i, target_type, invoice_id, linea.id, qty, uom, rate, amount)
             total_qty += qty
             total += amount
             line_count += 1
@@ -1648,7 +1652,7 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
             PurchaseQuotation: "purchase_quotation",
             PurchaseOrder: "purchase_order",
             PurchaseReceipt: "purchase_receipt",
-            PurchaseInvoice: "purchase_invoice",
+            PurchaseInvoice: PURCHASE_RETURN if document.document_type == PURCHASE_RETURN else PURCHASE_INVOICE,
         }
         require_line_relations(
             target_type=target_types[type(document)],
@@ -1844,6 +1848,40 @@ def _purchase_invoice_sources(
         database.session.get(PurchaseInvoice, source_ids["from_invoice_id"]) if source_ids["from_invoice_id"] else None
     )
     return orden_origen, recepcion_origen, factura_origen
+
+
+def _resolve_purchase_return_invoice(
+    receipt: PurchaseReceipt | None,
+    source_invoice: PurchaseInvoice | None,
+) -> PurchaseInvoice:
+    """Resolve the posted invoice that a purchase return must offset."""
+    if receipt is None:
+        raise ValueError("La devolución de compra requiere una recepción origen válida.")
+    if source_invoice is not None:
+        if (
+            source_invoice.purchase_receipt_id != receipt.id
+            or source_invoice.document_type != PURCHASE_INVOICE
+            or source_invoice.docstatus != 1
+        ):
+            raise ValueError("La factura origen no corresponde a la recepción devuelta.")
+        return source_invoice
+    candidates = (
+        database.session.execute(
+            database.select(PurchaseInvoice).where(
+                PurchaseInvoice.purchase_receipt_id == receipt.id,
+                PurchaseInvoice.document_type == PURCHASE_INVOICE,
+                PurchaseInvoice.docstatus == 1,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if len(candidates) != 1:
+        raise ValueError(
+            "La devolución requiere indicar la factura de compra origen cuando la recepción no tiene una única "
+            "factura aprobada."
+        )
+    return candidates[0]
 
 
 def _purchase_invoice_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
@@ -2074,7 +2112,7 @@ def _validate_purchase_reversal_of(
         raise ValueError(f"La factura origen '{reversal_of}' no pertenece al mismo proveedor.")
     if company and source.company != company:
         raise ValueError(f"La factura origen '{reversal_of}' no pertenece a la misma compañía.")
-    if document_type == "purchase_credit_note" and note_amount is not None:
+    if document_type in {PURCHASE_RETURN, "purchase_credit_note"} and note_amount is not None:
         from cacao_accounting.document_flow.payment import compute_outstanding_amount
 
         outstanding = compute_outstanding_amount(source, as_of_date=posting_date)
@@ -2086,7 +2124,10 @@ def _validate_purchase_reversal_of(
 
 def _persist_purchase_reversal_relation(invoice: PurchaseInvoice) -> None:
     """Persist the invoice-to-credit-note relation used by AP outstanding."""
-    if invoice.document_type not in {"purchase_credit_note", "purchase_debit_note"} or not invoice.reversal_of:
+    if (
+        invoice.document_type not in {PURCHASE_RETURN, "purchase_credit_note", "purchase_debit_note"}
+        or not invoice.reversal_of
+    ):
         return
     target_type = invoice.document_type
     relation = (
@@ -2145,7 +2186,7 @@ def _has_active_purchase_reversal_notes(invoice_id: str) -> bool:
         .where(
             DocumentRelation.source_type == "purchase_invoice",
             DocumentRelation.source_id == invoice_id,
-            DocumentRelation.target_type.in_(("purchase_credit_note", "purchase_debit_note")),
+            DocumentRelation.target_type.in_((PURCHASE_RETURN, "purchase_credit_note", "purchase_debit_note")),
             DocumentRelation.status == "active",
             PurchaseInvoice.docstatus != 2,
         )
@@ -2178,6 +2219,9 @@ def _create_purchase_invoice_from_request():
                 "from_invoice_id": from_invoice,
             }
         )
+        if document_type == PURCHASE_RETURN:
+            source_invoice = _resolve_purchase_return_invoice(source_receipt, source_invoice)
+            from_invoice = source_invoice.id
         source = source_order or source_receipt or source_invoice
         if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) and source_invoice is not None:
             from_order = from_order or source_invoice.purchase_order_id
@@ -2192,11 +2236,7 @@ def _create_purchase_invoice_from_request():
         _validate_supplier_company_membership(supplier_id, company)
         _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt, document_type)
         _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
-        reversal_of = (
-            (request.form.get("from_invoice") or request.form.get("from_return"))
-            if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE)
-            else None
-        )
+        reversal_of = from_invoice if document_type in (PURCHASE_RETURN, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) else None
         if reversal_of:
             _validate_purchase_reversal_of(reversal_of, supplier_id, company)
         factura = PurchaseInvoice(
@@ -2277,8 +2317,9 @@ def _create_purchase_invoice_from_request():
 def _handle_purchase_invoice_edit_post(registro):
     try:
         before_state = _capture_purchase_state(registro)
-        revert_relations_for_target("purchase_invoice", registro.id, reason="draft_edited")
-        refresh_source_caches_for_target("purchase_invoice", registro.id)
+        target_type = PURCHASE_RETURN if registro.document_type == PURCHASE_RETURN else PURCHASE_INVOICE
+        revert_relations_for_target(target_type, registro.id, reason="draft_edited")
+        refresh_source_caches_for_target(target_type, registro.id)
         registro.supplier_id = request.form.get("supplier_id") or None
         registro.company = request.form.get("company") or None
         purchase_order_id = request.form.get("from_order") or getattr(registro, "purchase_order_id", None)

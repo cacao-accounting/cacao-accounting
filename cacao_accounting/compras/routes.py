@@ -3010,7 +3010,7 @@ def compras_factura_compra_submit(invoice_id: str):
             getattr(registro, "supplier_invoice_no", None),
             exclude_id=registro.id,
         )
-        if registro.document_type in {"purchase_credit_note", "purchase_debit_note"}:
+        if registro.document_type in {"purchase_return", "purchase_credit_note", "purchase_debit_note"}:
             _validate_purchase_reversal_of(
                 registro.reversal_of or "",
                 registro.supplier_id,

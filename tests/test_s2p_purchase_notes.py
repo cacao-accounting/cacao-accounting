@@ -113,6 +113,54 @@ def test_purchase_credit_note_reduces_outstanding_balance(app_ctx):
     assert source_invoice.outstanding_amount == Decimal("600.00")
 
 
+def test_purchase_return_reduces_outstanding_balance(app_ctx):
+    """A posted purchase return offsets the related supplier invoice."""
+    supplier = _ensure_supplier("SUPLR-AP-RETURN-1", "Proveedor devolución AP")
+    source_invoice = PurchaseInvoice(
+        id="PINV-RETURN-ORIG-001",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="purchase_invoice",
+        grand_total=Decimal("1000.00"),
+        outstanding_amount=Decimal("1000.00"),
+        base_outstanding_amount=Decimal("1000.00"),
+    )
+    purchase_return = PurchaseInvoice(
+        id="PRET-001",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        document_type="purchase_return",
+        grand_total=Decimal("400.00"),
+        outstanding_amount=Decimal("400.00"),
+        reversal_of=source_invoice.id,
+        is_return=True,
+    )
+    database.session.add_all((source_invoice, purchase_return))
+    database.session.flush()
+
+    _validate_purchase_reversal_of(
+        reversal_of=purchase_return.reversal_of,
+        supplier_id=purchase_return.supplier_id,
+        company=purchase_return.company,
+        note_amount=purchase_return.grand_total,
+        document_type=purchase_return.document_type,
+        posting_date=purchase_return.posting_date,
+    )
+    _persist_purchase_reversal_relation(purchase_return)
+    database.session.commit()
+
+    assert compute_outstanding_amount(source_invoice) == Decimal("600.00")
+    assert source_invoice.outstanding_amount == Decimal("600.00")
+    relation = database.session.execute(
+        database.select(DocumentRelation).filter_by(target_type="purchase_return", target_id=purchase_return.id)
+    ).scalar_one()
+    assert relation.source_id == source_invoice.id
+
+
 def test_purchase_note_from_reconciled_invoice_skips_upstream_receipt_matching(app_ctx):
     """Una nota desde factura no exige repetir el matching contra la recepción."""
     from flask import current_app

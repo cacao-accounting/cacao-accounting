@@ -81,7 +81,7 @@
          source_label="Factura de Compra") }}
   {% elif from_receipt_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=purchase_invoice&source_id=" ~ from_receipt_id ~ "&company=" ~ recepcion_origen.company,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=" ~ (document_type == 'purchase_return' and 'purchase_return' or 'purchase_invoice') ~ "&source_id=" ~ from_receipt_id ~ "&company=" ~ recepcion_origen.company,
          source_label="Recepción de Compra") }}
   {% elif from_order_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
