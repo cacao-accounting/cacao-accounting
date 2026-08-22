@@ -1681,6 +1681,47 @@ def test_reports_return_subledger_aging_kardex_and_reconciliations(app_ctx):
     assert reconciliations.totals["bank_reconciled_amount"] == Decimal("0")
 
 
+def test_aging_uses_payment_due_date_and_maturity_skips_negative_credit_notes(app_ctx):
+    """AR aging and maturity share the due-date basis and exclude negative rows."""
+    from cacao_accounting.database import CompanyParty, Party, PaymentTerms, SalesInvoice, database
+    from cacao_accounting.reportes.services import AgingFilters, MaturityFilters, get_aging_report, get_maturity_schedule
+
+    customer = Party(code="CUST-DUE", name="Cliente vencimiento", is_customer=True)
+    terms = PaymentTerms(name="NET-60", due_days=60)
+    database.session.add_all([customer, terms])
+    database.session.flush()
+    database.session.add(CompanyParty(company="cacao", party_id=customer.id, payment_terms_id=terms.id, is_active=True))
+    database.session.add_all(
+        [
+            SalesInvoice(
+                company="cacao",
+                posting_date=date(2026, 1, 1),
+                customer_id=customer.id,
+                grand_total=Decimal("1000"),
+                docstatus=1,
+            ),
+            SalesInvoice(
+                company="cacao",
+                posting_date=date(2026, 1, 15),
+                customer_id=customer.id,
+                grand_total=Decimal("500"),
+                is_return=True,
+                docstatus=1,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    as_of = date(2026, 3, 31)
+    aging = get_aging_report(AgingFilters(company="cacao", party_type="customer", as_of_date=as_of))
+    maturity = get_maturity_schedule(MaturityFilters(company="cacao", party_type="customer", as_of_date=as_of))
+
+    assert aging.totals["0_30"] == Decimal("1000")
+    assert aging.rows[0].values["due_date"] == date(2026, 3, 2)
+    assert len(maturity.rows) == 1
+    assert maturity.rows[0].values["outstanding_amount"] == Decimal("1000")
+
+
 def test_inventory_existence_uses_latest_chronological_balance(app_ctx):
     """La existencia histórica no depende del orden físico de inserción."""
     from cacao_accounting.database import StockLedgerEntry, database

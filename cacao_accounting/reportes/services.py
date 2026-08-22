@@ -332,6 +332,7 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
         if party_ids
     }
     for document in database.session.execute(query.order_by(document_model.posting_date)).scalars():
+        party_reference_id = getattr(document, "customer_id", None) or getattr(document, "supplier_id", None)
         sign = _document_sign(document)
         base_factor = _document_base_factor(document)
         original_original_currency = _decimal_value(document.grand_total)
@@ -351,9 +352,10 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
                     "document_no": getattr(document, "document_no", None) or document.id,
                     "posting_date": document.posting_date,
                     "party_id": party_labels.get(
-                        getattr(document, "customer_id", None) or getattr(document, "supplier_id", None),
-                        getattr(document, "customer_id", None) or getattr(document, "supplier_id", None),
+                        party_reference_id,
+                        party_reference_id,
                     ),
+                    "party_reference_id": party_reference_id,
                     "original_amount": original,
                     "paid_amount": paid,
                     "outstanding_amount": outstanding,
@@ -709,6 +711,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
 
 def get_aging_report(filters: AgingFilters) -> AgingReport:
     """Devuelve aging AR/AP con buckets fijos."""
+    party_terms = _load_party_payment_terms(filters.company)
     subledger = get_ar_ap_subledger(
         SubledgerFilters(
             company=filters.company,
@@ -729,7 +732,9 @@ def get_aging_report(filters: AgingFilters) -> AgingReport:
         outstanding = _decimal_value(row.values["outstanding_amount"])
         if outstanding <= 0:
             continue
-        days = (filters.as_of_date - row.values["posting_date"]).days
+        party_id = row.values.get("party_reference_id") or row.values["party_id"]
+        due_date = row.values["posting_date"] + timedelta(days=party_terms.get(party_id or "", 0))
+        days = (filters.as_of_date - due_date).days
         bucket = "0_30"
         if days > 90:
             bucket = "over_90"
@@ -739,6 +744,7 @@ def get_aging_report(filters: AgingFilters) -> AgingReport:
             bucket = "31_60"
         bucket_totals[bucket] += outstanding
         values = dict(row.values)
+        values["due_date"] = due_date
         values["days"] = days
         values["bucket"] = bucket
         rows.append(ReportRow(values=values))
@@ -762,13 +768,21 @@ def _fetch_maturity_documents(filters: MaturityFilters) -> list[tuple[Any, str, 
     """Fetch sales and purchase invoices for maturity calculation."""
     documents: list[tuple[Any, str, str | None]] = []
     if filters.party_type in (None, "customer"):
-        query = select(SalesInvoice).where(SalesInvoice.company == filters.company, SalesInvoice.docstatus == 1)
+        query = select(SalesInvoice).where(
+            SalesInvoice.company == filters.company,
+            SalesInvoice.docstatus == 1,
+            or_(SalesInvoice.reversal_of.is_(None), SalesInvoice.reversal_of == ""),
+        )
         query = query.where(SalesInvoice.posting_date <= filters.as_of_date)
         if filters.party_id:
             query = query.where(SalesInvoice.customer_id == filters.party_id)
         documents.extend((doc, "customer", doc.customer_id) for doc in database.session.execute(query).scalars())
     if filters.party_type in (None, "supplier"):
-        query = select(PurchaseInvoice).where(PurchaseInvoice.company == filters.company, PurchaseInvoice.docstatus == 1)
+        query = select(PurchaseInvoice).where(
+            PurchaseInvoice.company == filters.company,
+            PurchaseInvoice.docstatus == 1,
+            or_(PurchaseInvoice.reversal_of.is_(None), PurchaseInvoice.reversal_of == ""),
+        )
         query = query.where(PurchaseInvoice.posting_date <= filters.as_of_date)
         if filters.party_id:
             query = query.where(PurchaseInvoice.supplier_id == filters.party_id)
@@ -776,14 +790,14 @@ def _fetch_maturity_documents(filters: MaturityFilters) -> list[tuple[Any, str, 
     return documents
 
 
-def _load_party_payment_terms(filters: MaturityFilters) -> dict[str, int]:
+def _load_party_payment_terms(company: str) -> dict[str, int]:
     """Load payment terms for all active parties."""
     return {
         party_id: terms.due_days
         for party_id, terms in database.session.execute(
             select(CompanyParty.party_id, PaymentTerms)
             .join(PaymentTerms, PaymentTerms.id == CompanyParty.payment_terms_id, isouter=True)
-            .where(CompanyParty.company == filters.company, CompanyParty.is_active.is_(True))
+            .where(CompanyParty.company == company, CompanyParty.is_active.is_(True))
         ).all()
         if terms is not None
     }
@@ -793,7 +807,7 @@ def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
     """Calcula vencimientos de cartera usando términos de pago por tercero."""
     if filters.horizon_days < 0 or filters.horizon_days > 3650:
         raise ValueError("horizon_days debe estar entre 0 y 3650")
-    party_terms = _load_party_payment_terms(filters)
+    party_terms = _load_party_payment_terms(filters.company)
     documents = _fetch_maturity_documents(filters)
 
     cutoff = filters.as_of_date + timedelta(days=filters.horizon_days)
@@ -801,7 +815,7 @@ def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
     for document, party_type, party_id in documents:
         outstanding_original_currency = compute_outstanding_amount(document, as_of_date=filters.as_of_date)
         outstanding = _document_sign(document) * outstanding_original_currency * _document_base_factor(document)
-        if outstanding == 0 or not document.posting_date:
+        if outstanding <= 0 or not document.posting_date:
             continue
         due_date = document.posting_date + timedelta(days=party_terms.get(party_id or "", 0))
         if due_date > cutoff:

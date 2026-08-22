@@ -3,6 +3,21 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Vencimiento consistente en cartera (#688)
+
+### Implementado
+
+El aging calcula ahora la antigüedad desde `due_date` (fecha de documento +
+términos del tercero), igual que el maturity schedule. El subledger conserva la
+etiqueta de tercero para UI y añade su identificador físico para consultar los
+términos correctamente. El schedule excluye reversiones y saldos no positivos,
+por lo que notas de crédito standalone no distorsionan su total.
+
+### Validación
+
+- Regresión aging/maturity: **1 passed**.
+- Ruff check/format y `git diff --check`: OK.
+
 ## 2026-08-22 — Distribución multilínea en matching de compras (#693)
 
 ### Implementado
