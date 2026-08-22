@@ -3,6 +3,21 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Reingreso de seriales por devolución de venta (#682)
+
+### Implementado
+
+La validación de inventario distingue devoluciones de transferencias. Una nota
+de entrega de devolución puede reingresar únicamente un serial existente en
+estado `delivered`; tras contabilizarla, el serial vuelve a `available` en la
+bodega de destino. Los seriales disponibles u otros estados siguen rechazados.
+
+### Validación
+
+- Regresión de reingreso y rechazo de estado no entregado: **1 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Contexto contable persistido en ReconciliationItem (#282)
 
 ### Petición

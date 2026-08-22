@@ -2228,6 +2228,7 @@ def _create_stock_movement(
             outgoing=qty_change < 0,
             warehouse=warehouse,
             allow_transfer=getattr(document, "purpose", None) == "material_transfer",
+            allow_return=isinstance(document, DeliveryNote) and bool(document.is_return),
             posting_date=getattr(document, "posting_date", None),
         )
     except InventoryServiceError as exc:
@@ -2713,6 +2714,7 @@ def _create_stock_ledger_for_document(
                 outgoing=False,
                 warehouse=warehouse,
                 allow_transfer=getattr(document, "purpose", None) == "material_transfer",
+                allow_return=isinstance(document, DeliveryNote) and bool(document.is_return),
                 posting_date=getattr(document, "posting_date", None),
             )
         except InventoryServiceError as exc:

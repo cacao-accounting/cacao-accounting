@@ -187,7 +187,7 @@ def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None
             raise InventoryServiceError("El lote no tiene saldo suficiente en la bodega de salida.")
 
 
-def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False):
+def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False, allow_return=False):
     serial_no = getattr(line, "serial_no", None)
     if not serial_no:
         raise InventoryServiceError("El item requiere numero de serie.")
@@ -199,8 +199,12 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False)
             raise InventoryServiceError("El serial no esta disponible para salida.")
         if warehouse and serial.warehouse != warehouse:
             raise InventoryServiceError("El serial no se encuentra en la bodega de salida.")
-    elif serial and not allow_transfer:
-        raise InventoryServiceError("El serial ya existe y solo puede cambiar de bodega mediante una transferencia.")
+    elif serial:
+        if allow_return:
+            if serial.serial_status != "delivered":
+                raise InventoryServiceError("Solo se puede reingresar un serial entregado mediante una devolución.")
+        elif not allow_transfer:
+            raise InventoryServiceError("El serial ya existe y solo puede cambiar de bodega mediante una transferencia.")
 
 
 def validate_batch_serial(
@@ -209,6 +213,7 @@ def validate_batch_serial(
     outgoing: bool,
     warehouse: str | None = None,
     allow_transfer: bool = False,
+    allow_return: bool = False,
     posting_date: date | None = None,
 ) -> None:
     """Valida obligatoriedad y disponibilidad de lote/serial en una linea."""
@@ -228,7 +233,7 @@ def validate_batch_serial(
         if posting_date and batch.expiry_date <= posting_date:
             raise InventoryServiceError("El lote está vencido para la fecha de contabilización.")
     if item.has_serial_no:
-        _validate_serial(line, item, outgoing, warehouse, allow_transfer)
+        _validate_serial(line, item, outgoing, warehouse, allow_transfer, allow_return)
 
 
 def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> None:
