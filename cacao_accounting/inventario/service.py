@@ -323,18 +323,15 @@ def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: st
 
 
 def rebuild_stock_valuation_layers(
-    company: str, item_code: str | None = None, warehouse: str | None = None
+    company: str, item_code: str | None = None, warehouse: str | None = None, *, dry_run: bool = False
 ) -> StockRebuildResult:
-    """Reconstruye StockValuationLayer desde StockLedgerEntry append-only."""
+    """Reconstruye capas FIFO, o previsualiza el resultado sin mutar datos."""
     query = select(StockValuationLayer).filter_by(company=company)
     if item_code:
         query = query.filter_by(item_code=item_code)
     if warehouse:
         query = query.filter_by(warehouse=warehouse)
     existing = database.session.execute(query).scalars().all()
-    for layer in existing:
-        database.session.delete(layer)
-    database.session.flush()
 
     entries_query = (
         select(StockLedgerEntry).filter_by(company=company).order_by(StockLedgerEntry.posting_date, StockLedgerEntry.id)
@@ -364,7 +361,11 @@ def rebuild_stock_valuation_layers(
                 posting_date=entry.posting_date,
             )
         )
-    database.session.add_all(new_layers)
+    if not dry_run:
+        for layer in existing:
+            database.session.delete(layer)
+        database.session.flush()
+        database.session.add_all(new_layers)
     return StockRebuildResult(rebuilt_bins=0, rebuilt_layers=len(new_layers))
 
 
