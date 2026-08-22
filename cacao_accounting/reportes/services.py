@@ -2865,6 +2865,10 @@ def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
         .join(Accounts, Accounts.id == GLEntry.account_id)
         .where(GLEntry.company == filters.company, Accounts.entity == filters.company)
     )
+    # El margen bruto representa la operación del período.  Los asientos de
+    # cierre anual neutralizan las cuentas de resultado y por ello no deben
+    # incorporarse, igual que en el estado de resultados por defecto.
+    query = query.where(GLEntry.is_fiscal_year_closing.is_(False))
     ledger_id = primary_ledger_id(filters.company)
     if ledger_id:
         query = query.where(GLEntry.ledger_id == ledger_id)
@@ -2875,7 +2879,7 @@ def get_gross_margin(filters: OperationalReportFilters) -> PaginatedReport:
     income = Decimal("0")
     cogs = Decimal("0")
     for entry, account in database.session.execute(query).all():
-        classification = (account.classification or "").lower()
+        classification = _normalize_account_classification(account)
         if classification in {"costo", "cost"}:
             cogs += _decimal_value(entry.debit) - _decimal_value(entry.credit)
         elif classification in {"ingreso", "income"}:

@@ -3,6 +3,23 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Margen bruto consistente con P&L (#684)
+
+### Implementado
+
+`get_gross_margin` excluye los asientos de cierre fiscal, que neutralizan las
+cuentas de resultado y no representan el rendimiento operativo del período.
+También normaliza aliases de clasificación mediante la misma función usada por
+el estado de resultados, por lo que `Ingresos` y `Costos` se incluyen de forma
+consistente.
+
+### Validación
+
+- Regresión de cierre fiscal y aliases plurales: **1 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse porque
+  el entorno local tiene la dependencia `pathspec` corrupta; Ruff format dejó
+  los archivos con el formato compatible.
+
 ## 2026-08-22 — Aplicación segura de anticipos (#685)
 
 ### Implementado
