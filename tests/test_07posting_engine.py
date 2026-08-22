@@ -125,6 +125,37 @@ def test_stock_reconciliation_rejects_negative_rate_from_positive_quantity_delta
         _create_stock_reconciliation_movement(entry, line)
 
 
+def test_cancelled_status_filter_includes_cancelled_gl_rows(app_ctx):
+    """The cancelled status must not conflict with the default scope."""
+    from cacao_accounting.database import Book, GLEntry, database
+    from cacao_accounting.reportes.services import FinancialReportFilters, _apply_gl_filters
+
+    ledger_id = database.session.execute(database.select(Book.id).where(Book.code == "PRIMARY")).scalar_one()
+    entry = GLEntry(
+        posting_date=date(2026, 5, 4),
+        company="cacao",
+        ledger_id=ledger_id,
+        debit=Decimal("10"),
+        credit=Decimal("0"),
+        voucher_type="test",
+        voucher_id="CANCELLED-GL",
+        is_cancelled=True,
+    )
+    database.session.add(entry)
+    database.session.commit()
+
+    rows = (
+        database.session.execute(
+            _apply_gl_filters(
+                database.select(GLEntry), FinancialReportFilters(company="cacao", status="cancelled"), None, None
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [row.id for row in rows] == [entry.id]
+
+
 def test_submit_document_rolls_back_docstatus_when_posting_fails(app_ctx):
     """A failed GL posting cannot leave the operational document approved."""
     from cacao_accounting.contabilidad.posting import PostingError, submit_document

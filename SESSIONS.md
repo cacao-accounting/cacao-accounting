@@ -90,6 +90,17 @@ La conciliación de inventario rechaza el caso de aumento de cantidad con reducc
 - Prueba focal: 1 passed.
 - Ruff y `git diff --check`: OK.
 
+## 2026-08-22 — Filtro de reportes anulados (#702)
+
+### Implementado
+
+El alcance por defecto de GL ya no excluye anulaciones cuando `FinancialReportFilters.status == "cancelled"`. Así el filtro de estado y el de cancelación no generan un `WHERE is_cancelled=false AND is_cancelled=true`. La regresión inserta una fila GL anulada y comprueba que el filtro la devuelve.
+
+### Validación
+
+- Prueba focal: 1 passed.
+- Ruff y `git diff --check`: OK.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición

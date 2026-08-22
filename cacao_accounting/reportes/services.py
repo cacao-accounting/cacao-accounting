@@ -1969,7 +1969,7 @@ def _apply_party_filters(query: Any, filters: FinancialReportFilters) -> Any:
 
 
 def _apply_cancellation_scope(query: Any, filters: FinancialReportFilters) -> Any:
-    if filters.include_cancellations:
+    if filters.include_cancellations or filters.status == "cancelled":
         return query
     return query.where(GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
 
