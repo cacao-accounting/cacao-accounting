@@ -761,6 +761,7 @@ ALLOWED_FLOWS: dict[tuple[str, str], FlowSpec] = {
     ("sales_invoice", "sales_debit_note"): FlowSpec("sales_invoice", "sales_debit_note", "debit_note"),
     ("sales_invoice", "payment_entry"): FlowSpec("sales_invoice", "payment_entry", "payment"),
     ("sales_credit_note", "payment_entry"): FlowSpec("sales_credit_note", "payment_entry", "refund"),
+    ("sales_return", "payment_entry"): FlowSpec("sales_return", "payment_entry", "refund"),
     ("sales_debit_note", "payment_entry"): FlowSpec("sales_debit_note", "payment_entry", "collection"),
     ("stock_entry", "stock_entry"): FlowSpec("stock_entry", "stock_entry", "reuse"),
 }

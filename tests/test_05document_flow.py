@@ -810,6 +810,7 @@ def test_allowed_flows_include_order_advances_and_receipt_notes():
     assert is_allowed_flow("purchase_credit_note", "payment_entry")
     assert is_allowed_flow("purchase_debit_note", "payment_entry")
     assert is_allowed_flow("sales_credit_note", "payment_entry")
+    assert is_allowed_flow("sales_return", "payment_entry")
     assert is_allowed_flow("sales_debit_note", "payment_entry")
 
 
