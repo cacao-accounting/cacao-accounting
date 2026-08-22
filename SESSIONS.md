@@ -3,6 +3,300 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Revisión final de issues abiertos con tag `ok`, tanda 2 (#613–#622)
+
+### Petición
+
+Segunda pasada como revisor final sobre issues abiertos con tag `ok`: confirmar
+robustez, validez y aceptabilidad del fix; aceptar → `fixed` + cierre; rechazar
+→ `needs-work`.
+
+### Método
+
+Se detectaron 9 issues con label `ok` pendientes de revisión final: #613, #614,
+#615, #616, #617, #619, #620, #621, #622. Tres auditorías paralelas verificaron
+commit fix ancestro de HEAD, presencia del cambio en código vigente, atención a
+la causa raíz y ejecución local de los tests focales.
+
+### Resultado — FIXED y cerrados (9)
+
+- **#613** (`da2d22aa`): `sales_return → payment_entry` registrado en
+  `ALLOWED_FLOWS` (`document_flow/registry.py:771`). Suite focal 135 passed.
+- **#614** (`d45cc93b`): `transaction_currency` propagado al pago destino
+  (`document_flow/payment.py:742,1290,1454-1462`); base = total × TC.
+- **#615** (`d6fb56af`): `has_active_source_relations` solo bloquea con hijos
+  aprobados (`repository.py:245`).
+- **#616** (`094d9f15`, `a58d4827`): anticipo exige pago y factura aprobados y
+  suma solo referencias activas (5 tests passed).
+- **#617** (`6dbfd237`): UOM sin conversión → fail-closed `DocumentFlowError`
+  409 (`document_flow/service.py:373-381`).
+- **#619** (`4067710e`): revaluación bancaria multilibro con candidato por
+  cuenta/libro (`exchange_revaluation_service.py:460-498`).
+- **#620** (`8a5fc302`): factura subdeclarada a cantidad completa ya no entra
+  por la excepción de importe menor (`purchase_reconciliation_service.py:525`).
+- **#621** (`428a18ec`): serial exige qty==1 con conversión UOM
+  (`inventario/service.py:205-212`).
+- **#622** (`12e46d55`): savepoint atómico en submit/cancel
+  (`posting_service.py:3567,3597`) + rollback en reversa.
+
+### Observaciones menores documentadas en los comentarios de cierre
+
+- #617: factor cero en conversión directa aún sin validar en inventario.
+- #616: falta test simétrico para rechazo de pago en borrador.
+- #613: el ciclo end-to-end reembolso podría blindarse con test de integración.
+- Todos los fixes siguen sin push (rama local ahead ~80 de origin).
+
+## 2026-08-22 — Triaje de issues `needs-work` (9): fixes propuestos y reclasificación a `needs-review`
+
+### Petición
+
+Analizar los issues abiertos con tag `needs-work` (#668, #282, #281, #280, #279,
+#278, #251, #250, #246), proponer los fixes necesarios, trabajar con commits
+semánticos firmados como `williamjmorenor@gmail.com` y, por cada issue con fix
+propuesto, eliminar `needs-work` y usar `needs-review`.
+
+### Implementado
+
+- **#668 — fix aplicado**: commit `8af476bc`
+  (`test(posting): restore party regression fixture for ledger contexts`). El
+  fix de producción estaba intacto; el test focal fallaba por drift del
+  fixture (#658 introdujo `_inventory_currency(document)` que requiere
+  `document.company`). Fixture reparado: `company="cacao"` + `LedgerContext`
+  real en el mock de `_document_contexts`. Focal: 1 passed.
+- **#251 — evidencia de implementación existente**: drill-down voucher en
+  operativos (`helpers.py:1027`, plantilla línea 92), paginación UI
+  (`operational_report.html:101-105`) y drill-down genérico trial-balance →
+  account-movement (`_build_drill_down_url`, aplicado en `helpers.py:861`).
+  Cobertura: `test_operational_report_framework.py` 6 passed. Propuesta de
+  cierre como falso positivo residual.
+- **#278/#280/#281/#282 — propuestas de cierre**: matrices AUDIT-003/005/006/007
+  ya cubiertas por sus suites en HEAD; queda corrida completa de CI (#278,
+  #280, #281), los 3 hallazgos de inventario documentados (#279) o la
+  operación post-upgrade del backfill (#282).
+- **#279 — fix propuesto para los 3 hallazgos**: capas FIFO retroactivas no
+  reescriben composición publicada; reversa SVL devuelve a su capa origen;
+  persistir costo de salida para desacoplar GL del atributo transitorio
+  `_inventory_cost_amount`.
+- **#250 — matriz fiscal parametrizada propuesta**
+  (`tests/test_fiscal_doctype_matrix.py`) priorizando sales_invoice,
+  payment_entry receive y NC/ND.
+- **#246 — plan LedgerMappingRule**: servicio `apply_ledger_mapping`,
+  integración al posting multi-libro dentro del savepoint de submit, CRUD UI,
+  tests unitarios/integración y decisión sobre `Book.mapping_rules` JSON.
+
+### Labels
+
+Los 9 issues quedaron con `needs-review` (0 issues abiertos con `needs-work`),
+cada uno con comentario de estado/propuesta.
+
+### Validación
+
+- Regresión focal conjunta de las suites asociadas: **67 passed**
+  (`/tmp/opencode/needs-work-regression.log`).
+- ruff + flake8 limpios en el archivo modificado; black sigue roto en el venv
+  local (`pathspec.patterns.gitignore`, cubre CI).
+
+## 2026-08-22 — Revisión final de issues abiertos con tag `ok` (30 issues)
+
+### Petición
+
+Actuar como revisor final de los issues abiertos marcados con el tag `ok`:
+confirmar que el fix aplicado es robusto, correcto, válido y aceptable; si lo es,
+cambiar `ok` → `fixed` y cerrar el issue; si no, cambiar `ok` → `needs-work`.
+
+### Método
+
+Se identificaron 30 issues abiertos con label `ok`: #630, #635, #636, #647,
+#650–#652, #656–#658, #659, #660–#662, #666–#668, #670, #672–#676, #678–#684.
+Cinco auditorías paralelas verificaron por issue: lectura del issue/comentarios
+vía API, existencia del commit fix como ancestro de HEAD (`git show`),
+presencia del cambio vigente en HEAD (archivo:línea), robustez frente a la
+causa raíz y ejecución de los tests de regresión focales.
+
+### Resultado
+
+- **FIXED y cerrados (29)**: #630, #635, #636, #647, #650, #651, #652, #656,
+  #657, #658, #659, #660, #661, #662, #666, #667, #669, #670, #672, #673, #674,
+  #675, #676, #678, #679, #681, #682, #683, #684. Cada issue recibió comentario
+  de cierre con commit, evidencia archivo:línea y test de regresión que pasa
+  en HEAD.
+- **NEEDS-WORK (1): #668** — el fix de producción (`8f179c5f`, sin party en
+  inventario/puente) está intacto, pero su test focal
+  `tests/test_purchase_receipt_party_regressions.py` falla en HEAD por drift
+  del fixture: `7ba0082b` (#658) introdujo `_inventory_ledger_context →
+  _inventory_currency(document)` que accede a `document.company`, ausente en
+  el fixture `SimpleNamespace`. Fallo verificado en ejecución local. Se
+  publicó comentario con análisis completo y fix propuesto (añadir
+  `company="cacao"` al documento, devolver un contexto con atributos de
+  `LedgerContext` desde `_document_contexts` y ajustar la aserción final);
+  el parche fue validado localmente (1 passed) antes de publicarlo
+  ([issuecomment-5378017807](https://github.com/cacao-accounting/cacao-accounting/issues/668#issuecomment-5378017807)).
+
+### Observaciones transversales (no bloqueantes)
+
+- La triage previa daba #672 y #678 por NEED-WORK; ambos quedaron resueltos
+  desde entonces (`65bcc2cd`+`3364cf4a` y `3684f766`) y fueron cerrados.
+- `main` local está *ahead ~80* de `origin/main`: los fixes viven solo en el
+  repo local hasta el push.
+- Residuales menores documentados en los comentarios de cierre: `transfer_rate`
+  libre en transferencias (#681), tolerancia +0.01 contra outstanding por
+  referencia individual (#630).
+
+## 2026-08-22 — Blindaje con pruebas de los fixes locales sin cobertura (#701, lock de transiciones)
+
+### Petición
+
+Analizar los fixes aplicados localmente y confirmar que están blindados con
+pruebas unitarias que confirmen el comportamiento esperado y eviten regresiones;
+añadir las pruebas que falten usando commits semánticos firmados como
+`williamjmorenor@gmail.com`.
+
+### Auditoría de cobertura
+
+De los 59 commits `fix*`/`feat*` locales (origin/main..HEAD), se verificó para
+cada uno si el commit mismo toca `tests/` o si existe un commit posterior de
+test referenciando el mismo issue. Resultado: 57 commits cubiertos. Solo dos
+quedaron sin cobertura dedicada:
+
+- `4f35d83b` fix(reports): unify default ledger resolution (#701).
+- `e49a1b74` fix(posting): lock documents before state transitions.
+
+(Los fixes #651 y #652 no traían test en el propio commit pero sí tienen
+commits de prueba posteriores: `8b2c9b5e` y `48983f77`.)
+
+### Plan implementado
+
+- `tests/test_default_ledger_resolution.py`: contrato del fix #701 —
+  `primary_ledger_id` acepta libros legacy con `status=NULL`, excluye
+  inactivos, prefiere default > primary > code; `_resolve_ledger` comparte el
+  mismo predicado y precedencia; ambos resolutores eligen el mismo libro.
+- `tests/test_posting_state_transition_lock.py`: contrato del fix de lock —
+  `submit_document`/`cancel_document` emiten `SELECT ... FOR UPDATE` sobre la
+  fila ANTES de validar `docstatus`; rechazo de documentos sin persistir o
+  eliminados; roundtrip aprobar/anular operando sobre la fila bloqueada;
+  doble aprobación rechazada tras expirar la sesión.
+
+### Commits y validación
+
+- `cc38ff8f` test(posting): cover document state transition locks
+- `e861dfe3` test(reports): cover default ledger resolution
+- `a05f2a78` test(accounting): align multimoneda posting with multi-book contract (#246)
+  - Reparación de regresión pre-existente detectada durante la validación:
+    `test_operational_posting_multimoneda_real` esperaba 2 GL entries pero con
+    los libros PRIMARY (fixture) + FISC-MC (prueba) el posting multi-libro
+    (#246/#705) genera 4. Ahora agrupa por `ledger_id`, verifica 2 asientos
+    balanceados por libro y conserva las aserciones de conversión USD→NIO.
+- Ambos commits nuevos firmados (`Signed-off-by: William José Moreno Reyes <williamjmorenor@gmail.com>`).
+- pytest focal final: **102 passed** (posting engine + 2 suites nuevas +
+  reconciliation unit + gross margin + report filters).
+- black aplicado; ruff y flake8 limpios; mypy sin errores nuevos (los 4
+  reportados son pre-existentes en `fiscal_persistence_service.py` y
+  `ventas/services.py`).
+
+
+## 2026-08-22 — Validación de fixes y reclasificación de labels en issues abiertos (#613–#697, épicos)
+
+### Petición
+
+Analizar los issues abiertos con tag `verified` que tienen fix propuesto/aplicado,
+validar el fix (robustez, validez) mediante análisis estático de código SIN
+ejecutar pruebas, exigir cobertura de test que evite regresiones futuras y
+reclasificar: falsos positivos → `needs-review`, fixes no validados →
+`need-work`, fixes válidos → `validated` (eliminando `verified`), comentando el
+análisis en cada issue.
+
+### Método
+
+Cinco agentes paralelos auditaron 84 issues con `verified`: lectura del issue y
+comentarios vía API, verificación del commit citado contra HEAD (`git show`),
+inspección del código vigente, localización y lectura del test de regresión
+(solo lectura, sin pytest por indicación del usuario).
+
+### Resultado (68 issues triados + 17 épicos/relacionados)
+
+- **VALIDATED (41)**: #616, #617, #619, #620, #621, #622, #624, #628, #630,
+  #632–#636, #647, #650, #655–#670, #673–#676, #679, #681–#684. Fix presente en
+  HEAD, causa raíz atendida y test focal existente.
+- **NEED-WORK (11)**: #613, #614, #615 (fix ausente en O2C), #623, #625, #626,
+  #627 (fix correcto pero sin test que cubra el fallo multi-libro), #651
+  (reconstrucción destructiva sin dry-run ni tests), #652 (test no aserta el
+  lock), #672 [CRÍTICO] (devolución de venta sigue reingresando a precio de
+  venta, `posting_service.py:2766-2770`) y #678 (devolución de compra no reduce
+  AP outstanding, `document_flow/payment.py:239-287`).
+- **FP → needs-review (19)**: #629, #631, #637–#646, #648, #649, #653, #654,
+  #677, #680, #697 — defecto inexistente en HEAD o comportamiento intencional,
+  con evidencia archivo:línea en cada comentario.
+- **Épicos**: #246 y #278–#282 pasaron a `need-work` (alcance parcial abierto);
+  #280/#281/#282 casi completos según bitácora previa.
+
+### Ejecución
+
+Se crearon los labels `validated` y `need-work`; se editaron los 84 issues
+quitando `verified`, se publicó/actualizó un comentario de análisis por issue
+(encabezado con veredicto + bullets con commit, archivo:línea y test). Se
+corrigieron en un segundo pase los comentarios de falsos positivos que habían
+salido con encabezado VALIDATED.
+
+### Pendientes prioritarios detectados
+
+1. #672 (crítico): valuar el reingreso desde capas de salida originales o exigir
+   costo explícito + test de Dr Inventario/Cr COGS al costo.
+2. #678: incluir `purchase_return` en `_compute_allocated_notes_amount` y decidir
+   el tratamiento del pending_qty de la recepción.
+3. #613/#614/#615: registrar `sales_return -> payment_entry` en `ALLOWED_FLOWS`,
+   propagar `transaction_currency` al posting del pago y relajar la cuenta de
+   hijos en borrador al cancelar orígenes.
+4. #627: añadir test de fallo en segundo libro para la atomicidad multilibro.
+
+## 2026-08-22 — Auditoría estática de issues #619–#697 (sin ejecutar tests ni tocar GitHub)
+
+### Petición
+
+Auditar 15 issues (#619, #672–#684, #697) verificando fixes citados en
+comentarios contra HEAD, robustez y cobertura de test (solo lectura; sin
+pytest, sin comentarios/labels en GitHub). Además triaje rápido de los épicos
+#246, #278–#282.
+
+### Resultado
+
+VALIDATED (10): #619 `4067710e`, #673 `8b7d0089`, #674 `7bb575f1`, #675
+`5ddbe9a8`, #676 `03d99f0c`, #679 `f0b5a8a4`, #681 `76edb515`, #682
+`02d17a3f`, #683 `ebb5933d`, #684 `4120cda8` — todos ancestros de HEAD con
+test focal existente. NEED-WORK (2): #672 (reingreso de devolución de venta
+sigue valuado a precio de venta en `posting_service.py:2766-2770`) y #678
+(devolución de compra sigue sin reducir AP: `_compute_allocated_notes_amount`
+en `document_flow/payment.py:239` solo suma credit/debit notes). FP (3): #677,
+#680, #697 según contrato vigente verificado en código (`payment.py:656`,
+`bancos/routes.py:469-472`, elegibilidad por `primary_ledger_id`). Épicos:
+#246 NEED-WORK (faltan UI + integración posting), #278–#282 alcance mayormente
+cubierto pero abiertos.
+
+## 2026-08-22 — Triaje de issues #689–#693: falsos positivos confirmados y cerrados
+
+### Petición
+
+Auditar los issues #689, #690, #691, #692 y #693 contra el código actual para
+determinar si describen defectos vigentes o si fueron ya corregidos, cerrando
+los falsos positivos con evidencia técnica.
+
+### Resultado
+
+Los cinco issues corresponden a defectos que **ya fueron corregidos** en HEAD
+mediante los commits referenciados en sus comentarios (todos ancestros de
+HEAD): `553517a7` (#689 landed cost valida métodos de prorrateo),
+`6dbfd237` (#690 conversión UOM fail-closed con `DocumentFlowError` 409),
+`57e504da` (#691 settlement conserva el efectivo declarado y rechaza
+descuadres), `51e9b428` (#692 aprobación refresca caches de flujo vía
+`_submit_document_and_refresh_flow`) y `6da16c88` (#693 matching distribuye
+entre líneas fuente vía `_available_line_slices`). Se publicó comentario de
+evidencia (archivo:línea) en cada issue y se cerraron como falsos positivos.
+
+### Validación
+
+- Focal sobre HEAD: `test_landed_cost_engine.py`, `test_settlement_engine.py`,
+  `test_purchase_reconciliation_service.py` — **20 passed**;
+  `test_05document_flow.py` — **35 passed**.
+
 ## 2026-08-22 — Valoración de inventario en moneda funcional (#658)
 
 ### Implementado
@@ -5111,3 +5405,184 @@ esperados calculados a mano fuera de los servicios:
   (`/tmp/opencode/focal_results.txt`) antes de cualquier PR hacia #278.
 - El label `needs-work` del issue puede revisarse tras push: faltan los
   criterios "matriz" como reporte UI (hoy cobertura es contable/pruebas).
+
+## 2026-08-22 — Auditoría de issues #705–#709: triage falso positivo vs real
+
+### Petición
+
+Analizar los issues #705, #706, #707, #708 y #709 verificando cada afirmación
+contra el código actual y decidir si son falsos positivos reales o problemas
+reales; cerrar los falsos positivos con justificación técnica o reclasificar
+los reales con etiquetas.
+
+### Verificación y veredictos (los 5 resultaron FALSO POSITIVO, cerrados)
+
+- **#705** (`ledger_code` descartado para no-journal): comportamiento
+  intencional — módulos operativos contabilizan en todos los libros activos;
+  cubierto por `tests/test_07posting_engine.py:4684`
+  (`test_operational_posting_ignores_ledger_code_and_affects_all_active_books`).
+  Guard en `posting_service.py:244-246`.
+- **#706** (FX AR/AP no registrado): corregido por commit `1a319852`;
+  `SettlementEngine` calcula `exchange_difference` (`settlement/engine.py:49-149`)
+  y `mapper.py:172-178` lo contabiliza; suite end-to-end
+  `tests/test_fx_ar_ap_lifecycle.py`. `_build_fx_difference_entries` es solo
+  para transferencias internas por diseño.
+- **#707** (fallback a moneda base): diseño documentado en el comentario de
+  `posting_service.py:258-264`; la propia reproducción del issue admite que
+  sí llega a conversión. `_lookup_exchange_rate` usa última tasa <= fecha
+  (no requiere tasa exacta), `posting_service.py:695-720`.
+- **#708** (conciliación solo libro primario): decisión de diseño deliberada —
+  el extracto se concilia contra el libro canónico del banco; cubierto por
+  `tests/test_reconciliation_service_unit.py:149`.
+- **#709** (CAS-03 bloquea pagos cross-currency): guarda de integridad
+  intencional; afirmada como deseada por
+  `tests/test_payment_unit.py:1108`. Eliminarla alteraría saldos sin modelo
+  dual de importes.
+
+### Acciones aplicadas
+
+- Comentario técnico + cierre en los 5 issues vía `gh`.
+- Sin cambios de código ni labels adicionales.
+
+## 2026-08-22 — Triaje de issues #694, #695, #696, #698, #699 (auditoría de falsos positivos)
+
+### Petición
+
+Analizar los issues #694, #695, #696, #698 y #699 verificando línea por línea
+sus afirmaciones contra el código actual, y cerrar como falsos positivos (con
+comentario técnico) o marcar como problemas reales (needs-work) según el caso.
+
+### Verificación y veredictos (todos FALSO_POSITIVO, cerrados)
+
+- **#694** (tasas 0/negativas en lookup): corregido en `7f31ee11` (en HEAD).
+  `posting_service.py:654-683` rechaza tasas ≤0 con `PostingError`; la ruta de
+  pagos (`bancos/services.py:56,1362`) delega en esa misma función;
+  `reconciliation_service.py:150-176` aplica el mismo criterio.
+- **#695** (`base_received_amount=NULL` en transferencias): falso positivo de
+  diseño. `bancos/services.py:1377` limpia la base deliberadamente; consumidores
+  (`reconciliation_service.py:109-115, 434-440`) tratan la pierna receptora sin
+  reconstruir desde `exchange_rate`. Documentado como intencional (:354-362).
+- **#696** (dedup bypaseable con aliases): corregido en `76a8abac`.
+  `bancos/services.py:748` deduplica por `_physical_reference_type`
+  (:978-987); regresión en `tests/test_07posting_engine.py:184`.
+- **#698** (capas de valuación rate<0): corregido en `91134f2e`.
+  Guard `qty_change>0 and value_change<0` → `PostingError`
+  (`posting_service.py:2393-2396`); regresión en test :100.
+- **#699** (reservas no excluyen DN is_return): corregido en `5678dd11`.
+  `ventas/services.py:427-428,458-459` ignoran devoluciones en release/restore;
+  regresión en test :170.
+
+### Acciones
+
+- Comentario técnico + cierre en cada issue (5 comentarios, 5 cierres).
+- Sin cambios de código; verificados los commits de fix como ancestros de HEAD
+  (`16a3a093`) con sus tests de regresión presentes.
+
+### Continuidad
+
+- Ningún issue quedó abierto de este lote. Si reaparecen síntomas similares,
+  revisar primero estos commits antes de reabrir.
+
+## 2026-08-22 — Triaje de issues #700–#704 (falso positivo vs problema real)
+
+### Petición
+
+Analizar los issues #700, #701, #702, #703 y #704 contra el código actual de
+main para decidir si son falsos positivos reales o problemas vigentes, y
+aplicar la acción correspondiente (comentario + cierre, o comentario +
+re-etiquetado needs-review→needs-work).
+
+### Verificación realizada
+
+- Confirmé que los commits citados en comentarios previos (88700e21,
+  4f35d83b, 631edee3, a9628ef3) son ancestros de main.
+- **#700**: `_active_books` (posting_service.py:225-241) lanza
+  `PostingError("La compañía no tiene libro contable activo.")`; regresión en
+  tests/test_07posting_engine.py:190. → FALSO_POSITIVO.
+- **#701**: `primary_ledger_id` (ledger_queries.py:16-28) y `_resolve_ledger`
+  (reportes/services.py:1940-1948) comparten predicado de estado legacy y
+  orden `default DESC, is_primary DESC, code ASC`. → FALSO_POSITIVO.
+- **#702**: `_apply_cancellation_scope` (reportes/services.py:2030-2034) omite
+  la exclusión cuando `status == "cancelled"`; regresión
+  `test_cancelled_status_filter_includes_cancelled_gl_rows`
+  (test_07posting_engine.py:228). → FALSO_POSITIVO.
+- **#703**: `GLEntry.account_id` tiene FK a accounts.id con
+  `ondelete=RESTRICT` (database/__init__.py:3503-3507; FK_RESTRICT línea 77);
+  cuentas huérfanas imposibles con datos íntegros. → FALSO_POSITIVO.
+- **#704**: `_convert_to_ledger_currency` (reportes/services.py:388-436) usa
+  `date <= as_of_date` orden desc + fallback a inversa; regresión
+  `test_reconciliation_currency_conversion_uses_latest_prior_rate`
+  (test_07posting_engine.py:261). → FALSO_POSITIVO.
+
+### Acciones aplicadas
+
+- Comentario técnico (español, con evidencia archivo:línea) + cierre de los 5
+  issues vía `gh issue comment` / `gh issue close`.
+- Sin cambios de código ni labels adicionales.
+
+## 2026-08-22 — Continuidad de fixes locales para issues `needs-work`
+
+### Petición
+
+Aplicar, sin hacer push ni cerrar issues, las correcciones necesarias para los
+issues marcados `need-work`/`needs-work`; usar commits semánticos firmados como
+`williamjmorenor@gmail.com`, y comentar cada fix propuesto con la referencia
+exacta al commit. Los falsos positivos se identifican con `needs-review`.
+
+### Plan implementado
+
+Se revisó la evidencia de los issues abiertos, se conservó el árbol de trabajo
+del usuario y se reforzó la cobertura de los fixes ya aplicados. Para el épico
+#250 se añadieron matrices de perfiles fiscales y snapshots persistidos de
+facturas de venta y cobros. El cobro se valida a través del constructor real de
+`PaymentEntry`, que carga el snapshot `payment_entry` para el evento
+`collection_confirmed`.
+
+### Resultado y validación
+
+- Commit local firmado `52f69dc5`:
+  `test(fiscal): cover collection tax snapshots (#250)`.
+- `ruff check tests/test_tax_rules.py cacao_accounting/accounting_engine/document_builders.py`:
+  correcto.
+- `pytest tests/test_tax_rules.py`: **30 passed**.
+- Se añadió un comentario de seguimiento en #250 con el SHA completo y la
+  validación. No se realizó push ni se cerró el issue.
+
+## 2026-08-22 — Auditoría exhaustiva de issues abiertos y anticipo de proveedor
+
+### Petición
+
+Cambiar la estrategia de trabajo porque varios issues ya estaban atendidos:
+confirmar con evidencia local que todos los issues abiertos mantienen un fix
+correcto, en vez de inferirlo desde labels o comentarios.
+
+### Plan implementado
+
+Se inventariaron los 48 issues abiertos y se asociaron sus commits locales,
+código y pruebas de regresión. Se ejecutaron las matrices transversales FX,
+inventario, O2C, S2P, bancos y fiscal. La auditoría descubrió una regresión
+real en pagos: el motor de liquidación rechazaba un excedente de efectivo aun
+cuando el mapper podía registrarlo correctamente como anticipo de proveedor.
+
+### Resultado y validación
+
+- `42753769` — `fix(payments): allow supplier advances in settlements (#660)`:
+  conserva el rechazo de faltantes y permite excedentes que se balancean como
+  anticipo configurado.
+- `b76c1df8` — `test(accounting): cover every active ledger (#246)`:
+  la regresión multilibro ahora valida todos los libros activos, incluido el
+  principal inicial.
+- Ruff y 13 pruebas focales de liquidación/posting: **13 passed**.
+- Matrices AUDIT-003 a AUDIT-007 y fiscal ejecutadas por grupos: **91 passed**
+  (41 de FX/inventario/O2C/S2P y 50 de bancos/fiscal).
+- Los commits fueron firmados con `williamjmorenor@gmail.com`, comentados en
+  #660 y #246, sin push ni cierre de issues.
+
+### Evidencia de continuidad
+
+La verificación mecánica posterior recorrió los **47 issues abiertos** y
+confirmó que cada uno posee en sus comentarios al menos un SHA local que es
+ancestro de `HEAD`. Las matrices de los épicos #278–#282 y las pruebas de
+fiscal, bancos y posting se usaron como evidencia funcional complementaria;
+los issues permanecen abiertos para QA o porque su alcance es deliberadamente
+evolutivo.
