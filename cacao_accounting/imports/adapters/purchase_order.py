@@ -9,6 +9,7 @@ from typing import List, Dict, Any
 from cacao_accounting.imports.utils.validation import is_period_open
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party, Warehouse, database
+from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 
@@ -18,6 +19,8 @@ class PurchaseOrderAdapter(BaseImportAdapter):
     columns = [
         "document_ref",
         "fecha",
+        "moneda",
+        "tipo_cambio",
         "proveedor",
         "producto",
         "descripcion",
@@ -32,6 +35,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         """Validate purchase order document."""
         errors = []
         company_id = (context or {}).get("company_id") or ""
+        posting_date = None
         try:
             posting_date = date.fromisoformat(str(document_data[0].get("fecha")))
             if not is_period_open(company_id, posting_date):
@@ -47,11 +51,17 @@ class PurchaseOrderAdapter(BaseImportAdapter):
             ).scalar_one_or_none()
             if warehouse is None or warehouse.company != company_id or not warehouse.is_active:
                 errors.append(f"La bodega '{warehouse_code}' no pertenece a la compañía o está inactiva.")
+        if posting_date is not None and not errors:
+            try:
+                self._currency_and_rate(document_data[0], company_id, posting_date)
+            except ValueError as exc:
+                errors.append(str(exc))
         return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:
         """Construye un objeto PurchaseOrder y sus ítems."""
         first_row = document_data[0]
+        company_id = str(context.get("company_id") or "")
         supplier_id = first_row.get("proveedor")
         supplier = database.session.execute(
             database.select(Party).filter_by(id=supplier_id, is_supplier=True)
@@ -63,11 +73,15 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         except ValueError:
             pass
 
+        transaction_currency, base_currency, exchange_rate = self._currency_and_rate(first_row, company_id, posting_date)
         orden = PurchaseOrder(
             supplier_id=supplier_id,
             supplier_name=supplier.name if supplier else None,
-            company=context.get("company_id"),
+            company=company_id,
             posting_date=posting_date,
+            transaction_currency=transaction_currency,
+            base_currency=base_currency,
+            exchange_rate=exchange_rate,
             remarks=f"Importación masiva: {first_row.get('document_ref')}",
             docstatus=0,
         )
@@ -87,6 +101,8 @@ class PurchaseOrderAdapter(BaseImportAdapter):
                 qty=qty,
                 rate=rate,
                 amount=amount,
+                base_rate=(rate * exchange_rate).quantize(Decimal("0.0001")),
+                base_amount=(amount * exchange_rate).quantize(Decimal("0.0001")),
                 warehouse=row.get("bodega"),
             )
             items.append(item)
@@ -97,9 +113,30 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         orden.total = total
         orden.net_total = total
         orden.grand_total = total
-        orden.base_total = total
+        orden.base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
 
         return {"order": orden, "items": items, "naming_series_id": context.get("sequence_id")}
+
+    @staticmethod
+    def _currency_and_rate(
+        first_row: Dict[str, Any], company_id: str, posting_date: date | None
+    ) -> tuple[str | None, str | None, Decimal]:
+        """Resolve an explicit or historical rate for an imported purchase order."""
+        base_currency = company_currency(company_id)
+        transaction_currency = first_row.get("moneda") or base_currency
+        if not transaction_currency or transaction_currency == base_currency:
+            return transaction_currency, base_currency, Decimal("1")
+        raw_rate = first_row.get("tipo_cambio")
+        if raw_rate:
+            rate = Decimal(str(raw_rate))
+        else:
+            from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
+
+            rate = _lookup_exchange_rate(transaction_currency, base_currency, posting_date) if posting_date else None
+            rate = Decimal(str(rate)) if rate is not None else Decimal("0")
+        if rate <= 0:
+            raise ValueError(f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}.")
+        return transaction_currency, base_currency, rate
 
     def persist_document(self, document: Any) -> None:
         """Guarda la orden de compra y sus ítems en la base de datos."""

@@ -64,6 +64,37 @@ def test_purchase_order_import_rejects_foreign_warehouse(app_ctx) -> None:
     assert any("no pertenece a la compañía" in error for error in errors)
 
 
+def test_purchase_order_import_preserves_currency_and_base_amounts(app_ctx, monkeypatch) -> None:
+    """Purchase order imports retain their foreign-currency conversion context."""
+    from cacao_accounting.imports.adapters import purchase_order
+
+    monkeypatch.setattr(purchase_order, "company_currency", lambda _company: "NIO")
+    with app_ctx.app_context():
+        document = PurchaseOrderAdapter().build_document(
+            [
+                {
+                    "document_ref": "PO-IMPORT-USD",
+                    "fecha": date.today().isoformat(),
+                    "moneda": "USD",
+                    "tipo_cambio": "36.5",
+                    "proveedor": "SUP-1",
+                    "producto": "ITEM-1",
+                    "cantidad": "2",
+                    "precio_unitario": "10",
+                }
+            ],
+            {"company_id": "cacao"},
+        )
+
+    order = document["order"]
+    item = document["items"][0]
+    assert order.transaction_currency == "USD"
+    assert order.base_currency == "NIO"
+    assert order.exchange_rate == Decimal("36.5")
+    assert order.base_total == Decimal("730.0000")
+    assert item.base_amount == Decimal("730.0000")
+
+
 class _DummyItem:
     """Objeto mínimo para validar asignaciones opcionales del adaptador."""
 
