@@ -3,6 +3,26 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Revalorización bancaria multilibro (#619, #710)
+
+### Petición
+
+Analizar los issues abiertos de GitHub, distinguir defectos reales de falsos positivos y, para los defectos confirmados, proponer fixes con commit semántico firmado y comentario de trazabilidad sin cerrar los issues.
+
+### Implementado
+
+`ExchangeRevaluationService` ya no deriva la exposición original de una cuenta bancaria desde un único libro resumen. `_open_bank_accounts` recibe los libros activos y crea un candidato por cuenta y libro con saldo abierto; el candidato conserva `source_ledger_id` y `_calculate_lines` lo mide exclusivamente en ese libro. Así, cada asiento de revalorización utiliza tanto el saldo original como el valor en libros del mismo ledger.
+
+Se añadió `test_service_uses_each_ledger_bank_exposure_independently`: para USD 10/NIO y USD 20/EUR, comprueba diferencias de +10 NIO y +0.60 EUR respectivamente.
+
+### Validación
+
+- Pruebas focales bancaria multilibro: 2 passed.
+- Ruff check/format y `git diff --check`: OK.
+- Black no arranca en `.venv` por dependencia local faltante `pathspec.patterns.gitignore`.
+- La suite completa se lanzó en segundo plano en `/tmp/cacao-full-tests-710.log`; su resultado debe revisarse antes de reportar cierre de validación.
+- La suite focal completa de revalorización conserva un fallo previo e independiente: `test_service_uses_only_open_partial_balance` espera `40.0000` y obtiene `-2120.0000`.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición

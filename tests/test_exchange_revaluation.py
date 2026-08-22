@@ -527,6 +527,82 @@ def test_service_revalues_foreign_currency_bank_balance(app_ctx):
     assert bank_line.exchange_difference == Decimal("10.0000")
 
 
+def test_service_uses_each_ledger_bank_exposure_independently(app_ctx):
+    """Una cuenta bancaria revaloriza el saldo original propio de cada libro."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import Accounts, Bank, BankAccount, ExchangeRevaluationItem, GLEntry, database
+
+    bank_account_id = database.session.execute(
+        database.select(Accounts.id).filter_by(entity="cacao", code="1005")
+    ).scalar_one()
+    bank = Bank(name="Banco USD multilibro")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta USD multilibro",
+        account_no="USD-ML-1",
+        currency="USD",
+        gl_account_id=bank_account_id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                ledger_id=_book("NIO").id,
+                account_id=bank_account_id,
+                account_code="1005",
+                debit=Decimal("360"),
+                credit=Decimal("0"),
+                debit_in_account_currency=Decimal("10"),
+                account_currency="USD",
+                company_currency="NIO",
+                exchange_rate=Decimal("36"),
+                bank_account_id=bank_account.id,
+                voucher_type="payment_entry",
+                voucher_id="NIO-1",
+            ),
+            GLEntry(
+                posting_date=date(2026, 5, 1),
+                company="cacao",
+                ledger_id=_book("EUR").id,
+                account_id=bank_account_id,
+                account_code="1005",
+                debit=Decimal("18"),
+                credit=Decimal("0"),
+                debit_in_account_currency=Decimal("20"),
+                account_currency="USD",
+                company_currency="EUR",
+                exchange_rate=Decimal("0.9"),
+                bank_account_id=bank_account.id,
+                voucher_type="payment_entry",
+                voucher_id="EUR-1",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    ExchangeRevaluationService().run(company="cacao", year=2026, month=5, user_id="admin")
+
+    items = (
+        database.session.execute(
+            database.select(ExchangeRevaluationItem)
+            .filter_by(source_document_type="bank_account", source_document_id=bank_account.id)
+            .order_by(ExchangeRevaluationItem.ledger_currency_id)
+        )
+        .scalars()
+        .all()
+    )
+    assert [(item.ledger_currency_id, item.open_amount_original, item.exchange_difference) for item in items] == [
+        ("EUR", Decimal("20.0000"), Decimal("0.6000")),
+        ("NIO", Decimal("10.0000"), Decimal("10.0000")),
+    ]
+
+
 def test_bank_balance_converts_functional_only_gl_amounts(app_ctx):
     """Bank revaluation falls back to functional GL amounts when needed."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService

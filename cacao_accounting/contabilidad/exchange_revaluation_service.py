@@ -61,6 +61,7 @@ class RevaluationCandidate:
     normal_balance: str
     total_amount_original: Decimal
     bank_account_id: str | None = None
+    source_ledger_id: str | None = None
     as_of_date: date | None = None
 
 
@@ -129,7 +130,7 @@ class ExchangeRevaluationService:
 
             self._reverse_prior_period_runs(company, period.start, user_id)
 
-            candidates = self._open_candidates(company, period.end, summary_ledger.id)
+            candidates = self._open_candidates(company, period.end, ledgers)
 
             run = ExchangeRevaluation(
                 company=company,
@@ -381,11 +382,11 @@ class ExchangeRevaluationService:
         entity_currency = str(entity.currency or "") if entity else ""
         return next((ledger for ledger in ledgers if ledger.currency == entity_currency), ledgers[0])
 
-    def _open_candidates(self, company: str, as_of_date: date, source_ledger_id: str) -> list[RevaluationCandidate]:
-        """Collect open monetary items using one ledger as the source of exposure."""
+    def _open_candidates(self, company: str, as_of_date: date, ledgers: Sequence[Book]) -> list[RevaluationCandidate]:
+        """Collect open monetary items, retaining per-ledger bank exposure."""
         candidates = self._open_sales_invoices(company, as_of_date)
         candidates.extend(self._open_purchase_invoices(company, as_of_date))
-        candidates.extend(self._open_bank_accounts(company, as_of_date, source_ledger_id))
+        candidates.extend(self._open_bank_accounts(company, as_of_date, ledgers))
         return candidates
 
     def _open_sales_invoices(self, company: str, as_of_date: date) -> list[RevaluationCandidate]:
@@ -456,7 +457,8 @@ class ExchangeRevaluationService:
                 )
         return candidates
 
-    def _open_bank_accounts(self, company: str, as_of_date: date, source_ledger_id: str) -> list[RevaluationCandidate]:
+    def _open_bank_accounts(self, company: str, as_of_date: date, ledgers: Sequence[Book]) -> list[RevaluationCandidate]:
+        """Build one bank candidate per source ledger with an open balance."""
         bank_accounts = (
             database.session.execute(select(BankAccount).filter_by(company=company, is_active=True)).scalars().all()
         )
@@ -464,25 +466,27 @@ class ExchangeRevaluationService:
         for account in bank_accounts:
             if not account.gl_account_id or not account.currency:
                 continue
-            amount = self._bank_original_balance(account, as_of_date, source_ledger_id)
-            if amount == 0:
-                continue
-            candidates.append(
-                RevaluationCandidate(
-                    source_document_type="bank_account",
-                    source_document_id=account.id,
-                    source_document_no=account.account_no or account.account_name,
-                    partner_type=None,
-                    partner_id=None,
-                    account_id=account.gl_account_id,
-                    original_currency=account.currency,
-                    open_amount_original=amount,
-                    normal_balance="debit",
-                    total_amount_original=amount,
-                    bank_account_id=account.id,
-                    as_of_date=as_of_date,
+            for ledger in ledgers:
+                amount = self._bank_original_balance(account, as_of_date, ledger.id)
+                if amount == 0:
+                    continue
+                candidates.append(
+                    RevaluationCandidate(
+                        source_document_type="bank_account",
+                        source_document_id=account.id,
+                        source_document_no=account.account_no or account.account_name,
+                        partner_type=None,
+                        partner_id=None,
+                        account_id=account.gl_account_id,
+                        original_currency=account.currency,
+                        open_amount_original=amount,
+                        normal_balance="debit",
+                        total_amount_original=amount,
+                        bank_account_id=account.id,
+                        source_ledger_id=ledger.id,
+                        as_of_date=as_of_date,
+                    )
                 )
-            )
         return candidates
 
     def _calculate_lines(
@@ -491,6 +495,8 @@ class ExchangeRevaluationService:
         drafts: list[RevaluationLineDraft] = []
         for candidate in candidates:
             for ledger in ledgers:
+                if candidate.source_ledger_id and candidate.source_ledger_id != ledger.id:
+                    continue
                 ledger_currency = str(ledger.currency or "")
                 if not ledger_currency or ledger_currency == candidate.original_currency:
                     continue
