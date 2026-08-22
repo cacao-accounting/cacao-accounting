@@ -3,6 +3,21 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Anticipo obligatorio para exceso de pago a proveedor (#660)
+
+### Implementado
+
+Un pago a proveedor parcialmente aplicado ya no puede omitir su diferencia.
+Cuando el importe supera lo asignado, se exige una cuenta de anticipo de
+proveedor antes de generar los asientos; así se evita acreditar al banco por
+menos que el pago real.
+
+### Validación
+
+- Regresiones de cobros, helper de banco y exceso sin anticipo: **4 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Helper de pago sin tercero en banco (#661)
 
 ### Implementado

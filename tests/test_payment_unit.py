@@ -1670,6 +1670,47 @@ class TestBankManagementExhaustive:
         assert bank_entry.party_type is None
         assert bank_entry.party_id is None
 
+    def test_supplier_payment_excess_requires_advance_account(self, app_ctx):
+        """A partially allocated supplier payment cannot drop its advance portion."""
+        import pytest
+
+        from cacao_accounting.contabilidad.posting import PostingError, _create_payment_pay_entries, _document_contexts
+        from cacao_accounting.database import BankAccount, Party, PaymentEntry, PaymentReference
+
+        supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        defaults = _ensure_company_default_accounts("cacao", bank)
+        defaults.supplier_advance_account_id = None
+        invoice = _make_supplier_invoice(grand_total=Decimal("700"))
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="pay",
+            party_type="supplier",
+            party_id=supplier.id,
+            party_name=supplier.name,
+            bank_account_id=bank.id,
+            currency="NIO",
+            paid_amount=Decimal("1000"),
+            docstatus=1,
+            document_no="PAY-SUPPLIER-EXCESS-01",
+        )
+        database.session.add(payment)
+        database.session.flush()
+        database.session.add(
+            PaymentReference(
+                payment_id=payment.id,
+                reference_type="purchase_invoice",
+                reference_id=invoice.id,
+                allocated_amount=Decimal("700"),
+                allocation_date=date.today(),
+            )
+        )
+        database.session.commit()
+
+        with pytest.raises(PostingError, match="anticipo de proveedor"):
+            _create_payment_pay_entries(_document_contexts(payment)[0], payment, "cacao", Decimal("1000"))
+
     def test_bank_debit_note_uses_custom_paid_to_account(self, app_ctx):
         """A bank debit note uses paid_to_account_id when specified."""
         from cacao_accounting.contabilidad.posting import post_payment_entry

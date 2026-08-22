@@ -1328,21 +1328,24 @@ def _create_payment_pay_entries(
                 credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
             )
         )
-        if advance_account_id:
-            excess = amount - allocated
-            entries.extend(
-                _normal_entries_for_amount(
-                    context=context,
-                    debit_account_id=advance_account_id,
-                    credit_account_id=bank_account_id,
-                    amount=excess,
-                    party_type=party_type,
-                    party_id=document.party_id,
-                    credit_bank_account_id=document.bank_account_id,
-                    debit_remarks="Anticipo a proveedor",
-                    credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
-                )
+        excess = amount - allocated
+        supplier_advance_account = _require_account(
+            advance_account_id,
+            "No existe cuenta de anticipo de proveedor configurada para la compañía.",
+        )
+        entries.extend(
+            _normal_entries_for_amount(
+                context=context,
+                debit_account_id=supplier_advance_account,
+                credit_account_id=bank_account_id,
+                amount=excess,
+                party_type=party_type,
+                party_id=document.party_id,
+                credit_bank_account_id=document.bank_account_id,
+                debit_remarks="Anticipo a proveedor",
+                credit_remarks=_REMARKS_CUENTA_BANCARIA_PAGO,
             )
+        )
         return entries
 
     account_id = party_account_id or (None if _payment_has_references(document.id) else advance_account_id)
