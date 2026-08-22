@@ -517,6 +517,13 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 "source_id",
                 {"source_type": "delivery_note"},
             ),
+            DocumentAction(
+                "Crear Devolución de Venta",
+                "delivery_note",
+                "ventas.ventas_entrega_nuevo",
+                "from_note",
+                {"is_return": "1"},
+            ),
         ),
     ),
     "sales_invoice": DocumentType(

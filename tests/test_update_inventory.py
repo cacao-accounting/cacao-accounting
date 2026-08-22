@@ -13,12 +13,14 @@ from cacao_accounting import create_app
 from cacao_accounting.database import (
     Accounts,
     DeliveryNote,
+    DeliveryNoteItem,
     ExchangeRate,
     Item,
     Party,
     SalesInvoice,
     SalesInvoiceItem,
     StockValuationLayer,
+    StockLedgerEntry,
     Warehouse,
     StockBin,
     database,
@@ -243,6 +245,57 @@ def test_auto_delivery_note_rejects_default_warehouse_from_another_company(app_c
 
     with pytest.raises(PostingError, match="no pertenece a la compañía"):
         _create_delivery_note_from_invoice(invoice)
+
+
+def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
+    """A sales return restores the original delivery cost, not the sales price."""
+    from cacao_accounting.contabilidad.posting_service import _create_stock_ledger_for_document
+
+    warehouse, item, _cogs_account, _inventory_account = _setup_inventory_context()
+    original = DeliveryNote(company="cacao", posting_date=date(2026, 5, 1), docstatus=1)
+    database.session.add(original)
+    database.session.flush()
+    database.session.add(
+        StockLedgerEntry(
+            posting_date=original.posting_date,
+            item_code=item.code,
+            warehouse=warehouse.code,
+            company="cacao",
+            qty_change=Decimal("-1"),
+            qty_after_transaction=Decimal("0"),
+            valuation_rate=Decimal("60"),
+            stock_value_difference=Decimal("-60"),
+            stock_value=Decimal("0"),
+            voucher_type="delivery_note",
+            voucher_id=original.id,
+        )
+    )
+    returned = DeliveryNote(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        is_return=True,
+        reversal_of=original.id,
+        docstatus=1,
+    )
+    database.session.add(returned)
+    database.session.flush()
+    line = DeliveryNoteItem(
+        delivery_note_id=returned.id,
+        item_code=item.code,
+        qty=Decimal("1"),
+        uom=item.default_uom,
+        rate=Decimal("100"),
+        amount=Decimal("100"),
+        warehouse=warehouse.code,
+    )
+    database.session.add(line)
+    database.session.flush()
+
+    movement = _create_stock_ledger_for_document(returned, Decimal("1"), Decimal("100"), warehouse.code, line)
+
+    assert movement.valuation_rate == Decimal("60")
+    assert movement.stock_value_difference == Decimal("60.0000")
+    assert line._inventory_cost_amount == Decimal("60.0000")
 
 
 def test_submit_without_update_inventory_does_not_create_dn(app_ctx):

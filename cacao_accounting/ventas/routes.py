@@ -1453,10 +1453,15 @@ def ventas_entrega_nuevo():
         for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
     ]
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
+    from_note_id = request.args.get("from_note") or request.form.get("from_note")
     orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
-    if orden_origen:
-        selected_company = orden_origen.company
+    entrega_origen = database.session.get(DeliveryNote, from_note_id) if from_note_id else None
+    source_document = orden_origen or entrega_origen
+    if source_document:
+        selected_company = source_document.company
         formulario.naming_series.choices = _series_choices("delivery_note", selected_company)
+    if from_note_id:
+        formulario.is_return.data = True
     items_disponibles = [
         {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
         for i in database.session.execute(database.select(Item)).all()
@@ -1474,24 +1479,33 @@ def ventas_entrega_nuevo():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "initialSourceType": "sales_order" if from_order_id else "",
-        "availableSourceTypes": [{"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)}],
+        "initialSourceType": "sales_order" if from_order_id else ("delivery_note" if from_note_id else ""),
+        "availableSourceTypes": [
+            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
+            {"value": "delivery_note", "label": _("Nota de Entrega")},
+        ],
     }
-    if orden_origen:
+    if source_document:
         transaction_config["initialHeader"] = {
-            "company": orden_origen.company or "",
-            "currency": effective_currency(orden_origen) or "",
-            "party": orden_origen.customer_id or "",
-            "party_label": orden_origen.customer_name or "",
+            "company": source_document.company or "",
+            "currency": effective_currency(source_document) or "",
+            "party": source_document.customer_id or "",
+            "party_label": source_document.customer_name or "",
             "posting_date": str(date.today()),
-            **_sales_logistics_values(orden_origen),
+            **_sales_logistics_values(source_document),
         }
     if request.method == "POST":
         try:
             posting_date = _parse_date(request.form.get("posting_date"))
             customer_id = request.form.get("customer_id") or None
             from_order = request.form.get("from_order") or None
+            from_note = request.form.get("from_note") or None
             source = database.session.get(SalesOrder, from_order) if from_order else None
+            source = database.session.get(DeliveryNote, from_note) if from_note else source
+            is_return = bool(request.form.get("is_return")) or bool(from_note)
+            if from_note and (not source or source.docstatus != 1 or source.is_return or not is_return):
+                raise ValueError("La devolución debe referenciar una nota de entrega aprobada que no sea devolución.")
+            from_order = from_order or getattr(source, "sales_order_id", None)
             company, _source_currency = validate_immutable_header(
                 source,
                 request.form.get("company") or None,
@@ -1506,7 +1520,8 @@ def ventas_entrega_nuevo():
                 company=company,
                 posting_date=posting_date,
                 sales_order_id=from_order,
-                is_return=bool(request.form.get("is_return")),
+                is_return=is_return,
+                reversal_of=from_note,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
@@ -1520,12 +1535,15 @@ def ventas_entrega_nuevo():
                 naming_series_id=request.form.get("naming_series") or None,
             )
             _total_qty, total = _save_delivery_note_items(entrega.id)
-            if entrega.sales_order_id:
+            if from_note or entrega.sales_order_id:
                 delivery_items = (
                     database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=entrega.id))
                     .scalars()
                     .all()
                 )
+            if from_note:
+                _validate_sales_source_link(entrega, "delivery_note", from_note, delivery_items)
+            elif entrega.sales_order_id:
                 _validate_sales_source_link(entrega, "sales_order", entrega.sales_order_id, delivery_items)
             _set_sales_document_totals(entrega, total)
             log_create(entrega)
@@ -1540,7 +1558,9 @@ def ventas_entrega_nuevo():
         form=formulario,
         titulo=titulo,
         orden_origen=orden_origen,
+        entrega_origen=entrega_origen,
         from_order_id=from_order_id,
+        from_note_id=from_note_id,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         bodegas_disponibles=bodegas_disponibles,
