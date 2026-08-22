@@ -85,6 +85,108 @@ def test_exchange_rate_lookups_use_the_latest_prior_positive_rate(app_ctx):
     assert bank_lookup_exchange_rate("NIO", "USD", date(2026, 5, 4)) == Decimal("0.028")
 
 
+def test_foreign_currency_inventory_uses_functional_valuation_and_cogs(app_ctx):
+    """Stock layers, bins and primary-book inventory stay in functional currency."""
+    from cacao_accounting.contabilidad.posting_service import post_delivery_note, post_purchase_receipt
+    from cacao_accounting.database import (
+        Accounts,
+        CompanyDefaultAccount,
+        DeliveryNote,
+        DeliveryNoteItem,
+        ExchangeRate,
+        Item,
+        ItemAccount,
+        PurchaseMatchingConfig,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        StockBin,
+        StockLedgerEntry,
+        UOM,
+        Warehouse,
+        WarehouseCompanyAccount,
+        database,
+    )
+
+    inventory = Accounts(entity="cacao", code="INV-FX", name="Inventario FX", classification="asset")
+    bridge = Accounts(entity="cacao", code="BRG-FX", name="Puente FX", classification="liability")
+    cogs = Accounts(entity="cacao", code="COGS-FX", name="Costo FX", classification="expense")
+    item = Item(code="ITEM-FX", name="Artículo FX", item_type="goods", is_stock_item=True, default_uom="EA-FX")
+    warehouse = Warehouse(code="WH-FX", name="Bodega FX", company="cacao")
+    database.session.add_all([inventory, bridge, cogs, item, warehouse, UOM(code="EA-FX", name="Each FX")])
+    database.session.flush()
+    database.session.add_all(
+        [
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 5, 4)),
+            ItemAccount(item_code=item.code, company="cacao", cogs_account_id=cogs.id),
+            WarehouseCompanyAccount(warehouse_code=warehouse.code, company="cacao", inventory_account_id=inventory.id),
+        ]
+    )
+    defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalar_one_or_none()
+    if defaults is None:
+        defaults = CompanyDefaultAccount(company="cacao")
+        database.session.add(defaults)
+    defaults.bridge_account_id = bridge.id
+    database.session.execute(
+        database.update(PurchaseMatchingConfig)
+        .where(PurchaseMatchingConfig.company == "cacao")
+        .values(bridge_account_required=True)
+    )
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        supplier_id="SUPP-FX",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    database.session.add(
+        PurchaseReceiptItem(
+            purchase_receipt_id=receipt.id,
+            item_code=item.code,
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom="EA-FX",
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+            warehouse=warehouse.code,
+        )
+    )
+    database.session.commit()
+
+    receipt_entries = post_purchase_receipt(receipt)
+    database.session.commit()
+    receipt_movement = database.session.execute(
+        database.select(StockLedgerEntry).filter_by(voucher_type="purchase_receipt", voucher_id=receipt.id)
+    ).scalar_one()
+    bin_row = database.session.execute(database.select(StockBin).filter_by(company="cacao", item_code=item.code)).scalar_one()
+    assert receipt_movement.stock_value_difference == Decimal("3600.0000")
+    assert bin_row.stock_value == Decimal("3600.0000")
+    assert sum(entry.debit for entry in receipt_entries if entry.account_id == inventory.id) == Decimal("3600.0000")
+
+    delivery = DeliveryNote(company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    database.session.add(delivery)
+    database.session.flush()
+    database.session.add(
+        DeliveryNoteItem(
+            delivery_note_id=delivery.id,
+            item_code=item.code,
+            qty=Decimal("1"),
+            qty_in_base_uom=Decimal("1"),
+            uom="EA-FX",
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+            warehouse=warehouse.code,
+        )
+    )
+    database.session.commit()
+
+    delivery_entries = post_delivery_note(delivery)
+    assert sum(entry.debit for entry in delivery_entries if entry.account_id == cogs.id) == Decimal("3600.0000")
+
+
 def test_posting_rejects_company_without_active_ledger(app_ctx):
     """Posting cannot create GL rows that no financial report can select."""
     from cacao_accounting.contabilidad.posting_service import PostingError, _active_books

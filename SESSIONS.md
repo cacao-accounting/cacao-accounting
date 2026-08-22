@@ -3,6 +3,23 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Valoración de inventario en moneda funcional (#658)
+
+### Implementado
+
+Las capas de valoración y `StockBin` usan la moneda funcional de la entidad,
+que es la única unidad posible en sus modelos sin columnas por libro. Las
+recepciones y ajustes de entrada convierten el importe documental al persistir;
+las salidas consumen ese costo y los asientos GL lo convierten desde la moneda
+funcional hacia cada libro, evitando una conversión doble.
+
+### Validación
+
+- Regresión USD de recepción y COGS, más matriz de conciliación de inventario:
+  **19 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Cuentas bancarias activas al crear pagos (#659)
 
 ### Implementado

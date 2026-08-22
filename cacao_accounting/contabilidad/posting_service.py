@@ -651,6 +651,47 @@ def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
     return (amount * exchange_rate).quantize(Decimal("0.0001"))
 
 
+def _inventory_currency(document: Any) -> str | None:
+    """Return the functional currency used by StockBin and valuation layers."""
+    entity = database.session.execute(select(Entity).filter_by(code=document.company)).scalars().first()
+    return (
+        getattr(entity, "currency", None)
+        or getattr(document, "base_currency", None)
+        or getattr(document, "transaction_currency", None)
+    )
+
+
+def _inventory_value_in_functional_currency(document: Any, amount: Decimal) -> Decimal:
+    """Convert an inbound inventory value into the single stock-ledger currency."""
+    functional_currency = _inventory_currency(document)
+    transaction_currency = (
+        getattr(document, "transaction_currency", None) or getattr(document, "base_currency", None) or functional_currency
+    )
+    if not functional_currency or not transaction_currency or transaction_currency == functional_currency:
+        return amount
+    base_currency = getattr(document, "base_currency", None)
+    document_rate = _decimal_value(getattr(document, "exchange_rate", None))
+    rate = (
+        document_rate
+        if functional_currency == base_currency and document_rate > 0
+        else _lookup_exchange_rate(transaction_currency, functional_currency, _posting_date_for(document))
+    )
+    return _to_company_currency(amount, rate)
+
+
+def _inventory_ledger_context(context: LedgerContext, document: Any) -> LedgerContext:
+    """Value functional-currency inventory costs in the destination ledger currency."""
+    functional_currency = _inventory_currency(document)
+    if not functional_currency or functional_currency == context.company_currency:
+        return _ledger_context_with_currency(context, functional_currency, Decimal("1"))
+    assert context.company_currency is not None
+    return _ledger_context_with_currency(
+        context,
+        functional_currency,
+        _lookup_exchange_rate(functional_currency, context.company_currency, context.posting_date),
+    )
+
+
 def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> Decimal:
     """Resolve the latest valid historical rate on or before ``posting_date``."""
     if origin == destination:
@@ -2574,6 +2615,8 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
         else:
             valuation_rate = _line_rate(line)
             value = amount or (qty * valuation_rate)
+        value = _inventory_value_in_functional_currency(document, value)
+        valuation_rate = value / qty if qty else valuation_rate
         line._inventory_cost_amount = value
         return [
             _create_stock_movement(
@@ -2588,7 +2631,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
     if purpose in ("material_issue", "adjustment_negative"):
         source_warehouse = line.source_warehouse or document.from_warehouse
         if qty == 0:
-            value = _decimal_value(line.amount)
+            value = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
             fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
             return [
                 _create_stock_movement(
@@ -2802,6 +2845,8 @@ def _create_stock_ledger_for_document_type(
             amount = _decimal_value(getattr(allocation, "final_inventory_cost", None))
         qty_change = _signed_amount(document, sign * qty)
         value_change = _signed_amount(document, sign * amount)
+        if qty_change > 0:
+            value_change = _inventory_value_in_functional_currency(document, value_change)
         warehouse = getattr(line, "warehouse", None)
         if not warehouse:
             raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
@@ -2957,6 +3002,7 @@ def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id,
 
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
+        context = _inventory_ledger_context(context, document)
         for line in _document_items(document):
             if _should_skip_non_stock_line(line):
                 continue
@@ -3048,6 +3094,7 @@ def _create_delivery_note_gl_entries(
     """Create GL entries for delivery note."""
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
+        context = _inventory_ledger_context(context, document)
         for line in _document_items(document):
             if _should_skip_non_stock_line(line):
                 continue
@@ -3237,6 +3284,7 @@ def _create_stock_entry_gl_entries(
     entries: list[GLEntry] = []
     items = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars().all()
     for context in _document_contexts(document, ledger_code=ledger_code):
+        context = _inventory_ledger_context(context, document)
         for line in items:
             _add_stock_entry_line_gl_entries(
                 entries=entries,
