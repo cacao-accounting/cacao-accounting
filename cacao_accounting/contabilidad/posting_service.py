@@ -2863,6 +2863,8 @@ def _record_purchase_reconciliation(document: PurchaseInvoice, matched_amount: D
     )
 
     _ = matched_amount
+    if document.is_return:
+        return
     config = get_matching_config(str(document.company))
     if not config.auto_reconcile:
         return

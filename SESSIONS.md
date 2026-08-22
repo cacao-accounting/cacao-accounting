@@ -3,6 +3,21 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Devoluciones fuera del matching positivo (#679)
+
+### Implementado
+
+El auto-matching 2-way/3-way de facturas de compra ignora documentos
+`is_return`. Así una devolución o nota de crédito no consume como cantidad
+positiva el pendiente de la OC o recepción original; sus efectos se manejan en
+el flujo de reversión correspondiente.
+
+### Validación
+
+- Regresión de exclusión del auto-matching: **1 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Moneda obligatoria en destino de transferencia (#681)
 
 ### Implementado
