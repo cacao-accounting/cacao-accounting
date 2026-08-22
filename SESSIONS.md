@@ -3,6 +3,20 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Cierres completos sin año fiscal resuelto (#673)
+
+### Implementado
+
+El balance general excluye ambos lados de un asiento de cierre cuando no puede
+resolver el año fiscal. Así evita sumar el patrimonio de cierre y, a la vez,
+el resultado del período calculado desde las cuentas P&L.
+
+### Validación
+
+- Regresiones de margen, utilidades retenidas y cierre sin período: **3 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — NC limitada por saldo actual (#675)
 
 ### Implementado

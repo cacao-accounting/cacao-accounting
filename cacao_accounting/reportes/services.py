@@ -2757,7 +2757,7 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         classification = _normalize_account_classification(account)
         # Skip closing entries if include_closing is False and they are P&L or current FY
         if not filters.include_closing and entry.is_fiscal_year_closing:
-            if classification in _PL_CLASSIFICATIONS or (fiscal_year_start and entry.posting_date >= fiscal_year_start):
+            if fiscal_year_start is None or classification in _PL_CLASSIFICATIONS or entry.posting_date >= fiscal_year_start:
                 continue
         # Los saldos P&L de ejercicios previos que no se cerraron siguen siendo
         # parte del patrimonio: se muestran como utilidades retenidas, no como

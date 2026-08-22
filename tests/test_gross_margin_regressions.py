@@ -191,3 +191,82 @@ def test_balance_sheet_capitalizes_unclosed_prior_year_profit() -> None:
         assert report.totals["equity"] == Decimal("70")
         assert report.totals["period_profit"] == Decimal("0")
         assert report.totals["difference"] == Decimal("0")
+
+
+def test_balance_sheet_without_fiscal_period_excludes_both_sides_of_closing_entry() -> None:
+    """Avoid counting closing retained earnings and the same period profit together."""
+    app = create_app(
+        {
+            **configuracion,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "TESTING": True,
+        }
+    )
+    with app.app_context():
+        database.create_all()
+        database.session.add(Entity(code="closing", name="Closing", company_name="Closing", tax_id="CLOSING", currency="NIO"))
+        book = Book(entity="closing", code="CLOSING", name="Closing", currency="NIO", is_primary=True, default=True)
+        cash = Accounts(entity="closing", code="1.01", name="Caja", active=True, enabled=True, classification="Activo")
+        income = Accounts(entity="closing", code="4.01", name="Ventas", active=True, enabled=True, classification="Ingresos")
+        equity = Accounts(
+            entity="closing", code="3.01", name="Resultado acumulado", active=True, enabled=True, classification="Patrimonio"
+        )
+        database.session.add_all([book, cash, income, equity])
+        database.session.flush()
+        database.session.add_all(
+            [
+                GLEntry(
+                    posting_date=date(2026, 12, 30),
+                    company="closing",
+                    ledger_id=book.id,
+                    account_id=cash.id,
+                    account_code=cash.code,
+                    debit=Decimal("100"),
+                    credit=Decimal("0"),
+                    voucher_type="invoice",
+                    voucher_id="invoice-1",
+                ),
+                GLEntry(
+                    posting_date=date(2026, 12, 30),
+                    company="closing",
+                    ledger_id=book.id,
+                    account_id=income.id,
+                    account_code=income.code,
+                    debit=Decimal("0"),
+                    credit=Decimal("100"),
+                    voucher_type="invoice",
+                    voucher_id="invoice-1",
+                ),
+                GLEntry(
+                    posting_date=date(2026, 12, 31),
+                    company="closing",
+                    ledger_id=book.id,
+                    account_id=income.id,
+                    account_code=income.code,
+                    debit=Decimal("100"),
+                    credit=Decimal("0"),
+                    voucher_type="closing",
+                    voucher_id="closing-1",
+                    is_fiscal_year_closing=True,
+                ),
+                GLEntry(
+                    posting_date=date(2026, 12, 31),
+                    company="closing",
+                    ledger_id=book.id,
+                    account_id=equity.id,
+                    account_code=equity.code,
+                    debit=Decimal("0"),
+                    credit=Decimal("100"),
+                    voucher_type="closing",
+                    voucher_id="closing-1",
+                    is_fiscal_year_closing=True,
+                ),
+            ]
+        )
+        database.session.commit()
+
+        report = get_balance_sheet_report(FinancialReportFilters(company="closing", ledger="CLOSING"))
+
+        assert report.totals["equity"] == Decimal("100")
+        assert report.totals["difference"] == Decimal("0")
