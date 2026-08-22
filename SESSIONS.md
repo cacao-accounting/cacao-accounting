@@ -3,6 +3,23 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Validación de método de prorrateo de landed cost (#689)
+
+### Implementado
+
+Se centralizó el contrato de métodos de prorrateo soportados en el motor de
+landed cost (`by_value`, `by_current_value`, `by_quantity`, `by_weight`,
+`by_volume`, `equal`). La creación del documento rechaza valores ajenos al
+contrato y el builder que procesa documentos ya persistidos lo vuelve a
+validar antes de contabilizar. El motor también se protege en cada regla, de
+modo que una llamada API o una regla manual inválida no puede degradar a
+shares cero y cargar el residuo entero en la última línea.
+
+### Validación
+
+- `tests/engines/test_landed_cost_engine.py`: **7 passed**.
+- Ruff check/format y `git diff --check`: OK.
+
 ## 2026-08-22 — UOM fail-closed en relaciones documentales (#690)
 
 ### Implementado

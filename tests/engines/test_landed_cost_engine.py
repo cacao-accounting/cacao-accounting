@@ -72,6 +72,19 @@ def test_landed_cost_by_value(items):
     assert result.get_allocation("B").allocated_total == Decimal("50.00")
 
 
+def test_landed_cost_rejects_unknown_allocation_method(items):
+    """Un método arbitrario no puede concentrar el residuo en la última línea."""
+    engine = LandedCostEngine()
+
+    with pytest.raises(ValueError, match="Método de prorrateo no soportado"):
+        engine.calculate(
+            items,
+            [],
+            capitalizable_charges=[{"amount": Decimal("100"), "concept": "Flete"}],
+            allocation_method="por_unidad",
+        )
+
+
 def test_landed_cost_rounding_residual(items):
     """Test that rounding residuals are handled (allocated to last item)."""
     # Total charge: 10.00.

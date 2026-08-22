@@ -15,6 +15,19 @@ from cacao_accounting.accounting_engine.common.context import (
 )
 from cacao_accounting.accounting_engine.common.rounding import RoundingManager
 
+VALID_ALLOCATION_METHODS = frozenset({"by_value", "by_current_value", "by_quantity", "by_weight", "by_volume", "equal"})
+
+
+def validate_allocation_method(method: str) -> str:
+    """Return a supported landed-cost allocation method or reject it.
+
+    The allocation engine is a trust boundary for persisted documents and API
+    callers, so unknown values must not silently turn into zero shares.
+    """
+    if method not in VALID_ALLOCATION_METHODS:
+        raise ValueError(f"Método de prorrateo no soportado: {method}.")
+    return method
+
 
 class LandedCostEngine:
     """Deterministic landed cost calculation engine."""
@@ -41,6 +54,8 @@ class LandedCostEngine:
 
         if not items:
             return LandedCostResult(errors=["No items to allocate costs to."])
+
+        validate_allocation_method(allocation_method)
 
         total_qty = sum((item.quantity for item in items), Decimal("0"))
         total_weight = sum((item.weight * item.quantity for item in items), Decimal("0"))
@@ -81,7 +96,7 @@ class LandedCostEngine:
         step_counter = 1
         for rule in all_rules:
             rule_amount: Decimal = rule["amount"]
-            method: str = rule["method"]
+            method = validate_allocation_method(rule["method"])
 
             # Calculate shares for this specific rule
             shares = {}
@@ -193,7 +208,7 @@ class LandedCostEngine:
             case "equal":
                 return self._ratio(Decimal("1"), total_count)
             case _:
-                return Decimal("0")
+                raise ValueError(f"Método de prorrateo no soportado: {method}.")
 
     def _current_value_share(
         self,

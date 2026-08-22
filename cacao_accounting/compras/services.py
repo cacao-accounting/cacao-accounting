@@ -2479,6 +2479,8 @@ def _landed_cost_currency_context(
 
 def _create_import_landed_cost_from_request():
     """Crea un documento de costo de importacion desde el formulario."""
+    from cacao_accounting.accounting_engine.landed_cost.engine import validate_allocation_method
+
     company = request.form.get("company", "").strip()
     posting_date = _parse_date(request.form.get("posting_date"))
     from_invoice_id = request.form.get("from_invoice", "").strip() or None
@@ -2487,6 +2489,11 @@ def _create_import_landed_cost_from_request():
 
     if not company or not posting_date:
         flash(_("Compania y fecha son obligatorios."), "danger")
+        return None
+    try:
+        allocation_method = validate_allocation_method(allocation_method)
+    except ValueError as exc:
+        flash(str(exc), "danger")
         return None
 
     exige_acceso_compania("purchases", company, "crear")

@@ -566,7 +566,13 @@ def _build_landed_cost_tax_rules(
 
 def _build_import_landed_cost_context(document: ImportLandedCost) -> CalculationContext:
     """Build the context for an import landed cost document."""
+    from cacao_accounting.accounting_engine.landed_cost.engine import validate_allocation_method
+
     company = _require_company(document.company)
+    try:
+        allocation_method = validate_allocation_method(document.allocation_method or "by_value")
+    except ValueError as exc:
+        raise CalculationContextBuilderError(str(exc)) from exc
     defaults = _company_defaults(company)
 
     item_contexts, account_lines = _build_landed_cost_item_contexts(document, company)
@@ -575,7 +581,7 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
         database.session.execute(select(ImportLandedCostCharge).filter_by(import_landed_cost_id=document.id)).scalars().all()
     )
     total_charges_amount = sum((_decimal_value(c.amount) for c in charges), Decimal("0"))
-    tax_rules = _build_landed_cost_tax_rules(charges, document.allocation_method)
+    tax_rules = _build_landed_cost_tax_rules(charges, allocation_method)
 
     bridge_account_id = getattr(defaults, "bridge_account_id", None)
     if bridge_account_id and account_lines:
@@ -603,7 +609,7 @@ def _build_import_landed_cost_context(document: ImportLandedCost) -> Calculation
         exchange_rate=_document_exchange_rate(document),
         items=item_contexts,
         tax_rules=tax_rules,
-        accounting_policy={"allocation_method": document.allocation_method or "by_value"},
+        accounting_policy={"allocation_method": allocation_method},
         references=_build_references(
             company=company,
             party_id=document.supplier_id,
