@@ -1330,15 +1330,21 @@ def _payment_bank_diagnostics(company: str, as_of_date: date | None) -> list[Rep
     return rows
 
 
-def _reconciliation_item_diagnostics(transaction_ids: set[str]) -> list[ReportRow]:
-    """Find active reconciliation items whose bank transaction is missing."""
+def _reconciliation_item_diagnostics(transaction_ids: set[str], company: str | None = None) -> list[ReportRow]:
+    """Find active reconciliation items whose bank transaction is missing.
+
+    También diagnostica partidas bancarias activas sin contexto contable
+    persistido (moneda/pierna), que deben migrarse con backfill o revisarse.
+    """
     item_query = select(ReconciliationItem).where(
         ReconciliationItem.source_type == "bank_transaction",
         ReconciliationItem.status != "cancelled",
     )
     rows: list[ReportRow] = []
+    flagged_ids: set[str] = set()
     for item in database.session.execute(item_query).scalars():
         if item.source_id not in transaction_ids:
+            flagged_ids.add(item.id)
             rows.append(
                 _bank_diagnostic_row(
                     "bank_transaction",
@@ -1350,6 +1356,31 @@ def _reconciliation_item_diagnostics(transaction_ids: set[str]) -> list[ReportRo
                     "orphan_reconciliation_item",
                 )
             )
+    context_query = (
+        select(ReconciliationItem)
+        .join(Reconciliation, ReconciliationItem.reconciliation_id == Reconciliation.id)
+        .where(
+            ReconciliationItem.source_type == "bank_transaction",
+            ReconciliationItem.status != "cancelled",
+            ReconciliationItem.currency.is_(None),
+        )
+    )
+    if company:
+        context_query = context_query.where(Reconciliation.company == company)
+    for item in database.session.execute(context_query).scalars():
+        if item.id in flagged_ids:
+            continue
+        rows.append(
+            _bank_diagnostic_row(
+                "bank_transaction",
+                item.source_id,
+                item.reconciliation_date,
+                item.target_type,
+                item.target_id,
+                _decimal_value(item.allocated_amount or item.amount),
+                "reconciliation_item_missing_context",
+            )
+        )
     return rows
 
 
@@ -1357,7 +1388,9 @@ def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[Repo
     """Detecta vínculos bancarios rotos sin confundirlos con partidas pendientes."""
     transaction_rows, transaction_ids = _transaction_bank_diagnostics(company, as_of_date)
     return (
-        transaction_rows + _payment_bank_diagnostics(company, as_of_date) + _reconciliation_item_diagnostics(transaction_ids)
+        transaction_rows
+        + _payment_bank_diagnostics(company, as_of_date)
+        + _reconciliation_item_diagnostics(transaction_ids, company)
     )
 
 
@@ -2702,6 +2735,7 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         "cost": Decimal("0"),
         "expense": Decimal("0"),
     }
+    retained_earnings = Decimal("0")
     for entry, account in database.session.execute(base_query).all():
         if account is None:
             continue
@@ -2710,8 +2744,20 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         if not filters.include_closing and entry.is_fiscal_year_closing:
             if classification in _PL_CLASSIFICATIONS or (fiscal_year_start and entry.posting_date >= fiscal_year_start):
                 continue
-        # Limitar cuentas de P&L al año fiscal para no acumular ejercicios cerrados
+        # Los saldos P&L de ejercicios previos que no se cerraron siguen siendo
+        # parte del patrimonio: se muestran como utilidades retenidas, no como
+        # resultado del período actual.
         if classification in _PL_CLASSIFICATIONS and fiscal_year_start and entry.posting_date < fiscal_year_start:
+            prior_year_result = _classify_income_account(
+                classification,
+                _decimal_value(entry.debit),
+                _decimal_value(entry.credit),
+                account.code or (entry.account_code or ""),
+                account.name,
+            )
+            if prior_year_result is not None:
+                section, amount = prior_year_result
+                retained_earnings += amount if section == "income" else -amount
             continue
         debit = _decimal_value(entry.debit)
         credit = _decimal_value(entry.credit)
@@ -2728,7 +2774,7 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         )
 
     period_profit = totals["income"] - totals["cost"] - totals["expense"]
-    totals["equity"] += period_profit
+    totals["equity"] += retained_earnings + period_profit
     rows = [ReportRow(values=value) for _, value in sorted(by_account.items())]
     rows.append(
         ReportRow(
@@ -2740,6 +2786,17 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
             }
         )
     )
+    if retained_earnings:
+        rows.append(
+            ReportRow(
+                values={
+                    "section": "equity",
+                    "account_code": None,
+                    "account_name": "retained_earnings_summary",
+                    "amount": retained_earnings,
+                }
+            )
+        )
     difference = totals["assets"] - (totals["liabilities"] + totals["equity"])
     return PaginatedReport(
         rows=rows,

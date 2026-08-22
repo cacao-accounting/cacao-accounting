@@ -761,3 +761,222 @@ def test_balance_summary_and_diagnostics_respect_period_cutoff(app_ctx, chart):
     # Sin corte, el pago posterior sin extracto vinculado es diagnostico explicito.
     assert after.id in _diagnostic_sources(None)
     assert before.id not in _diagnostic_sources(None)
+
+
+# --------------------------------------------------------------------------- #
+# 7. Contexto contable persistido en ReconciliationItem
+
+
+def test_reconciliation_items_persist_accounting_context(app_ctx, chart):
+    """Cada asignacion conserva compania, pierna, moneda, libro, direccion y tasa."""
+    from datetime import date as date_type
+
+    from cacao_accounting.database import ExchangeRate, ReconciliationItem, database
+
+    database.session.add(ExchangeRate(origin="USD", destination="NIO", rate="36.000000", date=date_type(2026, 8, 1)))
+    database.session.commit()
+
+    deposit = _make_bank_transaction(chart["account_a"], deposit=Decimal("120.00"), reference="CTX-NIO")
+    collection = _make_payment(amount=Decimal("120.00"), bank_account=chart["account_a"])
+    _reconcile(deposit, "payment_entry", collection.id, Decimal("120.00"))
+
+    transfer = _make_payment(
+        amount=Decimal("10.00"),
+        payment_type="internal_transfer",
+        bank_account=chart["account_usd"],
+        target_bank_account=chart["account_a"],
+        currency="USD",
+        rate=Decimal("36"),
+    )
+    out_leg = _make_bank_transaction(chart["account_usd"], withdrawal=Decimal("10.00"), reference="CTX-OUT")
+    _reconcile(out_leg, "payment_entry", transfer.id, Decimal("10.00"))
+
+    items = database.session.execute(select(ReconciliationItem)).scalars().all()
+    by_reference = {item.reference_id: item for item in items}
+
+    nio_item = by_reference[deposit.id]
+    assert nio_item.company == COMPANY
+    assert nio_item.bank_account_id == chart["account_a"].id
+    assert nio_item.currency == "NIO"
+    assert nio_item.ledger_id == chart["book_id"]
+    assert nio_item.direction == "deposit"
+    assert nio_item.exchange_rate == Decimal("1")
+
+    usd_item = next(item for item in items if item.source_id == out_leg.id)
+    assert usd_item.bank_account_id == chart["account_usd"].id
+    assert usd_item.currency == "USD"
+    assert usd_item.direction == "withdrawal"
+    # Tasa historica funcional -> moneda del banco (inversa de USD->NIO 36),
+    # persistida con la escala de 9 decimales del modelo.
+    assert usd_item.exchange_rate == (Decimal("1") / Decimal("36")).quantize(Decimal("0.000000001"))
+    assert usd_item.exchange_rate.as_tuple().exponent == -9
+
+
+def test_orphaned_statement_line_cannot_be_consumed_twice(app_ctx, chart):
+    """Con contexto persistido, borrar el extracto no libera el saldo consumido."""
+    from cacao_accounting.bancos.reconciliation_service import (
+        BankReconciliationError,
+        BankReconciliationMatch,
+        BankReconciliationRequest,
+        find_bank_reconciliation_candidates,
+        reconcile_bank_items,
+    )
+    from cacao_accounting.database import ExchangeRate, database
+
+    database.session.add(ExchangeRate(origin="USD", destination="NIO", rate="36.000000", date=date(2026, 8, 1)))
+    database.session.add(ExchangeRate(origin="USD", destination="NIO", rate="36.000000", date=AS_OF))
+    database.session.commit()
+
+    transfer = _make_payment(
+        amount=Decimal("10.00"),
+        payment_type="internal_transfer",
+        bank_account=chart["account_usd"],
+        target_bank_account=chart["account_a"],
+        currency="USD",
+        rate=Decimal("36"),
+    )
+    out_leg = _make_bank_transaction(chart["account_usd"], withdrawal=Decimal("10.00"), reference="ORPHAN-OUT")
+    _reconcile(out_leg, "payment_entry", transfer.id, Decimal("10.00"))
+
+    # La transaccion fuente desaparece: el importe asignado persiste en el item.
+    database.session.delete(out_leg)
+    database.session.commit()
+
+    replay_leg = _make_bank_transaction(chart["account_usd"], withdrawal=Decimal("10.00"), reference="REPLAY")
+    payment_candidates = [
+        candidate
+        for candidate in find_bank_reconciliation_candidates(replay_leg.id)
+        if candidate.reference_type == "payment_entry"
+    ]
+    # La pierna ya consumida no vuelve a ofrecerse como candidato.
+    assert payment_candidates == []
+
+    with pytest.raises(BankReconciliationError, match="saldo pendiente del documento destino"):
+        reconcile_bank_items(
+            BankReconciliationRequest(
+                company=COMPANY,
+                reconciliation_date=AS_OF,
+                matches=[BankReconciliationMatch(replay_leg.id, "payment_entry", transfer.id, Decimal("10.00"))],
+            )
+        )
+
+
+def test_persisted_currency_rejects_mixed_currency_allocation_of_unknown_source(app_ctx, chart):
+    """La moneda persistida rechaza mezclas aunque la fuente ya no exista."""
+    from cacao_accounting.bancos.reconciliation_service import (
+        BankReconciliationError,
+        BankReconciliationMatch,
+        BankReconciliationRequest,
+        reconcile_bank_items,
+    )
+    from cacao_accounting.database import Reconciliation, ReconciliationItem, database
+
+    payment = _make_payment(amount=Decimal("90.00"), bank_account=chart["account_a"])
+    deposit = _make_bank_transaction(chart["account_a"], deposit=Decimal("90.00"), reference="MIX-1")
+
+    reconciliation = Reconciliation(company=COMPANY, recon_date=AS_OF, recon_type="bank")
+    database.session.add(reconciliation)
+    database.session.flush()
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation.id,
+            reference_type="bank_transaction",
+            reference_id="LEGACY-FANTASMA",
+            amount=Decimal("40.00"),
+            allocated_amount=Decimal("40.00"),
+            reconciliation_date=AS_OF,
+            status="reconciled",
+            source_type="bank_transaction",
+            source_id="FANTASMA-INEXISTENTE",
+            target_type="payment_entry",
+            target_id=payment.id,
+            bank_account_id=chart["account_a"].id,
+            currency="EUR",
+        )
+    )
+    database.session.commit()
+
+    # La transaccion fuente del item previo no existe: sin moneda persistida la
+    # validacion se saltaba el chequeo y mezclaba EUR con NIO en el pendiente.
+    with pytest.raises(BankReconciliationError, match="otra moneda bancaria"):
+        reconcile_bank_items(
+            BankReconciliationRequest(
+                company=COMPANY,
+                reconciliation_date=AS_OF,
+                matches=[BankReconciliationMatch(deposit.id, "payment_entry", payment.id, Decimal("90.00"))],
+            )
+        )
+
+
+def test_backfill_restores_context_and_reports_unresolved(app_ctx, chart):
+    """El backfill migra partidas legacy y diagnostica las de fuente perdida."""
+    from cacao_accounting.bancos.reconciliation_service import backfill_reconciliation_item_context
+    from cacao_accounting.database import ReconciliationItem, database
+
+    deposit = _make_bank_transaction(chart["account_a"], deposit=Decimal("80.00"), reference="BF-1")
+    collection = _make_payment(amount=Decimal("80.00"), bank_account=chart["account_a"])
+    _reconcile(deposit, "payment_entry", collection.id, Decimal("80.00"))
+
+    items = database.session.execute(select(ReconciliationItem)).scalars().all()
+    for item in items:
+        item.company = None
+        item.bank_account_id = None
+        item.currency = None
+        item.ledger_id = None
+        item.direction = None
+        item.exchange_rate = None
+    database.session.commit()
+
+    stats = backfill_reconciliation_item_context()
+    assert stats == {"backfilled": 1, "unresolved": 0}
+    item = database.session.execute(select(ReconciliationItem)).scalars().first()
+    assert item.company == COMPANY
+    assert item.bank_account_id == chart["account_a"].id
+    assert item.currency == "NIO"
+    assert item.ledger_id == chart["book_id"]
+    assert item.direction == "deposit"
+    assert item.exchange_rate == Decimal("1")
+
+    # Una partida cuya fuente ya no existe no tiene contexto inequivoco.
+    database.session.delete(deposit)
+    item.company = None
+    item.bank_account_id = None
+    item.currency = None
+    database.session.commit()
+
+    stats_after = backfill_reconciliation_item_context()
+    assert stats_after == {"backfilled": 0, "unresolved": 1}
+    database.session.expire(item)
+    assert item.currency is None
+
+
+def test_missing_context_items_are_diagnosed_and_resolved_by_backfill(app_ctx, chart):
+    """Las partidas sin contexto generan diagnóstico explícito hasta migrarse."""
+    from cacao_accounting.bancos.reconciliation_service import backfill_reconciliation_item_context
+    from cacao_accounting.reportes.services import get_reconciliation_report
+
+    deposit = _make_bank_transaction(chart["account_a"], deposit=Decimal("55.00"), reference="DIAG-CTX")
+    collection = _make_payment(amount=Decimal("55.00"), bank_account=chart["account_a"])
+    _reconcile(deposit, "payment_entry", collection.id, Decimal("55.00"))
+
+    from cacao_accounting.database import ReconciliationItem, database
+
+    item = database.session.execute(select(ReconciliationItem)).scalars().first()
+    item.currency = None
+    item.bank_account_id = None
+    database.session.commit()
+
+    def _context_statuses():
+        report = get_reconciliation_report(company=COMPANY)
+        return [
+            row.values["status"]
+            for row in report.rows
+            if row.values.get("recon_type") == "bank_diagnostic"
+            and row.values.get("status") == "reconciliation_item_missing_context"
+        ]
+
+    assert len(_context_statuses()) == 1
+
+    backfill_reconciliation_item_context()
+    database.session.commit()
+    assert _context_statuses() == []

@@ -461,6 +461,9 @@ def _post_bank_difference_adjustment(
     ).scalar_one_or_none()
     if bank_entry is None:
         raise BankReconciliationError("No se encontró la línea bancaria del ajuste contabilizado.")
+    from cacao_accounting.bancos.reconciliation_service import _allocation_context
+
+    context = _allocation_context(transaction, str(bank_account.company), date.today())
     database.session.add(
         ReconciliationItem(
             reconciliation_id=reconciliation_id,
@@ -474,6 +477,7 @@ def _post_bank_difference_adjustment(
             source_id=transaction.id,
             target_type="gl_entry",
             target_id=bank_entry.id,
+            **context,
         )
     )
     transaction.is_reconciled = True
@@ -710,7 +714,12 @@ def _build_payment_reference(
         party_type=_reference_party_info(document)[0],
         party_id=_reference_party_info(document)[1],
         company=getattr(document, "company", None),
-        currency=getattr(document, "currency", None) or getattr(payment, "currency", None),
+        currency=(
+            getattr(document, "transaction_currency", None)
+            or getattr(document, "currency", None)
+            or getattr(document, "base_currency", None)
+            or getattr(payment, "currency", None)
+        ),
         total_amount=document.grand_total,
         outstanding_amount=outstanding,
         outstanding_amount_after=outstanding_after,

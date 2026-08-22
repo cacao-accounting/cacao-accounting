@@ -3,6 +3,59 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Contexto contable persistido en ReconciliationItem (#282)
+
+### Petición
+
+Continuar #282 (AUDIT-007) con el pendiente declarado en los comentarios del issue:
+persistir en cada `ReconciliationItem` bancario la moneda, libro, compañía, dirección
+y tasa histórica de la asignación; migrar/diagnosticar registros legacy. El guard
+anterior `6aacca6b` era mitigación parcial: si la transacción fuente ya no existía,
+la validación de moneda se saltaba aunque su importe siguiera consumiendo saldo.
+
+### Implementado
+
+1. **Modelo** (`database/__init__.py`): columnas nullable en `ReconciliationItem` —
+   `company`, `bank_account_id` (pierna), `currency`, `ledger_id`, `direction`
+   (deposit|withdrawal), `exchange_rate` (funcional→moneda del banco a la fecha de
+   conciliación, escala 9). Índice `ix_reconciliation_item_leg`. Sin Alembic: se
+   crean con `create_all` por política del proyecto; legacy queda NULL y se migra
+   con backfill.
+2. **Persistencia** (`bancos/reconciliation_service.py`): nuevo helper
+   `_allocation_context(transaction, company, fecha)` resuelve el contexto y se
+   aplica en `_add_reconciliation_match`; también en el ajuste por diferencia
+   `_post_bank_difference_adjustment` (`bancos/services.py`).
+3. **Consumo del contexto**:
+   - `_allocated_for_target(..., bank_account_id=...)` filtra primero por la pierna
+     persistida; las filas legacy (NULL) conservan el fallback por join contra
+     `BankTransaction`. Borrar el extracto ya no libera el saldo consumido.
+   - `_validate_target_allocation_currency` usa la moneda persistida de cada partida;
+     solo las legacy sin contexto derivan la moneda de su fuente, y una partida sin
+     fuente ni contexto se omite (queda diagnosticada).
+4. **Backfill**: `backfill_reconciliation_item_context()` migra partidas activas sin
+   moneda usando su transacción fuente; las de fuente perdida cuentan como
+   `unresolved` (sin contexto inequívoco, no se inventa).
+5. **Diagnóstico** (`reportes/services.py`): nuevo estado
+   `reconciliation_item_missing_context` en el reporte de reconciliaciones para
+   partidas bancarias activas sin contexto, evitando duplicar huérfanos ya marcados.
+
+### Regresiones (`tests/test_bank_cash_matrix_audit.py`, 13 → 18 pruebas)
+
+Contexto persistido en piernas NIO y USD (tasa inversa 1/36 a escala 9) · extracto
+borrado no permite doble consumo ni reofrece candidato · moneda persistida rechaza
+mezcla EUR/NIO con fuente inexistente · backfill restaura contexto y reporta
+`unresolved` · diagnóstico missing-context aparece y desaparece tras backfill.
+
+### Validación
+
+- Suite AUDIT-007: **18 passed**.
+- Regresión bancaria amplia (test_08, reconciliation_service_unit, cas18,
+  payment_unit, cas22, payment_entry_improved, bank_account_numbering):
+  10 fallos verificados idénticos contra el árbol limpio (preexistentes,
+  ajenos a este cambio), resto passed/skipped sin regresiones nuevas.
+- Ruff check/format ✅; black roto en venv local (`pathspec.patterns.gitignore`,
+  cubre CI).
+
 ## 2026-08-22 — Margen bruto consistente con P&L (#684)
 
 ### Implementado

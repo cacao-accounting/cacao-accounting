@@ -4051,6 +4051,7 @@ class ReconciliationItem(database.Model, BaseTabla):  # type: ignore[name-define
     __table_args__ = (
         database.Index("ix_reconciliation_item_source", "source_type", "source_id"),
         database.Index("ix_reconciliation_item_target", "target_type", "target_id"),
+        database.Index("ix_reconciliation_item_leg", "target_type", "target_id", "bank_account_id"),
     )
     reconciliation_id = database.Column(
         database.String(26),
@@ -4069,6 +4070,20 @@ class ReconciliationItem(database.Model, BaseTabla):  # type: ignore[name-define
     source_id = database.Column(database.String(26), nullable=True)
     target_type = database.Column(database.String(50), nullable=True)
     target_id = database.Column(database.String(26), nullable=True)
+    # Contexto contable de la asignacion (conciliacion bancaria).  Las
+    # columnas son nullable para no romper datos legacy: las partidas sin
+    # contexto deben diagnosticarse y migrarse con backfill.
+    company = database.Column(database.String(10), nullable=True, index=True)
+    bank_account_id = database.Column(database.String(26), nullable=True)
+    # Moneda en la que esta expresado allocated_amount (moneda de la cuenta
+    # bancaria de la pierna conciliada).
+    currency = database.Column(database.String(10), nullable=True)
+    ledger_id = database.Column(database.String(26), nullable=True)
+    # Direccion economica de la pierna bancaria: deposit | withdrawal.
+    direction = database.Column(database.String(20), nullable=True)
+    # Tasa historica moneda funcional -> currency vigente a la fecha de la
+    # conciliacion; 1 cuando ambas monedas coinciden.
+    exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #

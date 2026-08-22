@@ -250,7 +250,10 @@ def _allocated_for_target(target_type: str, target_id: str, *, bank_account_id: 
     Con ``bank_account_id`` se limita a la pierna bancaria indicada: un
     ``PaymentEntry`` de transferencia interna se concilia dos veces (salida
     en la cuenta origen y entrada en la destino) y cada pierna consume su
-    propio importe sin descontar el pendiente de la otra.
+    propio importe sin descontar el pendiente de la otra.  Las partidas con
+    contexto persistido se filtran por ``ReconciliationItem.bank_account_id``
+    (válido aunque la transacción fuente ya no exista); las legacy sin
+    contexto conservan el fallback por la transacción fuente.
     """
     query = (
         select(func.coalesce(func.sum(ReconciliationItem.allocated_amount), 0))
@@ -261,14 +264,86 @@ def _allocated_for_target(target_type: str, target_id: str, *, bank_account_id: 
         .where(ReconciliationItem.status != "cancelled")
     )
     if bank_account_id:
-        query = query.join(
+        query = query.outerjoin(
             BankTransaction,
             database.and_(
                 BankTransaction.id == ReconciliationItem.source_id,
                 ReconciliationItem.source_type == "bank_transaction",
             ),
-        ).where(BankTransaction.bank_account_id == bank_account_id)
+        ).where(
+            database.or_(
+                ReconciliationItem.bank_account_id == bank_account_id,
+                database.and_(
+                    ReconciliationItem.bank_account_id.is_(None),
+                    BankTransaction.bank_account_id == bank_account_id,
+                ),
+            )
+        )
     return _decimal_value(database.session.execute(query).scalar_one())
+
+
+def _allocation_context(transaction: BankTransaction, company: str, reconciliation_date: date) -> dict[str, Any]:
+    """Resuelve el contexto contable que se persiste en cada asignacion.
+
+    El contexto (compania, pierna bancaria, moneda, libro, direccion y tasa
+    historica) hace que los saldos pendientes sigan siendo correctos aunque la
+    transacción fuente desaparezca y permite rechazar mezclas de monedas sin
+    depender de datos ajenos a la propia asignación.
+    """
+    currency = _bank_currency(transaction)
+    company_currency = _company_currency(company)
+    exchange_rate: Decimal | None = None
+    if currency and company_currency:
+        if currency == company_currency:
+            exchange_rate = Decimal("1")
+        else:
+            exchange_rate = _lookup_exchange_rate(company_currency, currency, reconciliation_date)
+    return {
+        "company": company,
+        "bank_account_id": transaction.bank_account_id,
+        "currency": currency,
+        "ledger_id": primary_ledger_id(company),
+        "direction": _bank_direction(transaction),
+        "exchange_rate": exchange_rate,
+    }
+
+
+def backfill_reconciliation_item_context() -> dict[str, int]:
+    """Migra partidas de conciliación bancaria legacy al contexto persistido.
+
+    Recorre las asignaciones bancarias activas sin moneda y completa compania,
+    cuenta bancaria, moneda, libro, dirección y tasa histórica a partir de su
+    transacción fuente.  Las partidas cuya fuente ya no existe (o cuya
+    conciliación no declara compañía) no tienen contexto inequívoco: se
+    cuentan como ``unresolved`` para revisión manual.
+
+    Returns:
+        Conteo de partidas migradas y partidas sin contexto resoluble.
+    """
+    stats = {"backfilled": 0, "unresolved": 0}
+    items = (
+        database.session.execute(
+            select(ReconciliationItem).where(
+                ReconciliationItem.source_type == "bank_transaction",
+                ReconciliationItem.status != "cancelled",
+                ReconciliationItem.currency.is_(None),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for item in items:
+        transaction = database.session.get(BankTransaction, item.source_id) if item.source_id else None
+        reconciliation = database.session.get(Reconciliation, item.reconciliation_id)
+        company = str(reconciliation.company) if reconciliation and reconciliation.company else None
+        if transaction is None or not company:
+            stats["unresolved"] += 1
+            continue
+        context = _allocation_context(transaction, company, item.reconciliation_date or transaction.posting_date)
+        for field, value in context.items():
+            setattr(item, field, value)
+        stats["backfilled"] += 1
+    return stats
 
 
 def _validate_target_allocation_currency(
@@ -278,18 +353,23 @@ def _validate_target_allocation_currency(
 ) -> None:
     """Rechaza asignaciones históricas del destino en otra moneda bancaria.
 
-    ``ReconciliationItem`` no conserva moneda propia; la moneda fiable de una
-    asignación existente es la cuenta bancaria de su transacción fuente. La
-    validación se limita a la pierna de la misma cuenta bancaria: en una
-    transferencia interna cada pierna vive legítimamente en su propia moneda.
-    Sin esta comprobación, el saldo pendiente mezclaría cantidades incompatibles.
+    La moneda fiable de una asignación es la que la propia partida persiste;
+    así la validación cubre también huérfanos cuya transacción fuente ya no
+    existe.  Las partidas legacy sin contexto conservan el fallback por la
+    transacción fuente y las irreconocibles se omiten (quedan diagnosticadas
+    como partidas sin contexto).  La validación se limita a la pierna de la
+    misma cuenta bancaria: en una transferencia interna cada pierna vive
+    legítimamente en su propia moneda.
     """
     current_currency = _bank_currency(transaction)
     if not current_currency:
         return
-    source_ids = database.session.execute(
-        select(ReconciliationItem.source_id)
-        .join(
+    rows = database.session.execute(
+        select(
+            ReconciliationItem.currency,
+            ReconciliationItem.source_id,
+        )
+        .outerjoin(
             BankTransaction,
             database.and_(
                 BankTransaction.id == ReconciliationItem.source_id,
@@ -300,15 +380,21 @@ def _validate_target_allocation_currency(
             ReconciliationItem.target_type == target_type,
             ReconciliationItem.target_id == target_id,
             ReconciliationItem.status != "cancelled",
-            BankTransaction.bank_account_id == transaction.bank_account_id,
+            database.or_(
+                ReconciliationItem.bank_account_id == transaction.bank_account_id,
+                database.and_(
+                    ReconciliationItem.bank_account_id.is_(None),
+                    BankTransaction.bank_account_id == transaction.bank_account_id,
+                ),
+            ),
         )
-    ).scalars()
-    for source_id in source_ids:
-        source = database.session.get(BankTransaction, source_id)
-        if source is None:
-            continue
-        source_currency = _bank_currency(source)
-        if source_currency and source_currency != current_currency:
+    ).all()
+    for item_currency, source_id in rows:
+        resolved = str(item_currency) if item_currency else None
+        if not resolved:
+            source = database.session.get(BankTransaction, source_id)
+            resolved = _bank_currency(source) if source else None
+        if resolved and resolved != current_currency:
             raise BankReconciliationError(
                 "El destino ya tiene asignaciones en otra moneda bancaria; "
                 "convierta o revierta la asignación anterior antes de continuar."
@@ -665,6 +751,7 @@ def _add_reconciliation_match(
     if match.allocated_amount > target_pending:
         raise BankReconciliationError("El monto excede el saldo pendiente del documento destino.")
     status = "reconciled" if match.allocated_amount == source_pending == target_pending else "partial"
+    context = _allocation_context(transaction, request.company, request.reconciliation_date)
     database.session.add(
         ReconciliationItem(
             reconciliation_id=reconciliation.id,
@@ -678,6 +765,7 @@ def _add_reconciliation_match(
             source_id=transaction.id,
             target_type=match.target_type,
             target_id=match.target_id,
+            **context,
         )
     )
     source_totals[transaction.id] = source_totals.get(transaction.id, Decimal("0")) + match.allocated_amount
