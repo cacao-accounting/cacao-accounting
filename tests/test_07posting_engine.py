@@ -2264,6 +2264,29 @@ def test_valuation_queue_recovers_after_allowed_negative_stock(app_ctx):
     assert rate == Decimal("12")
 
 
+def test_moving_average_consumption_locks_the_stock_bin_before_valuing(app_ctx, monkeypatch):
+    """Concurrent outflows must price a moving average while holding the bin lock."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.contabilidad import posting_service
+
+    locked: list[bool] = []
+    monkeypatch.setattr(posting_service, "_valuation_queue", lambda *_args: [(Decimal("10"), Decimal("10"))])
+    monkeypatch.setattr(posting_service, "_valuation_method_for_company", lambda _company: "moving_average")
+
+    def stock_bin(*_args, lock: bool = False):
+        locked.append(lock)
+        return SimpleNamespace(actual_qty=Decimal("10"), stock_value=Decimal("100"))
+
+    monkeypatch.setattr(posting_service, "_stock_bin_for", stock_bin)
+
+    assert posting_service._consume_stock_valuation_layers("cacao", "ITEM", "WH", Decimal("2")) == (
+        Decimal("20"),
+        Decimal("10"),
+    )
+    assert locked == [True]
+
+
 def test_compute_outstanding_amount_for_note_types_uses_document_relations(app_ctx):
     from cacao_accounting.database import (
         DocumentRelation,

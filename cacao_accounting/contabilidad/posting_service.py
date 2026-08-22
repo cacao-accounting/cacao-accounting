@@ -1892,6 +1892,10 @@ def _consume_stock_valuation_layers(
         raise PostingError(
             f"La cantidad de consumo debe ser mayor que cero para el artículo {item_code} en la bodega {warehouse}."
         )
+    # Serialize valuation against every StockBin mutation. The lock stays held
+    # through the later `_upsert_stock_bin` in the same transaction, so two
+    # outgoing postings cannot price the same moving-average/FIFO snapshot.
+    locked_bin = _stock_bin_for(company, item_code, warehouse, lock=True)
     available = _valuation_queue(company, item_code, warehouse)
     total_available: Decimal = sum((qty for qty, _ in available), Decimal("0"))
     if total_available < quantity:
@@ -1901,9 +1905,8 @@ def _consume_stock_valuation_layers(
 
     valuation_method = _valuation_method_for_company(company)
     if valuation_method == "moving_average":
-        bin_row = _stock_bin_for(company, item_code, warehouse)
-        bin_qty = _decimal_value(bin_row.actual_qty) if bin_row else Decimal("0")
-        bin_value = _decimal_value(bin_row.stock_value) if bin_row else Decimal("0")
+        bin_qty = _decimal_value(locked_bin.actual_qty) if locked_bin else Decimal("0")
+        bin_value = _decimal_value(locked_bin.stock_value) if locked_bin else Decimal("0")
         if bin_qty >= quantity and bin_qty > 0:
             average_rate = bin_value / bin_qty
             return quantity * average_rate, average_rate
@@ -2096,13 +2099,12 @@ def _serializable_cost_details(costs: list[dict[str, Any]]) -> list[dict[str, An
     return serialized
 
 
-def _stock_bin_for(company: str, item_code: str, warehouse: str) -> StockBin | None:
-    """Fetch the stock bin for an item and warehouse."""
-    return (
-        database.session.execute(select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse))
-        .scalars()
-        .first()
-    )
+def _stock_bin_for(company: str, item_code: str, warehouse: str, *, lock: bool = False) -> StockBin | None:
+    """Fetch a stock bin, optionally locking it for a valuation transition."""
+    statement = select(StockBin).filter_by(company=company, item_code=item_code, warehouse=warehouse)
+    if lock:
+        statement = statement.with_for_update()
+    return database.session.execute(statement).scalars().first()
 
 
 def _persist_landed_cost_allocations(
