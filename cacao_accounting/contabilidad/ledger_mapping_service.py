@@ -62,6 +62,18 @@ def deactivate_ledger_mapping_rule(rule_id: str) -> LedgerMappingRule:
     return rule
 
 
+def list_ledger_mapping_rules(*, company: str | None = None) -> list[LedgerMappingRule]:
+    """List mapping rules, optionally scoped to a single company."""
+    query = select(LedgerMappingRule).join(Book, Book.code == LedgerMappingRule.target_book)
+    if company:
+        query = query.where(Book.entity == company)
+    return list(
+        database.session.execute(query.order_by(Book.entity, LedgerMappingRule.target_book, LedgerMappingRule.created))
+        .scalars()
+        .all()
+    )
+
+
 def _validate_rule_references(
     source_book: str, target_book: str, source_account_id: str, target_account_id: str
 ) -> tuple[Book, Book, Accounts, Accounts]:

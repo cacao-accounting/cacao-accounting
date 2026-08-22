@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-page-header"><h4>{{ _("Reglas de Mapeo entre Libros") }}</h4></div>
+<form method="post" class="row g-2 mb-4">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="col-md-3"><select class="form-select" name="source_book" required><option value="">{{ _("Libro origen") }}</option>{% for book in books %}<option value="{{ book.code }}">{{ book.entity }} · {{ book.code }}</option>{% endfor %}</select></div>
+  <div class="col-md-3"><select class="form-select" name="target_book" required><option value="">{{ _("Libro destino") }}</option>{% for book in books %}<option value="{{ book.code }}">{{ book.entity }} · {{ book.code }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select" name="source_account_id" required><option value="">{{ _("Cuenta origen") }}</option>{% for account in accounts %}<option value="{{ account.id }}">{{ account.entity }} · {{ account.code }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><select class="form-select" name="target_account_id" required><option value="">{{ _("Cuenta destino") }}</option>{% for account in accounts %}<option value="{{ account.id }}">{{ account.entity }} · {{ account.code }}</option>{% endfor %}</select></div>
+  <div class="col-md-2"><input class="form-control" name="description" placeholder="{{ _("Descripción") }}"></div>
+  <div class="col-12"><button class="btn btn-primary" type="submit">{{ _("Crear regla") }}</button></div>
+</form>
+<table class="table table-sm"><caption>{{ _("Reglas de mapeo configuradas") }}</caption><thead><tr><th>{{ _("Origen") }}</th><th>{{ _("Destino") }}</th><th>{{ _("Cuenta origen") }}</th><th>{{ _("Cuenta destino") }}</th><th>{{ _("Estado") }}</th><th>{{ _("Acciones") }}</th></tr></thead><tbody>{% for rule in rules %}<tr><td>{{ rule.source_book }}</td><td>{{ rule.target_book }}</td><td>{{ rule.source_account_id }}</td><td>{{ rule.target_account_id }}</td><td>{{ rule.is_active }}</td><td>{% if rule.is_active %}<form method="post" action="{{ url_for('admin.desactivar_regla_mapeo_libros', rule_id=rule.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-link btn-sm p-0" type="submit">{{ _("Desactivar") }}</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="6">{{ _("No hay reglas configuradas.") }}</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

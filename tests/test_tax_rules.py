@@ -188,6 +188,8 @@ def test_admin_tax_rule_crud(client) -> None:
     assert response.status_code == 200
     created_rule = database.session.execute(database.select(TaxRule)).scalar_one()
     assert created_rule.name == "IVA Venta"
+
+
     assert created_rule.include_concepts == "goods"
 
     response = client.post(
@@ -226,6 +228,59 @@ def test_admin_tax_rule_crud(client) -> None:
     response = client.post(f"/settings/tax-rules/{created_rule.id}/delete", follow_redirects=True)
     assert response.status_code == 200
     assert database.session.get(TaxRule, created_rule.id) is None
+
+
+def test_admin_ledger_mapping_rule_create_and_deactivate(client) -> None:
+    """System administrators can manage auditable multi-ledger mappings."""
+    from cacao_accounting.database import Accounts, Book, LedgerMappingRule, database
+
+    _login_admin(client)
+    source_account = Accounts(
+        id="ACC-MAP-SOURCE",
+        entity="cacao",
+        code="ACC-MAP-SOURCE",
+        name="Cuenta origen",
+        active=True,
+        enabled=True,
+        group=False,
+    )
+    target_account = Accounts(
+        id="ACC-MAP-TARGET",
+        entity="cacao",
+        code="ACC-MAP-TARGET",
+        name="Cuenta destino",
+        active=True,
+        enabled=True,
+        group=False,
+    )
+    database.session.add_all(
+        [
+            Book(code="MAP-PRIMARY", name="Principal", entity="cacao", is_primary=True),
+            Book(code="MAP-IFRS", name="IFRS", entity="cacao", is_primary=False),
+            source_account,
+            target_account,
+        ]
+    )
+    database.session.commit()
+    response = client.post(
+        "/settings/ledger-mapping-rules",
+        data={
+            "source_book": "MAP-PRIMARY",
+            "target_book": "MAP-IFRS",
+            "source_account_id": source_account.id,
+            "target_account_id": target_account.id,
+            "description": "Depreciación IFRS",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    rule = database.session.execute(database.select(LedgerMappingRule)).scalar_one()
+    assert rule.is_active is True
+    assert b"Reglas de Mapeo entre Libros" in response.data
+    response = client.post(f"/settings/ledger-mapping-rules/{rule.id}/deactivate", follow_redirects=True)
+    assert response.status_code == 200
+    database.session.refresh(rule)
+    assert rule.is_active is False
 
 
 def test_tax_rule_service_builds_contexts_from_db(app_ctx: Flask) -> None:

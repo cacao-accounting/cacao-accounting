@@ -21,7 +21,9 @@ from cacao_accounting.auth.forms import (
 from cacao_accounting.decorators import modulo_activo
 
 from cacao_accounting.database import (
+    Accounts,
     ApprovalMatrix,
+    Book,
     CompanyDefaultAccount,
     Entity,
     ItemPrice,
@@ -109,6 +111,13 @@ from cacao_accounting.tax_rule_service import (
     get_tax_rule,
     list_tax_rules,
     update_tax_rule,
+)
+
+from cacao_accounting.contabilidad.ledger_mapping_service import (
+    LedgerMappingError,
+    create_ledger_mapping_rule,
+    deactivate_ledger_mapping_rule,
+    list_ledger_mapping_rules,
 )
 
 admin = Blueprint("admin", __name__, template_folder="templates")
@@ -598,6 +607,57 @@ def eliminar_regla_fiscal(rule_id: str):
     database.session.commit()
     flash(_("Regla fiscal eliminada correctamente."), "success")
     return redirect(url_for("admin.lista_reglas_fiscales"))
+
+
+@admin.route("/settings/ledger-mapping-rules", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def lista_reglas_mapeo_libros():
+    """Administra reglas activas de sustitución de cuentas por libro."""
+    _require_system_admin()
+    if request.method == "POST":
+        try:
+            create_ledger_mapping_rule(
+                source_book=request.form.get("source_book") or "",
+                target_book=request.form.get("target_book") or "",
+                source_account_id=request.form.get("source_account_id") or "",
+                target_account_id=request.form.get("target_account_id") or "",
+                description=request.form.get("description") or None,
+            )
+        except LedgerMappingError as exc:
+            database.session.rollback()
+            flash(_(str(exc)), "danger")
+        else:
+            flash(_("Regla de mapeo creada correctamente."), "success")
+            return redirect(url_for("admin.lista_reglas_mapeo_libros"))
+    books = (
+        database.session.execute(database.select(Book).order_by(Book.entity, Book.is_primary.desc(), Book.code))
+        .scalars()
+        .all()
+    )
+    accounts = database.session.execute(database.select(Accounts).order_by(Accounts.entity, Accounts.code)).scalars().all()
+    return render_template(
+        "admin/ledger_mapping_rules.html",
+        rules=list_ledger_mapping_rules(),
+        books=books,
+        accounts=accounts,
+    )
+
+
+@admin.route("/settings/ledger-mapping-rules/<rule_id>/deactivate", methods=["POST"])
+@login_required
+@modulo_activo("admin")
+def desactivar_regla_mapeo_libros(rule_id: str):
+    """Desactiva una regla sin borrar la configuración histórica."""
+    _require_system_admin()
+    try:
+        deactivate_ledger_mapping_rule(rule_id)
+    except LedgerMappingError as exc:
+        database.session.rollback()
+        flash(_(str(exc)), "danger")
+    else:
+        flash(_("Regla de mapeo desactivada correctamente."), "success")
+    return redirect(url_for("admin.lista_reglas_mapeo_libros"))
 
 
 @admin.route("/settings/price-lists", methods=["GET", "POST"])

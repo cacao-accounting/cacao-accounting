@@ -77,6 +77,7 @@ CONFIGURATION_SECTIONS: tuple[ConfigurationSection, ...] = (
         icon="bi bi-journal-check",
         links=(
             ConfigurationLink("admin.cuentas_predeterminadas", "Cuentas predeterminadas"),
+            ConfigurationLink("admin.lista_reglas_mapeo_libros", "Mapeo entre libros"),
             ConfigurationLink("admin.config_control_presupuestario", "Control presupuestario"),
             ConfigurationLink("admin.config_approval_matrix", "Matriz de aprobaciones"),
         ),
