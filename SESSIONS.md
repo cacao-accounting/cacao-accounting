@@ -3,6 +3,20 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — NC limitada por saldo actual (#675)
+
+### Implementado
+
+Las notas de crédito de venta se limitan ahora contra el saldo vivo de la
+factura origen. Su fecha de contabilización ya no puede ocultar pagos aplicados
+posteriormente para conceder un crédito duplicado.
+
+### Validación
+
+- Límite acumulado y saldo actual contra NC retroactiva: **2 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Compañía inmutable en facturas de venta (#676)
 
 ### Implementado

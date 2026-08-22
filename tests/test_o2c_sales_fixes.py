@@ -461,6 +461,36 @@ def test_credit_note_cannot_exceed_cumulative_source_balance(app_ctx):
     )
 
 
+def test_credit_note_limit_uses_current_outstanding_not_backdated_balance(app_ctx):
+    """A backdated credit note cannot ignore a payment applied after its posting date."""
+    from cacao_accounting.ventas.services import _validate_reversal_of
+
+    customer = _ensure_customer("CUST-O2C-CURRENT-OUT", "Cliente saldo actual")
+    source = SalesInvoice(
+        customer_id=customer.id,
+        company="cacao",
+        posting_date=date(2026, 1, 1),
+        docstatus=1,
+        document_type="sales_invoice",
+        grand_total=Decimal("100"),
+    )
+    database.session.add(source)
+    database.session.commit()
+
+    with patch("cacao_accounting.document_flow.payment.compute_outstanding_amount", return_value=Decimal("0")) as outstanding:
+        with pytest.raises(ValueError, match="excede el saldo pendiente"):
+            _validate_reversal_of(
+                source.id,
+                customer.id,
+                "cacao",
+                note_amount=Decimal("100"),
+                document_type="sales_credit_note",
+                posting_date=date(2026, 2, 15),
+            )
+
+    outstanding.assert_called_once_with(source)
+
+
 def test_create_document_relation_rejects_cancelled_source(app_ctx):
     from cacao_accounting.document_flow.service import create_document_relation
     from cacao_accounting.document_flow import DocumentFlowError

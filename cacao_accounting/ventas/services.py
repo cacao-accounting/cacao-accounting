@@ -2045,7 +2045,9 @@ def _validate_reversal_of(
     if document_type == "sales_credit_note" and note_amount is not None:
         from cacao_accounting.document_flow.payment import compute_outstanding_amount
 
-        outstanding = compute_outstanding_amount(source, as_of_date=posting_date)
+        # Una NC no puede eludir pagos ya aplicados eligiendo una fecha anterior.
+        # El límite se evalúa contra el saldo vivo actual del documento origen.
+        outstanding = compute_outstanding_amount(source)
         if note_amount > outstanding:
             raise ValueError(
                 f"La nota de credito ({note_amount}) excede el saldo pendiente de la factura origen ({outstanding})."
