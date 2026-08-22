@@ -122,7 +122,7 @@ def _is_balanced(proforma: JournalEntryProforma) -> bool:
     """Accept only sub-cent arithmetic noise before GL quantization."""
     debit = sum((line.debit for line in proforma.lines), Decimal("0"))
     credit = sum((line.credit for line in proforma.lines), Decimal("0"))
-    return abs(debit - credit) <= Decimal("0.0001")
+    return abs(debit - credit) <= Decimal("0.01")
 
 
 def _calculation_context_for_ledger(

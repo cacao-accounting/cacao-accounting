@@ -843,6 +843,9 @@ def _payment_custom_references(
         "settlement_exchange_rate": amounts.settlement_exchange_rate,
         "actual_cash_amount": amounts.actual_cash_amount,
         "eligible_discount_amount": amounts.eligible_discount_amount,
+        "explicit_exchange_difference": sum(
+            (reference.gain_loss_amount or Decimal("0") for reference in settlement_references), Decimal("0")
+        ),
         "use_advance_as_party_balance": not settlement_references,
         "open_payment_amount": amounts.open_payment_amount,
     }

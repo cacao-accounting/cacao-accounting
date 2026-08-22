@@ -46,14 +46,12 @@ def app_ctx():
 
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         master_data()
-        books = database.session.execute(database.select(Book).filter_by(entity="cacao", is_primary=True)).scalars().all()
-        if not books:
-            database.session.add(
-                Book(code="PRIMARY", name="Primary", entity="cacao", currency="NIO", is_primary=True, status="activo")
-            )
-        else:
-            for book in books:
-                book.status = "activo"
+        books = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        for book in books:
+            book.status = "inactivo"
+        database.session.add(
+            Book(code="PRIMARY", name="Primary", entity="cacao", currency="NIO", is_primary=True, status="activo")
+        )
         database.session.commit()
         yield app
 

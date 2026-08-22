@@ -94,6 +94,7 @@ class BusinessEventOrchestrator:
                 settlement_exchange_rate=settlement_exchange_rate,
                 actual_cash_amount=context.references.get("actual_cash_amount"),
                 eligible_discount_amount=context.references.get("eligible_discount_amount"),
+                explicit_exchange_difference=context.references.get("explicit_exchange_difference", Decimal("0")),
             )
 
         # 4. Generate Pro-forma Journal Entry

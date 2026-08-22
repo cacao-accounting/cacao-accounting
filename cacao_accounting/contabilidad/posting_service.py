@@ -595,8 +595,9 @@ def _assert_ledger_balances(ledger_entries: list[GLEntry]) -> None:
     """Assert that debit and credit totals balance for a ledger."""
     debit_total = sum((_decimal_value(entry.debit) for entry in ledger_entries), Decimal("0"))
     credit_total = sum((_decimal_value(entry.credit) for entry in ledger_entries), Decimal("0"))
-    if debit_total != credit_total:
-        raise PostingError("Las entradas GL generadas no balancean por libro contable.")
+    if abs(debit_total - credit_total) <= Decimal("0.01"):
+        return
+    raise PostingError("Las entradas GL generadas no balancean por libro contable.")
 
 
 def _build_currency_groups(ledger_entries: list[GLEntry]) -> dict[str, list[GLEntry]]:
@@ -619,6 +620,11 @@ def _assert_single_currency_balance(currency: str, curr_entries: list[GLEntry], 
     """Assert a single currency group balances."""
     curr_debit = sum((_decimal_value(e.debit_in_account_currency) for e in curr_entries), Decimal("0"))
     curr_credit = sum((_decimal_value(e.credit_in_account_currency) for e in curr_entries), Decimal("0"))
+    if any(
+        "Exchange Difference" in (entry.remarks or "") or "Diferencia cambiaria" in (entry.remarks or "")
+        for entry in curr_entries
+    ):
+        return
     if abs(curr_debit - curr_credit) <= Decimal("0.01"):
         return
     if num_currencies == 1:

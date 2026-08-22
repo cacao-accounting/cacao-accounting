@@ -34,6 +34,7 @@ class SettlementEngine:
         settlement_exchange_rate: Optional[Decimal] = None,
         actual_cash_amount: Optional[Decimal] = None,
         eligible_discount_amount: Optional[Decimal] = None,
+        explicit_exchange_difference: Optional[Decimal] = None,
     ) -> SettlementResult:
         """Calculate payments, collections and withholdings."""
         settlement_lines: list[SettlementLine] = []
@@ -84,6 +85,7 @@ class SettlementEngine:
             step_counter += 1
 
         requested_cash_amount = actual_cash_amount if actual_cash_amount is not None else settlement_amount - withholding_total
+        explicit_exchange_difference = explicit_exchange_difference or Decimal("0")
         gap_after_withholdings = settlement_amount - requested_cash_amount - withholding_total
         if eligible_discount_amount and gap_after_withholdings > 0:
             payment_discount_amount = min(gap_after_withholdings, eligible_discount_amount)
@@ -113,6 +115,7 @@ class SettlementEngine:
             step_counter += 1
         cash_amount = requested_cash_amount
         unallocated_difference = settlement_amount - cash_amount - withholding_total - payment_discount_amount
+        unallocated_difference -= explicit_exchange_difference
         if unallocated_difference > 0:
             errors.append(
                 "El efectivo declarado, las retenciones y el descuento no cuadran con la liquidación. "
@@ -140,6 +143,7 @@ class SettlementEngine:
             )
         else:
             remaining_balance = open_balance - settlement_amount
+        exchange_difference += explicit_exchange_difference
         return SettlementResult(
             gross_settlement_amount=settlement_amount,
             cash_amount=cash_amount,
