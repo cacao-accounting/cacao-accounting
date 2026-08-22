@@ -519,8 +519,10 @@ def _evaluate_matching_result(
         config.price_tolerance_value,
     )
 
-    # Facturar menos que la referencia es un parcial valido; no debe fallar por monto menor.
-    if total_amount_difference <= 0:
+    # Facturar menos es válido sólo cuando también se factura menos cantidad.
+    # A igualdad de cantidad, un importe menor es una subdeclaración y debe
+    # respetar la tolerancia configurada.
+    if total_amount_difference <= 0 and total_invoiced_qty < total_reference_qty:
         amount_ok = True
 
     if qty_difference > 0 and not qty_ok:

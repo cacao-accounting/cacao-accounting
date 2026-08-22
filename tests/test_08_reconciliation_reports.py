@@ -475,6 +475,39 @@ def test_purchase_reconciliation_does_not_net_opposite_line_prices():
     assert result == MatchingResult.MATCH_FAILED
 
 
+def test_purchase_reconciliation_rejects_underdeclared_full_quantity():
+    """A full-quantity invoice cannot use the partial-invoice amount exception."""
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        MatchingConfig,
+        MatchingResult,
+        ToleranceType,
+        _evaluate_matching_result,
+    )
+
+    config = MatchingConfig(
+        matching_type="2-way",
+        price_tolerance_type=ToleranceType.PERCENTAGE,
+        price_tolerance_value=Decimal("0"),
+        qty_tolerance_type=ToleranceType.PERCENTAGE,
+        qty_tolerance_value=Decimal("0"),
+        require_purchase_order=True,
+        bridge_account_required=True,
+        auto_reconcile=True,
+        allow_price_difference=False,
+    )
+
+    result = _evaluate_matching_result(
+        total_invoiced_qty=Decimal("10"),
+        total_reference_qty=Decimal("10"),
+        total_price_difference=Decimal("0"),
+        total_amount_difference=Decimal("-100"),
+        total_reference_amount=Decimal("1000"),
+        config=config,
+    )
+
+    assert result == MatchingResult.MATCH_FAILED
+
+
 def test_bank_reconciliation_supports_partial_and_rejects_duplicates(app_ctx):
     from cacao_accounting.bancos.reconciliation_service import (
         BankReconciliationError,
