@@ -98,8 +98,8 @@ def setup_data(app):
         )
 
         # Setup Books
-        book = Book(code="GEN", name="General Ledger", entity="CMP", is_primary=True, currency="USD")
-        eur_book = Book(code="EUR", name="EUR Ledger", entity="CMP", is_primary=False, currency="EUR")
+        book = Book(code="GEN", name="General Ledger", entity="CMP", is_primary=True, currency="USD", status="activo")
+        eur_book = Book(code="EUR", name="EUR Ledger", entity="CMP", is_primary=False, currency="EUR", status="activo")
         database.session.add_all([book, eur_book])
         database.session.add(ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.90"), date=date(2024, 12, 15)))
 
