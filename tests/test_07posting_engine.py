@@ -167,6 +167,20 @@ def test_reconciliation_currency_conversion_uses_latest_prior_rate(app_ctx):
     assert _convert_to_ledger_currency(Decimal("100"), "NIO", "USD", date(2026, 5, 4)) == Decimal("2.800")
 
 
+def test_return_delivery_notes_do_not_change_sales_order_reservations(app_ctx):
+    """A return neither consumes nor restores a reservation from the original delivery."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.ventas.services import (
+        _release_reservation_for_delivery_note,
+        _restore_reservation_for_delivery_note,
+    )
+
+    note = SimpleNamespace(docstatus=1, sales_order_id="SO-RETURN", is_return=True)
+    _release_reservation_for_delivery_note(note)
+    _restore_reservation_for_delivery_note(note)
+
+
 def test_submit_document_rolls_back_docstatus_when_posting_fails(app_ctx):
     """A failed GL posting cannot leave the operational document approved."""
     from cacao_accounting.contabilidad.posting import PostingError, submit_document

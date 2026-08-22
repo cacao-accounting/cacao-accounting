@@ -112,6 +112,17 @@ El alcance por defecto de GL ya no excluye anulaciones cuando `FinancialReportFi
 - Prueba focal: 1 passed.
 - Ruff y `git diff --check`: OK.
 
+## 2026-08-22 — Reservas y devoluciones de entrega (#699)
+
+### Implementado
+
+Las notas de entrega de devolución (`is_return`) se excluyen tanto de liberar como de restaurar reservas de la orden de venta. Una devolución no debe alterar el compromiso que la entrega original ya consumió. La prueba cubre ambos hooks sin tocar una reserva.
+
+### Validación
+
+- Prueba focal: 1 passed.
+- Ruff y `git diff --check`: OK.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición

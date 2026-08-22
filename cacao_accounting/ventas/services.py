@@ -424,6 +424,8 @@ def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
         return
     if not dn.sales_order_id:
         return
+    if dn.is_return:
+        return
     if getattr(dn, "reservation_released", False):
         return
 
@@ -452,6 +454,8 @@ def _restore_reservation_for_delivery_note(dn: DeliveryNote) -> None:
     No sobrescribe: lee el valor vigente y le suma la cantidad liberada.
     """
     if not dn.sales_order_id:
+        return
+    if dn.is_return:
         return
 
     items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=dn.id)).scalars().all()
@@ -1294,8 +1298,7 @@ def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[
             raise ValueError(f"La línea {item.item_code} debe tener un monto positivo.")
         if abs(amount - expected) > tolerance:
             raise ValueError(
-                f"El monto de la línea {item.item_code} no coincide con cantidad por precio "
-                f"({amount} frente a {expected})."
+                f"El monto de la línea {item.item_code} no coincide con cantidad por precio ({amount} frente a {expected})."
             )
 
 
