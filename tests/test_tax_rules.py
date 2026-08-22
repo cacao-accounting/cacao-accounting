@@ -501,6 +501,52 @@ def test_document_tax_snapshot_is_persisted_and_loaded_for_invoice(app_ctx: Flas
     assert persisted_lines[0].account_id is None
 
 
+def test_sales_invoice_tax_snapshot_is_persisted_for_sales_posting(app_ctx: Flask) -> None:
+    """Sales invoices retain canonical fiscal lines for their posting event."""
+    from cacao_accounting.database import SalesInvoice, database
+
+    invoice = SalesInvoice(company="cacao", posting_date=date(2026, 5, 1), document_type="sales_invoice", docstatus=0)
+    database.session.add(invoice)
+    database.session.flush()
+    persist_document_fiscal_snapshot(
+        company="cacao",
+        document_type="sales_invoice",
+        document_id=invoice.id,
+        currency="NIO",
+        tax_lines=[
+            {
+                "source_rule_id": "MANUAL-SALES-IVA-001",
+                "manual": True,
+                "concept": "IVA",
+                "type": "tax",
+                "base_amount": "100.00",
+                "rate": "15",
+                "amount": "15.00",
+                "accounting_treatment": "separate_tax_account",
+                "account_id": "",
+                "affects_inventory": False,
+                "included_in_price": False,
+                "notes": "snapshot venta",
+            }
+        ],
+        tax_summary={"subtotal": "100.00", "document_tax_total": "15.00", "grand_total": "115.00"},
+    )
+
+    rules = _document_tax_rules(
+        invoice,
+        [],
+        company="cacao",
+        applies_to="sales",
+        event_type="sales_invoice_confirmed",
+    )
+
+    assert len(rules) == 1
+    assert rules[0].concept == "IVA"
+    assert rules[0].amount == Decimal("15.00")
+    persisted_lines = load_document_fiscal_lines("sales_invoice", invoice.id)
+    assert persisted_lines[0].notes == "snapshot venta"
+
+
 def test_document_tax_snapshot_uses_canonical_rule_values(app_ctx: Flask) -> None:
     """Browser values cannot replace a stored rule's amount, rate, or account."""
     from cacao_accounting.database import Accounts, PurchaseInvoice, TaxRule, database
