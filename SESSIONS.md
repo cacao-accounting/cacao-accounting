@@ -5586,3 +5586,20 @@ ancestro de `HEAD`. Las matrices de los épicos #278–#282 y las pruebas de
 fiscal, bancos y posting se usaron como evidencia funcional complementaria;
 los issues permanecen abiertos para QA o porque su alcance es deliberadamente
 evolutivo.
+
+## 2026-08-22 — Consulta e inventario de tipos de registros y documentos del sistema
+
+### Petición
+
+El usuario consulta: "¿Cuáles registros ofrece actualmente el sistema?" pidiendo una relación estructurada y detallada de los registros y documentos que maneja la aplicación Cacao Accounting.
+
+### Método / Plan
+
+- Inspeccionar el modelo de datos de la aplicación (`cacao_accounting/database/__init__.py`) y los registros documentales/transaccionales soportados.
+- Clasificar los 158 modelos y tablas en categorías funcionales (Compras/S2P, Ventas/O2C, Inventario/Logística, Bancos/Tesorería, Contabilidad General/R2R, Datos Maestros y Administración/Auditoría).
+- Elaborar un desglose claro y exhaustivo para responder de forma precisa a la consulta del usuario.
+
+### Resultado
+
+- Se identificaron y categorizaron todas las entidades de datos y documentos transaccionales que ofrece Cacao Accounting.
+- Se documentó la respuesta detallada en la interacción directa con el usuario.

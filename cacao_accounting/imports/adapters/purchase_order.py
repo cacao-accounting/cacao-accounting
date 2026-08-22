@@ -132,8 +132,8 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         else:
             from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 
-            rate = _lookup_exchange_rate(transaction_currency, base_currency, posting_date) if posting_date else None
-            rate = Decimal(str(rate)) if rate is not None else Decimal("0")
+            fetched_rate = _lookup_exchange_rate(transaction_currency, base_currency, posting_date) if posting_date else None
+            rate = Decimal(str(fetched_rate)) if fetched_rate is not None else Decimal("0")
         if rate <= 0:
             raise ValueError(f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}.")
         return transaction_currency, base_currency, rate

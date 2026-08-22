@@ -37,7 +37,7 @@ from cacao_accounting.database import (
     database,
 )
 
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -281,11 +281,11 @@ def _stock_bin_or_create(company: str, item_code: str, warehouse: str, for_updat
 
 def _require_sales_warehouse(company: str, warehouse_code: str) -> None:
     """Require an active warehouse that belongs to the sales document company."""
-    warehouse = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
+    warehouse = database.session.execute(select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
     if warehouse is None or warehouse.company != company:
-        raise PostingError(f"La bodega {warehouse_code} no pertenece a la compañía {company}.")
+        raise PostingError(f"La bodega {warehouse_code} no pertenece a la compañía {company}.")  # type: ignore[misc]
     if not warehouse.is_active:
-        raise PostingError(f"La bodega {warehouse_code} está inactiva.")
+        raise PostingError(f"La bodega {warehouse_code} está inactiva.")  # type: ignore[misc]
 
 
 def _resolve_item_warehouse(item: SalesOrderItem, item_obj: Item | None) -> str:
@@ -308,7 +308,7 @@ def _item_by_code(item_code: str) -> Item | None:
     item = database.session.get(Item, item_code)
     if item is not None:
         return item
-    return database.session.execute(database.select(Item).filter_by(code=item_code)).scalars().first()
+    return database.session.execute(select(Item).filter_by(code=item_code)).scalars().first()
 
 
 def _base_qty_for_sales_line(item: Any, item_obj: Item | None) -> Decimal:
