@@ -57,6 +57,17 @@ La prueba `test_submit_document_rolls_back_docstatus_when_posting_fails` fuerza 
 - Prueba focal: 1 passed.
 - Ruff check/format y `git diff --check`: OK.
 
+## 2026-08-22 — Lock de transición documental (#711)
+
+### Implementado
+
+Las primitivas `submit_document` y `cancel_document` ahora recargan el documento persistido con `SELECT ... FOR UPDATE` antes de validar `docstatus` y de crear movimientos. El lock está centralizado en `_lock_document_for_transition`, evitando que las múltiples rutas O2C, S2P y Bancos puedan trabajar con una lectura previa obsoleta.
+
+### Validación
+
+- Regresión de fallo de submit: 1 passed.
+- Ruff y `git diff --check`: OK.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición

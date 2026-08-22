@@ -3453,6 +3453,7 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
     de ruta que invocan esta funcion (ej. ``ventas_entrega_submit``,
     ``bancos_pago_submit``).
     """
+    document = _lock_document_for_transition(document)
     if getattr(document, "docstatus", 0) != 0:
         raise PostingError("Solo se puede aprobar un documento en borrador.")
     if _has_active_gl_entries(document):
@@ -3469,6 +3470,7 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
 
 def cancel_document(document: Any) -> list[GLEntry]:
     """Cancela un documento aprobado mediante reversos append-only."""
+    document = _lock_document_for_transition(document)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede cancelar un documento aprobado.")
 
@@ -3496,6 +3498,18 @@ def cancel_document(document: Any) -> list[GLEntry]:
         _emit_cancel_events(document, voucher_id, company)
 
         return _add_entries(reversals)
+
+
+def _lock_document_for_transition(document: Any) -> Any:
+    """Lock and refresh a persistent document before a state transition."""
+    document_id = getattr(document, "id", None)
+    if not document_id:
+        raise PostingError("El documento debe estar persistido antes de cambiar su estado.")
+    model = type(document)
+    locked = database.session.execute(select(model).where(model.id == document_id).with_for_update()).scalar_one_or_none()
+    if locked is None:
+        raise PostingError("El documento no existe.")
+    return locked
 
 
 def _validate_cancel_accounting_period(document: Any, company: str) -> None:
