@@ -166,6 +166,23 @@ def test_sales_order_items_reject_duplicate_item_codes(app_ctx):
     database.session.rollback()
 
 
+def test_flow_source_line_is_loaded_with_a_submission_lock(app_ctx):
+    """La validación O2C obtiene la línea fuente mediante el helper de lock."""
+    from cacao_accounting.database import SalesOrder, SalesOrderItem, database
+    from cacao_accounting.ventas.services import _lock_flow_source_item
+
+    order = SalesOrder(company="cacao", posting_date=date.today(), docstatus=1)
+    database.session.add(order)
+    database.session.flush()
+    item = SalesOrderItem(sales_order_id=order.id, item_code="ART-O2C-LOCK", qty=Decimal("1"), rate=Decimal("1"))
+    database.session.add(item)
+    database.session.flush()
+
+    locked = _lock_flow_source_item(SalesOrderItem, item.id)
+
+    assert locked is item
+
+
 O2C_BILLING_SCENARIOS = [
     (10, 4, "12"),
     (10, 10, "12"),

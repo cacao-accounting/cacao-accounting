@@ -1245,7 +1245,7 @@ def _validate_delivery_quantities_against_so(note_id: str) -> None:
     for rel in relations:
         if rel.source_type != "sales_order" or not rel.source_item_id:
             continue
-        so_item = database.session.get(SalesOrderItem, rel.source_item_id)
+        so_item = _lock_flow_source_item(SalesOrderItem, rel.source_item_id)
         if not so_item:
             continue
         consumed = consumed_qty_for_source(
@@ -1396,7 +1396,7 @@ def _validate_sales_invoice_relation(relation: DocumentRelation, invoice_id: str
     source = sources.get(relation.source_type)
     if not source or not relation.source_item_id:
         return
-    item: Any = database.session.get(source[0], relation.source_item_id)
+    item: Any = _lock_flow_source_item(source[0], relation.source_item_id)
     if not item:
         return
     if relation.source_type == "sales_invoice" and item.sales_invoice_id != relation.source_id:
@@ -1420,6 +1420,16 @@ def _validate_sales_invoice_relation(relation: DocumentRelation, invoice_id: str
                 consumed, source[1], item.item_code
             )
         )
+
+
+def _lock_flow_source_item(model: type[Any], item_id: str) -> Any | None:
+    """Lock an O2C source line while its consumed quantity is validated.
+
+    The lock serializes competing delivery or invoice submissions that consume
+    the same final quantity. It remains held by the caller's document
+    transaction through validation, posting and commit.
+    """
+    return database.session.execute(database.select(model).where(model.id == item_id).with_for_update()).scalar_one_or_none()
 
 
 def _persist_sales_invoice_fiscal_snapshot(invoice: SalesInvoice) -> None:

@@ -3,6 +3,20 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Lock de líneas fuente O2C (#686)
+
+### Implementado
+
+Las validaciones de sobre-entrega y sobre-facturación cargan ahora la línea
+fuente de OV/DN con `SELECT ... FOR UPDATE` antes de sumar el consumo. El
+lock se mantiene durante la transacción de submit, serializando dos entregas o
+facturas concurrentes que intenten consumir el mismo saldo final.
+
+### Validación
+
+- Prueba focal de carga con lock: **1 passed**.
+- Ruff check/format y `git diff --check`: OK.
+
 ## 2026-08-22 — Moneda transaccional en candidatos de pago (#687)
 
 ### Implementado
