@@ -333,11 +333,17 @@ def test_journal_books_endpoint_returns_only_active_books(app_ctx):
     client = app_ctx.test_client()
     _login(client, user.id)
 
+    # Fila legacy: NULL directo en BD (el default del modelo nace activo).
+    database.session.execute(database.update(Book).where(Book.code == "IFRS").values(status=None))
+    database.session.commit()
+
     response = client.get("/accounting/journal/books?company=cacao")
     payload = response.get_json()
 
     assert response.status_code == 200
-    assert set(item["value"] for item in payload["results"]) == {"DEFAULT_BOOK", "FISC", "IFRS"}
+    # Solo libros activos: ni los inactivos ni una fila legacy con
+    # status=NULL se ofrecen como candidatos.
+    assert set(item["value"] for item in payload["results"]) == {"DEFAULT_BOOK", "FISC"}
 
 
 def test_submit_journal_posts_only_selected_books(app_ctx):

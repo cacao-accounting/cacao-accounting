@@ -6,8 +6,8 @@
 Cubre el fix ``fix(reports): unify default ledger resolution``: ``primary_ledger_id``
 (``ledger_queries``) y ``_resolve_ledger`` (``reportes.services``) deben compartir:
 
-1. El predicado de libros activos que también acepta filas legacy con
-   ``status=NULL`` (los libros históricos no tienen estado).
+1. El predicado de libros activos, que es fail-closed: una fila legacy con
+   ``status=NULL`` ya no se interpreta como activa.
 2. La misma precedencia de selección: ``default DESC, is_primary DESC, code ASC``.
 3. La exclusión de libros inactivos.
 """
@@ -56,15 +56,24 @@ def _add_book(code: str, *, default: bool = False, primary: bool = False, status
     )
     database.session.add(book)
     database.session.commit()
+    if status is None:
+        # El default del modelo activa libros sin estado explícito; una fila
+        # legacy con NULL solo se obtiene mediante actualización directa.
+        database.session.execute(database.update(Book).where(Book.code == code).values(status=None))
+        database.session.commit()
+    database.session.expire(book)
     return book
 
 
-def test_primary_ledger_id_accepts_legacy_null_status_book(app_ctx):
-    """Un libro legacy sin estado (NULL) sigue siendo candidato válido."""
+def test_primary_ledger_id_excludes_legacy_null_status_book(app_ctx):
+    """Una fila legacy sin estado (NULL) ya no se interpreta como activa."""
     from cacao_accounting.ledger_queries import primary_ledger_id
 
-    book = _add_book("LEGACY", status=None)
-    assert primary_ledger_id("cacao") == book.id
+    _add_book("LEGACY", status=None)
+    assert primary_ledger_id("cacao") is None
+
+    active = _add_book("ACT1")
+    assert primary_ledger_id("cacao") == active.id
 
 
 def test_primary_ledger_id_excludes_inactive_books(app_ctx):
@@ -129,21 +138,27 @@ def test_resolve_ledger_falls_back_to_primary_then_code_order(app_ctx):
     assert resolved.id == primary_book.id
 
 
-def test_resolve_ledger_excludes_inactive_and_null_status_counts_as_active(app_ctx):
-    """_resolve_ledger comparte el predicado de actividad con primary_ledger_id."""
+def test_resolve_ledger_excludes_inactive_and_legacy_null_status(app_ctx):
+    """_resolve_ledger comparte el predicado de actividad fail-closed."""
     from cacao_accounting.ledger_queries import primary_ledger_id
     from cacao_accounting.reportes.services import _resolve_ledger
 
-    legacy = _add_book("OLD1", status=None, primary=True)
+    _add_book("OLD1", status=None, primary=True)
     _add_book("INAC", status="inactivo")
 
+    # Sin libros activos no hay resolución, aunque existan filas legacy.
+    assert _resolve_ledger("cacao", None) is None
+    assert primary_ledger_id("cacao") is None
+
+    active = _add_book("ACT1")
     resolved = _resolve_ledger("cacao", None)
     assert resolved is not None
-    assert resolved.id == legacy.id
+    assert resolved.id == active.id
     assert primary_ledger_id("cacao") == resolved.id
 
-    # Solicitado por código inactivo -> sin resultado.
+    # Solicitado por código inactivo o legacy -> sin resultado.
     assert _resolve_ledger("cacao", "INAC") is None
+    assert _resolve_ledger("cacao", "OLD1") is None
 
 
 def test_both_resolvers_agree_on_the_same_book(app_ctx):
@@ -151,7 +166,7 @@ def test_both_resolvers_agree_on_the_same_book(app_ctx):
     from cacao_accounting.ledger_queries import primary_ledger_id
     from cacao_accounting.reportes.services import _resolve_ledger
 
-    _add_book("FISC", primary=True, status=None)
+    _add_book("FISC", primary=True)
     default_book = _add_book("IFRS", default=True)
 
     resolved = _resolve_ledger("cacao", None)
