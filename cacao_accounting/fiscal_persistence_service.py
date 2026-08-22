@@ -18,7 +18,7 @@ from cacao_accounting.document_flow.status import _
 
 
 def calculate_document_total_with_taxes(
-    document: Any, subtotal: Decimal, items: list[Any], summary_payload: Any = None
+    document: Any, subtotal: Decimal, items: list[Any], summary_payload: Any = None, tax_lines_payload: Any = None
 ) -> Decimal:
     """Calcula el total persistible de una factura con impuestos server-side.
 
@@ -35,10 +35,102 @@ def calculate_document_total_with_taxes(
         tax_result = calculate_taxes(document, template_id)
         total = subtotal + tax_result.payable_delta
     else:
-        total = subtotal
+        total = _document_total_from_canonical_tax_lines(
+            company=str(getattr(document, "company", "") or ""),
+            subtotal=subtotal,
+            tax_lines_payload=tax_lines_payload,
+        )
+        if not _normalize_lines_payload(tax_lines_payload):
+            total = _document_total_from_active_rules(document=document, items=items, subtotal=subtotal)
     if total < 0:
         raise ValueError("El total fiscal no puede ser negativo.")
     return total
+
+
+def _document_total_from_canonical_tax_lines(*, company: str, subtotal: Decimal, tax_lines_payload: Any) -> Decimal:
+    """Calculate the payable total from the same canonical lines persisted for posting."""
+    lines_payload = _normalize_lines_payload(tax_lines_payload)
+    if not lines_payload:
+        return subtotal
+    concept_amounts = {"goods": subtotal}
+    delta = Decimal("0")
+    for line_payload in lines_payload:
+        rule_id = _document_tax_line_rule_id(line_payload)
+        is_manual = bool(line_payload.get("manual")) or str(rule_id or "").startswith("MANUAL-")
+        tax_rule = None if is_manual else _matching_tax_rule(company=company, rule_id=rule_id)
+        canonical = _canonical_tax_line_payload(
+            company=company,
+            line_payload=line_payload,
+            tax_rule=tax_rule,
+            server_subtotal=subtotal,
+            concept_amounts=concept_amounts,
+        )
+        amount = _decimal_or_none(canonical.get("amount")) or Decimal("0")
+        concept = str(canonical.get("concept") or "")
+        if tax_rule and tax_rule.participates_in_next_base and concept:
+            concept_amounts[concept] = concept_amounts.get(concept, Decimal("0")) + amount
+        if (
+            bool(canonical.get("affects_document_total", True))
+            and not bool(canonical.get("included_in_price"))
+            and str(canonical.get("type") or canonical.get("tax_type") or "tax") != "withholding"
+        ):
+            delta += amount
+    return subtotal + delta
+
+
+def _document_total_from_active_rules(*, document: Any, items: list[Any], subtotal: Decimal) -> Decimal:
+    """Calculate totals from the active rules used by the fallback posting path."""
+    if not getattr(document, "company", None):
+        return subtotal
+    from cacao_accounting.accounting_engine.common.context import AccountingReferences, CalculationContext, ItemContext
+    from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
+    from cacao_accounting.tax_rule_service import build_tax_rule_contexts
+
+    document_type = str(getattr(document, "document_type", None) or getattr(document, "__tablename__", "sales_invoice"))
+    applies_to = "purchase" if document_type.startswith("purchase") else "sales"
+    event = "purchase_invoice_confirmed" if applies_to == "purchase" else "sales_invoice_confirmed"
+    currency = str(getattr(document, "transaction_currency", None) or getattr(document, "base_currency", None) or "")
+    rules = build_tax_rule_contexts(
+        company=getattr(document, "company", None),
+        applies_to=applies_to,
+        currency=currency or None,
+        at_date=getattr(document, "posting_date", None),
+        recognition_event=event,
+    )
+    if not rules:
+        return subtotal
+    contexts = [
+        ItemContext(
+            line_id=str(getattr(item, "id", index)),
+            item_id=str(getattr(item, "item_code", "")),
+            description=str(getattr(item, "item_name", "")),
+            quantity=Decimal(str(getattr(item, "qty", 0) or 0)),
+            unit_price=Decimal(str(getattr(item, "rate", 0) or 0)),
+            gross_amount=Decimal(str(getattr(item, "amount", 0) or 0)),
+            net_amount=Decimal(str(getattr(item, "amount", 0) or 0)),
+        )
+        for index, item in enumerate(items, start=1)
+    ]
+    result = FiscalEngine().calculate(
+        CalculationContext(
+            company_id=str(getattr(document, "company", "")),
+            document_type=document_type,
+            event_type=event,
+            transaction_direction=applies_to,
+            transaction_date=getattr(document, "posting_date", None),
+            posting_date=getattr(document, "posting_date", None),
+            party_type="supplier" if applies_to == "purchase" else "customer",
+            party_id=str(getattr(document, "supplier_id", None) or getattr(document, "customer_id", None) or ""),
+            currency=currency,
+            company_currency=str(getattr(document, "base_currency", None) or currency),
+            items=contexts,
+            tax_rules=rules,
+            references=AccountingReferences(),
+        )
+    )
+    if result.errors:
+        raise ValueError("; ".join(result.errors))
+    return subtotal + result.document_tax_total
 
 
 def persist_document_fiscal_snapshot(

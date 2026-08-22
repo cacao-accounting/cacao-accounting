@@ -1705,7 +1705,9 @@ def _create_sales_invoice_from_form():
             database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=factura.id)).scalars().all()
         )
         source = _validate_sales_invoice_source_links(factura, items) or source
-        grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
+        grand_total = calculate_document_total_with_taxes(
+            factura, total, items, request.form.get("tax_summary_payload"), request.form.get("tax_lines_payload")
+        )
         _set_sales_invoice_totals(factura, total, grand_total, source)
         if reversal_of:
             _validate_reversal_of(
@@ -1823,7 +1825,9 @@ def _handle_sales_invoice_edit_post(registro):
         source = _validate_sales_invoice_source_links(registro, items)
         if source is None and registro.reversal_of:
             source = database.session.get(SalesInvoice, registro.reversal_of)
-        grand_total = calculate_document_total_with_taxes(registro, total, items, request.form.get("tax_summary_payload"))
+        grand_total = calculate_document_total_with_taxes(
+            registro, total, items, request.form.get("tax_summary_payload"), request.form.get("tax_lines_payload")
+        )
         _set_sales_invoice_totals(registro, total, grand_total, source)
         if registro.reversal_of:
             _validate_reversal_of(

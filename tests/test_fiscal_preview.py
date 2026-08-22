@@ -40,6 +40,28 @@ def test_document_total_ignores_tax_summary_without_template():
     assert total == Decimal("100")
 
 
+def test_document_total_uses_canonical_manual_tax_lines_without_template():
+    """A persisted manual tax changes AR totals even without a tax template."""
+    total = calculate_document_total_with_taxes(
+        type("Document", (), {"tax_template_id": None, "company": "cacao"})(),
+        Decimal("100"),
+        [],
+        tax_lines_payload=[
+            {
+                "manual": True,
+                "concept": "IVA",
+                "type": "tax",
+                "base_amount": "100",
+                "rate": "16",
+                "amount": "16",
+                "affects_document_total": True,
+                "included_in_price": False,
+            }
+        ],
+    )
+    assert total == Decimal("116")
+
+
 @pytest.fixture(scope="module", autouse=True)
 def setupdb(request):
     """Inicializa la base de datos para las pruebas lentas."""
