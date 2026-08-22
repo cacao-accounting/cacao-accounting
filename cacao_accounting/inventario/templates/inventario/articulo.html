@@ -44,6 +44,39 @@
 
 <div class="ca-card mt-3">
   <div class="ca-card-header">
+    <h6 class="ca-card-title mb-0"><i class="bi bi-image me-1"></i>{{ _('Imagen del producto') }}</h6>
+  </div>
+  <div class="p-3 text-center">
+    {% if registro.image_path %}
+    <div class="mb-3">
+      <img src="{{ url_for('api.api_get_item_image', item_id=registro.code) }}" alt="{{ registro.name }}" class="img-thumbnail" style="max-height: 250px; object-fit: contain;">
+    </div>
+    {% if is_cloud_mode() %}
+    <form method="post" action="{{ url_for('api.api_delete_item_image', item_id=registro.code) }}" class="d-inline mb-2" onsubmit="return confirm('¿Eliminar la imagen del producto?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>{{ _('Eliminar imagen') }}</button>
+    </form>
+    {% endif %}
+    {% else %}
+    <p class="text-muted small mb-2"><i class="bi bi-image-alt me-1"></i>{{ _('Este artículo no tiene imagen.') }}</p>
+    {% endif %}
+
+    {% if is_cloud_mode() %}
+    <form method="post" action="{{ url_for('api.api_upload_item_image', item_id=registro.code) }}" enctype="multipart/form-data" class="row g-2 align-items-center justify-content-center mt-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-auto">
+        <input type="file" class="form-control form-control-sm" name="file" accept="image/*" required>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-upload me-1"></i>{{ _('Subir imagen') if not registro.image_path else _('Cambiar imagen') }}</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
     <h6 class="ca-card-title mb-0">{{ _('Clasificacion y flags') }}</h6>
   </div>
   <div class="p-3">

@@ -22,7 +22,7 @@
       <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>{{ _('Guardar') }}</button>
     </div>
   </div>
-  <form method="post" id="form-main" class="row g-3 p-3">
+  <form method="post" id="form-main" enctype="multipart/form-data" class="row g-3 p-3">
     {{ form.csrf_token }}
 
     {# Card 1: Datos basicos #}
@@ -37,6 +37,12 @@
             {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
             {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors[0] }}</div>{% endif %}
           </div>
+          {% if is_cloud_mode() %}
+          <div class="col-md-3">
+            <label class="form-label" for="image">{{ _('Imagen del producto') }}</label>
+            <input class="form-control form-control-sm" type="file" id="image" name="image" accept="image/*">
+          </div>
+          {% endif %}
           <div class="col-md-3">
             <label class="form-label" for="item_category_id">{{ _('Categoria') }}</label>
             <div class="ca-smart-select" x-data='smartSelect({

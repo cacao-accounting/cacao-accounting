@@ -291,6 +291,9 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             from cacao_accounting.document_flow.status import calculate_document_status
 
             app.jinja_env.globals.update(document_status_info=calculate_document_status)
+            from cacao_accounting.attachment_service import list_attachments
+
+            app.jinja_env.globals.update(get_document_attachments=list_attachments)
             # now available globally in templates
             app.jinja_env.globals.update(now=datetime.now)
             app.jinja_env.globals.update(getattr=getattr)
