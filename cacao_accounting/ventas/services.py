@@ -1793,11 +1793,15 @@ def _handle_sales_invoice_edit_post(registro):
     inmutables despues de la creacion; se preservan del registro existente.
     """
     try:
+        requested_company = request.form.get("company") or registro.company
+        if requested_company != registro.company:
+            flash(_("La compañía de un documento existente no puede cambiarse."), "danger")
+            return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
         before_state = _capture_sales_state(registro)
         revert_relations_for_target("sales_invoice", registro.id, reason="draft_edited")
         refresh_source_caches_for_target("sales_invoice", registro.id)
         registro.customer_id = request.form.get("customer_id") or None
-        registro.company = request.form.get("company") or None
+        registro.company = requested_company
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.remarks = request.form.get("remarks")
         registro.update_inventory = bool(request.form.get("update_inventory")) and not registro.is_return

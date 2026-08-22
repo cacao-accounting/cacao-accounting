@@ -3,6 +3,20 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Compañía inmutable en facturas de venta (#676)
+
+### Implementado
+
+La edición de una factura de venta existente rechaza cambios de compañía antes
+de revertir relaciones, recalcular impuestos o modificar el documento. Con ello
+se preservan su numeración, contexto fiscal, permisos y futura contabilización.
+
+### Validación
+
+- Regresión de POST cross-company en borrador: **1 passed**.
+- Ruff check/format y `git diff --check`: OK. Black no pudo ejecutarse por la
+  dependencia `pathspec` corrupta del entorno local.
+
 ## 2026-08-22 — Devoluciones fuera del matching positivo (#679)
 
 ### Implementado
