@@ -163,6 +163,56 @@ def _make_bank_transaction(bank_account, *, deposit=None, withdrawal=None, posti
     return transaction
 
 
+def test_gl_reconciliation_rejects_entry_from_another_bank_account(app_ctx, chart):
+    """A shared GL account cannot let one bank reconcile another bank's GL leg."""
+    import pytest
+
+    from cacao_accounting.bancos.reconciliation_service import (
+        BankReconciliationError,
+        BankReconciliationMatch,
+        BankReconciliationRequest,
+        find_bank_reconciliation_candidates,
+        reconcile_bank_items,
+    )
+    from cacao_accounting.database import GLEntry, database
+
+    chart["account_b"].gl_account_id = chart["bank_gl_a_id"]
+    transaction = _make_bank_transaction(chart["account_a"], deposit=Decimal("40.00"))
+    foreign_entry = GLEntry(
+        posting_date=AS_OF,
+        company=COMPANY,
+        ledger_id=chart["book_id"],
+        account_id=chart["bank_gl_a_id"],
+        debit=Decimal("40.00"),
+        credit=Decimal("0"),
+        voucher_type="journal_entry",
+        voucher_id="JRN-OTHER-BANK",
+        bank_account_id=chart["account_b"].id,
+    )
+    database.session.add(foreign_entry)
+    database.session.commit()
+
+    candidates = find_bank_reconciliation_candidates(transaction.id)
+    assert foreign_entry.id not in {
+        candidate.reference_id for candidate in candidates if candidate.reference_type == "gl_entry"
+    }
+    with pytest.raises(BankReconciliationError, match="otra cuenta bancaria"):
+        reconcile_bank_items(
+            BankReconciliationRequest(
+                company=COMPANY,
+                reconciliation_date=AS_OF,
+                matches=[
+                    BankReconciliationMatch(
+                        bank_transaction_id=transaction.id,
+                        target_type="gl_entry",
+                        target_id=foreign_entry.id,
+                        allocated_amount=Decimal("40.00"),
+                    )
+                ],
+            )
+        )
+
+
 def _make_payment(
     *,
     amount: Decimal,

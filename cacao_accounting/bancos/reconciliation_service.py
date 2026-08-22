@@ -608,6 +608,8 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool 
             .all()
         )
         for entry in gl_entries:
+            if entry.bank_account_id and entry.bank_account_id != transaction.bank_account_id:
+                continue
             if _gl_direction(entry) != _bank_direction(transaction):
                 continue
             try:
@@ -790,6 +792,8 @@ def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: s
         bank_gl_account_id = _bank_gl_account_id(transaction)
         if not entry or not bank_gl_account_id or entry.account_id != bank_gl_account_id:
             raise BankReconciliationError("La entrada GL no pertenece a la cuenta bancaria conciliada.")
+        if entry.bank_account_id and entry.bank_account_id != transaction.bank_account_id:
+            raise BankReconciliationError("La entrada GL pertenece a otra cuenta bancaria.")
         _validate_gl_entry_eligibility(entry)
     elif match.target_type == "payment_entry":
         payment = database.session.get(PaymentEntry, match.target_id)
