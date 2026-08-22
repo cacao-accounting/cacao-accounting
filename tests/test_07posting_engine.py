@@ -3157,6 +3157,57 @@ def test_expired_batch_is_rejected_by_stock_posting(app_ctx):
         )
 
 
+def test_outgoing_batch_validation_uses_the_locked_stock_bin(app_ctx):
+    """A batch issue validates availability while holding its bin lock."""
+    from cacao_accounting.database import Batch, Item, StockBin, StockEntryItem, StockLedgerEntry, UOM, Warehouse, database
+    from cacao_accounting.inventario.service import validate_batch_serial
+
+    database.session.add_all(
+        [
+            UOM(code="EA-BATCH-LOCK", name="Each"),
+            Item(
+                code="ITEM-BATCH-LOCK",
+                name="Batch lock",
+                item_type="goods",
+                is_stock_item=True,
+                has_batch=True,
+                default_uom="EA-BATCH-LOCK",
+            ),
+            Warehouse(code="WH-BATCH-LOCK", name="Batch warehouse", company="cacao"),
+            StockBin(
+                company="cacao",
+                item_code="ITEM-BATCH-LOCK",
+                warehouse="WH-BATCH-LOCK",
+                actual_qty=Decimal("2"),
+                stock_value=Decimal("20"),
+            ),
+        ]
+    )
+    database.session.flush()
+    batch = Batch(item_code="ITEM-BATCH-LOCK", batch_no="BATCH-LOCK", is_active=True)
+    database.session.add(batch)
+    database.session.flush()
+    database.session.add(
+        StockLedgerEntry(
+            company="cacao",
+            posting_date=date(2026, 5, 4),
+            item_code="ITEM-BATCH-LOCK",
+            warehouse="WH-BATCH-LOCK",
+            qty_change=Decimal("2"),
+            voucher_type="purchase_receipt",
+            voucher_id="BATCH-LOCK-RECEIPT",
+            batch_id=batch.id,
+        )
+    )
+    database.session.flush()
+
+    validate_batch_serial(
+        StockEntryItem(item_code="ITEM-BATCH-LOCK", batch_id=batch.id, qty=Decimal("2"), uom="EA-BATCH-LOCK"),
+        outgoing=True,
+        warehouse="WH-BATCH-LOCK",
+    )
+
+
 def test_normal_receipt_rejects_an_available_serial(app_ctx):
     """A normal receipt cannot move an existing serial without a transfer."""
     from cacao_accounting.database import Item, SerialNumber, StockEntryItem, UOM, database

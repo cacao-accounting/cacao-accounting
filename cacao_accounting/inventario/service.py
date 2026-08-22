@@ -170,6 +170,17 @@ def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None
     if outgoing:
         if not warehouse:
             raise InventoryServiceError("La salida por lote requiere bodega.")
+        # Serializa la validación con la posterior actualización del bin en el
+        # posting. Sin este bloqueo dos transacciones podían observar el mismo
+        # saldo de lote y consumirlo simultáneamente.
+        database.session.execute(
+            select(StockBin.id)
+            .where(
+                StockBin.item_code == item.code,
+                StockBin.warehouse == warehouse,
+            )
+            .with_for_update()
+        ).first()
         balance = database.session.execute(
             select(func.coalesce(func.sum(StockLedgerEntry.qty_change), 0)).where(
                 StockLedgerEntry.item_code == item.code,
