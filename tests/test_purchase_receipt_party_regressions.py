@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.contabilidad import posting_service
+from cacao_accounting.contabilidad.posting_service import LedgerContext
 
 
 def test_purchase_receipt_inventory_entries_do_not_receive_supplier_dimension(monkeypatch) -> None:
@@ -16,9 +17,27 @@ def test_purchase_receipt_inventory_entries_do_not_receive_supplier_dimension(mo
     with app.app_context():
         calls: list[dict] = []
         line = SimpleNamespace(item_code="ITEM-1", qty=Decimal("2"), rate=Decimal("5"), amount=Decimal("10"))
-        receipt = SimpleNamespace(supplier_id="SUP-1", is_return=False)
+        receipt = SimpleNamespace(supplier_id="SUP-1", is_return=False, company="cacao")
+        ledger_context = LedgerContext(
+            company="cacao",
+            posting_date=None,
+            ledger_id="LEDGER",
+            voucher_type="purchase_receipt",
+            voucher_id="PR-1",
+            document_no="PR-2026-0001",
+            naming_series_id=None,
+            accounting_period_id=None,
+            fiscal_year_id=None,
+            transaction_currency=None,
+            company_currency=None,
+            document_base_currency=None,
+            exchange_rate=Decimal("1"),
+            document_remarks=None,
+        )
 
-        monkeypatch.setattr(posting_service, "_document_contexts", lambda _document, ledger_code=None: ["ledger"])
+        monkeypatch.setattr(
+            posting_service, "_document_contexts", lambda _document, ledger_code=None: [ledger_context]
+        )
         monkeypatch.setattr(posting_service, "_document_items", lambda _document: [line])
         monkeypatch.setattr(posting_service, "_should_skip_non_stock_line", lambda _line: False)
         monkeypatch.setattr(posting_service, "_line_qty_generic", lambda _line: Decimal("2"))
@@ -37,7 +56,7 @@ def test_purchase_receipt_inventory_entries_do_not_receive_supplier_dimension(mo
 
     assert calls == [
         {
-            "context": "ledger",
+            "context": ledger_context,
             "debit_account_id": "INVENTORY",
             "credit_account_id": "BRIDGE",
             "amount": Decimal("10"),
