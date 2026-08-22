@@ -1898,7 +1898,7 @@ def _resolve_ledger(company: str, ledger: str | None) -> Book | None:
     if ledger:
         query = query.where(or_(Book.id == ledger, Book.code == ledger))
     else:
-        query = query.order_by(Book.is_primary.desc(), Book.default.desc(), Book.created.asc())
+        query = query.order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
     return database.session.execute(query).scalars().first()
 
 
