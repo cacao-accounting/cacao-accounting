@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import List, Dict, Any
 from cacao_accounting.imports.utils.validation import is_period_open
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
-from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party, database
+from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party, Warehouse, database
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 
@@ -31,13 +31,22 @@ class PurchaseOrderAdapter(BaseImportAdapter):
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
         """Validate purchase order document."""
         errors = []
+        company_id = (context or {}).get("company_id") or ""
         try:
             posting_date = date.fromisoformat(str(document_data[0].get("fecha")))
-            company_id = (context or {}).get("company_id") or ""
             if not is_period_open(company_id, posting_date):
                 errors.append(f"El periodo contable para la fecha {posting_date} está cerrado o no existe.")
         except (ValueError, TypeError):
             pass
+        for row in document_data:
+            warehouse_code = row.get("bodega")
+            if not warehouse_code:
+                continue
+            warehouse = database.session.execute(
+                database.select(Warehouse).filter_by(code=warehouse_code)
+            ).scalar_one_or_none()
+            if warehouse is None or warehouse.company != company_id or not warehouse.is_active:
+                errors.append(f"La bodega '{warehouse_code}' no pertenece a la compañía o está inactiva.")
         return errors
 
     def build_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Any:

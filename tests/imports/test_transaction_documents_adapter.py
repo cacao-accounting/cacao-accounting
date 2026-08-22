@@ -5,12 +5,63 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
+import pytest
+
+from cacao_accounting import create_app
+from cacao_accounting.database import Entity, Warehouse, database
+from cacao_accounting.database.helpers import inicia_base_de_datos
+from cacao_accounting.imports.adapters.purchase_order import PurchaseOrderAdapter
 from cacao_accounting.imports.adapters.transaction_documents import (
     TransactionDocumentAdapter,
     TransactionImportConfig,
 )
+
+
+@pytest.fixture()
+def app_ctx():
+    """Provide an isolated database for import adapter validation tests."""
+    app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test_secret_key",
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        }
+    )
+    with app.app_context():
+        inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
+        yield app
+        database.session.remove()
+
+
+def test_purchase_order_import_rejects_foreign_warehouse(app_ctx) -> None:
+    """Purchase order imports cannot reference a warehouse from another company."""
+    with app_ctx.app_context():
+        database.session.add(
+            Entity(code="cafe", name="Café", company_name="Café", tax_id="T-IMPORT-CAFE", currency="NIO")
+        )
+        database.session.add(Warehouse(code="WH-CAFE-IMPORT", name="Café", company="cafe"))
+        database.session.commit()
+
+        errors = PurchaseOrderAdapter().validate_document(
+            [
+                {
+                    "document_ref": "PO-IMPORT-FOREIGN-WH",
+                    "fecha": date.today().isoformat(),
+                    "proveedor": "SUP-1",
+                    "producto": "ITEM-1",
+                    "cantidad": "1",
+                    "precio_unitario": "1",
+                    "bodega": "WH-CAFE-IMPORT",
+                }
+            ],
+            {"company_id": "cacao"},
+        )
+
+    assert any("no pertenece a la compañía" in error for error in errors)
 
 
 class _DummyItem:
