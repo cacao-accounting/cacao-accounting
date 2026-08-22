@@ -1648,11 +1648,12 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
         if getattr(source, "purchase_order_id", None) != document.purchase_order_id:
             raise ValueError("La recepción no pertenece a la orden de compra indicada.")
     if items is not None:
+        doc_type = getattr(document, "document_type", None)
         target_types = {
             PurchaseQuotation: "purchase_quotation",
             PurchaseOrder: "purchase_order",
             PurchaseReceipt: "purchase_receipt",
-            PurchaseInvoice: PURCHASE_RETURN if document.document_type == PURCHASE_RETURN else PURCHASE_INVOICE,
+            PurchaseInvoice: PURCHASE_RETURN if doc_type == PURCHASE_RETURN else PURCHASE_INVOICE,
         }
         require_line_relations(
             target_type=target_types[type(document)],
@@ -1829,7 +1830,13 @@ def _purchase_invoice_source_ids() -> dict[str, str | None]:
 def _purchase_invoice_document_type(source_ids: dict[str, str | None]) -> str:
     """Resolve the document type for the purchase invoice."""
     doc_type = PURCHASE_INVOICE
-    if source_ids.get("from_receipt_id"):
+    is_return = (
+        request.args.get("is_return") in ("true", "True", "1", True)
+        or request.form.get("is_return") in ("true", "True", "1", True)
+        or bool(request.args.get("from_return"))
+        or bool(request.form.get("from_return"))
+    )
+    if is_return:
         doc_type = PURCHASE_RETURN
     elif source_ids.get("from_invoice_id"):
         doc_type = PURCHASE_CREDIT_NOTE
@@ -2207,8 +2214,14 @@ def _create_purchase_invoice_from_request():
             if receipt:
                 from_order = receipt.purchase_order_id
         from_invoice = request.form.get("from_invoice") or request.form.get("from_return") or None
+        is_return = (
+            request.args.get("is_return") in ("true", "True", "1", True)
+            or request.form.get("is_return") in ("true", "True", "1", True)
+            or bool(request.args.get("from_return"))
+            or bool(request.form.get("from_return"))
+        )
         document_type = PURCHASE_INVOICE
-        if from_receipt:
+        if is_return:
             document_type = PURCHASE_RETURN
         elif from_invoice:
             document_type = PURCHASE_CREDIT_NOTE
