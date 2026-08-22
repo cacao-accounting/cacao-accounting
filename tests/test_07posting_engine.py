@@ -156,6 +156,17 @@ def test_cancelled_status_filter_includes_cancelled_gl_rows(app_ctx):
     assert [row.id for row in rows] == [entry.id]
 
 
+def test_reconciliation_currency_conversion_uses_latest_prior_rate(app_ctx):
+    """The reconciliation matrix can run on dates without a new quote."""
+    from cacao_accounting.database import ExchangeRate, database
+    from cacao_accounting.reportes.services import _convert_to_ledger_currency
+
+    database.session.add(ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.028"), date=date(2026, 5, 3)))
+    database.session.commit()
+
+    assert _convert_to_ledger_currency(Decimal("100"), "NIO", "USD", date(2026, 5, 4)) == Decimal("2.800")
+
+
 def test_submit_document_rolls_back_docstatus_when_posting_fails(app_ctx):
     """A failed GL posting cannot leave the operational document approved."""
     from cacao_accounting.contabilidad.posting import PostingError, submit_document

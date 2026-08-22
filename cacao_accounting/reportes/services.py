@@ -391,7 +391,13 @@ def _convert_to_ledger_currency(
         return amount
     rate = (
         database.session.execute(
-            select(ExchangeRate).filter_by(origin=source_currency, destination=target_currency, date=as_of_date)
+            select(ExchangeRate)
+            .where(
+                ExchangeRate.origin == source_currency,
+                ExchangeRate.destination == target_currency,
+                ExchangeRate.date <= as_of_date,
+            )
+            .order_by(ExchangeRate.date.desc())
         )
         .scalars()
         .first()
@@ -400,7 +406,13 @@ def _convert_to_ledger_currency(
         return amount * _decimal_value(rate.rate)
     inverse = (
         database.session.execute(
-            select(ExchangeRate).filter_by(origin=target_currency, destination=source_currency, date=as_of_date)
+            select(ExchangeRate)
+            .where(
+                ExchangeRate.origin == target_currency,
+                ExchangeRate.destination == source_currency,
+                ExchangeRate.date <= as_of_date,
+            )
+            .order_by(ExchangeRate.date.desc())
         )
         .scalars()
         .first()

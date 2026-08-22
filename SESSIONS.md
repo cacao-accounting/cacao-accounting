@@ -101,6 +101,17 @@ El alcance por defecto de GL ya no excluye anulaciones cuando `FinancialReportFi
 - Prueba focal: 1 passed.
 - Ruff y `git diff --check`: OK.
 
+## 2026-08-22 — Tasa histórica en matriz de conciliación (#704)
+
+### Implementado
+
+`_convert_to_ledger_currency` resuelve ahora la cotización directa o inversa más reciente en fecha menor o igual al corte. La matriz ya no falla cuando no existe una cotización para el día exacto. Se añadió regresión para conversión NIO→USD al día siguiente de la última cotización.
+
+### Validación
+
+- Prueba focal: 1 passed.
+- Ruff y `git diff --check`: OK.
+
 ## 2026-08-21 — Suite AUDIT-004: reconciliación inventario/valoración/COGS/GL (#279)
 
 ### Petición
