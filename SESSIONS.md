@@ -1,5 +1,29 @@
 # SESSIONS — Bitácora de Decisiones de Diseño
 
+## 2026-08-22 — Corrección de errores mypy reportados por GitHub
+
+### Petición
+
+Investigar las pruebas fallidas en GitHub con `gh` y corregir los errores de
+tipado detectados por el workflow de CI.
+
+### Implementado
+
+- Se tiparon explícitamente las fechas usadas por `CalculationContext` en
+  `fiscal_persistence_service.py`.
+- Se tipificó el tipo de cambio opcional del adaptador de órdenes de compra.
+- Se hizo explícito el narrowing de `settlement_exchange_rate` en la
+  liquidación multicurrency.
+- Se encapsuló la construcción dinámica de `PostingError` en ventas para que
+  `mypy` la reconozca como excepción invocable.
+
+### Validación
+
+- Ruff y `git diff --check`: correctos.
+- Los 5 errores reportados por CI quedaron cubiertos por los cambios.
+- La ejecución local de una versión compatible de mypy dejó únicamente 4
+  errores históricos en otros archivos no relacionados con este fix.
+
 ## 2026-08-22 — Skip de navegación no disponible en modo desktop
 
 ### Petición
