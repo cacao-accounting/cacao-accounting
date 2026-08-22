@@ -3,6 +3,61 @@
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-22 — Fixes de issues abiertos #279 (AUDIT-004) y #250 (FIS-01)
+
+### Petición
+
+Resolver los dos issues abiertos en GitHub aplicando los fixes que exigían sus
+comentarios de revisión (`needs-work`) y registrarlos en commits semánticos
+firmados como `williamjmorenor@gmail.com` con sign-off.
+
+### Implementado
+
+- **#279 — hallazgos 1 y 2** (`fa01b31e`, `fix(inventory): pin valuation
+  layers to their source and persist outbound cost`): nueva columna nullable
+  `StockValuationLayer.source_layer_id`. La reconstrucción de la cola FIFO
+  (`_valuation_queue` + `_schedule_valuation_layers` + `_consume_pinned_layer`)
+  fija cada consumo a su capa origen, así receipts retroactivos ya no reescriben
+  la composición histórica publicada; `_create_stock_reversal` fija la reversa a
+  la capa consumida original (`_restored_source_layer_id`) y la cola la ordena
+  junto a su origen, restaurando el costo FIFO exacto tras cancelaciones. El
+  promedio móvil conserva su ruta bin-based sin fijado (source None).
+- **#279 — hallazgo 3** (mismo commit): `_persisted_outbound_cost` resuelve el
+  monto GL de salidas desde `StockLedgerEntry` persistido; conectado en
+  `_get_delivery_note_line_value` y `_get_stock_entry_line_amount` (firma ahora
+  recibe `document`). El GL deja de depender del atributo transitorio
+  `_inventory_cost_amount`.
+- **Regresiones** (`23374dbb`, `test(audit)`): tres tests nuevos en
+  `tests/test_audit004_inventory_reconciliation.py` (receipt retroactivo sin
+  reescritura: 6×95=570 vs 565 legado; cancel devuelve valor a capa origen:
+  venta posterior 1000 vs 2000 legado; GL desde mayor persistido con sesión
+  limpia vía `expunge_all`). La suite dejó de sembrar montos en issues/
+  transferencias. Ajustes de firma en `tests/test_07posting_engine.py`.
+- **#250** (`68e034af`, `test(fiscal): add parametrized doctype fiscal matrix`):
+  nuevo `tests/test_fiscal_doctype_matrix.py` con 39 casos: preview positivo por
+  los 15 perfiles MVP (impuestos manuales canónicos vs ignora líneas del
+  navegador), preview negativo sin compañía, rechazo de doctype desconocido,
+  snapshot+contexto posting para sales/purchase invoice, NC/ND de venta y compra
+  (eventos `*_credit_note_confirmed`) y payment_entry pay/receive, notas
+  bancarias sin impuestos y rechazo de cuentas cross-company.
+
+### Decisiones de diseño
+
+- Trazabilidad de capas con una sola columna `source_layer_id` (consumo→capa de
+  ingreso; reversa→misma referencia); cuando un consumo cruza varias capas se
+  fija la predominante y se documenta la limitación (reversa mixta cae al
+  comportamiento legado).
+- El costo de salida para GL se resuelve del mayor (SLE), no se añaden columnas
+  a las tablas de línea; precedencia: atributo transitorio → SLE persistido →
+  fallbacks previos.
+
+### Validación
+
+- audit004: **24 passed**; posting/inventario focal: **91 passed**; batería
+  amplia (cancel/stock guards/valuation settings/purchase): **36 passed**;
+  matriz fiscal: **39 passed**. ruff + black en verde (flake8 no disponible en
+  venv local; cubierto por CI). Sin push.
+
 ## 2026-08-22 — Revisión final de issues abiertos con tag `ok`, tanda 2 (#613–#622)
 
 ### Petición
