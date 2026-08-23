@@ -58,5 +58,6 @@
 ) }}
 {{ macros.lineas_tabla_lectura(items, currency_code) }}
 {{ macros.document_flow_tree("sales_order", registro) }}
+{{ macros.document_attachments_panel("sales_order", registro.id) }}
 {{ macros.audit_timeline(audit_timeline) }}
 {% endblock %}

@@ -61,5 +61,6 @@
 ) }}
 {{ macros.lineas_tabla_lectura(items, currency_code) }}
 {{ macros.document_flow_tree("supplier_quotation", registro) }}
+{{ macros.document_attachments_panel("supplier_quotation", registro.id) }}
 {{ macros.audit_timeline(audit_timeline) }}
 {% endblock %}

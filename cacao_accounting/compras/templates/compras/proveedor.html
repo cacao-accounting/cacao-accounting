@@ -57,6 +57,8 @@
 {% set party_role = "supplier" %}
 {% include "party_detail_sections.html" %}
 
+{{ macros.document_attachments_panel("supplier", registro.id) }}
+
 {% if is_cloud_mode() %}
 <div class="ca-card mt-4">
   <div class="ca-card-header">
