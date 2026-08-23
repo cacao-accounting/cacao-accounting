@@ -5875,3 +5875,6 @@ El contexto de impresión ahora consulta `AuditTrail` y agrega
 snippet común muestran los cuatro datos junto con `printed_by/printed_at`.
 Se añadieron valores seguros para muestras sin eventos y una prueba de
 regresión. Ruff y la suite focal de impresión: **56 passed**.
+
+El job remoto de lint detectó un `F401` heredado en
+`fiscal_persistence_service.py`; se eliminó el import `cast` no utilizado.
