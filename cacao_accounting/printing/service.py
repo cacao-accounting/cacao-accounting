@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from html import escape
 from typing import Any
 
 from flask import current_app, has_request_context, request
@@ -61,6 +62,7 @@ class PrintService:
         company_code: str,
         template_id: str | int | None = None,
         sample: bool = False,
+        return_url: str = "/",
     ) -> str:
         """Render preview HTML for a sample or real document."""
         template: PrintTemplate | None = None
@@ -68,7 +70,7 @@ class PrintService:
             context = self._build_context(document_type, document_id, user, company_code, sample)
             template = self.resolve_template(document_type, company_code, template_id, allow_draft=sample)
             rendered_body = self.env.from_string(template.template_body).render(**context)
-            html = self.build_print_html(rendered_body, template.stylesheet_body)
+            html = self.build_print_html(rendered_body, template.stylesheet_body, return_url=return_url)
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -209,20 +211,37 @@ class PrintService:
             return global_default
         raise PrintTemplateNotFoundError(f"No published template found for {document_type}.")
 
-    def build_print_html(self, rendered_body: str, stylesheet_body: str | None) -> str:
+    def build_print_html(
+        self,
+        rendered_body: str,
+        stylesheet_body: str | None,
+        return_url: str = "/",
+    ) -> str:
         """Build the final standalone HTML document with embedded CSS."""
         css = stylesheet_body or ""
+        safe_return_url = escape(return_url or "/", quote=True)
         return (
             "<!doctype html>\n"
             '<html lang="es">\n'
             "<head>\n"
             '    <meta charset="utf-8">\n'
             "    <style>\n"
+            "        .print-toolbar { display: flex; gap: 8px; margin: 0 auto 20px; max-width: 900px; }\n"
+            "        .print-toolbar a, .print-toolbar button { border: 1px solid #6c757d; border-radius: 4px; background: #fff; color: #212529; cursor: pointer; font: inherit; padding: 6px 12px; text-decoration: none; }\n"
+            "        .print-toolbar button { background: #0d6efd; border-color: #0d6efd; color: #fff; }\n"
+            "        .print-document { margin: 0 auto; max-width: 900px; }\n"
+            "        @media print { [data-print-exclude] { display: none !important; } .print-document { max-width: none; } }\n"
             f"{css}\n"
             "    </style>\n"
             "</head>\n"
             "<body>\n"
+            '    <nav class="print-toolbar" data-print-exclude="true" aria-label="Acciones de impresión">\n'
+            f'        <a href="{safe_return_url}">Volver al comprobante</a>\n'
+            '        <button type="button" onclick="window.print()">Imprimir</button>\n'
+            "    </nav>\n"
+            '    <main class="print-document">\n'
             f"{rendered_body}\n"
+            "    </main>\n"
             "</body>\n"
             "</html>\n"
         )

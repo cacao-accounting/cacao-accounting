@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from flask import Blueprint, Response, abort, current_app, render_template, request
+from flask import Blueprint, Response, abort, current_app, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from cacao_accounting.printing.exceptions import PrintingError
@@ -40,6 +40,7 @@ def preview_document(document_type: str, document_id: str) -> str:
     """Render an operational document preview."""
     company = request.args.get("company") or _current_company()
     template_id = request.args.get("template_id")
+    return_url = _safe_return_url(request.args.get("return_url"))
     try:
         return PrintService().render_preview_html(
             document_type=document_type,
@@ -47,6 +48,7 @@ def preview_document(document_type: str, document_id: str) -> str:
             user=current_user,
             company_code=company,
             template_id=template_id,
+            return_url=return_url,
         )
     except PrintingError as exc:
         log.exception(
@@ -108,3 +110,10 @@ def _current_company() -> str:
 
     configured_company = current_app.config.get("DEFAULT_COMPANY")
     return str(configured_company) if configured_company else ""
+
+
+def _safe_return_url(value: str | None) -> str:
+    """Return an internal destination for the preview's back button."""
+    if value and value.startswith("/") and not value.startswith("//"):
+        return value
+    return url_for("cacao_app.pagina_inicio")

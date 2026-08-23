@@ -40,6 +40,10 @@ def test_print_service_html_structure():
     assert "<!doctype html>" in html
     assert "body { color: red; }" in html
     assert "<p>Hello</p>" in html
+    assert 'href="/"' in html
+    assert "window.print()" in html
+    assert 'data-print-exclude="true"' in html
+    assert '<main class="print-document">' in html
 
 
 def test_template_resolution_fallback(app):
