@@ -443,6 +443,10 @@ def test_purchase_invoice_document_type_helper_prefers_sources_and_ignores_untru
         with app.test_request_context("/buying/purchase-invoice/new"):
             assert _purchase_invoice_document_type(source_ids) == PURCHASE_RETURN
 
+        source_ids = {"from_order_id": "PO-1", "from_receipt_id": "REC-1", "from_invoice_id": None}
+        with app.test_request_context("/buying/purchase-invoice/new"):
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_INVOICE
+
         source_ids = {"from_receipt_id": None, "from_invoice_id": "PINV-1"}
         with app.test_request_context("/buying/purchase-invoice/new"):
             assert _purchase_invoice_document_type(source_ids) == PURCHASE_CREDIT_NOTE

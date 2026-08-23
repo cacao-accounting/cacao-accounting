@@ -6,6 +6,7 @@ from datetime import date
 import pytest
 from cacao_accounting import create_app
 from cacao_accounting.database import ComprobanteContable, GLEntry, Book, database
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 
 @pytest.fixture
@@ -109,6 +110,7 @@ def test_journal_entry_full_lifecycle_exhaustive(client, app):
         assert total_balance == 0
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="RBAC multiusuario no aplica en Desktop Mode")
 def test_rbac_manager_vs_auxiliar_vs_user(client, app):
     with app.app_context():
         # manager (accounting_manager) can do most things

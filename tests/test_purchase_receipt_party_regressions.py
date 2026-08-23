@@ -40,6 +40,7 @@ def test_purchase_receipt_inventory_entries_do_not_receive_supplier_dimension(mo
         monkeypatch.setattr(posting_service, "_should_skip_non_stock_line", lambda _line: False)
         monkeypatch.setattr(posting_service, "_line_qty_generic", lambda _line: Decimal("2"))
         monkeypatch.setattr(posting_service, "_line_rate_generic", lambda _line: Decimal("5"))
+        monkeypatch.setattr(posting_service, "_inventory_currency", lambda _document: None)
         monkeypatch.setattr(posting_service, "_warehouse_inventory_account_id", lambda *_args: "INVENTORY")
         monkeypatch.setattr(posting_service, "_require_account", lambda account_id, _message: account_id)
         monkeypatch.setattr(posting_service, "_add_entries", lambda entries: entries)

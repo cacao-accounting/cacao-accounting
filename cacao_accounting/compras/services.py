@@ -1838,7 +1838,7 @@ def _purchase_invoice_document_type(source_ids: dict[str, str | None], requested
     if requested in {PURCHASE_INVOICE, PURCHASE_RETURN, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE}:
         return requested
     doc_type = PURCHASE_INVOICE
-    if source_ids.get("from_receipt_id"):
+    if source_ids.get("from_receipt_id") and not source_ids.get("from_order_id"):
         doc_type = PURCHASE_RETURN
     elif source_ids.get("from_invoice_id"):
         doc_type = PURCHASE_CREDIT_NOTE
@@ -2224,7 +2224,7 @@ def _create_purchase_invoice_from_request():
         elif from_invoice and not requested_type:
             requested_type = PURCHASE_CREDIT_NOTE
         document_type = _purchase_invoice_document_type(
-            {"from_receipt_id": from_receipt, "from_invoice_id": from_invoice}, requested_type
+            {"from_order_id": from_order, "from_receipt_id": from_receipt, "from_invoice_id": from_invoice}, requested_type
         )
         source_order, source_receipt, source_invoice = _purchase_invoice_sources(
             {

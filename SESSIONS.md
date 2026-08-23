@@ -68,6 +68,41 @@ Corregir los tests que continuaban fallando después de la estabilización inici
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
 
+## 2026-08-23 — Estabilización de CI remoto: flujos de compras y Desktop Mode
+
+### Petición
+
+Investigar con GitHub Actions las fallas remotas de CI y dejar un commit semántico
+con sign-off para recuperar un pipeline verde.
+
+### Evidencia de CI
+
+El run `32593588965` de `main` (`10d608cd`) tenía `lint` y `databases` exitosos,
+pero fallaba en `e2e`, `build (3.13)`, `desktop` y `coverage`. Los fallos
+reproducibles fueron:
+
+- El flujo E2E clasificaba como devolución una factura creada desde una recepción
+  vinculada a una orden de compra, porque el helper no consideraba `from_order_id`.
+- La regresión de dimensiones de recepción consultaba `Entity` sin preparar una
+  base de datos, aunque el caso sólo verifica la construcción de asientos.
+- La prueba RBAC intentaba autenticar usuarios auxiliares en Desktop Mode, donde
+  la aplicación permite únicamente al administrador.
+
+### Implementado
+
+- `_purchase_invoice_document_type` conserva `purchase_invoice` cuando la recepción
+  proviene de una orden, y la ruta transmite `from_order_id` al resolver el tipo.
+- La prueba de dimensiones aísla la consulta de moneda funcional mediante monkeypatch.
+- La prueba RBAC se omite explícitamente en Desktop Mode.
+- Se añadió una regresión para recepción vinculada a orden de compra.
+
+### Validación
+
+- Pruebas focales: **2 passed**.
+- Prueba RBAC en Desktop Mode: **1 skipped** (comportamiento esperado).
+- Commit: `54f998a3 fix(ci): stabilize purchase flows and desktop tests`, con
+  `Signed-off-by: William Moreno Reyes <williamjmorenor@gmail.com>`.
+
 ## 2026-08-22 — Confirmación de corrección de los issues abiertos (#279, #250)
 
 ### Petición
