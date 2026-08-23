@@ -1,5 +1,30 @@
 # SESSIONS — Bitácora de Decisiones de Diseño
 
+## 2026-08-23 — Mejora urgente de la barra de acciones en móvil
+
+### Petición
+
+Mejorar la barra de acciones de los registros en vista móvil. La captura
+mostraba un menú demasiado estrecho, con botones comprimidos y acciones de
+impresión difíciles de usar.
+
+### Implementado
+
+- El control móvil de acciones ahora ocupa una fila completa del encabezado y
+  muestra la etiqueta `Acciones`, manteniendo el botón compacto en escritorio.
+- El menú desplegable usa todo el ancho disponible de la tarjeta y apila sus
+  acciones con objetivos táctiles de al menos 44 px.
+- Los botones agrupados de impresión se expanden al ancho disponible sin
+  desbordar el viewport.
+- El mismo comportamiento se aplicó al macro común de detalles, pagos y
+  comprobantes manuales.
+
+### Validación
+
+- `git diff --check`: correcto.
+- Pendiente ejecutar las pruebas de renderizado y controles remotos después del
+  commit.
+
 ## 2026-08-22 — Corrección de errores mypy reportados por GitHub
 
 ### Petición
