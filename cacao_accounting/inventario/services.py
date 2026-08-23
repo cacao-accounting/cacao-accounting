@@ -36,6 +36,7 @@ from cacao_accounting.database.helpers import get_active_naming_series
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.runtime_mode import is_cloud_mode
 
 
 from cacao_accounting.document_flow import (
@@ -187,6 +188,14 @@ def _process_item_edit(item, formulario):
         return None
     try:
         update_item_with_uoms(item_code=item.code, params=_item_params_from_form(request.form))
+        image_file = request.files.get("image") or request.files.get("product_image") or request.files.get("file")
+        if image_file and image_file.filename and is_cloud_mode():
+            try:
+                from cacao_accounting.attachment_service import upload_item_image
+                from flask_login import current_user
+                upload_item_image(item.code, image_file, user_id=getattr(current_user, "id", None))
+            except Exception as exc:
+                flash(f"Imagen no actualizada: {exc}", "warning")
         database.session.commit()
         flash("Artículo actualizado correctamente.", "success")
         return redirect(url_for("inventario.inventario_articulo", item_id=item.code))

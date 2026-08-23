@@ -59,5 +59,6 @@
 ) }}
 {{ macros.lineas_tabla_lectura(items, currency_code, show_pricing=False) }}
 {{ macros.document_flow_tree("purchase_quotation", registro) }}
+{{ macros.document_attachments_panel("purchase_quotation", registro.id) }}
 {{ macros.audit_timeline(audit_timeline) }}
 {% endblock %}

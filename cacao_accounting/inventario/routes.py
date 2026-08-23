@@ -37,6 +37,7 @@ from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 from cacao_accounting.decorators import exige_acceso_compania, modulo_activo, verifica_permiso
+from cacao_accounting.runtime_mode import is_cloud_mode
 
 from cacao_accounting.list_filters import apply_list_filters
 
@@ -347,7 +348,14 @@ def inventario_articulo_nuevo():
         if formulario.validate():
             try:
                 params = _item_params_from_form(request.form)
-                create_item_with_uoms(params)
+                item = create_item_with_uoms(params)
+                image_file = request.files.get("image") or request.files.get("product_image") or request.files.get("file")
+                if image_file and image_file.filename and is_cloud_mode():
+                    try:
+                        from cacao_accounting.attachment_service import upload_item_image
+                        upload_item_image(item.code, image_file, user_id=str(current_user.id))
+                    except Exception as exc:
+                        flash(f"Imagen no subida: {exc}", "warning")
                 database.session.commit()
                 return redirect("/inventory/item/list")
             except InventoryServiceError as exc:

@@ -1838,7 +1838,13 @@ def _purchase_invoice_document_type(source_ids: dict[str, str | None], requested
     if requested in {PURCHASE_INVOICE, PURCHASE_RETURN, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE}:
         return requested
     doc_type = PURCHASE_INVOICE
-    if source_ids.get("from_receipt_id") and not source_ids.get("from_order_id"):
+    is_return = (
+        request.args.get("is_return") in ("true", "True", "1", True)
+        or request.form.get("is_return") in ("true", "True", "1", True)
+        or bool(request.args.get("from_return"))
+        or bool(request.form.get("from_return"))
+    )
+    if is_return or (source_ids.get("from_receipt_id") and not source_ids.get("from_order_id")):
         doc_type = PURCHASE_RETURN
     elif source_ids.get("from_invoice_id"):
         doc_type = PURCHASE_CREDIT_NOTE

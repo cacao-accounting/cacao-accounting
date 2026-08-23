@@ -427,6 +427,97 @@
 {% endif %}
 {% endmacro %}
 
+{# ─── Document / Master Record Attachments Panel ───────────────── #}
+{% macro document_attachments_panel(reference_type, reference_id) %}
+{% set attachments = get_document_attachments(reference_type, reference_id) %}
+<div class="ca-card mt-3" x-data="{ open: false }">
+  <div class="ca-card-header" role="button" tabindex="0" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-paperclip me-1"></i>
+      <h6 class="ca-card-title mb-0">{{ _('Archivos adjuntos') }}</h6>
+      {% if attachments %}
+      <span class="badge bg-secondary rounded-pill">{{ attachments | length }}</span>
+      {% endif %}
+    </div>
+    <button class="btn btn-sm btn-outline-secondary" type="button" @click.stop="open = !open" :aria-expanded="open.toString()">
+      <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+    </button>
+  </div>
+
+  <div class="p-3" x-show="open" x-cloak>
+    {% if is_cloud_mode() %}
+    <form method="post" action="{{ url_for('api.api_upload_attachment', reference_type=reference_type, reference_id=reference_id) }}" enctype="multipart/form-data" class="row g-2 align-items-end mb-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="col-md-5">
+        <label class="form-label small fw-semibold" for="attachment-file-{{ reference_id }}">{{ _('Seleccionar archivo') }}</label>
+        <input type="file" class="form-control form-control-sm" id="attachment-file-{{ reference_id }}" name="file" required>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label small fw-semibold" for="attachment-remarks-{{ reference_id }}">{{ _('Observaciones / Descripción') }}</label>
+        <input type="text" class="form-control form-control-sm" id="attachment-remarks-{{ reference_id }}" name="remarks" placeholder="{{ _('Opcional...') }}" maxlength="255">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-sm btn-primary w-100"><i class="bi bi-upload me-1"></i>{{ _('Subir adjunto') }}</button>
+      </div>
+    </form>
+    {% endif %}
+
+    {% if attachments %}
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <caption class="visually-hidden">{{ _('Archivos adjuntos') }}</caption>
+        <thead>
+          <tr>
+            <th>{{ _('Archivo') }}</th>
+            <th>{{ _('Tamaño') }}</th>
+            <th>{{ _('Fecha de subida') }}</th>
+            <th>{{ _('Observaciones') }}</th>
+            <th class="text-end">{{ _('Acciones') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for att in attachments %}
+          <tr>
+            <td>
+              <i class="bi bi-file-earmark me-1 text-primary"></i>
+              <a href="{{ url_for('api.api_download_attachment', file_id=att.file_id) }}" target="_blank" class="fw-semibold link-dark">
+                {{ att.file_name }}
+              </a>
+            </td>
+            <td>{{ (att.file_size / 1024)|round(1) }} KB</td>
+            <td>{{ att.created }}</td>
+            <td>{{ att.remarks or '-' }}</td>
+            <td class="text-end">
+              <a href="{{ url_for('api.api_download_attachment', file_id=att.file_id) }}" class="btn btn-sm btn-outline-primary py-0 px-2" title="{{ _('Descargar') }}">
+                <i class="bi bi-download"></i>
+              </a>
+              {% if is_cloud_mode() %}
+              <form method="post" action="{{ url_for('api.api_delete_attachment', file_id=att.file_id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar este archivo adjunto?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="reference_type" value="{{ reference_type }}">
+                <input type="hidden" name="reference_id" value="{{ reference_id }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="{{ _('Eliminar') }}">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      {% if is_cloud_mode() %}
+      <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>{{ _('No hay archivos adjuntos.') }}</p>
+      {% else %}
+      <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>{{ _('La subida de archivos no está disponible en modo escritorio.') }}</p>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
 {# ─────────────────────────────────────────────────────────────── #}
 {# Árbol de flujo documental — componente reutilizable              #}
 {#                                                                   #}
