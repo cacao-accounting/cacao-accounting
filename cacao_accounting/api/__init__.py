@@ -27,7 +27,7 @@ from cacao_accounting.attachment_service import (
 )
 from jwt import decode
 from jwt.exceptions import PyJWTError
-from werkzeug.exceptions import Forbidden
+from werkzeug.exceptions import Forbidden, HTTPException
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -54,7 +54,9 @@ from cacao_accounting.collaboration_service import (
     open_task_count,
     update_task_status,
 )
-from cacao_accounting.database import Entity, StockBin, database
+from cacao_accounting.database import Entity, FileAttachment, Party, StockBin, database
+from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania, exige_acceso_compania_cualquiera
 from cacao_accounting.api.dashboard import user_can_access_company
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
@@ -152,6 +154,67 @@ def _require_document_send_access(document_type: str, document_id: str) -> Any:
         else:
             exige_acceso_compania(module, getattr(document, "company", None), "autorizar")
     return document
+
+
+_ATTACHMENT_MASTER_MODULES = {
+    "customer": "sales",
+    "supplier": "purchases",
+}
+
+
+def _require_attachment_reference_access(reference_type: str, reference_id: str, action: str = "consultar") -> None:
+    """Authorize access to an attachment reference before touching its file."""
+    if getattr(current_user, "classification", None) == "admin":
+        return
+    normalized_type = normalize_doctype(reference_type)
+    normalized_type = {"import_landed_cost": "landed_cost"}.get(normalized_type, normalized_type)
+
+    master_module = _ATTACHMENT_MASTER_MODULES.get(normalized_type)
+    if master_module:
+        if not database.session.get(Party, reference_id):
+            abort(404)
+        module_id = obtener_id_modulo_por_nombre(master_module)
+        permisos = Permisos(modulo=module_id, usuario=current_user.id)
+        permission = {"consultar": "consultar", "editar": "editar"}[action]
+        if not getattr(permisos, permission, False):
+            abort(403)
+        return
+
+    try:
+        document = get_document(normalized_type, reference_id)
+    except (KeyError, ValueError):
+        abort(400)
+    if not document:
+        abort(404)
+    module = _module_for_document_type(normalized_type) or {"landed_cost": "purchases"}.get(normalized_type)
+    if not module:
+        abort(400)
+    exige_acceso_compania(module, getattr(document, "company", None), action)
+
+
+def _require_attachment_file_access(file_id: str, action: str = "consultar") -> None:
+    """Authorize at least one reference linked to an attachment file."""
+    links = database.session.execute(database.select(FileAttachment).where(FileAttachment.file_id == file_id)).scalars().all()
+    if not links:
+        abort(404)
+    for link in links:
+        try:
+            _require_attachment_reference_access(link.reference_type, link.reference_id, action)
+            return
+        except HTTPException as exc:
+            if exc.code != 403:
+                raise
+    abort(403)
+
+
+def _require_inventory_image_edit_access() -> None:
+    """Require inventory write permission for product-image mutations."""
+    if getattr(current_user, "classification", None) == "admin":
+        return
+    module_id = obtener_id_modulo_por_nombre("inventory")
+    permisos = Permisos(modulo=module_id, usuario=current_user.id)
+    if not permisos.editar:
+        abort(403)
 
 
 def token_requerido(f):  # pragma: no cover
@@ -524,6 +587,7 @@ def _date_filter(name: str):
 @login_required
 def api_upload_attachment(reference_type: str, reference_id: str):
     """Upload a file attachment for a document or master record (Cloud mode only)."""
+    _require_attachment_reference_access(reference_type, reference_id, "editar")
     file = request.files.get("file") or request.files.get("attachment")
     remarks = request.form.get("remarks") or request.form.get("description")
     try:
@@ -557,6 +621,7 @@ def api_upload_attachment(reference_type: str, reference_id: str):
 @login_required
 def api_list_attachments(reference_type: str, reference_id: str):
     """List attachments for a document or master record."""
+    _require_attachment_reference_access(reference_type, reference_id)
     attachments = list_attachments(reference_type, reference_id)
     return jsonify(attachments)
 
@@ -565,6 +630,7 @@ def api_list_attachments(reference_type: str, reference_id: str):
 @login_required
 def api_download_attachment(file_id: str):
     """Download/serve an attached file."""
+    _require_attachment_file_access(file_id)
     try:
         file_rec, path = get_attachment_file(file_id)
         return send_file(
@@ -584,6 +650,7 @@ def api_delete_attachment(file_id: str):
     payload = request.get_json(silent=True) or request.form.to_dict()
     ref_type = payload.get("reference_type") or request.args.get("reference_type") or ""
     ref_id = payload.get("reference_id") or request.args.get("reference_id") or ""
+    _require_attachment_reference_access(ref_type, ref_id, "editar")
     try:
         delete_attachment(file_id, ref_type, ref_id, user_id=str(current_user.id))
     except AttachmentError as exc:
@@ -609,6 +676,7 @@ def api_delete_attachment(file_id: str):
 @login_required
 def api_upload_item_image(item_id: str):
     """Upload product image for an item (Cloud mode only)."""
+    _require_inventory_image_edit_access()
     file = request.files.get("file") or request.files.get("product_image") or request.files.get("image")
     try:
         result = upload_item_image(item_id, file, user_id=str(current_user.id))
@@ -648,6 +716,7 @@ def api_get_item_image(item_id: str):
 @login_required
 def api_delete_item_image(item_id: str):
     """Delete product image of an inventory item (Cloud mode only)."""
+    _require_inventory_image_edit_access()
     try:
         delete_item_image(item_id, user_id=str(current_user.id))
     except AttachmentError as exc:

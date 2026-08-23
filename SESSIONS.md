@@ -1,5 +1,30 @@
 # SESSIONS — Bitácora de Decisiones de Diseño
 
+## 2026-08-23 — Correcciones de code review en adjuntos e imágenes (#717)
+
+### Petición
+
+Aplicar las mejoras requeridas por los comentarios de code review de los PR
+abiertos, sin incorporar reversiones ni riesgos antes de integrar a `main`.
+
+### Implementado
+
+- Se añadió autorización por referencia, documento, compañía y módulo para
+  listar, subir, descargar y eliminar adjuntos.
+- Las mutaciones de imágenes de inventario requieren permiso de edición.
+- La validación de imágenes exige extensión, MIME y firma binaria compatibles.
+- El reemplazo de una imagen valida y persiste la nueva antes de eliminar la
+  anterior, preservando la imagen existente ante fallos.
+- Se añadieron regresiones para autorización del flujo API, firmas inválidas y
+  preservación de imágenes.
+
+### Validación
+
+- `tests/test_attachment_service.py`: **6 passed**.
+- Batería focal ampliada (`tests/test_attachment_service.py` y
+  `tests/test_01vistas.py`): **7 passed**.
+- Ruff, formato Ruff y `git diff --check`: correctos.
+
 ## 2026-08-23 — Diagnóstico de fallo Desktop en portal
 
 ### Hallazgo

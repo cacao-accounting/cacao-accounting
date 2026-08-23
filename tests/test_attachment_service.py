@@ -16,7 +16,7 @@ from cacao_accounting.attachment_service import (
     upload_attachment,
     upload_item_image,
 )
-from cacao_accounting.database import Item, User, database
+from cacao_accounting.database import Item, Party, User, database
 from werkzeug.datastructures import FileStorage
 
 
@@ -161,6 +161,17 @@ def test_item_product_image_flow_cloud(app_cloud, tmp_path):
             assert img_path is not None
             assert open(img_path, "rb").read() == image_bytes
 
+            invalid_replacement = FileStorage(
+                stream=io.BytesIO(b"not an image"),
+                filename="replacement.png",
+                content_type="image/png",
+            )
+            with pytest.raises(AttachmentError, match="contenido"):
+                upload_item_image("ITEM-TEST-01", invalid_replacement, user_id="user123")
+            preserved_file, preserved_path = get_item_image_file("ITEM-TEST-01")
+            assert preserved_file is not None
+            assert preserved_path == img_path
+
             # Test deleting item image
             delete_item_image("ITEM-TEST-01", user_id="user123")
 
@@ -221,6 +232,9 @@ def test_api_attachment_routes(app_cloud, tmp_path):
         )
         database.session.add(user)
 
+        supplier = Party(code="SUPP-API-01", name="Proveedor API", is_supplier=True, is_active=True)
+        database.session.add(supplier)
+
         item = Item(
             code="ITEM-API-01",
             name="Cacao en Polvo",
@@ -239,13 +253,17 @@ def test_api_attachment_routes(app_cloud, tmp_path):
                 "file": (io.BytesIO(b"Supplier Invoice PDF"), "inv_456.pdf"),
                 "remarks": "Factura recibida",
             }
-            res = client.post("/api/attachments/purchase_invoice/INV-001/upload", data=data, content_type="multipart/form-data")
+            res = client.post(
+                f"/api/attachments/supplier/{supplier.id}/upload",
+                data=data,
+                content_type="multipart/form-data",
+            )
             assert res.status_code == 201
             json_res = res.get_json()
             file_id = json_res["file_id"]
 
             # List attachments
-            res_list = client.get("/api/attachments/purchase_invoice/INV-001")
+            res_list = client.get(f"/api/attachments/supplier/{supplier.id}")
             assert res_list.status_code == 200
             attachments_list = res_list.get_json()
             assert len(attachments_list) == 1
@@ -257,12 +275,15 @@ def test_api_attachment_routes(app_cloud, tmp_path):
             assert res_dl.data == b"Supplier Invoice PDF"
 
             # Delete attachment
-            res_del = client.post(f"/api/attachments/{file_id}/delete", json={"reference_type": "purchase_invoice", "reference_id": "INV-001"})
+            res_del = client.post(
+                f"/api/attachments/{file_id}/delete",
+                json={"reference_type": "supplier", "reference_id": supplier.id},
+            )
             assert res_del.status_code == 200
 
             # Upload Item image via API
             data_img = {
-                "file": (io.BytesIO(b"\x89PNGfakeimage"), "cacao.png"),
+                "file": (io.BytesIO(b"\x89PNG\r\n\x1a\nfakeimage"), "cacao.png"),
             }
             res_img = client.post("/api/inventory/items/ITEM-API-01/image", data=data_img, content_type="multipart/form-data")
             assert res_img.status_code == 200
@@ -270,7 +291,7 @@ def test_api_attachment_routes(app_cloud, tmp_path):
             # Serve Item image via API
             res_get_img = client.get("/api/inventory/items/ITEM-API-01/image")
             assert res_get_img.status_code == 200
-            assert res_get_img.data == b"\x89PNGfakeimage"
+            assert res_get_img.data == b"\x89PNG\r\n\x1a\nfakeimage"
 
             # Delete Item image via API
             res_del_img = client.post("/api/inventory/items/ITEM-API-01/image/delete")

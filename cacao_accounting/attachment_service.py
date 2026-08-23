@@ -218,10 +218,24 @@ def upload_item_image(item_id: str, file_storage: Any, user_id: str | None = Non
     ext = os.path.splitext(file_storage.filename)[1].lower()
     content_type = getattr(file_storage, "content_type", "") or ""
 
-    if ext not in ALLOWED_IMAGE_EXTENSIONS and not content_type.startswith("image/"):
+    if ext not in ALLOWED_IMAGE_EXTENSIONS or not content_type.startswith("image/"):
         raise AttachmentError("Formato de imagen no permitido. Use PNG, JPG, WEBP, GIF o SVG.", 400)
 
-    delete_item_image(item.code, user_id=user_id, ignore_missing=True)
+    file_storage.seek(0)
+    header = file_storage.read(4096)
+    file_storage.seek(0)
+    if not _has_valid_image_signature(header, ext):
+        raise AttachmentError("El contenido no corresponde a una imagen válida.", 400)
+
+    old_attachments = (
+        database.session.execute(
+            database.select(FileAttachment)
+            .where(FileAttachment.reference_type == "item_image")
+            .where(FileAttachment.reference_id == item.code)
+        )
+        .scalars()
+        .all()
+    )
 
     upload_result = upload_attachment(
         reference_type="item_image",
@@ -235,11 +249,29 @@ def upload_item_image(item_id: str, file_storage: Any, user_id: str | None = Non
     item.image_path = path
     database.session.commit()
 
+    for old_attachment in old_attachments:
+        delete_attachment(old_attachment.file_id, "item_image", item.code, user_id=user_id)
+
     return {
         "item_id": item.code,
         "image_path": path,
         "file_id": file_rec.id,
     }
+
+
+def _has_valid_image_signature(header: bytes, extension: str) -> bool:
+    """Check the file signature instead of trusting multipart metadata alone."""
+    if extension == ".png":
+        return header.startswith(b"\x89PNG\r\n\x1a\n")
+    if extension in {".jpg", ".jpeg"}:
+        return header.startswith(b"\xff\xd8\xff")
+    if extension == ".gif":
+        return header.startswith((b"GIF87a", b"GIF89a"))
+    if extension == ".webp":
+        return len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
+    if extension == ".svg":
+        return b"<svg" in header.lower()
+    return False
 
 
 def delete_item_image(item_id: str, user_id: str | None = None, ignore_missing: bool = False) -> bool:
