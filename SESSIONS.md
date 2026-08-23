@@ -103,6 +103,23 @@ reproducibles fueron:
 - Commit: `54f998a3 fix(ci): stabilize purchase flows and desktop tests`, con
   `Signed-off-by: William Moreno Reyes <williamjmorenor@gmail.com>`.
 
+## 2026-08-23 — Corrección E2E: conservar factura creada desde recepción
+
+### Hallazgo
+
+El run remoto `32609082760` pasó lint y los jobs no-E2E habían avanzado, pero
+falló `test_document_flow_happy_paths_o2c_and_s2p` al guardar la factura de
+compra. La acción `Crear Factura` desde una recepción no enviaba el tipo
+documental explícito; la heurística de una recepción sin `from_order` la trataba
+como devolución.
+
+### Implementado y validado
+
+- La acción `purchase_receipt → purchase_invoice` ahora incluye
+  `document_type=purchase_invoice` en la URL.
+- Se añadió una regresión que verifica ambos parámetros de la URL.
+- Pruebas focales: **2 passed**.
+
 ## 2026-08-22 — Confirmación de corrección de los issues abiertos (#279, #250)
 
 ### Petición

@@ -238,7 +238,13 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         total_field="grand_total",
         filter_fields=("document_no", "company", "supplier_id", "supplier_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
-            DocumentAction(CREAR_FACTURA, "purchase_invoice", COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, "from_receipt"),
+            DocumentAction(
+                CREAR_FACTURA,
+                "purchase_invoice",
+                COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO,
+                "from_receipt",
+                {"document_type": "purchase_invoice"},
+            ),
             DocumentAction(
                 _ACTION_CREAR_NOTA_CREDITO,
                 "purchase_credit_note",
