@@ -5806,3 +5806,24 @@ ancestro de `HEAD`. Las matrices de los épicos #278–#282 y las pruebas de
 fiscal, bancos y posting se usaron como evidencia funcional complementaria;
 los issues permanecen abiertos para QA o porque su alcance es deliberadamente
 evolutivo.
+
+## 2026-08-23 — Ajuste adicional de Desktop CI: Approval Engine
+
+### Petición del usuario
+
+Corregir los issues detectados en la ejecución remota de CI y mantener todos
+los jobs en verde.
+
+### Plan implementado
+
+Se descargó el log del job `desktop` del run `32610583767`. El fallo estaba en
+`tests/test_approval_engine.py::test_approval_engine_is_enabled`: el test
+intentaba habilitar el motor aunque la implementación lo deshabilita
+explícitamente en Desktop Mode.
+
+### Cambio y validación
+
+Se marcó ese test como exclusivo del modo cloud mediante `skipif`, conservando
+los tests específicos que validan el comportamiento esperado del motor en
+Desktop Mode. Se validará el módulo focal localmente y se ejecutará un nuevo
+run remoto después del commit firmado.

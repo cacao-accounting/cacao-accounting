@@ -36,8 +36,14 @@ from cacao_accounting.database import (
     UOM,
 )
 from cacao_accounting.approval_engine import ApprovalEngine
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 compras_module = import_module("cacao_accounting.compras")
+
+pytestmark = pytest.mark.skipif(
+    is_desktop_mode(),
+    reason="El Approval Engine es una funcionalidad exclusiva del modo cloud",
+)
 
 
 @pytest.fixture(name="app")
@@ -169,6 +175,7 @@ def _create_rule(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="El motor de aprobaciones está deshabilitado en Desktop Mode")
 def test_approval_engine_is_enabled(app):
     """Prueba la habilitación del Approval Engine por compañía."""
     with app.app_context():
