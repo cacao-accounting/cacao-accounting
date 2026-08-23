@@ -8,9 +8,11 @@ from flask import Blueprint, Response, abort, current_app, render_template, requ
 from flask_login import current_user, login_required
 
 from cacao_accounting.printing.exceptions import PrintingError
+from cacao_accounting.logs import log
 from cacao_accounting.printing.service import PrintService
 from cacao_accounting.printing.settings import external_validation_enabled
 from cacao_accounting.printing.validation import ValidationService
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 printing_public = Blueprint("printing_public", __name__)
 
@@ -47,6 +49,12 @@ def preview_document(document_type: str, document_id: str) -> str:
             template_id=template_id,
         )
     except PrintingError as exc:
+        log.exception(
+            "Error generando vista previa de impresión: type={} id={} company={}",
+            document_type,
+            document_id,
+            company,
+        )
         abort(404, str(exc))
         raise RuntimeError("Flask abort returned unexpectedly")
 
@@ -66,9 +74,37 @@ def document_pdf(document_type: str, document_id: str) -> Response:
             template_id=template_id,
         )
     except PrintingError as exc:
+        log.exception(
+            "Error generando PDF de impresión: type={} id={} company={}",
+            document_type,
+            document_id,
+            company,
+        )
         abort(404, str(exc))
     return Response(pdf, mimetype="application/pdf")
 
 
 def _current_company() -> str:
-    return str(getattr(current_user, "company", None) or current_app.config.get("DEFAULT_COMPANY", "cacao"))
+    from cacao_accounting.database import Entity, database
+
+    if not is_desktop_mode():
+        user_company = getattr(current_user, "company", None)
+        if user_company:
+            return str(user_company)
+
+        default_entity = (
+            database.session.execute(database.select(Entity).filter_by(status="default")).scalars().first()
+        )
+        if default_entity is not None:
+            return str(default_entity.code)
+
+    first_entity = (
+        database.session.execute(database.select(Entity).order_by(Entity.created.asc(), Entity.code.asc()))
+        .scalars()
+        .first()
+    )
+    if first_entity is not None:
+        return str(first_entity.code)
+
+    configured_company = current_app.config.get("DEFAULT_COMPANY")
+    return str(configured_company) if configured_company else ""

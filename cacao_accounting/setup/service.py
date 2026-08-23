@@ -209,14 +209,17 @@ def finalize_setup(
     catalogo_archivo: str | None = None,
 ) -> None:
     """Completa el proceso de configuración inicial y crea la entidad por defecto."""
+    is_initial_entity = (
+        database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0
+    ) == 0
     create_company(
         company_data,
         catalogo_tipo=catalogo_tipo,
         country=country,
         idioma=idioma,
         catalogo_archivo=catalogo_archivo,
-        status="default",
-        default=True,
+        status="default" if is_initial_entity else "activo",
+        default=is_initial_entity,
     )
     _activate_and_set_default_currency(company_data.get("moneda", ""))
     create_default_party_groups(idioma)
