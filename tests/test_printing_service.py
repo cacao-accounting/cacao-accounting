@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 from cacao_accounting.printing.exceptions import PrintTemplateNotFoundError
+from cacao_accounting.printing.exceptions import PrintPermissionError
 from cacao_accounting.printing.registry import register_printable_document
 from cacao_accounting.printing.service import PrintService
 from cacao_accounting.printing.models import PrintTemplate
@@ -78,6 +79,28 @@ def test_template_resolution_requires_registered_type(app):
         service = PrintService()
         with pytest.raises(PrintTemplateNotFoundError):
             service.resolve_template("not_registered", "cacao")
+
+
+def test_sales_order_print_requires_customer_ownership(app, monkeypatch):
+    """A portal customer cannot print another customer's sales order."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.printing.registry import get_printable_document
+
+    with app.app_context():
+        service = PrintService()
+        document = SimpleNamespace(company="cacao", customer_id="party-owner")
+        user = SimpleNamespace(classification="customer", party_id="party-other")
+        monkeypatch.setattr(database.session, "get", lambda _model, _document_id: document)
+
+        with pytest.raises(PrintPermissionError):
+            service._authorize_document(
+                "sales_order",
+                "order-1",
+                user,
+                "cacao",
+                get_printable_document("sales_order"),
+            )
 
 
 def test_public_validation_endpoint(client, app):

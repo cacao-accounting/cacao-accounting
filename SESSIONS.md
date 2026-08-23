@@ -5843,3 +5843,20 @@ como cloud-only, igual que la restricción funcional de usuarios no
 administradores en Desktop. La cobertura del dashboard administrativo se
 conserva para Desktop y la matriz multiusuario continúa ejecutándose en CI
 cloud.
+
+## 2026-08-23 — Revisión de código del PR #716
+
+### Hallazgos analizados
+
+Se analizaron cinco comentarios inline del review automático: autorización de
+órdenes imprimibles, clave foránea de landed cost, columnas reales de totales,
+tipo de cotización del portal y registro de devoluciones de compra.
+
+### Correcciones aplicadas
+
+- La impresión valida documento, compañía, permisos de módulo y pertenencia
+  del cliente/proveedor antes de construir el contexto.
+- Landed cost usa `import_landed_cost_id`; los totales consideran `total` y
+  `tax_total`; se registra `purchase_return`; y el portal usa
+  `request_for_quotation`.
+- Ruff, compilación y la suite focal de impresión: **54 passed**.

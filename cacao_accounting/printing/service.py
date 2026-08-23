@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from flask import current_app, has_request_context, request
+from werkzeug.exceptions import HTTPException
 from flask_weasyprint import HTML
 from jinja2 import BaseLoader, StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
@@ -26,7 +27,7 @@ from cacao_accounting.printing.models import (
     PrintTemplateVersion,
     PublicDocumentValidation,
 )
-from cacao_accounting.printing.registry import get_printable_document
+from cacao_accounting.printing.registry import PrintableDocumentDefinition, get_printable_document
 from cacao_accounting.printing.settings import external_validation_base_url, external_validation_enabled
 from cacao_accounting.printing.validation import ValidationService
 from cacao_accounting.printing.validators import validate_css_safety, validate_template_security
@@ -258,9 +259,90 @@ class PrintService:
             return context
         if not document_id:
             raise ValueError("document_id is required for non-sample rendering.")
+        self._authorize_document(document_type, document_id, user, company_code, doc_def)
         context = doc_def["context_builder"](document_id, user, company_code)
         self._inject_validation_context(context, document_type, document_id, company_code)
         return context
+
+    def _authorize_document(
+        self,
+        document_type: str,
+        document_id: str,
+        user: Any,
+        company_code: str,
+        definition: PrintableDocumentDefinition,
+    ) -> None:
+        """Ensure the user can print this exact document and company."""
+        from cacao_accounting.decorators import exige_acceso_compania
+        from cacao_accounting.database import (
+            ComprobanteContable,
+            DeliveryNote,
+            ExchangeRevaluation,
+            ImportLandedCost,
+            PaymentEntry,
+            PurchaseInvoice,
+            PurchaseOrder,
+            PurchaseQuotation,
+            PurchaseReceipt,
+            PurchaseRequest,
+            SalesInvoice,
+            SalesOrder,
+            SalesQuotation,
+            SalesRequest,
+            StockEntry,
+            SupplierQuotation,
+        )
+
+        models = {
+            "journal_entry": ComprobanteContable,
+            "sales_invoice": SalesInvoice,
+            "sales_credit_note": SalesInvoice,
+            "sales_debit_note": SalesInvoice,
+            "sales_return": SalesInvoice,
+            "purchase_invoice": PurchaseInvoice,
+            "purchase_credit_note": PurchaseInvoice,
+            "purchase_debit_note": PurchaseInvoice,
+            "purchase_return": PurchaseInvoice,
+            "purchase_order": PurchaseOrder,
+            "sales_order": SalesOrder,
+            "sales_request": SalesRequest,
+            "purchase_request": PurchaseRequest,
+            "supplier_quotation": SupplierQuotation,
+            "request_for_quotation": PurchaseQuotation,
+            "purchase_receipt": PurchaseReceipt,
+            "landed_cost": ImportLandedCost,
+            "delivery_note": DeliveryNote,
+            "stock_entry": StockEntry,
+            "quotation": SalesQuotation,
+            "payment_entry": PaymentEntry,
+            "exchange_revaluation": ExchangeRevaluation,
+        }
+        model = models.get(document_type)
+        if model is None:
+            raise PrintPermissionError("Document type has no authorization policy.")
+        document = database.session.get(model, document_id)
+        if document is None:
+            raise PrintPermissionError("Document not found.")
+        document_company = getattr(document, "company", None) or getattr(document, "entity", None)
+        if str(document_company or "") != str(company_code):
+            raise PrintPermissionError("Document is not available for this company.")
+
+        classification = str(getattr(user, "classification", "") or "").lower()
+        party_id = getattr(user, "party_id", None)
+        if classification == "customer":
+            if not party_id or getattr(document, "customer_id", None) != party_id:
+                raise PrintPermissionError("Document is not available for this customer.")
+            return
+        if classification == "supplier":
+            if not party_id or getattr(document, "supplier_id", None) != party_id:
+                raise PrintPermissionError("Document is not available for this supplier.")
+            return
+
+        module_name = definition["permission"].split(".", 1)[0]
+        try:
+            exige_acceso_compania(module_name, company_code, "consultar")
+        except HTTPException as exc:
+            raise PrintPermissionError("User has no permission to print this document.") from exc
 
     def _resolve_template_by_id(
         self,
