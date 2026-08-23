@@ -45,3 +45,12 @@ Este archivo resume decisiones de diseño y resultados relevantes para continuar
 
 - Revisar primero este resumen y el codigo actual antes de planificar una nueva etapa.
 - Consultar el historial externo solo cuando se necesite recuperar contexto historico; no copiar esa trazabilidad en esta bitacora.
+## 2026-08-23 - Tipos de entidad localizados en setup
+
+- El formulario de empresa conserva valores estables para persistencia y ahora localiza sus etiquetas según el idioma elegido.
+- El catálogo inglés muestra Association, Limited Liability Company, Cooperative, Corporation, Nonprofit Organization e Individual.
+- Se agregó una regresión que verifica etiquetas bilingües y valores equivalentes.
+## 2026-08-23 - Publicacion de catalogos Babel
+
+- El workflow de publicacion instala Babel y compila los catalogos PO a MO antes de construir wheel y sdist.
+- La compilacion usa el directorio de traducciones del paquete y fuerza la regeneracion de los archivos binarios.

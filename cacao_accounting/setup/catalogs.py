@@ -14,6 +14,25 @@ LANGUAGE_CHOICES = [
     ("en", "English"),
 ]
 
+ENTITY_TYPE_LABELS: dict[str, dict[str, str]] = {
+    "es": {
+        "Asociación": "Asociación",
+        "Compañia Limitada": "Compañia Limitada",
+        "Cooperativa": "Cooperativa",
+        "Sociedad Anonima": "Sociedad Anonima",
+        "Organización sin Fines de Lucro": "Organización sin Fines de Lucro",
+        "Persona Natural": "Persona Natural",
+    },
+    "en": {
+        "Asociación": "Association",
+        "Compañia Limitada": "Limited Liability Company",
+        "Cooperativa": "Cooperative",
+        "Sociedad Anonima": "Corporation",
+        "Organización sin Fines de Lucro": "Nonprofit Organization",
+        "Persona Natural": "Individual",
+    },
+}
+
 AMERICA_CURRENCY_CODES = (
     "ARS",
     "BSD",
@@ -199,6 +218,12 @@ def normalize_language(language: str | None) -> str:
 def setup_texts(language: str | None) -> dict[str, str]:
     """Devuelve los textos localizados para el setup."""
     return SETUP_TEXTS[normalize_language(language)]
+
+
+def entity_type_choices(language: str | None) -> list[tuple[str, str]]:
+    """Devuelve tipos de entidad con etiquetas localizadas y valores estables."""
+    language_key = normalize_language(language)
+    return [(value, ENTITY_TYPE_LABELS[language_key][value]) for value in ENTITY_TYPE_LABELS["es"]]
 
 
 def country_choices(language: str | None) -> list[tuple[str, str]]:

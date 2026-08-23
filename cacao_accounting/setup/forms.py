@@ -12,6 +12,7 @@ from cacao_accounting.database import Entity
 from cacao_accounting.setup.catalogs import (
     LANGUAGE_CHOICES,
     catalog_choices,
+    entity_type_choices,
     country_choices,
     setup_texts,
 )
@@ -84,6 +85,7 @@ class SetupCompanyForm(FlaskForm):
         self.nombre_comercial.label.text = texts["trade_name"]
         self.id_fiscal.label.text = texts["tax_id"]
         self.tipo_entidad.label.text = texts["entity_type"]
+        self.tipo_entidad.choices = entity_type_choices(language)
         self.inicio_anio_fiscal.label.text = texts["fiscal_year_start"]
         self.fin_anio_fiscal.label.text = texts["fiscal_year_end"]
         self.catalogo.label.text = texts["catalog_title"]

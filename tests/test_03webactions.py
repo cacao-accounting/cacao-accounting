@@ -1297,3 +1297,16 @@ def test_logout_invalidates_session_and_token(request):
                     assert sess.get("_user_id") is None
 
                 assert old_user.token is None
+
+def test_setup_entity_type_choices_follow_selected_language():
+    """The setup company form localizes entity type labels without changing values."""
+    from cacao_accounting.setup.forms import SetupCompanyForm
+
+    with app.test_request_context("/setup/"):
+        english_choices = dict(SetupCompanyForm(language="en").tipo_entidad.choices)
+        spanish_choices = dict(SetupCompanyForm(language="es").tipo_entidad.choices)
+
+    assert english_choices["Sociedad Anonima"] == "Corporation"
+    assert english_choices["Persona Natural"] == "Individual"
+    assert spanish_choices["Sociedad Anonima"] == "Sociedad Anonima"
+    assert set(english_choices) == set(spanish_choices)
