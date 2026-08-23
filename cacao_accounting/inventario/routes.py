@@ -353,6 +353,7 @@ def inventario_articulo_nuevo():
                 if image_file and image_file.filename and is_cloud_mode():
                     try:
                         from cacao_accounting.attachment_service import upload_item_image
+
                         upload_item_image(item.code, image_file, user_id=str(current_user.id))
                     except Exception as exc:
                         flash(f"Imagen no subida: {exc}", "warning")
