@@ -63,6 +63,7 @@ class PrintService:
         template_id: str | int | None = None,
         sample: bool = False,
         return_url: str = "/",
+        export_url: str = "/",
     ) -> str:
         """Render preview HTML for a sample or real document."""
         template: PrintTemplate | None = None
@@ -70,7 +71,12 @@ class PrintService:
             context = self._build_context(document_type, document_id, user, company_code, sample)
             template = self.resolve_template(document_type, company_code, template_id, allow_draft=sample)
             rendered_body = self.env.from_string(template.template_body).render(**context)
-            html = self.build_print_html(rendered_body, template.stylesheet_body, return_url=return_url)
+            html = self.build_print_html(
+                rendered_body,
+                template.stylesheet_body,
+                return_url=return_url,
+                export_url=export_url,
+            )
             self.log_print_job(
                 company_code=company_code,
                 user_id=self._user_id(user),
@@ -216,10 +222,12 @@ class PrintService:
         rendered_body: str,
         stylesheet_body: str | None,
         return_url: str = "/",
+        export_url: str = "/",
     ) -> str:
         """Build the final standalone HTML document with embedded CSS."""
         css = stylesheet_body or ""
         safe_return_url = escape(return_url or "/", quote=True)
+        safe_export_url = escape(export_url or "/", quote=True)
         return (
             "<!doctype html>\n"
             '<html lang="es">\n'
@@ -238,6 +246,7 @@ class PrintService:
             '    <nav class="print-toolbar" data-print-exclude="true" aria-label="Acciones de impresión">\n'
             f'        <a href="{safe_return_url}">Volver al comprobante</a>\n'
             '        <button type="button" onclick="window.print()">Imprimir</button>\n'
+            f'        <a href="{safe_export_url}" download="comprobante.pdf">Exportar PDF</a>\n'
             "    </nav>\n"
             '    <main class="print-document">\n'
             f"{rendered_body}\n"

@@ -42,6 +42,7 @@ def test_print_service_html_structure():
     assert "<p>Hello</p>" in html
     assert 'href="/"' in html
     assert "window.print()" in html
+    assert 'download="comprobante.pdf"' in html
     assert 'data-print-exclude="true"' in html
     assert '<main class="print-document">' in html
 

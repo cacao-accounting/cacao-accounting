@@ -41,6 +41,13 @@ def preview_document(document_type: str, document_id: str) -> str:
     company = request.args.get("company") or _current_company()
     template_id = request.args.get("template_id")
     return_url = _safe_return_url(request.args.get("return_url"))
+    export_url = url_for(
+        "printing_public.document_pdf",
+        document_type=document_type,
+        document_id=document_id,
+        company=company,
+        template_id=template_id,
+    )
     try:
         return PrintService().render_preview_html(
             document_type=document_type,
@@ -49,6 +56,7 @@ def preview_document(document_type: str, document_id: str) -> str:
             company_code=company,
             template_id=template_id,
             return_url=return_url,
+            export_url=export_url,
         )
     except PrintingError as exc:
         log.exception(
