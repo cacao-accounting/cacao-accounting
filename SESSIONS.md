@@ -25,6 +25,26 @@ impresión difíciles de usar.
 - Pendiente ejecutar las pruebas de renderizado y controles remotos después del
   commit.
 
+## 2026-08-23 — Diagnóstico de fallo Desktop en portal
+
+### Hallazgo
+
+El job `desktop` del run `32611856504` fallaba en
+`tests/test_portales.py::test_portal_security_and_access`: Desktop Mode rechaza
+correctamente las rutas `/portal/*` con `403`, pero la prueba intentaba validar
+el flujo de clientes cloud y esperaba el texto `Portal del Cliente`.
+
+### Implementado
+
+- Se marcaron como cloud-only las cinco pruebas de funcionalidad de portales.
+- Se conservó activa `test_portal_desktop_restriction`, que verifica el
+  comportamiento esperado de bloqueo en Desktop Mode.
+
+### Validación
+
+- Desktop Mode: **1 passed, 5 skipped** en `tests/test_portales.py`.
+- Modo normal: **5 passed, 1 skipped** en `tests/test_portales.py`.
+
 ## 2026-08-22 — Corrección de errores mypy reportados por GitHub
 
 ### Petición

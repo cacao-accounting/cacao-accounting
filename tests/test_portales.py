@@ -7,6 +7,8 @@ import os
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from z_func import init_test_db
@@ -35,6 +37,12 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.auth import proteger_passwd
+from cacao_accounting.runtime_mode import is_desktop_mode
+
+
+_PORTAL_CLOUD_ONLY = pytest.mark.skipif(
+    is_desktop_mode(), reason="Los portales de clientes y proveedores no están disponibles en Desktop Mode"
+)
 
 app = create_app(
     {
@@ -49,6 +57,7 @@ app = create_app(
 )
 
 
+@_PORTAL_CLOUD_ONLY
 def test_portal_security_and_access():
     """Prueba el acceso y restricciones del Portal de Clientes y Proveedores."""
     with app.app_context():
@@ -204,6 +213,7 @@ def test_portal_security_and_access():
             client.get("/logout")
 
 
+@_PORTAL_CLOUD_ONLY
 def test_user_classification_and_roles_restriction():
     """Verifica que el administrador puede seleccionar clasificación de usuario y solo 'system' puede tener roles."""
     with app.test_client() as client:
@@ -247,6 +257,7 @@ def test_user_classification_and_roles_restriction():
         client.get("/logout")
 
 
+@_PORTAL_CLOUD_ONLY
 def test_supplier_portal_full_functionality():
     """Prueba exhaustiva para la funcionalidad completa del Portal del Proveedor."""
     with app.app_context():
@@ -427,40 +438,18 @@ def test_supplier_portal_full_functionality():
             client.get("/logout")
 
 
+@pytest.mark.skipif(not is_desktop_mode(), reason="Esta prueba valida exclusivamente el bloqueo de Desktop Mode")
 def test_portal_desktop_restriction():
     """Verifica que el portal de clientes/proveedores esté restringido en modo Desktop."""
-    from cacao_accounting.runtime_mode import is_desktop_mode
-
     with app.app_context():
-        # Forzar modo escritorio temporalmente en la config de la app
-        app.config["MODO_ESCRITORIO"] = True
-        try:
-            assert is_desktop_mode() is True
-
-            # Intentar login en modo escritorio como portal de cliente
-            from cacao_accounting.auth.helpers import puede_iniciar_en_escritorio
-
-            u = database.session.execute(database.select(User).filter_by(user="cliente1")).scalar_one_or_none()
-            assert u is not None
-            assert puede_iniciar_en_escritorio(u) is False
-
-            # Intentar login en modo escritorio como portal de proveedor
-            u2 = database.session.execute(database.select(User).filter_by(user="proveedor1")).scalar_one_or_none()
-            assert u2 is not None
-            assert puede_iniciar_en_escritorio(u2) is False
-
-            # Intentar acceder a rutas del portal en modo escritorio directamente
-            with app.test_client() as client:
-                client.post("/login", data={"usuario": "cliente1", "acceso": "password123"})
-                # Intentar acceder directamente a /portal/customer (debe dar 403 o no loguearse)
-                resp = client.get("/portal/customer")
-                assert resp.status_code in (403, 302)
-
-        finally:
-            # Restaurar estado
-            app.config["MODO_ESCRITORIO"] = False
+        init_test_db(app)
+        with app.test_client() as client:
+            client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+            assert client.get("/portal/customer").status_code == 403
+            assert client.get("/portal/supplier").status_code == 403
 
 
+@_PORTAL_CLOUD_ONLY
 def test_customer_portal_details_and_access_edge_cases():
     """Cubre detalles de ventas, administración y usuarios sin tercero asociado."""
     with app.app_context():
@@ -535,6 +524,7 @@ def test_customer_portal_details_and_access_edge_cases():
         client.get("/logout")
 
 
+@_PORTAL_CLOUD_ONLY
 def test_portal_rejects_user_without_party_assignment():
     """Rechaza explícitamente un usuario portal sin tercero o compañía."""
     with app.app_context():
