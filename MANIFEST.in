@@ -4,8 +4,10 @@ include README.md
 include LICENSE
 include wsgi.py
 include pyproject.toml
+include babel.cfg
 include cacao_accounting/
 recursive-include cacao_accounting *.ico *.js *.css *.png *.html *.eot *.svg *.ttf *.woff *.woff2 *.jpg *.j2 *.py *.csv *.json
+recursive-include cacao_accounting/translations *.po *.mo
 recursive-include docs *.py *.rst
 
 # Excluir caches y archivos compilados de Python

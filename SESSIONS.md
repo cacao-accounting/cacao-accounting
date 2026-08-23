@@ -1,5 +1,69 @@
 # SESSIONS — Bitácora de Decisiones de Diseño
 
+## 2026-08-23 — Inicialización y empaquetado de traducciones
+
+### Petición
+
+Inicializar las traducciones y confirmar que los catálogos se incluyan en los
+paquetes distribuibles.
+
+### Implementado
+
+- Se añadió `babel.cfg` para extraer mensajes de Python y Jinja2.
+- Se generaron catálogos base `en` y `es` con 1,789 mensajes extraídos.
+- Se compilaron los catálogos a `messages.mo`.
+- `MANIFEST.in` incluye los archivos `.po` y `.mo`, y `pyproject.toml` los
+  declara como `package-data` de setuptools.
+- Se excluyeron `node_modules` y `tests` durante la extracción para evitar
+  incluir mensajes de dependencias y pruebas.
+
+### Validación
+
+- La compilación Babel terminó correctamente para ambos idiomas.
+- `cacao_accounting.egg-info/SOURCES.txt` contiene los cuatro catálogos.
+- La construcción final de wheel/sdist no pudo completarse en este entorno
+  porque el venv no tiene `setuptools`/`wheel` y la red está deshabilitada;
+  CI instala esas dependencias antes de construir.
+
+### Traducciones completadas
+
+- Se completaron los `msgstr` de los 1,789 mensajes en ambos catálogos.
+- El catálogo `es` conserva el español como idioma base.
+- El catálogo `en` contiene las equivalencias inglesas de los mensajes de
+  interfaz y dominio, conservando identificadores y placeholders técnicos.
+- La carga directa de los `.mo` confirmó `Factura de compra` → `Purchase
+  Invoice` en inglés y `Factura de compra` en español.
+
+## 2026-08-23 — Diagnóstico: traducciones no visibles
+
+### Petición
+
+Investigar por qué la interfaz no muestra traducciones aunque el idioma pueda
+seleccionarse desde la configuración.
+
+### Hallazgo
+
+- Flask-Babel está instalado e inicializado con `_get_locale()` en
+  `cacao_accounting/__init__.py`.
+- Las plantillas y varios módulos sí invocan `_()`/`gettext`.
+- No existe ningún directorio `translations/` ni archivos `.po` o `.mo` en el
+  proyecto.
+- Tampoco existe una configuración de extracción de Babel ni una referencia a
+  catálogos en el empaquetado.
+
+### Conclusión
+
+La selección de `en` sólo cambia el locale; no genera traducciones. Al faltar
+los catálogos compilados, Flask-Babel devuelve el texto fuente (mayormente en
+español), por lo que no se observa ninguna traducción. Se requiere extraer,
+traducir y compilar los mensajes, además de incluir los catálogos en el
+paquete.
+
+### Validación
+
+Revisión estática de código, configuración, plantillas y pruebas de idioma;
+no se modificó la lógica de internacionalización en esta sesión.
+
 ## 2026-08-23 — Mejora urgente de la barra de acciones en móvil
 
 ### Petición

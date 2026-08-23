@@ -48,6 +48,9 @@ version = {attr = "cacao_accounting.version.VERSION"}
 include = ["cacao_accounting", "cacao_accounting.*"]
 namespaces = false
 
+[tool.setuptools.package-data]
+"cacao_accounting" = ["translations/*/LC_MESSAGES/*.po", "translations/*/LC_MESSAGES/*.mo"]
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
