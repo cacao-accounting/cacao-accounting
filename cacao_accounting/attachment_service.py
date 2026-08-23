@@ -79,26 +79,35 @@ def upload_attachment(
 
     file_storage.save(file_path)
 
-    mime_type = getattr(file_storage, "content_type", None) or "application/octet-stream"
+    try:
+        mime_type = getattr(file_storage, "content_type", None) or "application/octet-stream"
 
-    file_record = File(
-        file_name=original_filename,
-        file_path=file_path,
-        file_size=file_size,
-        mime_type=mime_type,
-        uploaded_by=user_id,
-        remarks=remarks,
-    )
-    database.session.add(file_record)
-    database.session.flush()
+        file_record = File(
+            file_name=original_filename,
+            file_path=file_path,
+            file_size=file_size,
+            mime_type=mime_type,
+            uploaded_by=user_id,
+            remarks=remarks,
+        )
+        database.session.add(file_record)
+        database.session.flush()
 
-    attachment_record = FileAttachment(
-        file_id=file_record.id,
-        reference_type=str(reference_type).strip(),
-        reference_id=str(reference_id).strip(),
-    )
-    database.session.add(attachment_record)
-    database.session.commit()
+        attachment_record = FileAttachment(
+            file_id=file_record.id,
+            reference_type=str(reference_type).strip(),
+            reference_id=str(reference_id).strip(),
+        )
+        database.session.add(attachment_record)
+        database.session.commit()
+    except Exception:
+        database.session.rollback()
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except OSError:
+            pass
+        raise
 
     return {
         "file_id": file_record.id,
