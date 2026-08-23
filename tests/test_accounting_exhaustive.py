@@ -171,6 +171,7 @@ def test_rbac_manager_vs_auxiliar_vs_user(client, app):
         assert resp.status_code == 403
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Usuarios no administradores no aplican en Desktop Mode")
 def test_negative_direct_access_bypassing_ui(client, app):
     """Try to access accounting resources with a non-accounting user."""
     with app.app_context():

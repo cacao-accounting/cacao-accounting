@@ -99,6 +99,14 @@ reproducibles fueron:
 ### Validación
 
 - Pruebas focales: **2 passed**.
+
+## 2026-08-23 — Ajuste adicional de Desktop Mode
+
+El segundo run del fix E2E dejó E2E, lint y bases verdes, pero Desktop falló en
+`test_negative_direct_access_bypassing_ui`: el caso también inicia sesión con
+un usuario no administrador, prohibido por el contrato de Desktop Mode. Se
+añadió el mismo skip explícito usado en el caso RBAC; queda pendiente confirmar
+el nuevo run remoto.
 - Prueba RBAC en Desktop Mode: **1 skipped** (comportamiento esperado).
 - Commit: `54f998a3 fix(ci): stabilize purchase flows and desktop tests`, con
   `Signed-off-by: William Moreno Reyes <williamjmorenor@gmail.com>`.
