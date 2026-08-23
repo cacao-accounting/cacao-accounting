@@ -193,6 +193,7 @@ def _process_item_edit(item, formulario):
             try:
                 from cacao_accounting.attachment_service import upload_item_image
                 from flask_login import current_user
+
                 upload_item_image(item.code, image_file, user_id=getattr(current_user, "id", None))
             except Exception as exc:
                 flash(f"Imagen no actualizada: {exc}", "warning")
