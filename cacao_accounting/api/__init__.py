@@ -54,7 +54,7 @@ from cacao_accounting.collaboration_service import (
     open_task_count,
     update_task_status,
 )
-from cacao_accounting.database import Entity, FileAttachment, Party, StockBin, database
+from cacao_accounting.database import CompanyParty, Entity, FileAttachment, Party, StockBin, database
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.decorators import exige_acceso_compania, exige_acceso_compania_cualquiera
@@ -111,6 +111,7 @@ def _module_for_document_type(document_type: str) -> str | None:
         "purchase_order": "purchases",
         "purchase_receipt": "inventory",
         "purchase_invoice": "purchases",
+        "import_landed_cost": "purchases",
         "stock_entry": "inventory",
         "journal_entry": "accounting",
         "payment_entry": "cash",
@@ -167,18 +168,30 @@ def _require_attachment_reference_access(reference_type: str, reference_id: str,
     if getattr(current_user, "classification", None) == "admin":
         return
     normalized_type = normalize_doctype(reference_type)
-    normalized_type = {"import_landed_cost": "landed_cost"}.get(normalized_type, normalized_type)
 
     master_module = _ATTACHMENT_MASTER_MODULES.get(normalized_type)
     if master_module:
         if not database.session.get(Party, reference_id):
             abort(404)
-        module_id = obtener_id_modulo_por_nombre(master_module)
-        permisos = Permisos(modulo=module_id, usuario=current_user.id)
-        permission = {"consultar": "consultar", "editar": "editar"}[action]
-        if not getattr(permisos, permission, False):
+        companies = (
+            database.session.execute(
+                database.select(CompanyParty.company).where(
+                    CompanyParty.party_id == reference_id, CompanyParty.is_active.is_(True)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not companies:
             abort(403)
-        return
+        for company in companies:
+            try:
+                exige_acceso_compania(master_module, company, action)
+                return
+            except HTTPException as exc:
+                if exc.code != 403:
+                    raise
+        abort(403)
 
     try:
         document = get_document(normalized_type, reference_id)
@@ -186,7 +199,7 @@ def _require_attachment_reference_access(reference_type: str, reference_id: str,
         abort(400)
     if not document:
         abort(404)
-    module = _module_for_document_type(normalized_type) or {"landed_cost": "purchases"}.get(normalized_type)
+    module = _module_for_document_type(normalized_type)
     if not module:
         abort(400)
     exige_acceso_compania(module, getattr(document, "company", None), action)
@@ -207,13 +220,19 @@ def _require_attachment_file_access(file_id: str, action: str = "consultar") -> 
     abort(403)
 
 
-def _require_inventory_image_edit_access() -> None:
-    """Require inventory write permission for product-image mutations."""
+def _require_inventory_image_access(action: str = "consultar") -> None:
+    """Require inventory permission for product-image access.
+
+    Mutations (upload/delete) require the inventory ``editar`` permission;
+    reads require at least ``consultar``, matching the item detail view that
+    is gated by ``modulo_activo("inventory")``.
+    """
     if getattr(current_user, "classification", None) == "admin":
         return
     module_id = obtener_id_modulo_por_nombre("inventory")
     permisos = Permisos(modulo=module_id, usuario=current_user.id)
-    if not permisos.editar:
+    permission = {"consultar": "consultar", "editar": "editar"}[action]
+    if not getattr(permisos, permission, False):
         abort(403)
 
 
@@ -676,7 +695,7 @@ def api_delete_attachment(file_id: str):
 @login_required
 def api_upload_item_image(item_id: str):
     """Upload product image for an item (Cloud mode only)."""
-    _require_inventory_image_edit_access()
+    _require_inventory_image_access("editar")
     file = request.files.get("file") or request.files.get("product_image") or request.files.get("image")
     try:
         result = upload_item_image(item_id, file, user_id=str(current_user.id))
@@ -703,6 +722,7 @@ def api_upload_item_image(item_id: str):
 @login_required
 def api_get_item_image(item_id: str):
     """Serve product image of an inventory item."""
+    _require_inventory_image_access("consultar")
     file_rec, path = get_item_image_file(item_id)
     if not path or not file_rec:
         abort(404)
@@ -716,7 +736,7 @@ def api_get_item_image(item_id: str):
 @login_required
 def api_delete_item_image(item_id: str):
     """Delete product image of an inventory item (Cloud mode only)."""
-    _require_inventory_image_edit_access()
+    _require_inventory_image_access("editar")
     try:
         delete_item_image(item_id, user_id=str(current_user.id))
     except AttachmentError as exc:

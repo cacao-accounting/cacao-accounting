@@ -213,3 +213,23 @@ def test_status_watermark_rendering_for_draft_and_cancelled(app):
         rendered_posted = service.env.from_string(template.template_body).render(**context_posted)
         assert "watermark" not in rendered_posted
         assert "status-posted" in rendered_posted
+
+
+def test_seed_preserves_customized_system_template(app):
+    from cacao_accounting.printing.seed import SEED_TEMPLATE_VERSION, seed_print_templates
+
+    with app.app_context():
+        seed_print_templates()
+        template = PrintTemplate.query.filter_by(code="system_default_sales_invoice").first()
+        assert template is not None
+        assert template.version == SEED_TEMPLATE_VERSION
+        original_body = template.template_body
+
+        template.template_body = "CUSTOM BODY PRESERVED"
+        template.version = SEED_TEMPLATE_VERSION
+        database.session.commit()
+
+        seed_print_templates()
+        template = PrintTemplate.query.filter_by(code="system_default_sales_invoice").first()
+        assert template.template_body == "CUSTOM BODY PRESERVED"
+        assert template.template_body != original_body

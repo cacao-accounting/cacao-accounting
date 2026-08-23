@@ -10,6 +10,8 @@ from cacao_accounting.database import database
 from cacao_accounting.printing.models import PrintTemplate
 from cacao_accounting.printing.registry import PRINTABLE_DOCUMENTS, init_printing_registry
 
+SEED_TEMPLATE_VERSION = 2
+
 BASE_CSS = """
 @page { size: letter portrait; margin: 15mm; }
 body { font-family: Arial, sans-serif; font-size: 12px; color: #1f2937; line-height: 1.4; position: relative; }
@@ -320,9 +322,11 @@ def _ensure_system_template(document_type: str, label: str, root_name: str) -> N
         )
     )
     if existing is not None:
-        existing.template_body = template_body
-        existing.stylesheet_body = BASE_CSS
-        database.session.commit()
+        if (existing.version or 1) < SEED_TEMPLATE_VERSION:
+            existing.template_body = template_body
+            existing.stylesheet_body = BASE_CSS
+            existing.version = SEED_TEMPLATE_VERSION
+            database.session.commit()
         return
     database.session.add(
         PrintTemplate(
@@ -337,6 +341,7 @@ def _ensure_system_template(document_type: str, label: str, root_name: str) -> N
             is_system=True,
             is_default=True,
             status="published",
+            version=SEED_TEMPLATE_VERSION,
         )
     )
     database.session.commit()
