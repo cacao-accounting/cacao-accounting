@@ -799,10 +799,12 @@
      target="_blank" class="btn btn-sm btn-outline-secondary" title="{{ _('Imprimir / Vista previa') }}">
     <i class="bi bi-printer me-1"></i>{{ _('Imprimir') }}
   </a>
-  <a href="{{ url_for('printing_public.document_pdf', document_type=document_type, document_id=document_id) }}"
-     target="_blank" class="btn btn-sm btn-outline-secondary" title="{{ _('Descargar PDF') }}">
-    <i class="bi bi-file-earmark-pdf me-1"></i>{{ _('PDF') }}
-  </a>
+  {% if not is_desktop_mode() %}
+    <a href="{{ url_for('printing_public.document_pdf', document_type=document_type, document_id=document_id) }}"
+       target="_blank" class="btn btn-sm btn-outline-secondary" title="{{ _('Descargar PDF') }}">
+      <i class="bi bi-file-earmark-pdf me-1"></i>{{ _('PDF') }}
+    </a>
+  {% endif %}
 </div>
 {% endmacro %}
 
