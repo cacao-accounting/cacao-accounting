@@ -128,7 +128,7 @@ class PurchaseOrderAdapter(BaseImportAdapter):
             return transaction_currency, base_currency, Decimal("1")
         raw_rate = first_row.get("tipo_cambio")
         if raw_rate:
-            rate = Decimal(str(raw_rate))
+            rate_dec = Decimal(str(raw_rate))
         else:
             from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 
@@ -136,10 +136,10 @@ class PurchaseOrderAdapter(BaseImportAdapter):
                 Decimal | None,
                 _lookup_exchange_rate(transaction_currency, base_currency, posting_date) if posting_date else None,
             )
-            rate = Decimal(str(resolved)) if resolved is not None else Decimal("0")
-        if rate <= 0:
+            rate_dec = Decimal(str(resolved)) if resolved is not None else Decimal("0")
+        if rate_dec <= 0:
             raise ValueError(f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}.")
-        return transaction_currency, base_currency, rate
+        return transaction_currency, base_currency, rate_dec
 
     def persist_document(self, document: Any) -> None:
         """Guarda la orden de compra y sus ítems en la base de datos."""

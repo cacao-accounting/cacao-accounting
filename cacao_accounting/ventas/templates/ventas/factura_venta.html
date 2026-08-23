@@ -38,6 +38,7 @@
 {{ macros.detail_nav_buttons(
             url_for('ventas.ventas_factura_venta_lista'),
             url_for('ventas.ventas_factura_venta_nuevo')) }}
+{{ macros.document_print_button(registro.document_type or "sales_invoice", registro.id) }}
 {{ macros.document_create_actions(registro.document_type or "sales_invoice", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}

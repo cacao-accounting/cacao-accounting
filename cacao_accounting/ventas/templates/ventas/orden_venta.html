@@ -37,6 +37,7 @@
 {{ macros.detail_nav_buttons(
             url_for('ventas.ventas_orden_venta_lista'),
             url_for('ventas.ventas_orden_venta_nuevo')) }}
+{{ macros.document_print_button("sales_order", registro.id) }}
 {{ macros.document_create_actions("sales_order", registro) }}
 {% endset %}
 {% set currency_code = document_currency_code(registro) %}

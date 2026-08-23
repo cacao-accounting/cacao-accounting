@@ -17,13 +17,13 @@
 </nav>
 
 {% set currency_code = document_currency_code(registro) %}
-{% set doc_type = "sales_quotation" if role == "customer" else "purchase_quotation" %}
+{% set doc_type = "sales_quotation" if role == "customer" else "request_for_quotation" %}
 {% set status_info = document_status_info(doc_type, registro) %}
 {{ dv_macros.detail_header(
     registro.document_no or registro.id,
     _('Cotización de Venta') if role == 'customer' else _('Solicitud de Cotización de Compra'),
     status_info,
-    "",
+    macros.document_print_button(doc_type, registro.id),
     [
       (_('Número'), registro.document_no),
       (_('Cliente') if role == 'customer' else _('Proveedor'), registro.customer_name if role == 'customer' else registro.supplier_name),

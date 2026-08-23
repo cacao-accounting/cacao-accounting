@@ -21,7 +21,7 @@
     registro.document_no or registro.id,
     _('Nota de Entrega / Remisión'),
     registro.docstatus,
-    "",
+    macros.document_print_button("delivery_note", registro.id),
     [
       (_('Número'), registro.document_no),
       (_('Cliente'), registro.customer_name),
