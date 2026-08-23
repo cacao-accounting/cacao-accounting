@@ -86,22 +86,22 @@ class CacaoGroup(click.Group):
 
 def _mensaje_exito(mensaje: str) -> None:
     """Imprime un mensaje de éxito con formato visual."""
-    click.secho(f"✓ {mensaje}", fg=COLOR_EXITO)
+    click.secho(f"[OK] {mensaje}", fg=COLOR_EXITO)
 
 
 def _mensaje_advertencia(mensaje: str) -> None:
     """Imprime un mensaje de advertencia con formato visual."""
-    click.secho(f"⚠ {mensaje}", fg=COLOR_ADVERTENCIA)
+    click.secho(f"[WARN] {mensaje}", fg=COLOR_ADVERTENCIA)
 
 
 def _mensaje_error(mensaje: str) -> None:
     """Imprime un mensaje de error con formato visual."""
-    click.secho(f"✗ {mensaje}", fg=COLOR_ERROR)
+    click.secho(f"[ERROR] {mensaje}", fg=COLOR_ERROR)
 
 
 def _mensaje_info(mensaje: str) -> None:
     """Imprime un mensaje informativo con formato visual."""
-    click.secho(f"ℹ {mensaje}", fg=COLOR_INFO)
+    click.secho(f"[INFO] {mensaje}", fg=COLOR_INFO)
 
 
 def _obtener_aplicacion():

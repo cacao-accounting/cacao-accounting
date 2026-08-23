@@ -688,14 +688,14 @@ def test_system_language_settings(app_instance):
         # POST valid language
         response = client.post("/settings/language", data={"language": "en"}, follow_redirects=True)
         assert response.status_code == 200
-        assert b"actualizado correctamente" in response.data
+        assert b"System language updated successfully" in response.data
         with app_instance.app_context():
             assert get_setup_value(SETUP_LANGUAGE) == "en"
 
         # POST invalid language
         response = client.post("/settings/language", data={"language": "invalid_lang"}, follow_redirects=True)
         assert response.status_code == 200
-        assert b"no es" in response.data
+        assert b"Selected language is invalid" in response.data
 
         # Reset to 'es'
         client.post("/settings/language", data={"language": "es"}, follow_redirects=True)
