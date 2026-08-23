@@ -184,7 +184,7 @@ def _build_closing_voucher_payload(
             book.code
             for book in database.session.execute(
                 select(Book)
-                .where(Book.entity == company, (Book.status == "activo") | (Book.status.is_(None)))
+                .where(Book.entity == company, Book.status == "activo")
                 .order_by(Book.code)
             ).scalars()
         ],
@@ -226,7 +226,7 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
 
     books = list(
         database.session.execute(
-            select(Book).where(Book.entity == company, (Book.status == "activo") | (Book.status.is_(None))).order_by(Book.code)
+            select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.code)
         ).scalars()
     )
     balances: list[dict[str, Any]] = []

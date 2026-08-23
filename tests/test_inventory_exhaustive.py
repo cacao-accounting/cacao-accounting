@@ -83,7 +83,6 @@ def _setup_inventory_test_data(app):
         database.session.query(StockEntry).delete()
         database.session.commit()
 
-
         # Company
         company = database.session.get(Entity, "cacao")
         if not company:
@@ -288,9 +287,11 @@ def test_valuation_layer_rebuild_dry_run_does_not_mutate_existing_layers(app):
         database.session.commit()
 
         result = rebuild_stock_valuation_layers("cacao", item_code="ITEM-GOODS", dry_run=True)
-        layers = database.session.execute(
-            database.select(StockValuationLayer).filter_by(company="cacao", item_code="ITEM-GOODS")
-        ).scalars().all()
+        layers = (
+            database.session.execute(database.select(StockValuationLayer).filter_by(company="cacao", item_code="ITEM-GOODS"))
+            .scalars()
+            .all()
+        )
 
         assert result.rebuilt_layers == 1
         assert [layer.id for layer in layers] == [existing.id]

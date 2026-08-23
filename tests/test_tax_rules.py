@@ -189,7 +189,6 @@ def test_admin_tax_rule_crud(client) -> None:
     created_rule = database.session.execute(database.select(TaxRule)).scalar_one()
     assert created_rule.name == "IVA Venta"
 
-
     assert created_rule.include_concepts == "goods"
 
     response = client.post(

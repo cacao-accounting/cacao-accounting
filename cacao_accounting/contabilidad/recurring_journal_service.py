@@ -297,7 +297,7 @@ def _authorized_template_books(company: str, requested: Any, user_id: str, actio
     active = database.session.execute(
         database.select(Book)
         .where(Book.entity == company)
-        .where((Book.status == "activo") | Book.status.is_(None))
+        .where(Book.status == "activo")
         .where(Book.code.in_(authorized))
         .order_by(Book.is_primary.desc(), Book.code)
     ).scalars()
@@ -305,7 +305,7 @@ def _authorized_template_books(company: str, requested: Any, user_id: str, actio
     if not active_codes:
         raise RecurringJournalError("El usuario no tiene libros contables autorizados para la compañía.")
     active_books = database.session.execute(
-        database.select(Book).where(Book.entity == company).where((Book.status == "activo") | Book.status.is_(None))
+        database.select(Book).where(Book.entity == company).where(Book.status == "activo")
     ).scalars()
     references = {str(value): book.code for book in active_books for value in (book.id, book.code)}
     selected = [references.get(str(value), str(value)) for value in (_normalize_requested_books(requested) or active_codes)]

@@ -45,6 +45,23 @@ def app_ctx():
         yield app
 
 
+def _seed_active_primary_book(code: str = "LOCAL", currency: str = "NIO"):
+    """Siembra el libro primario activo que exige el posting fail-closed (#700).
+
+    El estado es obligatorio: un libro sin ``status`` explicito ya no se
+    interpreta como activo, asi que los escenarios deben sembrar el libro con
+    ``status='activo'``.
+    """
+    from cacao_accounting.database import Book, database
+
+    book = database.session.execute(database.select(Book).filter_by(entity="cacao", code=code)).scalar_one_or_none()
+    if book is None:
+        book = Book(code=code, name="Local", entity="cacao", currency=currency, is_primary=True, status="activo")
+        database.session.add(book)
+        database.session.commit()
+    return book
+
+
 def _seed_accounting_admin() -> None:
     """Crea un actor persistido para servicios de posting fail-closed."""
     from cacao_accounting.database import Modules, User, database
@@ -856,6 +873,7 @@ def test_posted_payment_bank_dimension_reconciles_with_bank_summary(app_ctx):
     )
     bank = Bank(name="Banco dimensión")
     database.session.add_all([bank_gl, advance, bank])
+    _seed_active_primary_book()
     database.session.flush()
     bank_account = BankAccount(
         bank_id=bank.id,
@@ -1470,6 +1488,7 @@ def test_ar_subledger_uses_base_currency_and_offsets_returns(app_ctx):
         is_return=True,
         docstatus=1,
     )
+    _seed_active_primary_book()
     database.session.add_all([invoice, credit_note])
     database.session.commit()
 
@@ -1481,7 +1500,9 @@ def test_ar_subledger_uses_base_currency_and_offsets_returns(app_ctx):
     assert {row.values["currency"] for row in subledger.rows} == {"NIO"}
     assert {row.values["transaction_currency"] for row in subledger.rows} == {"USD"}
     assert sorted(row.values["outstanding_amount"] for row in subledger.rows) == [Decimal("-72"), Decimal("360")]
-    assert maturity.totals["outstanding_amount"] == Decimal("288")
+    # El maturity schedule excluye reversiones y saldos no positivos (#688):
+    # la NC de -72 no participa y el total es el de la factura vigente.
+    assert maturity.totals["outstanding_amount"] == Decimal("360")
 
 
 def test_ar_subledger_paid_amount_includes_undated_allocation(app_ctx):
@@ -2738,6 +2759,7 @@ def test_tax_template_posts_sales_tax_and_price_suggestion(app_ctx):
     tax = Tax(name="IVA 15", rate=Decimal("15.00"), tax_type="percentage", applies_to="sales", account_id=tax_account.id)
     price_list = PriceList(name="Ventas", company="cacao", currency="NIO", is_selling=True)
     database.session.add_all([template, tax, price_list])
+    _seed_active_primary_book()
     database.session.flush()
     database.session.add_all(
         [
@@ -3451,6 +3473,7 @@ def test_manual_journal_allows_bank_and_untyped_accounts(app_ctx):
     bank = Accounts(entity="cacao", code="BANK-M", name="Banco", active=True, enabled=True, account_type="bank")
     free = Accounts(entity="cacao", code="FREE-M", name="Libre", active=True, enabled=True)
     database.session.add_all([bank, free])
+    _seed_active_primary_book()
     database.session.flush()
 
     bank_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual banco")
@@ -3534,6 +3557,7 @@ def test_sales_tax_uses_default_account_when_tax_has_no_account(app_ctx):
     template = TaxTemplate(name="IVA Default", company="cacao", template_type="selling")
     tax = Tax(name="IVA 15", rate=Decimal("15.00"), tax_type="percentage", applies_to="sales", account_id=None)
     database.session.add_all([template, tax])
+    _seed_active_primary_book()
     database.session.flush()
     database.session.add_all(
         [
@@ -3599,6 +3623,7 @@ def test_inventory_uom_batch_serial_and_rebuild_stock_bins(app_ctx):
         entity="cacao", code="ADJ-S", name="Ajuste Inventario", active=True, enabled=True, account_type="expense"
     )
     database.session.add_all([inventory, bridge, adjustment])
+    _seed_active_primary_book()
     database.session.flush()
     database.session.add_all(
         [
@@ -4378,6 +4403,7 @@ def test_purchase_invoice_posting_auto_reconciles_two_way_po_only_invoice(app_ct
             Item(code="ITEM-2WP", name="Item 2WP", item_type="goods", is_stock_item=False, default_uom="EA-2WP"),
         ]
     )
+    _seed_active_primary_book()
     database.session.flush()
     database.session.add(PartyAccount(party_id="SUPP-2WP", company="cacao", payable_account_id=payable_account.id))
     seed_matching_config_for_company("cacao")

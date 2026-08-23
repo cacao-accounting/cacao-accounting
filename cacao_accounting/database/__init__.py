@@ -551,6 +551,8 @@ class Book(database.Model, BaseTabla):  # type: ignore[name-defined]
     currency = database.Column(
         database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    # Los libros nacen activos: el estado NULL ya no se interpreta como activo.
+    status = database.Column(database.String(50), nullable=True, default="activo")
     # El libro primario es la fuente de verdad base
     is_primary = database.Column(database.Boolean(), default=False, nullable=False)
     default = database.Column(database.Boolean())
@@ -1595,7 +1597,15 @@ class StockBin(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 
 class StockValuationLayer(database.Model):  # type: ignore[name-defined]
-    """Capa de valuacion de inventario para FIFO y Promedio Movil."""
+    """Capa de valuacion de inventario para FIFO y Promedio Movil.
+
+    ``source_layer_id`` fija la trazabilidad de capas exigida por AUDIT-004:
+
+    - En capas de consumo (qty < 0): identifica la capa de ingreso consumida,
+      de modo que receipts retroactivos no reescriban la composicion historica.
+    - En capas de reversa (qty > 0 creadas al cancelar): identifica la capa de
+      ingreso a la que debe devolverse cantidad/valor exactamente.
+    """
 
     __tablename__ = "stock_valuation_layer"
     __table_args__ = (
@@ -1635,6 +1645,7 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     voucher_type = database.Column(database.String(50), nullable=False, index=True)
     voucher_id = database.Column(database.String(26), nullable=False, index=True)
     posting_date = database.Column(database.Date(), nullable=False, index=True)
+    source_layer_id = database.Column(database.String(26), nullable=True, index=True)
     created = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
 

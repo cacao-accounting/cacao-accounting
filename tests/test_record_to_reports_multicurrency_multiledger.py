@@ -7,6 +7,7 @@ import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
+from cacao_accounting.database import Book
 
 
 @pytest.fixture()
@@ -35,9 +36,9 @@ def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import (
         Accounts,
+        Book,
         Bank,
         BankAccount,
-        Book,
         CompanyDefaultAccount,
         Currency,
         ExchangeRate,
@@ -974,9 +975,13 @@ def test_r2r_multi_company_isolation_all_ledgers(app_ctx):
     from cacao_accounting.reportes.services import SubledgerFilters, get_ar_ap_subledger
 
     # Setup Company B
+    database.session.add(Book(code="R2R-BASE", name="Base A", entity="r2r", currency="NIO", is_primary=True, status="activo"))
     comp_b = Entity(code="r2r-b", name="R2R Corp B", company_name="R2R Corp B", tax_id="R2R-B-1", currency="NIO")
     database.session.add(comp_b)
     database.session.flush()
+    database.session.add(
+        Book(code="R2R-BBASE", name="Base B", entity="r2r-b", currency="NIO", is_primary=True, status="activo")
+    )
 
     # Accounts for Company A ("r2r") and Company B ("r2r-b")
     ar_a = Accounts(entity="r2r", code="AR-A", name="AR A", active=True, enabled=True, classification="asset")
@@ -1213,6 +1218,10 @@ def test_r2r_append_only_cancellation_lifecycle(app_ctx):
         Warehouse,
         WarehouseCompanyAccount,
         database,
+    )
+
+    database.session.add(
+        Book(code="R2R-CANC", name="R2R Cancellation", entity="r2r", currency="NIO", is_primary=True, status="activo")
     )
 
     ar = Accounts(entity="r2r", code="AR-CANC", name="AR Canc", active=True, enabled=True, classification="asset")
@@ -1543,6 +1552,10 @@ def test_r2r_kardex_inventory_valuation_and_moving_average(app_ctx):
         Warehouse,
         WarehouseCompanyAccount,
         database,
+    )
+
+    database.session.add(
+        Book(code="R2R-KARD", name="R2R Kardex", entity="r2r", currency="NIO", is_primary=True, status="activo")
     )
 
     inv_acc = Accounts(entity="r2r", code="INV-KARD", name="Inv Kardex", active=True, enabled=True, classification="asset")

@@ -66,6 +66,9 @@ def app_ctx():
 
         books = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
         book_codes = [b.code for b in books]
+        for book in books:
+            if book.is_primary and book.status is None:
+                book.status = "activo"
         if "USD_BOOK" not in book_codes:
             database.session.add(Book(code="USD_BOOK", name="Dólares", entity="cacao", currency="USD", status="activo"))
         database.session.commit()
@@ -254,6 +257,7 @@ def test_sales_quotation_workflow(app_ctx):
         docstatus=0,
     )
     database.session.add(so)
+    so.docstatus = 1
     database.session.flush()
     so_item = SalesOrderItem(
         sales_order_id=so.id,
