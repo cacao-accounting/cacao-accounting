@@ -30,6 +30,7 @@ import os
 
 sys.path.append(os.path.join(os.path.dirname(__file__)))
 from cacao_accounting.auth import proteger_passwd
+from cacao_accounting.runtime_mode import is_desktop_mode
 from z_func import init_test_db
 
 
@@ -74,6 +75,7 @@ def test_admin_routes_accessible_to_admin(app_instance):
             assert b"Administraci" in response.data or b"Ajustes" in response.data
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Usuarios no administradores no aplican en Desktop Mode")
 def test_require_system_admin_unauthorized(app_instance):
     # Create a non-admin user
     with app_instance.app_context():

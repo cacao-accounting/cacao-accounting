@@ -107,6 +107,10 @@ El segundo run del fix E2E dejó E2E, lint y bases verdes, pero Desktop falló e
 un usuario no administrador, prohibido por el contrato de Desktop Mode. Se
 añadió el mismo skip explícito usado en el caso RBAC; queda pendiente confirmar
 el nuevo run remoto.
+
+El run siguiente avanzó hasta `test_admin_blueprint.py::test_require_system_admin_unauthorized`,
+otro caso que inicia sesión con un usuario no administrador. Se añadió el skip
+equivalente para Desktop Mode; queda pendiente la confirmación del siguiente run.
 - Prueba RBAC en Desktop Mode: **1 skipped** (comportamiento esperado).
 - Commit: `54f998a3 fix(ci): stabilize purchase flows and desktop tests`, con
   `Signed-off-by: William Moreno Reyes <williamjmorenor@gmail.com>`.
