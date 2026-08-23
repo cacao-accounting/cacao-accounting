@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
-from cacao_accounting.printing.exceptions import PrintTemplateNotFoundError
-from cacao_accounting.printing.exceptions import PrintPermissionError
+from datetime import datetime
+
+from cacao_accounting.printing.exceptions import PrintPermissionError, PrintTemplateNotFoundError
 from cacao_accounting.printing.registry import register_printable_document
 from cacao_accounting.printing.service import PrintService
 from cacao_accounting.printing.models import PrintTemplate
@@ -101,6 +102,44 @@ def test_sales_order_print_requires_customer_ownership(app, monkeypatch):
                 "cacao",
                 get_printable_document("sales_order"),
             )
+
+
+def test_print_context_includes_creation_and_approval_audit(app):
+    """Printing exposes the creation and approval actors from AuditTrail."""
+    from cacao_accounting.database import AuditTrail
+
+    with app.app_context():
+        database.session.add_all(
+            [
+                AuditTrail(
+                    document_id="doc-1",
+                    company="cacao",
+                    document_type="sales_order",
+                    action="created",
+                    actor_user_id="creator",
+                    actor_name="Creator",
+                    timestamp=datetime(2026, 5, 26, 9, 0),
+                ),
+                AuditTrail(
+                    document_id="doc-1",
+                    company="cacao",
+                    document_type="sales_order",
+                    action="approved",
+                    actor_user_id="approver",
+                    actor_name="Approver",
+                    timestamp=datetime(2026, 5, 26, 10, 0),
+                ),
+            ]
+        )
+        database.session.commit()
+        context = {"audit": {"printed_by": "Printer", "printed_at": "2026-05-26 11:00"}}
+
+        PrintService()._inject_audit_metadata(context, "doc-1", "cacao")
+
+        assert context["audit"]["created_by"] == "Creator"
+        assert context["audit"]["created_at"] == "2026-05-26 09:00"
+        assert context["audit"]["approved_by"] == "Approver"
+        assert context["audit"]["approved_at"] == "2026-05-26 10:00"
 
 
 def test_public_validation_endpoint(client, app):

@@ -19,6 +19,8 @@ COMMON_SNIPPETS = [
         "code": """
 <div class="audit-footer" style="margin-top: 50px; font-size: 10px; color: #999;">
     <p>Printed by: {{ audit.printed_by }} on {{ audit.printed_at | datetime }}</p>
+    <p>Created by: {{ audit.created_by | default_text('-') }} on {{ audit.created_at | default_text('-') }}</p>
+    <p>Approved by: {{ audit.approved_by | default_text('-') }} on {{ audit.approved_at | default_text('-') }}</p>
 </div>
 """,
     },

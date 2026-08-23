@@ -134,7 +134,11 @@ JOURNAL_TEMPLATE = (
   <div class="validation-text"><strong>Validate document</strong><br>Scan this QR code to verify this document.</div>
 </div>
 {% endif %}
-<div class="print-footer">Printed by {{ audit.printed_by }} at {{ audit.printed_at }}</div>
+<div class="print-footer">
+  Printed by {{ audit.printed_by }} at {{ audit.printed_at }}<br>
+  Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
+  Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
+</div>
 """
 )
 
@@ -195,7 +199,11 @@ LINES_TEMPLATE = """
   <div class="validation-text"><strong>Validate document</strong><br>Scan this QR code to verify this document.</div>
 </div>
 {% endif %}
-<div class="print-footer">Printed by {{ audit.printed_by }} at {{ audit.printed_at }}</div>
+<div class="print-footer">
+  Printed by {{ audit.printed_by }} at {{ audit.printed_at }}<br>
+  Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
+  Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
+</div>
 """
 
 ROOT_TEMPLATE_MAP = {
@@ -236,7 +244,11 @@ ROOT_TEMPLATE_MAP = {
   <div class="validation-text"><strong>Validate document</strong><br>Scan this QR code to verify this document.</div>
 </div>
 {% endif %}
-<div class="print-footer">Printed by {{ audit.printed_by }} at {{ audit.printed_at }}</div>
+<div class="print-footer">
+  Printed by {{ audit.printed_by }} at {{ audit.printed_at }}<br>
+  Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
+  Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
+</div>
 """,
     "revaluation": """
 {% set current_status = revaluation.status | default_text('') | lower %}
@@ -280,7 +292,11 @@ ROOT_TEMPLATE_MAP = {
   <div class="validation-text"><strong>Validate document</strong><br>Scan this QR code to verify this document.</div>
 </div>
 {% endif %}
-<div class="print-footer">Printed by {{ audit.printed_by }} at {{ audit.printed_at }}</div>
+<div class="print-footer">
+  Printed by {{ audit.printed_by }} at {{ audit.printed_at }}<br>
+  Created by {{ audit.created_by | default_text('-') }} at {{ audit.created_at | default_text('-') }}<br>
+  Approved by {{ audit.approved_by | default_text('-') }} at {{ audit.approved_at | default_text('-') }}
+</div>
 """,
 }
 

@@ -261,8 +261,31 @@ class PrintService:
             raise ValueError("document_id is required for non-sample rendering.")
         self._authorize_document(document_type, document_id, user, company_code, doc_def)
         context = doc_def["context_builder"](document_id, user, company_code)
+        self._inject_audit_metadata(context, document_id, company_code)
         self._inject_validation_context(context, document_type, document_id, company_code)
         return context
+
+    def _inject_audit_metadata(self, context: dict[str, Any], document_id: str, company_code: str) -> None:
+        """Add creation and approval actors from the immutable audit trail."""
+        from cacao_accounting.database import AuditTrail
+
+        events = (
+            database.session.execute(
+                select(AuditTrail)
+                .filter_by(document_id=str(document_id), company=company_code)
+                .order_by(AuditTrail.timestamp.asc(), AuditTrail.id.asc())
+            )
+            .scalars()
+            .all()
+        )
+        audit = context.setdefault("audit", {})
+        for event in events:
+            actor = str(event.actor_name or event.actor_user_id or "Sistema")
+            timestamp = event.timestamp.strftime("%Y-%m-%d %H:%M") if event.timestamp else None
+            if event.action == "created" and not audit.get("created_at"):
+                audit.update({"created_by": actor, "created_at": timestamp})
+            elif event.action == "approved":
+                audit.update({"approved_by": actor, "approved_at": timestamp})
 
     def _authorize_document(
         self,

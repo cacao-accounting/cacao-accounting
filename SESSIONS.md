@@ -5860,3 +5860,18 @@ tipo de cotización del portal y registro de devoluciones de compra.
   `tax_total`; se registra `purchase_return`; y el portal usa
   `request_for_quotation`.
 - Ruff, compilación y la suite focal de impresión: **54 passed**.
+
+## 2026-08-23 — Auditoría completa en formatos de impresión
+
+### Petición
+
+Completar la pista de auditoría visible en los formatos: además de quién
+imprimió, mostrar quién creó y quién aprobó el documento.
+
+### Implementación y validación
+
+El contexto de impresión ahora consulta `AuditTrail` y agrega
+`created_by/created_at` y `approved_by/approved_at`. Los pies de página y el
+snippet común muestran los cuatro datos junto con `printed_by/printed_at`.
+Se añadieron valores seguros para muestras sin eventos y una prueba de
+regresión. Ruff y la suite focal de impresión: **56 passed**.

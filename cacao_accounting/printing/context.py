@@ -34,6 +34,10 @@ def build_common_context(company_code: str | None, user_name: str) -> dict[str, 
         "audit": {
             "printed_by": user_name,
             "printed_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "created_by": "-",
+            "created_at": None,
+            "approved_by": "-",
+            "approved_at": None,
         },
     }
 
@@ -795,7 +799,14 @@ def _sample_common_context() -> dict[str, Any]:
             "logo_url": "/static/img/logo.png",
             "default_currency": "NIO",
         },
-        "audit": {"printed_by": "admin", "printed_at": "2026-05-26 10:00"},
+        "audit": {
+            "printed_by": "admin",
+            "printed_at": "2026-05-26 10:00",
+            "created_by": "-",
+            "created_at": None,
+            "approved_by": "-",
+            "approved_at": None,
+        },
     }
 
 
@@ -846,6 +857,10 @@ COMMON_SCHEMA = {
     "audit": {
         "printed_by": "User who printed the document",
         "printed_at": "Print date and time",
+        "created_by": "User who created the document",
+        "created_at": "Document creation date and time",
+        "approved_by": "User who approved the document",
+        "approved_at": "Document approval date and time",
     },
     "validation": {
         "enabled": "Whether public validation QR is available",
