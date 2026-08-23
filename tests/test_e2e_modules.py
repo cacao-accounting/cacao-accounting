@@ -401,10 +401,14 @@ def test_purchase_happy_path(app_ctx):
     check_ledger_entries(prc.id)
 
     # 6. Create Purchase Invoice from Purchase Receipt
+    # El tipo explicito purchase_invoice evita que from_receipt clasifique la
+    # factura como devolucion; asi el matching 3-way concilia contra la
+    # recepcion referenciada en cabecera.
     pi_data = {
         "company": "cacao",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
+        "document_type": "purchase_invoice",
         "from_receipt": prc.id,
         "item_code_0": "ART-001",
         "qty_0": "10",
@@ -431,7 +435,6 @@ def test_purchase_happy_path(app_ctx):
     check_ledger_entries(pi.id)
 
     # Check reconciliation
-    # Purchase Invoice should have reference to Purchase Receipt
     assert pi.purchase_receipt_id == prc.id
 
 

@@ -28,6 +28,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Entity,
+    Book,
     Party,
     CompanyParty,
     Item,
@@ -116,6 +117,7 @@ def _setup_base_data():
     exp_acc = Accounts(id="ACC-EXP", code="51.01.001", name="Gasto", entity="cacao", account_type="expense")
     pay_acc = Accounts(id="ACC-PAY", code="21.01.002", name="Cuentas por Pagar", entity="cacao", account_type="liability")
     bank_acc = Accounts(id="ACC-BANK", code="11.01.002", name="Banco", entity="cacao", account_type="bank")
+    book = Book(code="S2P", name="S2P", entity="cacao", currency="NIO", is_primary=True, status="activo")
 
     wca = WarehouseCompanyAccount(
         warehouse_code="ALM-MAIN",
@@ -178,6 +180,7 @@ def _setup_base_data():
             pay_acc,
             bank_acc,
             bank,
+            book,
             bank_account,
             wca,
             defaults,

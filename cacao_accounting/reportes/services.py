@@ -1940,7 +1940,7 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
 def _resolve_ledger(company: str, ledger: str | None) -> Book | None:
     query = select(Book).where(
         Book.entity == company,
-        or_(Book.status == "activo", Book.status.is_(None)),
+        Book.status == "activo",
     )
     if ledger:
         query = query.where(or_(Book.id == ledger, Book.code == ledger))
@@ -2751,10 +2751,16 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         "expense": Decimal("0"),
     }
     retained_earnings = Decimal("0")
-    for entry, account in database.session.execute(base_query).all():
+    entries = database.session.execute(base_query).all()
+    closed_fiscal_years = {entry.posting_date.year for entry, _ in entries if entry.is_fiscal_year_closing}
+    for entry, account in entries:
         if account is None:
             continue
         classification = _normalize_account_classification(account)
+        # El cierre ya transfiere el resultado al patrimonio; no vuelvas a
+        # sumar sus líneas P&L como utilidades retenidas del ejercicio anterior.
+        if entry.is_fiscal_year_closing and classification in _PL_CLASSIFICATIONS:
+            continue
         # Skip closing entries if include_closing is False and they are P&L or current FY
         if not filters.include_closing and entry.is_fiscal_year_closing:
             if fiscal_year_start is None or classification in _PL_CLASSIFICATIONS or entry.posting_date >= fiscal_year_start:
@@ -2763,6 +2769,8 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         # parte del patrimonio: se muestran como utilidades retenidas, no como
         # resultado del período actual.
         if classification in _PL_CLASSIFICATIONS and fiscal_year_start and entry.posting_date < fiscal_year_start:
+            if entry.posting_date.year in closed_fiscal_years:
+                continue
             retained_earnings += _prior_year_retained_earnings_contribution(
                 classification,
                 _decimal_value(entry.debit),

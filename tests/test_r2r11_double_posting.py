@@ -27,7 +27,7 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Entity, database
+        from cacao_accounting.database import Book, Entity, database
 
         database.create_all()
         database.session.add(
@@ -38,6 +38,9 @@ def app_ctx():
                 tax_id="J0001",
                 currency="NIO",
             )
+        )
+        database.session.add(
+            Book(code="R2R11", name="R2R11", entity="cacao", currency="NIO", is_primary=True, status="activo")
         )
         database.session.commit()
         yield app

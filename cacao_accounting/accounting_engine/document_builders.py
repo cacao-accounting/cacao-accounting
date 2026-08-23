@@ -287,13 +287,12 @@ def _subtract_late_receipt_reclassifications(
     prior_receipts: Iterable[PurchaseReceipt],
 ) -> None:
     """Subtract receipt expense reclassifications from pending invoice values."""
-    from sqlalchemy import or_
     from cacao_accounting.database import Book, GLEntry
 
     primary_book = (
         database.session.execute(
             select(Book)
-            .where(Book.entity == document.company, or_(Book.status == "activo", Book.status.is_(None)))
+            .where(Book.entity == document.company, Book.status == "activo")
             .order_by(Book.is_primary.desc(), Book.code)
         )
         .scalars()
@@ -844,6 +843,9 @@ def _payment_custom_references(
         "settlement_exchange_rate": amounts.settlement_exchange_rate,
         "actual_cash_amount": amounts.actual_cash_amount,
         "eligible_discount_amount": amounts.eligible_discount_amount,
+        "explicit_exchange_difference": sum(
+            (reference.gain_loss_amount or Decimal("0") for reference in settlement_references), Decimal("0")
+        ),
         "use_advance_as_party_balance": not settlement_references,
         "open_payment_amount": amounts.open_payment_amount,
     }

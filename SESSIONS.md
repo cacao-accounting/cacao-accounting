@@ -1,7 +1,227 @@
 # SESSIONS — Bitácora de Decisiones de Diseño
 
+## 2026-08-22 — Corrección de errores mypy reportados por GitHub
+
+### Petición
+
+Investigar las pruebas fallidas en GitHub con `gh` y corregir los errores de
+tipado detectados por el workflow de CI.
+
+### Implementado
+
+- Se tiparon explícitamente las fechas usadas por `CalculationContext` en
+  `fiscal_persistence_service.py`.
+- Se tipificó el tipo de cambio opcional del adaptador de órdenes de compra.
+- Se hizo explícito el narrowing de `settlement_exchange_rate` en la
+  liquidación multicurrency.
+- Se encapsuló la construcción dinámica de `PostingError` en ventas para que
+  `mypy` la reconozca como excepción invocable.
+
+### Validación
+
+- Ruff y `git diff --check`: correctos.
+- Los 5 errores reportados por CI quedaron cubiertos por los cambios.
+- La ejecución local de una versión compatible de mypy dejó únicamente 4
+  errores históricos en otros archivos no relacionados con este fix.
+
+## 2026-08-22 — Skip de navegación no disponible en modo desktop
+
+### Petición
+
+Omitir `test_modules_and_imports_are_settings_links_not_primary_sidebar_items`
+cuando la aplicación se ejecuta en modo desktop, donde `/imports/` no forma
+parte de la navegación disponible.
+
+### Implementado
+
+- Se añadió `pytest.mark.skipif(is_desktop_mode(), ...)` al test de webactions.
+- En modo normal el test continúa verificando los enlaces de módulos e imports;
+  en modo desktop se omite explícitamente.
+
+### Validación
+
+- Modo normal: 1 passed.
+- Modo desktop: 1 skipped.
+- Ruff y `git diff --check`: correctos.
+
+## 2026-08-22 — Estabilización de pruebas unitarias restantes
+
+### Petición
+
+Corregir los tests que continuaban fallando después de la estabilización inicial e incorporar todos los cambios con commits semánticos, autor y sign-off de williamjmorenor@gmail.com.
+
+### Implementado
+
+- Se corrigió el balance multianual para no duplicar el P&L de un ejercicio ya cerrado: las líneas históricas cerradas no se vuelven a sumar como resultado corriente cuando el patrimonio ya recibió la transferencia.
+- Se estabilizó la liquidación multicurrency: se propaga la diferencia cambiaria explícita, se toleran diferencias de redondeo de hasta 0.01 y se evita rechazar grupos que ya contienen una línea de diferencia cambiaria.
+- Se aisló el fixture de pagos a un libro activo para evitar contaminación entre libros durante la prueba.
+- Se mantuvo la bitácora como fuente de continuidad para las siguientes etapas.
+
+### Validación
+
+- Batería afectada: 76 passed.
+- Ruff y `git diff --check`: correctos.
+- Suite oficial completa: **2121 passed, 11 skipped, 237 warnings** en
+  `/tmp/test-stability-full-final2.log`.
+
+
 > Este archivo documenta decisiones de diseño, arquitectura e invariantes contables que no deben romperse.
 > Para detalles de implementación por sesión, consultar el historial de git.
+
+## 2026-08-23 — Estabilización de CI remoto: flujos de compras y Desktop Mode
+
+### Petición
+
+Investigar con GitHub Actions las fallas remotas de CI y dejar un commit semántico
+con sign-off para recuperar un pipeline verde.
+
+### Evidencia de CI
+
+El run `32593588965` de `main` (`10d608cd`) tenía `lint` y `databases` exitosos,
+pero fallaba en `e2e`, `build (3.13)`, `desktop` y `coverage`. Los fallos
+reproducibles fueron:
+
+- El flujo E2E clasificaba como devolución una factura creada desde una recepción
+  vinculada a una orden de compra, porque el helper no consideraba `from_order_id`.
+- La regresión de dimensiones de recepción consultaba `Entity` sin preparar una
+  base de datos, aunque el caso sólo verifica la construcción de asientos.
+- La prueba RBAC intentaba autenticar usuarios auxiliares en Desktop Mode, donde
+  la aplicación permite únicamente al administrador.
+
+### Implementado
+
+- `_purchase_invoice_document_type` conserva `purchase_invoice` cuando la recepción
+  proviene de una orden, y la ruta transmite `from_order_id` al resolver el tipo.
+- La prueba de dimensiones aísla la consulta de moneda funcional mediante monkeypatch.
+- La prueba RBAC se omite explícitamente en Desktop Mode.
+- Se añadió una regresión para recepción vinculada a orden de compra.
+
+### Validación
+
+- Pruebas focales: **2 passed**.
+
+## 2026-08-23 — Ajuste adicional de Desktop Mode
+
+El segundo run del fix E2E dejó E2E, lint y bases verdes, pero Desktop falló en
+`test_negative_direct_access_bypassing_ui`: el caso también inicia sesión con
+un usuario no administrador, prohibido por el contrato de Desktop Mode. Se
+añadió el mismo skip explícito usado en el caso RBAC; queda pendiente confirmar
+el nuevo run remoto.
+
+El run siguiente avanzó hasta `test_admin_blueprint.py::test_require_system_admin_unauthorized`,
+otro caso que inicia sesión con un usuario no administrador. Se añadió el skip
+equivalente para Desktop Mode; queda pendiente la confirmación del siguiente run.
+
+La corrida focal local sin `--exitfirst` identificó cuatro fallos relacionados en
+gestión multiusuario (`test_lista_usuarios`, creación, edición y roles/password).
+Todos reciben 403/redirect en Desktop por diseño; los tres últimos además
+dependían del usuario creado por el primero. Se agruparon bajo el skip de
+Desktop Mode, conservando la cobertura completa en modo normal.
+- Prueba RBAC en Desktop Mode: **1 skipped** (comportamiento esperado).
+- Commit: `54f998a3 fix(ci): stabilize purchase flows and desktop tests`, con
+  `Signed-off-by: William Moreno Reyes <williamjmorenor@gmail.com>`.
+
+## 2026-08-23 — Corrección E2E: conservar factura creada desde recepción
+
+### Hallazgo
+
+El run remoto `32609082760` pasó lint y los jobs no-E2E habían avanzado, pero
+falló `test_document_flow_happy_paths_o2c_and_s2p` al guardar la factura de
+compra. La acción `Crear Factura` desde una recepción no enviaba el tipo
+documental explícito; la heurística de una recepción sin `from_order` la trataba
+como devolución.
+
+### Implementado y validado
+
+- La acción `purchase_receipt → purchase_invoice` ahora incluye
+  `document_type=purchase_invoice` en la URL.
+- Se añadió una regresión que verifica ambos parámetros de la URL.
+- Pruebas focales: **2 passed**.
+
+## 2026-08-22 — Confirmación de corrección de los issues abiertos (#279, #250)
+
+### Petición
+
+Confirmar que los issues abiertos en GitHub ya están corregidos.
+
+### Verificación
+
+- **Commits ancestros de HEAD**: `fa01b31e` (fix inventario #279),
+  `23374dbb` (regresiones #279) y `68e034af` (matriz fiscal #250) presentes;
+  `cc956cca` documenta ambos en esta bitácora.
+- **Código vigente**: `StockValuationLayer.source_layer_id`
+  (`database/__init__.py:1647`), `_consume_pinned_layer` /
+  `_consume_stock_valuation_layers` y `_persisted_outbound_cost`
+  (`posting_service.py:1809,3241`) operativos; comentarios de fix publicados
+  en ambos issues.
+- **Suite focal** (`/tmp/opencode/verify-279-250.log`, segundo plano):
+  **63 passed** — audit004 reconciliación **24** + matriz fiscal por doctype
+  **39**, en 48 s.
+- **Calidad**: ruff check ✅ y ruff format ✅ en los 4 archivos del fix.
+  Black sigue roto en el venv local (`pathspec.patterns.gitignore`,
+  pre-existente; cubre CI).
+
+### Conclusión
+
+Ambos issues están corregidos en HEAD y validados con pruebas; quedan abiertos
+con label `needs-review` pendiendo de revisión final/push (rama local
+ahead ~8–80 según origen). Cambios sin commitear en el árbol (fixtures libro
+activo #700, maturity #688) no tocan los módulos de estos fixes.
+
+## 2026-08-22 — Fixes de issues abiertos #279 (AUDIT-004) y #250 (FIS-01)
+
+### Petición
+
+Resolver los dos issues abiertos en GitHub aplicando los fixes que exigían sus
+comentarios de revisión (`needs-work`) y registrarlos en commits semánticos
+firmados como `williamjmorenor@gmail.com` con sign-off.
+
+### Implementado
+
+- **#279 — hallazgos 1 y 2** (`fa01b31e`, `fix(inventory): pin valuation
+  layers to their source and persist outbound cost`): nueva columna nullable
+  `StockValuationLayer.source_layer_id`. La reconstrucción de la cola FIFO
+  (`_valuation_queue` + `_schedule_valuation_layers` + `_consume_pinned_layer`)
+  fija cada consumo a su capa origen, así receipts retroactivos ya no reescriben
+  la composición histórica publicada; `_create_stock_reversal` fija la reversa a
+  la capa consumida original (`_restored_source_layer_id`) y la cola la ordena
+  junto a su origen, restaurando el costo FIFO exacto tras cancelaciones. El
+  promedio móvil conserva su ruta bin-based sin fijado (source None).
+- **#279 — hallazgo 3** (mismo commit): `_persisted_outbound_cost` resuelve el
+  monto GL de salidas desde `StockLedgerEntry` persistido; conectado en
+  `_get_delivery_note_line_value` y `_get_stock_entry_line_amount` (firma ahora
+  recibe `document`). El GL deja de depender del atributo transitorio
+  `_inventory_cost_amount`.
+- **Regresiones** (`23374dbb`, `test(audit)`): tres tests nuevos en
+  `tests/test_audit004_inventory_reconciliation.py` (receipt retroactivo sin
+  reescritura: 6×95=570 vs 565 legado; cancel devuelve valor a capa origen:
+  venta posterior 1000 vs 2000 legado; GL desde mayor persistido con sesión
+  limpia vía `expunge_all`). La suite dejó de sembrar montos en issues/
+  transferencias. Ajustes de firma en `tests/test_07posting_engine.py`.
+- **#250** (`68e034af`, `test(fiscal): add parametrized doctype fiscal matrix`):
+  nuevo `tests/test_fiscal_doctype_matrix.py` con 39 casos: preview positivo por
+  los 15 perfiles MVP (impuestos manuales canónicos vs ignora líneas del
+  navegador), preview negativo sin compañía, rechazo de doctype desconocido,
+  snapshot+contexto posting para sales/purchase invoice, NC/ND de venta y compra
+  (eventos `*_credit_note_confirmed`) y payment_entry pay/receive, notas
+  bancarias sin impuestos y rechazo de cuentas cross-company.
+
+### Decisiones de diseño
+
+- Trazabilidad de capas con una sola columna `source_layer_id` (consumo→capa de
+  ingreso; reversa→misma referencia); cuando un consumo cruza varias capas se
+  fija la predominante y se documenta la limitación (reversa mixta cae al
+  comportamiento legado).
+- El costo de salida para GL se resuelve del mayor (SLE), no se añaden columnas
+  a las tablas de línea; precedencia: atributo transitorio → SLE persistido →
+  fallbacks previos.
+
+### Validación
+
+- audit004: **24 passed**; posting/inventario focal: **91 passed**; batería
+  amplia (cancel/stock guards/valuation settings/purchase): **36 passed**;
+  matriz fiscal: **39 passed**. ruff + black en verde (flake8 no disponible en
+  venv local; cubierto por CI). Sin push.
 
 ## 2026-08-22 — Revisión final de issues abiertos con tag `ok`, tanda 2 (#613–#622)
 
@@ -5586,6 +5806,27 @@ ancestro de `HEAD`. Las matrices de los épicos #278–#282 y las pruebas de
 fiscal, bancos y posting se usaron como evidencia funcional complementaria;
 los issues permanecen abiertos para QA o porque su alcance es deliberadamente
 evolutivo.
+
+## 2026-08-23 — Ajuste adicional de Desktop CI: Approval Engine
+
+### Petición del usuario
+
+Corregir los issues detectados en la ejecución remota de CI y mantener todos
+los jobs en verde.
+
+### Plan implementado
+
+Se descargó el log del job `desktop` del run `32610583767`. El fallo estaba en
+`tests/test_approval_engine.py::test_approval_engine_is_enabled`: el test
+intentaba habilitar el motor aunque la implementación lo deshabilita
+explícitamente en Desktop Mode.
+
+### Cambio y validación
+
+Se marcó ese test como exclusivo del modo cloud mediante `skipif`, conservando
+los tests específicos que validan el comportamiento esperado del motor en
+Desktop Mode. Se validará el módulo focal localmente y se ejecutará un nuevo
+run remoto después del commit firmado.
 
 ## 2026-08-22 — Consulta e inventario de tipos de registros y documentos del sistema
 

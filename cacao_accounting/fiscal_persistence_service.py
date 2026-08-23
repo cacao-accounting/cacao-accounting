@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 
@@ -112,15 +112,15 @@ def _document_total_from_active_rules(*, document: Any, items: list[Any], subtot
         )
         for index, item in enumerate(items, start=1)
     ]
-    doc_date = getattr(document, "posting_date", None) or date.today()
+    posting_date = cast(date, getattr(document, "posting_date", None) or date.today())
     result = FiscalEngine().calculate(
         CalculationContext(
             company_id=str(getattr(document, "company", "")),
             document_type=document_type,
             event_type=event,
             transaction_direction=applies_to,
-            transaction_date=doc_date,
-            posting_date=doc_date,
+            transaction_date=posting_date,
+            posting_date=posting_date,
             party_type="supplier" if applies_to == "purchase" else "customer",
             party_id=str(getattr(document, "supplier_id", None) or getattr(document, "customer_id", None) or ""),
             currency=currency,

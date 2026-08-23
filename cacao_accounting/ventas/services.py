@@ -4,7 +4,7 @@ from datetime import date
 
 from decimal import Decimal
 
-from typing import Any, Sequence
+from typing import Any, NoReturn, Sequence, cast
 
 from cacao_accounting.exceptions import flash_error
 
@@ -37,7 +37,7 @@ from cacao_accounting.database import (
     database,
 )
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -45,7 +45,7 @@ from ulid import ULID
 
 from cacao_accounting.database.helpers import get_active_naming_series
 
-from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
+from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document, submit_document
 
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
@@ -110,6 +110,13 @@ from cacao_accounting.party_management import (  # noqa: F401
 from cacao_accounting.audit_trail_service import log_cancel, log_submit, log_update
 
 from cacao_accounting.logistics import copy_logistics, logistics_values
+
+
+def _raise_posting_error(message: str) -> NoReturn:
+    """Raise the posting error while keeping the dynamic import type-safe."""
+    error_type = cast(type[PostingError], PostingError)
+    raise error_type(message)
+
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
@@ -281,11 +288,11 @@ def _stock_bin_or_create(company: str, item_code: str, warehouse: str, for_updat
 
 def _require_sales_warehouse(company: str, warehouse_code: str) -> None:
     """Require an active warehouse that belongs to the sales document company."""
-    warehouse = database.session.execute(select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
     if warehouse is None or warehouse.company != company:
-        raise PostingError(f"La bodega {warehouse_code} no pertenece a la compañía {company}.")  # type: ignore[misc]
+        _raise_posting_error(f"La bodega {warehouse_code} no pertenece a la compañía {company}.")
     if not warehouse.is_active:
-        raise PostingError(f"La bodega {warehouse_code} está inactiva.")  # type: ignore[misc]
+        _raise_posting_error(f"La bodega {warehouse_code} está inactiva.")
 
 
 def _resolve_item_warehouse(item: SalesOrderItem, item_obj: Item | None) -> str:
@@ -308,7 +315,7 @@ def _item_by_code(item_code: str) -> Item | None:
     item = database.session.get(Item, item_code)
     if item is not None:
         return item
-    return database.session.execute(select(Item).filter_by(code=item_code)).scalars().first()
+    return database.session.execute(database.select(Item).filter_by(code=item_code)).scalars().first()
 
 
 def _base_qty_for_sales_line(item: Any, item_obj: Item | None) -> Decimal:
@@ -990,7 +997,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     """
     items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars().all()
     if not items:
-        raise PostingError("La factura no tiene ítems para crear la Nota de Entrega.")  # type: ignore[misc]
+        raise PostingError("La factura no tiene ítems para crear la Nota de Entrega.")
 
     dn = DeliveryNote(
         customer_id=invoice.customer_id,
@@ -1019,7 +1026,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         item_obj = _item_by_code(si_item.item_code)
         warehouse = si_item.warehouse or (item_obj.default_warehouse_id if item_obj else None)
         if not warehouse:
-            raise PostingError(  # type: ignore[misc]
+            raise PostingError(
                 f"El ítem {si_item.item_code} no tiene bodega predeterminada. "
                 "Configure la bodega del ítem o cree la nota de entrega manualmente."
             )

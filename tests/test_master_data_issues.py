@@ -793,9 +793,11 @@ def test_search_select_active_only_does_not_raise_for_book(app_ctx):
         [
             Book(code="ACT", name="Activo", entity="cacao", currency="NIO", status="activo"),
             Book(code="INA", name="Inactivo", entity="cacao", currency="NIO", status="inactivo"),
-            Book(code="LEG", name="Legacy", entity="cacao", currency="NIO", status=None),
+            Book(code="LEG", name="Legacy", entity="cacao", currency="NIO"),
         ]
     )
+    database.session.commit()
+    database.session.execute(database.update(Book).where(Book.code == "LEG").values(status=None))
     database.session.commit()
     client = app_ctx.test_client()
     _login(client, User.query.filter_by(user="admin").first().id)
@@ -803,8 +805,10 @@ def test_search_select_active_only_does_not_raise_for_book(app_ctx):
     assert response.status_code == 200
     payload = response.get_json()
     values = {item["value"] for item in payload["results"]}
-    assert {"ACT", "LEG"} <= values
-    assert "INA" not in values
+    # Solo el libro activo se ofrece; inactivo y la fila legacy con
+    # status=NULL quedan excluidos.
+    assert "ACT" in values
+    assert {"INA", "LEG"}.isdisjoint(values)
 
 
 def test_search_select_active_only_does_not_raise_for_unit(app_ctx):

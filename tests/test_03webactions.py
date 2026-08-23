@@ -10,6 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__)))
 from z_func import init_test_db
 
 from cacao_accounting import create_app
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 app = create_app(
     {
@@ -441,6 +442,10 @@ def test_purchase_invoice_document_type_helper_prefers_sources_and_ignores_untru
         source_ids = {"from_receipt_id": "REC-1", "from_invoice_id": None}
         with app.test_request_context("/buying/purchase-invoice/new"):
             assert _purchase_invoice_document_type(source_ids) == PURCHASE_RETURN
+
+        source_ids = {"from_order_id": "PO-1", "from_receipt_id": "REC-1", "from_invoice_id": None}
+        with app.test_request_context("/buying/purchase-invoice/new"):
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_INVOICE
 
         source_ids = {"from_receipt_id": None, "from_invoice_id": "PINV-1"}
         with app.test_request_context("/buying/purchase-invoice/new"):
@@ -1220,6 +1225,7 @@ def test_buying_sales_and_cash_lists_support_search_filters(request):
                 assert 'value="cacao"' in html
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Los enlaces de módulos e imports no están disponibles en modo desktop")
 def test_modules_and_imports_are_settings_links_not_primary_sidebar_items(request):
 
     if request.config.getoption("--slow") == "True":

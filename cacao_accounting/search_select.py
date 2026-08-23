@@ -646,7 +646,7 @@ def _apply_active_only_filters(statement: Any, spec: SearchSelectSpec, active_on
     if not active_only:
         return statement
     if spec.model is Book:
-        statement = statement.where(or_(Book.status == "activo", Book.status.is_(None)))
+        statement = statement.where(Book.status == "activo")
     if spec.model is Unit:
         statement = statement.where(or_(Unit.enabled.is_(True), Unit.enabled.is_(None)))
     return statement
