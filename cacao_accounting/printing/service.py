@@ -194,6 +194,19 @@ class PrintService:
         global_default = self._default_template(document_type, None)
         if global_default is not None:
             return global_default
+
+        # A desktop database may have been created after the application
+        # factory attempted to seed printing, while its tables did not yet
+        # exist. Repair that state lazily on the first print request.
+        from cacao_accounting.printing.seed import seed_print_templates
+
+        seed_print_templates()
+        company_default = self._default_template(document_type, company_code)
+        if company_default is not None:
+            return company_default
+        global_default = self._default_template(document_type, None)
+        if global_default is not None:
+            return global_default
         raise PrintTemplateNotFoundError(f"No published template found for {document_type}.")
 
     def build_print_html(self, rendered_body: str, stylesheet_body: str | None) -> str:
