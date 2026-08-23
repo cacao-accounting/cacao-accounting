@@ -726,10 +726,15 @@ def api_get_item_image(item_id: str):
     file_rec, path = get_item_image_file(item_id)
     if not path or not file_rec:
         abort(404)
-    return send_file(
+    mime_type = (file_rec.mime_type or "image/png").lower()
+    if "svg" in mime_type:
+        abort(400)
+    response = send_file(
         path,
-        mimetype=file_rec.mime_type or "image/png",
+        mimetype=mime_type,
     )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @api.route("/api/inventory/items/<item_id>/image/delete", methods=["POST"])

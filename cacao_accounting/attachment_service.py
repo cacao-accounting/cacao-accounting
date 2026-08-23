@@ -13,7 +13,7 @@ from cacao_accounting.database import File, FileAttachment, Item, database
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 MAX_FILE_SIZE = 16 * 1024 * 1024  # 16 MB
-ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 class AttachmentError(ValueError):
@@ -228,7 +228,7 @@ def upload_item_image(item_id: str, file_storage: Any, user_id: str | None = Non
     content_type = getattr(file_storage, "content_type", "") or ""
 
     if ext not in ALLOWED_IMAGE_EXTENSIONS or not content_type.startswith("image/"):
-        raise AttachmentError("Formato de imagen no permitido. Use PNG, JPG, WEBP, GIF o SVG.", 400)
+        raise AttachmentError("Formato de imagen no permitido. Use PNG, JPG, WEBP o GIF.", 400)
 
     file_storage.seek(0)
     header = file_storage.read(4096)
@@ -278,8 +278,6 @@ def _has_valid_image_signature(header: bytes, extension: str) -> bool:
         return header.startswith((b"GIF87a", b"GIF89a"))
     if extension == ".webp":
         return len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"WEBP"
-    if extension == ".svg":
-        return b"<svg" in header.lower()
     return False
 
 
