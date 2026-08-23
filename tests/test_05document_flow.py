@@ -661,6 +661,11 @@ def test_get_create_actions_builds_urls_with_query_params(app_ctx):
     assert "from_receipt=PREC-ACT-001" in (purchase_return["create_url"] or "")
     assert "document_type=purchase_return" in (purchase_return["create_url"] or "")
 
+    purchase_receipt_invoice = _find_action(purchase_receipt_actions, "Crear Factura")
+    assert purchase_receipt_invoice["query_params"]["document_type"] == "purchase_invoice"
+    assert "from_receipt=PREC-ACT-001" in (purchase_receipt_invoice["create_url"] or "")
+    assert "document_type=purchase_invoice" in (purchase_receipt_invoice["create_url"] or "")
+
     purchase_receipt_credit = _find_action(purchase_receipt_actions, "Crear Nota de Crédito")
     assert purchase_receipt_credit["query_params"]["document_type"] == "purchase_credit_note"
     assert "from_receipt=PREC-ACT-001" in (purchase_receipt_credit["create_url"] or "")

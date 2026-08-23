@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 
@@ -115,7 +115,6 @@ def _document_total_from_active_rules(*, document: Any, items: list[Any], subtot
     posting_date_val = getattr(document, "posting_date", None)
     if not isinstance(posting_date_val, date):
         posting_date_val = date.today()
-
     result = FiscalEngine().calculate(
         CalculationContext(
             company_id=str(getattr(document, "company", "")),

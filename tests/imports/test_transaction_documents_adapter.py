@@ -40,9 +40,7 @@ def app_ctx():
 def test_purchase_order_import_rejects_foreign_warehouse(app_ctx) -> None:
     """Purchase order imports cannot reference a warehouse from another company."""
     with app_ctx.app_context():
-        database.session.add(
-            Entity(code="cafe", name="Café", company_name="Café", tax_id="T-IMPORT-CAFE", currency="NIO")
-        )
+        database.session.add(Entity(code="cafe", name="Café", company_name="Café", tax_id="T-IMPORT-CAFE", currency="NIO"))
         database.session.add(Warehouse(code="WH-CAFE-IMPORT", name="Café", company="cafe"))
         database.session.commit()
 

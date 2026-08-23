@@ -355,13 +355,12 @@ class BudgetService:
         if ledger_id:
             return ledger_id
         from cacao_accounting.database import Book
-        from sqlalchemy import or_
 
         primary_book = (
             database.session.query(Book)
             .filter(
                 Book.entity == company,
-                or_(Book.status == "activo", Book.status.is_(None)),
+                Book.status == "activo",
             )
             .order_by(Book.is_primary.desc(), Book.code)
             .first()

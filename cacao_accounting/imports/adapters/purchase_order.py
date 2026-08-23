@@ -5,7 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
-from typing import List, Dict, Any
+from typing import List, Dict, Any, cast
 from cacao_accounting.imports.utils.validation import is_period_open
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party, Warehouse, database
@@ -132,8 +132,11 @@ class PurchaseOrderAdapter(BaseImportAdapter):
         else:
             from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 
-            rate = _lookup_exchange_rate(transaction_currency, base_currency, posting_date) if posting_date else None
-            rate_dec = Decimal(str(rate)) if rate is not None else Decimal("0")
+            resolved = cast(
+                Decimal | None,
+                _lookup_exchange_rate(transaction_currency, base_currency, posting_date) if posting_date else None,
+            )
+            rate_dec = Decimal(str(resolved)) if resolved is not None else Decimal("0")
         if rate_dec <= 0:
             raise ValueError(f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}.")
         return transaction_currency, base_currency, rate_dec

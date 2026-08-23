@@ -229,12 +229,12 @@ def _receive(env: dict, warehouse: str, item: str, qty: Decimal, rate: Decimal, 
     return doc
 
 
-def _issue(env: dict, warehouse: str, item: str, qty: Decimal, day: date, cost: Decimal | None = None) -> StockEntry:
+def _issue(env: dict, warehouse: str, item: str, qty: Decimal, day: date) -> StockEntry:
     """Descarga material cuyo costo resuelve el motor desde las capas.
 
-    ``cost`` es el consumo de capas calculado independientemente en la prueba;
-    se persiste como monto de linea porque el GL de salidas resuelve su
-    contrapartida a partir del costo publicado en la misma sesion de posting.
+    La linea no siembra monto ni el atributo transitorio de costo: desde
+    AUDIT-004 el GL de salidas resuelve su contrapartida desde el mayor de
+    inventario persistido (StockLedgerEntry).
     """
     doc = StockEntry(
         company=COMPANY,
@@ -253,7 +253,6 @@ def _issue(env: dict, warehouse: str, item: str, qty: Decimal, day: date, cost: 
             uom="UND",
             qty_in_base_uom=qty,
             source_warehouse=warehouse,
-            amount=cost,
         )
     )
     database.session.commit()
@@ -262,10 +261,11 @@ def _issue(env: dict, warehouse: str, item: str, qty: Decimal, day: date, cost: 
     return doc
 
 
-def _transfer(
-    env: dict, source: str, target: str, item: str, qty: Decimal, day: date, cost: Decimal | None = None
-) -> StockEntry:
-    """Transfiere stock entre bodegas con cuentas GL distintas."""
+def _transfer(env: dict, source: str, target: str, item: str, qty: Decimal, day: date) -> StockEntry:
+    """Transfiere stock entre bodegas con cuentas GL distintas.
+
+    Sin monto de linea: el valor transferido lo resuelve el motor desde capas.
+    """
     doc = StockEntry(
         company=COMPANY,
         docstatus=0,
@@ -285,7 +285,6 @@ def _transfer(
             qty_in_base_uom=qty,
             source_warehouse=source,
             target_warehouse=target,
-            amount=cost,
         )
     )
     database.session.commit()
@@ -524,7 +523,7 @@ def test_receipt_backdated_cambia_composicion_subsiguiente_y_mantiene_ecuaciones
     el promedio movil usa la tasa del bin (860/10=86 -> 430).
     """
     _receive(env, WH_B, "ITF", Q("5"), Q("90"), D_MAY_05)
-    issue1 = _issue(env, WH_B, "ITF", Q("3"), D_MAY_10, cost=Q("270"))
+    issue1 = _issue(env, WH_B, "ITF", Q("3"), D_MAY_10)
     movements = _voucher_sle(env, "stock_entry", [issue1.id])
     assert movements[issue1.id] == (Q("-3"), Q("-270"))
 
@@ -534,7 +533,7 @@ def test_receipt_backdated_cambia_composicion_subsiguiente_y_mantiene_ecuaciones
         expected_cost, expected_rate = Q("425"), Q("85")
     else:
         expected_cost, expected_rate = Q("430"), Q("86")
-    issue2 = _issue(env, WH_B, "ITF", Q("5"), D_MAY_15, cost=expected_cost)
+    issue2 = _issue(env, WH_B, "ITF", Q("5"), D_MAY_15)
     movements = _voucher_sle(env, "stock_entry", [issue2.id])
     assert movements[issue2.id] == (Q("-5"), -expected_cost)
     sle_row = (
@@ -625,7 +624,7 @@ def test_transferencia_cross_account_mueve_valor_entre_cuentas_gl(env):
     """Transferencia entre bodegas migra valor entre cuentas GL preservando el total."""
     _receive(env, WH_A, "ITF", Q("12"), Q("100"), D_MAY_02)
 
-    _transfer(env, WH_A, WH_B, "ITF", Q("7"), D_JUN_01, cost=Q("700"))
+    _transfer(env, WH_A, WH_B, "ITF", Q("7"), D_JUN_01)
 
     bin_a = _bin(env, "ITF", WH_A)
     bin_b = _bin(env, "ITF", WH_B)
@@ -648,7 +647,7 @@ def test_stock_negativo_cierra_a_cero_con_ecuaciones_internas(env):
     recibe 17@40 y emite 14: ambos metodos cierran en cantidad 0 y valor 0.
     """
     _receive(env, WH_B, "ITN", Q("4"), Q("40"), D_MAY_02)
-    issue1 = _issue(env, WH_B, "ITN", Q("7"), D_JUN_01, cost=Q("280"))
+    issue1 = _issue(env, WH_B, "ITN", Q("7"), D_JUN_01)
 
     bin_row = _bin(env, "ITN", WH_B)
     assert _dec(bin_row.actual_qty) == Q("-3")
@@ -662,7 +661,7 @@ def test_stock_negativo_cierra_a_cero_con_ecuaciones_internas(env):
     bin_row = _bin(env, "ITN", WH_B)
     assert (_dec(bin_row.actual_qty), _dec(bin_row.stock_value)) == (Q("14"), Q("560"))
 
-    _issue(env, WH_B, "ITN", Q("14"), D_JUN_08, cost=Q("560"))
+    _issue(env, WH_B, "ITN", Q("14"), D_JUN_08)
     bin_row = _bin(env, "ITN", WH_B)
     assert (_dec(bin_row.actual_qty), _dec(bin_row.stock_value)) == (Q("0"), Q("0"))
     assert _dec(bin_row.valuation_rate) == 0
@@ -714,7 +713,7 @@ def test_cogs_gl_trazable_por_voucher_y_acumulado(env):
     """
     _receive(env, WH_A, "ITF", Q("10"), Q("50"), D_MAY_02)
     dn1 = _deliver(env, WH_A, "ITF", Q("4"), Q("90"), D_JUN_01)
-    issue = _issue(env, WH_A, "ITF", Q("2"), D_JUN_02, cost=Q("100"))
+    issue = _issue(env, WH_A, "ITF", Q("2"), D_JUN_02)
     dn2 = _deliver(env, WH_A, "ITF", Q("3"), Q("90"), D_JUN_03)
 
     cogs_total = _gl_balance(env, env["cogs_id"], as_of=OPEN_END)
@@ -769,3 +768,133 @@ def test_matriz_reconciliacion_por_corte_de_periodo(env):
     end_row = _matrix_inventory_row(env, OPEN_END)
     assert end_row["difference"] == 0
     assert end_row["subledger_amount"] == end_value
+
+
+def test_receipt_backdated_no_reescribe_capas_ya_consumidas(env):
+    """AUDIT-004 hallazgo 1: cada consumo queda fijado a su capa origen.
+
+    B: 5@90 (05-05). Consumo de 3 (05-10): costo 270 desde la capa B.
+    Receipt retroactivo A: 8@95 fechado 05-03 pero posteado despues del consumo.
+    Consumo de 6 (05-20): la capa A conserva sus 8 unidades, asi que FIFO paga
+    6x95=570. La reconstruccion legada habria reasignado el consumo historico a
+    la capa retroactiva dejando 5@95 + 2@90 y costado 565.
+    """
+    _receive(env, WH_B, "ITF", Q("5"), Q("90"), D_MAY_05)
+    issue1 = _issue(env, WH_B, "ITF", Q("3"), D_MAY_10)
+    movements = _voucher_sle(env, "stock_entry", [issue1.id])
+    assert movements[issue1.id] == (Q("-3"), Q("-270"))
+
+    _receive(env, WH_B, "ITF", Q("8"), Q("95"), D_MAY_03)
+
+    issue2 = _issue(env, WH_B, "ITF", Q("6"), D_MAY_15)
+    movements = _voucher_sle(env, "stock_entry", [issue1.id, issue2.id])
+    assert movements[issue1.id] == (Q("-3"), Q("-270"))
+    if env["method"] == "fifo":
+        assert movements[issue2.id] == (Q("-6"), Q("-570"))
+    else:
+        # Promedio movil del bin: (180+760)/10 = 94 por unidad.
+        assert movements[issue2.id] == (Q("-6"), Q("-564"))
+
+    bin_row = _bin(env, "ITF", WH_B)
+    expected_value = (Q("940") - Q("564")) if env["method"] == "moving_average" else (Q("1210") - Q("840"))
+    assert _dec(bin_row.actual_qty) == Q("4")
+    assert _dec(bin_row.stock_value) == expected_value
+
+    consumption_layer = (
+        database.session.execute(
+            select(StockValuationLayer).where(
+                StockValuationLayer.voucher_type == "stock_entry",
+                StockValuationLayer.voucher_id == issue1.id,
+                StockValuationLayer.qty < 0,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if env["method"] == "fifo":
+        source_layer_id = consumption_layer.source_layer_id
+        assert source_layer_id is not None
+        source_layer = database.session.get(StockValuationLayer, source_layer_id)
+        assert source_layer is not None and _dec(source_layer.qty) == Q("5")
+
+    _assert_consistency(env, [("ITF", WH_B, env["inv_b_id"])])
+    assert _matrix_inventory_row(env, OPEN_END)["difference"] == 0
+
+
+def test_cancel_devuelve_valor_a_la_capa_origen_fifo(env):
+    """AUDIT-004 hallazgo 2: la reversa restaura la capa consumida original.
+
+    L1: 10@100, L2: 10@200. Venta de 10 consume L1 (1000). Al cancelar, la
+    reversa se fija a la capa L1 y la venta subsiguiente de 10 vuelve a costar
+    1000 en FIFO; el repliegue legado a la fecha de reversa habria puesto la
+    capa restaurada despues de L2 y la venta habria costado 2000.
+    """
+    _receive(env, WH_A, "ITF", Q("10"), Q("100"), D_MAY_02)
+    receipt_l2 = _receive(env, WH_A, "ITF", Q("10"), Q("200"), D_MAY_05)
+    dn1 = _deliver(env, WH_A, "ITF", Q("10"), Q("300"), D_JUN_01)
+    cancel_document(dn1)
+    database.session.commit()
+
+    reversal_row = (
+        database.session.execute(
+            select(StockValuationLayer).where(
+                StockValuationLayer.voucher_type == "delivery_note",
+                StockValuationLayer.voucher_id == dn1.id,
+                StockValuationLayer.qty > 0,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert reversal_row is not None
+    if env["method"] == "fifo":
+        restored_source = database.session.get(StockValuationLayer, reversal_row.source_layer_id)
+        assert restored_source is not None
+        assert restored_source.posting_date == D_MAY_02
+        assert restored_source.voucher_type == "stock_entry"
+        assert restored_source.voucher_id != receipt_l2.id
+
+    dn2 = _deliver(env, WH_A, "ITF", Q("10"), Q("300"), D_JUN_02)
+    movements = _voucher_sle(env, "delivery_note", [dn2.id])
+    if env["method"] == "fifo":
+        assert movements[dn2.id] == (Q("-10"), Q("-1000"))
+    else:
+        # Promedio movil: 3000/20 = 150 por unidad tras la restauracion.
+        assert movements[dn2.id] == (Q("-10"), Q("-1500"))
+
+    _assert_consistency(env, [("ITF", WH_A, env["inv_a_id"])])
+    assert _matrix_inventory_row(env, OPEN_END)["difference"] == 0
+
+
+def test_gl_salidas_resuelve_costo_del_mayor_persistido(env):
+    """AUDIT-004 hallazgo 3: sin atributo transitorio el GL usa StockLedgerEntry.
+
+    Tras recargar las lineas en una sesion limpia no existe
+    ``_inventory_cost_amount``; los resolutores GL deben publicar la
+    contrapartida desde el mayor de inventario.
+    """
+    from cacao_accounting.contabilidad.posting_service import (
+        _get_delivery_note_line_value,
+        _get_stock_entry_line_amount,
+    )
+
+    _receive(env, WH_A, "ITF", Q("10"), Q("50"), D_MAY_02)
+    issue = _issue(env, WH_A, "ITF", Q("4"), D_JUN_01)
+    issue_id = issue.id
+
+    database.session.expunge_all()
+    issue_doc = database.session.get(StockEntry, issue_id)
+    issue_line = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=issue_id)).scalars().one()
+    assert getattr(issue_line, "_inventory_cost_amount", None) is None
+    assert _get_stock_entry_line_amount(issue_doc, issue_line, "material_issue") == Q("200")
+
+    dn = _deliver(env, WH_A, "ITF", Q("3"), Q("80"), D_JUN_02)
+    dn_id = dn.id
+
+    database.session.expunge_all()
+    dn_doc = database.session.get(DeliveryNote, dn_id)
+    dn_line = database.session.execute(select(DeliveryNoteItem).filter_by(delivery_note_id=dn_id)).scalars().one()
+    assert getattr(dn_line, "_inventory_cost_amount", None) is None
+    assert _get_delivery_note_line_value(dn_doc, dn_line) == Q("150")
+
+    _assert_consistency(env, [("ITF", WH_A, env["inv_a_id"])])

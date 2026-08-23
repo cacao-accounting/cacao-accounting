@@ -2741,7 +2741,7 @@ def compras_factura_compra_nuevo():
     from_order_id = source_ids["from_order_id"]
     from_receipt_id = source_ids["from_receipt_id"]
     from_invoice_id = source_ids["from_invoice_id"]
-    document_type = _purchase_invoice_document_type(source_ids)
+    document_type = _purchase_invoice_document_type(source_ids, request.args.get("document_type"))
     formulario.is_return.data = document_type == PURCHASE_RETURN
     orden_origen, recepcion_origen, factura_origen = _purchase_invoice_sources(source_ids)
     document_title = DOCUMENT_TYPE_LABELS.get(document_type, FACTURA_DE_COMPRA)

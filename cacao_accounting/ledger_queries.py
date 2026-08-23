@@ -7,7 +7,7 @@ par, mientras que las reconstrucciones deben sumar ambos para obtener el neto.
 
 from typing import Any
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, select
 from sqlalchemy.orm import aliased
 
 from cacao_accounting.database import Book, GLEntry, StockLedgerEntry, database
@@ -20,7 +20,7 @@ def primary_ledger_id(company: str, requested: str | None = None) -> str | None:
     The accounting module is the only place where a user explicitly selects a
     book; all other consumers use the system default (then primary) active book.
     """
-    query = select(Book).where(Book.entity == company, or_(Book.status == "activo", Book.status.is_(None)))
+    query = select(Book).where(Book.entity == company, Book.status == "activo")
     if requested:
         query = query.where((Book.id == requested) | (Book.code == requested))
     else:

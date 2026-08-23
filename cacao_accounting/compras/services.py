@@ -1648,12 +1648,14 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
         if getattr(source, "purchase_order_id", None) != document.purchase_order_id:
             raise ValueError("La recepción no pertenece a la orden de compra indicada.")
     if items is not None:
-        doc_type = getattr(document, "document_type", None)
+        # Solo PurchaseInvoice persiste document_type; el resto de destinos se
+        # resuelven por su clase.
+        document_type = getattr(document, "document_type", None)
         target_types = {
             PurchaseQuotation: "purchase_quotation",
             PurchaseOrder: "purchase_order",
             PurchaseReceipt: "purchase_receipt",
-            PurchaseInvoice: PURCHASE_RETURN if doc_type == PURCHASE_RETURN else PURCHASE_INVOICE,
+            PurchaseInvoice: PURCHASE_RETURN if document_type == PURCHASE_RETURN else PURCHASE_INVOICE,
         }
         require_line_relations(
             target_type=target_types[type(document)],
@@ -1827,14 +1829,20 @@ def _purchase_invoice_source_ids() -> dict[str, str | None]:
     }
 
 
-def _purchase_invoice_document_type(source_ids: dict[str, str | None]) -> str:
-    """Resolve the document type for the purchase invoice."""
-    requested_type = request.args.get("document_type") or request.form.get("document_type")
-    if requested_type:
-        return requested_type
-    if source_ids.get("from_invoice_id"):
-        return PURCHASE_CREDIT_NOTE
-    return PURCHASE_INVOICE
+def _purchase_invoice_document_type(source_ids: dict[str, str | None], requested: str | None = None) -> str:
+    """Resolve the document type for the purchase invoice.
+
+    El ``document_type`` explicito (form/query) tiene precedencia; los
+    heuristicos por origen aplican solo cuando no se solicita un tipo valido.
+    """
+    if requested in {PURCHASE_INVOICE, PURCHASE_RETURN, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE}:
+        return requested
+    doc_type = PURCHASE_INVOICE
+    if source_ids.get("from_receipt_id") and not source_ids.get("from_order_id"):
+        doc_type = PURCHASE_RETURN
+    elif source_ids.get("from_invoice_id"):
+        doc_type = PURCHASE_CREDIT_NOTE
+    return doc_type
 
 
 def _purchase_invoice_sources(
@@ -2209,12 +2217,15 @@ def _create_purchase_invoice_from_request():
                 from_order = receipt.purchase_order_id
         from_invoice = request.form.get("from_invoice") or request.form.get("from_return") or None
         requested_type = request.form.get("document_type") or request.args.get("document_type")
-        if requested_type:
-            document_type = requested_type
-        elif from_invoice:
-            document_type = PURCHASE_CREDIT_NOTE
-        else:
-            document_type = PURCHASE_INVOICE
+        if from_receipt and not (request.form.get("from_order") or request.args.get("from_order")):
+            # Una factura creada desde recepcion sin OC es una devolucion,
+            # salvo que se solicite un tipo explicito.
+            requested_type = requested_type or PURCHASE_RETURN
+        elif from_invoice and not requested_type:
+            requested_type = PURCHASE_CREDIT_NOTE
+        document_type = _purchase_invoice_document_type(
+            {"from_order_id": from_order, "from_receipt_id": from_receipt, "from_invoice_id": from_invoice}, requested_type
+        )
         source_order, source_receipt, source_invoice = _purchase_invoice_sources(
             {
                 "from_order_id": from_order,

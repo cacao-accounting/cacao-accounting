@@ -128,10 +128,13 @@ def test_journal_import_without_book_uses_all_active_company_books():
         database.session.add_all(
             [
                 Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True),
-                Book(entity="cacao", code="IFRS", name="IFRS", status=None),
+                Book(entity="cacao", code="IFRS", name="IFRS"),
                 Book(entity="cacao", code="TAX", name="Tax", status="inactivo"),
+                Book(entity="cacao", code="LEG", name="Legacy"),
             ]
         )
+        database.session.commit()
+        database.session.execute(database.update(Book).where(Book.code == "LEG").values(status=None))
         database.session.commit()
 
         payload = JournalEntryAdapter().build_document(
@@ -142,6 +145,9 @@ def test_journal_import_without_book_uses_all_active_company_books():
             {"company_id": "cacao", "accounting_book_id": None},
         )
 
+        # Los libros activos se usan todos; una fila legacy con status=NULL ya
+        # no se interpreta como activa y queda excluida.
+        assert payload["books"] == ["FISC", "IFRS"]
         assert payload["books"] == ["FISC", "IFRS"]
 
 

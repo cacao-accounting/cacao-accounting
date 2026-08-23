@@ -124,7 +124,7 @@ class JournalEntryAdapter(BaseImportAdapter):
             select(Book)
             .where(
                 Book.entity == company_id,
-                or_(Book.status == "activo", Book.status.is_(None)),
+                Book.status == "activo",
             )
             .order_by(Book.is_primary.desc(), Book.code)
         ).scalars()
