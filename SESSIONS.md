@@ -111,6 +111,12 @@ el nuevo run remoto.
 El run siguiente avanzó hasta `test_admin_blueprint.py::test_require_system_admin_unauthorized`,
 otro caso que inicia sesión con un usuario no administrador. Se añadió el skip
 equivalente para Desktop Mode; queda pendiente la confirmación del siguiente run.
+
+La corrida focal local sin `--exitfirst` identificó cuatro fallos relacionados en
+gestión multiusuario (`test_lista_usuarios`, creación, edición y roles/password).
+Todos reciben 403/redirect en Desktop por diseño; los tres últimos además
+dependían del usuario creado por el primero. Se agruparon bajo el skip de
+Desktop Mode, conservando la cobertura completa en modo normal.
 - Prueba RBAC en Desktop Mode: **1 skipped** (comportamiento esperado).
 - Commit: `54f998a3 fix(ci): stabilize purchase flows and desktop tests`, con
   `Signed-off-by: William Moreno Reyes <williamjmorenor@gmail.com>`.

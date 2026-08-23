@@ -714,6 +714,7 @@ def test_purchase_configuration_owns_automatic_advance_setting(app_instance):
     assert "Aplicar anticipos automáticamente a facturas de la misma OC" not in account_page
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Gestión multiusuario no aplica en Desktop Mode")
 def test_lista_usuarios(app_instance):
     with app_instance.test_client() as client:
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
@@ -751,6 +752,7 @@ def test_lista_usuarios(app_instance):
         assert b"correctamente" in response.data
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Gestión multiusuario no aplica en Desktop Mode")
 def test_crear_usuario_validations(app_instance):
     with app_instance.test_client() as client:
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
@@ -808,6 +810,7 @@ def test_crear_usuario_validations(app_instance):
         assert "correo" in html or "ya está en uso" in html
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Gestión multiusuario no aplica en Desktop Mode")
 def test_editar_usuario_validations(app_instance):
     with app_instance.test_client() as client:
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
@@ -839,6 +842,7 @@ def test_editar_usuario_validations(app_instance):
         assert "usuario ya" in html
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Gestión multiusuario no aplica en Desktop Mode")
 def test_usuario_roles_y_password(app_instance):
     with app_instance.test_client() as client:
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
