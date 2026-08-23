@@ -65,6 +65,7 @@
   {{ macros.detail_nav_buttons(
         url_for('bancos.bancos_pago_lista'),
         url_for('bancos.bancos_pago_nuevo')) }}
+  {{ macros.document_print_button(registro.document_type or "payment_entry", registro.id) }}
 {% endset %}
 
 <div class="ca-card">
@@ -82,6 +83,7 @@
     <div class="ca-detail-actions-menu dropdown">
       <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ _('Acciones del documento') }}">
         <i class="bi bi-list"></i>
+        <span class="ca-detail-actions-label">{{ _('Acciones') }}</span>
       </button>
       <div class="dropdown-menu dropdown-menu-end">
         {{ payment_actions }}

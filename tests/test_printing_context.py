@@ -238,6 +238,25 @@ class TestSampleContextFunctions:
         assert "customer" in quo
         assert quo["grand_total"] == 1150.0
 
+    def test_new_document_sample_contexts(self):
+        from cacao_accounting.printing.context import (
+            build_sales_order_sample_context,
+            build_sales_request_sample_context,
+            build_purchase_request_sample_context,
+            build_supplier_quotation_sample_context,
+            build_request_for_quotation_sample_context,
+            build_purchase_receipt_sample_context,
+            build_landed_cost_sample_context,
+        )
+
+        assert "sales_order" in build_sales_order_sample_context()
+        assert "sales_request" in build_sales_request_sample_context()
+        assert "purchase_request" in build_purchase_request_sample_context()
+        assert "supplier_quotation" in build_supplier_quotation_sample_context()
+        assert "request_for_quotation" in build_request_for_quotation_sample_context()
+        assert "purchase_receipt" in build_purchase_receipt_sample_context()
+        assert "landed_cost" in build_landed_cost_sample_context()
+
 
 class TestPrintSchemas:
     def test_common_schema_has_required_fields(self):

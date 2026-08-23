@@ -1,5 +1,30 @@
 # SESSIONS — Bitácora de Decisiones de Diseño
 
+## 2026-08-23 — Mejora urgente de la barra de acciones en móvil
+
+### Petición
+
+Mejorar la barra de acciones de los registros en vista móvil. La captura
+mostraba un menú demasiado estrecho, con botones comprimidos y acciones de
+impresión difíciles de usar.
+
+### Implementado
+
+- El control móvil de acciones ahora ocupa una fila completa del encabezado y
+  muestra la etiqueta `Acciones`, manteniendo el botón compacto en escritorio.
+- El menú desplegable usa todo el ancho disponible de la tarjeta y apila sus
+  acciones con objetivos táctiles de al menos 44 px.
+- Los botones agrupados de impresión se expanden al ancho disponible sin
+  desbordar el viewport.
+- El mismo comportamiento se aplicó al macro común de detalles, pagos y
+  comprobantes manuales.
+
+### Validación
+
+- `git diff --check`: correcto.
+- Pendiente ejecutar las pruebas de renderizado y controles remotos después del
+  commit.
+
 ## 2026-08-23 — Diagnóstico de fallo Desktop en portal
 
 ### Hallazgo
@@ -5863,3 +5888,38 @@ como cloud-only, igual que la restricción funcional de usuarios no
 administradores en Desktop. La cobertura del dashboard administrativo se
 conserva para Desktop y la matriz multiusuario continúa ejecutándose en CI
 cloud.
+
+## 2026-08-23 — Revisión de código del PR #716
+
+### Hallazgos analizados
+
+Se analizaron cinco comentarios inline del review automático: autorización de
+órdenes imprimibles, clave foránea de landed cost, columnas reales de totales,
+tipo de cotización del portal y registro de devoluciones de compra.
+
+### Correcciones aplicadas
+
+- La impresión valida documento, compañía, permisos de módulo y pertenencia
+  del cliente/proveedor antes de construir el contexto.
+- Landed cost usa `import_landed_cost_id`; los totales consideran `total` y
+  `tax_total`; se registra `purchase_return`; y el portal usa
+  `request_for_quotation`.
+- Ruff, compilación y la suite focal de impresión: **54 passed**.
+
+## 2026-08-23 — Auditoría completa en formatos de impresión
+
+### Petición
+
+Completar la pista de auditoría visible en los formatos: además de quién
+imprimió, mostrar quién creó y quién aprobó el documento.
+
+### Implementación y validación
+
+El contexto de impresión ahora consulta `AuditTrail` y agrega
+`created_by/created_at` y `approved_by/approved_at`. Los pies de página y el
+snippet común muestran los cuatro datos junto con `printed_by/printed_at`.
+Se añadieron valores seguros para muestras sin eventos y una prueba de
+regresión. Ruff y la suite focal de impresión: **56 passed**.
+
+El job remoto de lint detectó un `F401` heredado en
+`fiscal_persistence_service.py`; se eliminó el import `cast` no utilizado.
