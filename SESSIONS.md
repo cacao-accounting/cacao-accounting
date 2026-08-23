@@ -1,5 +1,25 @@
 # SESSIONS — Bitácora de Decisiones de Diseño
 
+## 2026-08-23 — Diagnóstico de fallo Desktop en portal
+
+### Hallazgo
+
+El job `desktop` del run `32611856504` fallaba en
+`tests/test_portales.py::test_portal_security_and_access`: Desktop Mode rechaza
+correctamente las rutas `/portal/*` con `403`, pero la prueba intentaba validar
+el flujo de clientes cloud y esperaba el texto `Portal del Cliente`.
+
+### Implementado
+
+- Se marcaron como cloud-only las cinco pruebas de funcionalidad de portales.
+- Se conservó activa `test_portal_desktop_restriction`, que verifica el
+  comportamiento esperado de bloqueo en Desktop Mode.
+
+### Validación
+
+- Desktop Mode: **1 passed, 5 skipped** en `tests/test_portales.py`.
+- Modo normal: **5 passed, 1 skipped** en `tests/test_portales.py`.
+
 ## 2026-08-22 — Corrección de errores mypy reportados por GitHub
 
 ### Petición
@@ -5827,3 +5847,19 @@ Se marcó ese test como exclusivo del modo cloud mediante `skipif`, conservando
 los tests específicos que validan el comportamiento esperado del motor en
 Desktop Mode. Se validará el módulo focal localmente y se ejecutará un nuevo
 run remoto después del commit firmado.
+
+## 2026-08-23 — Ajuste adicional de Desktop CI: permisos del dashboard
+
+### Evidencia
+
+El run `32610982868` pasó `lint`, `e2e` y `databases`, pero Desktop falló en
+`tests/test_dashboard_api.py::test_dashboard_hides_sales_without_permission`
+porque el login del usuario multiusuario `accountant` responde 302 en Desktop.
+
+### Cambio
+
+Los dos tests de visibilidad por permisos (`sales` y `banks`) quedan marcados
+como cloud-only, igual que la restricción funcional de usuarios no
+administradores en Desktop. La cobertura del dashboard administrativo se
+conserva para Desktop y la matriz multiusuario continúa ejecutándose en CI
+cloud.
