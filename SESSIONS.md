@@ -54,3 +54,8 @@ Este archivo resume decisiones de diseño y resultados relevantes para continuar
 
 - El workflow de publicacion instala Babel y compila los catalogos PO a MO antes de construir wheel y sdist.
 - La compilacion usa el directorio de traducciones del paquete y fuerza la regeneracion de los archivos binarios.
+## 2026-08-23 - Encabezados localizados en plantillas de importacion
+
+- Las plantillas Excel, CSV y ODS usan etiquetas del idioma activo al generarse.
+- Los nombres internos de los adaptadores permanecen sin cambios para preservar la compatibilidad del importador.
+- Se agrego una regresion para comprobar los encabezados del comprobante contable en ingles y espanol.

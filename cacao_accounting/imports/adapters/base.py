@@ -5,12 +5,18 @@
 
 from typing import List, Dict, Any
 
+from cacao_accounting.imports.column_labels import localized_columns
+
 
 class BaseImportAdapter:
     """Interfaz base para adaptadores de importación."""
 
     columns: List[str] = []
     required_columns: List[str] = []
+
+    def localized_columns(self, language: str | None) -> List[str]:
+        """Return this adapter's headers in the requested language."""
+        return localized_columns(self.columns, language)
 
     def validate_row(self, row_data: Dict[str, Any]) -> List[str]:
         """Valida una fila individual. Retorna lista de errores."""

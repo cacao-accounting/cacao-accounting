@@ -256,3 +256,25 @@ def test_upload_mime_type_validation():
                 follow_redirects=True,
             )
             assert response.status_code == 403
+
+def test_import_template_headers_follow_selected_language():
+    """Generated templates expose English headers when the locale is English."""
+    from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
+
+    adapter = JournalEntryAdapter()
+    english = adapter.localized_columns("en")
+    spanish = adapter.localized_columns("es")
+
+    assert english == [
+        "document_reference",
+        "date",
+        "account",
+        "cost_center",
+        "party",
+        "description",
+        "debit",
+        "credit",
+        "reference",
+    ]
+    assert spanish[0] == "referencia_documento"
+    assert english != spanish

@@ -21,6 +21,7 @@ from flask import (
     send_file,
 )
 from flask_login import login_required, current_user
+from flask_babel import get_locale
 from werkzeug.utils import secure_filename
 from cacao_accounting.database import Book, database
 from sqlalchemy import or_
@@ -393,7 +394,7 @@ def download_template(record_type):
         if fmt == "xlsx":
             wb = openpyxl.Workbook()
             ws = wb.active
-            ws.append(adapter.columns)
+            ws.append(adapter.localized_columns(str(get_locale())))
             template_path = os.path.join(template_dir, output_name)
             wb.save(template_path)
             return send_file(template_path, as_attachment=True, download_name=output_name)
@@ -404,7 +405,7 @@ def download_template(record_type):
             doc.spreadsheet.addElement(spreadsheet)
             tr = odf_table.TableRow()
             spreadsheet.addElement(tr)
-            for col in adapter.columns:
+            for col in adapter.localized_columns(str(get_locale())):
                 tc = odf_table.TableCell(valuetype="string")
                 tc.addElement(opendocument.teletype.Text(col))
                 spreadsheet.addElement(tc)
@@ -414,7 +415,7 @@ def download_template(record_type):
 
         else:
             # Default to CSV
-            content = ",".join(adapter.columns)
+            content = ",".join(adapter.localized_columns(str(get_locale())))
             template_path = os.path.join(template_dir, output_name)
             with open(template_path, "w", encoding="utf-8") as f:
                 f.write(content)
