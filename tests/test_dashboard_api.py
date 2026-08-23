@@ -44,6 +44,7 @@ from cacao_accounting.modulos import (
     MODULE_PURCHASES,
     MODULE_SALES,
 )
+from cacao_accounting.runtime_mode import is_desktop_mode
 
 ph = PasswordHasher()
 
@@ -241,6 +242,7 @@ def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
     assert Decimal(str(sections["sales"]["tables"]["top_customers"][0]["total"])) == Decimal("800")
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Los permisos multiusuario del dashboard requieren modo cloud")
 def test_dashboard_hides_sales_without_permission(client):
     """Sin permiso de ventas no se devuelven datos sensibles de ventas."""
     _login(client, "accountant")
@@ -253,6 +255,7 @@ def test_dashboard_hides_sales_without_permission(client):
     assert sales["tables"] == {}
 
 
+@pytest.mark.skipif(is_desktop_mode(), reason="Los permisos multiusuario del dashboard requieren modo cloud")
 def test_dashboard_hides_banks_without_permission(client):
     """Sin permiso de bancos no se devuelven saldos bancarios."""
     _login(client, "seller")

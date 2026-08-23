@@ -5827,3 +5827,19 @@ Se marcó ese test como exclusivo del modo cloud mediante `skipif`, conservando
 los tests específicos que validan el comportamiento esperado del motor en
 Desktop Mode. Se validará el módulo focal localmente y se ejecutará un nuevo
 run remoto después del commit firmado.
+
+## 2026-08-23 — Ajuste adicional de Desktop CI: permisos del dashboard
+
+### Evidencia
+
+El run `32610982868` pasó `lint`, `e2e` y `databases`, pero Desktop falló en
+`tests/test_dashboard_api.py::test_dashboard_hides_sales_without_permission`
+porque el login del usuario multiusuario `accountant` responde 302 en Desktop.
+
+### Cambio
+
+Los dos tests de visibilidad por permisos (`sales` y `banks`) quedan marcados
+como cloud-only, igual que la restricción funcional de usuarios no
+administradores en Desktop. La cobertura del dashboard administrativo se
+conserva para Desktop y la matriz multiusuario continúa ejecutándose en CI
+cloud.
