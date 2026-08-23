@@ -337,7 +337,10 @@ class PrintService:
             "delivery_note": DeliveryNote,
             "stock_entry": StockEntry,
             "quotation": SalesQuotation,
+            "sales_quotation": SalesQuotation,
             "payment_entry": PaymentEntry,
+            "bank_transfer": PaymentEntry,
+            "cash_receipt": PaymentEntry,
             "exchange_revaluation": ExchangeRevaluation,
         }
         model = models.get(document_type)

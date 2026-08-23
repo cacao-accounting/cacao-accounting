@@ -204,6 +204,18 @@ def test_item_product_image_invalid_type_and_desktop_block(app_cloud):
             assert exc_info.value.status_code == 400
             assert "Formato de imagen no permitido" in str(exc_info.value)
 
+        svg_file = FileStorage(
+            stream=io.BytesIO(b"<svg xmlns='http://www.w3.org/2000/svg'></svg>"),
+            filename="grafico.svg",
+            content_type="image/svg+xml",
+        )
+
+        with patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+            with pytest.raises(AttachmentError) as exc_info_svg:
+                upload_item_image("ITEM-TEST-02", svg_file)
+            assert exc_info_svg.value.status_code == 400
+            assert "Formato de imagen no permitido" in str(exc_info_svg.value)
+
         image_file = FileStorage(
             stream=io.BytesIO(b"\x89PNG"),
             filename="valid.png",
