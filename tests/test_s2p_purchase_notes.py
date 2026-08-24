@@ -288,6 +288,35 @@ def test_purchase_credit_note_exceeds_source_balance(app_ctx):
     )
 
 
+def test_purchase_credit_note_limit_uses_current_outstanding_not_backdated_balance(app_ctx):
+    """A backdated purchase credit note cannot ignore a subsequent payment."""
+    supplier = _ensure_supplier("SUPLR-AP-NOTE-CURRENT", "Proveedor saldo actual")
+    source_invoice = PurchaseInvoice(
+        id="PINV-ORIG-CURRENT",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date(2026, 1, 1),
+        docstatus=1,
+        document_type="purchase_invoice",
+        grand_total=Decimal("100.00"),
+    )
+    database.session.add(source_invoice)
+    database.session.commit()
+
+    with patch("cacao_accounting.document_flow.payment.compute_outstanding_amount", return_value=Decimal("0")) as outstanding:
+        with pytest.raises(ValueError, match="excede el saldo pendiente"):
+            _validate_purchase_reversal_of(
+                reversal_of=source_invoice.id,
+                supplier_id=supplier.id,
+                company="cacao",
+                note_amount=Decimal("100.00"),
+                document_type="purchase_credit_note",
+                posting_date=date(2026, 2, 15),
+            )
+
+    outstanding.assert_called_once_with(source_invoice)
+
+
 def test_purchase_invoice_cannot_cancel_with_active_reversal_note(app_ctx):
     """Una factura con NC/NDto activa no puede quedar como origen cancelado."""
     supplier = _ensure_supplier("SUPLR-AP-NOTE-CANCEL", "Proveedor AP Note Cancel")

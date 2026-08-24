@@ -2130,7 +2130,9 @@ def _validate_purchase_reversal_of(
     if document_type in {PURCHASE_RETURN, "purchase_credit_note"} and note_amount is not None:
         from cacao_accounting.document_flow.payment import compute_outstanding_amount
 
-        outstanding = compute_outstanding_amount(source, as_of_date=posting_date)
+        # The credit note must not exceed the invoice's live open balance.
+        # A backdated date cannot reopen an amount that has already been paid.
+        outstanding = compute_outstanding_amount(source)
         if note_amount > outstanding:
             raise ValueError(
                 f"La nota de credito ({note_amount}) excede el saldo pendiente de la factura origen ({outstanding})."
