@@ -209,9 +209,7 @@ def finalize_setup(
     catalogo_archivo: str | None = None,
 ) -> None:
     """Completa el proceso de configuración inicial y crea la entidad por defecto."""
-    is_initial_entity = (
-        database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0
-    ) == 0
+    is_initial_entity = (database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0) == 0
     create_company(
         company_data,
         catalogo_tipo=catalogo_tipo,

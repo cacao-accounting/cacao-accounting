@@ -102,16 +102,12 @@ def _current_company() -> str:
         if user_company:
             return str(user_company)
 
-        default_entity = (
-            database.session.execute(database.select(Entity).filter_by(status="default")).scalars().first()
-        )
+        default_entity = database.session.execute(database.select(Entity).filter_by(status="default")).scalars().first()
         if default_entity is not None:
             return str(default_entity.code)
 
     first_entity = (
-        database.session.execute(database.select(Entity).order_by(Entity.created.asc(), Entity.code.asc()))
-        .scalars()
-        .first()
+        database.session.execute(database.select(Entity).order_by(Entity.created.asc(), Entity.code.asc())).scalars().first()
     )
     if first_entity is not None:
         return str(first_entity.code)
