@@ -162,7 +162,7 @@ def ready():
 
 @cacao_app.route("/sw.js")
 def service_worker():
-    """Serves the PWA service worker script from the root scope."""
+    """Serve the PWA service worker script from the root scope."""
     response = send_from_directory(join(current_app.static_folder, "js"), "sw.js")
     response.headers["Content-Type"] = "application/javascript"
     response.headers["Service-Worker-Allowed"] = "/"
