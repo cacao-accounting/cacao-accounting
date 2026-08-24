@@ -482,6 +482,7 @@ def _register_app_hooks(app: Flask) -> None:
             "img-src 'self' data:; "
             "font-src 'self' https://cdn.jsdelivr.net; "
             "manifest-src 'self'; "
+            "worker-src 'self'; "
             "frame-ancestors 'none'"
         )
         response.headers["X-Frame-Options"] = "DENY"

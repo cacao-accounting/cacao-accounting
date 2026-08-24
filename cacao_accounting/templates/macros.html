@@ -61,6 +61,16 @@
 
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/sw.js').catch(function(err) {
+        console.error('ServiceWorker registration failed: ', err);
+      });
+    });
+  }
+</script>
+
 <script src="{{ url_for('static', filename='js/smart-select.js') }}?v=20260506-2" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="{{ url_for('static', filename='js/transaction-form.js') }}" defer></script>
