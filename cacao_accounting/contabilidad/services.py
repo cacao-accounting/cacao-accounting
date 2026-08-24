@@ -773,9 +773,7 @@ def _build_journal_selected_books(journal, entity: str) -> list[str]:
     ]
     if not selected_books:
         fallback_book_rows = (
-            database.session.execute(
-                database.select(Book).filter(Book.entity == entity).where(Book.status == "activo")
-            )
+            database.session.execute(database.select(Book).filter(Book.entity == entity).where(Book.status == "activo"))
             .scalars()
             .all()
         )
