@@ -1028,7 +1028,7 @@ def _render_operational_framework(
         {column: _build_voucher_url(row.values) for column in ("document_no", "voucher_id")} for row in page_rows
     ]
     totals = {key: _format_cell(key, value, ledger_currency) for key, value in totals_raw.items()}
-    query = request.args.to_dict(flat=True)
+    query = request.args.to_dict()
 
     def _page_url(target_page: int) -> str:
         query["page"] = str(target_page)
