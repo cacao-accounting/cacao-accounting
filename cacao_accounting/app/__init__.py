@@ -12,7 +12,8 @@ from os import environ
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import Blueprint, current_app, jsonify, make_response, render_template
+from os.path import join
+from flask import Blueprint, current_app, jsonify, make_response, render_template, send_from_directory
 from flask_login import login_required
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -157,3 +158,12 @@ def ready():
         return make_response("ready", 200)
     except SQLAlchemyError:
         return make_response("service unavailable", 503)
+
+
+@cacao_app.route("/sw.js")
+def service_worker():
+    """Serves the PWA service worker script from the root scope."""
+    response = send_from_directory(join(current_app.static_folder, "js"), "sw.js")
+    response.headers["Content-Type"] = "application/javascript"
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
