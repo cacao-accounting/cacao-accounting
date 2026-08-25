@@ -744,6 +744,8 @@ def _validate_payment_reference_line(
     reference_type = line.get("reference_type", "")
     reference_id = line.get("reference_id", "")
     allocated = Decimal(str(line.get("allocated_amount", "0")))
+    discount = Decimal(str(line.get("discount_amount") or "0"))
+    gain_loss = Decimal(str(line.get("gain_loss_amount") or "0"))
     requested_flow_source_type = str(line.get("flow_source_type") or reference_type)
     reference_key = (_physical_reference_type(reference_type, requested_flow_source_type), reference_id)
     if reference_key in processed_keys:
@@ -757,6 +759,12 @@ def _validate_payment_reference_line(
 
             raise Conflict(_("El monto asignado no puede ser negativo."))
         return reference_type, reference_id, requested_flow_source_type, allocated, Decimal("0")
+    if discount + gain_loss >= allocated:
+        raise ValueError(
+            _("El descuento + diferencia de cambio ({0}) no puede ser igual o mayor al monto asignado ({1}).").format(
+                discount + gain_loss, allocated
+            )
+        )
     if normalize_doctype(requested_flow_source_type) in ("purchase_order", "sales_order") and not allow_order_references:
         raise ValueError(_("Las órdenes solo pueden referenciarse en flujo de anticipo."))
     return reference_type, reference_id, requested_flow_source_type, allocated, allocated

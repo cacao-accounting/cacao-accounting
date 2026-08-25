@@ -251,6 +251,54 @@ def test_payment_line_cannot_exceed_individual_outstanding(app_ctx):
     assert "saldo pendiente" in response.data.decode("utf-8").lower()
 
 
+def test_payment_rejects_discount_that_fully_consumes_the_allocation(app_ctx):
+    """A direct payment cannot clear an invoice through a discount without cash."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        docstatus=1,
+        grand_total=100,
+        outstanding_amount=100,
+        base_outstanding_amount=100,
+    )
+    database.session.add(invoice)
+    database.session.commit()
+
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    payment_payload = {
+        "payment_type": "receive",
+        "company": "cacao",
+        "bank_account_id": bank.id,
+        "posting_date": date.today().isoformat(),
+        "paid_amount": 1,
+        "party_id": customer.id,
+        "party_type": "customer",
+        "lines": [
+            {
+                "reference_type": "sales_invoice",
+                "reference_id": invoice.id,
+                "allocated_amount": 100,
+                "discount_amount": 100,
+            }
+        ],
+    }
+
+    response = client.post(
+        "/cash_management/payment/new", data={"payment_payload": json.dumps(payment_payload)}, follow_redirects=True
+    )
+
+    assert b"Pago registrado correctamente" not in response.data
+    assert "descuento + diferencia de cambio" in response.data.decode("utf-8").lower()
+    database.session.refresh(invoice)
+    assert invoice.outstanding_amount == Decimal("100")
+
+
 def test_payment_with_discount_and_gain_loss(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")

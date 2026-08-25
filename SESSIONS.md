@@ -114,3 +114,12 @@ Se auditó el motor fiscal utilizado por la vista previa y por los asientos. Est
 
 - La secuencia conserva su función de orden determinista; no determina qué impuestos comparten base gravable.
 - Solo se agrupan reglas con la misma definición explícita de base, preservando las dependencias de reglas acumuladas distintas.
+
+### Plan implementado
+
+Se comparó el alta directa de pagos con la conciliación AR/AP. La conciliación rechazaba que descuento más diferencia cambiaria fuera igual o superior al importe aplicado, pero el alta directa no contenía ese control. Así, un pago de efectivo 1 podía liquidar una factura de 100 declarando una asignación y descuento de 100. Se incorporó la misma validación antes de crear la referencia y una prueba de regresión por la ruta HTTP que confirma que la factura conserva su saldo.
+
+### Decisiones de diseño
+
+- Un descuento y una diferencia cambiaria no pueden consumir por completo la asignación: debe existir una porción de efectivo conciliable.
+- Ambos flujos de aplicación de pagos comparten ahora el mismo límite económico para evitar resultados divergentes según la pantalla utilizada.
