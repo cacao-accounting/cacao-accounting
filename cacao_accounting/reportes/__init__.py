@@ -13,10 +13,11 @@ from typing import Any
 from cacao_accounting.reportes import helpers as _helpers
 from cacao_accounting.reportes import routes as _routes
 from cacao_accounting.reportes import services as _services
+from cacao_accounting.reportes import cash_flow as _cash_flow
 
 reportes = _routes.reportes
 
-_MODULES = (_services, _helpers, _routes)
+_MODULES = (_services, _helpers, _routes, _cash_flow)
 __all__ = tuple(
     dict.fromkeys(
         (

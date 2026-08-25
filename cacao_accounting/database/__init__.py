@@ -3802,6 +3802,35 @@ class CompanyDefaultAccount(database.Model, BaseTabla):  # type: ignore[name-def
     )
 
 
+class CashFlowAccountMapping(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Clasificación NIC 7 explícita de una cuenta contable por compañía.
+
+    La capa de presentación del Estado de Flujo de Efectivo no deduce nada
+    del catálogo: cada cuenta con movimientos debe estar clasificada aquí
+    (operación, inversión, financiamiento o efectivo) para poder generar
+    el reporte. El catálogo contable describe la naturaleza de la cuenta;
+    esta tabla decide cómo se presenta en el EFE.
+    """
+
+    __tablename__ = "cash_flow_account_mapping"
+    __table_args__ = (
+        database.UniqueConstraint("company", "account_id", name="uq_cash_flow_mapping_cuenta_compania"),
+        database.Index("ix_cash_flow_mapping_company", "company"),
+    )
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+    )
+    account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+    )
+    # operating | investing | financing | cash
+    flow_section = database.Column(database.String(20), nullable=False)
+
+
 # <---------------------------------------------------------------------------------------------> #
 # Tax Structure — Impuestos (estructura sin logica de calculo).
 # <---------------------------------------------------------------------------------------------> #

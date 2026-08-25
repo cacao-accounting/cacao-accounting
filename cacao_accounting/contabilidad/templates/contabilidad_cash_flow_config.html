@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">{{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Clasificación EFE") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
+    <h5 class="ca-card-title mb-0">{{ _("Clasificación para el Estado de Flujo de Efectivo") }}</h5>
+    {% if selected_company %}
+    {% if overview and overview.pending_count == 0 and overview.mapped_count > 0 %}
+    <span class="badge bg-success">{{ _("Configuración completa") }}</span>
+    {% else %}
+    <span class="badge bg-warning text-dark">{{ _("Configuración incompleta") }}</span>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<form method="get" class="row g-2 mb-3">
+  <div class="col-auto">
+    <label class="form-label mb-0" for="company-selector">{{ _("Compañía") }}</label>
+    <select id="company-selector" name="company" class="form-select" onchange="this.form.submit()">
+      {% for item in companies %}
+      <option value="{{ item.code }}" {% if item.code == selected_company %}selected{% endif %}>{{ item.name or item.code }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+
+{% if overview %}
+<div class="ca-card mb-3">
+  <div class="ca-report-context">
+    <div><strong>{{ _("Cuentas clasificadas") }}:</strong> {{ overview.mapped_count }}</div>
+    <div><strong>{{ _("Pendientes con movimiento") }}:</strong> {{ overview.pending_count }}</div>
+    <div>
+      <strong>{{ _("Reporte EFE") }}:</strong>
+      {% if overview.pending_count == 0 and overview.mapped_count > 0 %}
+      <a href="{{ url_for('reportes.cash_flow', company=selected_company) }}">{{ _("Disponible") }}</a>
+      {% else %}
+      {{ _("Bloqueado hasta completar la clasificación") }}
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('contabilidad.cash_flow_config', company=selected_company) }}">
+  <input type="hidden" name="company" value="{{ selected_company }}">
+  <div class="ca-card">
+    <div class="ca-card-header d-flex justify-content-between align-items-center">
+      <h6 class="ca-card-title mb-0">{{ _("Catálogo de cuentas") }}</h6>
+      <button class="btn btn-primary btn-sm" type="submit">{{ _("Guardar clasificación") }}</button>
+    </div>
+    <div class="table-responsive">
+      <table class="ca-table table table-sm align-middle">
+        <thead>
+          <tr>
+            <th scope="col" style="width:12%">{{ _("Código") }}</th>
+            <th scope="col">{{ _("Cuenta") }}</th>
+            <th scope="col" style="width:14%">{{ _("Tipo") }}</th>
+            <th scope="col" style="width:22%">{{ _("Sección del flujo") }}</th>
+            <th scope="col" style="width:10%" class="text-center">{{ _("Estado") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in overview.rows %}
+          <tr class="{% if row.section is none and row.has_movement %}table-warning{% endif %}">
+            <td>{{ row.code }}</td>
+            <td>{{ row.name }}</td>
+            <td>{{ row.account_type or row.classification or "—" }}</td>
+            <td>
+              <input type="hidden" name="account_ids" value="{{ row.id }}">
+              <select class="form-select form-select-sm" name="section_{{ row.id }}" aria-label="{{ _('Sección de') }} {{ row.code }}">
+                <option value="" {% if row.section is none %}selected{% endif %}>{{ _("Sin clasificar") }}{% if row.suggestion %} ({{ _("sugerido") }}: {{ section_labels.get(row.suggestion, row.suggestion) }}){% endif %}</option>
+                {% for section in valid_sections %}
+                <option value="{{ section }}" {% if row.section == section %}selected{% endif %}>{{ section_labels.get(section, section) }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td class="text-center">
+              {% if row.section %}
+              <span class="badge bg-primary">{{ _("Configurada") }}</span>
+              {% elif row.has_movement %}
+              <span class="badge bg-danger text-white">{{ _("Requerida") }}</span>
+              {% else %}
+              <span class="badge bg-secondary">{{ _("Opcional") }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="p-3 d-flex justify-content-end">
+      <button class="btn btn-primary" type="submit">{{ _("Guardar clasificación") }}</button>
+    </div>
+  </div>
+</form>
+<p class="text-muted small mt-2">
+  {{ _("La sugerencia entre paréntesis es orientativa según el tipo de cuenta; solo se aplica al guardar.") }}
+</p>
+{% else %}
+<div class="ca-card p-3">{{ _("No hay compañías disponibles.") }}</div>
+{% endif %}
+{% endblock %}

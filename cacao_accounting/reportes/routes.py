@@ -48,6 +48,11 @@ from cacao_accounting.reportes.services import (
     get_trial_balance_report,
 )
 
+from cacao_accounting.reportes.cash_flow import (
+    get_cash_flow_configuration_status,
+    get_cash_flow_statement,
+)
+
 from cacao_accounting.version import APPNAME
 
 from cacao_accounting.reportes.helpers import (
@@ -305,6 +310,38 @@ def balance_sheet():
     return _render_financial_report(
         "balance-sheet",
         _("Balance General"),
+        report,
+        filters,
+        selected_view,
+        saved_views,
+    )
+
+
+@reportes.route("/reports/cash-flow")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def cash_flow():
+    """Estado de Flujo de Efectivo (NIC 7, método indirecto)."""
+    filters, selected_view, saved_views = _resolve_view_context("cash-flow", _financial_filters())
+    status = get_cash_flow_configuration_status(filters.company, filters.ledger, filters.accounting_period)
+    if not status.complete:
+        return render_template(
+            "reportes/cash_flow_blocked.html",
+            titulo=f"{_('Estado de Flujo de Efectivo')} - {APPNAME}",
+            report_title=_("Estado de Flujo de Efectivo"),
+            pending_accounts=status.pending_accounts,
+            context_summary={
+                "company": filters.company or "—",
+                "ledger": filters.ledger or "—",
+                "period": filters.accounting_period or "—",
+                "records": str(len(status.pending_accounts)),
+            },
+        )
+    report = get_cash_flow_statement(filters) if _should_run_financial_report() else _empty_financial_report()
+    return _render_financial_report(
+        "cash-flow",
+        _("Estado de Flujo de Efectivo"),
         report,
         filters,
         selected_view,

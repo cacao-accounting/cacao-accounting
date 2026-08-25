@@ -257,6 +257,7 @@ def get_accounting_data(
             {"label": "Nuevo comprobante", "url": "/accounting/journal/new"},
             {"label": "Estado de resultados", "url": "/reports/income-statement"},
             {"label": "Balance general", "url": "/reports/balance-sheet"},
+            {"label": "Flujo de efectivo", "url": "/reports/cash-flow"},
         ],
         "empty_state": "No hay movimientos contables en el periodo seleccionado.",
     }

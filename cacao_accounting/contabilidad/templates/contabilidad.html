@@ -175,6 +175,14 @@
         <a href="{{ url_for('reportes.income_statement') }}">Estado de Resultado</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
+      <li>
+        <a href="{{ url_for('reportes.cash_flow') }}">Estado de Flujo de Efectivo</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('contabilidad.cash_flow_config') }}">Clasificación EFE</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='accounting')) }}
+      </li>
       {% else %}
       <li class="ca-no-access">
         <span>Reportes</span>

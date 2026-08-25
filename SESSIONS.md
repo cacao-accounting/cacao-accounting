@@ -186,6 +186,25 @@ Se auditó el motor de liquidación de pagos. Una configuración de retención s
 - Las retenciones pueden reducir el efectivo hasta cero, pero no pueden exceder la obligación que se liquida.
 - El motor devuelve un error de cálculo antes de que el orquestador genere un pro-forma, y el servicio de contabilización convierte ese error en un rechazo de la publicación.
 
+## 2026-08-25 (EFE NIC 7)
+
+### Petición del usuario
+
+Implementar el issue #722: falta el Estado de Flujo de Efectivo (NIC 7) en los reportes financieros. El usuario fijó la arquitectura: configuración explícita obligatoria (sin heurísticas silenciosas), vista dedicada para mapear cada cuenta a Operación/Inversión/Financiamiento (+Efectivo), bloqueo del reporte mientras existan cuentas con movimiento sin clasificar en el período, sugerencia por account_type solo visual y alcance de validación limitado a cuentas con movimiento del período.
+
+### Plan implementado
+
+Se agregó el modelo `CashFlowAccountMapping` (único por compañía+cuenta, sección NIC 7). Nuevo módulo `cacao_accounting/reportes/cash_flow.py` con: resolución de mapeos, validación de cobertura (`get_cash_flow_configuration_status`, exige además al menos una cuenta clasificada como efectivo), cálculo del EFE por identidad contable (`utilidad − Δactivos + Δpasivos/patrimonio` por sección; aporte universal `−(debe−haber)` garantiza `difference == 0` contra la variación real de las cuentas de efectivo) y servicio de la vista dedicada con sugerencias no vinculantes. Ruta `/reports/cash-flow` con estado bloqueado (plantilla con pendientes + CTA a `/accounting/cash-flow-config/{company}`), export CSV/XLSX y jerarquía heredados del marco financiero existente (`cash-flow` agregado al conjunto jerárquico y etiquetas de sección en helpers). Vista dedicada GET/POST en el módulo Contabilidad con badge Configurada/Requerida/Opcional e indicador de desbloqueo. Enlaces desde la página del módulo y acciones del dashboard API. Pruebas unitarias y HTTP completas (`tests/test_cash_flow_statement.py`, 6 casos incluidos cuadre exacto, override entre secciones y flujo HTTP de desbloqueo).
+
+### Decisiones de diseño
+
+- Catálogo contable ≠ presentación: el GL registra hechos y la tabla de mapeo decide cómo se presentan; nada se deduce en silencio.
+- El reporte solo honra compañía/libro/período: filtros de dimensión romperían la identidad contable del cuadre.
+- Excluye anulados, reversas y cierres fiscales (mismo universo que balanza/estado de resultados por defecto).
+- La validación cubre cuentas con movimiento neto en la ventana; una cuenta nueva con movimiento vuelve a bloquear hasta clasificarse (guard auditable).
+- La utilidad proviene de cuentas P&L aunque estén sin mapear; su clasificación explícita se ignora a propósito.
+- Fase 2 fuera de alcance: método directo, efecto cambiario multimoneda, líneas personalizadas/copiables entre compañías.
+
 ### Plan implementado
 
 Se completó la ruta de pago totalmente retenido solicitada durante la auditoría. El alta ahora admite efectivo cero únicamente en pagos o cobros con referencias aplicadas; valida que el importe aplicado esté cubierto por efectivo, descuentos/diferencia de cambio y las retenciones fiscales canónicas. El constructor contable y el posting aceptan ese caso, y el mapeador genera solo la contrapartida de tercero y la retención, sin movimiento bancario. La interfaz usa el total aplicado como base de la retención y no bloquea el envío cuando el efectivo es cero y la retención lo cubre.

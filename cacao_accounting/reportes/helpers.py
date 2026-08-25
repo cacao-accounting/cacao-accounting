@@ -219,6 +219,15 @@ def _format_cell(column: str, value: object, ledger_currency: str | None) -> str
             "expense": _("GASTOS"),
             "gross_profit": _("UTILIDAD BRUTA"),
             "net_profit": _("UTILIDAD NETA"),
+            "operating_adjustments": _("AJUSTES AL RESULTADO"),
+            "total_operating": _("TOTAL ACTIVIDADES DE OPERACIÓN"),
+            "investing": _("ACTIVIDADES DE INVERSIÓN"),
+            "total_investing": _("TOTAL ACTIVIDADES DE INVERSIÓN"),
+            "financing": _("ACTIVIDADES DE FINANCIAMIENTO"),
+            "total_financing": _("TOTAL ACTIVIDADES DE FINANCIAMIENTO"),
+            "net_change_cash": _("VARIACIÓN NETA DE EFECTIVO"),
+            "cash_opening": _("EFECTIVO AL INICIO DEL PERÍODO"),
+            "cash_closing": _("EFECTIVO AL FINAL DEL PERÍODO"),
         }
         return section_labels.get(str(value), str(value))
     return str(value)
@@ -416,7 +425,7 @@ def _build_voucher_url(values: dict[str, object]) -> str | None:
 def _build_hierarchical_financial_rows(
     report_code: str, source_rows: list[dict[str, object]], company: str
 ) -> list[dict[str, object]]:
-    if report_code not in {"trial-balance", "income-statement", "balance-sheet"}:
+    if report_code not in {"trial-balance", "income-statement", "balance-sheet", "cash-flow"}:
         return source_rows
     sections_order, section_nodes, section_non_account_rows = _collect_section_nodes(source_rows)
     _enrich_section_nodes(section_nodes, company)

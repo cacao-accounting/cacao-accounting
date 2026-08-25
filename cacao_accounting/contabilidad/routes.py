@@ -3880,3 +3880,62 @@ def fiscal_year_closing_reverse(fy_id):
         flash_error(exc)
 
     return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
+
+
+@contabilidad.route("/cash-flow-config", methods=["GET", "POST"], defaults={"company": None})
+@contabilidad.route("/cash-flow-config/<company>", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def cash_flow_config(company):
+    """Vista dedicada de clasificación NIC 7 de cuentas para el EFE.
+
+    Cada cuenta activa no agrupadora puede mapearse explícitamente a
+    Operación, Inversión, Financiamiento o Efectivo. La sugerencia mostrada
+    es solo visual: el mapeo únicamente se crea al guardar el formulario.
+    """
+    from cacao_accounting.reportes.cash_flow import (
+        SECTION_LABELS,
+        VALID_SECTIONS,
+        get_cash_flow_config_overview,
+        save_cash_flow_mappings,
+    )
+    from cacao_accounting.database import Entity
+
+    companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
+    selected_company = company or request.form.get("company") or (companies[0].code if companies else None)
+    if not selected_company:
+        return render_template(
+            "contabilidad_cash_flow_config.html",
+            titulo=f"Contabilidad | Clasificación EFE - {APPNAME}",
+            companies=[],
+            selected_company=None,
+            overview=None,
+            section_labels=SECTION_LABELS,
+            valid_sections=list(VALID_SECTIONS),
+        )
+
+    exige_acceso_compania("accounting", selected_company, "consultar")
+
+    if request.method == "POST":
+        overrides = {
+            account_id: request.form.get(f"section_{account_id}") for account_id in request.form.getlist("account_ids")
+        }
+        try:
+            save_cash_flow_mappings(selected_company, overrides)
+            database.session.commit()
+            flash(_("Clasificación del flujo de efectivo guardada correctamente."), "success")
+        except ValueError as exc:
+            database.session.rollback()
+            flash(str(exc), "danger")
+        return redirect(url_for("contabilidad.cash_flow_config", company=selected_company))
+
+    return render_template(
+        "contabilidad_cash_flow_config.html",
+        titulo=f"Contabilidad | Clasificación EFE - {APPNAME}",
+        companies=companies,
+        selected_company=selected_company,
+        overview=get_cash_flow_config_overview(selected_company),
+        section_labels=SECTION_LABELS,
+        valid_sections=list(VALID_SECTIONS),
+    )
