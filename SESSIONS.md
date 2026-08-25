@@ -204,3 +204,13 @@ Se auditó el posting de transferencias de inventario. Una transferencia cuyo or
 
 - Un traslado interno requiere un cambio físico de bodega; la corrección no intenta normalizarlo como ajuste ni como movimiento nulo.
 - El rechazo ocurre antes del consumo de capas de valoración, preservando el orden FIFO y el valor histórico de inventario.
+
+### Plan implementado
+
+Se auditó el filtrado de retenciones en el orquestador de liquidaciones. Este aceptaba indistintamente los alias heredados `payment` y `collection` para cualquier liquidación. En consecuencia, un pago a proveedor de 100 con una retención exclusiva de cobro al 10 % calculaba erróneamente efectivo de 90. Se separaron los eventos válidos por dirección y se añadió una prueba de regresión.
+
+### Decisiones de diseño
+
+- Los alias heredados permanecen compatibles, pero `payment` solo aplica a pagos y `collection` solo a cobros.
+- El evento explícito (`payment_confirmed`, `collection_confirmed` o `refund_confirmed`) sigue siendo la autoridad primaria para las reglas modernas.
+- En reembolsos, la compatibilidad heredada sigue el sentido de caja: reembolso a cliente usa `payment`; reembolso de proveedor usa `collection`.

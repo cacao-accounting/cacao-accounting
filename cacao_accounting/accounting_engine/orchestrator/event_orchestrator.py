@@ -72,11 +72,11 @@ class BusinessEventOrchestrator:
             )
 
         if self._should_run_settlement(context):
+            recognition_events = self._settlement_recognition_events(context.event_type, context.transaction_direction)
             withholding_rules = [
                 rule_item
                 for rule_item in context.tax_rules
-                if rule_item.tax_type == "withholding"
-                and rule_item.recognition_event in (context.event_type, "payment", "collection")
+                if rule_item.tax_type == "withholding" and rule_item.recognition_event in recognition_events
             ]
             settlement_amount = context.settlement_amount or Decimal("0")
             settlement_exchange_rate = context.references.get("settlement_exchange_rate", context.exchange_rate)
@@ -119,6 +119,22 @@ class BusinessEventOrchestrator:
         if context.event_type in ("payment_confirmed", "collection_confirmed", "refund_confirmed"):
             return True
         return context.settlement_amount is not None and context.settlement_amount > 0
+
+    @staticmethod
+    def _settlement_recognition_events(event_type: str, transaction_direction: str) -> set[str]:
+        """Return the exact and legacy recognition events valid for a settlement."""
+        aliases = {
+            "payment_confirmed": {"payment_confirmed", "payment"},
+            "collection_confirmed": {"collection_confirmed", "collection"},
+            # Refunds inherit the legacy alias of their cash direction: a
+            # customer refund is an outgoing payment, while a supplier refund
+            # is an incoming collection.
+            "refund_confirmed": {
+                "refund_confirmed",
+                "payment" if transaction_direction == "sales" else "collection",
+            },
+        }
+        return aliases.get(event_type, {event_type})
 
     def reverse_from_snapshot(self, snapshot: Dict[str, Any]) -> Dict[str, Any]:
         """

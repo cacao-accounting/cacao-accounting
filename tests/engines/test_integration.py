@@ -164,6 +164,94 @@ def test_orchestrator_skips_landed_cost_on_sales():
     assert results["landed_cost"] is None
 
 
+def test_payment_settlement_does_not_apply_collection_only_withholdings():
+    """A supplier payment must not use withholding rules limited to collections."""
+    context = CalculationContext(
+        company_id="COM-001",
+        document_type="payment_entry",
+        event_type="payment_confirmed",
+        transaction_direction="purchase",
+        transaction_date=date(2026, 5, 16),
+        posting_date=date(2026, 5, 16),
+        party_type="supplier",
+        party_id="SUP-001",
+        currency="NIO",
+        company_currency="NIO",
+        settlement_amount=Decimal("100"),
+        items=[
+            ItemContext(
+                line_id="L001",
+                item_id="I1",
+                description="Item",
+                quantity=Decimal("1"),
+                unit_price=Decimal("100"),
+                gross_amount=Decimal("100"),
+                net_amount=Decimal("100"),
+            )
+        ],
+        tax_rules=[
+            TaxRuleContext(
+                rule_id="COLLECTION-ONLY",
+                name="Retención de cobro",
+                concept="IR",
+                tax_type="withholding",
+                calculation_method="percentage",
+                rate=Decimal("10"),
+                recognition_event="collection",
+            )
+        ],
+    )
+
+    result = BusinessEventOrchestrator().handle_event(context)["settlement"]
+
+    assert result.withholding_amount == Decimal("0")
+    assert result.cash_amount == Decimal("100")
+
+
+def test_customer_refund_keeps_the_legacy_payment_withholding_alias():
+    """A customer refund is an outgoing payment for legacy fiscal rules."""
+    context = CalculationContext(
+        company_id="COM-001",
+        document_type="payment_entry",
+        event_type="refund_confirmed",
+        transaction_direction="sales",
+        transaction_date=date(2026, 5, 16),
+        posting_date=date(2026, 5, 16),
+        party_type="customer",
+        party_id="CUS-001",
+        currency="NIO",
+        company_currency="NIO",
+        settlement_amount=Decimal("100"),
+        items=[
+            ItemContext(
+                line_id="L001",
+                item_id="I1",
+                description="Item",
+                quantity=Decimal("1"),
+                unit_price=Decimal("100"),
+                gross_amount=Decimal("100"),
+                net_amount=Decimal("100"),
+            )
+        ],
+        tax_rules=[
+            TaxRuleContext(
+                rule_id="PAYMENT-LEGACY",
+                name="Retención de pago",
+                concept="IR",
+                tax_type="withholding",
+                calculation_method="percentage",
+                rate=Decimal("10"),
+                recognition_event="payment",
+            )
+        ],
+    )
+
+    result = BusinessEventOrchestrator().handle_event(context)["settlement"]
+
+    assert result.withholding_amount == Decimal("10")
+    assert result.cash_amount == Decimal("90")
+
+
 def test_orchestrator_does_not_recapitalize_component_already_recognized_at_receipt():
     """A linked receipt component must not be capitalized again on the invoice."""
     orchestrator = BusinessEventOrchestrator()
