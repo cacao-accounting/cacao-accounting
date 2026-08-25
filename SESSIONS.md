@@ -69,3 +69,12 @@ Se auditó el cálculo de plantillas fiscales con impuestos incluidos en precio.
 
 - Los impuestos fijos incluidos conservan su importe configurado; la descomposición aplica solo a tasas porcentuales.
 - Las tasas incluidas se agrupan por base de cálculo, evitando que dos impuestos del mismo precio se calculen uno sobre el bruto y se inflen mutuamente.
+
+### Plan implementado
+
+Se detectó una segunda condición límite en el cálculo de plantillas fiscales: cuando las líneas actuales totalizaban cero, el motor usaba indistintamente `grand_total` como respaldo. En un documento editado que conservaba un total anterior, una línea gratuita podía generar impuesto sobre ese importe obsoleto. El respaldo documental ahora se utiliza únicamente cuando no hay líneas, y se añadió una prueba de regresión con una línea de importe cero y un `grand_total` histórico de 100.
+
+### Decisiones de diseño
+
+- Una línea existente con importe cero es información contable válida y no equivale a la ausencia de líneas.
+- Se preserva el respaldo por total documental para flujos heredados que efectivamente no aportan líneas al motor.

@@ -78,7 +78,10 @@ def _document_items_total(document: Any) -> Decimal:
     if items is None:
         items = []
     total = sum((_decimal_value(getattr(item, "amount", None)) for item in items), Decimal("0"))
-    if total == 0:
+    # A document can legitimately contain free items.  Falling back to a
+    # previously persisted grand total in that case creates tax on a value
+    # that is not present in its current lines.
+    if not items:
         total = _decimal_value(getattr(document, "total", None) or getattr(document, "grand_total", None))
     return total
 
