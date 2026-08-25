@@ -1138,7 +1138,13 @@ def _payment_reference_document(reference: PaymentReference) -> PurchaseInvoice 
     """Resolve the invoice linked to a payment reference."""
     if _is_order_payment_reference(reference):
         return None
-    model = PurchaseInvoice if reference.reference_type == "purchase_invoice" else SalesInvoice
+    reference_type = str(reference.reference_type or "")
+    if reference_type.startswith("purchase_"):
+        model = PurchaseInvoice
+    elif reference_type.startswith("sales_"):
+        model = SalesInvoice
+    else:
+        return None
     return cast(PurchaseInvoice | SalesInvoice | None, database.session.get(model, reference.reference_id))
 
 

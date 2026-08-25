@@ -78,3 +78,12 @@ Se detectó una segunda condición límite en el cálculo de plantillas fiscales
 
 - Una línea existente con importe cero es información contable válida y no equivale a la ausencia de líneas.
 - Se preserva el respaldo por total documental para flujos heredados que efectivamente no aportan líneas al motor.
+
+### Plan implementado
+
+Se auditó la resolución de referencias durante el pago y la liquidación cambiaria. El helper de documentos de referencia solo reconocía literalmente `purchase_invoice`; una nota de crédito o débito de compra se consultaba erróneamente contra `SalesInvoice`. Se cambió la resolución para elegir `PurchaseInvoice` o `SalesInvoice` por la familia del doctype y se añadió una prueba de regresión de una nota de crédito de compra.
+
+### Decisiones de diseño
+
+- Las notas de compra y venta comparten sus tablas físicas con sus respectivas facturas, pero no deben cruzar de familia al resolver referencias.
+- Los tipos de referencia desconocidos se omiten de forma segura en este helper, manteniendo la validación estricta de tipos en el flujo de pagos.

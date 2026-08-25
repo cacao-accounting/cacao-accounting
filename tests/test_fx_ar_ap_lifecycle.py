@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -367,6 +368,20 @@ def test_open_balance_uses_pre_allocation_carrying_including_offsets(app_ctx, ch
     eur_carrying = _reference_carrying_in_ledger(probe, "EUR", "NIO", _book_id("EUR"))
     # Calculo independiente EUR: 90 - 36 + 0.30 = 54.3000.
     assert eur_carrying == Decimal("54.3000")
+
+
+def test_payment_reference_resolves_purchase_credit_note_from_purchase_invoices(app_ctx, chart):
+    """Purchase notes must not be loaded through the sales-invoice model."""
+    from cacao_accounting.accounting_engine.document_builders import _payment_reference_document
+    from cacao_accounting.database import database
+
+    note = _make_purchase_invoice()
+    note.document_type = "purchase_credit_note"
+    database.session.commit()
+
+    reference = SimpleNamespace(reference_type="purchase_credit_note", reference_id=note.id)
+
+    assert _payment_reference_document(reference) is note
 
 
 def test_ar_sequential_partial_settlements_exact_fx_and_zero_balance(app_ctx, chart):
