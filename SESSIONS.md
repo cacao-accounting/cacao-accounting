@@ -123,3 +123,12 @@ Se comparó el alta directa de pagos con la conciliación AR/AP. La conciliació
 
 - Un descuento y una diferencia cambiaria no pueden consumir por completo la asignación: debe existir una porción de efectivo conciliable.
 - Ambos flujos de aplicación de pagos comparten ahora el mismo límite económico para evitar resultados divergentes según la pantalla utilizada.
+
+### Plan implementado
+
+Se completó la auditoría de variantes del cálculo de impuestos incluidos. Las reglas fiscales permiten un importe manual incluido en precio, pero el motor solo restaba los cargos de tipo fijo antes de extraer porcentajes incluidos. Un cargo manual 15 e IVA 15 % dentro de un total de 130 calculaba IVA 16,9565 en vez de 15. El grupo de cargos monetarios incluidos ahora contempla métodos `fixed` y `manual`; la prueba de regresión verifica la descomposición neto 100, cargo 15, IVA 15.
+
+### Decisiones de diseño
+
+- Los métodos fijo y manual representan importes monetarios conocidos, por lo que ambos se excluyen de la base de tasas porcentuales incluidas.
+- El ajuste no cambia la semántica de tasas porcentuales ni de reglas con una base diferente.

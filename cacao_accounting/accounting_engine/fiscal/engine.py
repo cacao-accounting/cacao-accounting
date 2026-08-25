@@ -195,7 +195,7 @@ class FiscalEngine:
                     Decimal("0"),
                 )
                 fixed_included = sum(
-                    (candidate.amount for candidate in included_rules if candidate.calculation_method == "fixed"),
+                    (candidate.amount for candidate in included_rules if candidate.calculation_method in {"fixed", "manual"}),
                     Decimal("0"),
                 )
                 if not all_rules:  # Fallback for single rule

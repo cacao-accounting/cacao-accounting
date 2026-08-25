@@ -134,3 +134,59 @@ def test_included_taxes_share_base_when_sequences_differ():
     assert result.get_amount("Timbre") == Decimal("10.0000")
     assert result.get_amount("IVA") == Decimal("15.0000")
     assert result.net_goods_total == Decimal("100.0000")
+
+
+def test_included_manual_charge_is_excluded_from_percentage_tax_base():
+    """A manually configured included charge does not inflate an included percentage tax."""
+    engine = FiscalEngine()
+    manual_charge = TaxRuleContext(
+        rule_id="MANUAL",
+        name="Cargo manual",
+        concept="Cargo manual",
+        tax_type="charge",
+        calculation_method="manual",
+        amount=Decimal("15"),
+        order=1,
+        included_in_price=True,
+    )
+    vat = TaxRuleContext(
+        rule_id="VAT",
+        name="IVA",
+        concept="IVA",
+        tax_type="tax",
+        calculation_method="percentage",
+        rate=Decimal("15"),
+        order=2,
+        included_in_price=True,
+    )
+    ctx = CalculationContext(
+        company_id="C1",
+        document_type="invoice",
+        event_type="confirm",
+        transaction_direction="sales",
+        transaction_date=date(2025, 6, 1),
+        posting_date=date(2025, 6, 1),
+        party_type="customer",
+        party_id="P1",
+        currency="NIO",
+        company_currency="NIO",
+        items=[
+            ItemContext(
+                line_id="L1",
+                item_id="I1",
+                description="Item 1",
+                quantity=Decimal("1"),
+                unit_price=Decimal("130"),
+                gross_amount=Decimal("130"),
+                net_amount=Decimal("130"),
+            )
+        ],
+        tax_rules=[manual_charge, vat],
+        references=AccountingReferences(),
+    )
+
+    result = engine.calculate(ctx)
+
+    assert result.get_amount("Cargo manual") == Decimal("15.0000")
+    assert result.get_amount("IVA") == Decimal("15.0000")
+    assert result.net_goods_total == Decimal("100.0000")
