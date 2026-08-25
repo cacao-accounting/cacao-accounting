@@ -105,3 +105,12 @@ Se detectó un caso adicional en la descomposición de impuestos incluidos: al c
 
 - El importe fijo incluido se reconoce íntegramente y no se capitaliza dentro de la base porcentual del mismo grupo de cálculo.
 - La separación continúa agrupada por `calculation_base`, de modo que los cargos de otra base no afectan la descomposición.
+
+### Plan implementado
+
+Se auditó el motor fiscal utilizado por la vista previa y por los asientos. Este agrupaba las tasas porcentuales incluidas por la secuencia de la regla, aunque la secuencia solo define el orden de procesamiento. Dos impuestos incluidos sobre la misma base con secuencias distintas se extraían por separado y se sobreestimaban; además no descontaba cargos fijos incluidos. Se agruparon reglas incluidas por su definición de base (`base_mode`, conceptos incluidos y excluidos) y se añadió una prueba con timbre fijo 10 e IVA 15 % incluidos en un precio de 125, con secuencias distintas.
+
+### Decisiones de diseño
+
+- La secuencia conserva su función de orden determinista; no determina qué impuestos comparten base gravable.
+- Solo se agrupan reglas con la misma definición explícita de base, preservando las dependencias de reglas acumuladas distintas.

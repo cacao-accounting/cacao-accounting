@@ -186,16 +186,23 @@ class FiscalEngine:
         if rule.calculation_method == "percentage":
             if rule.included_in_price:
                 # Tax Decomposition for multiple included taxes
-                # Total = Net * (1 + sum(rates_included))
+                # Total = Net * (1 + sum(rates_included)) + fixed_included
                 # Tax_i = Net * rate_i
-                # Tax_i = (Total / (1 + sum(rates_included))) * rate_i
+                # Tax_i = ((Total - fixed_included) / (1 + sum(rates_included))) * rate_i
+                included_rules = self._included_rules_with_same_base(rule, all_rules or [])
                 sum_included_rates = sum(
-                    (r.rate for r in (all_rules or []) if r.included_in_price and r.order == rule.order), Decimal("0")
+                    (candidate.rate for candidate in included_rules if candidate.calculation_method == "percentage"),
+                    Decimal("0"),
+                )
+                fixed_included = sum(
+                    (candidate.amount for candidate in included_rules if candidate.calculation_method == "fixed"),
+                    Decimal("0"),
                 )
                 if not all_rules:  # Fallback for single rule
                     sum_included_rates = rule.rate
+                    fixed_included = Decimal("0")
 
-                net_amount = base_amount / (Decimal("1") + (sum_included_rates / Decimal("100")))
+                net_amount = (base_amount - fixed_included) / (Decimal("1") + (sum_included_rates / Decimal("100")))
                 return net_amount * rule.rate / Decimal("100")
             return base_amount * rule.rate / Decimal("100")
         if rule.calculation_method == "fixed":
@@ -203,6 +210,24 @@ class FiscalEngine:
         if rule.calculation_method == "manual":
             return rule.amount
         return Decimal("0")
+
+    @staticmethod
+    def _included_rules_with_same_base(rule: TaxRuleContext, rules: list[TaxRuleContext]) -> list[TaxRuleContext]:
+        """Return included taxes calculated from the same unmodified base.
+
+        The configured sequence determines processing order, not the tax base.
+        Using it as a grouping key makes two included rates with different
+        sequences extract themselves independently.  The base definition is
+        the combination of ``base_mode`` and its included/excluded concepts.
+        """
+        return [
+            candidate
+            for candidate in rules
+            if candidate.included_in_price
+            and candidate.base_mode == rule.base_mode
+            and candidate.include_concepts == rule.include_concepts
+            and candidate.exclude_concepts == rule.exclude_concepts
+        ]
 
     def _get_formula(self, rule: TaxRuleContext, base_amount: Decimal) -> str:
         if rule.calculation_method == "percentage":

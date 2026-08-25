@@ -78,3 +78,59 @@ def test_multiple_included_taxes():
 
     assert t1 == Decimal("10.0000")
     assert t2 == Decimal("5.0000")
+
+
+def test_included_taxes_share_base_when_sequences_differ():
+    """Included taxes with distinct sequences are extracted from their common base."""
+    engine = FiscalEngine()
+    fixed = TaxRuleContext(
+        rule_id="FIXED",
+        name="Timbre",
+        concept="Timbre",
+        tax_type="charge",
+        calculation_method="fixed",
+        amount=Decimal("10"),
+        order=1,
+        included_in_price=True,
+    )
+    vat = TaxRuleContext(
+        rule_id="VAT",
+        name="IVA",
+        concept="IVA",
+        tax_type="tax",
+        calculation_method="percentage",
+        rate=Decimal("15"),
+        order=2,
+        included_in_price=True,
+    )
+    ctx = CalculationContext(
+        company_id="C1",
+        document_type="invoice",
+        event_type="confirm",
+        transaction_direction="sales",
+        transaction_date=date(2025, 6, 1),
+        posting_date=date(2025, 6, 1),
+        party_type="customer",
+        party_id="P1",
+        currency="NIO",
+        company_currency="NIO",
+        items=[
+            ItemContext(
+                line_id="L1",
+                item_id="I1",
+                description="Item 1",
+                quantity=Decimal("1"),
+                unit_price=Decimal("125"),
+                gross_amount=Decimal("125"),
+                net_amount=Decimal("125"),
+            )
+        ],
+        tax_rules=[fixed, vat],
+        references=AccountingReferences(),
+    )
+
+    result = engine.calculate(ctx)
+
+    assert result.get_amount("Timbre") == Decimal("10.0000")
+    assert result.get_amount("IVA") == Decimal("15.0000")
+    assert result.net_goods_total == Decimal("100.0000")
