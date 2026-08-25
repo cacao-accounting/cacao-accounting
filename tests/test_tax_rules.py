@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from flask import Flask
@@ -151,6 +152,74 @@ def test_purchase_tax_template_validation_uses_template_type_and_applies_to(app_
     _validate_purchase_tax_template("cacao", valid.id, "NIO")
     with pytest.raises(ValueError, match="no corresponde a compras"):
         _validate_purchase_tax_template("cacao", selling.id, "NIO")
+
+
+def test_tax_template_extracts_percentage_tax_included_in_price(app_ctx: Flask) -> None:
+    """A 15% inclusive template extracts 15 from a displayed total of 115."""
+    from cacao_accounting.database import Tax, TaxTemplate, TaxTemplateItem, database
+    from cacao_accounting.tax_pricing_service import calculate_taxes
+
+    tax = Tax(name="IVA incluido", rate=Decimal("15"), tax_type="percentage", applies_to="sales", is_active=True)
+    template = TaxTemplate(name="Venta IVA incluido", company="cacao", template_type="selling", is_active=True)
+    database.session.add_all([tax, template])
+    database.session.flush()
+    database.session.add(
+        TaxTemplateItem(
+            tax_template_id=template.id,
+            tax_id=tax.id,
+            sequence=1,
+            calculation_base="net_document",
+            behavior="additive",
+            is_inclusive=True,
+        )
+    )
+    database.session.commit()
+
+    document = SimpleNamespace(company="cacao", _tax_items=[SimpleNamespace(amount=Decimal("115"))])
+    result = calculate_taxes(document, template.id)
+
+    assert result.inclusive_total == Decimal("15.0000")
+    assert result.payable_delta == Decimal("0")
+
+
+def test_tax_template_extracts_multiple_included_percentage_taxes(app_ctx: Flask) -> None:
+    """Included taxes sharing a base are extracted together, not compounded."""
+    from cacao_accounting.database import Tax, TaxTemplate, TaxTemplateItem, database
+    from cacao_accounting.tax_pricing_service import calculate_taxes
+
+    tax_a = Tax(name="IVA incluido", rate=Decimal("10"), tax_type="percentage", applies_to="sales", is_active=True)
+    tax_b = Tax(name="ISC incluido", rate=Decimal("5"), tax_type="percentage", applies_to="sales", is_active=True)
+    template = TaxTemplate(name="Venta impuestos incluidos", company="cacao", template_type="selling", is_active=True)
+    database.session.add_all([tax_a, tax_b, template])
+    database.session.flush()
+    database.session.add_all(
+        [
+            TaxTemplateItem(
+                tax_template_id=template.id,
+                tax_id=tax_a.id,
+                sequence=1,
+                calculation_base="net_document",
+                behavior="additive",
+                is_inclusive=True,
+            ),
+            TaxTemplateItem(
+                tax_template_id=template.id,
+                tax_id=tax_b.id,
+                sequence=2,
+                calculation_base="net_document",
+                behavior="additive",
+                is_inclusive=True,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    result = calculate_taxes(
+        SimpleNamespace(company="cacao", _tax_items=[SimpleNamespace(amount=Decimal("115"))]), template.id
+    )
+
+    assert [line.amount for line in result.lines] == [Decimal("10.0000"), Decimal("5.0000")]
+    assert result.inclusive_total == Decimal("15.0000")
 
 
 def test_admin_tax_rule_crud(client) -> None:

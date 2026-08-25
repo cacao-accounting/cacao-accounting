@@ -83,7 +83,8 @@ def _document_items_total(document: Any) -> Decimal:
     return total
 
 
-def _calculate_template_item_tax(template_item, base_amount, running_total):
+def _calculate_template_item_tax(template_item, base_amount, running_total, inclusive_rate_total=Decimal("0")):
+    """Calculate one template tax, extracting percentage taxes included in price."""
 
     tax = database.session.get(Tax, template_item.tax_id)
     if not tax or not tax.is_active:
@@ -91,7 +92,16 @@ def _calculate_template_item_tax(template_item, base_amount, running_total):
     calculation_base = template_item.calculation_base or "net_document"
     taxable_base = running_total if calculation_base == "previous_total" else base_amount
     rate = _decimal_value(tax.rate)
-    amount = rate if tax.tax_type == "fixed" else (taxable_base * rate / Decimal("100"))
+    if tax.tax_type == "fixed":
+        amount = rate
+    elif template_item.is_inclusive:
+        # ``taxable_base`` is the price displayed to the user, which already
+        # contains every percentage tax in its calculation-base group.  Using
+        # the additive formula here overstates the tax (e.g. 15% of 115 =
+        # 17.25 instead of extracting 15.00).
+        amount = taxable_base * rate / (Decimal("100") + inclusive_rate_total)
+    else:
+        amount = taxable_base * rate / Decimal("100")
     amount = amount.quantize(Decimal("0.0001"))
     return TaxLineResult(
         tax_id=tax.id,
@@ -130,8 +140,24 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
         .scalars()
         .all()
     )
+    inclusive_rates_by_base: dict[str, Decimal] = {}
     for template_item in items:
-        result = _calculate_template_item_tax(template_item, base_amount, running_total)
+        if not template_item.is_inclusive:
+            continue
+        tax = database.session.get(Tax, template_item.tax_id)
+        if tax and tax.is_active and tax.tax_type == "percentage":
+            calculation_base = template_item.calculation_base or "net_document"
+            inclusive_rates_by_base[calculation_base] = inclusive_rates_by_base.get(
+                calculation_base, Decimal("0")
+            ) + _decimal_value(tax.rate)
+    for template_item in items:
+        calculation_base = template_item.calculation_base or "net_document"
+        result = _calculate_template_item_tax(
+            template_item,
+            base_amount,
+            running_total,
+            inclusive_rates_by_base.get(calculation_base, Decimal("0")),
+        )
         if not result:
             continue
         if result.is_inclusive:
