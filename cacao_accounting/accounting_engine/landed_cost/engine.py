@@ -97,6 +97,16 @@ class LandedCostEngine:
         for rule in all_rules:
             rule_amount: Decimal = rule["amount"]
             method = validate_allocation_method(rule["method"])
+            self._validate_allocation_basis(
+                method=method,
+                rule_amount=rule_amount,
+                total_value=base_goods_total,
+                total_current_value=sum(item_costs.values(), Decimal("0")),
+                total_qty=total_qty,
+                total_weight=total_weight,
+                total_volume=total_volume,
+                total_count=total_count,
+            )
 
             # Calculate shares for this specific rule
             shares = {}
@@ -219,6 +229,37 @@ class LandedCostEngine:
         if current_item_value is None or total_current_value is None:
             return Decimal("0")
         return self._ratio(current_item_value, total_current_value)
+
+    def _validate_allocation_basis(
+        self,
+        *,
+        method: str,
+        rule_amount: Decimal,
+        total_value: Decimal,
+        total_current_value: Decimal,
+        total_qty: Decimal,
+        total_weight: Decimal,
+        total_volume: Decimal,
+        total_count: Decimal,
+    ) -> None:
+        """Reject a non-zero allocation that lacks a positive distribution base.
+
+        Without this guard all shares are zero and the rounding residual would
+        assign the entire charge to the last line, which is not an accounting
+        allocation method and makes inventory valuation depend on line order.
+        """
+        if rule_amount == 0:
+            return
+        bases = {
+            "by_value": total_value,
+            "by_current_value": total_current_value,
+            "by_quantity": total_qty,
+            "by_weight": total_weight,
+            "by_volume": total_volume,
+            "equal": total_count,
+        }
+        if bases[method] <= 0:
+            raise ValueError(f"No existe una base positiva para prorratear el cargo mediante {method}.")
 
     def _ratio(self, numerator: Decimal, denominator: Decimal) -> Decimal:
         """Return a safe Decimal ratio."""

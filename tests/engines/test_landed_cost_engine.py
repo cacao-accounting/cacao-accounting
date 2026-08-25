@@ -85,6 +85,40 @@ def test_landed_cost_rejects_unknown_allocation_method(items):
         )
 
 
+def test_landed_cost_rejects_charge_with_zero_weight_basis():
+    """A zero-weight shipment must not assign all freight to the last item."""
+    zero_weight_items = [
+        ItemContext(
+            line_id="A",
+            item_id="I1",
+            description="Item A",
+            quantity=Decimal("1"),
+            unit_price=Decimal("100"),
+            gross_amount=Decimal("100"),
+            net_amount=Decimal("100"),
+            weight=Decimal("0"),
+        ),
+        ItemContext(
+            line_id="B",
+            item_id="I2",
+            description="Item B",
+            quantity=Decimal("1"),
+            unit_price=Decimal("100"),
+            gross_amount=Decimal("100"),
+            net_amount=Decimal("100"),
+            weight=Decimal("0"),
+        ),
+    ]
+
+    with pytest.raises(ValueError, match="base positiva.*by_weight"):
+        LandedCostEngine().calculate(
+            zero_weight_items,
+            [],
+            capitalizable_charges=[{"amount": Decimal("30"), "concept": "Flete"}],
+            allocation_method="by_weight",
+        )
+
+
 def test_landed_cost_rounding_residual(items):
     """Test that rounding residuals are handled (allocated to last item)."""
     # Total charge: 10.00.
