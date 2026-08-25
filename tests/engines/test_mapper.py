@@ -148,6 +148,47 @@ def test_payment_mapping_uses_bank_withholding_and_exchange_loss():
     assert loss_line.amount_transaction_currency == Decimal("0")
 
 
+def test_payment_mapping_allows_a_fully_withheld_settlement_without_a_bank_line():
+    """A zero-cash payment settles the party balance solely through withholding."""
+    ctx = CalculationContext(
+        company_id="C1",
+        document_type="payment_entry",
+        event_type="payment_confirmed",
+        transaction_direction="purchase",
+        transaction_date=date(2025, 6, 1),
+        posting_date=date(2025, 6, 1),
+        party_type="supplier",
+        party_id="S1",
+        currency="NIO",
+        company_currency="NIO",
+        references=AccountingReferences(party_account="2101", cash_account="1010"),
+    )
+    settlement = SettlementResult(
+        gross_settlement_amount=Decimal("100"),
+        cash_amount=Decimal("0"),
+        withholding_amount=Decimal("100"),
+        settlement_lines=[
+            SettlementLine(
+                line_id="S1",
+                concept="IR",
+                type="withholding",
+                base_amount=Decimal("100"),
+                rate=Decimal("100"),
+                amount=Decimal("100"),
+                recognition_event="payment",
+                accounting_treatment="withholding_payable",
+                account_id="2150",
+            )
+        ],
+    )
+
+    proforma = AccountingMapper().map_to_proforma(ctx, settlement=settlement)
+
+    assert proforma.is_balanced
+    assert {line.account_id for line in proforma.lines} == {"2101", "2150"}
+    assert all(line.account_id != "1010" for line in proforma.lines)
+
+
 def test_collection_mapping_uses_bank_withholding_and_exchange_gain():
     """A customer collection should map bank, withholding receivable and exchange gain."""
     ctx = CalculationContext(

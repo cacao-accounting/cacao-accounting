@@ -176,3 +176,22 @@ La validación completa detectó una compatibilidad faltante en el pronóstico d
 
 - La fuente canónica sigue teniendo prioridad en esquemas operativos completos; el respaldo no silencia otros errores de cálculo.
 - El respaldo se limita a objetos no ORM o a la ausencia explícita de la tabla de relaciones, y conserva el importe base legado para no reconvertir una moneda ya expresada en la moneda de compañía.
+
+### Plan implementado
+
+Se auditó el motor de liquidación de pagos. Una configuración de retención superior al importe liquidado permitía que el cálculo produjera efectivo negativo sin errores; por ejemplo, una liquidación de 100 con retención de 120 devolvía efectivo -20. Se añadió un rechazo explícito antes de construir el efectivo y una prueba de regresión del escenario.
+
+### Decisiones de diseño
+
+- Las retenciones pueden reducir el efectivo hasta cero, pero no pueden exceder la obligación que se liquida.
+- El motor devuelve un error de cálculo antes de que el orquestador genere un pro-forma, y el servicio de contabilización convierte ese error en un rechazo de la publicación.
+
+### Plan implementado
+
+Se completó la ruta de pago totalmente retenido solicitada durante la auditoría. El alta ahora admite efectivo cero únicamente en pagos o cobros con referencias aplicadas; valida que el importe aplicado esté cubierto por efectivo, descuentos/diferencia de cambio y las retenciones fiscales canónicas. El constructor contable y el posting aceptan ese caso, y el mapeador genera solo la contrapartida de tercero y la retención, sin movimiento bancario. La interfaz usa el total aplicado como base de la retención y no bloquea el envío cuando el efectivo es cero y la retención lo cubre.
+
+### Decisiones de diseño
+
+- Un pago de efectivo cero sin documentos liquidados sigue rechazado; no se permite crear anticipos ni pagos vacíos usando esta excepción.
+- La validación se apoya en las líneas fiscales canonicalizadas y persistidas, no en el resumen calculado por el navegador.
+- El efectivo bancario no se crea artificialmente: una liquidación cubierta íntegramente por retenciones publica únicamente las cuentas por pagar/cobrar y de retenciones.

@@ -84,6 +84,15 @@ class SettlementEngine:
             )
             step_counter += 1
 
+        if withholding_total > settlement_amount:
+            return SettlementResult(
+                gross_settlement_amount=settlement_amount,
+                withholding_amount=withholding_total,
+                settlement_lines=settlement_lines,
+                audit_trail=audit_trail,
+                errors=["Las retenciones calculadas no pueden ser mayores que el monto a liquidar."],
+            )
+
         requested_cash_amount = actual_cash_amount if actual_cash_amount is not None else settlement_amount - withholding_total
         explicit_exchange_difference = explicit_exchange_difference or Decimal("0")
         gap_after_withholdings = settlement_amount - requested_cash_amount - withholding_total

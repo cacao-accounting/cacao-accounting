@@ -268,6 +268,12 @@
         return this.lines.reduce((sum, line) => sum + this.parseNumber(line.allocated_amount || 0), 0);
       },
 
+      withholdingTotal: function () {
+        return (this.taxCharges.lines || []).reduce((sum, line) => {
+          return line.type === 'withholding' ? sum + this.parseNumber(line.amount || 0) : sum;
+        }, 0);
+      },
+
       unallocatedAmount: function () {
         const headerTotal = this.parseNumber(this.header.paid_amount || 0);
         const delta = headerTotal - this.totalApplied();
@@ -363,7 +369,7 @@
           posting_date: this.header.posting_date,
           party_type: this.header.party_type,
           party_id: this.header.party_id,
-          lines: [{ uid: 'PAYMENT-REF', item_code: 'PAYMENT', item_name: 'Payment', qty: 1, rate: this.toCurrencyString(this.header.paid_amount), amount: this.toCurrencyString(this.header.paid_amount) }],
+          lines: [{ uid: 'PAYMENT-REF', item_code: 'PAYMENT', item_name: 'Payment', qty: 1, rate: this.toCurrencyString(this.totalApplied()), amount: this.toCurrencyString(this.totalApplied()) }],
           tax_lines: (this.taxCharges.lines || []).map((line) => ({
             ...line,
             base_amount: this.toCurrencyString(line.base_amount),
@@ -428,7 +434,7 @@
           type: 'charge',
           calculation_method: 'manual',
           base_mode: 'goods',
-          base_amount: this.parseNumber(this.header.paid_amount || 0),
+          base_amount: this.totalApplied(),
           rate: 0,
           amount: 0,
           accounting_treatment: 'separate_tax_account',
@@ -468,7 +474,7 @@
       },
 
       calculateTaxLine: function (line) {
-        line.base_amount = this.parseNumber(line.base_amount || this.header.paid_amount || 0);
+        line.base_amount = this.parseNumber(line.base_amount || this.totalApplied() || 0);
         line.rate = this.parseNumber(line.rate || 0);
         if (line.calculation_method === 'percentage') {
           line.amount = line.base_amount * line.rate / 100;
@@ -495,7 +501,7 @@
           if (line.type !== 'withholding') return total;
           return total + this.parseNumber(line.amount || 0);
         }, 0);
-        const subtotal = this.parseNumber(this.header.paid_amount || 0);
+        const subtotal = this.totalApplied();
         this.taxCharges.summary = {
           subtotal: this.toCurrencyString(subtotal),
           document_tax_total: this.toCurrencyString(documentTaxTotal),
@@ -507,7 +513,7 @@
       },
 
       prepareSubmit: function (event) {
-        if (!this.header.company || !this.header.bank_account_id || this.header.paid_amount <= 0) {
+        if (!this.header.company || !this.header.bank_account_id || this.header.paid_amount < 0) {
           event.preventDefault();
           alert("{{ _('Por favor complete los campos obligatorios.') }}");
           return;
@@ -515,7 +521,7 @@
         for (const line of this.lines) {
           this.normalizeReferenceAllocation(line);
         }
-        if (this.totalApplied() > this.parseNumber(this.header.paid_amount || 0) + 0.01) {
+        if (this.totalApplied() > this.parseNumber(this.header.paid_amount || 0) + this.withholdingTotal() + 0.01) {
           event.preventDefault();
           alert("{{ _('El total aplicado no puede ser mayor al monto total del pago.') }}");
           return;

@@ -665,7 +665,7 @@ def _payment_settlement_amounts(
     company: str,
 ) -> PaymentSettlementAmounts:
     """Compute settlement amounts used by the fiscal and accounting engines."""
-    actual_cash_amount = _positive_payment_amount(document, spec)
+    actual_cash_amount = _payment_cash_amount(document, spec, settlement_references)
     settlement_amount = _payment_settlement_amount(settlement_references, actual_cash_amount)
     document_total = _payment_document_total(settlement_references, settlement_amount)
     company_open_balance = _payment_company_open_balance(
@@ -692,10 +692,12 @@ def _payment_settlement_amounts(
     )
 
 
-def _positive_payment_amount(document: PaymentEntry, spec: PaymentBuildSpec) -> Decimal:
-    """Return the cash amount and reject zero or negative payments."""
+def _payment_cash_amount(
+    document: PaymentEntry, spec: PaymentBuildSpec, settlement_references: list[PaymentReference]
+) -> Decimal:
+    """Return cash amount, allowing zero only for a referenced settlement."""
     amount = _decimal_value(getattr(document, spec.amount_field, None))
-    if amount <= 0:
+    if amount < 0 or (amount == 0 and not settlement_references):
         raise CalculationContextBuilderError("El monto del pago debe ser mayor que cero.")
     return amount
 

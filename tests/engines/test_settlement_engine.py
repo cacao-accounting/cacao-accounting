@@ -223,6 +223,34 @@ def test_settlement_rejects_unallocated_cash_gap():
     assert result.cash_amount + result.withholding_amount + result.payment_discount_amount == Decimal("98")
 
 
+def test_settlement_rejects_withholdings_greater_than_the_amount_settled():
+    """A withholding configuration cannot produce a negative cash payment."""
+    result = SettlementEngine().calculate(
+        document_total=Decimal("100"),
+        open_balance=Decimal("100"),
+        settlement_amount=Decimal("100"),
+        withholding_rules=[MockRule("IR", Decimal("120"), "payment", "withholding_payable")],
+    )
+
+    assert result.cash_amount == Decimal("0")
+    assert result.withholding_amount == Decimal("120.00")
+    assert result.errors == ["Las retenciones calculadas no pueden ser mayores que el monto a liquidar."]
+
+
+def test_settlement_allows_withholdings_equal_to_the_amount_settled():
+    """A fully withheld settlement is valid even when its cash portion is zero."""
+    result = SettlementEngine().calculate(
+        document_total=Decimal("100"),
+        open_balance=Decimal("100"),
+        settlement_amount=Decimal("100"),
+        withholding_rules=[MockRule("IR", Decimal("100"), "payment", "withholding_payable")],
+    )
+
+    assert result.cash_amount == Decimal("0.00")
+    assert result.withholding_amount == Decimal("100.00")
+    assert result.errors == []
+
+
 def test_settlement_allows_cash_excess_for_a_separate_advance_entry():
     """A payment surplus is balanced by the posting mapper as a party advance."""
     result = SettlementEngine().calculate(

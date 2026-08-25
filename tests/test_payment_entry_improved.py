@@ -215,6 +215,61 @@ def test_payment_over_application_blocking(app_ctx):
     assert "El monto aplicado no puede ser mayor al monto total del pago" in content
 
 
+def test_fully_withheld_payment_can_be_registered_with_zero_cash(app_ctx):
+    """A referenced payment may close an invoice when withholding covers all cash."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        docstatus=1,
+        grand_total=Decimal("100"),
+        outstanding_amount=Decimal("100"),
+        base_outstanding_amount=Decimal("100"),
+    )
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    database.session.add(invoice)
+    database.session.commit()
+
+    payload = {
+        "payment_type": "receive",
+        "company": "cacao",
+        "bank_account_id": bank.id,
+        "posting_date": date.today().isoformat(),
+        "paid_amount": 0,
+        "party_id": customer.id,
+        "party_type": "customer",
+        "lines": [{"reference_type": "sales_invoice", "reference_id": invoice.id, "allocated_amount": 100}],
+        "tax_lines": [
+            {
+                "manual": True,
+                "source_rule_id": "MANUAL-WH-100",
+                "concept": "Retención total",
+                "type": "withholding",
+                "calculation_method": "manual",
+                "base_amount": 100,
+                "amount": 100,
+                "accounting_treatment": "withholding_receivable",
+            }
+        ],
+    }
+
+    response = client.post(
+        "/cash_management/payment/new", data={"payment_payload": json.dumps(payload)}, follow_redirects=True
+    )
+
+    assert response.status_code == 200
+    assert b"Pago registrado correctamente" in response.data
+    payment = database.session.execute(database.select(PaymentEntry).order_by(PaymentEntry.created.desc())).scalars().first()
+    assert payment.received_amount == Decimal("0")
+    database.session.refresh(invoice)
+    assert invoice.outstanding_amount == Decimal("0")
+
+
 def test_payment_line_cannot_exceed_individual_outstanding(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")

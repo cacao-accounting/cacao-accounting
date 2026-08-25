@@ -73,7 +73,7 @@ from cacao_accounting.document_identifiers import (
 
 from cacao_accounting.decorators import exige_acceso_compania
 
-from cacao_accounting.fiscal_persistence_service import persist_document_fiscal_snapshot
+from cacao_accounting.fiscal_persistence_service import load_document_fiscal_lines, persist_document_fiscal_snapshot
 
 from cacao_accounting.list_filters import apply_list_filters
 
@@ -1030,6 +1030,7 @@ def _validate_payment_header(
     party_type: str | None,
     party_id: str | None,
     target_bank_account_id: str | None = None,
+    allow_zero_amount: bool = False,
 ) -> None:
     """Validate the required Payment Entry header fields."""
     _validate_payment_header_required_fields(
@@ -1037,6 +1038,7 @@ def _validate_payment_header(
         bank_account_id=bank_account_id,
         posting_date_raw=posting_date_raw,
         amount=amount,
+        allow_zero_amount=allow_zero_amount,
     )
     validated_company = cast(str, company)
     validated_bank_account_id = cast(str, bank_account_id)
@@ -1056,6 +1058,7 @@ def _validate_payment_header_required_fields(
     bank_account_id: str | None,
     posting_date_raw: str | None,
     amount: Decimal,
+    allow_zero_amount: bool = False,
 ) -> None:
     """Validate the required payment header fields that are independent."""
     if not company:
@@ -1064,7 +1067,7 @@ def _validate_payment_header_required_fields(
         raise ValueError(_("La cuenta bancaria es obligatoria."))
     if not posting_date_raw:
         raise ValueError(_("La fecha del pago es obligatoria."))
-    if amount <= 0:
+    if amount < 0 or (amount == 0 and not allow_zero_amount):
         raise ValueError(_("El monto del pago debe ser mayor que cero."))
 
 
@@ -1287,8 +1290,6 @@ def _finalize_and_commit_payment(
         payload.get("lines") or [],
         allow_order_references=bool(payload.get("advance_mode")),
     )
-    _validate_payment_reference_totals(amount, ref_totals)
-    _warn_duplicate_payment(payment)
     persist_document_fiscal_snapshot(
         company=str(payment.company or ""),
         document_type="payment_entry",
@@ -1297,6 +1298,8 @@ def _finalize_and_commit_payment(
         tax_lines=payload.get("tax_lines"),
         tax_summary=payload.get("tax_summary"),
     )
+    _validate_payment_reference_totals(amount, ref_totals, _payment_withholding_total(payment.id))
+    _warn_duplicate_payment(payment)
     log_create(payment)
     database.session.commit()
     flash(_("Pago registrado correctamente."), "success")
@@ -1402,6 +1405,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
         party_type=payload.get("party_type"),
         party_id=payload.get("party_id"),
         target_bank_account_id=target_bank_account_id,
+        allow_zero_amount=_allows_fully_withheld_payment(payload, amount),
     )
     # La compañía enviada por el cliente no es una autorización.  Bloquear
     # antes de crear y hacer flush evita dejar borradores cross-company.
@@ -1587,13 +1591,34 @@ def _payment_identifier_context(payment: PaymentEntry, mode_of_payment: str) -> 
     return context
 
 
-def _validate_payment_reference_totals(amount: Decimal, ref_totals: dict[str, Decimal]) -> None:
+def _validate_payment_reference_totals(
+    amount: Decimal, ref_totals: dict[str, Decimal], withholding_total: Decimal = Decimal("0")
+) -> None:
     """Validate the totals assigned to payment references."""
     allocated = ref_totals["allocated"]
     discount = ref_totals["discount"]
     gain_loss = ref_totals["gain_loss"]
-    if (allocated - discount - gain_loss) > amount:
+    if (allocated - discount - gain_loss) > amount + withholding_total:
         raise ValueError(_("El monto aplicado no puede ser mayor al monto total del pago."))
+
+
+def _allows_fully_withheld_payment(payload: PaymentPayload, amount: Decimal) -> bool:
+    """Allow zero cash only for a pay/receive entry settling a reference."""
+    if amount != 0 or payload.get("payment_type") not in {"pay", "receive"}:
+        return False
+    return any(Decimal(str(line.get("allocated_amount") or "0")) > 0 for line in payload.get("lines") or [])
+
+
+def _payment_withholding_total(payment_id: str) -> Decimal:
+    """Return the canonical withholding total persisted for a payment."""
+    return sum(
+        (
+            Decimal(str(line.amount or "0"))
+            for line in load_document_fiscal_lines("payment_entry", payment_id)
+            if line.tax_type == "withholding"
+        ),
+        Decimal("0"),
+    )
 
 
 def _payment_source_rows_from_request() -> list[dict[str, object]]:
