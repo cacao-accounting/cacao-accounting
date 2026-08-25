@@ -222,6 +222,46 @@ def test_tax_template_extracts_multiple_included_percentage_taxes(app_ctx: Flask
     assert result.inclusive_total == Decimal("15.0000")
 
 
+def test_tax_template_extracts_percentage_after_included_fixed_tax(app_ctx: Flask) -> None:
+    """A fixed included tax is excluded before extracting an included percentage tax."""
+    from cacao_accounting.database import Tax, TaxTemplate, TaxTemplateItem, database
+    from cacao_accounting.tax_pricing_service import calculate_taxes
+
+    fixed_tax = Tax(name="Timbre incluido", rate=Decimal("10"), tax_type="fixed", applies_to="sales", is_active=True)
+    percentage_tax = Tax(name="IVA incluido", rate=Decimal("15"), tax_type="percentage", applies_to="sales", is_active=True)
+    template = TaxTemplate(name="Venta IVA y timbre incluidos", company="cacao", template_type="selling", is_active=True)
+    database.session.add_all([fixed_tax, percentage_tax, template])
+    database.session.flush()
+    database.session.add_all(
+        [
+            TaxTemplateItem(
+                tax_template_id=template.id,
+                tax_id=fixed_tax.id,
+                sequence=1,
+                calculation_base="net_document",
+                behavior="additive",
+                is_inclusive=True,
+            ),
+            TaxTemplateItem(
+                tax_template_id=template.id,
+                tax_id=percentage_tax.id,
+                sequence=2,
+                calculation_base="net_document",
+                behavior="additive",
+                is_inclusive=True,
+            ),
+        ]
+    )
+    database.session.commit()
+
+    result = calculate_taxes(
+        SimpleNamespace(company="cacao", _tax_items=[SimpleNamespace(amount=Decimal("125"))]), template.id
+    )
+
+    assert [line.amount for line in result.lines] == [Decimal("10.0000"), Decimal("15.0000")]
+    assert result.inclusive_total == Decimal("25.0000")
+
+
 def test_tax_template_does_not_tax_free_items_using_a_stale_document_total(app_ctx: Flask) -> None:
     """A zero-valued line remains tax-free even if the document has an old total."""
     from cacao_accounting.database import Tax, TaxTemplate, TaxTemplateItem, database

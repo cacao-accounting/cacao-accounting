@@ -86,7 +86,13 @@ def _document_items_total(document: Any) -> Decimal:
     return total
 
 
-def _calculate_template_item_tax(template_item, base_amount, running_total, inclusive_rate_total=Decimal("0")):
+def _calculate_template_item_tax(
+    template_item,
+    base_amount,
+    running_total,
+    inclusive_rate_total=Decimal("0"),
+    inclusive_fixed_total=Decimal("0"),
+):
     """Calculate one template tax, extracting percentage taxes included in price."""
     tax = database.session.get(Tax, template_item.tax_id)
     if not tax or not tax.is_active:
@@ -100,8 +106,10 @@ def _calculate_template_item_tax(template_item, base_amount, running_total, incl
         # ``taxable_base`` is the price displayed to the user, which already
         # contains every percentage tax in its calculation-base group.  Using
         # the additive formula here overstates the tax (e.g. 15% of 115 =
-        # 17.25 instead of extracting 15.00).
-        amount = taxable_base * rate / (Decimal("100") + inclusive_rate_total)
+        # 17.25 instead of extracting 15.00).  Fixed taxes included in that
+        # price are first removed because they are not part of the percentage
+        # tax base (e.g. 125 = 100 + fixed 10 + IVA 15).
+        amount = (taxable_base - inclusive_fixed_total) * rate / (Decimal("100") + inclusive_rate_total)
     else:
         amount = taxable_base * rate / Decimal("100")
     amount = amount.quantize(Decimal("0.0001"))
@@ -143,13 +151,20 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
         .all()
     )
     inclusive_rates_by_base: dict[str, Decimal] = {}
+    inclusive_fixed_by_base: dict[str, Decimal] = {}
     for template_item in items:
         if not template_item.is_inclusive:
             continue
         tax = database.session.get(Tax, template_item.tax_id)
-        if tax and tax.is_active and tax.tax_type == "percentage":
-            calculation_base = template_item.calculation_base or "net_document"
+        if not tax or not tax.is_active:
+            continue
+        calculation_base = template_item.calculation_base or "net_document"
+        if tax.tax_type == "percentage":
             inclusive_rates_by_base[calculation_base] = inclusive_rates_by_base.get(
+                calculation_base, Decimal("0")
+            ) + _decimal_value(tax.rate)
+        elif tax.tax_type == "fixed":
+            inclusive_fixed_by_base[calculation_base] = inclusive_fixed_by_base.get(
                 calculation_base, Decimal("0")
             ) + _decimal_value(tax.rate)
     for template_item in items:
@@ -159,6 +174,7 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
             base_amount,
             running_total,
             inclusive_rates_by_base.get(calculation_base, Decimal("0")),
+            inclusive_fixed_by_base.get(calculation_base, Decimal("0")),
         )
         if not result:
             continue
