@@ -901,12 +901,15 @@ def _validate_advance_allocation(
     allocated_before = _advance_allocated_amount(payment.id)
     payment_total = decimal_or_zero(payment.paid_amount or payment.received_amount)
     outstanding = compute_outstanding_amount(invoice, as_of_date=allocation_date)
+    current_outstanding = compute_outstanding_amount(invoice)
     if amount <= 0:
         raise _document_flow_error(_MSG_MONTO_MAYOR_CERO, 409)
     if amount > payment_total - allocated_before:
         raise _document_flow_error("El monto excede el remanente del anticipo.", 409)
     if amount > outstanding:
         raise _document_flow_error("El monto excede el saldo pendiente de la factura.", 409)
+    if amount > current_outstanding:
+        raise _document_flow_error("El monto excede el saldo pendiente vigente de la factura.", 409)
     return outstanding, outstanding - amount
 
 
@@ -955,7 +958,7 @@ def apply_advance_to_invoice(
         rate=amount,
         amount=amount,
     )
-    refresh_outstanding_amount_cache(invoice, as_of_date=allocation_date)
+    refresh_outstanding_amount_cache(invoice)
     _maybe_settle_advance_against_invoice(payment, invoice, reference_type, amount, allocation_date)
     return reference
 

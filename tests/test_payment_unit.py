@@ -15,7 +15,7 @@ Cobertura de funciones no testeadas:
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from importlib import import_module
 from types import SimpleNamespace
@@ -1600,6 +1600,53 @@ class TestApplyAdvancePartyTypeCasing:
 
         with pytest.raises(ValueError, match="factura debe estar aprobada"):
             apply_advance_to_invoice(payment.id, invoice.id, Decimal("100"), date.today())
+
+    def test_advance_cannot_overapply_an_invoice_with_a_later_payment(self, app_ctx):
+        """Una aplicación retrofechada debe respetar el saldo vigente de la factura."""
+        from cacao_accounting.document_flow.payment import apply_advance_to_invoice, compute_outstanding_amount
+        from cacao_accounting.document_flow.service import create_document_relation
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        invoice = _make_customer_invoice(grand_total=Decimal("100"))
+        invoice.posting_date = date.today() - timedelta(days=3)
+        advance = _make_open_payment(party=customer, payment_type="receive", amount=Decimal("100"))
+        advance.posting_date = date.today() - timedelta(days=2)
+        later_payment = _make_open_payment(
+            party=customer,
+            payment_type="receive",
+            amount=Decimal("100"),
+            document_no="PAY-LATER-001",
+        )
+        later_payment.posting_date = date.today()
+        later_reference = PaymentReference(
+            payment_id=later_payment.id,
+            reference_type="sales_invoice",
+            reference_id=invoice.id,
+            allocated_amount=Decimal("100"),
+            allocation_date=date.today(),
+            company="cacao",
+        )
+        database.session.add(later_reference)
+        database.session.flush()
+        create_document_relation(
+            source_type="sales_invoice",
+            source_id=invoice.id,
+            source_item_id=None,
+            target_type="payment_entry",
+            target_id=later_payment.id,
+            target_item_id=later_reference.id,
+            qty=Decimal("1"),
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+        )
+        database.session.flush()
+
+        assert compute_outstanding_amount(invoice) == Decimal("0")
+        with pytest.raises(ValueError, match="saldo pendiente vigente"):
+            apply_advance_to_invoice(advance.id, invoice.id, Decimal("100"), date.today() - timedelta(days=1))
+        assert (
+            database.session.execute(database.select(PaymentReference).filter_by(payment_id=advance.id)).scalars().all() == []
+        )
 
 
 # ---------------------------------------------------------------------------
