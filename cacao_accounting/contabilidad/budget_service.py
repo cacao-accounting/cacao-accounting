@@ -387,10 +387,15 @@ class BudgetService:
             BudgetLine.cost_center_id == resolved_cost_center_id,
             BudgetLine.period_id == period_id,
         )
-        if business_unit_id is not None:
-            lines = lines.filter(BudgetLine.business_unit_id == business_unit_id)
-        if project_id is not None:
-            lines = lines.filter(BudgetLine.project_id == project_id)
+        # A missing dimension means a global transaction, not an aggregate of
+        # every dimension-specific budget.  Otherwise a project-only budget
+        # could authorize an unrelated transaction without that project.
+        lines = lines.filter(
+            BudgetLine.business_unit_id.is_(None)
+            if business_unit_id is None
+            else BudgetLine.business_unit_id == business_unit_id
+        )
+        lines = lines.filter(BudgetLine.project_id.is_(None) if project_id is None else BudgetLine.project_id == project_id)
         return sum(line.amount for line in lines.all())
 
     @staticmethod

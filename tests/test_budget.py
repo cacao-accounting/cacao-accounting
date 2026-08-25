@@ -567,3 +567,54 @@ def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
     assert variance.totals["actual"] == Decimal("300")
     assert report.totals["budget"] == Decimal("250")
     assert report.totals["actual"] == Decimal("300")
+
+
+def test_budget_control_does_not_use_dimension_restricted_budget_for_global_transaction(app_ctx):
+    """A transaction without dimensions cannot consume a project-only budget."""
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    book = database.session.query(Book).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+    project = Project(entity="cacao", code="PRJ-GLOBAL-SCOPE", name="Proyecto restringido", enabled=True, start=per.start)
+    database.session.add(project)
+    database.session.flush()
+
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "DIMENSION-SCOPE-TEST",
+            "name": "Presupuesto por proyecto",
+            "currency_id": book.currency or database.session.get(Entity, "cacao").currency,
+        },
+        str(admin_user.id),
+    )
+    service.add_budget_line(
+        budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "project_id": project.id,
+            "period_id": per.id,
+            "amount": 100,
+        },
+        str(admin_user.id),
+    )
+    service.approve_budget(budget.id, str(admin_user.id))
+
+    result = service.validate_transaction(
+        company="cacao",
+        date_val=per.start,
+        account_id=acc.id,
+        cost_center_id=cc.id,
+        amount=Decimal("1"),
+        document_id="GLOBAL-TRANSACTION",
+        document_type="purchase_order",
+    )
+
+    assert result["budget"] == Decimal("0")
+    assert result["exceeded"] is True
