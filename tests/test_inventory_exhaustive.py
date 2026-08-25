@@ -42,6 +42,7 @@ from cacao_accounting.database import (
     GLEntry,
 )
 from cacao_accounting.contabilidad.posting import (
+    PostingError,
     submit_document,
     cancel_document,
 )
@@ -453,6 +454,31 @@ def test_03_traslados_entre_inventarios(app):
 
         assert _get_bin("WH-MAIN").actual_qty == Decimal("6.0")
         assert _get_bin("WH-SEC").actual_qty == Decimal("4.0")
+
+
+def test_material_transfer_rejects_the_same_source_and_target_warehouse(app):
+    """A same-warehouse transfer must not reorder FIFO valuation layers."""
+    _setup_inventory_test_data(app)
+    with app.app_context():
+        _create_and_submit_stock_entry(
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 1),
+            item_code="ITEM-GOODS",
+            qty=Decimal("10"),
+            valuation_rate=Decimal("100"),
+            amount=Decimal("1000"),
+            target_warehouse="WH-MAIN",
+        )
+
+        with pytest.raises(PostingError, match="bodegas de origen y destino distintas"):
+            _create_and_submit_stock_entry(
+                purpose="material_transfer",
+                posting_date=date(2026, 5, 3),
+                item_code="ITEM-GOODS",
+                qty=Decimal("4"),
+                source_warehouse="WH-MAIN",
+                target_warehouse="WH-MAIN",
+            )
 
 
 def test_04_entradas_inventario_variantes(app):

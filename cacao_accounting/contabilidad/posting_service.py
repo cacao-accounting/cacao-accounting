@@ -3455,6 +3455,8 @@ def _validate_material_transfer_accounts(document: StockEntry, company: str) -> 
         _validate_stock_entry_warehouses(document, line)
         source_warehouse = line.source_warehouse or document.from_warehouse
         target_warehouse = line.target_warehouse or document.to_warehouse
+        if source_warehouse == target_warehouse:
+            raise PostingError("La transferencia de material requiere bodegas de origen y destino distintas.")
         source_acc = warehouse_inventory_account_id(source_warehouse, company)
         target_acc = warehouse_inventory_account_id(target_warehouse, company)
         if not source_acc or not target_acc:

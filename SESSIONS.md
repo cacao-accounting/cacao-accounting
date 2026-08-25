@@ -195,3 +195,12 @@ Se completó la ruta de pago totalmente retenido solicitada durante la auditorí
 - Un pago de efectivo cero sin documentos liquidados sigue rechazado; no se permite crear anticipos ni pagos vacíos usando esta excepción.
 - La validación se apoya en las líneas fiscales canonicalizadas y persistidas, no en el resumen calculado por el navegador.
 - El efectivo bancario no se crea artificialmente: una liquidación cubierta íntegramente por retenciones publica únicamente las cuentas por pagar/cobrar y de retenciones.
+
+### Plan implementado
+
+Se auditó el posting de transferencias de inventario. Una transferencia cuyo origen y destino eran la misma bodega era aceptada: consumía capas FIFO y las recreaba al final de la cola, sin movimiento físico pero alterando la secuencia usada para valorar futuras salidas. Se añadió una validación previa que exige bodegas distintas y una prueba de regresión que confirma el rechazo; la prueba existente de transferencia válida continúa aprobando.
+
+### Decisiones de diseño
+
+- Un traslado interno requiere un cambio físico de bodega; la corrección no intenta normalizarlo como ajuste ni como movimiento nulo.
+- El rechazo ocurre antes del consumo de capas de valoración, preservando el orden FIFO y el valor histórico de inventario.
