@@ -18,6 +18,7 @@ from cacao_accounting.database import (
     CashForecastEntry,
     Entity,
     FiscalYear,
+    SalesInvoice,
 )
 from cacao_accounting.bancos.cash_forecast_service import (
     CashForecastConversionError,
@@ -184,6 +185,49 @@ def test_cash_forecast_matrix_calculation():
         # Clean up
         db.session.delete(entry_in)
         db.session.delete(entry_out)
+        db.session.delete(forecast)
+        db.session.commit()
+
+
+def test_cash_forecast_includes_invoice_with_missing_outstanding_cache():
+    """A posted imported invoice is forecast from canonical balance even without cache fields."""
+    with test_app.app_context():
+        fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+        forecast = CashForecast(
+            version="V-TEST-CANONICAL-AR",
+            description="Saldo canonico",
+            fiscal_year_id=fy.id,
+            company="cacao",
+            periodicity="monthly",
+            status="Draft",
+        )
+        db.session.add(forecast)
+        db.session.commit()
+        today = date(2026, 7, 11)
+        before = next(
+            row for row in get_cash_forecast_matrix("cacao", forecast.id, today_date=today) if row["period"] == "July 2026"
+        )
+
+        invoice = SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 7, 11),
+            document_type="sales_invoice",
+            docstatus=1,
+            grand_total=Decimal("100"),
+            transaction_currency="NIO",
+            base_currency="NIO",
+            outstanding_amount=None,
+            base_outstanding_amount=None,
+        )
+        db.session.add(invoice)
+        db.session.commit()
+
+        after = next(
+            row for row in get_cash_forecast_matrix("cacao", forecast.id, today_date=today) if row["period"] == "July 2026"
+        )
+
+        assert after["proj_ar"] - before["proj_ar"] == Decimal("100")
+        db.session.delete(invoice)
         db.session.delete(forecast)
         db.session.commit()
 

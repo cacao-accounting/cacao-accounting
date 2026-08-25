@@ -20,6 +20,7 @@ from cacao_accounting.database import (
     Entity,
 )
 from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
+from cacao_accounting.document_flow.payment import compute_outstanding_amount
 from cacao_accounting.ledger_queries import primary_ledger_id
 
 _EPOCH_DATE = date(1900, 1, 1)
@@ -188,21 +189,22 @@ def _sum_invoice_amount(
     for inv in invoices:
         flow_date = getattr(inv, "due_date", None) or inv.posting_date
         if start_date <= flow_date <= end_date:
-            amount = inv.base_outstanding_amount
+            outstanding = compute_outstanding_amount(inv)
+            if outstanding <= 0:
+                continue
+            amount = None
             try:
-                if amount is None:
-                    transaction_currency = getattr(inv, "transaction_currency", None) or company_currency
-                    outstanding = Decimal(str(inv.outstanding_amount or 0))
-                    if transaction_currency == company_currency:
-                        exchange_rate = Decimal("1")
-                    else:
-                        raw_exchange_rate = getattr(inv, "exchange_rate", None)
-                        if raw_exchange_rate is None or Decimal(str(raw_exchange_rate)) <= 0:
-                            raise CashForecastConversionError(
-                                f"No existe tipo de cambio para {transaction_currency} -> {company_currency} en {flow_date}."
-                            )
-                        exchange_rate = Decimal(str(raw_exchange_rate))
-                    amount = outstanding * exchange_rate
+                transaction_currency = getattr(inv, "transaction_currency", None) or company_currency
+                if transaction_currency == company_currency:
+                    exchange_rate = Decimal("1")
+                else:
+                    raw_exchange_rate = getattr(inv, "exchange_rate", None)
+                    if raw_exchange_rate is None or Decimal(str(raw_exchange_rate)) <= 0:
+                        raise CashForecastConversionError(
+                            f"No existe tipo de cambio para {transaction_currency} -> {company_currency} en {flow_date}."
+                        )
+                    exchange_rate = Decimal(str(raw_exchange_rate))
+                amount = outstanding * exchange_rate
             except CashForecastConversionError:
                 # An incomplete document must not make every other cash-flow
                 # projection unavailable. It remains excluded until its FX
@@ -326,7 +328,6 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         database.session.query(SalesInvoice)
         .filter(
             SalesInvoice.company == company,
-            or_(SalesInvoice.outstanding_amount > 0, SalesInvoice.base_outstanding_amount > 0),
             SalesInvoice.docstatus == 1,
         )
         .all()
@@ -335,7 +336,6 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
         database.session.query(PurchaseInvoice)
         .filter(
             PurchaseInvoice.company == company,
-            or_(PurchaseInvoice.outstanding_amount > 0, PurchaseInvoice.base_outstanding_amount > 0),
             PurchaseInvoice.docstatus == 1,
         )
         .all()

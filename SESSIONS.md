@@ -132,3 +132,12 @@ Se completó la auditoría de variantes del cálculo de impuestos incluidos. Las
 
 - Los métodos fijo y manual representan importes monetarios conocidos, por lo que ambos se excluyen de la base de tasas porcentuales incluidas.
 - El ajuste no cambia la semántica de tasas porcentuales ni de reglas con una base diferente.
+
+### Plan implementado
+
+Se auditó la proyección de caja de AR/AP. El servicio filtraba las facturas solo por sus columnas cacheadas `outstanding_amount` y `base_outstanding_amount`; una factura contabilizada importada con ambas en `NULL` quedaba fuera aunque su saldo vivo fuera positivo. Se eliminó el filtro cacheado y cada factura candidata se valora con `compute_outstanding_amount`, convirtiendo después el saldo canónico a la moneda de compañía. La prueba de regresión crea una factura con vencimiento en agosto y cachés nulos, y verifica que aumenta exactamente 100 la proyección de AR.
+
+### Decisiones de diseño
+
+- El pronóstico usa la misma fuente de verdad de saldos que AR/AP, no un índice cacheado que puede estar incompleto.
+- Los documentos liquidados se excluyen tras el cálculo canónico, por lo que ampliar la consulta no incorpora saldos cerrados.
