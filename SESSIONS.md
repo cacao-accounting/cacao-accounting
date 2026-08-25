@@ -214,3 +214,12 @@ Se auditó el filtrado de retenciones en el orquestador de liquidaciones. Este a
 - Los alias heredados permanecen compatibles, pero `payment` solo aplica a pagos y `collection` solo a cobros.
 - El evento explícito (`payment_confirmed`, `collection_confirmed` o `refund_confirmed`) sigue siendo la autoridad primaria para las reglas modernas.
 - En reembolsos, la compatibilidad heredada sigue el sentido de caja: reembolso a cliente usa `payment`; reembolso de proveedor usa `collection`.
+
+### Plan implementado
+
+Se auditó la aplicación de pagos a documentos multimoneda importados. Una factura extranjera con `exchange_rate = 0` pasaba la validación y varias rutas la trataban como tasa 1 al actualizar saldos base. Se añadió una validación de tasa histórica positiva antes de aplicar la referencia y una prueba de regresión con una factura USD de tasa cero.
+
+### Decisiones de diseño
+
+- Los documentos en moneda de la compañía no requieren tasa; los documentos extranjeros requieren una tasa positiva antes de cualquier liquidación.
+- Se rechaza la operación en el límite de referencia, antes de persistir la aplicación o modificar cachés de saldo.

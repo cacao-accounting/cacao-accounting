@@ -684,6 +684,21 @@ def _validate_payment_reference_document(
                 "No se permiten aplicaciones cruzadas de moneda."
             ).format(payment_currency, document_currency)
         )
+    _validate_document_payment_exchange_rate(document, document_currency)
+
+
+def _validate_document_payment_exchange_rate(document: Any, document_currency: str | None) -> None:
+    """Require a valid historical rate before settling a foreign document."""
+    company = getattr(document, "company", None)
+    entity = (
+        database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none() if company else None
+    )
+    company_currency = getattr(entity, "currency", None)
+    if not document_currency or not company_currency or document_currency == company_currency:
+        return
+    exchange_rate = getattr(document, "exchange_rate", None)
+    if exchange_rate is None or Decimal(str(exchange_rate)) <= 0:
+        raise ValueError(_("El documento referenciado no tiene un tipo de cambio válido para " "su moneda de transacción."))
 
 
 def _build_payment_reference(

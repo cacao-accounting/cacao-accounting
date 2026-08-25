@@ -270,6 +270,38 @@ def test_fully_withheld_payment_can_be_registered_with_zero_cash(app_ctx):
     assert invoice.outstanding_amount == Decimal("0")
 
 
+def test_payment_reference_rejects_a_foreign_document_with_zero_exchange_rate(app_ctx):
+    """A foreign reference must not silently be valued at a one-to-one rate."""
+    from cacao_accounting.bancos.services import _validate_payment_reference_document
+
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        transaction_currency="USD",
+        exchange_rate=Decimal("0"),
+        docstatus=1,
+        grand_total=Decimal("100"),
+        outstanding_amount=Decimal("100"),
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        payment_type="receive",
+        currency="USD",
+        party_type="customer",
+        party_id=customer.id,
+    )
+
+    with pytest.raises(ValueError, match="tipo de cambio válido"):
+        _validate_payment_reference_document(
+            payment=payment,
+            document=invoice,
+            flow_source_type="sales_invoice",
+        )
+
+
 def test_payment_line_cannot_exceed_individual_outstanding(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
