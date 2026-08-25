@@ -79,6 +79,23 @@ Se detectó una segunda condición límite en el cálculo de plantillas fiscales
 - Una línea existente con importe cero es información contable válida y no equivale a la ausencia de líneas.
 - Se preserva el respaldo por total documental para flujos heredados que efectivamente no aportan líneas al motor.
 
+## 2026-08-25 (auditoría funcional)
+
+### Petición del usuario
+
+Realizar una auditoría funcional completa del sistema (solo lectura, sin editar código) para evaluar si es best-in-class, y luego abrir issues en GitHub para los hallazgos detectados.
+
+### Plan implementado
+
+Se auditó en profundidad O2C (ventas), S2P (compras), bancos/tesorería, inventario, núcleo contable/fiscal, reportes y plataforma transversal (auth, admin, API, portal, flujo documental, aprobaciones, impresión, imports, frontend, CLI), contrastando contra ERPs de referencia (Odoo, ERPNext, SAP/Dynamics). El veredicto: el núcleo contable-operativo es best-in-class (GL append-only, multi-libro/multimoneda, parcialidades línea-a-línea, matching 3-way, aprobaciones anti-tamper); las brechas se concentran en capa comercial (precios/descuentos), reporting corporativo (EFE, comparativos, consolidación), trazabilidad física (lote/serie sin UI) y plataforma (MFA, API, async). Los 5 hallazgos más sensibles se re-verificaron contra el árbol actual antes de publicar. Se crearon 27 issues en GitHub (#720–#746): 6 HIGH, 19 MEDIUM y 2 LOW (checklists), siguiendo la convención del repo (`SEVERITY:` + etiquetas por módulo/severidad), cada uno con resumen, evidencia archivo:línea, impacto, sugerencia y criterios de aceptación.
+
+### Decisiones de diseño
+
+- Auditoría 100% de solo lectura; ningún archivo de código fue modificado.
+- Hallazgos afines se agruparon en un solo issue cuando forman una unidad de trabajo coherente (p. ej. control presupuestario #728, paquete de reporting corporativo #743, endurecimiento de cuentas #739, quick wins de UX #745).
+- No se usaron etiquetas del flujo QA del repo (`verified`, `needs-work`, etc.) para no interferir con su semántica de validación; solo severidad + módulo + tipo.
+- Cuerpos en español y títulos en inglés con prefijo de severidad, replicando el estilo de los issues históricos del proyecto.
+
 ### Plan implementado
 
 Se auditó la resolución de referencias durante el pago y la liquidación cambiaria. El helper de documentos de referencia solo reconocía literalmente `purchase_invoice`; una nota de crédito o débito de compra se consultaba erróneamente contra `SalesInvoice`. Se cambió la resolución para elegir `PurchaseInvoice` o `SalesInvoice` por la familia del doctype y se añadió una prueba de regresión de una nota de crédito de compra.
@@ -150,3 +167,12 @@ Se auditó el cierre fiscal anual. La comprobación de períodos abiertos usaba 
 
 - `is_closed` es la autoridad para bloquear movimientos y decidir elegibilidad de cierre; `enabled` es una bandera administrativa independiente.
 - Los períodos cerrados pueden seguir disponibles para lectura y reportes sin reabrir el año fiscal.
+
+### Plan implementado
+
+La validación completa detectó una compatibilidad faltante en el pronóstico de caja: algunos escenarios legados de reportes exponen facturas pero no las tablas de relaciones documentales requeridas por el cálculo canónico. El pronóstico ahora intenta primero el saldo canónico; solo para objetos sin tabla ORM o ante un `OperationalError` que confirma la ausencia de `document_relation` usa el saldo persistido y, si existe, su importe base. Se mantienen la conversión histórica y la exclusión individual de facturas sin tasa de cambio.
+
+### Decisiones de diseño
+
+- La fuente canónica sigue teniendo prioridad en esquemas operativos completos; el respaldo no silencia otros errores de cálculo.
+- El respaldo se limita a objetos no ORM o a la ausencia explícita de la tabla de relaciones, y conserva el importe base legado para no reconvertir una moneda ya expresada en la moneda de compañía.

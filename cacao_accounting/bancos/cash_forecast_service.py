@@ -7,7 +7,7 @@ import calendar
 from datetime import date, timedelta
 from decimal import Decimal
 from sqlalchemy import func, or_
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from cacao_accounting.database import (
     database,
     Accounts,
@@ -189,31 +189,58 @@ def _sum_invoice_amount(
     for inv in invoices:
         flow_date = getattr(inv, "due_date", None) or inv.posting_date
         if start_date <= flow_date <= end_date:
-            outstanding = compute_outstanding_amount(inv)
-            if outstanding <= 0:
-                continue
-            amount = None
             try:
-                transaction_currency = getattr(inv, "transaction_currency", None) or company_currency
-                if transaction_currency == company_currency:
-                    exchange_rate = Decimal("1")
+                if getattr(inv, "__table__", None) is None:
+                    outstanding, amount = _legacy_forecast_amount(inv, company_currency, flow_date)
                 else:
-                    raw_exchange_rate = getattr(inv, "exchange_rate", None)
-                    if raw_exchange_rate is None or Decimal(str(raw_exchange_rate)) <= 0:
-                        raise CashForecastConversionError(
-                            f"No existe tipo de cambio para {transaction_currency} -> {company_currency} en {flow_date}."
-                        )
-                    exchange_rate = Decimal(str(raw_exchange_rate))
-                amount = outstanding * exchange_rate
+                    outstanding = compute_outstanding_amount(inv)
+                    amount = _forecast_base_amount(outstanding, inv, company_currency, flow_date)
+            except OperationalError as exc:
+                if not _is_missing_document_relation_table(exc):
+                    raise
+                try:
+                    outstanding, amount = _legacy_forecast_amount(inv, company_currency, flow_date)
+                except CashForecastConversionError:
+                    continue
             except CashForecastConversionError:
                 # An incomplete document must not make every other cash-flow
                 # projection unavailable. It remains excluded until its FX
                 # data is completed.
                 continue
+            if outstanding <= 0:
+                continue
             if getattr(inv, "is_return", False):
                 amount = -Decimal(str(amount))
             total += Decimal(str(amount))
     return total
+
+
+def _legacy_forecast_amount(invoice, company_currency: str, flow_date: date) -> tuple[Decimal, Decimal]:
+    """Return legacy cached balances when canonical relation data is unavailable."""
+    legacy_outstanding = Decimal(str(getattr(invoice, "outstanding_amount", None) or 0))
+    legacy_base = getattr(invoice, "base_outstanding_amount", None)
+    if legacy_base is not None:
+        return legacy_outstanding, Decimal(str(legacy_base))
+    return legacy_outstanding, _forecast_base_amount(legacy_outstanding, invoice, company_currency, flow_date)
+
+
+def _forecast_base_amount(outstanding: Decimal, invoice, company_currency: str, flow_date: date) -> Decimal:
+    """Convert a canonical outstanding amount to company currency for forecast use."""
+    transaction_currency = getattr(invoice, "transaction_currency", None) or company_currency
+    if transaction_currency == company_currency:
+        return outstanding
+    raw_exchange_rate = getattr(invoice, "exchange_rate", None)
+    if raw_exchange_rate is None or Decimal(str(raw_exchange_rate)) <= 0:
+        raise CashForecastConversionError(
+            f"No existe tipo de cambio para {transaction_currency} -> {company_currency} en {flow_date}."
+        )
+    return outstanding * Decimal(str(raw_exchange_rate))
+
+
+def _is_missing_document_relation_table(exc: OperationalError) -> bool:
+    """Return whether a legacy schema lacks only the canonical relation table."""
+    detail = str(exc).lower()
+    return "document_relation" in detail and ("no such table" in detail or "does not exist" in detail)
 
 
 def _compute_ar_ap_projections(
