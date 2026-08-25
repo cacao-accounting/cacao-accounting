@@ -88,7 +88,6 @@ def _document_items_total(document: Any) -> Decimal:
 
 def _calculate_template_item_tax(template_item, base_amount, running_total, inclusive_rate_total=Decimal("0")):
     """Calculate one template tax, extracting percentage taxes included in price."""
-
     tax = database.session.get(Tax, template_item.tax_id)
     if not tax or not tax.is_active:
         return None
