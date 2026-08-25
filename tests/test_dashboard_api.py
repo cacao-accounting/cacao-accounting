@@ -242,6 +242,14 @@ def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
     assert Decimal(str(sections["sales"]["tables"]["top_customers"][0]["total"])) == Decimal("800")
 
 
+def test_concentration_share_is_a_portion_of_the_total():
+    """Concentration shares are proportions, not period-over-period variances."""
+    from cacao_accounting.reportes.analytics import _share_percentage
+
+    assert _share_percentage(Decimal("60"), Decimal("100")) == Decimal("60")
+    assert _share_percentage(Decimal("60"), Decimal("0")) == Decimal("0")
+
+
 @pytest.mark.skipif(is_desktop_mode(), reason="Los permisos multiusuario del dashboard requieren modo cloud")
 def test_dashboard_hides_sales_without_permission(client):
     """Sin permiso de ventas no se devuelven datos sensibles de ventas."""

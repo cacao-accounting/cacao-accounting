@@ -290,10 +290,17 @@ def get_concentration(company: str, dimension: str, start: date, end: date, limi
             "dimension": dimension,
             "key": key,
             "amount": amount,
-            "share_percentage": _percentage(amount, grand_total) or Decimal("0"),
+            "share_percentage": _share_percentage(amount, grand_total),
         }
         for key, amount in ordered[: max(1, min(limit, 100))]
     ]
+
+
+def _share_percentage(amount: Decimal, total: Decimal) -> Decimal:
+    """Return an item's signed contribution to a concentration total."""
+    if total == 0:
+        return Decimal("0")
+    return amount / total * Decimal("100")
 
 
 def _concentration_totals(company: str, dimension: str, start: date, end: date) -> defaultdict[str, Decimal]:

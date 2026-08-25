@@ -223,3 +223,12 @@ Se auditó la aplicación de pagos a documentos multimoneda importados. Una fact
 
 - Los documentos en moneda de la compañía no requieren tasa; los documentos extranjeros requieren una tasa positiva antes de cualquier liquidación.
 - Se rechaza la operación en el límite de referencia, antes de persistir la aplicación o modificar cachés de saldo.
+
+### Plan implementado
+
+Se auditó el indicador de concentración en los reportes analíticos. La salida reutilizaba la fórmula de variación entre períodos para calcular la participación de cada grupo contra el total; por ejemplo, un importe de 60 dentro de un total de 100 se exponía como -40 % en vez de 60 %. Se introdujo un cálculo específico de participación y una prueba de regresión que cubre el total ordinario y el total cero.
+
+### Decisiones de diseño
+
+- Las participaciones se calculan como importe dividido entre total, conservando el signo contable de ambos valores.
+- Un total cero se presenta como 0 % para evitar una división indefinida y mantener la respuesta del reporte estable.
