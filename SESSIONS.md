@@ -141,3 +141,12 @@ Se auditó la proyección de caja de AR/AP. El servicio filtraba las facturas so
 
 - El pronóstico usa la misma fuente de verdad de saldos que AR/AP, no un índice cacheado que puede estar incompleto.
 - Los documentos liquidados se excluyen tras el cálculo canónico, por lo que ampliar la consulta no incorpora saldos cerrados.
+
+### Plan implementado
+
+Se auditó el cierre fiscal anual. La comprobación de períodos abiertos usaba `is_closed = False OR enabled = True`, por lo que un período correctamente cerrado pero habilitado para consulta/reportes impedía permanentemente el cierre del año. Se corrigió el criterio para considerar abierto únicamente un período con `is_closed = False`. La prueba de ciclo de cierre anual conserva el período habilitado después de cerrarlo y verifica que el comprobante de cierre se genera.
+
+### Decisiones de diseño
+
+- `is_closed` es la autoridad para bloquear movimientos y decidir elegibilidad de cierre; `enabled` es una bandera administrativa independiente.
+- Los períodos cerrados pueden seguir disponibles para lectura y reportes sin reabrir el año fiscal.

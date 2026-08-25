@@ -210,7 +210,7 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     open_periods = database.session.execute(
         select(AccountingPeriod.id)
         .where(AccountingPeriod.fiscal_year_id == fiscal_year.id)
-        .where((AccountingPeriod.is_closed.is_(False)) | (AccountingPeriod.enabled.is_(True)))
+        .where(AccountingPeriod.is_closed.is_(False))
     ).all()
     if open_periods:
         raise FiscalYearClosingError(

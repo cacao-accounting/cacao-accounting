@@ -165,7 +165,10 @@ def test_fiscal_year_closing_cycle(app, setup_data):
             database.select(AccountingPeriod).filter_by(fiscal_year_id=setup_data["fiscal_year_id"])
         ).scalar_one()
         period.is_closed = True
-        period.enabled = False
+        # A closed period may remain enabled for reporting and lookup.  Its
+        # closed state, not the administrative enabled flag, governs fiscal
+        # year closing eligibility.
+        period.enabled = True
         database.session.commit()
 
         # 2. Create Closing Voucher (auto-submitted)
