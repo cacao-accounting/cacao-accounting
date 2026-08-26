@@ -40,6 +40,36 @@ El sistema es:
 
 # Bitácora de desarrollo
 
+## 2026-08-26
+
+### Petición del usuario
+
+Corregir fallos focalizados de esquema, navegación administrativa, reconciliación FIFO y permisos de búsqueda.
+
+### Plan implementado
+
+La ejecución de esquema se verificó sin `DATABASE_URL`, para mantener aisladas las pruebas SQLite. Se actualizó la
+expectativa de navegación con la sección pública de seguridad y la política ACL que rechaza con HTTP 403 un filtro de
+compañía no autorizado. En inventario, la reversa de una recepción ahora queda fijada a su capa de valoración original,
+evitando que FIFO consuma una recepción anterior al cancelar una recepción posterior. La regresión valida que una venta
+posterior conserva el coste de la capa no anulada y que Bin, SLE, SVL y GL se reconcilian.
+
+## 2026-08-26
+
+### Petición del usuario
+
+Hacer visible en el panel administrativo la opción para asignar compañías a usuarios.
+
+### Plan implementado
+
+Se corrigió la visibilidad de la acción `Compañías` en la lista de usuarios: antes solo aparecía para
+clasificación `system`, aunque el administrador (`admin`) también es un usuario interno válido. La ruta
+ahora aplica la misma regla que la asignación de roles: bloquea únicamente usuarios portal (`customer` y
+`supplier`). Se añadió una prueba que verifica la visibilidad y el guardado para el usuario administrador.
+
+La columna de acciones usa ahora badges compactos para reducir el espacio horizontal ocupado por los
+enlaces y conservar la misma diferenciación visual por tipo de acción.
+
 ## 2026-08-23
 
 ### Petición del usuario
