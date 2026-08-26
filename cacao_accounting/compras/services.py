@@ -1023,6 +1023,8 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
                 rate=rate,
                 amount=amount,
                 warehouse=warehouse_code,
+                batch_id=request.form.get(f"batch_id_{i}") or None,
+                serial_no=request.form.get(f"serial_no_{i}") or None,
             )
             database.session.add(linea)
             database.session.flush()
@@ -1077,6 +1079,8 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
+                batch_id=request.form.get(f"batch_id_{i}") or None,
+                serial_no=request.form.get(f"serial_no_{i}") or None,
             )
             database.session.add(linea)
             database.session.flush()

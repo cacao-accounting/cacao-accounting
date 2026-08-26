@@ -294,6 +294,9 @@
                         line.item_name = opt.name || opt.item_name || opt.display_name || opt.label || "";
                         line.allowed_uoms = opt.allowed_uoms || opt.uoms || (opt.default_uom ? [opt.default_uom] : []);
                         line.uom = opt.default_uom || line.allowed_uoms[0] || line.uom || "";
+                        line.has_batch = opt.has_batch || false;
+                        line.has_serial_no = opt.has_serial_no || false;
+                        line.has_expiry_date = opt.has_expiry_date || false;
                         onItemChange(line);
                       },
                       messages: {
@@ -395,6 +398,58 @@
                       <option :value="warehouse.code" x-text="warehouse.code + (warehouse.name ? ' — ' + warehouse.name : '')"></option>
                     </template>
                   </select>
+                </template>
+                <template x-if="column.field === 'batch_id'" x-show="line.has_batch">
+                  <div class="ca-smart-select" x-data='smartSelect({
+                    doctype: "batch",
+                    name: "batch_id_" + index,
+                    minChars: 1,
+                    preload: false,
+                    preloadOnFocus: true,
+                    filters: {
+                      item_code: function() { return line.item_code || ""; }
+                    },
+                    requiredFilters: ["item_code"],
+                    initialValue: line.batch_id,
+                    initialLabel: line.batch_no || line.batch_id || "",
+                    onSelect: function(opt) {
+                      line.batch_id = opt.value || opt.id || "";
+                      line.batch_no = opt.batch_no || "";
+                    },
+                    messages: {
+                      placeholder: "{{ _('Buscar lote') }}",
+                      loading: "{{ _('Buscando...') }}",
+                      noResults: "{{ _('Sin resultados') }}",
+                      minChars: "{{ _('Escriba para buscar') }}",
+                      clear: "{{ _('Limpiar') }}",
+                      invalid: "{{ _('Seleccione una opción válida') }}",
+                      error: "{{ _('No se pudo buscar') }}"
+                    }
+                  })'>
+                    <input type="hidden" :name="'batch_id_' + index" x-model="selectedValue">
+                    <div class="ca-smart-select-input-wrap">
+                      <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput"
+                        @focus="onFocus" @blur="closeSoon" :placeholder="column.label">
+                      <button class="ca-smart-select-clear" type="button" x-show="selectedValue" @click="clearSelection"
+                        title="{{ _('Limpiar') }}">×</button>
+                    </div>
+                    <div class="ca-smart-select-menu" x-show="open" x-cloak>
+                      <div class="ca-smart-select-state" x-show="loading" x-text="messages.loading"></div>
+                      <template x-for="option in options" :key="option.value">
+                        <button class="ca-smart-select-option" type="button"
+                          @mousedown.prevent="selectOptionFromValues(option.value !== undefined ? option.value : option.id, option.display_name || option.label || '', option)">
+                          <span x-text="option.display_name"></span>
+                        </button>
+                      </template>
+                      <div class="ca-smart-select-state" x-show="!loading && !options.length && search.length >= minChars"
+                        x-text="messages.noResults"></div>
+                      <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+                    </div>
+                  </div>
+                </template>
+                <template x-if="column.field === 'serial_no'" x-show="line.has_serial_no">
+                  <input class="form-control form-control-sm" type="text" :name="'serial_no_' + index" x-model="line.serial_no"
+                    :placeholder="column.label">
                 </template>
               </td>
             </template>
