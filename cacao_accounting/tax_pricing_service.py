@@ -135,8 +135,6 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
         raise TaxPricingError("La plantilla de impuestos pertenece a otra compania.")
 
     base_amount = _document_items_total(document)
-    if base_amount < 0:
-        base_amount = abs(base_amount)
     running_total = base_amount
     lines: list[TaxLineResult] = []
     additive_total = Decimal("0")

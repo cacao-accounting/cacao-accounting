@@ -295,6 +295,35 @@ def test_tax_template_does_not_tax_free_items_using_a_stale_document_total(app_c
     assert result.payable_delta == Decimal("0.0000")
 
 
+def test_tax_template_preserves_negative_base_for_credit_note(app_ctx: Flask) -> None:
+    """Credit notes must produce tax amounts with the same negative direction as their lines."""
+    from cacao_accounting.database import Tax, TaxTemplate, TaxTemplateItem, database
+    from cacao_accounting.tax_pricing_service import calculate_taxes
+
+    tax = Tax(name="IVA crédito", rate=Decimal("15"), tax_type="percentage", applies_to="sales", is_active=True)
+    template = TaxTemplate(name="Venta crédito", company="cacao", template_type="selling", is_active=True)
+    database.session.add_all([tax, template])
+    database.session.flush()
+    database.session.add(
+        TaxTemplateItem(
+            tax_template_id=template.id,
+            tax_id=tax.id,
+            sequence=1,
+            calculation_base="net_document",
+            behavior="additive",
+        )
+    )
+    database.session.commit()
+
+    result = calculate_taxes(
+        SimpleNamespace(company="cacao", _tax_items=[SimpleNamespace(amount=Decimal("-100"))]), template.id
+    )
+
+    assert result.lines[0].amount == Decimal("-15.0000")
+    assert result.additive_total == Decimal("-15.0000")
+    assert result.payable_delta == Decimal("-15.0000")
+
+
 def test_admin_tax_rule_crud(client) -> None:
     """The admin module should create, edit and delete fiscal rules."""
     from cacao_accounting.database import TaxRule, database
