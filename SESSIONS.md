@@ -1,3 +1,43 @@
+# Introducción
+
+Cacao Accouting es un software contable que busca dar covertura completa y robusto a los siguientes
+flujo de negocio:
+- Order to Cash (O2C): Flujo completo del ciclo de venta.
+- Source to Pay (S2P): Flujo completo del proceso de abastecimiento.
+- Record to Report (R2R): Generación robusta de reportes a partir de los registros almacenados en
+  el sistema
+- Inventory to Fulfillment (I2F): Gestión integral de inventarios.
+- Cash & Treasury Management (CTM): Gestión del efectivo en caja y bancos.
+
+Cacao Accounting no pretende ser un ERP, manufactura, gestión de nominas, activo fijo y similares
+estan fuera de el alcance.
+
+Cacao Accounting soporta dos modos de uso:
+- Modo Desktop: Limitado a una empresa y un usuario por base de datos.
+- Modo Cloud: Multi empresa y multiusuario con acceso definidos por roles y acceso definido a compañias
+  especificas.
+
+Modo desktop se considera la base operativa del sistema, el sistema debe ser completamente funcional en
+modo desktop, el modo cloud es una capa de funcionalidad adicional que agrega funciones utiles para 
+entornos en la nube como: correo electronico, multi usuario, multi moneda.
+
+Dado que en modo desktop solo esta disponible la base de datos local hay que mantener el scope sencillo.
+
+El sistema es:
+- Multilibro: un registro postea a varios libros sin crear registros adicionales, todos los modulos
+  operativos (O2C, S2P, I2F, CTM) publican a todos los libros activos. Solo desde el modulo de
+  contabilidad es posible seleccionar que un registro afecte libros contables especificos.
+- Multimoneda real (toda transacción registra moneda origen y moneda destino) multimoneda debe
+  considerar la moneda del libro destino si una tasa de cambio no esta disponible para la conversión
+  bloquear el registro.
+- El ledger contable es la fuente unica de verdad, los ledger de Cuentas por Pagar, Cuentas por Cobrar e
+  Inventario existen como extenciones del ledger financiero y deben reconciliables en todo momento.
+- El sistema es append only, una vez registrado un registro no se debe eliminar, solo se permite cambio
+  de status en caso de anulaciones.
+- El sistema diferencia entre anulaciones (mismo périodo) y reversiones (distintos períodos), dado que
+  las anulaciones se efectuan en el mismo período y misma fecha que el registro adicional estas en la
+  practica tienen efecto cero y pueden ser excluidos en reportes.
+
 # Bitácora de desarrollo
 
 ## 2026-08-23
@@ -327,3 +367,95 @@ Se corrigió `get_document_timeline` para consultar el tipo recibido junto con s
 - Se preservaron los siete archivos modificados sin commit por el usuario.
 
 ### Verificación
+
+## 2026-08-26 (triage de issues)
+
+### Petición del usuario
+
+Hacer triage de los 37 issues abiertos (#720–#756) comparando contra el código fuente. Clasificar: falsos positivos, ya resueltos, necesitan trabajo, diferidos pre-beta. Aplicar comentarios y etiquetas `needs-work` / `needs-review` en GitHub.
+
+### Plan implementado
+
+Se analizaron los 37 issues abiertos contra el árbol de código fuente actual. Cada issue fue clasificado y etiquetado en GitHub:
+
+**Cerrados (wontfix) — 6 issues:**
+- #725 API REST: No necesitamos API pública, es consumo interno de librerías JS
+- #724 MFA/TOTP: Redefinido a self-service recovery por token de un solo uso (ver needs-work)
+- #723 UserBookAccess admin UI: Overhead innecesario, RBAC + acceso por compañía es suficiente
+- #741 Manufacturing/BOM: Fuera de alcance, Cacao Accounting no es un ERP completo
+- #740 Task queue/scheduler: Fuera de alcance, operaciones síncronas
+- #739 Account security hardening: Pre-beta, no prioritario
+
+**Ya resueltos (wontfix) — 6 issues:**
+- #722 Cash flow statement: Ya implementado en `reportes/cash_flow.py`
+- #721 Bank matching tolerances: Ya implementado en `reconciliation_service.py`
+- #720 Batch/serial capture: Ya implementado en `transaction_form_macros.html`
+- #730 Sales orders close: Ya implementado via document flow API
+- #745 UX polish: Dark mode completo, portal paging parcial
+- #754 Tax pricing negative base: Comportamiento correcto, bases negativas son flujo real
+
+**Diferidos (needs-review) — 6 issues:**
+- #746 Platform ergonomics: i18n framework existe, strings hardcodeados es deuda técnica post-beta
+- #744 Pricing engine inactive: Price lists funcionan, descuentos no son necesarios para MVP
+- #743 Financial statements comparatives: Post-beta
+- #742 Standard costing/variances: Post-beta, FIFO ya funciona
+- #733 Financial reports memory: Performance post-beta
+- #729 Withholding lifecycle: Parcialmente implementado, refinamiento post-beta
+
+**Necesitan trabajo (needs-work) — 18 issues:**
+- #756 FiscalEngine concept_amounts: goods no se actualiza después de descomposición de impuestos incluidos
+- #755 Credit limit error message: Mezcla moneda de transacción y moneda base en mensaje
+- #753 Purchase request edit: base_currency y exchange_rate no se recalculan en edición
+- #752 Analytics _convert_to_ledger: Usa fecha exacta en vez de nearest-date
+- #751 Purchase returns supplier link: target_type hardcodeado a purchase_invoice
+- #750 Stock valuation rebuild: Puede perder SVLs de value-adjustment en reconciliación FIFO
+- #748 Dashboard income KPI: abs() enmascara pérdidas como ingreso positivo
+- #736 Accounts excluded from reports: Clasificación vacía = cuenta silenciosamente excluida
+- #732 Monthly close lacks integrity checks: No valida GL balance o subledger vs GL
+- #734 Fiscal year closing distorted: No valida reversals en periodos posteriores
+- #727 Purchase receipt warehouse: Sin validación cross-company
+- #726 Sales invoice warehouse: Auto delivery note usa item default silenciosamente
+- #749 FX difference sign: Requiere validación de signa con escenario real
+- #738 Inventory valuation divergence: Reporte puede divergir de FIFO remaining
+- #735 Project capitalization: Abor ta batch completo en moneda mixta
+- #731 Purchase request close: Ya atendido (commit local)
+- #728 Budget control skipped: Default policy do_nothing es inútil sin configuración
+- #724 Self-service recovery: Redefinido para implementar token de un solo uso por email
+
+**Requiere revisión (needs-review) — 1 issue:**
+- #737 Bank statement hash: Posible false positive, reference_number None puede causar falsos positivos
+
+### Decisiones de diseño
+
+- El sistema no ha sido lanzado ni para beta pública; muchos issues son prematuros.
+- Legacy scopes son overhead que se debe evitar.
+- No hay deployments que proteger (entorno pre-beta).
+- Cacao Accounting no es un ERP completo; flujos MTI (BOM, manufacturing) están fuera de alcance.
+- Bases negativas tienen usos prácticos (devoluciones con impuestos negativos) y no son un error.
+- La API REST es de consumo interno de librerías JS, no necesita versionado ni OpenAPI.
+
+### Verificación
+
+Se aplicaron 37 comentarios y etiquetas en GitHub. Todos los issues del rango #720–#756 fueron procesados.
+
+## 2026-08-26 (acceso por compañía)
+
+### Petición del usuario
+
+Eliminar el acceso por libro contable por ser un overhead. Mantener los roles globales para definir acciones y añadir, en paralelo, administración de compañías por usuario en Cloud. Un usuario no debe poder conocer la existencia de una compañía que no tiene asignada.
+
+### Plan implementado
+
+Se reemplazó `UserBookAccess` por `UserCompanyAccess`, que asigna explícitamente compañías a usuarios internos. Los roles existentes conservan el control global de módulos y acciones; las rutas y servicios ahora exigen ambas capas antes de operar. Se añadió la pantalla Cloud Administración → Usuarios → Compañías y se ocultó en Desktop.
+
+Los listados, dashboard, endpoints de selectores y formularios de compañía usan únicamente compañías activas asignadas al usuario. Los libros contables se preservan como dimensión financiera, pero ya no autorizan ni restringen usuarios: el posting resuelve todos los libros activos de la compañía e ignora selecciones parciales heredadas.
+
+### Decisiones de diseño
+
+- RBAC y acceso a compañías son capas paralelas: el rol define qué puede hacer un usuario; el grant define en qué compañías.
+- Los administradores conservan acceso global y los usuarios sin grant no reciben resultados que revelen compañías ajenas.
+- No se agrega migración de datos porque las bases de desarrollo actuales son descartables.
+
+### Verificación de compatibilidad
+
+Con `DATABASE_URL` desactivada, la suite completa produjo 2.192 tests pasados, 14 fallos y 12 omitidos. Los fallos correspondían a expectativas heredadas del ACL por libro, selección parcial de libros, descubrimiento global de compañías, fixtures con permisos obsoletos y mensajes que revelaban compañías inactivas. Se actualizaron esas expectativas y la batería de regresión resultante pasó 43/43; no quedaron fallos de conexión de base de datos.
