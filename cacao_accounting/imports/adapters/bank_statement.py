@@ -132,8 +132,8 @@ class BankStatementAdapter(BaseImportAdapter):
 
     def persist_document(self, document: Any) -> None:
         """Persist bank transactions to the database."""
-        seen: set[tuple[Any, ...]] = set()
         persisted_ids: list[str] = []
+        seen_in_batch: set[str] = set()
         for tx_data in document:
             bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
             if bank_account is None:
@@ -144,29 +144,23 @@ class BankStatementAdapter(BaseImportAdapter):
                     f"La cuenta bancaria {bank_account.id} pertenece a la compañía {bank_account.company}, "
                     f"no a {company_id}."
                 )
-            identity = (
-                tx_data["bank_account_id"],
-                tx_data["posting_date"],
-                tx_data.get("reference_number", ""),
-                tx_data.get("deposit"),
-                tx_data.get("withdrawal"),
-            )
             existing = (
                 database.session.execute(
-                    database.select(BankTransaction).filter_by(
-                        bank_account_id=identity[0],
-                        posting_date=identity[1],
-                        reference_number=identity[2],
-                        deposit=identity[3],
-                        withdrawal=identity[4],
+                    database.select(BankTransaction)
+                    .filter_by(
+                        bank_account_id=tx_data["bank_account_id"],
+                        posting_date=tx_data["posting_date"],
+                        reference_number=tx_data.get("reference_number", ""),
+                        deposit=tx_data.get("deposit"),
+                        withdrawal=tx_data.get("withdrawal"),
                     )
+                    .filter(~BankTransaction.id.in_(list(seen_in_batch)))
                 )
                 .scalars()
                 .first()
             )
-            if identity in seen or existing:
-                raise ValueError("La transacción bancaria ya existe en el extracto o en la base de datos.")
-            seen.add(identity)
+            if existing:
+                raise ValueError("La transacción bancaria ya existe en la base de datos.")
             tx = BankTransaction(
                 bank_account_id=tx_data["bank_account_id"],
                 posting_date=tx_data["posting_date"],
@@ -177,6 +171,7 @@ class BankStatementAdapter(BaseImportAdapter):
             )
             database.session.add(tx)
             database.session.flush()
+            seen_in_batch.add(str(tx.id))
             persisted_ids.append(str(tx.id))
         self._auto_reconcile(persisted_ids)
 

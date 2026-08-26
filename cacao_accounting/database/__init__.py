@@ -3201,7 +3201,6 @@ class BankTransaction(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Transaccion bancaria importada o ingresada manualmente."""
 
     __tablename__ = "bank_transaction"
-    __table_args__ = (UniqueConstraint("identity_key", name="uq_bank_transaction_identity"),)
     identity_key = database.Column(database.String(64), nullable=False, index=True)
     bank_account_id = database.Column(
         database.String(26),
