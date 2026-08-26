@@ -4,7 +4,7 @@
 """Rutas para el submódulo de Presupuesto."""
 
 from cacao_accounting.exceptions import flash_error
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from cacao_accounting.auth.permisos import Permisos
@@ -42,25 +42,9 @@ _TEMPLATE_PRESUPUESTO_IMPORTAR = "contabilidad/presupuestos/import.html"
 presupuestos = Blueprint("presupuestos", __name__)
 
 
-def _authorized_budget_books(permisos: Permisos, action: str = "can_read") -> list[str]:
-    """Obtiene libros autorizados tolerando dobles de prueba mínimos."""
-    getter = getattr(permisos, "obtener_libros_autorizados", None)
-    return getter(action) if callable(getter) else []
-
-
 def _enforce_budget_company_access(company: str, action: str = "consultar") -> None:
-    """Valida ACL de presupuesto con fallback para roles sin grants de libro."""
-    module_id = obtener_id_modulo_por_nombre("accounting")
-    permisos = Permisos(modulo=module_id, usuario=current_user.id)
-    books = _authorized_budget_books(
-        permisos, {"consultar": "can_read", "crear": "can_write", "editar": "can_write"}.get(action, "can_read")
-    )
-    if books or getattr(permisos, "administrador", False):
-        exige_acceso_compania("accounting", company, action)
-        return
-    read_allowed = getattr(permisos, "consultar", False) or getattr(permisos, "importar", False)
-    if action != "consultar" or not read_allowed:
-        abort(403)
+    """Valida RBAC y acceso explícito a la compañía del presupuesto."""
+    exige_acceso_compania("accounting", company, action)
 
 
 @presupuestos.before_request
@@ -94,12 +78,8 @@ def enforce_budget_company_access():
 def listar():
     """Listado de presupuestos."""
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
-    authorized_books = _authorized_budget_books(permisos, "can_read")
-    query = (
-        database.select(Budget).where(Budget.ledger_id.in_(authorized_books))
-        if authorized_books
-        else database.select(Budget) if getattr(permisos, "consultar", False) else database.select(Budget).where(False)
-    )
+    companies = permisos.obtener_companias_autorizadas() if permisos.consultar else []
+    query = database.select(Budget).where(Budget.company.in_(companies))
     search = request.args.get("search")
     if search:
         query = query.filter(Budget.name.ilike(f"%{search}%") | Budget.budget_code.ilike(f"%{search}%"))

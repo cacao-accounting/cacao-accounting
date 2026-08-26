@@ -36,9 +36,7 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
     validate_template_balance(items)
     company = data["company"]
     books = _authorized_template_books(company, data.get("books"), user_id, "crear")
-    ledger_id = _canonical_book_reference(company, data.get("ledger_id"))
-    if ledger_id and ledger_id not in (books or []):
-        raise RecurringJournalError("El libro principal debe pertenecer a los libros autorizados seleccionados.")
+    ledger_id = books[0] if books else None
 
     template = RecurringJournalTemplate(
         code=data["code"],
@@ -281,38 +279,27 @@ def _serialize_book_codes(books: Any) -> str | None:
 
 
 def _authorized_template_books(company: str, requested: Any, user_id: str, action: str) -> list[str] | None:
-    """Canonicaliza libros de una plantilla contra el ACL contable."""
+    """Valida compañía y devuelve todos sus libros activos."""
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
         raise RecurringJournalError("El usuario indicado no existe o no puede autorizar libros contables.")
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
-    granular_action = {
-        "autorizar": "can_approve",
-        "anular": "can_cancel",
-        "consultar": "can_read",
-        "listar": "can_read",
-    }.get(action, "can_write")
-    authorized = permissions.obtener_libros_autorizados(granular_action, company=company, return_codes=True)
+    permission_name = {"autorizar": "autorizar", "anular": "anular", "consultar": "consultar", "listar": "consultar"}.get(
+        action, "crear"
+    )
+    if not getattr(permissions, permission_name, False) or not permissions.tiene_acceso_compania(company):
+        raise RecurringJournalError("El usuario no tiene acceso a la compañía seleccionada.")
     active = database.session.execute(
         database.select(Book)
         .where(Book.entity == company)
         .where(Book.status == "activo")
-        .where(Book.code.in_(authorized))
         .order_by(Book.is_primary.desc(), Book.code)
     ).scalars()
     active_codes = [book.code for book in active]
     if not active_codes:
-        raise RecurringJournalError("El usuario no tiene libros contables autorizados para la compañía.")
-    active_books = database.session.execute(
-        database.select(Book).where(Book.entity == company).where(Book.status == "activo")
-    ).scalars()
-    references = {str(value): book.code for book in active_books for value in (book.id, book.code)}
-    selected = [references.get(str(value), str(value)) for value in (_normalize_requested_books(requested) or active_codes)]
-    invalid = set(selected) - set(active_codes)
-    if invalid:
-        raise RecurringJournalError(f"El usuario no tiene acceso al libro contable {sorted(invalid)[0]}.")
-    return [code for code in active_codes if code in selected]
+        raise RecurringJournalError("La compañía no tiene libros contables activos.")
+    return active_codes
 
 
 def _normalize_requested_books(value: Any) -> list[str] | None:

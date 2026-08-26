@@ -223,19 +223,12 @@ def _normalize_ledger_codes(ledger_code: str | Sequence[str] | None) -> list[str
 
 
 def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) -> list[Book]:
-    selected_codes = _normalize_ledger_codes(ledger_code)
+    """Return every active book for a company, ignoring legacy selectors."""
     query = select(Book).where(
         Book.entity == company,
         Book.status == "activo",
     )
-    if selected_codes:
-        query = query.where(Book.code.in_(selected_codes))
     books = database.session.execute(query.order_by(Book.is_primary.desc(), Book.code)).scalars().all()
-    if selected_codes:
-        found_codes = {book.code for book in books}
-        missing_codes = [code for code in selected_codes if code not in found_codes]
-        if missing_codes:
-            raise PostingError("Uno o más libros contables seleccionados no existen o están inactivos para la compañia.")
     if not books:
         raise PostingError("La compañía no tiene libro contable activo.")
     return list(books)

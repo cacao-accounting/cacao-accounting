@@ -175,7 +175,7 @@ def _validate_fiscal_year_closing(journal: ComprobanteContable) -> FiscalYear | 
 def _post_and_sync_journal(journal: ComprobanteContable, commit: bool) -> list[Any]:
     """Realiza la contabilización y sincronización del comprobante contable."""
     try:
-        entries = post_comprobante_contable(journal, ledger_code=_selected_books_for_journal(journal))  # type: ignore[misc]
+        entries = post_comprobante_contable(journal)  # type: ignore[misc]
         sync_journal_document_relations(journal)
         return entries
     except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
@@ -699,49 +699,32 @@ def _authorized_journal_books(
     user_id: str,
     action: str,
 ) -> list[str] | None:
-    """Canonicaliza libros de un borrador contra el ACL del usuario.
-
-    La validación falla cerrada: los flujos internos también deben transportar
-    un usuario persistido y auditable.
-    """
+    """Valida el alcance de compañía y devuelve todos los libros activos."""
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
         raise JournalValidationError("El usuario indicado no existe o no puede autorizar libros contables.")
-    authorized = _authorized_book_codes(company, user_id, action)
-    if not authorized:
-        raise JournalValidationError("El usuario no tiene libros contables autorizados para la compañía.")
-    active_books = database.session.execute(
-        select(Book).where(Book.entity == company).where(Book.status == "activo")
-    ).scalars()
-    references = {str(value): book.code for book in active_books for value in (book.id, book.code)}
-    selected = [references.get(str(value), str(value)) for value in (requested_books or authorized)]
-    invalid = set(selected) - set(authorized)
-    if invalid:
-        raise JournalValidationError(f"El usuario no tiene acceso al libro contable {sorted(invalid)[0]}.")
-    return [code for code in authorized if code in selected]
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
+    permission_name = {
+        "autorizar": "autorizar",
+        "anular": "anular",
+        "consultar": "consultar",
+        "editar": "editar",
+        "validar": "validar",
+    }.get(action, "crear")
+    if not getattr(permissions, permission_name, False) or not permissions.tiene_acceso_compania(company):
+        raise JournalValidationError("El usuario no tiene acceso a la compañía seleccionada.")
+    return [
+        book.code
+        for book in database.session.execute(
+            select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.is_primary.desc(), Book.code)
+        ).scalars()
+    ]
 
 
 def _validate_journal_book_access(company: str, books: list[str] | None, user_id: str, action: str) -> None:
-    """Valida libros persistidos antes de una transición que afecta el GL."""
-    if not books:
-        raise JournalValidationError("El comprobante no tiene una selección canónica de libros contables.")
+    """Valida el permiso de compañía antes de una transición GL."""
     _authorized_journal_books(company, books, user_id, action)
-
-
-def _authorized_book_codes(company: str, user_id: str, action: str) -> list[str]:
-    """Obtiene códigos activos autorizados para una compañía y acción."""
-    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
-    granular_action = "can_approve" if action in {"autorizar", "validar"} else "can_write"
-    codes = permissions.obtener_libros_autorizados(granular_action, company=company, return_codes=True)
-    active_books = database.session.execute(
-        select(Book)
-        .where(Book.entity == company)
-        .where(Book.status == "activo")
-        .where(Book.code.in_(codes))
-        .order_by(Book.is_primary.desc(), Book.code)
-    ).scalars()
-    return [book.code for book in active_books]
 
 
 def _line_model(

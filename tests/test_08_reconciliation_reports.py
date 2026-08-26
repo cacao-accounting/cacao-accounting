@@ -3835,8 +3835,8 @@ def test_bank_statement_adapter_rejects_empty_movement(app_ctx):
     assert any("depósito o un retiro" in error for error in errors)
 
 
-def test_bank_company_lists_use_authorized_book_scope(app_ctx, monkeypatch):
-    """Los listados bancarios no exponen compañías fuera de los libros autorizados."""
+def test_bank_company_lists_use_assigned_company_scope(app_ctx, monkeypatch):
+    """Los listados bancarios no exponen compañías fuera de los grants."""
     import importlib
     from types import SimpleNamespace
 
@@ -3858,7 +3858,7 @@ def test_bank_company_lists_use_authorized_book_scope(app_ctx, monkeypatch):
     monkeypatch.setattr(
         bancos_module,
         "Permisos",
-        lambda **_: SimpleNamespace(obtener_libros_autorizados=lambda *_args, **_kwargs: [allowed_book.id]),
+        lambda **_: SimpleNamespace(consultar=True, obtener_companias_autorizadas=lambda: ["cacao"]),
     )
 
     with app_ctx.test_request_context("/bank-account/list"):

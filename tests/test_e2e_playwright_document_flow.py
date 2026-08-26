@@ -62,8 +62,8 @@ def flask_server():
                     pass
         database.session.commit()
 
-        # Grant access to books
-        from cacao_accounting.database import Book, UserBookAccess
+        # Grant access to active companies.
+        from cacao_accounting.database import Book, UserCompanyAccess
 
         books = database.session.execute(database.select(Book)).scalars().all()
         for username, _, _ in user_list:
@@ -71,14 +71,12 @@ def flask_server():
             if user:
                 for book in books:
                     exists = database.session.execute(
-                        database.select(UserBookAccess).filter_by(user_id=user.id, book_id=book.id)
+                        database.select(UserCompanyAccess).filter_by(user_id=user.id, company_code=book.entity)
                     ).first()
                     if not exists:
-                        access = UserBookAccess(
+                        access = UserCompanyAccess(
                             user_id=user.id,
-                            book_id=book.id,
-                            can_read=True,
-                            can_write=True,
+                            company_code=book.entity,
                         )
                         database.session.add(access)
         database.session.commit()
@@ -88,14 +86,12 @@ def flask_server():
         if user_cacao:
             for book in books:
                 exists = database.session.execute(
-                    database.select(UserBookAccess).filter_by(user_id=user_cacao.id, book_id=book.id)
+                    database.select(UserCompanyAccess).filter_by(user_id=user_cacao.id, company_code=book.entity)
                 ).first()
                 if not exists:
-                    access = UserBookAccess(
+                    access = UserCompanyAccess(
                         user_id=user_cacao.id,
-                        book_id=book.id,
-                        can_read=True,
-                        can_write=True,
+                        company_code=book.entity,
                     )
                     database.session.add(access)
             database.session.commit()

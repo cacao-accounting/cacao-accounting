@@ -211,8 +211,8 @@ def tiene_acceso_bi_empresa(modulo: str, usuario: str | None) -> bool:
     """Return whether a user may access enterprise analytics for any company.
 
     The sidebar must use the same upstream RBAC decision as the APIs: a role
-    needs the BI action on the module and at least one readable accounting
-    book.  Checking the book scope prevents a global BI module permission from
+    needs the BI action on the module and at least one assigned company.
+    Checking the company scope prevents a global BI module permission from
     exposing a link to a user with no company access.
     """
     if not modulo or not usuario:
@@ -223,7 +223,7 @@ def tiene_acceso_bi_empresa(modulo: str, usuario: str | None) -> bool:
     permisos_modulo = Permisos(modulo=module_id, usuario=usuario)
     if not permisos_modulo.autorizado or not permisos_modulo.bi:
         return False
-    return bool(permisos_modulo.obtener_libros_autorizados(accion="can_read"))
+    return bool(permisos_modulo.obtener_companias_autorizadas())
 
 
 def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:

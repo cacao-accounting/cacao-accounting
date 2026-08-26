@@ -123,18 +123,17 @@ from cacao_accounting.version import APPNAME
 
 
 def _accounting_company_scope(query, company_column, action: str = "consultar"):
-    """Limit an accounting master-data query to companies covered by book ACLs."""
+    """Limit an accounting master-data query to assigned active companies."""
     from cacao_accounting.auth.permisos import Permisos
-    from cacao_accounting.database import Book
 
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
     if permissions.administrador:
         return query
-    book_action = {"consultar": "can_read", "crear": "can_write", "editar": "can_write"}.get(action, "can_read")
-    authorized_books = permissions.obtener_libros_autorizados(book_action)
-    if not authorized_books:
+    permission_name = {"consultar": "consultar", "crear": "crear", "editar": "editar"}.get(action, "consultar")
+    companies = permissions.obtener_companias_autorizadas() if getattr(permissions, permission_name, False) else []
+    if not companies:
         return query.where(false())
-    return query.where(company_column.in_(database.select(Book.entity).where(Book.id.in_(authorized_books))))
+    return query.where(company_column.in_(companies))
 
 
 def _accounting_entity_choices(action: str = "consultar") -> list[tuple[str, str]]:
@@ -1123,13 +1122,13 @@ def journal_books():
         return jsonify({"results": []})
 
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
-    allowed_codes = permisos.obtener_libros_autorizados(company=company, return_codes=True)
+    if not permisos.tiene_acceso_compania(company):
+        return jsonify({"results": []})
 
     books = (
         database.session.execute(
             database.select(Book)
             .where(Book.entity == company, Book.status == "activo")
-            .where(Book.code.in_(allowed_codes))
             .order_by(Book.is_primary.desc(), Book.code)
         )
         .scalars()
@@ -2540,15 +2539,10 @@ def cancelar_plantilla_recurrente(identifier: str):
 def asistente_cierre_mensual():
     """Lista de ejecuciones de cierre mensual."""
     from cacao_accounting.auth.permisos import Permisos
-    from cacao_accounting.database import AccountingPeriod, Book, PeriodCloseRun
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
 
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
-    authorized_books = permisos.obtener_libros_autorizados("can_read")
-    companies = (
-        database.session.execute(database.select(Book.entity).where(Book.id.in_(authorized_books)).distinct()).scalars().all()
-        if authorized_books
-        else []
-    )
+    companies = permisos.obtener_companias_autorizadas() if permisos.consultar else []
 
     runs = (
         database.session.execute(

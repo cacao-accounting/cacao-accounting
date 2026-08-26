@@ -36,9 +36,12 @@ def gl_list():
 @gl.route("/new")
 def gl_new():
     """Lista de Comprobantes Contables."""
-    from cacao_accounting.database import Entity, database
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
-    ENTIDADES = database.session.execute(database.select(Entity).order_by(Entity.default)).all()
     INICIO_PERIODO = None  # yyyy-mm-dd
 
-    return render_template("gl_new.html", entidades=ENTIDADES, inicio_periodo=INICIO_PERIODO)
+    return render_template(
+        "gl_new.html",
+        entidades=obtener_lista_entidades_por_id_razonsocial(),
+        inicio_periodo=INICIO_PERIODO,
+    )

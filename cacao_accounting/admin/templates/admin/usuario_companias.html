@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.lista_usuarios') }}" class="link-dark">Usuarios</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Compañías</li>
+  </ol>
+</nav>
+<div class="ca-page-header"><h4>Compañías para {{ usuario.user }}</h4></div>
+<div class="ca-card p-4">
+  <p class="text-muted small">Los roles definen acciones; estas asignaciones delimitan las compañías donde puede ejecutarlas.</p>
+  <form method="post" id="companies-form">
+    {{ form.hidden_tag() }}
+    <div class="row g-3">
+      {% for subfield in form.companies %}
+      <div class="col-12 col-md-6 col-lg-4"><div class="form-check">
+        {{ subfield(class="form-check-input", id=subfield.id) }}
+        <label class="form-check-label" for="{{ subfield.id }}">{{ subfield.label.text }}</label>
+      </div></div>
+      {% endfor %}
+    </div>
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary">Guardar compañías</button>
+      <a href="{{ url_for('admin.lista_usuarios') }}" class="btn btn-outline-secondary ms-2">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

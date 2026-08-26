@@ -344,11 +344,12 @@ def _resolve_company(company_code: str) -> str:
 
 def _default_ledger_for_company(company_code: str) -> str | None:
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
-    allowed_codes = permisos.obtener_libros_autorizados(company=company_code, return_codes=True)
+    if not permisos.tiene_acceso_compania(company_code):
+        return None
     return (
         database.session.execute(
             database.select(Book.code)
-            .where(Book.entity == company_code, Book.code.in_(allowed_codes))
+            .where(Book.entity == company_code)
             .order_by(Book.default.desc(), Book.is_primary.desc(), Book.code.asc())
         )
         .scalars()

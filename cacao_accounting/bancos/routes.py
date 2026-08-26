@@ -126,10 +126,10 @@ def _cash_accessible_companies():
     )
     if permissions.administrador:
         return None
-    book_ids = permissions.obtener_libros_autorizados("can_read")
-    if not book_ids:
+    companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
+    if not companies:
         return database.select(Book.entity).where(database.false())
-    return database.select(Book.entity).where(Book.id.in_(book_ids))
+    return database.select(Book.entity).where(Book.entity.in_(companies))
 
 
 from cacao_accounting.bancos import cash_forecast as _cf  # noqa: F401, E402
@@ -381,13 +381,12 @@ def bancos_conciliacion_bancaria():
     elif not getattr(current_user, "classification", None) == "admin":
         module_id = obtener_id_modulo_por_nombre("cash")
         permissions = Permisos(modulo=module_id, usuario=current_user.id)
-        book_ids = permissions.obtener_libros_autorizados("can_read")
-        if not book_ids:
+        companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
+        if not companies:
             query = query.where(database.false())
         else:
-            accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
             query = query.join(BankAccount, BankAccount.id == BankTransaction.bank_account_id).filter(
-                BankAccount.company.in_(accessible_companies)
+                BankAccount.company.in_(companies)
             )
     transactions = database.session.execute(query.order_by(BankTransaction.posting_date)).scalars().all()
     suggestions = {transaction.id: _safe_bank_reconciliation_candidates(transaction) for transaction in transactions}

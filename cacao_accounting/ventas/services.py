@@ -13,7 +13,6 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user
 
 from cacao_accounting.database import (
-    Book,
     CompanyParty,
     DeliveryNote,
     DeliveryNoteItem,
@@ -549,16 +548,16 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
             exige_acceso_compania_cualquiera(access_modules, company, "consultar")
             base_query = base_query.filter(model.company == company)
         elif getattr(current_user, "classification", None) != "admin":
-            book_ids = set()
+            companies = set()
             for module in access_modules:
                 module_id = obtener_id_modulo_por_nombre(module)
                 permissions = Permisos(modulo=module_id, usuario=current_user.id)
-                book_ids.update(permissions.obtener_libros_autorizados("can_read"))
-            if not book_ids:
+                if permissions.consultar:
+                    companies.update(permissions.obtener_companias_autorizadas())
+            if not companies:
                 base_query = base_query.where(database.false())
             else:
-                accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
-                base_query = base_query.where(model.company.in_(accessible_companies))
+                base_query = base_query.where(model.company.in_(companies))
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     return database.paginate(
         filtered_query,

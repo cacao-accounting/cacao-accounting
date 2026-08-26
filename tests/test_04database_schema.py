@@ -1272,7 +1272,7 @@ def test_all_domain_models_importable():
         Roles,
         RolesAccess,
         RolesUser,
-        UserBookAccess,
+        UserCompanyAccess,
         Modules,
         Modulos,
         # Company

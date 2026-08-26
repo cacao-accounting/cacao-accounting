@@ -18,16 +18,20 @@ from cacao_accounting.database import database
 
 
 def obtener_lista_entidades_por_id_razonsocial():
-    """Devuelve la lista de unidades registrada en la base de datos."""
+    """Devuelve únicamente compañías activas visibles para el usuario actual."""
     from cacao_accounting.database import Entity
+    from flask_login import current_user
+    from cacao_accounting.auth.permisos import Permisos
+    from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
-    _entidades = []
-    _entidades.append(("", ""))
-    consulta = database.session.execute(database.select(Entity)).all()
-    for i in consulta:
-        _entidad = (i[0].code, i[0].name)
-        _entidades.append(_entidad)
-    return _entidades
+    query = database.select(Entity).where(Entity.enabled.is_(True)).order_by(Entity.code)
+    if not getattr(current_user, "is_authenticated", False):
+        return [("", "")]
+    permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
+    if not permisos.administrador:
+        query = query.where(Entity.code.in_(permisos.obtener_companias_autorizadas()))
+    entities = database.session.execute(query).scalars().all()
+    return [("", "")] + [(entity.code, entity.name or entity.company_name) for entity in entities]
 
 
 def obtener_catalogo_base(entidad_=None):

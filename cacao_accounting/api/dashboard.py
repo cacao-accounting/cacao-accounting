@@ -93,7 +93,7 @@ def get_dashboard_data():
 
 
 def user_can_access_company(user: Any, company: Entity | None) -> bool:
-    """Validate authenticated access to a company through authorized books."""
+    """Validate authenticated access to a company through its explicit grant."""
     if company is None or not getattr(user, "is_authenticated", False):
         return False
     if getattr(user, "active", False) is not True:
@@ -104,9 +104,7 @@ def user_can_access_company(user: Any, company: Entity | None) -> bool:
     for module_name in (MODULE_ACCOUNTING, MODULE_BANKS, MODULE_PURCHASES, MODULE_INVENTORY, MODULE_SALES):
         module_id = obtener_id_modulo_por_nombre(module_name)
         permissions = Permisos(modulo=module_id, usuario=user.id)
-        if permissions.administrador or (
-            permissions.autorizado and permissions.obtener_libros_autorizados("can_read", company=company_code)
-        ):
+        if permissions.administrador or (permissions.autorizado and permissions.tiene_acceso_compania(company_code)):
             return True
     return False
 
@@ -203,7 +201,7 @@ def _has_module_access(module_name: str, company: str | None = None) -> bool:
         return False
     if permissions.administrador:
         return True
-    return bool(permissions.obtener_libros_autorizados("can_read", company=company))
+    return permissions.autorizado and permissions.tiene_acceso_compania(company)
 
 
 def _hidden_section(title: str, subtitle: str) -> dict[str, Any]:

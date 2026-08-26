@@ -117,7 +117,7 @@ def test_rbac_manager_vs_auxiliar_vs_user(client, app):
         # contaj (accounting_auxiliar) can create but not submit/cancel
         # usuario (accounting_user) can only view
 
-        from cacao_accounting.database import Book, User, UserBookAccess, database
+        from cacao_accounting.database import Book, User, UserCompanyAccess, database
 
         books = database.session.execute(database.select(Book)).scalars().all()
         for uname in ["conta", "contaj", "usuario"]:
@@ -127,16 +127,12 @@ def test_rbac_manager_vs_auxiliar_vs_user(client, app):
                 u.classification = "system"
             for book in books:
                 if not database.session.execute(
-                    database.select(UserBookAccess).filter_by(user_id=u.id, book_id=book.id)
+                    database.select(UserCompanyAccess).filter_by(user_id=u.id, company_code=book.entity)
                 ).first():
                     database.session.add(
-                        UserBookAccess(
+                        UserCompanyAccess(
                             user_id=u.id,
-                            book_id=book.id,
-                            can_read=True,
-                            can_write=True,
-                            can_approve=True,
-                            can_cancel=True,
+                            company_code=book.entity,
                         )
                     )
         database.session.commit()

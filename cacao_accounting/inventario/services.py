@@ -16,7 +16,6 @@ from flask_login import current_user
 
 from cacao_accounting.database import (
     Accounts,
-    Book,
     CostCenter,
     DocumentRelation,
     Entity,
@@ -99,17 +98,16 @@ def _parse_date(value: str | None) -> date | None:
 
 
 def _inventory_company_scoped_select(model: type[Any]):
-    """Build an inventory query restricted to companies in accessible books."""
+    """Build an inventory query restricted to assigned companies."""
     permissions = Permisos(
         modulo=obtener_id_modulo_por_nombre("inventory"),
         usuario=current_user.id,
     )
-    book_ids = permissions.obtener_libros_autorizados("can_read")
+    companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
     query = database.select(model)
-    if not book_ids:
+    if not companies:
         return query.where(database.false())
-    accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
-    return query.where(model.company.in_(accessible_companies))
+    return query.where(model.company.in_(companies))
 
 
 def _inventory_writable_company_select():
@@ -118,10 +116,10 @@ def _inventory_writable_company_select():
         modulo=obtener_id_modulo_por_nombre("inventory"),
         usuario=current_user.id,
     )
-    book_ids = permissions.obtener_libros_autorizados("can_write")
-    if not book_ids:
+    companies = permissions.obtener_companias_autorizadas() if permissions.crear else []
+    if not companies:
         return database.select(Entity.code).where(database.false())
-    return database.select(Book.entity).where(Book.id.in_(book_ids))
+    return database.select(Entity.code).where(Entity.code.in_(companies), Entity.enabled.is_(True))
 
 
 def _series_choices(entity_type: str, company: str | None) -> list[tuple[str, str]]:

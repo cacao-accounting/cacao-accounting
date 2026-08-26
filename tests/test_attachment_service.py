@@ -383,7 +383,7 @@ def test_attachment_master_requires_company_access(app_cloud, tmp_path):
             Roles,
             RolesAccess,
             RolesUser,
-            UserBookAccess,
+            UserCompanyAccess,
         )
 
         module_id = "MOD-SALES-COMPANY"
@@ -412,7 +412,7 @@ def test_attachment_master_requires_company_access(app_cloud, tmp_path):
                 RolesUser(user_id=user_id, role_id=role_id, active=True),
                 RolesUser(user_id=other_user_id, role_id=role_id, active=True),
                 RolesAccess(rol_id=role_id, module_id=module_id, access=True, view=True, edit=True),
-                UserBookAccess(user_id=user_id, book_id="BOOK-A", can_read=True, can_write=True),
+                UserCompanyAccess(user_id=user_id, company_code="cacao"),
             ]
         )
         supplier = Party(code="SUP-CMP", name="Supplier Company", is_supplier=True)

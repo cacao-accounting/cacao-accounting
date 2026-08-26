@@ -67,16 +67,6 @@ def _batch_or_404(batch_id: str, action: str = "consultar") -> ImportBatch:
     """Load a batch only after validating the user's company scope."""
     batch = ImportBatch.query.get_or_404(batch_id)
     exige_acceso_compania("imports", batch.company_id, action)
-    if batch.accounting_book_id:
-        permission = Permisos(modulo=obtener_id_modulo_por_nombre("imports"), usuario=current_user.id)
-        book_action = {
-            "consultar": "can_read",
-            "crear": "can_create",
-            "editar": "can_write",
-            "eliminar": "can_delete",
-        }.get(action, "can_read")
-        if not permission.tiene_acceso_libro(batch.accounting_book_id, book_action):
-            abort(403)
     return batch
 
 
@@ -108,12 +98,8 @@ def index():
     if permission.administrador:
         batches = ImportBatch.query.order_by(ImportBatch.created.desc()).all()
     else:
-        book_ids = permission.obtener_libros_autorizados("can_read")
-        batches = (
-            ImportBatch.query.filter(ImportBatch.company_id.in_(database.select(Book.entity).where(Book.id.in_(book_ids))))
-            .order_by(ImportBatch.created.desc())
-            .all()
-        )
+        companies = permission.obtener_companias_autorizadas() if permission.consultar else []
+        batches = ImportBatch.query.filter(ImportBatch.company_id.in_(companies)).order_by(ImportBatch.created.desc()).all()
     return render_template("imports/index.html", batches=batches)
 
 
@@ -143,9 +129,6 @@ def new():
             flash("El libro contable no pertenece a la compañía seleccionada.", "danger")
             return redirect(url_for("imports.new"))
         if book:
-            permission = Permisos(modulo=obtener_id_modulo_por_nombre("imports"), usuario=current_user.id)
-            if not permission.tiene_acceso_libro(book.id, "can_create"):
-                abort(403)
             accounting_book_id = book.code
 
         batch = ImportBatch(

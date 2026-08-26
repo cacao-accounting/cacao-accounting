@@ -143,6 +143,13 @@ class UserRoleForm(FlaskForm):
     guardar_roles = SubmitField("Guardar roles")
 
 
+class UserCompanyAccessForm(FlaskForm):
+    """Formulario para asignar compañías a un usuario interno."""
+
+    companies = MultiCheckboxField("Compañías", validators=[Optional()], choices=[])
+    guardar_companias = SubmitField("Guardar compañías")
+
+
 class RoleForm(FlaskForm):
     """Formulario para crear o editar un rol."""
 

@@ -87,7 +87,7 @@ def test_warehouse_detail_hides_inaccessible_company_accounts(app_ctx):
         RolesAccess,
         RolesUser,
         User,
-        UserBookAccess,
+        UserCompanyAccess,
         Warehouse,
         WarehouseCompanyAccount,
         database,
@@ -104,7 +104,7 @@ def test_warehouse_detail_hides_inaccessible_company_accounts(app_ctx):
         [
             RolesUser(user_id=viewer.id, role_id=role.id, active=True),
             RolesAccess(rol_id=role.id, module_id=module.id, access=True, view=True),
-            UserBookAccess(user_id=viewer.id, book_id=book.id, can_read=True),
+            UserCompanyAccess(user_id=viewer.id, company_code="cacao"),
             WarehouseCompanyAccount(warehouse_code=warehouse.code, company="cacao"),
             WarehouseCompanyAccount(warehouse_code=warehouse.code, company="cafe"),
         ]
@@ -125,7 +125,7 @@ def test_item_account_rows_require_company_write_access(app_ctx):
     from flask_login import login_user
     from werkzeug.exceptions import Forbidden
 
-    from cacao_accounting.database import Book, Modules, Roles, RolesAccess, RolesUser, User, UserBookAccess, database
+    from cacao_accounting.database import Book, Modules, Roles, RolesAccess, RolesUser, User, UserCompanyAccess, database
     from cacao_accounting.inventario.service import ItemAccountRow, validate_item_account_rows
 
     viewer = database.session.execute(database.select(User).filter_by(user="viewer")).scalar_one()
@@ -138,7 +138,7 @@ def test_item_account_rows_require_company_write_access(app_ctx):
         [
             RolesUser(user_id=viewer.id, role_id=role.id, active=True),
             RolesAccess(rol_id=role.id, module_id=module.id, access=True, view=True, create=True, edit=True),
-            UserBookAccess(user_id=viewer.id, book_id=book.id, can_read=True, can_write=True),
+            UserCompanyAccess(user_id=viewer.id, company_code="cacao"),
         ]
     )
     database.session.commit()
@@ -165,7 +165,7 @@ def test_default_warehouse_requires_company_write_access(app_ctx):
         RolesAccess,
         RolesUser,
         User,
-        UserBookAccess,
+        UserCompanyAccess,
         Warehouse,
         database,
     )
@@ -182,7 +182,7 @@ def test_default_warehouse_requires_company_write_access(app_ctx):
         [
             RolesUser(user_id=viewer.id, role_id=role.id, active=True),
             RolesAccess(rol_id=role.id, module_id=module.id, access=True, view=True, create=True, edit=True),
-            UserBookAccess(user_id=viewer.id, book_id=book.id, can_read=True, can_write=True),
+            UserCompanyAccess(user_id=viewer.id, company_code="cacao"),
         ]
     )
     database.session.commit()

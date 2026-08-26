@@ -30,7 +30,6 @@ from cacao_accounting.database import (
     Accounts,
     BankAccountNumberingConfig,
     BankTransaction,
-    Book,
     DocumentRelation,
     Entity,
     ExternalCounter,
@@ -381,12 +380,11 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
         elif not getattr(current_user, "classification", None) == "admin":
             module_id = obtener_id_modulo_por_nombre("cash")
             permissions = Permisos(modulo=module_id, usuario=current_user.id)
-            book_ids = permissions.obtener_libros_autorizados("can_read")
-            if not book_ids:
+            companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
+            if not companies:
                 base_query = base_query.where(database.false())
             else:
-                accessible_companies = database.select(Book.entity).where(Book.id.in_(book_ids))
-                base_query = base_query.where(model.company.in_(accessible_companies))
+                base_query = base_query.where(model.company.in_(companies))
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     return database.paginate(
         filtered_query,

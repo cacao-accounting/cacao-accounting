@@ -4969,11 +4969,15 @@ class BudgetImportLine(database.Model, BaseTabla):  # type: ignore[name-defined]
     description = database.Column(database.String(255), nullable=True)
 
 
-class UserBookAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Acceso granular de usuario a libros contables."""
+class UserCompanyAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Alcance de compañías asignado a un usuario interno.
 
-    __tablename__ = "user_book_access"
-    __table_args__ = (UniqueConstraint("user_id", "book_id", name="uq_user_book_access"),)
+    Los roles conservan los permisos globales por módulo y acción; esta tabla
+    únicamente determina en qué compañías puede ejercerlos cada usuario.
+    """
+
+    __tablename__ = "user_company_access"
+    __table_args__ = (UniqueConstraint("user_id", "company_code", name="uq_user_company_access"),)
 
     user_id = database.Column(
         database.String(26),
@@ -4981,16 +4985,12 @@ class UserBookAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
         nullable=False,
         index=True,
     )
-    book_id = database.Column(
-        database.String(26),
-        database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+    company_code = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
-    can_read = database.Column(database.Boolean, default=True, nullable=False)
-    can_write = database.Column(database.Boolean, default=False, nullable=False)
-    can_cancel = database.Column(database.Boolean, default=False, nullable=False)
-    can_approve = database.Column(database.Boolean, default=False, nullable=False)
 
 
 def _item_has_usage(connection, item_code: str) -> bool:

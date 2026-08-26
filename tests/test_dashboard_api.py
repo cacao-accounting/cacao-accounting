@@ -33,7 +33,7 @@ from cacao_accounting.database import (
     StockLedgerEntry,
     UOM,
     User,
-    UserBookAccess,
+    UserCompanyAccess,
     Warehouse,
     database,
 )
@@ -463,8 +463,8 @@ def _seed_financial_activity() -> None:
     database.session.flush()
     database.session.add_all(
         [
-            UserBookAccess(user_id="USER-ACC", book_id=book.id, can_read=True),
-            UserBookAccess(user_id="USER-SALES", book_id=book.id, can_read=True),
+            UserCompanyAccess(user_id="USER-ACC", company_code="COMP"),
+            UserCompanyAccess(user_id="USER-SALES", company_code="COMP"),
         ]
     )
     accounts = [

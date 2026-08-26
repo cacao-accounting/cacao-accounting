@@ -105,10 +105,10 @@ def validate_lines() -> ResponseReturnValue:
         return permission_error
     module_name = DOCTYPES_MODULES.get(str(payload.doctype), "general")
     granular_permission = Permisos(modulo=obtener_id_modulo_por_nombre(module_name), usuario=current_user.id)
-    if not granular_permission.administrador and not granular_permission.obtener_libros_autorizados(
-        "can_write", company=company_id
+    if not granular_permission.administrador and not (
+        granular_permission.crear and granular_permission.tiene_acceso_compania(company_id)
     ):
-        return _error_response(_("No tiene acceso a libros de la compañía seleccionada."), 403)
+        return _error_response(_("No tiene acceso a la compañía seleccionada."), 403)
 
     rows_error = _validate_rows_limit(payload.rows)
     if rows_error:

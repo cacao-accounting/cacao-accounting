@@ -13,6 +13,7 @@ from cacao_accounting.auth import helpers, proteger_passwd
 from cacao_accounting.auth.forms import (
     RoleForm,
     UserCreateForm,
+    UserCompanyAccessForm,
     UserEditForm,
     UserPasswordForm,
     UserRoleForm,
@@ -39,6 +40,7 @@ from cacao_accounting.database import (
     TaxTemplate,
     TaxTemplateItem,
     User,
+    UserCompanyAccess,
     database,
 )
 
@@ -1081,6 +1083,49 @@ def usuario_roles(user_id: str):
         form=form,
         usuario=usuario,
     )
+
+
+@admin.route("/settings/users/<string:user_id>/companies", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def usuario_companias(user_id: str):
+    """Asigna el alcance de compañías a un usuario interno en Cloud."""
+    _require_system_admin()
+    if is_desktop_mode():
+        abort(403)
+    usuario = _obtener_usuario(user_id)
+    if usuario is None:
+        flash(USUARIO_NO_ENCONTRADO, "danger")
+        return redirect(url_for(LISTA_USUARIOS))
+    if usuario.classification != "system":
+        flash("Solo los usuarios de tipo 'system' pueden tener compañías asignadas.", "warning")
+        return redirect(url_for(LISTA_USUARIOS))
+
+    form = UserCompanyAccessForm()
+    companies = (
+        database.session.execute(database.select(Entity).where(Entity.enabled.is_(True)).order_by(Entity.code)).scalars().all()
+    )
+    form.companies.choices = [
+        (company.code, f"{company.code} - {company.name or company.company_name}") for company in companies
+    ]
+    if request.method == "GET":
+        form.companies.data = list(
+            database.session.execute(
+                database.select(UserCompanyAccess.company_code)
+                .where(UserCompanyAccess.user_id == usuario.id)
+                .order_by(UserCompanyAccess.company_code)
+            ).scalars()
+        )
+    if form.validate_on_submit():
+        selected = set(form.companies.data or [])
+        database.session.execute(delete(UserCompanyAccess).where(UserCompanyAccess.user_id == usuario.id))
+        database.session.add_all(
+            [UserCompanyAccess(user_id=usuario.id, company_code=company_code) for company_code in selected]
+        )
+        database.session.commit()
+        flash("Compañías actualizadas correctamente.", "success")
+        return redirect(url_for(LISTA_USUARIOS))
+    return render_template("admin/usuario_companias.html", form=form, usuario=usuario)
 
 
 @admin.route("/settings/users/<string:user_id>/password", methods=["GET", "POST"])

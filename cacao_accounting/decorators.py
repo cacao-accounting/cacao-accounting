@@ -11,7 +11,7 @@ from functools import wraps
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
-from flask import abort, flash, request
+from flask import abort, flash
 from flask_login import current_user
 from werkzeug.exceptions import HTTPException
 
@@ -51,9 +51,8 @@ def verifica_acceso(modulo):  # pragma: no cover
                 flash("No se encuentra autorizado a acceder al recurso solicitado.")
                 return abort(403)
             module_id = obtener_id_modulo_por_nombre(modulo)
-            libros = _libros_contables_solicitados(modulo)
             permisos = Permisos(modulo=module_id, usuario=current_user.id)
-            if permisos.autorizado and _tiene_acceso_a_libros(module_id, libros):
+            if permisos.autorizado:
                 return func(*args, **kwargs)
             else:
                 flash("No se encuentra autorizado a acceder al recurso solicitado.")
@@ -88,11 +87,7 @@ def verifica_permiso(modulo: str, accion: str):
 def exige_acceso_compania(
     modulo: str, company: str | None, accion: str = "consultar", allow_unauthenticated: bool = False
 ) -> None:
-    """Enforce module/action access to at least one book of a company.
-
-    Operational documents carry a company but not a user-specific company
-    ACL. Company access is therefore derived from the user's authorized books;
-    administrators retain global access.
+    """Enforce module/action RBAC and explicit company access.
 
     Args:
         modulo: Module name (e.g., "sales", "purchases", "accounting")
@@ -115,14 +110,14 @@ def exige_acceso_compania(
     permisos = Permisos(modulo=module_id, usuario=current_user.id)
     if permisos.administrador:
         return
-    granular_action = {
-        "autorizar": "can_approve",
-        "anular": "can_cancel",
-        "crear": "can_write",
-        "editar": "can_write",
-        "consultar": "can_read",
-    }.get(accion, "can_read")
-    if permisos.autorizado and permisos.obtener_libros_autorizados(granular_action, company=company):
+    permission_name = {
+        "autorizar": "autorizar",
+        "anular": "anular",
+        "crear": "crear",
+        "editar": "editar",
+        "consultar": "consultar",
+    }.get(accion, "consultar")
+    if getattr(permisos, permission_name, False) and permisos.tiene_acceso_compania(company):
         return
     abort(403)
 
@@ -137,24 +132,3 @@ def exige_acceso_compania_cualquiera(modulos: tuple[str, ...], company: str | No
             if exc.code != 403:
                 raise
     abort(403)
-
-
-def _libros_contables_solicitados(modulo: str) -> list[str]:
-    """Extrae libros de la peticion solo para rutas del modulo contable."""
-    if modulo != "accounting":
-        return []
-    form_books = request.form.getlist("books") if request.method == "POST" else []
-    candidates = [
-        request.args.get("ledger"),
-        request.form.get("ledger"),
-        request.form.get("ledger_id"),
-        *form_books,
-    ]
-    return [book for book in candidates if book]
-
-
-def _tiene_acceso_a_libros(module_id: str | None, libros: list[str]) -> bool:
-    """Valida acceso de lectura a todos los libros contables solicitados."""
-    if not libros:
-        return True
-    return all(Permisos(modulo=module_id, usuario=current_user.id, libro=libro).autorizado for libro in libros)
