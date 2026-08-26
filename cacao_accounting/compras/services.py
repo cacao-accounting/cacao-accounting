@@ -997,6 +997,8 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
 
 def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una recepción de compra desde el formulario."""
+    receipt = database.session.get(PurchaseReceipt, receipt_id)
+    company = receipt.company if receipt is not None else None
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -1013,7 +1015,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
             warehouse_code = (
                 request.form.get(f"warehouse_{i}") or request.form.get("to_warehouse") or request.form.get("warehouse") or None
             )
-            _validate_receipt_warehouse(warehouse_code, item_code)
+            _validate_receipt_warehouse(warehouse_code, item_code, company)
             linea = PurchaseReceiptItem(
                 purchase_receipt_id=receipt_id,
                 item_code=item_code,
@@ -1038,7 +1040,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
     return total_qty, total
 
 
-def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | None = None) -> None:
+def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | None = None, company: str | None = None) -> None:
     """Valida la bodega indicada en una recepción."""
     item = database.session.get(Item, item_code) if item_code else None
     if not warehouse_code and item is not None and item.is_stock_item:
@@ -1052,6 +1054,8 @@ def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | Non
         raise DocumentFlowError(f"Almacén '{warehouse_code}' no encontrado.", 404)
     if not warehouse.is_active:
         raise DocumentFlowError(f"Almacén '{warehouse_code}' está inactivo.", 409)
+    if company and warehouse.company != company:
+        raise DocumentFlowError(f"Almacén '{warehouse_code}' no pertenece a la compañía de la recepción.", 400)
 
 
 def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:

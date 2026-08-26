@@ -198,6 +198,20 @@ def _setup_base_data():
     database.session.commit()
 
 
+def test_purchase_receipt_rejects_cross_company_warehouse(app_ctx):
+    """Una recepción no puede usar una bodega perteneciente a otra compañía."""
+    from cacao_accounting.compras.services import _validate_receipt_warehouse
+    from cacao_accounting.document_flow import DocumentFlowError
+
+    with app_ctx.app_context():
+        database.session.add(Entity(code="other", name="Otra", company_name="Otra", tax_id="J-OTHER", currency="NIO"))
+        database.session.add(Warehouse(code="ALM-OTHER", name="Almacén ajeno", company="other", is_active=True))
+        database.session.commit()
+
+        with pytest.raises(DocumentFlowError, match="no pertenece a la compañía"):
+            _validate_receipt_warehouse("ALM-OTHER", "ITEM-S2P-01", "cacao")
+
+
 def test_import_landed_cost_preserves_invoice_currency_and_base_amounts(app_ctx):
     """Los landed costs conservan la tasa de la factura y calculan sus bases."""
     from cacao_accounting.compras.services import (
