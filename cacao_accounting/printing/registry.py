@@ -13,6 +13,7 @@ from cacao_accounting.printing.context import (
     JOURNAL_ENTRY_PRINT_SCHEMA,
     LANDED_COST_PRINT_SCHEMA,
     PAYMENT_ENTRY_PRINT_SCHEMA,
+    WITHHOLDING_CERTIFICATE_PRINT_SCHEMA,
     PURCHASE_INVOICE_PRINT_SCHEMA,
     PURCHASE_ORDER_PRINT_SCHEMA,
     PURCHASE_RECEIPT_PRINT_SCHEMA,
@@ -34,6 +35,8 @@ from cacao_accounting.printing.context import (
     build_landed_cost_sample_context,
     build_payment_entry_print_context,
     build_payment_entry_sample_context,
+    build_withholding_certificate_print_context,
+    build_withholding_certificate_sample_context,
     build_purchase_invoice_print_context,
     build_purchase_order_print_context,
     build_purchase_order_sample_context,
@@ -316,6 +319,17 @@ def init_printing_registry() -> None:
         build_payment_entry_print_context,
         build_payment_entry_sample_context,
         PAYMENT_ENTRY_PRINT_SCHEMA,
+        snippets,
+    )
+    _register(
+        "withholding_certificate",
+        "Certificado de retención",
+        "purchases",
+        "withholding_certificate",
+        _PERM_PURCHASES_VIEW,
+        build_withholding_certificate_print_context,
+        build_withholding_certificate_sample_context,
+        WITHHOLDING_CERTIFICATE_PRINT_SCHEMA,
         snippets,
     )
     _register(

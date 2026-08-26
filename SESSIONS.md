@@ -283,3 +283,27 @@ Se añadió `purchase_request_direct_order_item_ids` (líneas con relación acti
 - Si una línea tiene comparativo finalizado y además orden directa, el motivo auditado prioriza el comparativo (`setdefault`) para reflejar la decisión de abastecimiento.
 - El motivo por línea se registra como entrada de auditoría independiente (acción permitida `closed`) en lugar de un comentario único, para trazabilidad granular por línea exigida por el issue.
 - La normalización snake_case en `_doc_info` no afecta modelos con columna `document_type` explícita y corrige de paso la línea de tiempo vacía en detalles de solicitudes, órdenes, asientos y demás documentos DocBase.
+
+## 2026-08-26
+
+### Petición del usuario
+
+Atender el issue #729: completar el ciclo operativo de retenciones. La retención debe respetar la configuración del proveedor por compañía y aplicarse por defecto al pagar; además se requiere un certificado imprimible con validación QR y un reporte fiscal mensual de retenciones aplicadas. El reporte no debe ser un resumen agrupado por proveedor.
+
+### Plan implementado
+
+Se reutilizó la regla fiscal configurada en la ficha del proveedor (`CompanyParty.default_tax_rule_id`) cuando la regla es de tipo `withholding` y reconoce el evento de pago. Al pagar a un proveedor, la regla configurada reemplaza las retenciones genéricas de compañía y conserva el cálculo proporcional de pagos parciales. Se agregó `WithholdingCertificate`, emitido dentro de la misma transacción del posting, con copia inmutable de las líneas, importes y relación al pago; al anular el pago el certificado se marca anulado.
+
+El certificado se registró como documento imprimible configurable, con plantilla predeterminada que muestra base, tasa, importe retenido, efectivo pagado y QR. Se incorporó al catálogo de validación pública y se añadió el acceso desde el detalle del pago. Se agregó `/reports/withholdings/monthly`, que lista el detalle fiscal de todos los certificados emitidos del mes seleccionado y excluye anulados, con exportación CSV/XLSX mediante el framework existente.
+
+### Decisiones de diseño
+
+- La configuración del proveedor es la autoridad para sus retenciones al pagar; una regla de impuesto ordinario no se interpreta silenciosamente como retención.
+- El certificado se crea solo cuando existe una retención positiva en un pago a proveedor contabilizado y conserva un snapshot de sus líneas para auditoría fiscal.
+- El reporte es mensual y detallado por certificado/concepto; no agrega ni sustituye la trazabilidad por proveedor.
+- La impresión se mantiene configurable mediante el subsistema existente de plantillas, sin fijar el formato en una ruta especial.
+- La validación QR usa el mismo mecanismo público de documentos y la anulación del pago invalida el estado operativo del certificado.
+
+### Verificación
+
+Las pruebas focalizadas de retenciones y liquidación pasaron 15/15; las pruebas de impresión, QR y rutas pasaron 62/62. Black y Ruff pasan para los archivos nuevos/modificados revisados.

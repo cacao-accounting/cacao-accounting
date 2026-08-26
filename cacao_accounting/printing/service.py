@@ -360,6 +360,7 @@ class PrintService:
             SalesRequest,
             StockEntry,
             SupplierQuotation,
+            WithholdingCertificate,
         )
 
         models = {
@@ -388,6 +389,7 @@ class PrintService:
             "bank_transfer": PaymentEntry,
             "cash_receipt": PaymentEntry,
             "exchange_revaluation": ExchangeRevaluation,
+            "withholding_certificate": WithholdingCertificate,
         }
         model = models.get(document_type)
         if model is None:

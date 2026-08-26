@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import json
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from decimal import Decimal
@@ -48,6 +49,7 @@ from cacao_accounting.database import (
     StockEntryItem,
     StockLedgerEntry,
     StockValuationLayer,
+    WithholdingCertificate,
     WarehouseCompanyAccount,
     database,
 )
@@ -1780,6 +1782,87 @@ def get_unreconciled_bank_transactions(filters: BankingFilters) -> PaginatedRepo
             "status",
             "remarks",
         ],
+    )
+
+
+def get_monthly_withholding_report(company: str, year: int, month: int) -> PaginatedReport:
+    """Return the fiscal detail of withholding certificates for one month.
+
+    The report is based only on issued certificates, therefore cancelled or
+    draft payments cannot inflate the fiscal declaration. Rows retain each
+    withholding concept and its base, rate and amount.
+    """
+    if month < 1 or month > 12:
+        raise ValueError("El mes fiscal debe estar entre 1 y 12.")
+    start = date(year, month, 1)
+    end = date(year + (month == 12), 1 if month == 12 else month + 1, 1)
+    certificates = database.session.execute(
+        select(WithholdingCertificate)
+        .where(
+            WithholdingCertificate.company == company,
+            WithholdingCertificate.docstatus == 1,
+            WithholdingCertificate.status == "issued",
+            WithholdingCertificate.posting_date >= start,
+            WithholdingCertificate.posting_date < end,
+        )
+        .order_by(WithholdingCertificate.posting_date, WithholdingCertificate.certificate_no)
+    ).scalars().all()
+    rows: list[ReportRow] = []
+    total_withheld = Decimal("0")
+    line_count = 0
+    for certificate in certificates:
+        try:
+            lines = json.loads(certificate.lines_json or "[]")
+        except (TypeError, ValueError):
+            lines = []
+        if not isinstance(lines, list):
+            lines = []
+        payment = database.session.get(PaymentEntry, certificate.payment_id)
+        supplier = database.session.get(Party, certificate.supplier_id)
+        for line in lines:
+            if not isinstance(line, dict):
+                continue
+            amount = _decimal_value(line.get("amount"))
+            total_withheld += amount
+            line_count += 1
+            rows.append(
+                ReportRow(
+                    {
+                        "posting_date": certificate.posting_date,
+                        "certificate_no": certificate.certificate_no,
+                        "payment_no": getattr(payment, "document_no", "") or certificate.payment_id,
+                        "supplier_name": certificate.supplier_name,
+                        "supplier_tax_id": getattr(supplier, "tax_id", "") or "",
+                        "concept": line.get("concept", ""),
+                        "base_amount": _decimal_value(line.get("base_amount")),
+                        "rate": _decimal_value(line.get("rate")),
+                        "withheld_amount": amount,
+                        "currency": certificate.currency or "",
+                    }
+                )
+            )
+    return PaginatedReport(
+        rows=rows,
+        totals={
+            "withheld_amount": total_withheld,
+            "certificate_count": Decimal(len(certificates)),
+            "line_count": Decimal(line_count),
+        },
+        columns=[
+            "posting_date",
+            "certificate_no",
+            "payment_no",
+            "supplier_name",
+            "supplier_tax_id",
+            "concept",
+            "base_amount",
+            "rate",
+            "withheld_amount",
+            "currency",
+        ],
+        total_rows=len(rows),
+        page=1,
+        page_size=max(len(rows), 1),
     )
 
 

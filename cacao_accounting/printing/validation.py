@@ -43,6 +43,7 @@ VALIDATABLE_TYPES = {
     "delivery_note",
     "sales_quotation",
     "stock_entry",
+    "withholding_certificate",
 }
 
 
@@ -247,6 +248,7 @@ def _model_for_type(document_type: str) -> Any | None:
         SalesInvoice,
         SalesQuotation,
         StockEntry,
+        WithholdingCertificate,
     )
 
     return {
@@ -267,6 +269,7 @@ def _model_for_type(document_type: str) -> Any | None:
         "sales_quotation": SalesQuotation,
         "stock_entry": StockEntry,
         "exchange_revaluation": ExchangeRevaluation,
+        "withholding_certificate": WithholdingCertificate,
     }.get(document_type)
 
 
@@ -282,6 +285,7 @@ def _document_line_summary(document_type: str, document_id: str) -> tuple[int, D
         SalesInvoiceItem,
         SalesQuotationItem,
         StockEntryItem,
+        WithholdingCertificate,
     )
 
     line_map: dict[str, tuple[Any, str, str]] = {
@@ -302,6 +306,7 @@ def _document_line_summary(document_type: str, document_id: str) -> tuple[int, D
         "bank_transfer": (PaymentReference, "payment_id", "allocated_amount"),
         "cash_receipt": (PaymentReference, "payment_id", "allocated_amount"),
         "exchange_revaluation": (ExchangeRevaluationItem, "revaluation_id", "difference_amount"),
+        "withholding_certificate": (WithholdingCertificate, "id", "withheld_amount"),
     }
     config = line_map.get(document_type)
     if config is None:

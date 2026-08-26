@@ -37,7 +37,12 @@
           {{ smart_select_field("Cliente", "party_id", "customer", filter_state.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {% endif %}
 
-        {% if filter_mode in ("bank_movement", "kardex") %}
+        {% if filter_mode == "withholding_monthly" %}
+          <label class="form-label mb-0">
+            {{ _("Mes fiscal") }}
+            <input class="form-control" type="month" name="month" value="{{ filter_state.month or '' }}" required>
+          </label>
+        {% elif filter_mode in ("bank_movement", "kardex") %}
           <label class="form-label mb-0">
             {{ _("Fecha desde") }}
             <input class="form-control" type="date" name="date_from" value="{{ filter_state.date_from or '' }}">

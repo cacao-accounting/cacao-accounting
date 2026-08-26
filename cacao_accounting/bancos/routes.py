@@ -949,6 +949,11 @@ def bancos_pago(payment_id):
         )
 
     creador = database.session.get(User, registro.created_by) if registro.created_by else None
+    from cacao_accounting.database import WithholdingCertificate
+
+    withholding_certificate = database.session.execute(
+        database.select(WithholdingCertificate).filter_by(payment_id=registro.id)
+    ).scalar_one_or_none()
 
     titulo = (registro.document_no or payment_id) + " - " + APPNAME
     return render_template(
@@ -960,6 +965,7 @@ def bancos_pago(payment_id):
         banco=banco,
         banco_destino=banco_destino,
         creador=creador,
+        withholding_certificate=withholding_certificate,
         audit_timeline=format_document_timeline("payment_entry", registro.id),
     )
 

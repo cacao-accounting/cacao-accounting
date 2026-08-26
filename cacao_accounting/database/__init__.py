@@ -3054,6 +3054,43 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
     notes = database.Column(database.Text(), nullable=True)
 
 
+class WithholdingCertificate(database.Model, DocBase):  # type: ignore[name-defined]
+    """Certificado fiscal emitido por una retención aplicada en un pago.
+
+    El certificado conserva una copia inmutable de las líneas calculadas en el
+    pago para que la impresión y los reportes fiscales no dependan de cambios
+    posteriores en la configuración del proveedor.
+    """
+
+    __tablename__ = "withholding_certificate"
+    __table_args__ = (
+        database.UniqueConstraint("payment_id", name="uq_withholding_certificate_payment"),
+        database.UniqueConstraint("certificate_no", name="uq_withholding_certificate_number"),
+        database.Index("ix_withholding_certificate_company_date", "company", "posting_date"),
+    )
+    document_type = database.Column(database.String(50), nullable=False, default="withholding_certificate")
+    payment_id = database.Column(
+        database.String(26),
+        database.ForeignKey("payment_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    supplier_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    supplier_name = database.Column(database.String(200), nullable=False)
+    certificate_no = database.Column(database.String(100), nullable=False, index=True)
+    currency = database.Column(database.String(10), nullable=True)
+    gross_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    withheld_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    cash_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    lines_json = database.Column(database.Text(), nullable=False)
+    status = database.Column(database.String(30), nullable=False, default="issued", index=True)
+
+
 class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Relacion generica entre documentos y sus lineas.
 

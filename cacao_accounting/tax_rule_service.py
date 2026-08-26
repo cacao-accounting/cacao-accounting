@@ -78,6 +78,14 @@ def build_tax_rule_contexts(
     return [_to_context(rule) for rule in rules]
 
 
+def build_tax_rule_context(rule_id: str) -> TaxRuleContext | None:
+    """Build one active persisted rule for a party-specific configuration."""
+    rule = get_tax_rule(rule_id)
+    if rule is None or not rule.is_active:
+        return None
+    return _to_context(rule)
+
+
 def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> None:
     """Aplica datos validados a una regla fiscal ORM."""
     name = (values.get("name") or "").strip()

@@ -1320,9 +1320,14 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
         raise PostingError("El monto del pago debe ser mayor que cero.")
 
     if payment_type in {"pay", "receive"}:
-        engine_result = _post_with_calculation_engine(document, ledger_code=ledger_code)
-        if engine_result is not None:
-            return engine_result
+        engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code)
+        if engine_payload is not None:
+            settlement = engine_payload.results.get("settlement")
+            if settlement is not None:
+                from cacao_accounting.withholding_service import create_withholding_certificate
+
+                create_withholding_certificate(document, settlement)
+            return engine_payload.entries
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         if payment_type == "pay":
@@ -3754,6 +3759,10 @@ def cancel_document(document: Any) -> list[GLEntry]:
 
     with database.session.begin_nested():
         document.docstatus = 2
+        if isinstance(document, PaymentEntry):
+            from cacao_accounting.withholding_service import cancel_withholding_certificate
+
+            cancel_withholding_certificate(document.id)
         _update_validation_service(document)
 
         reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id)

@@ -36,6 +36,7 @@ from cacao_accounting.reportes.services import (
     get_income_statement_report,
     get_inventory_existence,
     get_inventory_valuation,
+    get_monthly_withholding_report,
     get_kardex,
     get_purchases_by_item,
     get_purchases_by_supplier,
@@ -346,6 +347,38 @@ def cash_flow():
         filters,
         selected_view,
         saved_views,
+    )
+
+
+@reportes.route("/reports/withholdings/monthly")
+@login_required
+@modulo_activo("purchases")
+def monthly_withholdings():
+    """Render the fiscal monthly detail of applied supplier withholdings."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    exige_acceso_compania("purchases", company, "consultar")
+    month_value = request.args.get("month") or date.today().strftime("%Y-%m")
+    try:
+        year, month = (int(part) for part in month_value.split("-", 1))
+        report = get_monthly_withholding_report(company, year, month)
+    except (TypeError, ValueError):
+        year, month = date.today().year, date.today().month
+        month_value = date.today().strftime("%Y-%m")
+        report = get_monthly_withholding_report(company, year, month)
+    return _render_operational_framework(
+        "withholdings-monthly",
+        _("Reporte fiscal mensual de retenciones aplicadas"),
+        report,
+        module_home_endpoint="compras.compras_",
+        module_home_label=_("Compras"),
+        filter_mode="withholding_monthly",
+        filter_state={"company": company, "month": month_value},
+        context_summary={
+            "company": company,
+            "period": month_value,
+            "records": str(report.total_rows),
+            "status": _("Certificados emitidos; anulados excluidos"),
+        },
     )
 
 

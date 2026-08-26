@@ -66,6 +66,9 @@
         url_for('bancos.bancos_pago_lista'),
         url_for('bancos.bancos_pago_nuevo')) }}
   {{ macros.document_print_button(registro.document_type or "payment_entry", registro.id) }}
+  {% if withholding_certificate and withholding_certificate.status == "issued" %}
+    {{ macros.document_print_button("withholding_certificate", withholding_certificate.id) }}
+  {% endif %}
 {% endset %}
 
 <div class="ca-card">

@@ -394,6 +394,60 @@ def build_payment_entry_print_context(
     return context
 
 
+def build_withholding_certificate_print_context(
+    document_id: str,
+    user: Any,
+    company_code: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build print context for a fiscal withholding certificate."""
+    from cacao_accounting.database import PaymentEntry, WithholdingCertificate
+    from cacao_accounting.withholding_service import withholding_certificate_lines
+
+    certificate = database.session.get(WithholdingCertificate, document_id)
+    context = build_common_context(company_code, _user_name(user))
+    if certificate is None:
+        return context
+    context["withholding_certificate"] = {
+        "number": certificate.certificate_no,
+        "date": _date_text(certificate.posting_date),
+        "status": "posted" if certificate.status == "issued" else certificate.status,
+        "supplier_name": certificate.supplier_name,
+        "currency": certificate.currency or context["company"]["default_currency"],
+        "payment_number": _text(database.session.get(PaymentEntry, certificate.payment_id), "document_no", ""),
+        "gross_amount": certificate.gross_amount,
+        "withheld_amount": certificate.withheld_amount,
+        "cash_amount": certificate.cash_amount,
+        "lines": withholding_certificate_lines(certificate),
+    }
+    return context
+
+
+def build_withholding_certificate_sample_context(user: Any = None, company: Any = None) -> dict[str, Any]:
+    """Build a configurable sample withholding certificate context."""
+    context = _sample_common_context()
+    context["withholding_certificate"] = {
+        "number": "RET-2026-00001",
+        "date": "2026-05-26",
+        "status": "posted",
+        "supplier_name": "Proveedor de ejemplo",
+        "currency": "NIO",
+        "payment_number": "PAY-2026-00001",
+        "gross_amount": Decimal("1000.00"),
+        "withheld_amount": Decimal("20.00"),
+        "cash_amount": Decimal("980.00"),
+        "lines": [
+            {
+                "concept": "retencion_renta",
+                "base_amount": Decimal("1000.00"),
+                "rate": Decimal("2.00"),
+                "amount": Decimal("20.00"),
+            }
+        ],
+    }
+    return context
+
+
 def build_exchange_revaluation_print_context(
     document_id: str,
     user: Any,
@@ -938,6 +992,10 @@ DELIVERY_NOTE_PRINT_SCHEMA = {**COMMON_SCHEMA, "receipt": {_ITEMS_KEY: LINE_SCHE
 STOCK_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "adjustment": {_ITEMS_KEY: LINE_SCHEMA}}
 QUOTATION_PRINT_SCHEMA = {**COMMON_SCHEMA, "quote": {_ITEMS_KEY: LINE_SCHEMA}}
 PAYMENT_ENTRY_PRINT_SCHEMA = {**COMMON_SCHEMA, "payment": {"references[]": {"allocated_amount": "Allocated amount"}}}
+WITHHOLDING_CERTIFICATE_PRINT_SCHEMA = {
+    **COMMON_SCHEMA,
+    "withholding_certificate": {"lines[]": {"base_amount": "Base amount", "rate": "Rate", "amount": "Withheld amount"}},
+}
 EXCHANGE_REVALUATION_PRINT_SCHEMA = {
     **COMMON_SCHEMA,
     "revaluation": {

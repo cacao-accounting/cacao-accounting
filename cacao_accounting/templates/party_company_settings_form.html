@@ -54,7 +54,7 @@
               <th>{{ _('Activo') }}</th>
               <th>{% if party_role == "customer" %}{{ _('Cuenta por cobrar') }}{% else %}{{ _('Cuenta por pagar') }}{% endif %}</th>
               <th>{{ _('Lista de Precio') }}</th>
-              <th>{{ _('Regla Fiscal') }}</th>
+              <th>{% if party_role == "supplier" %}{{ _('Retención al pagar') }}{% else %}{{ _('Regla Fiscal') }}{% endif %}</th>
               <th>{{ _('Plantilla de impuestos') }}</th>
               {% if party_role == "supplier" %}
               <th>{{ _('Sin OC') }}</th>
@@ -207,6 +207,10 @@
                     filters: {
                       company: function () { return row.company; },
                       applies_to: [{% if party_role == "customer" %}"sales"{% else %}"purchase"{% endif %}, "both"],
+                      {% if party_role == "supplier" %}
+                      tax_type: "withholding",
+                      recognition_event: ["payment_confirmed", "payment"],
+                      {% endif %}
                       is_active: true
                     },
                     requiredFilters: ["company"],

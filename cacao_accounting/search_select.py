@@ -555,7 +555,13 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         search_fields=("name", "concept"),
         value_field="id",
         label_builder=_tax_rule_label,
-        allowed_filters={"company": "company", "applies_to": "applies_to", "is_active": "is_active"},
+        allowed_filters={
+            "company": "company",
+            "applies_to": "applies_to",
+            "tax_type": "tax_type",
+            "recognition_event": "recognition_event",
+            "is_active": "is_active",
+        },
         default_filters={"is_active": True},
     ),
     "price_list": SearchSelectSpec(

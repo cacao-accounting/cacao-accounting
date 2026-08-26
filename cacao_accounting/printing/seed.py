@@ -209,6 +209,52 @@ LINES_TEMPLATE = """
 """
 
 ROOT_TEMPLATE_MAP = {
+    "withholding_certificate": """
+{% set current_status = withholding_certificate.status | default_text('') | lower %}
+{% if current_status in ['cancelled', 'anulado', 'void'] %}<div class="watermark watermark-cancelled">ANULADO</div>{% endif %}
+<div class="print-header">
+  <div class="company-info"><h1>{{ company.name }}</h1><div>{{ company.tax_id }}</div></div>
+  <div class="document-info">
+    <h2>Certificado de retención</h2>
+    <div>{{ withholding_certificate.number }}</div>
+    <div>{{ withholding_certificate.date }}</div>
+    <div class="status-badge status-{{ current_status }}">{{ withholding_certificate.status | status_label }}</div>
+  </div>
+</div>
+<p>Proveedor: {{ withholding_certificate.supplier_name }}</p>
+<p>Pago relacionado: {{ withholding_certificate.payment_number }}</p>
+<table class="items-table">
+  <thead><tr>
+    <th>Concepto</th><th class="text-right">Base</th>
+    <th class="text-right">Tasa</th><th class="text-right">Retención</th>
+  </tr></thead>
+  <tbody>{% for line in withholding_certificate.lines %}
+    <tr>
+      <td>{{ line.concept }}</td>
+      <td class="text-right">{{ line.base_amount | money(withholding_certificate.currency) }}</td>
+      <td class="text-right">{{ line.rate | percent }}</td>
+      <td class="text-right">{{ line.amount | money(withholding_certificate.currency) }}</td>
+    </tr>
+  {% endfor %}</tbody>
+</table>
+<table class="totals">
+  <tr><td>Importe bruto</td><td class="text-right">
+    {{ withholding_certificate.gross_amount | money(withholding_certificate.currency) }}</td></tr>
+  <tr><td>Total retenido</td><td class="text-right">
+    {{ withholding_certificate.withheld_amount | money(withholding_certificate.currency) }}</td></tr>
+  <tr><td>Efectivo pagado</td><td class="text-right">
+    {{ withholding_certificate.cash_amount | money(withholding_certificate.currency) }}</td></tr>
+</table>
+{% if validation is defined and validation and validation.enabled and validation.qr_data_uri %}
+<div class="validation-block">
+  <img src="{{ validation.qr_data_uri }}" class="qr-code" alt="QR de validación">
+  <div class="validation-text"><strong>Validar certificado</strong><br>
+    Escanee este código QR para verificar su autenticidad.
+  </div>
+</div>
+{% endif %}
+<div class="print-footer">Impreso por {{ audit.printed_by }} el {{ audit.printed_at }}</div>
+""",
     "invoice": "{% set doc = invoice %}{% set title = 'Factura' %}" + LINES_TEMPLATE,
     "purchase_order": "{% set doc = purchase_order %}{% set title = 'Orden de compra' %}" + LINES_TEMPLATE,
     "sales_order": "{% set doc = sales_order %}{% set title = 'Orden de venta' %}" + LINES_TEMPLATE,

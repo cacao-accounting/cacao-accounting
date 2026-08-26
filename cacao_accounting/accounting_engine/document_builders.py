@@ -53,7 +53,7 @@ from cacao_accounting.document_flow.service import compute_payment_unallocated_a
 from cacao_accounting.warehouse_accounting import inventory_account_id_for_document_line
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 from cacao_accounting.fiscal_persistence_service import build_tax_rule_contexts_from_snapshot
-from cacao_accounting.tax_rule_service import build_tax_rule_contexts
+from cacao_accounting.tax_rule_service import build_tax_rule_context, build_tax_rule_contexts
 
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel.
     from flask_babel import gettext as _babel_gettext
@@ -794,13 +794,26 @@ def _payment_tax_rules(
     )
     if tax_rules:
         return tax_rules
-    return build_tax_rule_contexts(
+    rules = build_tax_rule_contexts(
         company=company,
         applies_to=spec.direction,
         currency=transaction_currency,
         at_date=document.posting_date,
         recognition_event=spec.event_type,
     )
+    # A supplier's configured rule is authoritative for withholding at payment
+    # time. Generic company withholding rules do not override that choice.
+    if spec.party_type == "supplier" and spec.event_type == "payment_confirmed" and document.party_id:
+        company_party = database.session.execute(
+            select(CompanyParty).filter_by(company=company, party_id=document.party_id, is_active=True)
+        ).scalar_one_or_none()
+        configured_rule_id = getattr(company_party, "default_tax_rule_id", None) if company_party else None
+        configured_rule = build_tax_rule_context(configured_rule_id) if configured_rule_id else None
+        if configured_rule and configured_rule.tax_type == "withholding":
+            if configured_rule.recognition_event in {"payment_confirmed", "payment"}:
+                rules = [rule for rule in rules if rule.tax_type != "withholding"]
+                rules.append(configured_rule)
+    return sorted(rules, key=lambda rule: rule.order)
 
 
 def _payment_item_context(document: PaymentEntry, document_total: Decimal) -> ItemContext:
