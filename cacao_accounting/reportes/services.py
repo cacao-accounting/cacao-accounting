@@ -3194,15 +3194,19 @@ def get_inventory_valuation(filters: OperationalReportFilters) -> PaginatedRepor
         query.order_by(StockValuationLayer.posting_date, StockValuationLayer.created, StockValuationLayer.id)
     ).scalars():
         key = (layer.item_code, layer.warehouse)
-        if key not in grouped:
-            grouped[key] = {
-                "item_code": layer.item_code,
-                "warehouse": layer.warehouse,
-                "remaining_qty": Decimal("0"),
-                "remaining_stock_value": Decimal("0"),
-            }
-        grouped[key]["remaining_qty"] += _decimal_value(layer.qty)
-        grouped[key]["remaining_stock_value"] += _decimal_value(layer.stock_value_difference)
+        # Valuation layers carry a running remaining snapshot.  Keep the
+        # latest snapshot at the cutoff instead of summing historical deltas
+        # (which would count consumed layers more than once).
+        grouped[key] = {
+            "item_code": layer.item_code,
+            "warehouse": layer.warehouse,
+            "remaining_qty": _decimal_value(layer.remaining_qty if layer.remaining_qty is not None else layer.qty),
+            "remaining_stock_value": _decimal_value(
+                layer.remaining_stock_value
+                if layer.remaining_stock_value is not None
+                else layer.stock_value_difference
+            ),
+        }
     rows = [
         ReportRow(
             {
