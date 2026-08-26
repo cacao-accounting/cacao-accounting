@@ -27,6 +27,7 @@ ALLOWED_ACTIONS = {
     "imported",
     "reconciled",
     "closed",
+    "reopened",
     "commented",
     "delete_attempted",
     "task_created",

@@ -85,10 +85,22 @@ def customer_dashboard():
         q_quotations = q_quotations.filter_by(customer_id=pid)
         q_deliveries = q_deliveries.filter_by(customer_id=pid)
 
-    invoices = database.session.execute(q_invoices.order_by(SalesInvoice.posting_date.desc())).scalars().all()
-    orders = database.session.execute(q_orders.order_by(SalesOrder.posting_date.desc())).scalars().all()
-    quotations = database.session.execute(q_quotations.order_by(SalesQuotation.posting_date.desc())).scalars().all()
-    deliveries = database.session.execute(q_deliveries.order_by(DeliveryNote.posting_date.desc())).scalars().all()
+    invoices = (
+        database.session.execute(q_invoices.order_by(SalesInvoice.posting_date.desc()).limit(PORTAL_PAGE_SIZE)).scalars().all()
+    )
+    orders = (
+        database.session.execute(q_orders.order_by(SalesOrder.posting_date.desc()).limit(PORTAL_PAGE_SIZE)).scalars().all()
+    )
+    quotations = (
+        database.session.execute(q_quotations.order_by(SalesQuotation.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
+        .scalars()
+        .all()
+    )
+    deliveries = (
+        database.session.execute(q_deliveries.order_by(DeliveryNote.posting_date.desc()).limit(PORTAL_PAGE_SIZE))
+        .scalars()
+        .all()
+    )
 
     return render_template(
         "portal/customer_dashboard.html",

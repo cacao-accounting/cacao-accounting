@@ -93,6 +93,14 @@
         </div>
         <div class="form-text">{{ _('Un período solo acepta registros si está habilitado y no está cerrado.') }}</div>
       </div>
+      {% if edit and form.cerrado.data %}
+      <div class="col-12">
+        <label class="form-label" for="reopen_reason">{{ _('Motivo de reapertura') }}</label>
+        <textarea class="form-control form-control-sm" id="reopen_reason" name="reopen_reason" rows="2"
+          placeholder="{{ _('Explique por qué se reabre el período') }}"></textarea>
+        <div class="form-text">{{ _('El motivo queda registrado en la bitácora de auditoría.') }}</div>
+      </div>
+      {% endif %}
     </form>
   </div>
 </div>

@@ -419,6 +419,7 @@ def ventas_pedido_venta_duplicar(request_id: str):
         database.session.add(linea)
         total += item.amount or Decimal("0")
     _set_sales_document_totals(duplicado, total)
+    log_create(duplicado)
     database.session.commit()
     flash(_("Pedido de venta duplicado como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=duplicado.id))
@@ -798,6 +799,7 @@ def ventas_cliente_direccion_desactivar(customer_id: str, link_id: str):
 @ventas.route("/sales-order/new", methods=["GET", "POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "crear")
 def ventas_orden_venta_nuevo():
     """Formulario para crear una orden de venta."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
@@ -1012,6 +1014,7 @@ def ventas_orden_venta_duplicar(order_id: str):
         database.session.add(linea)
         total += item.amount or Decimal("0")
     _set_sales_document_totals(duplicado, total)
+    log_create(duplicado)
     database.session.commit()
     flash(_("Orden de venta duplicada como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=duplicado.id))
@@ -1271,6 +1274,7 @@ def ventas_cotizacion_duplicar(quotation_id: str):
         database.session.add(linea)
         total += item.amount or Decimal("0")
     _set_sales_document_totals(duplicado, total)
+    log_create(duplicado)
     database.session.commit()
     flash(_("Cotización de venta duplicada como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=duplicado.id))
@@ -1744,6 +1748,7 @@ def ventas_entrega_duplicar(note_id: str):
         database.session.add(linea)
         total += item.amount or Decimal("0")
     _set_sales_document_totals(duplicado, total)
+    log_create(duplicado)
     database.session.commit()
     flash(_("Nota de entrega duplicada como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=duplicado.id))
@@ -1834,6 +1839,7 @@ def ventas_entrega_cancel(note_id: str):
 @ventas.route("/sales-invoice/new", methods=["GET", "POST"])
 @modulo_activo("sales")
 @login_required
+@verifica_permiso("sales", "crear")
 def ventas_factura_venta_nuevo():
     """Formulario para crear una factura de venta."""
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
@@ -2106,6 +2112,7 @@ def ventas_factura_venta_duplicar(invoice_id: str):
     duplicado.base_grand_total = origen.base_grand_total
     duplicado.outstanding_amount = origen.grand_total
     duplicado.base_outstanding_amount = origen.base_grand_total
+    log_create(duplicado)
     database.session.commit()
     flash(_("Factura de venta duplicada como nuevo borrador."), "success")
     return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=duplicado.id))

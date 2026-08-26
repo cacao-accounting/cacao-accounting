@@ -39,6 +39,8 @@ from cacao_accounting.contabilidad.services import (
     _get_templates_and_applied_ids,
     _get_period_close_checks,
     _monthly_close_check_errors,
+    _monthly_ledger_integrity,
+    _monthly_subledger_integrity,
     _discover_applicable_templates,
     _apply_recurring_templates,
     _record_check_result,
@@ -96,7 +98,7 @@ from cacao_accounting.setup.service import (
 
 from cacao_accounting.contabilidad.gl import gl
 
-from cacao_accounting.audit_trail_service import format_document_timeline, log_submit
+from cacao_accounting.audit_trail_service import format_document_timeline, log_submit, log_task_event
 
 from cacao_accounting.database import (
     STATUS,
@@ -2028,6 +2030,17 @@ def accounting_period_edit(period_id):
                 edit=True,
                 entity_initial_label=entity_initial_label,
             )
+        reopening_reason = request.form.get("reopen_reason", "").strip()
+        reopening = bool(period.is_closed) and not bool(formulario.cerrado.data)
+        if reopening and not reopening_reason:
+            flash_error(ValueError("Debe indicar el motivo de reapertura del período."))
+            return render_template(
+                _TPL_PERIODO_CREAR,
+                titulo=TITULO,
+                form=formulario,
+                edit=True,
+                entity_initial_label=entity_initial_label,
+            )
         period.fiscal_year_id = fiscal_year_id
         period.name = request.form.get("nombre", period.name)
         period.status = _accounting_period_status_label(bool(formulario.habilitado.data), bool(formulario.cerrado.data))
@@ -2035,6 +2048,8 @@ def accounting_period_edit(period_id):
         period.is_closed = bool(formulario.cerrado.data)
         period.start = formulario.inicio.data
         period.end = formulario.fin.data
+        if reopening:
+            log_task_event(period, "reopened", reopening_reason)
         database.session.commit()
         return redirect(url_for(CONTABILIDAD_PERIODO_CONTABLE))
 
@@ -2824,6 +2839,30 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
         .scalars()
         .all()
     )
+    latest_ledger_check = next((check for check in checks if str(check.check_type) == "ledger_integrity"), None)
+    if latest_ledger_check is None or latest_ledger_check.check_status != "passed":
+        passed, message = _monthly_ledger_integrity(close_run.company, period.start, period.end)
+        integrity_check = PeriodCloseCheck(
+            close_run_id=close_run.id,
+            check_type="ledger_integrity",
+            check_status="passed" if passed else "failed",
+            message=message,
+        )
+        database.session.add(integrity_check)
+        database.session.commit()
+        checks.insert(0, integrity_check)
+    latest_subledger_check = next((check for check in checks if str(check.check_type) == "subledger_integrity"), None)
+    if latest_subledger_check is None or latest_subledger_check.check_status != "passed":
+        passed, message = _monthly_subledger_integrity(close_run.company, period.name, period.end)
+        subledger_check = PeriodCloseCheck(
+            close_run_id=close_run.id,
+            check_type="subledger_integrity",
+            check_status="passed" if passed else "failed",
+            message=message,
+        )
+        database.session.add(subledger_check)
+        database.session.commit()
+        checks.insert(0, subledger_check)
     missing, unsuccessful = _monthly_close_check_errors(checks)
     if missing or unsuccessful:
         detail = ", ".join(sorted(missing | unsuccessful))

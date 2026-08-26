@@ -38,7 +38,7 @@
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
-        <a href="{{ url_for('compras.compras_proveedor_lista') }}">Contactos y Direcciones de Proveedores</a>
+        <a href="{{ url_for('compras.compras_proveedor_lista') }}#contactos-direcciones">Contactos y Direcciones de Proveedores</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       {% else %}
@@ -91,6 +91,18 @@
       </li>
       <li>
         <a href="{{ url_for('compras.compras_factura_compra_lista') }}">Facturas de Proveedor</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_factura_compra_nota_debito_lista') }}">Notas de Débito</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_factura_compra_nota_credito_lista') }}">Notas de Crédito y Devoluciones</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('compras.compras_import_landed_cost_lista') }}">Import Landed Cost</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       {% else %}

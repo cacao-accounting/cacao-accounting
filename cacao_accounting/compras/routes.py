@@ -2765,6 +2765,7 @@ def compras_recepcion_cancel(receipt_id: str):
 @compras.route("/purchase-invoice/new", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
+@verifica_permiso("purchases", "crear")
 def compras_factura_compra_nuevo():
     """Formulario para crear una factura de compra."""
     from cacao_accounting.compras.forms import FormularioFacturaCompra

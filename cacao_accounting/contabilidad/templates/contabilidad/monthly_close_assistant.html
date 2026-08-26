@@ -254,6 +254,41 @@
   </div>
 </section>
 
+{% if checks %}
+<section class="ca-card mb-3" aria-labelledby="close-check-results">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title mb-0" id="close-check-results">{{ _('Resultados de verificaciones') }}</h5>
+  </div>
+  <div class="table-responsive">
+    <table class="ca-table">
+      <caption class="visually-hidden">{{ _('Resultados de las verificaciones del cierre') }}</caption>
+      <thead>
+        <tr>
+          <th scope="col">{{ _('Verificación') }}</th>
+          <th scope="col">{{ _('Estado') }}</th>
+          <th scope="col">{{ _('Detalle y causa') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for check in checks %}
+        <tr>
+          <td>{{ _(check.check_type) }}</td>
+          <td>
+            {% if check.check_status in ('passed', 'skipped') %}
+            <span class="badge text-bg-success">{{ _(check.check_status) }}</span>
+            {% else %}
+            <span class="badge text-bg-danger">{{ _(check.check_status) }}</span>
+            {% endif %}
+          </td>
+          <td>{{ check.message or _('Sin detalle disponible.') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
 <section class="ca-card">
   <div class="ca-card-header d-flex justify-content-between align-items-center">
     <h5 class="ca-card-title mb-0">{{ _('Paso 4: finalizar cierre y cerrar periodo') }}</h5>

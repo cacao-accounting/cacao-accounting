@@ -122,7 +122,9 @@ ENTIDAD_NO_EXISTE_MSG = "La entidad indicada no existe."
 
 CONTABILIDAD_CUENTAS_ENDPOINT = "contabilidad.cuentas"
 
-REQUIRED_MONTHLY_CLOSE_CHECKS = frozenset({"apply_recurring_journals", "exchange_revaluation", "project_capitalization"})
+REQUIRED_MONTHLY_CLOSE_CHECKS = frozenset(
+    {"apply_recurring_journals", "exchange_revaluation", "project_capitalization", "ledger_integrity", "subledger_integrity"}
+)
 
 COMPLETED_MONTHLY_CLOSE_STATUSES = frozenset({"passed", "skipped"})
 
@@ -600,6 +602,51 @@ def _monthly_close_check_errors(checks: Sequence[Any]) -> tuple[set[str], set[st
         if check_type in REQUIRED_MONTHLY_CLOSE_CHECKS and check.check_status not in COMPLETED_MONTHLY_CLOSE_STATUSES
     }
     return missing, unsuccessful
+
+
+def _monthly_ledger_integrity(company: str, period_start: date, period_end: date) -> tuple[bool, str]:
+    """Verifica que cada libro contable quede cuadrado en el periodo indicado."""
+    from cacao_accounting.database import GLEntry
+
+    entries = database.session.execute(
+        database.select(GLEntry.ledger_id, GLEntry.debit, GLEntry.credit)
+        .where(GLEntry.company == company)
+        .where(GLEntry.posting_date >= period_start)
+        .where(GLEntry.posting_date <= period_end)
+    ).all()
+    balances: dict[str, tuple[Decimal, Decimal]] = {}
+    for ledger_id, debit, credit in entries:
+        key = str(ledger_id or "__default__")
+        previous_debit, previous_credit = balances.get(key, (Decimal("0"), Decimal("0")))
+        balances[key] = (previous_debit + Decimal(str(debit or 0)), previous_credit + Decimal(str(credit or 0)))
+    differences = {
+        ledger: debit - credit for ledger, (debit, credit) in balances.items() if abs(debit - credit) >= Decimal("0.01")
+    }
+    if differences:
+        detail = ", ".join(f"{ledger}: {difference:.2f}" for ledger, difference in sorted(differences.items()))
+        return False, f"Descuadre GL por libro ({detail})."
+    return True, f"GL cuadrado en {len(balances)} libro(s)."
+
+
+def _monthly_subledger_integrity(company: str, period_name: str, period_end: date) -> tuple[bool, str]:
+    """Reconcilia AR/AP e inventario contra el mayor al cierre del periodo."""
+    try:
+        from cacao_accounting.reportes.services import ReconciliationFilters, get_reconciliation_matrix
+
+        report = get_reconciliation_matrix(
+            ReconciliationFilters(company=company, accounting_period=period_name, as_of_date=period_end)
+        )
+    except Exception as exc:  # pragma: no cover - datos de configuración incompletos se reportan como fallo
+        return False, f"No fue posible ejecutar la conciliación de submayores: {exc}"
+    differences = [
+        (str(row.values.get("area", "subledger")), row.values.get("difference"))
+        for row in report.rows
+        if abs(Decimal(str(row.values.get("difference") or 0))) >= Decimal("0.01")
+    ]
+    if differences:
+        detail = ", ".join(f"{area}: {difference}" for area, difference in differences)
+        return False, f"Diferencias submayor vs GL ({detail})."
+    return True, "Submayores AR/AP e inventario conciliados contra GL."
 
 
 def _discover_applicable_templates(company: str, period_end: date) -> list[str]:
