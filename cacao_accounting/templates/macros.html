@@ -783,8 +783,10 @@
       </button>
     </form>
   {% elif docstatus == 1 %}
-    <form method="post" action="{{ cancel_url }}" class="d-inline">
+    <form method="post" action="{{ cancel_url }}" class="d-inline"
+          onsubmit="var r=prompt('{{ _('Indique el motivo de la anulación:') }}'); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="reason" value="">
       <button type="submit" class="btn btn-sm btn-outline-danger"
               onclick="return confirm('¿Cancelar este documento?')">
         <i class="bi bi-arrow-counterclockwise me-1"></i>{{ cancel_label }}

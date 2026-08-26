@@ -3155,6 +3155,41 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     metadata_json = database.Column(database.Text(), nullable=True)
 
 
+class DocumentTransition(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Registro inmutable de una anulación o reversión documental.
+
+    Las referencias son deliberadamente genéricas para conservar el mismo
+    contrato entre documentos de ventas, compras, tesorería, inventario y GL.
+    """
+
+    __tablename__ = "document_transition"
+    __table_args__ = (
+        database.Index("ix_document_transition_source", "source_type", "source_id", "transition_type"),
+        database.Index("ix_document_transition_company_period", "company", "accounting_period_id"),
+    )
+    source_type = database.Column(database.String(50), nullable=False)
+    source_id = database.Column(database.String(26), nullable=False)
+    target_type = database.Column(database.String(50), nullable=True)
+    target_id = database.Column(database.String(26), nullable=True)
+    transition_type = database.Column(database.String(20), nullable=False, index=True)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    posting_date = database.Column(database.Date(), nullable=False)
+    accounting_period_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+    )
+    actor_user_id = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    reason = database.Column(database.Text(), nullable=False)
+
+
 class DocumentLineFlowState(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Estado acumulado de una linea fuente dentro de un flujo documental.
 

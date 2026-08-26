@@ -3185,6 +3185,10 @@ def anular_comprobante(identifier: str):
     if not journal:
         abort(404)
     exige_acceso_compania("accounting", journal.entity, "anular")
+    reason = (request.form.get("reason") or "").strip()
+    if not reason:
+        flash(_("Debe indicar el motivo de la anulación."), "danger")
+        return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
     try:
         if ApprovalEngine.is_enabled(journal.entity):
@@ -3193,7 +3197,7 @@ def anular_comprobante(identifier: str):
             flash("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).", "info")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
-        cancel_submitted_journal(identifier, user_id=str(current_user.id))
+        cancel_submitted_journal(identifier, user_id=str(current_user.id), reason=reason)
     except JournalValidationError as exc:
         flash_error(exc)
     else:

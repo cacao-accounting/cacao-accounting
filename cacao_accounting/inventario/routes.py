@@ -914,6 +914,10 @@ def inventario_entrada_cancel(entry_id: str):
     exige_acceso_compania("inventory", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    reason = (request.form.get("reason") or "").strip()
+    if not reason:
+        flash(_("Debe indicar el motivo de la anulación."), "danger")
+        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
 
@@ -923,7 +927,7 @@ def inventario_entrada_cancel(entry_id: str):
             flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
             return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
 
-        cancel_document(registro)
+        cancel_document(registro, reason=reason, actor_user_id=str(current_user.id))
         revert_relations_for_target("stock_entry", entry_id)
         log_cancel(registro)
         database.session.commit()

@@ -106,8 +106,10 @@
             </button>
             {% endif %}
             {% if registro.status == "submitted" %}
-            <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}">
+            <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}"
+                onsubmit="var r=prompt('{{ _('Indique el motivo de la anulación:') }}'); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="reason" value="">
                 <button class="btn btn-sm btn-outline-danger" type="submit">
                     <i class="bi bi-arrow-counterclockwise me-1"></i>{{ _('Anular comprobante') }}
                 </button>
@@ -158,8 +160,10 @@
                 </button>
                 {% endif %}
                 {% if registro.status == "submitted" %}
-                <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}">
+                <form method="post" action="{{ url_for('contabilidad.anular_comprobante', identifier=registro.id) }}"
+                    onsubmit="var r=prompt('{{ _('Indique el motivo de la anulación:') }}'); if (!r || !r.trim()) return false; this.elements.reason.value=r.trim();">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="reason" value="">
                     <button class="btn btn-sm btn-outline-danger" type="submit">
                         <i class="bi bi-arrow-counterclockwise me-1"></i>{{ _('Anular comprobante') }}
                     </button>

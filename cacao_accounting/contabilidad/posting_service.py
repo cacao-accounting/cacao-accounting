@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     DeliveryNote,
     DeliveryNoteItem,
     DocumentRelation,
+    DocumentTransition,
     ExchangeRate,
     GLEntry,
     ImportLandedCost,
@@ -3757,8 +3758,13 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
     return entries
 
 
-def cancel_document(document: Any) -> list[GLEntry]:
-    """Cancela un documento aprobado mediante reversos append-only."""
+def cancel_document(document: Any, *, reason: str | None = None, actor_user_id: str | None = None) -> list[GLEntry]:
+    """Cancela un documento aprobado mediante reversos append-only.
+
+    La fecha, periodo y tasas de las contrapartidas se toman de cada asiento
+    original. ``reason`` y ``actor_user_id`` permiten registrar la transición
+    de negocio sin alterar el documento ni el ledger histórico.
+    """
     document = _lock_document_for_transition(document)
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede cancelar un documento aprobado.")
@@ -3775,9 +3781,11 @@ def cancel_document(document: Any) -> list[GLEntry]:
     _validate_cancel_accounting_period(document, company)
     voucher_type = _get_voucher_type(document)
     voucher_id = _get_voucher_id(document)
+    _validate_cancellation_reason(reason)
     original_entries = _get_original_gl_entries(company, voucher_type, voucher_id, document)
 
     with database.session.begin_nested():
+        _record_cancellation_transition(document, company, reason, actor_user_id)
         document.docstatus = 2
         if isinstance(document, PaymentEntry):
             from cacao_accounting.withholding_service import cancel_withholding_certificate
@@ -3803,6 +3811,43 @@ def _lock_document_for_transition(document: Any) -> Any:
     if locked is None:
         raise PostingError("El documento no existe.")
     return locked
+
+
+def _record_cancellation_transition(document: Any, company: str, reason: str | None, actor_user_id: str | None) -> None:
+    """Persist cancellation metadata when the transition was user initiated."""
+    if reason is None:
+        return
+    normalized_reason = reason.strip()
+    source_type = _get_voucher_type(document)
+    source_id = _get_voucher_id(document)
+    existing = database.session.execute(
+        select(DocumentTransition.id).where(
+            DocumentTransition.source_type == source_type,
+            DocumentTransition.source_id == source_id,
+            DocumentTransition.transition_type == "cancellation",
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise PostingError("El documento ya tiene una anulación registrada.")
+    period_id, _ = _find_period_ids(company, _posting_date_for(document))
+    database.session.add(
+        DocumentTransition(
+            source_type=source_type,
+            source_id=source_id,
+            transition_type="cancellation",
+            company=company,
+            posting_date=_posting_date_for(document),
+            accounting_period_id=period_id,
+            actor_user_id=actor_user_id,
+            reason=normalized_reason,
+        )
+    )
+
+
+def _validate_cancellation_reason(reason: str | None) -> None:
+    """Reject an explicitly requested cancellation without an audit reason."""
+    if reason is not None and not reason.strip():
+        raise PostingError("Debe indicar el motivo de la anulación.")
 
 
 def _validate_cancel_accounting_period(document: Any, company: str) -> None:
@@ -3852,7 +3897,9 @@ def _create_gl_reversals(
     for entry in original_entries:
         context = LedgerContext(
             company=entry.company,
-            posting_date=_posting_date_for(document),
+            # A cancellation reverses the historical entry at its original
+            # date and period, avoiding a newly calculated FX difference.
+            posting_date=entry.posting_date,
             ledger_id=entry.ledger_id,
             voucher_type=voucher_type,
             voucher_id=voucher_id,

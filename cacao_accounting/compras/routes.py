@@ -2749,7 +2749,9 @@ def compras_recepcion_cancel(receipt_id: str):
         database.session.rollback()
         flash_error(exc)
     try:
-        cancel_document(registro)  # type: ignore[misc]
+        cancel_document(
+            registro, reason=(request.form.get("reason") or "").strip(), actor_user_id=str(current_user.id)
+        )  # type: ignore[misc]
         emit_goods_received_cancelled(receipt_id, registro.company)
         revert_relations_for_target("purchase_receipt", receipt_id)
         refresh_source_caches_for_target("purchase_receipt", receipt_id)
@@ -3134,7 +3136,9 @@ def compras_factura_compra_cancel(invoice_id: str):
         database.session.rollback()
         flash_error(exc)
     try:
-        cancel_document(registro)  # type: ignore[misc]
+        cancel_document(
+            registro, reason=(request.form.get("reason") or "").strip(), actor_user_id=str(current_user.id)
+        )  # type: ignore[misc]
         log_cancel(registro)
         target_type = registro.document_type or "purchase_invoice"
         revert_relations_for_target(target_type, invoice_id)
@@ -3300,7 +3304,9 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
         database.session.rollback()
         flash_error(exc)
     try:
-        cancel_document(registro)  # type: ignore[misc]
+        cancel_document(
+            registro, reason=(request.form.get("reason") or "").strip(), actor_user_id=str(current_user.id)
+        )  # type: ignore[misc]
         log_cancel(registro)
         revert_relations_for_target("import_landed_cost", landed_cost_id)
         refresh_source_caches_for_target("import_landed_cost", landed_cost_id)

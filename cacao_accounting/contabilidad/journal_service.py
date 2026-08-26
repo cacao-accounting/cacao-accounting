@@ -269,7 +269,7 @@ def reject_journal_draft(journal_id: str, user_id: str | None = None) -> Comprob
     return journal
 
 
-def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> list[Any]:
+def cancel_submitted_journal(journal_id: str, user_id: str | None = None, reason: str | None = None) -> list[Any]:
     """Anula un comprobante contabilizado mediante reversa GL append-only."""
     journal = get_journal(journal_id)
     if journal is None:
@@ -278,7 +278,7 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None) -> lis
         raise JournalValidationError("Solo se puede anular un comprobante contabilizado.")
     setattr(journal, "docstatus", 1)
     try:
-        entries = cancel_document(journal)  # type: ignore[misc]
+        entries = cancel_document(journal, reason=reason, actor_user_id=user_id)  # type: ignore[misc]
         revert_relations_for_target(JOURNAL_TRANSACTION_TYPE, journal.id, reason="journal_cancelled")
     except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
