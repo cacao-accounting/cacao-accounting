@@ -8,7 +8,10 @@ Las siguientes etiquetas son utiles para coordinar el trabajo con issues:
 - needs-review: issue no verificado, posible falso positivo, posible duplicado, se requiere establecer
   un criterio o politica antes de continuar.
 - needs-work: issue verificado sin solución aplicada o con solución parcial.
-- ok: issue con una solución aceptada implementada.
+- fix-proposed: existe un commit relacionado a la tarea indicada, puede avanzar a:
+  - fix-confirmed: el fix se considera apropiado.
+  - needs-work: el fix se considera incompleto y requiere trabajo adicional.
+- fixed: issue con una solución aceptada implementada.
 
 Una tarea no se considera completada si no cuenta con pruebas unitarias que validen el funcionamiento
 esperado del sistema y ayuden a evitar que se introduzcan regresiones a funcionalidades validades en el
