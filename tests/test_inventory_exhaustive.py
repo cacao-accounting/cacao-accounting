@@ -7,7 +7,7 @@ Cubre:
 1. Recepción de Órdenes de Compra (PurchaseReceipt)
 2. Remisión de Facturas o Notas de Venta (DeliveryNote)
 3. Traslados entre inventarios (StockEntry: material_transfer)
-4. Entradas de inventario en todas sus variantes (material_receipt, adjustment_positive, stock_adjustment, manufacture, repack)
+4. Entradas de inventario en todas sus variantes (material_receipt, adjustment_positive, stock_adjustment)
 5. Ajustes negativos/positivos de valores (qty == 0, amount != 0)
 6. Ajustes negativos/positivos de cantidades (material_issue, adjustment_negative)
 7. Ajustes por inventario / Conciliación de inventario (stock_reconciliation)
@@ -588,27 +588,6 @@ def test_material_transfer_rejects_the_same_source_and_target_warehouse(app):
                 source_warehouse="WH-MAIN",
                 target_warehouse="WH-MAIN",
             )
-
-
-def test_04_entradas_inventario_variantes(app):
-    """Prueba de entradas de inventario en distintas variantes (manufacture, repack, adjustment_positive)."""
-    _setup_inventory_test_data(app)
-    with app.app_context():
-        se_mfg = _create_and_submit_stock_entry(
-            purpose="manufacture",
-            posting_date=date(2026, 5, 1),
-            item_code="ITEM-GOODS",
-            qty=Decimal("15.0"),
-            valuation_rate=Decimal("120.00"),
-            amount=Decimal("1800.00"),
-            target_warehouse="WH-MAIN",
-        )
-
-        sle = database.session.execute(
-            database.select(StockLedgerEntry).filter_by(voucher_type="stock_entry", voucher_id=se_mfg.id)
-        ).scalar_one()
-        assert sle.qty_change == Decimal("15.0")
-        assert sle.stock_value == Decimal("1800.00")
 
 
 def test_05_ajustes_valores_positivos_negativos(app):

@@ -2688,7 +2688,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
     """Crea movimientos de inventario para una linea segun el proposito."""
     qty = _line_qty(line)
 
-    if purpose in ("material_receipt", "adjustment_positive", "stock_adjustment", "manufacture", "repack"):
+    if purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
         amount = _decimal_value(line.amount)
         if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount > 0:
             # A positive adjustment can change value without changing quantity.
@@ -3534,7 +3534,7 @@ def _add_stock_entry_line_gl_entries(
 
     if purpose == "stock_reconciliation":
         _add_reconciliation_entries(entries, context, inventory_account_id, offset_account_id, amount, line, dimension_kwargs)
-    elif purpose in ("material_receipt", "adjustment_positive", "stock_adjustment", "manufacture", "repack"):
+    elif purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
         entries.extend(
             _normal_entries_for_amount(
                 context=context,

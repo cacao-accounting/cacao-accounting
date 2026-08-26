@@ -1422,7 +1422,7 @@ class StockEntry(database.Model, DocBase):  # type: ignore[name-defined]
 
     __tablename__ = "stock_entry"
     __table_args__ = (database.Index("ix_stock_entry_company_docstatus", "company", "docstatus"),)
-    # receipt, issue, transfer, manufacture, repack
+    # receipt, issue, transfer
     purpose = database.Column(database.String(30), nullable=False, index=True)
     from_warehouse = database.Column(
         database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
