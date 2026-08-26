@@ -251,3 +251,19 @@ Se auditó el indicador de concentración en los reportes analíticos. La salida
 
 - Las participaciones se calculan como importe dividido entre total, conservando el signo contable de ambos valores.
 - Un total cero se presenta como 0 % para evitar una división indefinida y mantener la respuesta del reporte estable.
+
+## 2026-08-26
+
+### Petición del usuario
+
+Atender el issue #749: «Exchange revaluation multiplies instead of dividing when converting functional to account currency», que afirma que `_bank_original_balance` multiplica en lugar de dividir al convertir saldos funcionales a la moneda de la cuenta bancaria.
+
+### Plan implementado
+
+Se reprodujo empíricamente el escenario exacto del issue (entidad NIO, cuenta bancaria USD, única tasa USD->NIO = 36.6243, GL de 36,624.30 sin importes en moneda de cuenta): `_bank_original_balance` devolvió 1,000.0000 USD, el valor correcto, y no los 1,341,250.45 afirmados. La premisa del issue es incorrecta: `_closing_rate(origin, destination)` normaliza la dirección del par e invierte la tasa cuando solo existe el sentido contrario, por lo que multiplicar por su resultado ya equivale a dividir entre la tasa cotizada. Aplicar la corrección sugerida (`functional_amount / rate`) introduciría exactamente el error descrito. Se agregó `test_bank_functional_only_balance_divides_inverse_exchange_pair` con los números concretos del issue (36,624.30 NIO → 1,000.00 USD; cierre 37.00 → ganancia no realizada 375.70 NIO) y la suite completa del módulo pasó 16/16.
+
+### Decisiones de diseño
+
+- No se modificó código de producción: la conversión actual es matemáticamente correcta bajo la convención documentada del par (origen -> destino) y está cubierta además por `test_bank_balance_converts_functional_only_gl_amounts`.
+- La nueva prueba de regresión congela el escenario y los criterios de aceptación del issue para detectar si una futura refactorización de `_closing_rate` rompe la normalización de dirección.
+- El único riesgo residual detectado es de datos: un par NIO->USD capturado manualmente con el valor estilo USD->NIO (36.6243 en vez de 0.0273) engaña a cualquier consumidor de la tabla; eso es validación de captura, no un defecto de esta función.

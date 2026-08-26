@@ -661,6 +661,74 @@ def test_bank_balance_converts_functional_only_gl_amounts(app_ctx):
     assert balance == Decimal("20.0000")
 
 
+def test_bank_functional_only_balance_divides_inverse_exchange_pair(app_ctx):
+    """A functional-only NIO amount must reach the USD account divided by the quoted pair.
+
+    Regresión del issue #749: con la única tasa configurada USD->NIO
+    (36.6243), el saldo en moneda de la cuenta debe ser 36,624.30 / 36.6243
+    = 1,000.00 USD y no 36,624.30 * 36.6243.
+    """
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import Accounts, Bank, BankAccount, ExchangeRevaluationItem, ExchangeRate, GLEntry, database
+
+    database.session.execute(
+        database.update(ExchangeRate)
+        .where(ExchangeRate.origin == "USD", ExchangeRate.destination == "NIO", ExchangeRate.date == date(2026, 5, 1))
+        .values(rate=Decimal("36.6243"))
+    )
+    bank_account_id = database.session.execute(
+        database.select(Accounts.id).filter_by(entity="cacao", code="1005")
+    ).scalar_one()
+    bank = Bank(name="Banco par inverso")
+    database.session.add(bank)
+    database.session.flush()
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta par inverso",
+        account_no="USD-INVERSE-1",
+        currency="USD",
+        gl_account_id=bank_account_id,
+    )
+    database.session.add(bank_account)
+    database.session.flush()
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 5, 1),
+            company="cacao",
+            ledger_id=_book("NIO").id,
+            account_id=bank_account_id,
+            account_code="1005",
+            debit=Decimal("36624.30"),
+            credit=Decimal("0"),
+            debit_in_account_currency=None,
+            credit_in_account_currency=None,
+            account_currency="USD",
+            company_currency="NIO",
+            exchange_rate=Decimal("36.6243"),
+            bank_account_id=bank_account.id,
+            voucher_type="payment_entry",
+            voucher_id="PAY-INVERSE-1",
+        )
+    )
+    database.session.commit()
+
+    balance = ExchangeRevaluationService()._bank_original_balance(bank_account, date(2026, 5, 31), _book("NIO").id)
+
+    assert balance == Decimal("1000.0000")
+
+    run = ExchangeRevaluationService().run(company="cacao", year=2026, month=5, user_id="admin")
+
+    assert run.status == "posted"
+    assert run.total_gain == Decimal("375.7000")
+    bank_line = database.session.execute(
+        database.select(ExchangeRevaluationItem).filter_by(source_document_type="bank_account", ledger_currency_id="NIO")
+    ).scalar_one()
+    assert bank_line.open_amount_original == Decimal("1000.0000")
+    assert bank_line.revalued_balance == Decimal("37000.0000")
+    assert bank_line.exchange_difference == Decimal("375.7000")
+
+
 def test_revaluation_uses_credit_note_nature_for_open_ar_and_ap(app_ctx):
     """Open credit notes must revalue with the opposite subledger nature."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
