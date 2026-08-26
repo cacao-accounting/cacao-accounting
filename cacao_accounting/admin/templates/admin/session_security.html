@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block contenido %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Seguridad de Sesión") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-shield-lock me-2" style="color:#78BF30"></i>{{ _("Seguridad de Sesión") }}</h4>
+</div>
+
+<div class="row">
+  <div class="col-md-8">
+    <div class="ca-card p-3 mb-4">
+      <h5 class="mb-3">{{ _("Protección de Orígenes") }}</h5>
+      {% if not smtp_configured %}
+      <div class="alert alert-warning py-2 small">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        {{ _("El servidor SMTP no está configurado. Debe configurar el correo electrónico en ") }}
+        <a href="{{ url_for('admin.email_settings') }}">{{ _("Correo Electrónico") }}</a>
+        {{ _(" antes de activar esta función.") }}
+      </div>
+      {% endif %}
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="toggle">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="enabled"
+            name="enabled" {% if enabled %}checked{% endif %} {% if not smtp_configured %}disabled{% endif %}>
+          <label class="form-check-label" for="enabled">
+            {{ _("Proteger Inicio de Sesión de Orígenes no Verificados") }}
+          </label>
+          <div class="form-text text-muted">
+            {{ _("Cuando está activado, los usuarios que inicien sesión desde un navegador nuevo recibirán un código de verificación por correo electrónico.") }}
+          </div>
+        </div>
+        {% if smtp_configured %}
+        <button type="submit" class="btn btn-primary btn-sm">{{ _("Guardar") }}</button>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="ca-card p-3">
+      <h5 class="mb-3">{{ _("Dispositivos Reconocidos") }}</h5>
+      {% if dispositivos %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead>
+            <tr>
+              <th>{{ _("Usuario") }}</th>
+              <th>{{ _("IP") }}</th>
+              <th>{{ _("Navegador") }}</th>
+              <th>{{ _("Creado") }}</th>
+              <th>{{ _("Expira") }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for device, username in dispositivos %}
+            <tr>
+              <td>{{ username }}</td>
+              <td>{{ device.ip_address or "—" }}</td>
+              <td class="text-truncate" style="max-width:200px;" title="{{ device.user_agent or '' }}">
+                {{ device.user_agent[:60] ~ "…" if device.user_agent and device.user_agent|length > 60 else (device.user_agent or "—") }}
+              </td>
+              <td>{{ device.created.strftime("%Y-%m-%d %H:%M") if device.created else "—" }}</td>
+              <td>{{ device.expires_at.strftime("%Y-%m-%d %H:%M") if device.expires_at else "—" }}</td>
+              <td>
+                <form method="post" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="action" value="revoke">
+                  <input type="hidden" name="device_id" value="{{ device.id }}">
+                  <button type="submit" class="btn btn-outline-danger btn-sm"
+                    onclick="return confirm('{{ _('¿Está seguro de revocar este dispositivo?') }}')">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted small">{{ _("No hay dispositivos reconocidos registrados.") }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="ca-card p-3">
+      <h5 class="mb-3">{{ _("Información") }}</h5>
+      <p class="small text-muted">
+        {{ _("Esta función protege contra accesos no autorizados cuando un agente malicioso obtiene credenciales válidas.") }}
+      </p>
+      <p class="small text-muted">
+        {{ _("Cuando un usuario intenta iniciar sesión desde un navegador no reconocido, el sistema envía un código de verificación de 6 dígitos a su correo electrónico.") }}
+      </p>
+      <p class="small text-muted">
+        {{ _("Una vez verificado, el navegador queda registrado por 30 días y no se volverá a solicitar verificación.") }}
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -104,6 +104,13 @@ from cacao_accounting.admin.services import (
     _validate_portal_fields,
 )
 
+from cacao_accounting.admin.session_security_service import (
+    is_session_security_enabled,
+    listar_todos_dispositivos,
+    revocar_dispositivo,
+    set_session_security_enabled,
+    smtp_is_configured,
+)
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 from cacao_accounting.tax_rule_service import (
@@ -1352,4 +1359,48 @@ def pending_approvals():
         "admin/pending_approvals.html",
         pending_list=my_pending,
         titulo=_("Mis Aprobaciones Pendientes"),
+    )
+
+
+@admin.route("/settings/session-security", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def session_security_settings():
+    """Administra la configuración de seguridad de sesión y dispositivos reconocidos."""
+    _require_system_admin()
+    if is_desktop_mode():
+        abort(403)
+
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "toggle":
+            if not smtp_is_configured():
+                flash(
+                    _("Debe configurar el servidor SMTP antes de activar la protección de orígenes."),
+                    "danger",
+                )
+                return redirect(url_for("admin.session_security_settings"))
+            new_state = request.form.get("enabled") == "on"
+            set_session_security_enabled(new_state)
+            database.session.commit()
+            estado = _("activada") if new_state else _("desactivada")
+            flash(_("Protección de orígenes {}.").format(estado), "success")
+            return redirect(url_for("admin.session_security_settings"))
+        if action == "revoke":
+            device_id = request.form.get("device_id")
+            if device_id and revocar_dispositivo(device_id):
+                database.session.commit()
+                flash(_("Dispositivo revocado correctamente."), "success")
+            return redirect(url_for("admin.session_security_settings"))
+
+    enabled = is_session_security_enabled()
+    smtp_ok = smtp_is_configured()
+    dispositivos = listar_todos_dispositivos()
+
+    return render_template(
+        "admin/session_security.html",
+        enabled=enabled,
+        smtp_configured=smtp_ok,
+        dispositivos=dispositivos,
+        titulo=_("Seguridad de Sesión"),
     )

@@ -4993,6 +4993,75 @@ class UserCompanyAccess(database.Model, BaseTabla):  # type: ignore[name-defined
     )
 
 
+class RecognizedDevice(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Navegador o dispositivo reconocido para un usuario.
+
+    Almacena un token UUID4 por cada navegador que haya superado la
+    verificación OTP. El token se entrega como cookie firmada y se
+    valida contra esta tabla en cada inicio de sesión cuando la
+    protección de orígenes está habilitada.
+    """
+
+    __tablename__ = "recognized_device"
+
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    token = database.Column(database.String(36), nullable=False, unique=True, index=True)
+    user_agent = database.Column(database.String(255), nullable=True)
+    ip_address = database.Column(database.String(45), nullable=True)
+    expires_at = database.Column(database.DateTime(timezone=True), nullable=False)
+
+
+class OtpVerification(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Código OTP de un solo uso para verificación de dispositivo o recuperación.
+
+    Cada registro almacena un código de 6 dígitos generado con ``secrets``,
+    con un tiempo de vida corto (5 minutos por defecto) y un contador de
+    intentos. Se marca como consumido tras una validación exitosa o al
+    exceder el máximo de intentos permitidos.
+    """
+
+    __tablename__ = "otp_verification"
+
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    code = database.Column(database.String(6), nullable=False)
+    purpose = database.Column(database.String(30), nullable=False, default="device_verification")
+    expires_at = database.Column(database.DateTime(timezone=True), nullable=False)
+    attempts = database.Column(database.Integer(), nullable=False, default=0)
+    consumed = database.Column(database.Boolean(), nullable=False, default=False)
+
+
+class PasswordResetToken(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Token de un solo uso para recuperación de contraseña por email.
+
+    El token es un UUID4 generado criptográficamente, con un TTL de 1 hora.
+    Se almacena en texto plano para poder expirarlo y marcarlo como
+    consumido; no se usa para hash adicional porque la protección está
+    en el TTL y en el uso único.
+    """
+
+    __tablename__ = "password_reset_token"
+
+    user_id = database.Column(
+        database.String(26),
+        database.ForeignKey(USER_ID, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    token = database.Column(database.String(64), nullable=False, unique=True, index=True)
+    expires_at = database.Column(database.DateTime(timezone=True), nullable=False)
+    consumed = database.Column(database.Boolean(), nullable=False, default=False)
+
+
 def _item_has_usage(connection, item_code: str) -> bool:
     """Detecta si un item ya tiene registros transaccionales o de stock."""
     usage_tables = (

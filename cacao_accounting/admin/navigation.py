@@ -110,6 +110,17 @@ CONFIGURATION_SECTIONS: tuple[ConfigurationSection, ...] = (
         ),
     ),
     ConfigurationSection(
+        label="Seguridad de Sesión",
+        icon="bi bi-shield-lock",
+        links=(
+            ConfigurationLink(
+                "admin.session_security_settings",
+                "Protección de orígenes",
+                cloud_only=True,
+            ),
+        ),
+    ),
+    ConfigurationSection(
         label="Usuarios y Permisos",
         icon="bi bi-people",
         links=(

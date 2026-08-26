@@ -69,6 +69,11 @@
           <i class="bi bi-box-arrow-in-right me-1"></i>Iniciar Sesión
         </button>
       </form>
+      <p class="text-center mt-2 mb-0">
+        <a href="{{ url_for('login.forgot_password') }}" style="font-size:.8rem;color:#64748b;">
+          {{ _("¿Olvidó su contraseña?") }}
+        </a>
+      </p>
       {% if MODO_ESCRITORIO and development %}
       <div class="mt-3">
         <button class="btn btn-light btn-sm w-100" type="button" data-bs-toggle="collapse" data-bs-target="#devDetails"

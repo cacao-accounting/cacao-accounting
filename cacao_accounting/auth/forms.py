@@ -156,3 +156,28 @@ class RoleForm(FlaskForm):
     name = StringField("Nombre del rol", validators=[DataRequired(), Length(min=3, max=50)])
     note = StringField("Detalle", validators=[Optional(), Length(max=100)])
     guardar_rol = SubmitField("Guardar rol")
+
+
+class OtpVerificationForm(FlaskForm):
+    """Formulario para verificar un código OTP de 6 dígitos."""
+
+    code = StringField("Código de verificación", validators=[DataRequired(), Length(min=6, max=6)])
+    verificar = SubmitField("Verificar")
+
+
+class ForgotPasswordForm(FlaskForm):
+    """Formulario para solicitar recuperación de contraseña."""
+
+    email = StringField("Correo electrónico", validators=[DataRequired(), Email()])
+    enviar = SubmitField("Enviar enlace de recuperación")
+
+
+class ResetPasswordForm(FlaskForm):
+    """Formulario para restablecer contraseña con token de recuperación."""
+
+    new_password = PasswordField("Nueva contraseña", validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField(
+        "Confirmar contraseña",
+        validators=[DataRequired(), EqualTo("new_password", message="Las contraseñas deben coincidir")],
+    )
+    restablecer = SubmitField("Restablecer contraseña")
