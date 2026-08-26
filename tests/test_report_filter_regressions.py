@@ -92,6 +92,34 @@ def test_voucher_type_catalog_includes_system_registry_and_accepts_book_code(app
     assert "purchase_order" not in values
 
 
+def test_batch_search_select_filters_by_item_and_serializes_expiry(app_ctx):
+    """El selector de lotes devuelve solo lotes activos del artículo y su vencimiento."""
+    from cacao_accounting.database import Batch, Item, UOM
+
+    database.session.add(UOM(code="EA-BATCH-SELECT", name="Unidad lote"))
+    database.session.add(
+        Item(code="ITEM-BATCH-SELECT", name="Artículo lote", item_type="goods", default_uom="EA-BATCH-SELECT")
+    )
+    database.session.flush()
+    database.session.add(
+        Batch(
+            item_code="ITEM-BATCH-SELECT",
+            batch_no="LOT-SELECT-01",
+            expiry_date=date(2027, 1, 15),
+            is_active=True,
+        )
+    )
+    database.session.commit()
+
+    payload = search_select("batch", "LOT-SELECT", {"item_code": ["ITEM-BATCH-SELECT"]}, limit=10)
+
+    assert payload["results"]
+    result = payload["results"][0]
+    assert result["batch_no"] == "LOT-SELECT-01"
+    assert result["expiry_date"] == "2027-01-15"
+    assert "2027-01-15" in result["display_name"]
+
+
 def test_gl_entry_rejects_missing_voucher_type():
     """El motor no permite crear entradas GL sin origen documental."""
     from cacao_accounting.contabilidad.posting import GLEntryParams, LedgerContext, PostingError, _create_gl_entry

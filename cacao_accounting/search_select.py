@@ -17,6 +17,7 @@ from cacao_accounting.database import (
     Accounts,
     Bank,
     BankAccount,
+    Batch,
     Book,
     Budget,
     BusinessUnit,
@@ -135,6 +136,13 @@ def _item_label(item: Item) -> str:
 
 def _item_category_label(category: ItemCategory) -> str:
     return category.name
+
+
+def _batch_label(batch: Batch) -> str:
+    label = batch.batch_no
+    if batch.expiry_date:
+        label += f" (vence: {batch.expiry_date})"
+    return label
 
 
 def _warehouse_label(warehouse: Warehouse) -> str:
@@ -488,6 +496,15 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
             "item_type": "item_type",
             "is_stock_item": "is_stock_item",
         },
+        default_filters={"is_active": True},
+    ),
+    "batch": SearchSelectSpec(
+        doctype="batch",
+        model=Batch,
+        search_fields=("batch_no", "item_code"),
+        value_field="id",
+        label_builder=_batch_label,
+        allowed_filters={"item_code": "item_code", "is_active": "is_active"},
         default_filters={"is_active": True},
     ),
     "item_category": SearchSelectSpec(
@@ -908,6 +925,12 @@ def _serialize_result(spec: SearchSelectSpec, row: Any) -> dict[str, Any]:
         "default_uom",
         "default_naming_series_id",
         "default_external_counter_id",
+        "has_batch",
+        "has_serial_no",
+        "has_expiry_date",
+        "is_stock_item",
+        "batch_no",
+        "expiry_date",
     ):
         if hasattr(row, field):
             payload[field] = getattr(row, field)
@@ -920,6 +943,8 @@ def _serialize_result(spec: SearchSelectSpec, row: Any) -> dict[str, Any]:
         payload["next_suggested_formatted"] = row.next_suggested_formatted
     if isinstance(row, Item):
         payload["allowed_uoms"] = _allowed_uoms_for_item(row)
+    if isinstance(row, Batch):
+        payload["expiry_date"] = str(row.expiry_date) if row.expiry_date else ""
     return payload
 
 
