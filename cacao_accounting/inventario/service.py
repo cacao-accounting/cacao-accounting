@@ -847,7 +847,7 @@ def default_uom_change_allowed(item_code: str, new_default_uom: str) -> bool:
 
 
 def _item_has_records(item_code: str) -> bool:
-    """Detect active stock usage or a positive migrated stock snapshot."""
+    """Detect active stock usage or a positive migrated stock balance."""
     stock_statement = (
         select(1)
         .select_from(StockLedgerEntry)

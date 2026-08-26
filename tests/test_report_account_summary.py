@@ -9,6 +9,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import func, select
 
 from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
@@ -24,7 +25,9 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.reportes.services import (
     FinancialReportFilters,
+    _grouped_account_gl_query,
     get_account_summary_report,
+    get_trial_balance_report,
 )
 
 
@@ -145,3 +148,49 @@ def test_get_account_summary_report(app_ctx):
     assert report.totals["debit"] == Decimal("50.00")
     assert report.totals["credit"] == Decimal("30.00")
     assert report.totals["ending_balance"] == Decimal("120.00")
+
+
+def test_summary_and_trial_balance_receive_grouped_rows_from_database(app_ctx):
+    """Los reportes resumidos transfieren cuentas agregadas, no movimientos GL."""
+    book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True, currency="NIO")
+    account = Accounts(entity="cacao", code="1.01", name="Caja", active=True, enabled=True, classification="Activo")
+    period = AccountingPeriod(
+        entity="cacao",
+        name="2026-05",
+        enabled=True,
+        is_closed=False,
+        start=date(2026, 5, 1),
+        end=date(2026, 5, 31),
+    )
+    database.session.add_all([book, account, period])
+    database.session.flush()
+    database.session.add_all(
+        [
+            GLEntry(
+                company="cacao",
+                ledger_id=book.id,
+                account_id=account.id,
+                account_code=account.code,
+                posting_date=date(2026, 5, 10),
+                debit=Decimal("1"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id=f"ROW-{index}",
+            )
+            for index in range(100)
+        ]
+    )
+    database.session.commit()
+    filters = FinancialReportFilters(company="cacao", ledger="FISC", accounting_period="2026-05")
+
+    grouped_query = _grouped_account_gl_query(filters, period.start, period.end, book.id)
+    compiled = str(grouped_query.compile(database.engine))
+    raw_count = database.session.execute(select(func.count()).select_from(GLEntry)).scalar_one()
+    grouped_rows = database.session.execute(grouped_query).all()
+    assert "GROUP BY" in compiled.upper()
+    assert "SUM(" in compiled.upper()
+    assert len(grouped_rows) == 1
+    assert len(grouped_rows) < raw_count
+
+    assert len(get_account_summary_report(filters).rows) == 1
+    assert len(get_trial_balance_report(filters).rows) == 1

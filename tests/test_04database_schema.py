@@ -442,12 +442,10 @@ class TestSchemaTableCreation(unittest.TestCase):
     def test_audit_log_table_exists(self):
         self.assertIn("audit_log", self.tables)
 
-    # Snapshots
-    def test_account_balance_snapshot_table_exists(self):
-        self.assertIn("account_balance_snapshot", self.tables)
-
-    def test_stock_balance_snapshot_table_exists(self):
-        self.assertIn("stock_balance_snapshot", self.tables)
+    def test_unused_balance_snapshot_tables_are_not_created(self):
+        """Los snapshots de balance retirados no forman parte del esquema nuevo."""
+        self.assertNotIn("account_balance_snapshot", self.tables)
+        self.assertNotIn("stock_balance_snapshot", self.tables)
 
     # Budgeting
     def test_budget_table_exists(self):
@@ -1375,10 +1373,8 @@ def test_all_domain_models_importable():
         # Files
         File,
         FileAttachment,
-        # Audit & Snapshots
+        # Audit
         AuditLog,
-        AccountBalanceSnapshot,
-        StockBalanceSnapshot,
     )
 
     # If we reach here without ImportError, all imports succeeded

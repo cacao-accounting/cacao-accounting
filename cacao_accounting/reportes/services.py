@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Sequence, cast
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 
 from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
 from cacao_accounting.database import (
@@ -2187,112 +2187,6 @@ def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
     return query.order_by(direction, GLEntry.id.asc())
 
 
-def _entry_bucket(posting_date: date, period_start: date | None, period_end: date | None) -> str | None:
-    """Clasifica una entrada como saldo inicial o movimiento del periodo."""
-    if period_start and posting_date < period_start:
-        return "opening"
-    if period_end and posting_date > period_end:
-        return None
-    return "movement"
-
-
-def _account_summary_base_values(account_code: str, account: Accounts | None) -> dict[str, Any]:
-    """Construye el acumulador inicial para la sabana por cuenta."""
-    return {
-        "account_code": account_code,
-        "account_name": account.name if account else None,
-        "account_type": account.account_type if account else None,
-        "classification": _normalize_account_classification(account),
-        "currency": account.currency if account else None,
-        "opening_balance": Decimal("0"),
-        "debit": Decimal("0"),
-        "credit": Decimal("0"),
-        "movement_count": 0,
-        "first_movement": None,
-        "last_movement": None,
-        "level": account_code.count(".") + 1 if account_code else 1,
-    }
-
-
-def _apply_account_summary_entry(row: dict[str, Any], bucket: str, entry: GLEntry, debit: Decimal, credit: Decimal) -> None:
-    """Acumula una entrada en el resumen por cuenta."""
-    if bucket == "opening":
-        row["opening_balance"] += debit - credit
-        return
-    row["debit"] += debit
-    row["credit"] += credit
-    row["movement_count"] += 1
-    if row["first_movement"] is None or entry.posting_date < row["first_movement"]:
-        row["first_movement"] = entry.posting_date
-    if row["last_movement"] is None or entry.posting_date > row["last_movement"]:
-        row["last_movement"] = entry.posting_date
-
-
-def _build_account_summary_row(values: dict[str, Any]) -> tuple[ReportRow, Decimal]:
-    """Construye la fila de salida y su saldo final para la sabana por cuenta."""
-    ending = values["opening_balance"] + values["debit"] - values["credit"]
-    return (
-        ReportRow(
-            values={
-                "account_code": values["account_code"],
-                "account_name": values["account_name"],
-                "account_type": values["account_type"],
-                "classification": values["classification"],
-                "currency": values["currency"],
-                "opening_balance": values["opening_balance"],
-                "debit": values["debit"],
-                "credit": values["credit"],
-                "ending_balance": ending,
-                "movement_count": values["movement_count"],
-                "first_movement": values["first_movement"],
-                "last_movement": values["last_movement"],
-                "level": values["level"],
-            }
-        ),
-        ending,
-    )
-
-
-def _trial_balance_base_values(account_code: str, account: Accounts | None) -> dict[str, Any]:
-    """Construye el acumulador inicial para la balanza de comprobación."""
-    return {
-        "account_code": account_code,
-        "account_name": account.name if account else None,
-        "opening": Decimal("0"),
-        "debit": Decimal("0"),
-        "credit": Decimal("0"),
-        "level": account_code.count(".") + 1 if account_code else 1,
-    }
-
-
-def _apply_trial_balance_entry(row: dict[str, Any], bucket: str, debit: Decimal, credit: Decimal) -> None:
-    """Acumula una entrada en la balanza de comprobación."""
-    if bucket == "opening":
-        row["opening"] += debit - credit
-        return
-    row["debit"] += debit
-    row["credit"] += credit
-
-
-def _build_trial_balance_row(values: dict[str, Any]) -> tuple[ReportRow, Decimal]:
-    """Construye la fila de salida y su saldo final para la balanza."""
-    ending = values["opening"] + values["debit"] - values["credit"]
-    return (
-        ReportRow(
-            values={
-                "account_code": values["account_code"],
-                "account_name": values["account_name"],
-                "opening_balance": values["opening"],
-                "debit": values["debit"],
-                "credit": values["credit"],
-                "ending_balance": ending,
-                "level": values["level"],
-            }
-        ),
-        ending,
-    )
-
-
 def _movement_detail_row_values(
     entry: GLEntry,
     account: Accounts | None,
@@ -2528,6 +2422,46 @@ def get_budget_variance(filters: FinancialReportFilters) -> PaginatedReport:
     )
 
 
+def _grouped_account_gl_query(
+    filters: FinancialReportFilters,
+    period_start: date | None,
+    period_end: date | None,
+    ledger_id: str,
+) -> Any:
+    """Devuelve agregados GL por cuenta para los reportes resumidos."""
+    account_code = func.coalesce(GLEntry.account_code, Accounts.code, "")
+    movement_conditions = []
+    if period_start:
+        movement_conditions.append(GLEntry.posting_date >= period_start)
+    if period_end:
+        movement_conditions.append(GLEntry.posting_date <= period_end)
+    movement_condition = and_(*movement_conditions) if movement_conditions else True
+    opening_value = case((GLEntry.posting_date < period_start, GLEntry.debit - GLEntry.credit), else_=0) if period_start else 0
+    movement_debit = case((movement_condition, GLEntry.debit), else_=0)
+    movement_credit = case((movement_condition, GLEntry.credit), else_=0)
+    movement_count = case((movement_condition, 1), else_=0)
+    query = select(
+        account_code.label("account_code"),
+        Accounts.name.label("account_name"),
+        Accounts.account_type.label("account_type"),
+        Accounts.classification.label("classification"),
+        Accounts.currency.label("currency"),
+        func.coalesce(func.sum(opening_value), 0).label("opening_balance"),
+        func.coalesce(func.sum(movement_debit), 0).label("debit"),
+        func.coalesce(func.sum(movement_credit), 0).label("credit"),
+        func.coalesce(func.sum(movement_count), 0).label("movement_count"),
+        func.min(case((movement_condition, GLEntry.posting_date), else_=None)).label("first_movement"),
+        func.max(case((movement_condition, GLEntry.posting_date), else_=None)).label("last_movement"),
+    ).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
+    query = _apply_gl_filters(query, filters, None, None).where(GLEntry.ledger_id == ledger_id)
+    return query.group_by(account_code, Accounts.name, Accounts.account_type, Accounts.classification, Accounts.currency)
+
+
+def _account_code_level(account_code: str) -> int:
+    """Calcula el nivel de presentación de una cuenta."""
+    return account_code.count(".") + 1 if account_code else 1
+
+
 def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Resumen de movimientos por cuenta contable (Sábana analítica)."""
     period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
@@ -2535,30 +2469,26 @@ def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedRepo
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
 
-    # Siempre unimos con Accounts para obtener metadatos de la cuenta
-    base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-    base_query = _apply_gl_filters(base_query, filters, None, None).where(GLEntry.ledger_id == selected_ledger.id)
-
-    # El requerimiento sugiere que puede haber agrupaciones dinámicas (Cuenta, Centro de Costo, Proyecto, etc.)
-    # Por ahora implementamos la agrupación base por cuenta, pero permitimos extraer metadatos.
-    entries = database.session.execute(base_query).all()
-
-    account_totals: dict[str, dict[str, Any]] = {}
-    for entry, account in entries:
-        bucket = _entry_bucket(entry.posting_date, period_start, period_end)
-        if bucket is None:
-            continue
-
-        account_code = entry.account_code or (account.code if account else "")
-        # Podemos extender la llave de agrupación si en el futuro se requiere soportar
-        # agrupaciones múltiples (ej. Cuenta + Centro de Costos) en una sola fila.
-        group_key = account_code
-
-        summary_row = account_totals.setdefault(group_key, _account_summary_base_values(account_code, account))
-
-        debit = _decimal_value(entry.debit)
-        credit = _decimal_value(entry.credit)
-        _apply_account_summary_entry(summary_row, bucket, entry, debit, credit)
+    grouped_query = _grouped_account_gl_query(filters, period_start, period_end, selected_ledger.id)
+    account_totals = {
+        str(row.account_code): {
+            "account_code": str(row.account_code),
+            "account_name": row.account_name,
+            "account_type": row.account_type,
+            "classification": _CLASSIFICATION_ALIASES.get(
+                (row.classification or "").strip().lower(), (row.classification or "").strip().lower()
+            ),
+            "currency": row.currency,
+            "opening_balance": _decimal_value(row.opening_balance),
+            "debit": _decimal_value(row.debit),
+            "credit": _decimal_value(row.credit),
+            "movement_count": int(row.movement_count or 0),
+            "first_movement": row.first_movement,
+            "last_movement": row.last_movement,
+            "level": _account_code_level(str(row.account_code)),
+        }
+        for row in database.session.execute(grouped_query).all()
+    }
 
     rows: list[ReportRow] = []
     total_opening = Decimal("0")
@@ -2568,7 +2498,8 @@ def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedRepo
 
     for group_key in sorted(account_totals):
         values = account_totals[group_key]
-        row, ending = _build_account_summary_row(values)
+        ending = values["opening_balance"] + values["debit"] - values["credit"]
+        row = ReportRow(values={**values, "ending_balance": ending})
         total_opening += values["opening_balance"]
         total_debit += values["debit"]
         total_credit += values["credit"]
@@ -2599,20 +2530,18 @@ def get_trial_balance_report(filters: FinancialReportFilters) -> PaginatedReport
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
 
-    base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-    base_query = _apply_gl_filters(base_query, filters, None, None).where(GLEntry.ledger_id == selected_ledger.id)
-    entries = database.session.execute(_sorted_gl_query(base_query, "account_code", "asc")).all()
-
-    account_totals: dict[str, dict[str, Any]] = {}
-    for entry, account in entries:
-        bucket = _entry_bucket(entry.posting_date, period_start, period_end)
-        if bucket is None:
-            continue
-        account_code = entry.account_code or (account.code if account else "")
-        trial_row = account_totals.setdefault(account_code, _trial_balance_base_values(account_code, account))
-        debit = _decimal_value(entry.debit)
-        credit = _decimal_value(entry.credit)
-        _apply_trial_balance_entry(trial_row, bucket, debit, credit)
+    grouped_query = _grouped_account_gl_query(filters, period_start, period_end, selected_ledger.id)
+    account_totals = {
+        str(row.account_code): {
+            "account_code": str(row.account_code),
+            "account_name": row.account_name,
+            "opening": _decimal_value(row.opening_balance),
+            "debit": _decimal_value(row.debit),
+            "credit": _decimal_value(row.credit),
+            "level": _account_code_level(str(row.account_code)),
+        }
+        for row in database.session.execute(grouped_query).all()
+    }
 
     rows: list[ReportRow] = []
     total_opening = Decimal("0")
@@ -2621,7 +2550,18 @@ def get_trial_balance_report(filters: FinancialReportFilters) -> PaginatedReport
     total_ending = Decimal("0")
     for account_code in sorted(account_totals):
         values = account_totals[account_code]
-        row, ending = _build_trial_balance_row(values)
+        ending = values["opening"] + values["debit"] - values["credit"]
+        row = ReportRow(
+            values={
+                "account_code": values["account_code"],
+                "account_name": values["account_name"],
+                "opening_balance": values["opening"],
+                "debit": values["debit"],
+                "credit": values["credit"],
+                "ending_balance": ending,
+                "level": values["level"],
+            }
+        )
         total_opening += values["opening"]
         total_debit += values["debit"]
         total_credit += values["credit"]
@@ -2754,10 +2694,17 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
-    base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
+    base_query = select(
+        Accounts.code.label("account_code"),
+        Accounts.name.label("account_name"),
+        Accounts.classification.label("classification"),
+        func.coalesce(func.sum(GLEntry.debit), 0).label("debit"),
+        func.coalesce(func.sum(GLEntry.credit), 0).label("credit"),
+    ).join(Accounts, Accounts.id == GLEntry.account_id)
     base_query = _apply_gl_filters(base_query, filters, period_start, period_end).where(
         GLEntry.ledger_id == selected_ledger.id
     )
+    base_query = base_query.group_by(Accounts.code, Accounts.name, Accounts.classification)
     summary: dict[str, Decimal] = {
         "income": Decimal("0"),
         "cost": Decimal("0"),
@@ -2765,14 +2712,14 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
     }
     account_summary: dict[str, dict[str, Any]] = {}
     unclassified: dict[str, dict[str, Any]] = {}
-    for entry, account in database.session.execute(base_query).all():
-        if account is None:
-            continue
-        classification = _normalize_account_classification(account)
-        debit = _decimal_value(entry.debit)
-        credit = _decimal_value(entry.credit)
-        account_code = account.code or (entry.account_code or "")
-        account_name = account.name
+    for row in database.session.execute(base_query).all():
+        classification = _CLASSIFICATION_ALIASES.get(
+            (row.classification or "").strip().lower(), (row.classification or "").strip().lower()
+        )
+        debit = _decimal_value(row.debit)
+        credit = _decimal_value(row.credit)
+        account_code = row.account_code or ""
+        account_name = row.account_name
         processed = _accumulate_income_entry(
             classification,
             debit,
@@ -2925,8 +2872,24 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         return PaginatedReport(rows=[], totals={}, columns=[])
     # For balance sheet, query with include_closing=True to retrieve the closing entries (e.g. for retained earnings)
     query_filters = replace(filters, include_closing=True)
-    base_query = select(GLEntry, Accounts).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
+    posting_year = func.extract("year", GLEntry.posting_date).label("posting_year")
+    base_query = select(
+        Accounts.code.label("account_code"),
+        Accounts.name.label("account_name"),
+        Accounts.classification.label("classification"),
+        GLEntry.is_fiscal_year_closing.label("is_fiscal_year_closing"),
+        posting_year,
+        func.coalesce(func.sum(GLEntry.debit), 0).label("debit"),
+        func.coalesce(func.sum(GLEntry.credit), 0).label("credit"),
+    ).join(Accounts, Accounts.id == GLEntry.account_id)
     base_query = _apply_gl_filters(base_query, query_filters, None, period_end).where(GLEntry.ledger_id == selected_ledger.id)
+    base_query = base_query.group_by(
+        Accounts.code,
+        Accounts.name,
+        Accounts.classification,
+        GLEntry.is_fiscal_year_closing,
+        posting_year,
+    )
 
     by_account: dict[str, dict[str, Any]] = {}
     totals: dict[str, Decimal] = {
@@ -2940,37 +2903,45 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
     retained_earnings = Decimal("0")
     unclassified: dict[str, dict[str, Any]] = {}
     entries = database.session.execute(base_query).all()
-    closed_fiscal_years = {entry.posting_date.year for entry, _ in entries if entry.is_fiscal_year_closing}
-    for entry, account in entries:
-        if account is None:
-            continue
-        classification = _normalize_account_classification(account)
+    closed_fiscal_years = {int(row.posting_year) for row in entries if row.is_fiscal_year_closing}
+    for row in entries:
+        classification = _CLASSIFICATION_ALIASES.get(
+            (row.classification or "").strip().lower(), (row.classification or "").strip().lower()
+        )
         # El cierre ya transfiere el resultado al patrimonio; no vuelvas a
         # sumar sus líneas P&L como utilidades retenidas del ejercicio anterior.
-        if entry.is_fiscal_year_closing and classification in _PL_CLASSIFICATIONS:
+        if row.is_fiscal_year_closing and classification in _PL_CLASSIFICATIONS:
             continue
         # Skip closing entries if include_closing is False and they are P&L or current FY
-        if not filters.include_closing and entry.is_fiscal_year_closing:
-            if fiscal_year_start is None or classification in _PL_CLASSIFICATIONS or entry.posting_date >= fiscal_year_start:
+        if not filters.include_closing and row.is_fiscal_year_closing:
+            if (
+                fiscal_year_start is None
+                or classification in _PL_CLASSIFICATIONS
+                or date(int(row.posting_year), 1, 1) >= fiscal_year_start
+            ):
                 continue
         # Los saldos P&L de ejercicios previos que no se cerraron siguen siendo
         # parte del patrimonio: se muestran como utilidades retenidas, no como
         # resultado del período actual.
-        if classification in _PL_CLASSIFICATIONS and fiscal_year_start and entry.posting_date < fiscal_year_start:
-            if entry.posting_date.year in closed_fiscal_years:
+        if (
+            classification in _PL_CLASSIFICATIONS
+            and fiscal_year_start
+            and date(int(row.posting_year), 1, 1) < fiscal_year_start
+        ):
+            if int(row.posting_year) in closed_fiscal_years:
                 continue
             retained_earnings += _prior_year_retained_earnings_contribution(
                 classification,
-                _decimal_value(entry.debit),
-                _decimal_value(entry.credit),
-                account.code or (entry.account_code or ""),
-                account.name,
+                _decimal_value(row.debit),
+                _decimal_value(row.credit),
+                row.account_code or "",
+                row.account_name,
             )
             continue
-        debit = _decimal_value(entry.debit)
-        credit = _decimal_value(entry.credit)
-        account_code = account.code or (entry.account_code or "")
-        account_name = account.name
+        debit = _decimal_value(row.debit)
+        credit = _decimal_value(row.credit)
+        account_code = row.account_code or ""
+        account_name = row.account_name
         processed = _accumulate_balance_sheet_entry(
             classification,
             debit,
@@ -3206,9 +3177,7 @@ def get_inventory_valuation(filters: OperationalReportFilters) -> PaginatedRepor
             "warehouse": layer.warehouse,
             "remaining_qty": _decimal_value(layer.remaining_qty if layer.remaining_qty is not None else layer.qty),
             "remaining_stock_value": _decimal_value(
-                layer.remaining_stock_value
-                if layer.remaining_stock_value is not None
-                else layer.stock_value_difference
+                layer.remaining_stock_value if layer.remaining_stock_value is not None else layer.stock_value_difference
             ),
         }
     rows = [
