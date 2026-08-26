@@ -101,6 +101,16 @@ def _snake_case(name: str) -> str:
     return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", stepped).lower()
 
 
+def _document_type_aliases(document_type: str) -> set[str]:
+    """Return canonical and legacy aliases for a document type lookup."""
+    value = str(document_type or "").strip()
+    if not value:
+        return {value}
+    snake = _snake_case(value)
+    pascal = "".join(part.capitalize() for part in snake.split("_"))
+    return {value, snake, pascal}
+
+
 def _doc_info(document: Any) -> tuple[str, str, str | None, str | None]:
     doc = _normalize_document(document)
     document_id = str(doc.get("id") or "")
@@ -254,10 +264,10 @@ def log_task_event(document: Any, action: str, comment: str) -> AuditTrail:
 
 
 def get_document_timeline(document_type: str, document_id: str, company: str | None = None) -> list[AuditTrail]:
-    """Devuelve historial cronológico ascendente de un documento."""
+    """Devuelve historial cronológico aceptando tipos legacy y snake_case."""
     query = (
         database.select(AuditTrail)
-        .where(AuditTrail.document_type == document_type)
+        .where(AuditTrail.document_type.in_(_document_type_aliases(document_type)))
         .where(AuditTrail.document_id == document_id)
     )
     if company is not None:

@@ -307,3 +307,23 @@ El certificado se registró como documento imprimible configurable, con plantill
 ### Verificación
 
 Las pruebas focalizadas de retenciones y liquidación pasaron 15/15; las pruebas de impresión, QR y rutas pasaron 62/62. Black y Ruff pasan para los archivos nuevos/modificados revisados.
+
+## 2026-08-26 (continuidad y correcciones)
+
+### Petición del usuario
+
+Verificar los commits locales frente a los issues abiertos de GitHub, confirmar qué fixes eran correctos y corregir los fallos reproducibles encontrados. Mantener las bases de datos como entornos de desarrollo descartables y no agregar migraciones.
+
+### Plan implementado
+
+Se compararon los 12 commits locales contra `origin/main` y los issues abiertos. Las pruebas focalizadas cubrieron 290 casos: 287 pasaron, 2 fueron omitidos y 1 falló en la auditoría de auto-conciliación bancaria. La causa fue una incompatibilidad introducida al normalizar tipos de documento a `snake_case`: el evento se guardaba como `bank_transaction`, mientras el timeline solicitado como `BankTransaction` no lo encontraba.
+
+Se corrigió `get_document_timeline` para consultar el tipo recibido junto con sus aliases canónico `snake_case` y legacy CamelCase. También se corrigió el `F821` detectado por Ruff en `contabilidad/forms.py` importando `gettext as _` para el mensaje de validación de clasificación.
+
+### Decisiones de diseño
+
+- `snake_case` permanece como formato canónico de almacenamiento; la compatibilidad se resuelve en la lectura para no reescribir auditorías existentes.
+- No se agregaron migraciones ni cambios de esquema; todas las bases se consideran descartables de desarrollo.
+- Se preservaron los siete archivos modificados sin commit por el usuario.
+
+### Verificación

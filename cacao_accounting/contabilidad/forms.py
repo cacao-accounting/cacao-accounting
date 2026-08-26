@@ -11,9 +11,10 @@
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask_wtf import FlaskForm
+from flask_babel import gettext as _
 from wtforms import BooleanField, IntegerField, RadioField, SelectField, StringField, TextAreaField
 from wtforms.fields import DateField, DecimalField
-from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional
+from wtforms.validators import DataRequired, InputRequired, Length, NumberRange, Optional, ValidationError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -213,6 +214,33 @@ class FormularioTasaCambio(FlaskForm):
     date = DateField("Fecha", validators=[DataRequired()])
 
 
+CLASSIFICATION_CHOICES = [
+    ("", "— Seleccione —"),
+    ("activo", "Activo"),
+    ("pasivo", "Pasivo"),
+    ("patrimonio", "Patrimonio"),
+    ("ingreso", "Ingreso"),
+    ("costo", "Costo"),
+    ("gasto", "Gasto"),
+]
+
+
+def validar_clasificacion_de_cuenta(formulario, campo):
+    """Valida la clasificación de la cuenta contra la lista permitida.
+
+    Acepta aliases históricos (plurales y valores en inglés usados por los
+    catálogos precargados) pero rechaza valores arbitrarios que dejarían a la
+    cuenta fuera del balance general y del estado de resultados.
+    """
+    valor = (campo.data or "").strip()
+    if not valor:
+        return
+    from cacao_accounting.reportes.services import account_classification_is_known
+
+    if not account_classification_is_known(valor):
+        raise ValidationError(_("Clasificación no permitida para cuentas contables."))
+
+
 class FormularioCuenta(FlaskForm):
     """Formulario para crear y editar cuentas contables."""
 
@@ -223,15 +251,10 @@ class FormularioCuenta(FlaskForm):
     padre = SelectField("Cuenta Padre", choices=[], validators=[Optional()])
     clasificacion = SelectField(
         "Clasificación",
-        choices=[
-            ("", "— Seleccione —"),
-            ("activo", "Activo"),
-            ("pasivo", "Pasivo"),
-            ("patrimonio", "Patrimonio"),
-            ("ingresos", "Ingresos"),
-            ("gastos", "Gastos"),
-        ],
-        validators=[Optional()],
+        choices=CLASSIFICATION_CHOICES,
+        validators=[Optional(), validar_clasificacion_de_cuenta],
+        validate_choice=False,
+        default="",
     )
     account_type = SelectField(
         "Tipo de Cuenta",
