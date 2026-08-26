@@ -260,7 +260,9 @@
         { field: 'uom', label: 'UOM', visible: true, width: 1, required: false },
         { field: 'qty', label: 'Cantidad', visible: true, width: 1, required: false },
         { field: 'rate', label: 'Precio', visible: true, width: 1, required: false },
-        { field: 'amount', label: 'Monto', visible: true, width: 1, required: false }
+        { field: 'amount', label: 'Monto', visible: true, width: 1, required: false },
+        { field: 'batch_id', label: 'Lote', visible: false, width: 1, required: false },
+        { field: 'serial_no', label: 'Serie', visible: false, width: 1, required: false },
       ];
 
       const configColumns = Array.isArray(config.columns) ? config.columns : [];
@@ -289,6 +291,12 @@
       if (config.showPricing === false) {
         for (const column of columnsList) {
           if (column.field === 'rate' || column.field === 'amount') column.visible = false;
+        }
+      }
+
+      if (config.enableBatchSerial === true) {
+        for (const column of columnsList) {
+          if (column.field === 'batch_id' || column.field === 'serial_no') column.visible = true;
         }
       }
 
@@ -395,11 +403,24 @@
             this.submitError = 'El documento requiere al menos una línea.';
             event.preventDefault();
           }
+          for (const line of this.lines) {
+            if (line.item_code && line.has_batch && !line.batch_id) {
+              this.submitError = `El item ${line.item_code} requiere lote.`;
+              event.preventDefault();
+              return;
+            }
+            if (line.item_code && line.has_serial_no && !line.serial_no) {
+              this.submitError = `El item ${line.item_code} requiere número de serie.`;
+              event.preventDefault();
+              return;
+            }
+          }
         },
 
         syncLineInputs() {
           const root = this.$root || document;
-          const fields = ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount', 'warehouse', 'account',
+          const fields = ['item_code', 'item_name', 'uom', 'qty', 'rate', 'amount', 'warehouse',
+            'batch_id', 'serial_no', 'account',
             'cost_center', 'unit', 'project', 'remarks', 'source_type', 'source_id', 'source_item_id'];
           const monetaryFields = new Set(['qty', 'rate', 'amount']);
           for (const [index, line] of this.lines.entries()) {
@@ -457,6 +478,12 @@
             rate: 0,
             amount: 0,
             warehouse: '',
+            batch_id: '',
+            serial_no: '',
+            has_batch: false,
+            has_serial_no: false,
+            has_expiry_date: false,
+            batch_no: '',
             account: '',
             cost_center: '',
             unit: '',
@@ -522,6 +549,14 @@
             line.item_name = item.name || line.item_name;
           }
           this._applyItemUom(line, item);
+          line.has_batch = item.has_batch || false;
+          line.has_serial_no = item.has_serial_no || false;
+          line.has_expiry_date = item.has_expiry_date || false;
+          if (!keepCustomName) {
+            line.batch_id = '';
+            line.serial_no = '';
+            line.batch_no = '';
+          }
         },
 
         _applyItemUom(line, item) {
@@ -648,6 +683,8 @@
             uom: line.uom || '',
             rate: toCurrencyString(line.rate),
             amount: toCurrencyString(line.amount),
+            batch_id: line.batch_id || '',
+            serial_no: line.serial_no || '',
           };
         },
 

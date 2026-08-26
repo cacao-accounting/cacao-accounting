@@ -427,6 +427,8 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
         qty_in_base_uom=qty_in_base_uom,
         basic_rate=rate,
         amount=amount,
+        batch_id=request.form.get(f"batch_id_{index}") or None,
+        serial_no=request.form.get(f"serial_no_{index}") or None,
     )
     database.session.add(line)
     database.session.flush()
@@ -760,6 +762,7 @@ def _render_stock_entry_edit_form(
     transaction_config = {
         "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",
+        "enableBatchSerial": True,
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "availableSourceTypes": [
@@ -779,6 +782,8 @@ def _render_stock_entry_edit_form(
                 "uom": item.uom or "",
                 "rate": str(item.basic_rate or 0),
                 "amount": str(item.amount or 0),
+                "batch_id": item.batch_id or "",
+                "serial_no": item.serial_no or "",
             }
             for item in lineas
         ],

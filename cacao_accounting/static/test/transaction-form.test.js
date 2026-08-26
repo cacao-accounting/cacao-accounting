@@ -146,6 +146,27 @@ describe('transaction-form', function () {
     assert.strictEqual(component.visibleColumns[5].field, 'amount');
   });
 
+  it('requires lot selection for controlled items before submitting', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'inventory.stock_entry',
+      enableBatchSerial: true,
+      items: [{ code: 'LOT-ITEM', name: 'Artículo con lote', uom: 'UND', has_batch: true }],
+      uoms: [{ code: 'UND', name: 'Unidad' }],
+      defaultRows: 1,
+    });
+    component.init();
+    const line = component.lines[0];
+    line.item_code = 'LOT-ITEM';
+    component.onItemChange(line);
+
+    assert(component.visibleColumns.some((column) => column.field === 'batch_id'));
+    const event = { prevented: false, preventDefault() { this.prevented = true; } };
+    component.prepareSubmit(event);
+    assert.strictEqual(event.prevented, true);
+    assert.strictEqual(component.submitError, 'El item LOT-ITEM requiere lote.');
+  });
+
   it('filters unit options based on the selected item and keeps the selected unit valid', function () {
     const create = loadTransactionForm();
     const component = create({

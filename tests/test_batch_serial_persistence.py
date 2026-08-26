@@ -26,6 +26,8 @@ from cacao_accounting.database import (
     PurchaseReceiptItem,
     SalesInvoice,
     SalesInvoiceItem,
+    StockEntry,
+    StockEntryItem,
     Warehouse,
     database,
 )
@@ -98,7 +100,6 @@ class TestPurchaseReceiptBatchSerial:
         """PurchaseReceiptItem debe guardar batch_id del formulario."""
         client = app_ctx.test_client()
         _login(client)
-
         response = client.post(
             "/buying/purchase-receipt/new",
             data={
@@ -416,3 +417,43 @@ class TestSalesInvoiceBatchSerial:
         )
         assert item is not None
         assert item.serial_no == "SN-004"
+
+
+class TestStockEntryBatchSerial:
+    """Tests para lote/serie en movimientos directos de inventario."""
+
+    def test_material_receipt_persists_batch(self, app_ctx):
+        """Un movimiento directo conserva el lote seleccionado en su línea."""
+        from cacao_accounting.inventario.services import _save_stock_entry_item
+
+        client = app_ctx.test_client()
+        _login(client)
+        response = client.get("/inventory/stock-entry/new")
+        assert response.status_code == 200
+        assert b'"enableBatchSerial": true' in response.data
+        assert b'"has_batch": true' in response.data
+
+        entry = StockEntry(
+            purpose="material_receipt",
+            company="cacao",
+            posting_date=date.today(),
+            to_warehouse="WH-TEST",
+        )
+        database.session.add(entry)
+        database.session.flush()
+        with app_ctx.test_request_context(
+            "/inventory/stock-entry/new",
+            method="POST",
+            data={
+                "item_code_0": "ITEM-BATCH",
+                "qty_0": "5",
+                "uom_0": "UND",
+                "rate_0": "10",
+                "amount_0": "50",
+                "batch_id_0": "LOT-001",
+            },
+        ):
+            _save_stock_entry_item(entry, 0, "ITEM-BATCH")
+
+        line = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)).scalar_one()
+        assert line.batch_id == "LOT-001"

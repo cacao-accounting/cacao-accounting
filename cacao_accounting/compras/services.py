@@ -1911,8 +1911,15 @@ def _resolve_purchase_return_invoice(
 def _purchase_invoice_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
     """Load the catalogs reused by purchase invoices."""
     items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
+        {
+            "code": item.code,
+            "name": item.name,
+            "uom": item.default_uom,
+            "has_batch": item.has_batch,
+            "has_serial_no": item.has_serial_no,
+            "has_expiry_date": item.has_expiry_date,
+        }
+        for (item,) in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     return items_disponibles, uoms_disponibles
@@ -1928,6 +1935,7 @@ def _purchase_invoice_transaction_config(
     return {
         "formKey": FORMKEY_PURCHASE_INVOICE,
         "viewKey": "draft",
+        "enableBatchSerial": True,
         "items": items,
         "uoms": uoms,
         "availableSourceTypes": [

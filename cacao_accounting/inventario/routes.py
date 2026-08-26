@@ -636,8 +636,15 @@ def inventario_entrada_nuevo():
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
     items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
+        {
+            "code": item.code,
+            "name": item.name,
+            "uom": item.default_uom,
+            "has_batch": item.has_batch,
+            "has_serial_no": item.has_serial_no,
+            "has_expiry_date": item.has_expiry_date,
+        }
+        for (item,) in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     purpose = request.args.get("purpose") or _infer_stock_entry_purpose(request.path)
@@ -647,6 +654,7 @@ def inventario_entrada_nuevo():
     transaction_config = {
         "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",
+        "enableBatchSerial": True,
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "initialSourceType": request.args.get("source_type") or "",
@@ -769,8 +777,15 @@ def inventario_entrada_editar(entry_id: str):
     formulario.from_warehouse.choices = warehouse_choices
     formulario.to_warehouse.choices = warehouse_choices
     items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
+        {
+            "code": item.code,
+            "name": item.name,
+            "uom": item.default_uom,
+            "has_batch": item.has_batch,
+            "has_serial_no": item.has_serial_no,
+            "has_expiry_date": item.has_expiry_date,
+        }
+        for (item,) in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
@@ -834,6 +849,8 @@ def inventario_entrada_duplicar(entry_id: str):
             current_stock_value=item.current_stock_value,
             target_stock_value=item.target_stock_value,
             stock_value_difference=item.stock_value_difference,
+            batch_id=item.batch_id,
+            serial_no=item.serial_no,
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")

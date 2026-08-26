@@ -2437,8 +2437,15 @@ def compras_recepcion_nuevo():
         (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
+        {
+            "code": item.code,
+            "name": item.name,
+            "uom": item.default_uom,
+            "has_batch": item.has_batch,
+            "has_serial_no": item.has_serial_no,
+            "has_expiry_date": item.has_expiry_date,
+        }
+        for (item,) in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     # INV-03: Filtrar almacenes por compañía usando WarehouseCompanyAccount
@@ -2451,6 +2458,7 @@ def compras_recepcion_nuevo():
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_RECEIPT,
         "viewKey": "draft",
+        "enableBatchSerial": True,
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
@@ -2545,8 +2553,15 @@ def compras_recepcion_editar(receipt_id: str):
         (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
+        {
+            "code": item.code,
+            "name": item.name,
+            "uom": item.default_uom,
+            "has_batch": item.has_batch,
+            "has_serial_no": item.has_serial_no,
+            "has_expiry_date": item.has_expiry_date,
+        }
+        for (item,) in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     # INV-03: Filtrar almacenes por compañía usando WarehouseCompanyAccount
@@ -2565,6 +2580,7 @@ def compras_recepcion_editar(receipt_id: str):
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_RECEIPT,
         "viewKey": "draft",
+        "enableBatchSerial": True,
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
@@ -2585,6 +2601,8 @@ def compras_recepcion_editar(receipt_id: str):
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
                 "warehouse": item.warehouse or "",
+                "batch_id": item.batch_id or "",
+                "serial_no": item.serial_no or "",
                 **get_target_line_source("purchase_receipt", item.id),
             }
             for item in lineas
@@ -2651,6 +2669,8 @@ def compras_recepcion_duplicar(receipt_id: str):
             rate=item.rate,
             amount=item.amount,
             warehouse=item.warehouse,
+            batch_id=item.batch_id,
+            serial_no=item.serial_no,
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
@@ -2870,8 +2890,15 @@ def compras_factura_compra_editar(invoice_id: str):
         (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
     ]
     items_disponibles = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
+        {
+            "code": item.code,
+            "name": item.name,
+            "uom": item.default_uom,
+            "has_batch": item.has_batch,
+            "has_serial_no": item.has_serial_no,
+            "has_expiry_date": item.has_expiry_date,
+        }
+        for (item,) in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
 
@@ -2885,6 +2912,7 @@ def compras_factura_compra_editar(invoice_id: str):
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_INVOICE,
         "viewKey": "draft",
+        "enableBatchSerial": True,
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "availableSourceTypes": [
@@ -2907,6 +2935,8 @@ def compras_factura_compra_editar(invoice_id: str):
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                "batch_id": item.batch_id or "",
+                "serial_no": item.serial_no or "",
                 **get_target_line_source("purchase_invoice", item.id),
             }
             for item in lineas
@@ -2981,6 +3011,8 @@ def compras_factura_compra_duplicar(invoice_id: str):
             uom=item.uom,
             rate=item.rate,
             amount=item.amount,
+            batch_id=item.batch_id,
+            serial_no=item.serial_no,
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")

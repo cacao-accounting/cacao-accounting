@@ -1661,9 +1661,17 @@ def _sales_invoice_sources_and_type(formulario) -> dict[str, Any]:
 
 
 def _sales_invoice_catalogs() -> tuple[list[dict[str, str | None]], list[dict[str, str]]]:
+    """Load sales invoice catalogs with batch/serial controls for the transaction grid."""
     items = [
-        {"code": i[0].code, "name": i[0].name, "uom": i[0].default_uom}
-        for i in database.session.execute(database.select(Item)).all()
+        {
+            "code": item.code,
+            "name": item.name,
+            "uom": item.default_uom,
+            "has_batch": item.has_batch,
+            "has_serial_no": item.has_serial_no,
+            "has_expiry_date": item.has_expiry_date,
+        }
+        for (item,) in database.session.execute(database.select(Item)).all()
     ]
     uoms = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
     return items, uoms
