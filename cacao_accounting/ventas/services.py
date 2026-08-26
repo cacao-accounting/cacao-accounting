@@ -2086,3 +2086,50 @@ def _validate_reversal_of(
             raise ValueError(
                 f"La nota de credito ({note_amount}) excede el saldo pendiente de la factura origen ({outstanding})."
             )
+
+
+def sales_order_line_closure_reasons(sales_order: SalesOrder) -> dict[str, str]:
+    """Return one human-readable closure reason per closable order line."""
+    reasons: dict[str, str] = {}
+    dn_rows = database.session.execute(
+        database.select(DocumentRelation.source_item_id, DeliveryNote)
+        .join(DeliveryNote, DeliveryNote.id == DocumentRelation.target_id)
+        .where(
+            DocumentRelation.source_type == "sales_order",
+            DocumentRelation.source_id == sales_order.id,
+            DocumentRelation.target_type == "delivery_note",
+            DocumentRelation.status == "active",
+            DeliveryNote.docstatus == 1,
+        )
+    ).all()
+    for item_id, dn in dn_rows:
+        label = dn.document_no or dn.id
+        reasons.setdefault(item_id, f"Nota de Entrega {label} aprobada.")
+    invoice_rows = database.session.execute(
+        database.select(DocumentRelation.source_item_id, SalesInvoice)
+        .join(SalesInvoice, SalesInvoice.id == DocumentRelation.target_id)
+        .where(
+            DocumentRelation.source_type == "sales_order",
+            DocumentRelation.source_id == sales_order.id,
+            DocumentRelation.target_type == "sales_invoice",
+            DocumentRelation.status == "active",
+            SalesInvoice.docstatus == 1,
+        )
+    ).all()
+    for item_id, invoice in invoice_rows:
+        label = invoice.document_no or invoice.id
+        reasons.setdefault(item_id, f"Factura de Venta {label} aprobada.")
+    return reasons
+
+
+def sales_order_is_ready_to_close(sales_order: SalesOrder) -> bool:
+    """Return whether every order line has been delivered or invoiced."""
+    order_item_ids = set(
+        database.session.execute(database.select(SalesOrderItem.id).where(SalesOrderItem.sales_order_id == sales_order.id))
+        .scalars()
+        .all()
+    )
+    if not order_item_ids:
+        return False
+    covered = set(sales_order_line_closure_reasons(sales_order).keys())
+    return order_item_ids.issubset(covered)

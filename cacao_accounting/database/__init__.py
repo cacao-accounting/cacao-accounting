@@ -2563,6 +2563,7 @@ class SalesOrder(database.Model, DocBase):  # type: ignore[name-defined]
     delivery_date = database.Column(database.Date(), nullable=True)
     delivery_place = database.Column(database.String(255), nullable=True)
     sales_terms = database.Column(database.Text(), nullable=True)
+    status = database.Column(database.String(20), nullable=False, default="open", index=True)
 
 
 class SalesRequest(database.Model, DocBase):  # type: ignore[name-defined]
@@ -3529,6 +3530,7 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
         database.Index("ix_gl_entry_party", "party_type", "party_id"),
         database.Index("ix_gl_entry_company_date", "company", "posting_date"),
         database.Index("ix_gl_entry_ledger", "ledger_id", "posting_date"),
+        database.Index("ix_gl_entry_report_scope", "company", "ledger_id", "posting_date", "account_id"),
         database.Index("ix_gl_entry_reversal", "reversal_of"),
         ForeignKeyConstraint(
             ["company", "cost_center_code"], ["cost_center.entity", "cost_center.code"], ondelete=FK_RESTRICT
@@ -4784,62 +4786,6 @@ class DocumentTask(database.Model, BaseTabla):  # type: ignore[name-defined]
         nullable=False,
     )
     completed_at = database.Column(database.DateTime(timezone=True), nullable=True)
-
-
-# <---------------------------------------------------------------------------------------------> #
-# Snapshots — Vistas materializadas para performance de reportes.
-# Son derivados recalculables — no son fuente de verdad.
-# <---------------------------------------------------------------------------------------------> #
-class AccountBalanceSnapshot(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Snapshot de saldo de cuenta contable para reportes rapidos."""
-
-    __tablename__ = "account_balance_snapshot"
-    __table_args__ = (UniqueConstraint("account_id", "company", "snapshot_date", name="uq_account_balance_snap"),)
-    account_id = database.Column(
-        database.String(26),
-        database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    company = database.Column(
-        database.String(10),
-        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    snapshot_date = database.Column(database.Date(), nullable=False, index=True)
-    debit_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
-    credit_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
-    net_balance = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
-
-
-class StockBalanceSnapshot(database.Model, BaseTabla):  # type: ignore[name-defined]
-    """Snapshot de stock por item y almacen para reportes rapidos."""
-
-    __tablename__ = "stock_balance_snapshot"
-    __table_args__ = (UniqueConstraint("item_code", "warehouse", "snapshot_date", name="uq_stock_balance_snap"),)
-    item_code = database.Column(
-        database.String(50),
-        database.ForeignKey(ITEM_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    warehouse = database.Column(
-        database.String(20),
-        database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    company = database.Column(
-        database.String(10),
-        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=False,
-        index=True,
-    )
-    snapshot_date = database.Column(database.Date(), nullable=False, index=True)
-    qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=0)
-    valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
-    stock_value = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
 
 
 class Budget(database.Model, BaseTabla):  # type: ignore[name-defined]

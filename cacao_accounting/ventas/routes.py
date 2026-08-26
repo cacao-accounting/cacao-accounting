@@ -84,7 +84,7 @@ from cacao_accounting.party_management import (  # noqa: F401
 
 from cacao_accounting.version import APPNAME
 
-from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
 
 from cacao_accounting.ventas.services import (
     _sales_logistics_values,
@@ -129,6 +129,8 @@ from cacao_accounting.ventas.services import (
     _cancel_linked_delivery_note,
     _validate_credit_limit_and_overdue,
     _validate_reversal_of,
+    sales_order_is_ready_to_close,
+    sales_order_line_closure_reasons,
 )
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
@@ -871,8 +873,14 @@ def ventas_orden_venta(order_id):
     items = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=order_id)).all()
     titulo = (registro.document_no or order_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("sales_order", registro.id)
+    can_close = registro.docstatus == 1 and registro.status != "closed" and sales_order_is_ready_to_close(registro)
     return render_template(
-        "ventas/orden_venta.html", registro=registro, items=items, titulo=titulo, audit_timeline=audit_timeline
+        "ventas/orden_venta.html",
+        registro=registro,
+        items=items,
+        titulo=titulo,
+        audit_timeline=audit_timeline,
+        can_close=can_close,
     )
 
 
@@ -1434,6 +1442,42 @@ def ventas_orden_venta_cancel(order_id: str):
         database.session.rollback()
         flash_error(exc)
     flash("Orden de venta cancelada y reserva liberada.", "warning")
+    return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
+
+
+@ventas.route("/sales-order/<order_id>/close", methods=["POST"])
+@modulo_activo("sales")
+@login_required
+@verifica_permiso("sales", "autorizar")
+def ventas_orden_venta_close(order_id: str):
+    """Cierra manualmente una orden de venta cuyas lineas fueron entregadas o facturadas."""
+    registro = database.session.get(SalesOrder, order_id)
+    if not registro:
+        abort(404)
+    exige_acceso_compania("sales", registro.company, "autorizar")
+    if registro.docstatus != 1 or registro.status == "closed":
+        abort(400)
+    if not sales_order_is_ready_to_close(registro):
+        flash(
+            "La Orden de Venta requiere Notas de Entrega o Facturas aprobadas para todas sus lineas.",
+            "danger",
+        )
+        return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
+    before = {"status": registro.status}
+    registro.status = "closed"
+    log_update(registro, before=before, after={"status": registro.status})
+    order_items = {
+        item.id: item
+        for item in database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id))
+        .scalars()
+        .all()
+    }
+    for item_id, reason in sorted(sales_order_line_closure_reasons(registro).items()):
+        item = order_items.get(item_id)
+        label = (item.item_code or item.id) if item else item_id
+        log_update(registro, before={"line": label}, after={"closure_reason": reason})
+    database.session.commit()
+    flash("Orden de Venta cerrada correctamente.", "success")
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
 

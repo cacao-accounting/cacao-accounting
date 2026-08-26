@@ -34,6 +34,14 @@
             url_for('ventas.ventas_orden_venta_cancel', order_id=registro.id),
             _('Aprobar'),
             _('Anular')) }}
+{% if can_close %}
+<form method="post" action="{{ url_for('ventas.ventas_orden_venta_close', order_id=registro.id) }}" class="d-inline">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="btn btn-sm btn-outline-success" type="submit">
+    <i class="bi bi-lock me-1"></i>{{ _('Cerrar') }}
+  </button>
+</form>
+{% endif %}
 {{ macros.detail_nav_buttons(
             url_for('ventas.ventas_orden_venta_lista'),
             url_for('ventas.ventas_orden_venta_nuevo')) }}
@@ -52,6 +60,7 @@
       (_('Fecha'), registro.posting_date),
       (_('Total'), format_money_with_currency(registro.grand_total, currency_code)),
       (_('Moneda'), currency_code),
+      (_('Estado de proceso'), registro.status),
       (_('Observaciones'), registro.remarks)
     ],
     'bi-cart4'
