@@ -51,6 +51,11 @@ class FiscalEngine:
                 amount = rounding_manager.round(amount, context_key="fiscal")
 
                 # Update concept amounts for next rules
+                if rule.included_in_price:
+                    # ``goods`` represents the net merchandise amount once an
+                    # included tax has been decomposed.  Keep the accumulated
+                    # concept in sync so later rules cannot count that tax twice.
+                    concept_amounts["goods"] = concept_amounts.get("goods", goods_total) - amount
                 if rule.participates_in_next_base:
                     if rule.concept not in concept_amounts:
                         concept_amounts[rule.concept] = Decimal("0")

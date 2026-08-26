@@ -123,6 +123,57 @@ def test_audit_multi_tax_inclusive_decomposition(audit_context):
     assert goods_lines[0].credit == Decimal("1000.00")
 
 
+def test_audit_included_tax_updates_goods_for_chained_base(audit_context):
+    """A later accumulated rule must use net goods after an included tax is extracted."""
+    context = audit_context.__class__(
+        **{
+            **audit_context.__dict__,
+            "items": [
+                ItemContext(
+                    line_id="L-01",
+                    item_id="ITEM-01",
+                    description="Chained included tax",
+                    quantity=Decimal("1"),
+                    unit_price=Decimal("115"),
+                    gross_amount=Decimal("115"),
+                    net_amount=Decimal("115"),
+                )
+            ],
+            "tax_rules": [
+                TaxRuleContext(
+                    rule_id="R-IVA",
+                    name="IVA incluido",
+                    concept="iva",
+                    tax_type="tax",
+                    calculation_method="percentage",
+                    rate=Decimal("15"),
+                    order=1,
+                    included_in_price=True,
+                    participates_in_next_base=True,
+                ),
+                TaxRuleContext(
+                    rule_id="R-ISC",
+                    name="ISC acumulado",
+                    concept="isc",
+                    tax_type="tax",
+                    calculation_method="percentage",
+                    rate=Decimal("10"),
+                    order=2,
+                    base_mode="accumulated",
+                    include_concepts=["goods", "iva"],
+                ),
+            ],
+        }
+    )
+
+    result = FiscalEngine().calculate(context)
+
+    assert not result.errors
+    isc_line = next(line for line in result.tax_lines if line.concept == "isc")
+    assert isc_line.base_amount == Decimal("115.00")
+    assert isc_line.amount == Decimal("11.50")
+
+
 def test_audit_cascading_with_rounding_precision(audit_context):
     """Verify step-by-step rounding manager handles precision in cascading rules."""
     # Goods: 1000.00
