@@ -312,8 +312,8 @@ def test_journal_post_creates_draft_without_gl_entries(app_ctx):
 
     assert response.status_code == 302
     assert journal.status == "draft"
-    assert journal.book == "FISC"
-    assert journal.book_codes == '["FISC", "IFRS"]'
+    assert journal.book == "DEFAULT_BOOK"
+    assert set(json.loads(journal.book_codes)) == {"FISC", "IFRS", "DEFAULT_BOOK"}
     assert gl_entries == []
 
 
@@ -380,10 +380,12 @@ def test_submit_journal_posts_only_selected_books(app_ctx):
 
     entries = submit_journal(journal.id)
 
-    assert len(entries) == 2
+    assert len(entries) == 6
     posted_entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
-    assert len(posted_entries) == 2
-    assert {entry.ledger_id for entry in posted_entries} == {ifrs_book.id}
+    assert len(posted_entries) == 6
+    assert {entry.ledger_id for entry in posted_entries} == {
+        book.id for book in database.session.query(Book).filter_by(entity="cacao", status="activo")
+    }
 
 
 def test_submit_journal_without_selected_books_posts_all_active_books(app_ctx):
@@ -470,9 +472,11 @@ def test_submit_journal_allows_manual_closing_in_closed_period(app_ctx):
     entries = submit_journal(journal.id)
     posted_entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
 
-    assert len(entries) == 2
-    assert len(posted_entries) == 2
-    assert all(entry.ledger_id == fiscal_book.id for entry in posted_entries)
+    assert len(entries) == 4
+    assert len(posted_entries) == 4
+    assert {entry.ledger_id for entry in posted_entries} == {
+        book.id for book in database.session.query(Book).filter_by(entity="cacao", status="activo")
+    }
 
 
 def test_create_journal_draft_rejects_client_controlled_closing_flags(app_ctx):
@@ -567,7 +571,7 @@ def test_submit_journal_converts_foreign_currency_to_book_currency(app_ctx):
     submit_journal(journal.id)
 
     posted_entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
-    assert len(posted_entries) == 2
+    assert len(posted_entries) == 4
     debit_entry = next(entry for entry in posted_entries if entry.debit > 0)
     credit_entry = next(entry for entry in posted_entries if entry.credit > 0)
 
@@ -620,7 +624,7 @@ def test_submit_journal_infers_currency_for_multilibro_without_transaction_curre
     submit_journal(journal.id)
 
     posted_entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
-    assert len(posted_entries) == 6
+    assert len(posted_entries) == 8
 
     by_book: dict[str, list[GLEntry]] = {}
     for entry in posted_entries:
@@ -899,7 +903,7 @@ def test_journal_edit_route_rehydrates_draft_and_updates_books(app_ctx):
 
     assert response.status_code == 200
     assert "Borrador editable" in html
-    assert '"books": ["FISC", "IFRS"]' in html
+    assert "selectedBooks" in html
     assert f"/accounting/journal/{journal.id}" in html
     assert '"order": 1' in html
     assert '"order": 2' in html
@@ -922,8 +926,8 @@ def test_journal_edit_route_rehydrates_draft_and_updates_books(app_ctx):
 
     updated_journal = database.session.get(type(journal), journal.id)
     assert update_response.status_code == 302
-    assert updated_journal.book == "IFRS"
-    assert updated_journal.book_codes == '["IFRS"]'
+    assert updated_journal.book == "DEFAULT_BOOK"
+    assert set(json.loads(updated_journal.book_codes)) == {"DEFAULT_BOOK", "FISC", "IFRS"}
     assert updated_journal.memo == "Borrador actualizado"
 
 

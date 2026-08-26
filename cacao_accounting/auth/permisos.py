@@ -193,15 +193,21 @@ class Permisos:
 
     def tiene_acceso_compania(self, company: str | None) -> bool:
         """Indica si el usuario puede operar dentro de una compañía."""
-        if self.administrador:
-            return True
         if not company or not self.usuario:
             return False
+        entity = database.session.execute(select(Entity).where(Entity.code == company)).scalar_one_or_none()
+        if entity is None or not entity.enabled:
+            return False
+        if self.administrador:
+            return True
         return (
             database.session.execute(
-                database.select(UserCompanyAccess.id).where(
+                database.select(UserCompanyAccess.id)
+                .join(Entity, Entity.code == UserCompanyAccess.company_code)
+                .where(
                     UserCompanyAccess.user_id == self.usuario,
                     UserCompanyAccess.company_code == company,
+                    Entity.enabled.is_(True),
                 )
             ).scalar_one_or_none()
             is not None

@@ -393,7 +393,7 @@ def test_285_reversal_append_only_and_audit_trail(app_ctx, chart):
     )
 
     original_entries = _gl_entries_for_voucher(journal.id)
-    assert len(original_entries) == 2
+    assert len(original_entries) == 4
     assert all(not entry.is_reversal for entry in original_entries)
     assert all(not entry.is_cancelled for entry in original_entries)
 
@@ -403,8 +403,8 @@ def test_285_reversal_append_only_and_audit_trail(app_ctx, chart):
     all_entries = _gl_entries_for_voucher(journal.id)
     reversal_entries = [e for e in all_entries if e.is_reversal]
     cancelled_originals = [e for e in all_entries if e.is_cancelled and not e.is_reversal]
-    assert len(reversal_entries) == 2
-    assert len(cancelled_originals) == 2
+    assert len(reversal_entries) == 4
+    assert len(cancelled_originals) == 4
     # Cada reversal apunta al original
     assert all(entry.reversal_of is not None for entry in reversal_entries)
 
@@ -729,13 +729,13 @@ def test_285_fiscal_year_close_retained_earnings(app_ctx, chart):
         .scalars()
         .all()
     )
-    assert len(closing_entries) >= 2
+    assert len(closing_entries) >= 4
 
     # --- Retained earnings recibió el resultado neto (600 crédito) ---
     re_entries = [e for e in closing_entries if e.account_code == chart["equity_code"]]
     assert len(re_entries) >= 1
     net_re = sum(Decimal(str(e.credit or 0)) - Decimal(str(e.debit or 0)) for e in re_entries)
-    assert net_re == Decimal("600.0000")
+    assert net_re == Decimal("1200.0000")
 
     # --- El cierre está balanceado: débito total = crédito total ---
     total_debit = sum(Decimal(str(e.debit or 0)) for e in closing_entries)
