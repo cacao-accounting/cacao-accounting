@@ -464,7 +464,7 @@ def _income_expense_balances(
         balance = Decimal(result.balance or 0)
         classification = (result.classification or "").lower()
         if classification in INCOME_CLASSIFICATIONS:
-            income += abs(balance)
+            income += -balance
         elif classification in EXPENSE_CLASSIFICATIONS:
             expenses += balance
     return {"income": income, "expenses": expenses}
@@ -505,7 +505,7 @@ def _accounting_monthly_result(
         balance = Decimal(str(row.balance or 0))
         classification = (row.classification or "").lower()
         if classification in INCOME_CLASSIFICATIONS:
-            payload["income"] = _numeric(Decimal(str(payload["income"])) + abs(balance))
+            payload["income"] = _numeric(Decimal(str(payload["income"])) - balance)
         elif classification in EXPENSE_CLASSIFICATIONS:
             payload["expenses"] = _numeric(Decimal(str(payload["expenses"])) + balance)
     return list(months.values())

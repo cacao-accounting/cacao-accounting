@@ -163,6 +163,22 @@ def test_dashboard_returns_uniform_sections_and_metrics(client):
     assert sales["tables"]["top_customers"][0]["name"] == "Cliente Demo"
 
 
+def test_dashboard_preserves_negative_income_for_net_loss(app, client):
+    """Una pérdida neta debe permanecer negativa en los KPI y el resultado mensual."""
+    with app.app_context():
+        database.session.add(_gl("GL-INCOME-LOSS", "ACC-INCOME-EN", debit=500, credit=0))
+        database.session.commit()
+
+    _login(client, "admin")
+    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+
+    assert response.status_code == 200
+    accounting = response.get_json()["sections"]["accounting"]
+    assert Decimal(str(accounting["kpis"]["income"]["value"])) == Decimal("-200")
+    assert Decimal(str(accounting["kpis"]["profit"]["value"])) == Decimal("-300")
+    assert Decimal(str(accounting["charts"]["monthly_result"][0]["income"])) == Decimal("-200")
+
+
 def test_dashboard_excludes_cancelled_and_reversal_gl_entries(app, client):
     """Los KPIs no mezclan actividad vigente con asientos anulados."""
     with app.app_context():
