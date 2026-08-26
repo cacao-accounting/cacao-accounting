@@ -1833,17 +1833,21 @@ def get_monthly_withholding_report(company: str, year: int, month: int) -> Pagin
         raise ValueError("El mes fiscal debe estar entre 1 y 12.")
     start = date(year, month, 1)
     end = date(year + (month == 12), 1 if month == 12 else month + 1, 1)
-    certificates = database.session.execute(
-        select(WithholdingCertificate)
-        .where(
-            WithholdingCertificate.company == company,
-            WithholdingCertificate.docstatus == 1,
-            WithholdingCertificate.status == "issued",
-            WithholdingCertificate.posting_date >= start,
-            WithholdingCertificate.posting_date < end,
+    certificates = (
+        database.session.execute(
+            select(WithholdingCertificate)
+            .where(
+                WithholdingCertificate.company == company,
+                WithholdingCertificate.docstatus == 1,
+                WithholdingCertificate.status == "issued",
+                WithholdingCertificate.posting_date >= start,
+                WithholdingCertificate.posting_date < end,
+            )
+            .order_by(WithholdingCertificate.posting_date, WithholdingCertificate.certificate_no)
         )
-        .order_by(WithholdingCertificate.posting_date, WithholdingCertificate.certificate_no)
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     rows: list[ReportRow] = []
     total_withheld = Decimal("0")
     line_count = 0
