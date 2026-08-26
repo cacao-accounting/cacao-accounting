@@ -1974,6 +1974,72 @@ class TestBankManagementExhaustive:
         source_credit = [e for e in primary_entries if e.account_id == bank2.gl_account_id and e.credit > 0][0]
         assert source_credit.credit_in_account_currency == Decimal("100")
 
+    def test_internal_transfer_multi_currency_gain_credits_gain_account(self, app_ctx):
+        """A transfer receiving more functional value credits the FX gain account."""
+        from cacao_accounting.contabilidad.posting import post_payment_entry
+        from cacao_accounting.database import BankAccount, Bank, Accounts, ExchangeRate, PaymentEntry
+        from cacao_accounting.ledger_queries import primary_ledger_id
+
+        bank_entity = database.session.execute(database.select(Bank)).scalars().first()
+        target_bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        defaults = _ensure_company_default_accounts("cacao", target_bank)
+        source_gl = (
+            database.session.execute(
+                database.select(Accounts).filter_by(entity="cacao", account_type="bank").order_by(Accounts.code.desc())
+            )
+            .scalars()
+            .first()
+        )
+        source_bank = BankAccount(
+            bank_id=bank_entity.id,
+            company="cacao",
+            account_name="Cuenta USD Ganancia",
+            account_no="USD-GAIN-1",
+            currency="USD",
+            gl_account_id=source_gl.id,
+        )
+        rate = (
+            database.session.execute(
+                database.select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date.today())
+            )
+            .scalars()
+            .first()
+        )
+        if rate:
+            rate.rate = Decimal("36.50")
+        else:
+            database.session.add(ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.50"), date=date.today()))
+        database.session.add(source_bank)
+        database.session.commit()
+
+        payment = PaymentEntry(
+            company="cacao",
+            posting_date=date.today(),
+            payment_type="internal_transfer",
+            bank_account_id=source_bank.id,
+            target_bank_account_id=target_bank.id,
+            paid_from_account_id=source_bank.gl_account_id,
+            paid_to_account_id=target_bank.gl_account_id,
+            currency="USD",
+            paid_amount=Decimal("100"),
+            received_amount=Decimal("3700"),
+            docstatus=1,
+            document_no="PAY-TRF-FX-GAIN-01",
+        )
+        database.session.add(payment)
+        database.session.commit()
+
+        entries = post_payment_entry(payment)
+        primary_id = primary_ledger_id("cacao")
+        primary_entries = [entry for entry in entries if entry.ledger_id == primary_id] if primary_id else entries
+        gain_entries = [entry for entry in primary_entries if entry.account_id == defaults.exchange_gain_account_id]
+
+        assert len(primary_entries) == 3
+        assert len(gain_entries) == 1
+        assert gain_entries[0].debit == Decimal("0")
+        assert gain_entries[0].credit == Decimal("50.00")
+        assert sum(entry.debit for entry in primary_entries) == sum(entry.credit for entry in primary_entries)
+
     def test_internal_transfer_multi_currency_unbalanced_rejected(self, app_ctx):
         """Internal transfer with internally unbalanced amounts in foreign currency is rejected."""
         from cacao_accounting.contabilidad.posting import post_payment_entry, PostingError
