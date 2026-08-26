@@ -96,6 +96,34 @@ def test_credit_limit_validation(app_ctx):
     assert "límite de crédito" in str(excinfo.value).lower()
 
 
+def test_credit_limit_error_uses_base_currency_for_multicurrency_document(app_ctx):
+    """El mensaje de límite debe mostrar el importe convertido a moneda funcional."""
+    customer, company_party = _ensure_customer("CUST-LIMIT-FX", "Cliente límite FX")
+    company_party.credit_limit = Decimal("1000")
+    database.session.commit()
+
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        customer_name=customer.name,
+        posting_date=date.today(),
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36.5"),
+        grand_total=Decimal("100"),
+        docstatus=0,
+        is_return=False,
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        _validate_credit_limit_and_overdue("cacao", customer.id, invoice.grand_total, current_document=invoice)
+
+    message = str(excinfo.value)
+    assert "Monto del documento: 3650.0000" in message
+    assert "Moneda base: NIO" in message
+    assert "Monto del documento: 100," not in message
+
+
 def test_credit_limit_uses_invoice_outstanding_not_grand_total(app_ctx, monkeypatch):
     """Un saldo parcial no debe sustituirse por el total base de la factura."""
     customer, company_party = _ensure_customer("CUST-PARTIAL-OUTSTANDING", "Cliente saldo parcial")

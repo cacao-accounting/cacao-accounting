@@ -1937,10 +1937,11 @@ def _validate_credit_limit_and_overdue(
         exposure = outstanding + order_exposure + current_doc_base
         limit = Decimal(str(company_party.credit_limit))
         if exposure > limit:
+            base_currency = company_currency(company) or ""
             raise ValueError(
                 f"El límite de crédito para el cliente ha sido excedido. Límite: {limit}, "
-                f"Saldo actual: {outstanding + order_exposure}, Monto del documento: {current_doc_total}, "
-                f"Exposición total: {exposure}."
+                f"Saldo actual: {outstanding + order_exposure}, Monto del documento: {current_doc_base}, "
+                f"Exposición total: {exposure}. Moneda base: {base_currency}."
             )
 
 

@@ -436,7 +436,12 @@ class ApprovalEngine:
         from cacao_accounting.ventas import _validate_credit_limit_and_overdue
 
         if doctype == "sales_order" and not getattr(document, "is_return", False):
-            _validate_credit_limit_and_overdue(document.company, document.customer_id, document.grand_total or Decimal("0"))
+            _validate_credit_limit_and_overdue(
+                document.company,
+                document.customer_id,
+                document.grand_total or Decimal("0"),
+                current_document=document,
+            )
             return
         if doctype != "sales_invoice":
             return
@@ -447,7 +452,12 @@ class ApprovalEngine:
         )
 
         if not getattr(document, "is_return", False):
-            _validate_credit_limit_and_overdue(document.company, document.customer_id, document.grand_total or Decimal("0"))
+            _validate_credit_limit_and_overdue(
+                document.company,
+                document.customer_id,
+                document.grand_total or Decimal("0"),
+                current_document=document,
+            )
         _validate_sales_invoice_quantities(document.id)
         _validate_invoice_prices_against_source(document)
         if getattr(document, "document_type", None) == "sales_credit_note":
