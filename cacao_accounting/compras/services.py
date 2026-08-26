@@ -1718,6 +1718,7 @@ def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
     valida contra la cantidad ordenada en la OC.
     """
     invoice = database.session.get(PurchaseInvoice, invoice_id)
+    target_type = PURCHASE_RETURN if invoice and invoice.document_type == PURCHASE_RETURN else PURCHASE_INVOICE
     if invoice:
         invoice_items = (
             database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id))
@@ -1730,17 +1731,21 @@ def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
             _validate_purchase_source_link(invoice, "purchase_order", invoice.purchase_order_id, invoice_items)
     relations = database.session.execute(
         database.select(DocumentRelation).filter_by(
-            target_type="purchase_invoice",
+            target_type=target_type,
             target_id=invoice_id,
             status="active",
         )
     ).scalars()
     for rel in relations:
         if rel.source_item_id:
-            _validate_purchase_invoice_relation(rel, invoice_id=invoice_id)
+            _validate_purchase_invoice_relation(rel, invoice_id=invoice_id, target_type=target_type)
 
 
-def _validate_purchase_invoice_relation(relation: DocumentRelation, invoice_id: str | None = None) -> None:
+def _validate_purchase_invoice_relation(
+    relation: DocumentRelation,
+    invoice_id: str | None = None,
+    target_type: str = PURCHASE_INVOICE,
+) -> None:
     """Valida una relación de factura de compra contra su fuente."""
     sources = {"purchase_receipt": (PurchaseReceiptItem, "recibida"), "purchase_order": (PurchaseOrderItem, "ordenada")}
     source = sources.get(relation.source_type)
@@ -1753,7 +1758,7 @@ def _validate_purchase_invoice_relation(relation: DocumentRelation, invoice_id: 
         relation.source_type,
         relation.source_id,
         relation.source_item_id,
-        "purchase_invoice",
+        target_type,
         exclude_draft_targets=True,
         include_target_id=invoice_id,
     )
@@ -1780,6 +1785,7 @@ def _validate_invoice_requires_supplier_link(invoice_id: str) -> None:
     invoice = database.session.get(PurchaseInvoice, invoice_id)
     if not invoice or not invoice.supplier_id:
         return
+    target_type = PURCHASE_RETURN if invoice.document_type == PURCHASE_RETURN else PURCHASE_INVOICE
     cp = database.session.execute(
         database.select(CompanyParty).filter_by(party_id=invoice.supplier_id, company=invoice.company)
     ).scalar_one_or_none()
@@ -1787,7 +1793,7 @@ def _validate_invoice_requires_supplier_link(invoice_id: str) -> None:
         return
     relations = (
         database.session.execute(
-            database.select(DocumentRelation).filter_by(target_type="purchase_invoice", target_id=invoice_id, status="active")
+            database.select(DocumentRelation).filter_by(target_type=target_type, target_id=invoice_id, status="active")
         )
         .scalars()
         .all()
