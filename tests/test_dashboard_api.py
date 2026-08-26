@@ -18,6 +18,7 @@ from cacao_accounting.database import (
     CompanyParty,
     Currency,
     Entity,
+    ExchangeRate,
     GLEntry,
     Item,
     Modules,
@@ -256,6 +257,22 @@ def test_r2r_analytics_and_dashboard_net_credit_notes(app, client):
     assert Decimal(str(sections["purchases"]["kpis"]["outstanding"]["value"])) == Decimal("150")
     assert all(row["document_no"] != "PI-RETURN" for row in sections["purchases"]["tables"]["payables"])
     assert Decimal(str(sections["sales"]["tables"]["top_customers"][0]["total"])) == Decimal("800")
+
+
+def test_analytics_currency_conversion_uses_latest_prior_rate(app):
+    """Analytics debe convertir con la última tasa disponible antes de la fecha."""
+    from cacao_accounting.reportes.analytics import _convert_to_ledger_currency
+
+    with app.app_context():
+        database.session.add_all(
+            [
+                ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.027"), date=date(2024, 1, 1)),
+                ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.028"), date=date(2024, 1, 15)),
+            ]
+        )
+        database.session.commit()
+
+        assert _convert_to_ledger_currency(Decimal("100"), "NIO", "USD", date(2024, 1, 31)) == Decimal("2.800")
 
 
 def test_concentration_share_is_a_portion_of_the_total():
