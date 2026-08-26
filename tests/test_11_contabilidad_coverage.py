@@ -3317,7 +3317,7 @@ def test_posting_normalize_ledger_codes_list_dedup(app_ctx):
 
 
 def test_posting_active_books_missing_code(app_ctx):
-    from cacao_accounting.contabilidad.posting import PostingError, _active_books
+    from cacao_accounting.contabilidad.posting import _active_books
 
     assert [book.code for book in _active_books("cacao", ["NONEXISTENT"])]
 
