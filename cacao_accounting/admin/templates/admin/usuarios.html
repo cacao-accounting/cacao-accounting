@@ -63,12 +63,12 @@
             </span>
           </td>
           <td class="text-end">
-            <a href="{{ url_for('admin.editar_usuario', user_id=usuario.id) }}" class="btn btn-sm btn-outline-primary me-1">Editar</a>
-            <a href="{{ url_for('admin.usuario_roles', user_id=usuario.id) }}" class="btn btn-sm btn-outline-secondary me-1">Roles</a>
-            {% if is_cloud_mode() and usuario.classification == 'system' %}
-            <a href="{{ url_for('admin.usuario_companias', user_id=usuario.id) }}" class="btn btn-sm btn-outline-secondary me-1">Compañías</a>
+            <a href="{{ url_for('admin.editar_usuario', user_id=usuario.id) }}" class="badge text-bg-primary text-decoration-none me-1">Editar</a>
+            <a href="{{ url_for('admin.usuario_roles', user_id=usuario.id) }}" class="badge text-bg-secondary text-decoration-none me-1">Roles</a>
+            {% if is_cloud_mode() and usuario.classification not in ('customer', 'supplier') %}
+            <a href="{{ url_for('admin.usuario_companias', user_id=usuario.id) }}" class="badge text-bg-info text-decoration-none me-1">Compañías</a>
             {% endif %}
-            <a href="{{ url_for('admin.usuario_password', user_id=usuario.id) }}" class="btn btn-sm btn-outline-warning me-1">Contraseña</a>
+            <a href="{{ url_for('admin.usuario_password', user_id=usuario.id) }}" class="badge text-bg-warning text-dark text-decoration-none me-1">Contraseña</a>
             <form method="post" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="user_id" value="{{ usuario.id }}">
@@ -76,7 +76,7 @@
                 type="submit"
                 name="action"
                 value="toggle"
-                class="btn btn-sm btn-{{ 'outline-danger' if usuario.active else 'outline-success' }}"
+                class="badge border-0 bg-{{ 'danger' if usuario.active else 'success' }}"
               >
                 {{ 'Deshabilitar' if usuario.active else 'Habilitar' }}
               </button>

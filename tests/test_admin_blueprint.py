@@ -24,6 +24,7 @@ from cacao_accounting.database import (
     PriceList,
     Entity,
     PartyGroup,
+    UserCompanyAccess,
 )
 import sys
 import os
@@ -638,6 +639,7 @@ def test_admin_home_consolidates_global_configuration_sections(app_instance):
         "Bancos",
         "Series e Identificadores",
         "Impuestos y Cargos",
+        "Seguridad de Sesión",
         "Usuarios y Permisos",
     ):
         assert section in html
@@ -646,7 +648,7 @@ def test_admin_home_consolidates_global_configuration_sections(app_instance):
 
 
 def test_configuration_navigation_registry_preserves_public_endpoints():
-    """El registro de navegación conserva las once áreas y sus endpoints."""
+    """El registro de navegación conserva las doce áreas y sus endpoints."""
     from cacao_accounting.admin.navigation import CONFIGURATION_SECTIONS
 
     assert [section.label for section in CONFIGURATION_SECTIONS] == [
@@ -660,6 +662,7 @@ def test_configuration_navigation_registry_preserves_public_endpoints():
         "Bancos",
         "Series e Identificadores",
         "Impuestos y Cargos",
+        "Seguridad de Sesión",
         "Usuarios y Permisos",
     ]
     endpoints = {link.endpoint for section in CONFIGURATION_SECTIONS for link in section.links}
@@ -750,6 +753,40 @@ def test_lista_usuarios(app_instance):
         response = client.post("/settings/users", data={"user_id": user_id, "action": "toggle"}, follow_redirects=True)
         assert response.status_code == 200
         assert b"correctamente" in response.data
+
+
+@pytest.mark.skipif(is_desktop_mode(), reason="Gestión multiusuario no aplica en Desktop Mode")
+def test_admin_user_can_view_and_save_company_access(app_instance):
+    """La asignación de compañías también está disponible para usuarios administradores internos."""
+    with app_instance.test_client() as client:
+        client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
+
+        with app_instance.app_context():
+            admin_user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()
+            company = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().first()
+            assert company is not None
+            user_id = admin_user.id
+
+        listing = client.get("/settings/users")
+        assert listing.status_code == 200
+        assert f"/settings/users/{user_id}/companies".encode() in listing.data
+        assert b"badge text-bg-primary" in listing.data
+
+        page = client.get(f"/settings/users/{user_id}/companies")
+        assert page.status_code == 200
+        assert b"Guardar compa" in page.data
+
+        response = client.post(
+            f"/settings/users/{user_id}/companies",
+            data={"companies": [company.code], "guardar_companias": "Guardar compañías"},
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        with app_instance.app_context():
+            grant = database.session.execute(
+                database.select(UserCompanyAccess).filter_by(user_id=user_id, company_code=company.code)
+            ).scalar_one_or_none()
+            assert grant is not None
 
 
 @pytest.mark.skipif(is_desktop_mode(), reason="Gestión multiusuario no aplica en Desktop Mode")
