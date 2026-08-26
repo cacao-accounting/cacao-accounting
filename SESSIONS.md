@@ -408,10 +408,11 @@ Hacer triage de los 37 issues abiertos (#720–#756) comparando contra el códig
 
 Se analizaron los 37 issues abiertos contra el árbol de código fuente actual. Cada issue fue clasificado y etiquetado en GitHub:
 
-**Cerrados (wontfix) — 6 issues:**
+**Cerrados (wontfix) — 7 issues:**
 - #725 API REST: No necesitamos API pública, es consumo interno de librerías JS
 - #724 MFA/TOTP: Redefinido a self-service recovery por token de un solo uso (ver needs-work)
 - #723 UserBookAccess admin UI: Overhead innecesario, RBAC + acceso por compañía es suficiente
+- #742 Standard costing/variances/FEFO: Fuera de alcance, Cacao Accounting no es un ERP completo
 - #741 Manufacturing/BOM: Fuera de alcance, Cacao Accounting no es un ERP completo
 - #740 Task queue/scheduler: Fuera de alcance, operaciones síncronas
 - #739 Account security hardening: Pre-beta, no prioritario
@@ -424,11 +425,10 @@ Se analizaron los 37 issues abiertos contra el árbol de código fuente actual. 
 - #745 UX polish: Dark mode completo, portal paging parcial
 - #754 Tax pricing negative base: Comportamiento correcto, bases negativas son flujo real
 
-**Diferidos (needs-review) — 6 issues:**
+**Diferidos (needs-review) — 5 issues:**
 - #746 Platform ergonomics: i18n framework existe, strings hardcodeados es deuda técnica post-beta
 - #744 Pricing engine inactive: Price lists funcionan, descuentos no son necesarios para MVP
 - #743 Financial statements comparatives: Post-beta
-- #742 Standard costing/variances: Post-beta, FIFO ya funciona
 - #733 Financial reports memory: Performance post-beta
 - #729 Withholding lifecycle: Parcialmente implementado, refinamiento post-beta
 
