@@ -222,9 +222,17 @@ class ProjectCapitalizationService:
         if not orig_journal or orig_journal.capitalized_by_id:
             return False
 
-        cap_journal = _create_capitalization_journal(company, lines, user_id)
-        orig_journal.capitalized_by_id = cap_journal.id
+        lines_by_currency: dict[str, list[CapitalizationLine]] = {}
+        for line in lines:
+            currency = line.entry.account_currency or line.entry.company_currency or ""
+            lines_by_currency.setdefault(currency, []).append(line)
+
+        capitalization_journals = [
+            _create_capitalization_journal(company, currency_lines, user_id) for currency_lines in lines_by_currency.values()
+        ]
+        orig_journal.capitalized_by_id = capitalization_journals[0].id
         database.session.add(orig_journal)
 
-        submit_journal(cap_journal.id, user_id=user_id)
+        for cap_journal in capitalization_journals:
+            submit_journal(cap_journal.id, user_id=user_id)
         return True

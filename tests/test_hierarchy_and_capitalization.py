@@ -5,6 +5,8 @@
 import unittest
 from decimal import Decimal
 from datetime import date
+from types import SimpleNamespace
+from unittest.mock import patch
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     database,
@@ -405,3 +407,38 @@ class TestHierarchyAndCapitalization(unittest.TestCase):
         # 7. Intentar anular el comprobante de capitalización automática (debe estar bloqueado)
         with self.assertRaises(PostingError):
             cancel_document(cap_jv)
+
+    def test_mixed_currency_voucher_is_split_into_capitalization_journals(self):
+        """Mixed account currencies are capitalized independently instead of aborting the voucher."""
+        from cacao_accounting.contabilidad.project_capitalization_service import CapitalizationLine
+
+        source = ComprobanteContable(id="JV-MIXED-735", entity="cacao", status="submitted")
+        database.session.add(source)
+        database.session.commit()
+        usd_line = CapitalizationLine(
+            entry=SimpleNamespace(voucher_id=source.id, account_currency="USD", company_currency="NIO"),
+            debit_account_code="1201",
+            credit_account_code="6101",
+            value=Decimal("10"),
+        )
+        nio_line = CapitalizationLine(
+            entry=SimpleNamespace(voucher_id=source.id, account_currency="NIO", company_currency="NIO"),
+            debit_account_code="1201",
+            credit_account_code="6101",
+            value=Decimal("20"),
+        )
+        created = [SimpleNamespace(id="CAP-USD"), SimpleNamespace(id="CAP-NIO")]
+        with (
+            patch(
+                "cacao_accounting.contabilidad.project_capitalization_service._create_capitalization_journal",
+                side_effect=created,
+            ) as create_journal,
+            patch("cacao_accounting.contabilidad.project_capitalization_service.submit_journal") as submit,
+        ):
+            assert ProjectCapitalizationService._process_group("cacao", source.id, [usd_line, nio_line], "test_user")
+
+        assert [[line.entry.account_currency for line in call.args[1]] for call in create_journal.call_args_list] == [
+            ["USD"],
+            ["NIO"],
+        ]
+        assert [call.args[0] for call in submit.call_args_list] == ["CAP-USD", "CAP-NIO"]
