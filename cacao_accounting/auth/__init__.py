@@ -83,6 +83,13 @@ def inicio_sesion():  # pragma: no cover
     """Inicio de sesión del usuario."""
     from flask_login import current_user
 
+    from cacao_accounting.auth.account_throttling import (
+        esta_bloqueada,
+        notificar_intento_fallido,
+        registrar_intento_exitoso,
+        registrar_intento_fallido,
+        tiempo_restante_bloqueo,
+    )
     from cacao_accounting.auth.forms import LoginForm
 
     form = LoginForm()
@@ -92,10 +99,24 @@ def inicio_sesion():  # pragma: no cover
     if not form.validate_on_submit():
         return render_template("login.html", form=form, titulo=_("Inicio de Sesion - Cacao Accounting"))
 
+    usuario_previo = helpers.obtener_usuario(form.usuario.data)
+    if usuario_previo is not None and esta_bloqueada(usuario_previo):
+        segundos = tiempo_restante_bloqueo(usuario_previo)
+        minutos = (segundos or 0) // 60 + 1
+        flash(_("Cuenta bloqueada temporalmente. Intente de nuevo en {} minuto(s).").format(minutos))
+        return INICIO_SESION
+
     identidad = helpers.autenticar_usuario(form.usuario.data, form.acceso.data)
     if identidad is None:
+        if usuario_previo is not None:
+            registrar_intento_fallido(usuario_previo)
+            notificar_intento_fallido(usuario_previo)
+            database.session.commit()
         flash(_("Inicio de Sesion Incorrecto."))
         return INICIO_SESION
+
+    registrar_intento_exitoso(identidad)
+    database.session.commit()
 
     if not helpers.puede_iniciar_en_escritorio(identidad):
         flash(_("Solo un usuario administrador puede iniciar sesion."))

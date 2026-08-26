@@ -45,6 +45,8 @@ ALLOWED_ACTIONS = {
     "balance_confirmation_cancelled",
     "balance_confirmation_expired",
     "email_sent",
+    "login_failed",
+    "login_unlocked",
 }
 
 
@@ -400,3 +402,24 @@ def log_balance_confirmation_event(
 ) -> AuditTrail:
     """Log an audit trail event for a balance confirmation."""
     return _log(action, document, before=before, after=after, comment=comment)
+
+
+def log_login_failed(user_id: str, username: str, attempt_count: int, ip_address: str | None = None) -> AuditTrail:
+    """Log a failed login attempt for audit purposes."""
+    from cacao_accounting.database import User
+
+    fake_doc = User(id=user_id, user=username)
+    return _log(
+        "login_failed",
+        fake_doc,
+        comment=f"intentos_fallidos:{attempt_count}",
+    )
+
+
+def log_account_unlocked(user_id: str, username: str, unlocked_by: str | None = None) -> AuditTrail:
+    """Log when an account is manually unlocked by an admin."""
+    from cacao_accounting.database import User
+
+    fake_doc = User(id=user_id, user=username)
+    comment = f"desbloqueado_por:{unlocked_by}" if unlocked_by else "desbloqueo_automatico"
+    return _log("login_unlocked", fake_doc, comment=comment)

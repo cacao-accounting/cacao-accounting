@@ -71,3 +71,24 @@ def usuario_actual_ip() -> str:
     if request and request.remote_addr:
         return request.remote_addr
     return "unknown"
+
+
+def listar_cuentas_bloqueadas() -> list[tuple[User, int]]:
+    """Retorna usuarios bloqueados con sus segundos restantes de lockout."""
+    from cacao_accounting.auth.account_throttling import listar_cuentas_bloqueadas as _listar
+
+    return _listar()
+
+
+def desbloquear_cuenta_usuario(user_id: str) -> bool:
+    """Desbloquea una cuenta de usuario. Retorna True si existía y estaba bloqueada."""
+    from cacao_accounting.auth.account_throttling import desbloquear_cuenta
+
+    usuario = database.session.get(User, user_id)
+    if usuario is None:
+        return False
+    if not usuario.lockout_until and (not usuario.failed_login_count or usuario.failed_login_count == 0):
+        return False
+    desbloquear_cuenta(usuario)
+    database.session.flush()
+    return True

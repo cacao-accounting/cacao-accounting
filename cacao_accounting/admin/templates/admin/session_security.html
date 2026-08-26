@@ -87,6 +87,48 @@
       <p class="text-muted small">{{ _("No hay dispositivos reconocidos registrados.") }}</p>
       {% endif %}
     </div>
+
+    <div class="ca-card p-3 mt-4">
+      <h5 class="mb-3">{{ _("Cuentas Bloqueadas") }}</h5>
+      {% if cuentas_bloqueadas %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover">
+          <thead>
+            <tr>
+              <th>{{ _("Usuario") }}</th>
+              <th>{{ _("Intentos Fallidos") }}</th>
+              <th>{{ _("Último Intento") }}</th>
+              <th>{{ _("Desbloqueo en") }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for usuario, segundos in cuentas_bloqueadas %}
+            <tr>
+              <td>{{ usuario.user }}</td>
+              <td>{{ usuario.failed_login_count }}</td>
+              <td>{{ usuario.last_failed_login.strftime("%Y-%m-%d %H:%M") if usuario.last_failed_login else "—" }}</td>
+              <td>{{ (segundos // 60) + 1 }} {{ _("min(s)") }}</td>
+              <td>
+                <form method="post" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="action" value="unlock">
+                  <input type="hidden" name="user_id" value="{{ usuario.id }}">
+                  <button type="submit" class="btn btn-outline-warning btn-sm"
+                    onclick="return confirm('{{ _('¿Está seguro de desbloquear esta cuenta?') }}')">
+                    <i class="bi bi-unlock"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted small">{{ _("No hay cuentas bloqueadas actualmente.") }}</p>
+      {% endif %}
+    </div>
   </div>
 
   <div class="col-md-4">

@@ -297,6 +297,9 @@ class User(UserMixin, database.Model, BaseTabla):  # type: ignore[name-defined]
     birthday = database.Column(database.Date())
     phone = database.Column(database.String(50))
     language = database.Column(database.String(10), nullable=True)
+    failed_login_count = database.Column(database.Integer(), nullable=False, default=0)
+    lockout_until = database.Column(database.DateTime(timezone=True), nullable=True)
+    last_failed_login = database.Column(database.DateTime(timezone=True), nullable=True)
     party_id = database.Column(
         database.String(26), database.ForeignKey(PARTY_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
     )
@@ -2415,6 +2418,10 @@ class PurchaseInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defin
     warehouse = database.Column(
         database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    batch_id = database.Column(
+        database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    serial_no = database.Column(database.String(100), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #

@@ -105,7 +105,9 @@ from cacao_accounting.admin.services import (
 )
 
 from cacao_accounting.admin.session_security_service import (
+    desbloquear_cuenta_usuario,
     is_session_security_enabled,
+    listar_cuentas_bloqueadas,
     listar_todos_dispositivos,
     revocar_dispositivo,
     set_session_security_enabled,
@@ -1104,8 +1106,8 @@ def usuario_companias(user_id: str):
     if usuario is None:
         flash(USUARIO_NO_ENCONTRADO, "danger")
         return redirect(url_for(LISTA_USUARIOS))
-    if usuario.classification != "system":
-        flash("Solo los usuarios de tipo 'system' pueden tener compañías asignadas.", "warning")
+    if usuario.classification in ("customer", "supplier"):
+        flash("Solo los usuarios internos pueden tener compañías asignadas.", "warning")
         return redirect(url_for(LISTA_USUARIOS))
 
     form = UserCompanyAccessForm()
@@ -1392,15 +1394,23 @@ def session_security_settings():
                 database.session.commit()
                 flash(_("Dispositivo revocado correctamente."), "success")
             return redirect(url_for("admin.session_security_settings"))
+        if action == "unlock":
+            user_id = request.form.get("user_id")
+            if user_id and desbloquear_cuenta_usuario(user_id):
+                database.session.commit()
+                flash(_("Cuenta desbloqueada correctamente."), "success")
+            return redirect(url_for("admin.session_security_settings"))
 
     enabled = is_session_security_enabled()
     smtp_ok = smtp_is_configured()
     dispositivos = listar_todos_dispositivos()
+    cuentas_bloqueadas = listar_cuentas_bloqueadas()
 
     return render_template(
         "admin/session_security.html",
         enabled=enabled,
         smtp_configured=smtp_ok,
         dispositivos=dispositivos,
+        cuentas_bloqueadas=cuentas_bloqueadas,
         titulo=_("Seguridad de Sesión"),
     )
