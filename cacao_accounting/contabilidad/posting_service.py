@@ -3086,6 +3086,34 @@ def _restored_source_layer_id(movement: StockLedgerEntry) -> str | None:
     return None
 
 
+def _reversed_stock_layer_id(movement: StockLedgerEntry) -> str | None:
+    """Return the valuation layer created by the stock movement being cancelled.
+
+    A reversal of an incoming movement is an outgoing valuation layer.  Pinning
+    it to the original layer is essential for FIFO: otherwise a same-date
+    reversal consumes the oldest available receipt instead of the receipt being
+    cancelled.
+    """
+    original_layer = (
+        database.session.execute(
+            select(StockValuationLayer.id)
+            .where(
+                StockValuationLayer.company == movement.company,
+                StockValuationLayer.item_code == movement.item_code,
+                StockValuationLayer.warehouse == movement.warehouse,
+                StockValuationLayer.voucher_type == movement.voucher_type,
+                StockValuationLayer.voucher_id == movement.voucher_id,
+                StockValuationLayer.qty == movement.qty_change,
+                StockValuationLayer.stock_value_difference == movement.stock_value_difference,
+            )
+            .order_by(StockValuationLayer.created, StockValuationLayer.id)
+        )
+        .scalars()
+        .first()
+    )
+    return str(original_layer) if original_layer is not None else None
+
+
 def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLedgerEntry:
     qty_change = -_decimal_value(movement.qty_change)
     value_change = -_decimal_value(movement.stock_value_difference)
@@ -3112,7 +3140,7 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
             voucher_type=movement.voucher_type,
             voucher_id=movement.voucher_id,
             posting_date=posting_date,
-            source_layer_id=_restored_source_layer_id(movement) if qty_change > 0 else None,
+            source_layer_id=(_restored_source_layer_id(movement) if qty_change > 0 else _reversed_stock_layer_id(movement)),
         )
     )
     if movement.serial_no:

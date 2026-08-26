@@ -611,10 +611,7 @@ def test_cancel_recepcion_sin_consumo_libera_disponibilidad(env):
 
     dn = _deliver(env, WH_A, "ITF", Q("10"), Q("200"), D_JUN_01)
     movements = _voucher_sle(env, "delivery_note", [dn.id])
-    if env["method"] == "fifo":
-        expected_sale = Q("-1400")
-    else:
-        expected_sale = Q("-1000")
+    expected_sale = Q("-1000")
     assert movements[dn.id][1] == expected_sale
 
     _assert_consistency(env, [("ITF", WH_A, env["inv_a_id"])])
