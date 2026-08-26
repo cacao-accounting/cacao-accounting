@@ -235,6 +235,7 @@ def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) 
 
 
 def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = None) -> list[LedgerContext]:
+    """Build explicit, auditable currency contexts for every posted ledger."""
     if type(document).__name__ != "ComprobanteContable":
         ledger_code = None
     company = _company_for(document)
@@ -242,24 +243,22 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     allow_closing = bool(getattr(document, "is_closing", False))
     validate_accounting_period(company, posting_date, allow_closing=allow_closing)
     accounting_period_id, fiscal_year_id = _find_period_ids(company, posting_date)
-    document_exchange_rate = getattr(document, "exchange_rate", None)
-    document_base_currency = getattr(document, "base_currency", None)
-    transaction_currency = getattr(document, "transaction_currency", None)
     entity = database.session.execute(select(Entity).filter_by(code=company)).scalars().first()
     default_company_currency = getattr(entity, "currency", None) if entity else None
-    document_base_currency = document_base_currency or default_company_currency
+    document_base_currency = getattr(document, "base_currency", None)
+    transaction_currency = getattr(document, "transaction_currency", None)
+    document_exchange_rate = getattr(document, "exchange_rate", None)
     if not transaction_currency:
-        # Los importes de documentos sin moneda explícita nacen en la moneda
-        # base de la compañía. Declararla permite convertir inventario,
-        # recepciones, journals manuales y otros movimientos independientemente
-        # a la moneda funcional de cada libro, evitando copiar importes sin
-        # conversión a libros con moneda distinta.
-        transaction_currency = document_base_currency
+        raise PostingError("El documento requiere moneda transaccional antes de contabilizarse.")
+    if not default_company_currency:
+        raise PostingError("La compañía requiere una moneda funcional configurada antes de contabilizarse.")
     contexts: list[LedgerContext] = []
     is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
     for book in _active_books(company, ledger_code):
         book_currency = getattr(book, "currency", None)
-        company_currency = book_currency or document_base_currency or default_company_currency
+        if not book_currency:
+            raise PostingError(f"El libro contable {book.code} requiere una moneda funcional configurada.")
+        company_currency = book_currency
         exchange_rate = _ledger_exchange_rate(
             transaction_currency=transaction_currency,
             ledger_currency=company_currency,

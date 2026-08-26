@@ -45,6 +45,8 @@ from cacao_accounting.document_flow import (
 
 from cacao_accounting.document_flow.status import _
 
+from cacao_accounting.document_flow.context import company_currency
+
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 from cacao_accounting.decorators import exige_acceso_compania
@@ -638,6 +640,8 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
             unit_code=form_data.get("unit_code") or None,
             project_code=form_data.get("project_code") or None,
             remarks=form_data.get("remarks"),
+            transaction_currency=company_currency(company),
+            base_currency=company_currency(company),
             docstatus=0,
         )
         database.session.add(entry)
@@ -724,6 +728,8 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
     registro.unit_code = request.form.get("unit_code") or None
     registro.project_code = request.form.get("project_code") or None
     registro.remarks = request.form.get("remarks")
+    registro.transaction_currency = registro.transaction_currency or company_currency(company)
+    registro.base_currency = company_currency(company)
 
 
 def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:

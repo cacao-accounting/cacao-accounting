@@ -1613,6 +1613,7 @@ def _handle_purchase_receipt_edit_post(registro):
 def _set_purchase_receipt_totals(receipt: PurchaseReceipt, total: Decimal) -> None:
     """Recalcula importes transaccionales y funcionales de una recepción."""
     receipt.total = receipt.grand_total = total
+    receipt.transaction_currency = receipt.transaction_currency or company_currency(receipt.company)
     receipt.base_currency = company_currency(receipt.company)
     receipt.exchange_rate = _purchase_exchange_rate(receipt.company, receipt.posting_date, receipt.transaction_currency)
     receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
@@ -1623,6 +1624,7 @@ def _set_purchase_document_totals(document: Any, total: Decimal) -> None:
     document.total = total
     if hasattr(document, "grand_total"):
         document.grand_total = total
+    document.transaction_currency = document.transaction_currency or company_currency(document.company)
     document.base_currency = company_currency(document.company)
     document.exchange_rate = _purchase_exchange_rate(document.company, document.posting_date, document.transaction_currency)
     document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))

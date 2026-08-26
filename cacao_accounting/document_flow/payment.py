@@ -1040,7 +1040,7 @@ def _post_advance_settlement_journal(
         status="submitted",
         voucher_type="journal_entry",
         book_codes=json.dumps([book.code for book in books]) if books else None,
-        transaction_currency=None,
+        transaction_currency=payment.transaction_currency or invoice.transaction_currency,
     )
     database.session.add(journal)
     database.session.flush()
