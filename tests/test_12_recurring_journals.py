@@ -488,7 +488,7 @@ def test_e2e_monthly_close_rejects_missing_mandatory_checks(app_ctx):
 
 def test_monthly_ledger_integrity_rejects_unbalanced_book(app_ctx):
     """El check automático del cierre detecta descuadres por libro contable."""
-    from cacao_accounting.contabilidad.services import _monthly_ledger_integrity
+    from cacao_accounting.contabilidad.services import _monthly_ledger_integrity, _monthly_ledger_source_entries
     from cacao_accounting.database import GLEntry
 
     database.session.add_all(
@@ -519,6 +519,8 @@ def test_monthly_ledger_integrity_rejects_unbalanced_book(app_ctx):
 
     assert passed is False
     assert "L01" in message
+    sources = _monthly_ledger_source_entries("abc", date(2027, 1, 1), date(2027, 1, 31))
+    assert {source["voucher_id"] for source in sources} == {"voucher-debit", "voucher-credit"}
 
 
 def test_posting_initializes_outstanding_amount(app_ctx):

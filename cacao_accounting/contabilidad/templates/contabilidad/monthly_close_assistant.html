@@ -280,7 +280,21 @@
             <span class="badge text-bg-danger">{{ _(check.check_status) }}</span>
             {% endif %}
           </td>
-          <td>{{ check.message or _('Sin detalle disponible.') }}</td>
+          <td>
+            <div>{{ check.message or _('Sin detalle disponible.') }}</div>
+            {% if check.source_links %}
+            <div class="mt-1">
+              <strong>{{ _('Registros origen') }}:</strong>
+              {% for source in check.source_links %}
+              {% if source.url %}
+              <a class="ms-2" href="{{ source.url }}">{{ source.label }}</a>
+              {% else %}
+              <span class="ms-2">{{ source.label }}</span>
+              {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

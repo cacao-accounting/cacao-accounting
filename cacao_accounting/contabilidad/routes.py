@@ -40,6 +40,7 @@ from cacao_accounting.contabilidad.services import (
     _get_period_close_checks,
     _monthly_close_check_errors,
     _monthly_ledger_integrity,
+    _monthly_ledger_source_entries,
     _monthly_subledger_integrity,
     _discover_applicable_templates,
     _apply_recurring_templates,
@@ -2687,6 +2688,39 @@ def ver_cierre_mensual(identifier: str):
     period = database.session.get(AccountingPeriod, close_run.period_id)
     templates, applied_ids = _get_templates_and_applied_ids(close_run, period)
     checks = _get_period_close_checks(close_run)
+    for check in checks:
+        check.source_links = []
+        if check.check_status in COMPLETED_MONTHLY_CLOSE_STATUSES:
+            continue
+        if check.check_type == "ledger_integrity" and period:
+            for source in _monthly_ledger_source_entries(close_run.company, period.start, period.end):
+                endpoint = {
+                    "salesinvoice": ("ventas.ventas_factura_venta", "invoice_id"),
+                    "purchaseinvoice": ("compras.compras_factura_compra", "invoice_id"),
+                    "paymententry": ("bancos.bancos_pago", "payment_id"),
+                    "comprobantecontable": ("contabilidad.ver_comprobante", "identifier"),
+                }.get(source["voucher_type"].lower().replace("_", "").replace(" ", ""))
+                if endpoint:
+                    check.source_links.append(
+                        {
+                            "label": source["label"],
+                            "url": url_for(endpoint[0], **{endpoint[1]: source["voucher_id"]}),
+                        }
+                    )
+                else:
+                    check.source_links.append({"label": source["label"], "url": None})
+        elif check.check_type == "subledger_integrity" and period:
+            check.source_links.append(
+                {
+                    "label": "Matriz de conciliación detallada",
+                    "url": url_for(
+                        "reportes.reconciliation_matrix",
+                        company=close_run.company,
+                        accounting_period=period.name,
+                        as_of_date=period.end.isoformat(),
+                    ),
+                }
+            )
 
     return render_template(
         "contabilidad/monthly_close_assistant.html",

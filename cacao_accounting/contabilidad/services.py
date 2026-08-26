@@ -628,6 +628,49 @@ def _monthly_ledger_integrity(company: str, period_start: date, period_end: date
     return True, f"GL cuadrado en {len(balances)} libro(s)."
 
 
+def _monthly_ledger_source_entries(company: str, period_start: date, period_end: date) -> list[dict[str, str]]:
+    """Obtiene vouchers de los libros descuadrados para facilitar su corrección."""
+    from cacao_accounting.database import GLEntry
+
+    entries = (
+        database.session.execute(
+            database.select(GLEntry)
+            .where(
+                GLEntry.company == company,
+                GLEntry.posting_date >= period_start,
+                GLEntry.posting_date <= period_end,
+            )
+            .order_by(GLEntry.posting_date, GLEntry.created, GLEntry.id)
+        )
+        .scalars()
+        .all()
+    )
+    balances: dict[str, tuple[Decimal, Decimal]] = {}
+    for entry in entries:
+        key = str(entry.ledger_id or "__default__")
+        debit, credit = balances.get(key, (Decimal("0"), Decimal("0")))
+        balances[key] = (debit + Decimal(str(entry.debit or 0)), credit + Decimal(str(entry.credit or 0)))
+    unbalanced = {ledger for ledger, (debit, credit) in balances.items() if abs(debit - credit) >= Decimal("0.01")}
+    sources: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in entries:
+        ledger = str(entry.ledger_id or "__default__")
+        key = (str(entry.voucher_type), str(entry.voucher_id))
+        if ledger not in unbalanced or key in seen:
+            continue
+        seen.add(key)
+        sources.append(
+            {
+                "voucher_type": str(entry.voucher_type),
+                "voucher_id": str(entry.voucher_id),
+                "label": str(entry.document_no or entry.voucher_id),
+            }
+        )
+        if len(sources) >= 20:
+            break
+    return sources
+
+
 def _monthly_subledger_integrity(company: str, period_name: str, period_end: date) -> tuple[bool, str]:
     """Reconcilia AR/AP e inventario contra el mayor al cierre del periodo."""
     try:
