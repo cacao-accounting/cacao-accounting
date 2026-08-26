@@ -517,9 +517,7 @@ def compras_solicitud_compra_editar(request_id: str):
             ).scalars():
                 database.session.delete(item)
             _qty, total = _save_purchase_request_items(registro.id)
-            registro.total = total
-            registro.base_total = total
-            registro.grand_total = total
+            _set_purchase_document_totals(registro, total)
             after_state = _capture_purchase_state(registro)
             log_update(registro, before=before_state, after=after_state)
             database.session.commit()

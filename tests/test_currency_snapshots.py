@@ -23,6 +23,21 @@ def test_purchase_receipt_totals_recalculate_functional_snapshot(monkeypatch):
     assert receipt.base_total == Decimal("300.0000")
 
 
+def test_purchase_request_totals_recalculate_functional_snapshot(monkeypatch):
+    """La edición de solicitud de compra debe actualizar moneda, tasa y base total."""
+    compras = import_module("cacao_accounting.compras.services")
+    monkeypatch.setattr(compras, "company_currency", lambda _company: "NIO")
+    monkeypatch.setattr(compras, "_purchase_exchange_rate", lambda *_args: Decimal("36.5"))
+    request = SimpleNamespace(company="cacao", posting_date=None, transaction_currency="USD", grand_total=None)
+
+    compras._set_purchase_document_totals(request, Decimal("100"))
+
+    assert request.exchange_rate == Decimal("36.5")
+    assert request.base_currency == "NIO"
+    assert request.total == request.grand_total == Decimal("100")
+    assert request.base_total == Decimal("3650.0000")
+
+
 def test_sales_invoice_totals_preserve_source_currency_and_rate(monkeypatch):
     """Una factura derivada conserva la moneda y tasa histórica de su origen."""
     ventas = import_module("cacao_accounting.ventas.services")
