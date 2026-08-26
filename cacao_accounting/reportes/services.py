@@ -221,23 +221,60 @@ def _invoice_report_amount(invoice: Any) -> Decimal:
     return _decimal_value(amount)
 
 
+_CLASSIFICATION_ALIASES = {
+    "activos": "activo",
+    "pasivos": "pasivo",
+    "ingresos": "ingreso",
+    "costos": "costo",
+    "gastos": "gasto",
+    "assets": "asset",
+    "liabilities": "liability",
+    "equities": "equity",
+    "incomes": "income",
+    "costs": "cost",
+    "expenses": "expense",
+}
+
+KNOWN_ACCOUNT_CLASSIFICATIONS = frozenset(
+    {
+        "activo",
+        "asset",
+        "pasivo",
+        "liability",
+        "patrimonio",
+        "equity",
+        "ingreso",
+        "income",
+        "costo",
+        "cost",
+        "gasto",
+        "expense",
+    }
+)
+
+
+def normalize_account_classification_value(value: str | None) -> str | None:
+    """Normaliza un valor de clasificación al token canónico reconocido.
+
+    Devuelve ``None`` cuando el valor está vacío o no pertenece a la lista
+    permitida, de modo que alta y edición de cuentas validen contra la misma
+    lista que usan los reportes financieros.
+    """
+    normalized = (value or "").strip().lower()
+    if not normalized:
+        return None
+    return _CLASSIFICATION_ALIASES.get(normalized, normalized)
+
+
+def account_classification_is_known(value: str | None) -> bool:
+    """Indica si un valor de clasificación es reconocido por los reportes."""
+    return normalize_account_classification_value(value) in KNOWN_ACCOUNT_CLASSIFICATIONS
+
+
 def _normalize_account_classification(account: Accounts | None) -> str:
     """Normaliza aliases de clasificaciones de cuentas para reportes financieros."""
     raw_classification = (account.classification or "").strip().lower() if account else ""
-    aliases = {
-        "activos": "activo",
-        "pasivos": "pasivo",
-        "ingresos": "ingreso",
-        "costos": "costo",
-        "gastos": "gasto",
-        "assets": "asset",
-        "liabilities": "liability",
-        "equities": "equity",
-        "incomes": "income",
-        "costs": "cost",
-        "expenses": "expense",
-    }
-    return aliases.get(raw_classification, raw_classification)
+    return _CLASSIFICATION_ALIASES.get(raw_classification, raw_classification)
 
 
 def _payment_allocations(reference_type: str, reference_id: str, company: str, as_of_date: date | None) -> Decimal:
@@ -2603,6 +2640,59 @@ def get_trial_balance_report(filters: FinancialReportFilters) -> PaginatedReport
     )
 
 
+_UNCLASSIFIED_SECTION = "unclassified"
+
+
+def _track_unclassified_account(
+    unclassified: dict[str, dict[str, Any]],
+    account_code: str,
+    account_name: str,
+    classification: str,
+    debit: Decimal,
+    credit: Decimal,
+) -> None:
+    """Registra una cuenta con movimiento cuya clasificación no es reconocida.
+
+    Estas cuentas quedan fuera de las secciones del reporte; se listan al pie
+    para advertir explícitamente la exclusión en lugar de omitirlas en silencio.
+    """
+    record = unclassified.setdefault(
+        account_code,
+        {
+            "section": _UNCLASSIFIED_SECTION,
+            "account_code": account_code,
+            "account_name": account_name,
+            "classification": classification,
+            "amount": Decimal("0"),
+        },
+    )
+    record["amount"] += debit - credit
+
+
+def _finalize_unclassified(
+    rows: list[ReportRow],
+    totals: dict[str, Any],
+    unclassified: dict[str, dict[str, Any]],
+    include_level: bool,
+) -> None:
+    """Añade al pie del reporte la sección de cuentas sin clasificación."""
+    if not unclassified:
+        return
+    for values in sorted(unclassified.values(), key=lambda item: str(item["account_code"])):
+        row_values = {
+            "section": _UNCLASSIFIED_SECTION,
+            "account_code": values["account_code"],
+            "account_name": values["account_name"],
+            "amount": values["amount"],
+        }
+        if include_level:
+            row_values["level"] = str(values["account_code"]).count(".") + 1 if values["account_code"] else 1
+        rows.append(ReportRow(row_values))
+    excluded_total = sum((abs(_decimal_value(values["amount"])) for values in unclassified.values()), Decimal("0"))
+    totals["unclassified_accounts"] = len(unclassified)
+    totals["unclassified_amount"] = excluded_total
+
+
 def _classify_income_account(
     classification: str,
     debit: Decimal,
@@ -2628,11 +2718,15 @@ def _accumulate_income_entry(
     account_name: str,
     account_summary: dict[str, dict[str, Any]],
     summary: dict[str, Decimal],
-) -> None:
-    """Acumula una entrada en el resumen del estado de resultado."""
+) -> bool:
+    """Acumula una entrada en el resumen del estado de resultado.
+
+    Retorna ``True`` si la clasificación fue reconocida; ``False`` cuando la
+    cuenta debe advertirse como excluida.
+    """
     result = _classify_income_account(classification, debit, credit, account_code, account_name)
     if result is None:
-        return
+        return False
     section, amount = result
     summary[section] += amount
     bucket = account_summary.setdefault(
@@ -2647,6 +2741,7 @@ def _accumulate_income_entry(
     )
     bucket["section"] = section
     bucket["amount"] += amount
+    return True
 
 
 def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedReport:
@@ -2665,6 +2760,7 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
         "expense": Decimal("0"),
     }
     account_summary: dict[str, dict[str, Any]] = {}
+    unclassified: dict[str, dict[str, Any]] = {}
     for entry, account in database.session.execute(base_query).all():
         if account is None:
             continue
@@ -2673,7 +2769,7 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
         credit = _decimal_value(entry.credit)
         account_code = account.code or (entry.account_code or "")
         account_name = account.name
-        _accumulate_income_entry(
+        processed = _accumulate_income_entry(
             classification,
             debit,
             credit,
@@ -2682,6 +2778,8 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
             account_summary,
             summary,
         )
+        if not processed:
+            _track_unclassified_account(unclassified, account_code, account_name, classification, debit, credit)
     gross_profit = summary["income"] - summary["cost"]
     operating_profit = gross_profit - summary["expense"]
     rows: list[ReportRow] = []
@@ -2717,15 +2815,17 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
             ),
         ]
     )
+    totals: dict[str, Any] = {
+        "income": summary["income"],
+        "cost": summary["cost"],
+        "expense": summary["expense"],
+        "gross_profit": gross_profit,
+        "net_profit": operating_profit,
+    }
+    _finalize_unclassified(rows, totals, unclassified, include_level=True)
     return PaginatedReport(
         rows=rows,
-        totals={
-            "income": summary["income"],
-            "cost": summary["cost"],
-            "expense": summary["expense"],
-            "gross_profit": gross_profit,
-            "net_profit": operating_profit,
-        },
+        totals=totals,
         columns=["section", "account_code", "account_name", "amount", "level"],
         total_rows=len(rows),
         page=1,
@@ -2834,6 +2934,7 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         "expense": Decimal("0"),
     }
     retained_earnings = Decimal("0")
+    unclassified: dict[str, dict[str, Any]] = {}
     entries = database.session.execute(base_query).all()
     closed_fiscal_years = {entry.posting_date.year for entry, _ in entries if entry.is_fiscal_year_closing}
     for entry, account in entries:
@@ -2866,7 +2967,7 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         credit = _decimal_value(entry.credit)
         account_code = account.code or (entry.account_code or "")
         account_name = account.name
-        _accumulate_balance_sheet_entry(
+        processed = _accumulate_balance_sheet_entry(
             classification,
             debit,
             credit,
@@ -2875,6 +2976,8 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
             by_account,
             totals,
         )
+        if not processed:
+            _track_unclassified_account(unclassified, account_code, account_name, classification, debit, credit)
 
     period_profit = totals["income"] - totals["cost"] - totals["expense"]
     totals["equity"] += retained_earnings + period_profit
@@ -2901,15 +3004,17 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
             )
         )
     difference = totals["assets"] - (totals["liabilities"] + totals["equity"])
+    bs_totals: dict[str, Any] = {
+        "assets": totals["assets"],
+        "liabilities": totals["liabilities"],
+        "equity": totals["equity"],
+        "period_profit": period_profit,
+        "difference": difference,
+    }
+    _finalize_unclassified(rows, bs_totals, unclassified, include_level=False)
     return PaginatedReport(
         rows=rows,
-        totals={
-            "assets": totals["assets"],
-            "liabilities": totals["liabilities"],
-            "equity": totals["equity"],
-            "period_profit": period_profit,
-            "difference": difference,
-        },
+        totals=bs_totals,
         columns=["section", "account_code", "account_name", "amount"],
         total_rows=len(rows),
         page=1,

@@ -130,6 +130,7 @@ _MONEY_COLUMNS = {
     "expense",
     "gross_profit",
     "net_profit",
+    "unclassified_amount",
     "incoming_amount",
     "outgoing_amount",
     "receipts_amount",
@@ -229,6 +230,7 @@ def _format_cell(column: str, value: object, ledger_currency: str | None) -> str
             "expense": _("GASTOS"),
             "gross_profit": _("UTILIDAD BRUTA"),
             "net_profit": _("UTILIDAD NETA"),
+            "unclassified": _("SIN CLASIFICACIÓN"),
             "operating_adjustments": _("AJUSTES AL RESULTADO"),
             "total_operating": _("TOTAL ACTIVIDADES DE OPERACIÓN"),
             "investing": _("ACTIVIDADES DE INVERSIÓN"),
@@ -270,6 +272,29 @@ def _is_report_balanced(raw_totals: dict[str, Decimal]) -> bool:
         return Decimal(str(difference)) == Decimal("0")
     except DecimalException:
         return False
+
+
+def _unclassified_accounts_count(raw_totals: dict[str, object]) -> int:
+    """Devuelve cuántas cuentas sin clasificación advierte el reporte."""
+    value = raw_totals.get("unclassified_accounts", 0)
+    try:
+        return max(int(value), 0)  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return 0
+
+
+def _build_unclassified_warning(count: int) -> str | None:
+    """Construye el mensaje de advertencia por cuentas excluidas del reporte."""
+    if count <= 0:
+        return None
+    message = _(
+        "%(count)s cuenta(s) con clasificación vacía o desconocida fueron excluidas de este reporte."
+        " Revise la sección SIN CLASIFICACIÓN y corrija el catálogo contable."
+    )
+    try:
+        return message % {"count": count}
+    except (KeyError, TypeError, ValueError):  # pragma: no cover - mensaje sin marcadores
+        return message
 
 
 def _report_form_key(report_code: str) -> str:
@@ -985,6 +1010,7 @@ def _render_financial_report(
     display_rows = _build_display_rows(source_rows, row_metadata, display_columns, report.ledger_currency)
     grouped_rows = _apply_grouping(display_rows, source_rows, report, report_code, saved_view)
     display_totals = {key: _format_cell(key, value, report.ledger_currency) for key, value in report.totals.items()}
+    unclassified_count = _unclassified_accounts_count(report.totals)
     return render_template(
         "reportes/financial_report.html",
         titulo=f"{report_title} - {APPNAME}",
@@ -1004,6 +1030,8 @@ def _render_financial_report(
         report_filters=report_filters,
         right_align_columns=_RIGHT_ALIGN_COLUMNS,
         is_balanced=_is_report_balanced(report.totals),
+        unclassified_accounts=unclassified_count,
+        unclassified_warning=_build_unclassified_warning(unclassified_count),
         saved_view=saved_view,
         saved_views=saved_views,
         selected_columns=display_columns,

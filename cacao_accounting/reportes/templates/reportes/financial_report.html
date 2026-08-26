@@ -107,6 +107,11 @@
       <div><strong>{{ _("Estado") }}:</strong> {{ context_summary.status }}</div>
       <div><strong>{{ _("Registros") }}:</strong> {{ context_summary.records }}</div>
     </div>
+    {% if unclassified_warning %}
+    <div class="alert alert-warning mb-0" role="alert">
+      <strong>{{ _("Advertencia") }}:</strong> {{ unclassified_warning }}
+    </div>
+    {% endif %}
     <div class="ca-report-table-wrapper">
       <table class="ca-table ca-report-table">
         <caption style="display:none;">{{ report_title }}</caption>

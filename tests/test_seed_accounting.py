@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
+from datetime import date
 import json
 from decimal import Decimal
 from cacao_accounting import create_app
 from cacao_accounting.database import (
+    Accounts,
     Book,
     BankAccount,
     ComprobanteContable,
@@ -251,3 +253,65 @@ def test_reportes_financieros(app):
         # En el seed actual solo hay saldos iniciales en cuentas de activo y patrimonio
         # pero validamos que el reporte se ejecute sin errores y balancee.
         assert "net_profit" in income_statement.totals
+
+
+def test_financial_reports_expose_accounts_with_unknown_classification(app):
+    """Las cuentas con clasificación desconocida aparecen como excluidas y generan advertencia."""
+    with app.app_context():
+        book = database.session.execute(database.select(Book).filter_by(entity="cacao", code="LOCAL")).scalar_one()
+        baseline = get_income_statement_report(FinancialReportFilters(company="cacao", ledger="LOCAL"))
+        baseline_balance = get_balance_sheet_report(FinancialReportFilters(company="cacao", ledger="LOCAL"))
+        baseline_count = baseline.totals.get("unclassified_accounts", 0)
+        baseline_amount = baseline.totals.get("unclassified_amount", Decimal("0"))
+        account = Accounts(
+            entity="cacao",
+            code="9.99.99",
+            name="Cuenta sin clasificación",
+            active=True,
+            enabled=True,
+            group=False,
+            classification="clasificacion-no-valida",
+        )
+        database.session.add(account)
+        database.session.flush()
+        database.session.add(
+            GLEntry(
+                posting_date=date.today(),
+                company="cacao",
+                ledger_id=book.id,
+                account_id=account.id,
+                account_code=account.code,
+                debit=Decimal("25"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="UNCLASSIFIED-REPORT-01",
+            )
+        )
+        database.session.commit()
+
+        filters = FinancialReportFilters(company="cacao", ledger="LOCAL")
+        income = get_income_statement_report(filters)
+        balance = get_balance_sheet_report(filters)
+
+        assert income.totals["unclassified_accounts"] == baseline_count + 1
+        assert income.totals["unclassified_amount"] == baseline_amount + Decimal("25")
+        assert any(
+            row.values["section"] == "unclassified" and row.values["account_code"] == account.code for row in income.rows
+        )
+        assert balance.totals["unclassified_accounts"] == baseline_balance.totals.get("unclassified_accounts", 0) + 1
+        assert any(
+            row.values["section"] == "unclassified" and row.values["account_code"] == account.code for row in balance.rows
+        )
+
+
+def test_account_form_rejects_unknown_classification(app):
+    """El formulario contable rechaza clasificaciones fuera del catálogo permitido."""
+    from cacao_accounting.contabilidad.forms import FormularioCuenta, validar_clasificacion_de_cuenta
+    from wtforms.validators import ValidationError
+
+    with app.test_request_context("/"):
+        form = FormularioCuenta()
+        form.clasificacion.data = "clasificacion-no-valida"
+
+        with pytest.raises(ValidationError):
+            validar_clasificacion_de_cuenta(form, form.clasificacion)
