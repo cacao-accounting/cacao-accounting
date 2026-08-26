@@ -133,6 +133,7 @@ class BankStatementAdapter(BaseImportAdapter):
     def persist_document(self, document: Any) -> None:
         """Persist bank transactions to the database."""
         seen: set[tuple[Any, ...]] = set()
+        persisted_ids: list[str] = []
         for tx_data in document:
             bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
             if bank_account is None:
@@ -175,3 +176,31 @@ class BankStatementAdapter(BaseImportAdapter):
                 withdrawal=tx_data.get("withdrawal"),
             )
             database.session.add(tx)
+            database.session.flush()
+            persisted_ids.append(str(tx.id))
+        self._auto_reconcile(persisted_ids)
+
+    def _auto_reconcile(self, persisted_ids: list[str]) -> None:
+        """Intenta la conciliación automática opcional de las filas importadas.
+
+        Solo actúa cuando existen reglas activas con ``auto_reconcile``
+        habilitado; un fallo de conciliación individual no revierte la
+        importación y deja la transacción pendiente para revisión manual.
+        """
+        if not persisted_ids:
+            return
+        from cacao_accounting.bancos.reconciliation_service import BankReconciliationError
+        from cacao_accounting.bancos.statement_service import (
+            BankStatementError,
+            auto_reconcile_bank_transaction,
+        )
+
+        for transaction_id in persisted_ids:
+            try:
+                # Savepoint: un fallo controlado de conciliación automática no
+                # revierte la importación de la fila del extracto; el propio
+                # context manager deshace solo el intento fallido.
+                with database.session.begin_nested():
+                    auto_reconcile_bank_transaction(transaction_id)
+            except (BankStatementError, BankReconciliationError):
+                pass

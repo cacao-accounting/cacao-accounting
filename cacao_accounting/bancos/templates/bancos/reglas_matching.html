@@ -2,25 +2,29 @@
 {% block contenido %}
 <div class="ca-page-header"><h4>{{ _("Reglas de Matching Bancario") }}</h4></div>
 <form method="post" class="mb-4">
-  <div class="row g-2">
+  <div class="row g-2 align-items-center">
     <div class="col-md-2"><input class="form-control" name="company" placeholder="{{ _('Compañía') }}" required></div>
     <div class="col-md-2"><select class="form-select" name="bank_account_id"><option value="">{{ _("Todas") }}</option>{% for account in accounts %}<option value="{{ account.id }}">{{ account.account_name }}</option>{% endfor %}</select></div>
     <div class="col-md-2"><input class="form-control" name="name" placeholder="{{ _('Nombre') }}" required></div>
     <div class="col-md-1"><input class="form-control" name="days_tolerance" value="7"></div>
     <div class="col-md-1"><input class="form-control" name="amount_tolerance" value="0"></div>
-    <div class="col-md-2"><input class="form-control" name="reference_contains" placeholder="{{ _('Referencia') }}"></div>
+    <div class="col-md-1"><input class="form-control" name="reference_contains" placeholder="{{ _('Referencia') }}"></div>
     <div class="col-md-1"><input class="form-control" name="priority" value="100"></div>
+    <div class="col-md-1 form-check ms-2">
+      <input class="form-check-input" type="checkbox" name="auto_reconcile" id="auto_reconcile" value="1">
+      <label class="form-check-label small" for="auto_reconcile">{{ _("Auto-conciliar") }}</label>
+    </div>
     <div class="col-md-1"><button class="btn btn-primary">{{ _("Guardar") }}</button></div>
   </div>
 </form>
-<p class="text-muted small mb-2">{{ _("Estas reglas controlan el matching bancario y se organizan por prioridad y alcance de compañía.") }}</p>
+<p class="text-muted small mb-2">{{ _("Estas reglas controlan el matching bancario y se organizan por prioridad y alcance de compañía. Las tolerancias configuradas amplían la ventana de fechas y el rango de montos aceptados por el motor de candidatos. Con Auto-conciliar activado, al importar un extracto se aplica automáticamente la conciliación cuando existe un único candidato exacto dentro de las tolerancias, dejando registro auditable.") }}</p>
 <table class="table table-sm">
   <caption class="visually-hidden">{{ _("Reglas de matching bancario") }}</caption>
-  <thead><tr><th>{{ _("Prioridad") }}</th><th>{{ _("Nombre") }}</th><th>{{ _("Compañía") }}</th><th>{{ _("Referencia") }}</th><th>{{ _("Ejecutar") }}</th></tr></thead>
+  <thead><tr><th>{{ _("Prioridad") }}</th><th>{{ _("Nombre") }}</th><th>{{ _("Compañía") }}</th><th>{{ _("Referencia") }}</th><th>{{ _("Días") }}</th><th>{{ _("Tolerancia monto") }}</th><th>{{ _("Auto-conciliar") }}</th><th>{{ _("Ejecutar") }}</th></tr></thead>
   <tbody>
     {% for rule in rules %}
     <tr>
-      <td>{{ rule.priority }}</td><td>{{ rule.name }}</td><td>{{ rule.company }}</td><td>{{ rule.reference_contains or "" }}</td>
+      <td>{{ rule.priority }}</td><td>{{ rule.name }}</td><td>{{ rule.company }}</td><td>{{ rule.reference_contains or "" }}</td><td>{{ rule.days_tolerance }}</td><td>{{ rule.amount_tolerance }}</td><td>{{ _("Sí") if rule.auto_reconcile else _("No") }}</td>
       <td>
         <form method="post" action="{{ url_for('bancos.bancos_regla_matching_ejecutar', rule_id=rule.id) }}" class="d-flex gap-1">
           <select class="form-select form-select-sm" name="bank_account_id">{% for account in accounts %}<option value="{{ account.id }}">{{ account.account_name }}</option>{% endfor %}</select>

@@ -4059,6 +4059,7 @@ class BankMatchingRule(database.Model, BaseTabla):  # type: ignore[name-defined]
     reference_contains = database.Column(database.String(100), nullable=True)
     priority = database.Column(database.Integer(), default=100, nullable=False, index=True)
     is_active = database.Column(database.Boolean(), default=True, nullable=False, index=True)
+    auto_reconcile = database.Column(database.Boolean(), default=False, nullable=False)
 
 
 # <---------------------------------------------------------------------------------------------> #

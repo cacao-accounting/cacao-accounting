@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 
 from cacao_accounting.database import (
     BankAccount,
+    BankMatchingRule,
     BankTransaction,
     Entity,
     ExchangeRate,
@@ -489,9 +490,11 @@ def _candidate_score(
     amount: Decimal,
     posting_date: date,
     reference_no: str | None,
+    amount_tolerance: Decimal = Decimal("0"),
 ) -> int:
+    """Puntúa un candidato: monto dentro de tolerancia (+60), fecha exacta (+25) y referencia (+15)."""
     score = 0
-    if amount == _bank_amount(bank_transaction):
+    if abs(amount - _bank_amount(bank_transaction)) <= amount_tolerance:
         score += 60
     if posting_date == bank_transaction.posting_date:
         score += 25
@@ -510,9 +513,12 @@ def _append_candidate(
     reference_no: str | None,
     bank_transaction: BankTransaction,
     pending: Decimal,
+    amount_tolerance: Decimal = Decimal("0"),
 ) -> None:
     """Agrega un candidato con el score y estado derivados."""
-    allocated_amount = min(amount, pending, _bank_amount(bank_transaction))
+    bank_amount = _bank_amount(bank_transaction)
+    allocated_amount = min(amount, pending, bank_amount)
+    within_tolerance = abs(amount - bank_amount) <= amount_tolerance
     candidates.append(
         BankCandidate(
             reference_type=reference_type,
@@ -525,14 +531,60 @@ def _append_candidate(
                 amount=amount,
                 posting_date=posting_date,
                 reference_no=reference_no,
+                amount_tolerance=amount_tolerance,
             ),
-            status="exact" if pending == amount == _bank_amount(bank_transaction) else "partial",
+            status="exact" if (pending == amount and within_tolerance) else "partial",
         )
     )
 
 
-def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool = False) -> list[BankCandidate]:
-    """Busca pagos y GL bancario candidatos para una transaccion bancaria."""
+def _resolve_rule_tolerances(transaction: BankTransaction, company: str) -> tuple[int, Decimal]:
+    """Resuelve las tolerancias desde las reglas activas aplicables.
+
+    Cuando ``find_bank_reconciliation_candidates`` se invoca sin
+    tolerancias explícitas (p. ej. desde el panel de conciliación o las
+    sugerencias), se consultan las reglas activas para la cuenta y
+    compañía de la transacción.  Se toma la ventana de días y la
+    tolerancia de monto más amplias entre las reglas cuyo alcance
+    (cuenta específica o toda la compañía) aplica; sin reglas aplicables
+    se conservan los valores históricos (7 días, monto exacto).
+    """
+    rows = database.session.execute(
+        select(BankMatchingRule.days_tolerance, BankMatchingRule.amount_tolerance).where(
+            BankMatchingRule.company == company,
+            BankMatchingRule.is_active.is_(True),
+            database.or_(
+                BankMatchingRule.bank_account_id == transaction.bank_account_id,
+                BankMatchingRule.bank_account_id.is_(None),
+            ),
+        )
+    ).all()
+    days = 7
+    amount_tolerance = Decimal("0")
+    for rule_days, rule_amount in rows:
+        if rule_days is not None and int(rule_days) > days:
+            days = int(rule_days)
+        tolerance = _decimal_value(rule_amount)
+        if tolerance > amount_tolerance:
+            amount_tolerance = tolerance
+    return days, amount_tolerance
+
+
+def find_bank_reconciliation_candidates(
+    bank_transaction_id: str,
+    *,
+    lock: bool = False,
+    days_tolerance: int | None = None,
+    amount_tolerance: Decimal | None = None,
+) -> list[BankCandidate]:
+    """Busca pagos y GL bancario candidatos para una transaccion bancaria.
+
+    Los parámetros ``days_tolerance`` y ``amount_tolerance`` amplían
+    respectivamente la ventana de fechas y el rango de montos aceptables.
+    Sin valores explícitos se resuelven desde las reglas de matching
+    activas aplicables a la cuenta/compañía, de modo que las tolerancias
+    configuradas afectan realmente al motor de candidatos y al scoring.
+    """
     transaction = database.session.get(BankTransaction, bank_transaction_id, with_for_update=lock)
     if not transaction:
         raise BankReconciliationError("La transaccion bancaria no existe.")
@@ -541,8 +593,15 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool 
     if amount <= 0:
         raise BankReconciliationError("La transaccion bancaria no tiene monto conciliable.")
 
-    date_from = transaction.posting_date - timedelta(days=7)
-    date_to = transaction.posting_date + timedelta(days=7)
+    if days_tolerance is None or amount_tolerance is None:
+        resolved_days, resolved_amount = _resolve_rule_tolerances(transaction, company)
+        if days_tolerance is None:
+            days_tolerance = resolved_days
+        if amount_tolerance is None:
+            amount_tolerance = resolved_amount
+
+    date_from = transaction.posting_date - timedelta(days=max(0, days_tolerance))
+    date_to = transaction.posting_date + timedelta(days=max(0, days_tolerance))
     candidates: list[BankCandidate] = []
     bank_currency = _bank_currency(transaction)
     company_currency = _company_currency(company)
@@ -590,6 +649,7 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool 
             reference_no=payment.reference_no,
             bank_transaction=transaction,
             pending=pending,
+            amount_tolerance=amount_tolerance,
         )
 
     bank_gl_account_id = _bank_gl_account_id(transaction)
@@ -632,6 +692,7 @@ def find_bank_reconciliation_candidates(bank_transaction_id: str, *, lock: bool 
                 reference_no=entry.document_no,
                 bank_transaction=transaction,
                 pending=pending,
+                amount_tolerance=amount_tolerance,
             )
 
     return sorted(candidates, key=lambda candidate: candidate.score, reverse=True)

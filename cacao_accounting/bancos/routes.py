@@ -549,6 +549,7 @@ def bancos_reglas_matching():
             reference_contains=request.form.get("reference_contains") or None,
             priority=int(request.form.get("priority") or 100),
             is_active=bool(request.form.get("is_active", "1")),
+            auto_reconcile=bool(request.form.get("auto_reconcile")),
         )
         database.session.add(rule)
         database.session.commit()
