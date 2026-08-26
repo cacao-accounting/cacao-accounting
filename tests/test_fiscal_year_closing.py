@@ -204,6 +204,56 @@ def test_fiscal_year_closing_cycle(app, setup_data):
         assert fy.closing_voucher_id is None
 
 
+def test_fiscal_year_closing_blocks_cross_year_reversal(app, setup_data):
+    """El cierre anual bloquea una reversa publicada después del año original."""
+    with app.app_context():
+        income_account = database.session.execute(
+            database.select(Accounts).filter_by(entity="CMP", code=setup_data["income_acc_code"])
+        ).scalar_one()
+        original = GLEntry(
+            posting_date=date(2024, 12, 20),
+            company="CMP",
+            ledger_id="GEN",
+            account_id=income_account.id,
+            account_code=setup_data["income_acc_code"],
+            debit=Decimal("100"),
+            credit=Decimal("0"),
+            voucher_type="journal_entry",
+            voucher_id="JV-ORIGINAL-734",
+            is_reversal=False,
+            is_cancelled=False,
+        )
+        database.session.add(original)
+        database.session.flush()
+        reversal = GLEntry(
+            posting_date=date(2025, 1, 5),
+            company="CMP",
+            ledger_id="GEN",
+            account_id=income_account.id,
+            account_code=setup_data["income_acc_code"],
+            debit=Decimal("0"),
+            credit=Decimal("100"),
+            voucher_type="journal_entry",
+            voucher_id="JV-REVERSAL-734",
+            is_reversal=True,
+            reversal_of=original.id,
+            is_cancelled=False,
+        )
+        database.session.add(reversal)
+        fiscal_year = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
+        fiscal_year.is_closed = True
+        period = database.session.execute(
+            database.select(AccountingPeriod).filter_by(fiscal_year_id=fiscal_year.id)
+        ).scalar_one()
+        period.is_closed = True
+        database.session.commit()
+
+        with pytest.raises(ValueError, match="reversas publicadas posteriormente") as excinfo:
+            create_fiscal_year_closing_voucher("CMP", fiscal_year.id, setup_data["admin_user_id"])
+        assert "JV-ORIGINAL-734" in str(excinfo.value)
+        assert "JV-REVERSAL-734" in str(excinfo.value)
+
+
 def test_multiannual_balance_sheet_balanced(app, setup_data):
     from cacao_accounting.reportes.services import get_balance_sheet_report, FinancialReportFilters
 

@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import aliased
 
 from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
 from cacao_accounting.database import (
@@ -25,6 +26,29 @@ from cacao_accounting.ledger_queries import primary_ledger_id
 
 class FiscalYearClosingError(ValueError):
     """Error en el proceso de cierre de año fiscal."""
+
+
+def _cross_year_reversal_pairs(company: str, fiscal_year: FiscalYear) -> list[tuple[str, str]]:
+    """Return original/reversal voucher pairs that cross the fiscal-year boundary."""
+    original = aliased(GLEntry)
+    reversal = aliased(GLEntry)
+    query = (
+        select(original.voucher_id, reversal.voucher_id)
+        .join(reversal, reversal.reversal_of == original.id)
+        .where(
+            original.company == company,
+            original.posting_date >= fiscal_year.year_start_date,
+            original.posting_date <= fiscal_year.year_end_date,
+            original.is_reversal.is_(False),
+            original.is_cancelled.is_(False),
+            reversal.company == company,
+            reversal.posting_date > fiscal_year.year_end_date,
+            reversal.is_reversal.is_(True),
+            reversal.is_cancelled.is_(False),
+        )
+        .distinct()
+    )
+    return [(str(original_id), str(reversal_id)) for original_id, reversal_id in database.session.execute(query).all()]
 
 
 def calculate_closing_balances(
@@ -221,6 +245,13 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
         raise FiscalYearClosingError("El año fiscal debe estar cerrado administrativamente antes del cierre contable.")
     if fiscal_year.financial_closed:
         raise FiscalYearClosingError("El año fiscal ya tiene un cierre contable realizado.")
+
+    reversal_pairs = _cross_year_reversal_pairs(company, fiscal_year)
+    if reversal_pairs:
+        details = ", ".join(f"{original} → {reversal}" for original, reversal in reversal_pairs)
+        raise FiscalYearClosingError(
+            f"No se puede cerrar el año fiscal: existen reversas publicadas posteriormente ({details})."
+        )
 
     books = list(
         database.session.execute(
