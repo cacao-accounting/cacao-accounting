@@ -72,18 +72,21 @@
 
   {% if from_return_id or from_invoice_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+         warehouses_disponibles=bodegas_disponibles,
          source_api_url="/api/document-flow/pending-lines?source_type=sales_invoice&target_type=sales_invoice&source_id=" ~ from_invoice_id ~ "&company=" ~ factura_origen.company,
          source_label="Factura de Venta") }}
   {% elif from_note_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+         warehouses_disponibles=bodegas_disponibles,
          source_api_url="/api/document-flow/pending-lines?source_type=delivery_note&target_type=sales_invoice&source_id=" ~ from_note_id ~ "&company=" ~ entrega_origen.company,
          source_label="Nota de Entrega") }}
   {% elif from_order_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
+         warehouses_disponibles=bodegas_disponibles,
          source_api_url="/api/document-flow/pending-lines?source_type=sales_order&target_type=sales_invoice&source_id=" ~ from_order_id ~ "&company=" ~ orden_origen.company,
          source_label="Orden de Venta") }}
   {% else %}
-  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles) }}
+  {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, warehouses_disponibles=bodegas_disponibles) }}
   {% endif %}
 </form>
 

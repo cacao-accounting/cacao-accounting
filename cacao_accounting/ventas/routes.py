@@ -25,6 +25,7 @@ from cacao_accounting.database import (
     SalesRequest,
     SalesRequestItem,
     UOM,
+    Warehouse,
     database,
 )
 
@@ -1867,12 +1868,19 @@ def ventas_factura_venta_nuevo():
     elif src["from_invoice_id"]:
         initial_source_type = "sales_invoice"
 
+    bodegas_disponibles = [
+        {"code": warehouse.code, "name": warehouse.name}
+        for (warehouse,) in database.session.execute(database.select(Warehouse).filter_by(company=company_id)).all()
+    ]
+
     transaction_config = {
         "formKey": _FORMKEY_SALES_INVOICE,
         "viewKey": "draft",
         "enableBatchSerial": True,
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "warehouses": bodegas_disponibles,
+        "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "initialSourceType": initial_source_type,
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
@@ -1906,6 +1914,7 @@ def ventas_factura_venta_nuevo():
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+        bodegas_disponibles=bodegas_disponibles,
         update_inventory_checked=formulario.update_inventory.data,
     )
 
@@ -1968,6 +1977,10 @@ def ventas_factura_venta_editar(invoice_id: str):
         for (item,) in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
+    bodegas_disponibles = [
+        {"code": warehouse.code, "name": warehouse.name}
+        for (warehouse,) in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
+    ]
 
     if request.method == "POST":
         return _handle_sales_invoice_edit_post(registro)
@@ -1979,6 +1992,8 @@ def ventas_factura_venta_editar(invoice_id: str):
         "enableBatchSerial": True,
         "items": items_disponibles,
         "uoms": uoms_disponibles,
+        "warehouses": bodegas_disponibles,
+        "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
@@ -1999,6 +2014,7 @@ def ventas_factura_venta_editar(invoice_id: str):
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
                 "amount": str(item.amount or 0),
+                "warehouse": item.warehouse or "",
                 "batch_id": item.batch_id or "",
                 "serial_no": item.serial_no or "",
                 **get_target_line_source("sales_invoice", item.id),
@@ -2025,6 +2041,7 @@ def ventas_factura_venta_editar(invoice_id: str):
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         transaction_config=transaction_config,
+        bodegas_disponibles=bodegas_disponibles,
         update_inventory_checked=registro.update_inventory,
     )
 

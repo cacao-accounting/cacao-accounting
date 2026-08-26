@@ -23,6 +23,7 @@ from cacao_accounting.database import (
     SalesOrder,
     SalesOrderItem,
     database,
+    Warehouse,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
 from cacao_accounting.document_flow import DocumentFlowError
@@ -114,6 +115,21 @@ def test_sales_order_new_handles_unexpected_error(app_ctx):
             # No debe propagar la excepcion (500); debe capturarla y retornar None.
             result = _handle_sales_order_new_post(None, None)
     assert result is None
+
+
+def test_sales_invoice_form_exposes_company_warehouses(app_ctx):
+    """La factura de venta muestra la bodega por línea para crear la DN correcta."""
+    client = app_ctx.test_client()
+    client.post("/login", data={"usuario": "cacao", "acceso": "cacao"}, follow_redirects=True)
+
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="cacao")).scalars().first()
+    assert warehouse is not None
+    response = client.get("/sales/sales-invoice/new?company=cacao")
+
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert '"field": "warehouse"' in html
+    assert warehouse.code in html
 
 
 def test_sales_document_totals_convert_transaction_currency(app_ctx):
