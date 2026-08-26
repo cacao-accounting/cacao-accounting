@@ -267,3 +267,19 @@ Se reprodujo empíricamente el escenario exacto del issue (entidad NIO, cuenta b
 - No se modificó código de producción: la conversión actual es matemáticamente correcta bajo la convención documentada del par (origen -> destino) y está cubierta además por `test_bank_balance_converts_functional_only_gl_amounts`.
 - La nueva prueba de regresión congela el escenario y los criterios de aceptación del issue para detectar si una futura refactorización de `_closing_rate` rompe la normalización de dirección.
 - El único riesgo residual detectado es de datos: un par NIO->USD capturado manualmente con el valor estilo USD->NIO (36.6243 en vez de 0.0273) engaña a cualquier consumidor de la tabla; eso es validación de captura, no un defecto de esta función.
+
+### Petición del usuario
+
+Atender el issue #731: «MEDIUM: Purchase request cannot close when lines were ordered directly without comparison round». El cierre de una Solicitud de Compra exigía que todas sus líneas estuvieran cubiertas por un comparativo finalizado con oferta seleccionada, dejando permanentemente incerrables las PR con líneas compradas por asignación directa (sin comparativo).
+
+### Plan implementado
+
+Se añadió `purchase_request_direct_order_item_ids` (líneas con relación activa hacia una Orden de Compra aprobada), `purchase_request_line_closure_reasons` (motivo legible por línea: comparativo u orden directa), y `purchase_request_is_ready_to_close` como nueva compuerta de cierre que acepta cobertura por comparativo o por orden directa. La ruta de cierre y el flag `can_close` del detalle usan ahora la nueva compuerta; al cerrar se registra una entrada de auditoría por línea (`log_line_closure`, acción `closed`) con el motivo correspondiente. Además se corrigió en `audit_trail_service._doc_info` la caída por defecto a nombre de clase CamelCase (p.ej. `PurchaseRequest`) que impedía que la línea de tiempo de documentos DocBase consultada por doctype snake_case (`purchase_request`) mostrara entradas; ahora se normaliza a snake_case. Pruebas nuevas en `tests/test_purchase_request_close.py` cubren PR mixta por servicio y por HTTP, rechazo de órdenes borrador/revertidas, rechazo de cierre con línea descubierta y el tipo de documento snake_case en auditoría.
+
+### Decisiones de diseño
+
+- La cobertura directa exige relación `active` y Orden de Compra `docstatus == 1`: una OC borrador no compromete la compra y una OC anulada revierte sus relaciones, así que ninguna de las dos cierra la línea.
+- `purchase_request_comparison_is_closed` conserva su semántica original (solo comparativos) para otros consumidores; la compuerta de cierre real es `purchase_request_is_ready_to_close`.
+- Si una línea tiene comparativo finalizado y además orden directa, el motivo auditado prioriza el comparativo (`setdefault`) para reflejar la decisión de abastecimiento.
+- El motivo por línea se registra como entrada de auditoría independiente (acción permitida `closed`) en lugar de un comentario único, para trazabilidad granular por línea exigida por el issue.
+- La normalización snake_case en `_doc_info` no afecta modelos con columna `document_type` explícita y corrige de paso la línea de tiempo vacía en detalles de solicitudes, órdenes, asientos y demás documentos DocBase.

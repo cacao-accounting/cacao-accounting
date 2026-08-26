@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
@@ -94,13 +95,22 @@ def _current_actor() -> tuple[str | None, str | None]:
     return None, None
 
 
+def _snake_case(name: str) -> str:
+    """Convert a CamelCase class name to the snake_case document type."""
+    stepped = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+    return re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", stepped).lower()
+
+
 def _doc_info(document: Any) -> tuple[str, str, str | None, str | None]:
     doc = _normalize_document(document)
     document_id = str(doc.get("id") or "")
     if not document_id:
         raise AuditTrailServiceError("El documento debe incluir id para registrar auditoría.")
     document_type = str(
-        doc.get("document_type") or doc.get("voucher_type") or doc.get("transaction") or document.__class__.__name__
+        doc.get("document_type")
+        or doc.get("voucher_type")
+        or doc.get("transaction")
+        or _snake_case(document.__class__.__name__)
     )
     document_no = doc.get("document_no") or doc.get("serie") or doc.get("name")
     company = doc.get("company") or doc.get("entity")
@@ -220,6 +230,11 @@ def log_delete_attempt(document: Any) -> AuditTrail:
 def log_comment(document: Any, comment: str) -> AuditTrail:
     """Log a user comment on a document."""
     return _log("commented", document, after=document, comment=comment)
+
+
+def log_line_closure(document: Any, comment: str) -> AuditTrail:
+    """Log a per-line closure reason against a document."""
+    return _log("closed", document, after=document, comment=comment)
 
 
 def log_email_sent(

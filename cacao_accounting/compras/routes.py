@@ -40,7 +40,8 @@ from cacao_accounting.compras.purchase_request_comparison_service import (
     create_purchase_orders_from_comparison,
     create_purchase_request_comparison,
     finalize_purchase_request_comparison,
-    purchase_request_comparison_is_closed,
+    purchase_request_is_ready_to_close,
+    purchase_request_line_closure_reasons,
     save_purchase_request_comparison_draft,
     supplier_quotations_for_comparison,
     supplier_quotations_for_request,
@@ -92,7 +93,14 @@ from cacao_accounting.database import (
 )
 
 
-from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit, log_update
+from cacao_accounting.audit_trail_service import (
+    format_document_timeline,
+    log_cancel,
+    log_create,
+    log_line_closure,
+    log_submit,
+    log_update,
+)
 
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 
@@ -423,7 +431,7 @@ def compras_solicitud_compra(request_id: str):
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or request_id) + " - " + APPNAME
     audit_timeline = format_document_timeline("purchase_request", registro.id)
-    can_close = registro.docstatus == 1 and registro.status != "closed" and purchase_request_comparison_is_closed(registro)
+    can_close = registro.docstatus == 1 and registro.status != "closed" and purchase_request_is_ready_to_close(registro)
     return render_template(
         "compras/solicitud_compra.html",
         registro=registro,
@@ -440,19 +448,32 @@ def compras_solicitud_compra(request_id: str):
 @login_required
 @verifica_permiso("purchases", "autorizar")
 def compras_solicitud_compra_close(request_id: str):
-    """Close a purchase request after all its lines have closed comparisons."""
+    """Close a purchase request whose lines are compared or directly ordered."""
     registro = database.session.get(PurchaseRequest, request_id)
     if not registro:
         abort(404)
     exige_acceso_compania("purchases", registro.company, "autorizar")
     if registro.docstatus != 1 or registro.status == "closed":
         abort(400)
-    if not purchase_request_comparison_is_closed(registro):
-        flash("La Solicitud de Compra requiere comparativos cerrados para todas sus líneas.", "danger")
+    if not purchase_request_is_ready_to_close(registro):
+        flash(
+            "La Solicitud de Compra requiere comparativos cerrados u órdenes de compra activas para todas sus líneas.",
+            "danger",
+        )
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
     before = {"status": registro.status}
     registro.status = "closed"
     log_update(registro, before=before, after={"status": registro.status})
+    request_items = {
+        item.id: item
+        for item in database.session.execute(database.select(PurchaseRequestItem).filter_by(purchase_request_id=registro.id))
+        .scalars()
+        .all()
+    }
+    for item_id, reason in sorted(purchase_request_line_closure_reasons(registro).items()):
+        item = request_items.get(item_id)
+        label = (item.item_code or item.id) if item else item_id
+        log_line_closure(registro, f"Cierre de línea {label}: {reason}")
     database.session.commit()
     flash("Solicitud de Compra cerrada correctamente.", "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))

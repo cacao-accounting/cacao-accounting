@@ -431,18 +431,9 @@ def finalize_purchase_request_comparison(
     database.session.flush()
 
 
-def purchase_request_comparison_is_closed(purchase_request: PurchaseRequest) -> bool:
-    """Return whether closed comparisons cover every request line."""
-    request_item_ids = set(
-        database.session.execute(
-            database.select(PurchaseRequestItem.id).where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
-        )
-        .scalars()
-        .all()
-    )
-    if not request_item_ids:
-        return False
-    covered_item_ids = set(
+def purchase_request_comparison_covered_item_ids(purchase_request: PurchaseRequest) -> set[str]:
+    """Return request line ids covered by a closed comparison with selected offer."""
+    return set(
         database.session.execute(
             database.select(PurchaseRequestComparisonLine.purchase_request_item_id)
             .join(
@@ -458,7 +449,111 @@ def purchase_request_comparison_is_closed(purchase_request: PurchaseRequest) -> 
         .scalars()
         .all()
     )
-    return request_item_ids.issubset(covered_item_ids)
+
+
+def purchase_request_comparison_is_closed(purchase_request: PurchaseRequest) -> bool:
+    """Return whether closed comparisons cover every request line.
+
+    This gate only measures comparison coverage; lines ordered by direct
+    assignment are recognized by :func:`purchase_request_is_ready_to_close`,
+    the actual precondition to close a purchase request.
+    """
+    request_item_ids = set(
+        database.session.execute(
+            database.select(PurchaseRequestItem.id).where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
+        )
+        .scalars()
+        .all()
+    )
+    if not request_item_ids:
+        return False
+    return request_item_ids.issubset(purchase_request_comparison_covered_item_ids(purchase_request))
+
+
+def purchase_request_direct_order_item_ids(purchase_request: PurchaseRequest) -> set[str]:
+    """Return request line ids ordered directly through an approved purchase order."""
+    request_item_ids = list(
+        database.session.execute(
+            database.select(PurchaseRequestItem.id).where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
+        )
+        .scalars()
+        .all()
+    )
+    if not request_item_ids:
+        return set()
+    return set(
+        database.session.execute(
+            database.select(DocumentRelation.source_item_id)
+            .join(PurchaseOrder, PurchaseOrder.id == DocumentRelation.target_id)
+            .where(
+                DocumentRelation.source_type == "purchase_request",
+                DocumentRelation.source_id == purchase_request.id,
+                DocumentRelation.source_item_id.in_(request_item_ids),
+                DocumentRelation.target_type == "purchase_order",
+                DocumentRelation.status == "active",
+                PurchaseOrder.docstatus == 1,
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+def purchase_request_line_closure_reasons(purchase_request: PurchaseRequest) -> dict[str, str]:
+    """Return one human-readable closure reason per closable request line."""
+    reasons: dict[str, str] = {}
+    comparison_rows = database.session.execute(
+        database.select(PurchaseRequestComparisonLine.purchase_request_item_id, PurchaseRequestComparison)
+        .join(
+            PurchaseRequestComparison,
+            PurchaseRequestComparison.id == PurchaseRequestComparisonLine.comparison_id,
+        )
+        .where(
+            PurchaseRequestComparison.purchase_request_id == purchase_request.id,
+            PurchaseRequestComparison.status.in_(("finalized", "used")),
+            PurchaseRequestComparisonLine.selected_supplier_quotation_id.is_not(None),
+        )
+    ).all()
+    for item_id, comparison in comparison_rows:
+        label = comparison.document_no or comparison.id
+        reasons.setdefault(item_id, f"Comparativo {label} finalizado con oferta seleccionada.")
+    direct_rows = database.session.execute(
+        database.select(DocumentRelation.source_item_id, PurchaseOrder)
+        .join(PurchaseOrder, PurchaseOrder.id == DocumentRelation.target_id)
+        .where(
+            DocumentRelation.source_type == "purchase_request",
+            DocumentRelation.source_id == purchase_request.id,
+            DocumentRelation.target_type == "purchase_order",
+            DocumentRelation.status == "active",
+            PurchaseOrder.docstatus == 1,
+        )
+    ).all()
+    for item_id, order in direct_rows:
+        label = order.document_no or order.id
+        reasons.setdefault(item_id, f"Orden de Compra directa {label} sin comparativo.")
+    return reasons
+
+
+def purchase_request_is_ready_to_close(purchase_request: PurchaseRequest) -> bool:
+    """Return whether every request line is closed by comparison or direct order.
+
+    A line counts as closed when a finalized comparison selected an offer for
+    it or when it has an active relation to an approved purchase order, even
+    if no comparison round ever existed for that line.
+    """
+    request_item_ids = set(
+        database.session.execute(
+            database.select(PurchaseRequestItem.id).where(PurchaseRequestItem.purchase_request_id == purchase_request.id)
+        )
+        .scalars()
+        .all()
+    )
+    if not request_item_ids:
+        return False
+    covered = purchase_request_comparison_covered_item_ids(purchase_request) | purchase_request_direct_order_item_ids(
+        purchase_request
+    )
+    return request_item_ids.issubset(covered)
 
 
 def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison) -> list[PurchaseOrder]:
