@@ -5,10 +5,11 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from datetime import date
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from sqlalchemy import func, select
 
@@ -322,10 +323,141 @@ def rebuild_stock_bins(company: str, item_code: str | None = None, warehouse: st
     )
 
 
+def _valuation_group_key(layer: Any) -> tuple[str, str, str, str]:
+    """Clave de agrupacion de capas por comprobante, item y bodega."""
+    return (
+        str(getattr(layer, "voucher_type", "")),
+        str(getattr(layer, "voucher_id", "")),
+        str(getattr(layer, "item_code", "")),
+        str(getattr(layer, "warehouse", "")),
+    )
+
+
+def _valuation_bucket(layer: Any) -> str:
+    """Clasifica una capa por el signo de su cantidad."""
+    qty = _decimal_value(getattr(layer, "qty", None))
+    if qty < 0:
+        return "neg"
+    return "pos" if qty > 0 else "adj"
+
+
+def _clone_valuation_layer(layer: StockValuationLayer) -> StockValuationLayer:
+    """Crea una capa nueva con el contenido historico de otra."""
+    return StockValuationLayer(
+        item_code=layer.item_code,
+        warehouse=layer.warehouse,
+        company=layer.company,
+        qty=_decimal_value(layer.qty),
+        rate=_decimal_value(layer.rate),
+        stock_value_difference=_decimal_value(layer.stock_value_difference),
+        remaining_qty=_decimal_value(layer.remaining_qty),
+        remaining_stock_value=_decimal_value(layer.remaining_stock_value),
+        voucher_type=layer.voucher_type,
+        voucher_id=layer.voucher_id,
+        posting_date=layer.posting_date,
+        source_layer_id=layer.source_layer_id,
+    )
+
+
+def _merge_rebuilt_layers(
+    rebuilt: list[StockValuationLayer], existing: Sequence[StockValuationLayer]
+) -> list[StockValuationLayer]:
+    """Empareja capas reconstruidas con las preexistentes y preserva las huerfanas.
+
+    La correspondencia uno a uno entre ``StockLedgerEntry`` y capas no captura
+    las capas de ajuste de valor (qty = 0) que la conciliacion de inventario
+    publica junto a su capa de consumo, ni las capas de costos capitalizables,
+    que carecen de movimiento en el ledger. Cada capa preexistente se empareja
+    por comprobante, item, bodega y signo con su capa reconstruida: el consumo
+    hereda tasa, valor FIFO y capa origen; los ajustes sin contraparte derivada
+    del ledger se reinseren tras su consumo o en su posicion cronologica. Las
+    capas finales reciben identificadores explicitos y los fijados a capas
+    reconstruidas se remapean a sus nuevas identidades.
+    """
+    prepared: dict[tuple[str, str, str, str], dict[str, list[StockValuationLayer]]] = {}
+    for layer in existing:
+        bucket = _valuation_bucket(layer)
+        prepared.setdefault(_valuation_group_key(layer), {"neg": [], "pos": [], "adj": []})[bucket].append(layer)
+
+    staged: list[StockValuationLayer] = []
+    follow_ups: dict[int, list[StockValuationLayer]] = {}
+    orphan_sources: list[StockValuationLayer] = []
+    pairs: list[tuple[StockValuationLayer, StockValuationLayer]] = []
+    for layer in rebuilt:
+        position = len(staged)
+        staged.append(layer)
+        group = prepared.get(_valuation_group_key(layer))
+        if group is None:
+            continue
+        bucket = _valuation_bucket(layer)
+        paired = group[bucket].pop(0) if group[bucket] else None
+        if paired is not None:
+            pairs.append((paired, layer))
+            if bucket == "neg":
+                layer.rate = _decimal_value(paired.rate)
+                layer.stock_value_difference = _decimal_value(paired.stock_value_difference)
+                layer.source_layer_id = paired.source_layer_id
+            elif bucket == "pos":
+                layer.source_layer_id = paired.source_layer_id
+        if bucket != "neg":
+            continue
+        adjustment = _take_adjustment_for_qty(group["adj"], _decimal_value(layer.remaining_qty))
+        if adjustment is not None:
+            follow_ups.setdefault(position, []).append(_clone_valuation_layer(adjustment))
+    for buckets in prepared.values():
+        orphan_sources.extend(buckets["adj"])
+    orphans = [_clone_valuation_layer(row) for row in sorted(orphan_sources, key=lambda row: (row.posting_date, str(row.id)))]
+    merged: list[StockValuationLayer] = []
+    for position, layer in enumerate(staged):
+        merged.append(layer)
+        merged.extend(follow_ups.get(position, []))
+    dates: list[Any] = [layer.posting_date for layer in merged]
+    for clone in orphans:
+        position = bisect_right(dates, clone.posting_date)
+        merged.insert(position, clone)
+        dates.insert(position, clone.posting_date)
+    _assign_layer_ids(merged, pairs)
+    return merged
+
+
+def _assign_layer_ids(layers: list[StockValuationLayer], pairs: list[tuple[StockValuationLayer, StockValuationLayer]]) -> None:
+    """Fija identificadores secuenciales y remapea fijados entre capas reconstruidas.
+
+    El orden de insercion define el orden de los ULID, de modo que la replica
+    por (fecha, id) de la cola de valuacion respeta la composicion historica.
+    Un fijado que apuntaba a una capa reconstruida se actualiza a su nueva
+    identidad; los que apuntan fuera del alcance se conservan intactos.
+    """
+    identity_map = {str(old.id): new for old, new in pairs if old.id is not None}
+    for layer in layers:
+        layer.id = obtiene_texto_unico()
+    remap: dict[str, str] = {}
+    for old_id, new in identity_map.items():
+        remap[old_id] = str(new.id)
+    for layer in layers:
+        source = layer.source_layer_id
+        if source is not None and str(source) in remap:
+            layer.source_layer_id = remap[str(source)]
+
+
+def _take_adjustment_for_qty(rows: list[StockValuationLayer], remaining_qty: Decimal) -> StockValuationLayer | None:
+    """Reserva la capa de ajuste cuyo saldo coincide con el movimiento consumido."""
+    for index, row in enumerate(rows):
+        if _decimal_value(row.remaining_qty) == remaining_qty:
+            return rows.pop(index)
+    return None
+
+
 def rebuild_stock_valuation_layers(
     company: str, item_code: str | None = None, warehouse: str | None = None, *, dry_run: bool = False
 ) -> StockRebuildResult:
-    """Reconstruye capas FIFO, o previsualiza el resultado sin mutar datos."""
+    """Reconstruye capas FIFO, o previsualiza el resultado sin mutar datos.
+
+    Ademas de la correspondencia entre ledger y capas, preserva las capas de
+    ajuste de valor publicadas por conciliaciones y costos capitalizables para
+    que la cola FIFO reconstruida valore las salidas igual que antes del
+    rebuild.
+    """
     query = select(StockValuationLayer).filter_by(company=company)
     if item_code:
         query = query.filter_by(item_code=item_code)
@@ -361,12 +493,13 @@ def rebuild_stock_valuation_layers(
                 posting_date=entry.posting_date,
             )
         )
+    final_layers = _merge_rebuilt_layers(new_layers, list(existing))
     if not dry_run:
         for layer in existing:
             database.session.delete(layer)
         database.session.flush()
-        database.session.add_all(new_layers)
-    return StockRebuildResult(rebuilt_bins=0, rebuilt_layers=len(new_layers))
+        database.session.add_all(final_layers)
+    return StockRebuildResult(rebuilt_bins=0, rebuilt_layers=len(final_layers))
 
 
 def update_item_with_uoms(

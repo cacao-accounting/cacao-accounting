@@ -299,6 +299,115 @@ def test_valuation_layer_rebuild_dry_run_does_not_mutate_existing_layers(app):
         assert layers[0].rate == Decimal("11")
 
 
+def test_valuation_layer_rebuild_preserva_capa_huerfana_sin_ledger(app):
+    """El rebuild conserva capas de ajuste sin movimiento en el ledger (issue #750).
+
+    Los costos capitalizables publican capas qty=0 con comprobante propio sin
+    StockLedgerEntry; tras reconstruir deben sobrevivir en su posicion
+    cronologica y el consumo conserva su capa origen fijada.
+    """
+    _setup_inventory_test_data(app)
+    with app.app_context():
+        receipt = StockValuationLayer(
+            id="SVL-ORPHAN-RECEIPT",
+            item_code="ITEM-GOODS",
+            warehouse="WH-MAIN",
+            company="cacao",
+            qty=Decimal("10"),
+            rate=Decimal("10"),
+            stock_value_difference=Decimal("100"),
+            remaining_qty=Decimal("10"),
+            remaining_stock_value=Decimal("100"),
+            voucher_type="seed",
+            voucher_id="SEED-RECEIPT",
+            posting_date=date(2026, 1, 1),
+        )
+        orphan = StockValuationLayer(
+            id="SVL-ORPHAN-LANDING",
+            item_code="ITEM-GOODS",
+            warehouse="WH-MAIN",
+            company="cacao",
+            qty=Decimal("0"),
+            rate=Decimal("11"),
+            stock_value_difference=Decimal("20"),
+            remaining_qty=Decimal("10"),
+            remaining_stock_value=Decimal("120"),
+            voucher_type="purchase_invoice",
+            voucher_id="SEED-LANDING",
+            posting_date=date(2026, 1, 2),
+        )
+        consumption = StockValuationLayer(
+            id="SVL-ORPHAN-CONSUMPTION",
+            item_code="ITEM-GOODS",
+            warehouse="WH-MAIN",
+            company="cacao",
+            qty=Decimal("-3"),
+            rate=Decimal("10"),
+            stock_value_difference=Decimal("-30"),
+            remaining_qty=Decimal("7"),
+            remaining_stock_value=Decimal("90"),
+            voucher_type="seed",
+            voucher_id="SEED-DELIVERY",
+            posting_date=date(2026, 1, 3),
+            source_layer_id="SVL-ORPHAN-RECEIPT",
+        )
+        database.session.add_all([receipt, orphan, consumption])
+        database.session.add_all(
+            [
+                StockLedgerEntry(
+                    id="SLE-ORPHAN-RECEIPT",
+                    company="cacao",
+                    posting_date=date(2026, 1, 1),
+                    item_code="ITEM-GOODS",
+                    warehouse="WH-MAIN",
+                    qty_change=Decimal("10"),
+                    qty_after_transaction=Decimal("10"),
+                    valuation_rate=Decimal("10"),
+                    stock_value_difference=Decimal("100"),
+                    stock_value=Decimal("100"),
+                    voucher_type="seed",
+                    voucher_id="SEED-RECEIPT",
+                ),
+                StockLedgerEntry(
+                    id="SLE-ORPHAN-DELIVERY",
+                    company="cacao",
+                    posting_date=date(2026, 1, 3),
+                    item_code="ITEM-GOODS",
+                    warehouse="WH-MAIN",
+                    qty_change=Decimal("-3"),
+                    qty_after_transaction=Decimal("7"),
+                    valuation_rate=Decimal("10"),
+                    stock_value_difference=Decimal("-30"),
+                    stock_value=Decimal("70"),
+                    voucher_type="seed",
+                    voucher_id="SEED-DELIVERY",
+                ),
+            ]
+        )
+        database.session.commit()
+
+        result = rebuild_stock_valuation_layers("cacao", item_code="ITEM-GOODS")
+        assert result.rebuilt_layers == 3
+
+        layers = (
+            database.session.execute(
+                database.select(StockValuationLayer).order_by(StockValuationLayer.posting_date, StockValuationLayer.id)
+            )
+            .scalars()
+            .all()
+        )
+        assert [(layer.voucher_type, layer.qty) for layer in layers] == [
+            ("seed", Decimal("10")),
+            ("purchase_invoice", Decimal("0")),
+            ("seed", Decimal("-3")),
+        ]
+        assert layers[0].stock_value_difference == Decimal("100")
+        assert layers[1].stock_value_difference == Decimal("20")
+        assert layers[1].source_layer_id is None
+        assert layers[2].stock_value_difference == Decimal("-30")
+        assert layers[2].source_layer_id == layers[0].id
+
+
 def test_01_recepcion_ordenes_compra(app):
     """Prueba de Recepción de Compras (PurchaseReceipt) con mercancías y servicios."""
     _setup_inventory_test_data(app)

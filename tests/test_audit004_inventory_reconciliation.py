@@ -73,6 +73,7 @@ from cacao_accounting.ledger_queries import (
     exclude_cancelled_gl_entries,
     exclude_cancelled_stock_entries,
 )
+from cacao_accounting.inventario.service import rebuild_stock_valuation_layers
 from cacao_accounting.reportes.services import (
     OperationalReportFilters,
     ReconciliationFilters,
@@ -897,4 +898,112 @@ def test_gl_salidas_resuelve_costo_del_mayor_persistido(env):
     assert getattr(dn_line, "_inventory_cost_amount", None) is None
     assert _get_delivery_note_line_value(dn_doc, dn_line) == Q("150")
 
+    _assert_consistency(env, [("ITF", WH_A, env["inv_a_id"])])
+
+
+def _svl_stream(item: str, warehouse: str) -> list[tuple[Decimal, Decimal, Decimal]]:
+    """Stream cronologico de capas como tuplas comparables (qty, rate, valor)."""
+    rows = (
+        database.session.execute(
+            select(StockValuationLayer)
+            .filter_by(company=COMPANY, item_code=item, warehouse=warehouse)
+            .order_by(StockValuationLayer.posting_date, StockValuationLayer.id)
+        )
+        .scalars()
+        .all()
+    )
+    return [(_dec(r.qty), _dec(r.rate), _dec(r.stock_value_difference)) for r in rows]
+
+
+def test_rebuild_preserva_ajuste_de_conciliacion_y_costo_posterior(env):
+    """Issue #750: el rebuild conserva la capa de ajuste de valor de la conciliacion.
+
+    Semilla 10@10 = 100; conciliacion a 8 unidades con valor objetivo 90 publica
+    consumo FIFO -20 mas ajuste +10. Tras reconstruir ambas capas sobreviven y
+    la venta siguiente cuesta 90/8 = 11.25 en ambos metodos de valuacion.
+    """
+    _receive(env, WH_A, "ITF", Q("10"), Q("10"), D_MAY_02)
+    _reconcile(env, WH_A, "ITF", Q("8"), Q("90"), Q("11.25"), D_MAY_10)
+    antes = _svl_stream("ITF", WH_A)
+    assert antes == [(Q("10"), Q("10"), Q("100")), (Q("-2"), Q("10"), Q("-20")), (Q("0"), Q("11.25"), Q("10"))]
+
+    resultado = rebuild_stock_valuation_layers(COMPANY)
+    assert resultado.rebuilt_layers == 3
+
+    despues_capas = (
+        database.session.execute(
+            select(StockValuationLayer)
+            .filter_by(company=COMPANY, item_code="ITF", warehouse=WH_A)
+            .order_by(StockValuationLayer.posting_date, StockValuationLayer.id)
+        )
+        .scalars()
+        .all()
+    )
+    assert [(_dec(r.qty), _dec(r.rate), _dec(r.stock_value_difference)) for r in despues_capas] == [
+        (Q("10"), Q("10"), Q("100")),
+        (Q("-2"), Q("10"), Q("-20")),
+        (Q("0"), Q("11.25"), Q("10")),
+    ]
+    if env["method"] == "fifo":
+        assert despues_capas[1].source_layer_id == despues_capas[0].id
+    else:
+        assert despues_capas[1].source_layer_id is None
+
+    _deliver(env, WH_A, "ITF", Q("1"), Q("30"), D_MAY_15)
+    movimiento = (
+        database.session.execute(
+            select(StockLedgerEntry).where(
+                StockLedgerEntry.company == COMPANY,
+                StockLedgerEntry.voucher_type == "delivery_note",
+                StockLedgerEntry.posting_date == D_MAY_15,
+            )
+        )
+        .scalars()
+        .one()
+    )
+    assert -_dec(movimiento.stock_value_difference) == Q("11.25")
+    bin_row = _bin(env, "ITF", WH_A)
+    assert (_dec(bin_row.actual_qty), _dec(bin_row.stock_value)) == (Q("7"), Q("78.75"))
+    _assert_consistency(env, [("ITF", WH_A, env["inv_a_id"])])
+
+
+def test_rebuild_produce_las_mismas_valuaciones_de_salida_que_el_estado_vivo(env):
+    """Criterio #750: la cola tras el rebuild valora igual que sin reconstruir.
+
+    Dos articulos con historial identico (receipts, venta, conciliacion con
+    ajuste de valor y venta) terminan con streams de capas identicos; solo el
+    primero se reconstruye, y la salida posterior cuesta lo mismo en ambos.
+    """
+    _receive(env, WH_A, "ITF", Q("10"), Q("10"), D_MAY_02)
+    _deliver(env, WH_A, "ITF", Q("2"), Q("50"), D_MAY_03)
+    _receive(env, WH_A, "ITF", Q("10"), Q("14"), D_MAY_05)
+    _reconcile(env, WH_A, "ITF", Q("12"), Q("148"), Q("12.333333333"), D_MAY_10)
+
+    _receive(env, WH_B, "ITN", Q("10"), Q("10"), D_MAY_02)
+    _deliver(env, WH_B, "ITN", Q("2"), Q("50"), D_MAY_03)
+    _receive(env, WH_B, "ITN", Q("10"), Q("14"), D_MAY_05)
+    _reconcile(env, WH_B, "ITN", Q("12"), Q("148"), Q("12.333333333"), D_MAY_10)
+
+    referencia = _svl_stream("ITN", WH_B)
+    assert len(referencia) == 5
+
+    rebuild = rebuild_stock_valuation_layers(COMPANY, item_code="ITF")
+    assert rebuild.rebuilt_layers == len(referencia)
+    assert _svl_stream("ITF", WH_A) == referencia
+
+    _deliver(env, WH_A, "ITF", Q("1"), Q("50"), D_MAY_15)
+    _deliver(env, WH_B, "ITN", Q("1"), Q("50"), D_MAY_15)
+    costo_itf = _sle_totals(env, "ITF", WH_A)[1]
+    costo_itn = _sle_totals(env, "ITN", WH_B)[1]
+    assert costo_itf == costo_itn
+    if env["method"] == "fifo":
+        venta_itf = database.session.execute(
+            select(StockLedgerEntry).where(
+                StockLedgerEntry.company == COMPANY,
+                StockLedgerEntry.item_code == "ITF",
+                StockLedgerEntry.voucher_type == "delivery_note",
+                StockLedgerEntry.posting_date == D_MAY_15,
+            )
+        ).scalar_one()
+        assert -_dec(venta_itf.stock_value_difference) == Q("9")
     _assert_consistency(env, [("ITF", WH_A, env["inv_a_id"])])
