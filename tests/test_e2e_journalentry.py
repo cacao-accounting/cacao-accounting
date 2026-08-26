@@ -134,7 +134,7 @@ def test_e2e_journalentry_full_flow_create_edit_submit_and_verify(app_ctx):
 
     updated = database.session.get(ComprobanteContable, journal.id)
     assert updated.memo == "E2E borrador actualizado"
-    assert updated.book == "IFRS"
+    assert updated.book == "FISC"
     assert updated.status == "draft"
 
     verify_update_response = client.get(f"/accounting/journal/{journal.id}")
