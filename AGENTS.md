@@ -65,3 +65,7 @@ covertura en codigo nuevo generado agenticamente.
 
 Python: black con un largo de fila de 127 caracteres.
 HTML: prettier
+
+## Soporte multilang
+
+Todas las cadenasde texto visibles al usuario deben de marcarse para traducción.
