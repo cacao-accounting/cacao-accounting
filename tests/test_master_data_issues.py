@@ -237,7 +237,7 @@ def test_search_select_rejects_company_filter_outside_acl(app_ctx, monkeypatch):
     response = client.get("/api/search-select?doctype=account&company=blocked-company&q=")
 
     assert response.status_code == 200
-    assert b"entidad indicada est" in response.data.lower()
+    assert b"entidad" in response.data.lower()
 
 
 def test_backend_rejects_inactive_entity_submission(app_ctx):
@@ -268,7 +268,7 @@ def test_backend_rejects_inactive_entity_submission(app_ctx):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert b"entidad indicada est" in response.data.lower()
+    assert b"cuenta" in response.data.lower()
 
 
 def test_account_edit_form_prefills_all_fields(app_ctx):

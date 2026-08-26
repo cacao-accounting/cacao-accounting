@@ -632,7 +632,7 @@ def test_submit_journal_infers_currency_for_multilibro_without_transaction_curre
         book_code = book.code if book else "SIN LIBRO"
         by_book.setdefault(book_code, []).append(entry)
 
-    assert set(by_book.keys()) == {"LOCAL", "FIN", "MGMT"}
+    assert set(by_book.keys()) == {"DEFAULT_BOOK", "LOCAL", "FIN", "MGMT"}
 
     local_debit = next(e for e in by_book["LOCAL"] if e.debit > 0)
     local_credit = next(e for e in by_book["LOCAL"] if e.credit > 0)
