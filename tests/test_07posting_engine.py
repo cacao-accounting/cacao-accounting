@@ -166,7 +166,9 @@ def test_foreign_currency_inventory_uses_functional_valuation_and_cogs(app_ctx):
     assert bin_row.stock_value == Decimal("3600.0000")
     assert sum(entry.debit for entry in receipt_entries if entry.account_id == inventory.id) == Decimal("3600.0000")
 
-    delivery = DeliveryNote(company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    delivery = DeliveryNote(
+        company="cacao", posting_date=date(2026, 5, 4), transaction_currency="NIO", base_currency="NIO", docstatus=1
+    )
     database.session.add(delivery)
     database.session.flush()
     database.session.add(
@@ -197,6 +199,62 @@ def test_posting_rejects_company_without_active_ledger(app_ctx):
 
     with pytest.raises(PostingError, match="no tiene libro contable activo"):
         _active_books("cacao")
+
+
+def test_posting_rejects_documents_without_an_explicit_source_currency(app_ctx):
+    """Posting never infers the source currency from the company."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, _document_contexts
+    from cacao_accounting.database import StockEntry
+
+    document = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="material_receipt",
+        base_currency="NIO",
+        docstatus=1,
+    )
+
+    with pytest.raises(PostingError, match="moneda transaccional"):
+        _document_contexts(document)
+
+
+def test_posting_rejects_foreign_documents_without_a_positive_exchange_rate(app_ctx):
+    """A foreign document must carry the positive historical rate it uses."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, _document_contexts
+    from cacao_accounting.database import StockEntry
+
+    document = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="material_receipt",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("0"),
+        docstatus=1,
+    )
+
+    with pytest.raises(PostingError, match="tipo de cambio debe ser mayor"):
+        _document_contexts(document)
+
+
+def test_posting_rejects_active_books_without_a_destination_currency(app_ctx):
+    """A ledger destination currency cannot be inherited from the document."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, _document_contexts
+    from cacao_accounting.database import Book, StockEntry, database
+
+    database.session.add(Book(entity="cacao", code="NO-CURRENCY", name="Libro incompleto", currency=None))
+    database.session.commit()
+    document = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        purpose="material_receipt",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        docstatus=1,
+    )
+
+    with pytest.raises(PostingError, match="NO-CURRENCY.*moneda funcional"):
+        _document_contexts(document)
 
 
 def test_stock_reconciliation_rejects_negative_rate_from_positive_quantity_delta(app_ctx):
@@ -368,6 +426,8 @@ def test_post_sales_invoice_creates_balanced_gl_entries(app_ctx):
         posting_date=date(2026, 5, 4),
         customer_id="CUST-001",
         customer_name="Cliente prueba",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         document_no="cacao-SI-2026-05-00001",
         naming_series_id=None,
@@ -458,6 +518,8 @@ def test_submit_sales_invoice_uses_persisted_fiscal_snapshot(app_ctx):
         posting_date=date(2026, 5, 4),
         customer_id="CUST-SNAP",
         customer_name="Cliente snapshot",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=0,
         total=Decimal("100.00"),
         grand_total=Decimal("115.00"),
@@ -557,6 +619,7 @@ def test_post_comprobante_contable_creates_balanced_gl_entries(app_ctx):
         entity="cacao",
         date=date(2026, 5, 4),
         memo="Comprobante de diario prueba",
+        transaction_currency="NIO",
     )
     database.session.add(journal)
     database.session.flush()
@@ -636,6 +699,8 @@ def test_post_payment_entry_creates_balanced_gl_entries(app_ctx):
         party_type="supplier",
         party_id="SUPP-001",
         party_name="Proveedor prueba",
+        transaction_currency="NIO",
+        base_currency="NIO",
         paid_amount=Decimal("50.00"),
         paid_from_account_id=bank_account.id,
         docstatus=1,
@@ -680,8 +745,8 @@ def test_post_sales_invoice_posts_once_per_active_book(app_ctx):
         classification="income",
         account_type="income",
     )
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", is_primary=True)
-    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", is_primary=False)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", is_primary=True)
+    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", currency="NIO", is_primary=False)
     database.session.add_all([receivable_account, income_account, fiscal_book, ifrs_book])
     database.session.flush()
     database.session.add(PartyAccount(party_id="CUST-ML", company="cacao", receivable_account_id=receivable_account.id))
@@ -689,6 +754,8 @@ def test_post_sales_invoice_posts_once_per_active_book(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 4),
         customer_id="CUST-ML",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("25.00"),
         grand_total=Decimal("25.00"),
@@ -757,6 +824,8 @@ def test_post_document_to_gl_rejects_duplicate_posting(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 4),
         customer_id="CUST-IDEMP",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("10.00"),
         grand_total=Decimal("10.00"),
@@ -785,7 +854,15 @@ def test_post_document_to_gl_rejects_duplicate_posting(app_ctx):
 
 def test_cancel_document_creates_gl_reversals(app_ctx):
     from cacao_accounting.contabilidad.posting import cancel_document, post_document_to_gl
-    from cacao_accounting.database import Accounts, GLEntry, PartyAccount, SalesInvoice, SalesInvoiceItem, database
+    from cacao_accounting.database import (
+        Accounts,
+        DocumentTransition,
+        GLEntry,
+        PartyAccount,
+        SalesInvoice,
+        SalesInvoiceItem,
+        database,
+    )
 
     receivable_account = Accounts(
         entity="cacao",
@@ -812,6 +889,8 @@ def test_cancel_document_creates_gl_reversals(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 4),
         customer_id="CUST-REV",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("80.00"),
         grand_total=Decimal("80.00"),
@@ -833,7 +912,7 @@ def test_cancel_document_creates_gl_reversals(app_ctx):
 
     post_document_to_gl(invoice)
     database.session.commit()
-    reversals = cancel_document(invoice)
+    reversals = cancel_document(invoice, reason="Factura emitida por error")
     database.session.commit()
 
     entries = (
@@ -846,6 +925,27 @@ def test_cancel_document_creates_gl_reversals(app_ctx):
     assert sum(entry.debit for entry in entries) == sum(entry.credit for entry in entries)
     assert sum(entry.is_reversal for entry in entries) == 2
     assert all(entry.is_cancelled for entry in entries if not entry.is_reversal)
+    transition = database.session.execute(
+        database.select(DocumentTransition).filter_by(source_id=invoice.id, transition_type="cancellation")
+    ).scalar_one()
+    assert transition.reason == "Factura emitida por error"
+    assert transition.posting_date == invoice.posting_date
+
+
+def test_cancel_document_requires_reason_when_transition_is_requested(app_ctx):
+    """The transition record never accepts a blank cancellation reason."""
+    from cacao_accounting.contabilidad.posting import PostingError, cancel_document
+    from cacao_accounting.database import SalesInvoice, database
+
+    invoice = SalesInvoice(company="cacao", posting_date=date(2026, 5, 4), docstatus=1)
+    database.session.add(invoice)
+    database.session.commit()
+
+    with pytest.raises(PostingError, match="motivo"):
+        cancel_document(invoice, reason=" ")
+
+    database.session.refresh(invoice)
+    assert invoice.docstatus == 1
 
 
 def test_cancel_purchase_receipt_reverts_stock_and_gl(app_ctx):
@@ -904,6 +1004,8 @@ def test_cancel_purchase_receipt_reverts_stock_and_gl(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 4),
         supplier_id="SUPP-PR",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("50.00"),
         grand_total=Decimal("50.00"),
@@ -1037,6 +1139,8 @@ def test_purchase_receipt_lands_import_costs_into_initial_valuation_layers(app_c
         company="cacao",
         posting_date=date(2026, 5, 4),
         supplier_id="SUPP-IMP",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("200.00"),
         grand_total=Decimal("200.00"),
@@ -1204,6 +1308,8 @@ def test_cancel_delivery_note_reverts_stock_and_gl(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 4),
         customer_id="CUST-DN",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("40.00"),
         grand_total=Decimal("40.00"),
@@ -1443,6 +1549,8 @@ def test_purchase_invoice_with_receipt_records_purchase_reconciliation(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 4),
         supplier_id="SUPP-GR",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("100.00"),
         grand_total=Decimal("100.00"),
@@ -1468,6 +1576,8 @@ def test_purchase_invoice_with_receipt_records_purchase_reconciliation(app_ctx):
         posting_date=date(2026, 5, 4),
         supplier_id="SUPP-GR",
         purchase_receipt_id=receipt.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("100.00"),
         grand_total=Decimal("100.00"),
@@ -1660,6 +1770,8 @@ def test_purchase_credit_note_balances_gl(app_ctx):
         posting_date=date(2026, 5, 4),
         supplier_id="SUPP-CR",
         is_return=True,
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("50.00"),
         grand_total=Decimal("50.00"),
@@ -1737,6 +1849,8 @@ def test_sales_credit_note_balances_gl(app_ctx):
         customer_id="CUST-CR",
         document_type="sales_credit_note",
         is_return=True,
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("50.00"),
         grand_total=Decimal("50.00"),
@@ -1920,6 +2034,8 @@ def test_cancel_document_rejects_closed_accounting_period(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 4),
         supplier_id="SUPP-CL",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("100.00"),
         grand_total=Decimal("100.00"),
@@ -2431,6 +2547,8 @@ def test_post_payment_entry_uses_bank_account_gl_fallback(app_ctx):
         party_id="CUST-FB",
         bank_account_id=bank_account.id,
         received_amount=Decimal("45.00"),
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add_all(
@@ -2650,6 +2768,8 @@ def test_post_payment_entry_without_references_uses_advance_account(app_ctx):
         paid_amount=Decimal("100.00"),
         base_paid_amount=Decimal("100.00"),
         paid_from_account_id=bank_account.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add(payment)
@@ -2723,6 +2843,8 @@ def test_post_payment_entry_partial_reference_balances_open_amount_with_advance(
         company="cacao",
         posting_date=date(2026, 5, 4),
         supplier_id="SUPP-PART",
+        transaction_currency="NIO",
+        base_currency="NIO",
         grand_total=Decimal("60.00"),
         outstanding_amount=Decimal("60.00"),
         base_outstanding_amount=Decimal("60.00"),
@@ -2737,6 +2859,8 @@ def test_post_payment_entry_partial_reference_balances_open_amount_with_advance(
         paid_amount=Decimal("100.00"),
         base_paid_amount=Decimal("100.00"),
         paid_from_account_id=bank_account.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add_all([invoice, payment])
@@ -2820,6 +2944,8 @@ def test_post_bank_transaction_creates_balanced_gl_entries(app_ctx):
         deposit=Decimal("35.00"),
         description="Nota de credito bancaria",
     )
+    transaction.transaction_currency = "NIO"
+    transaction.base_currency = "NIO"
     database.session.add(transaction)
     database.session.commit()
 
@@ -2923,6 +3049,8 @@ def test_post_stock_entry_creates_stock_ledger_bin_valuation_and_gl(app_ctx):
         posting_date=date(2026, 5, 4),
         purpose="material_receipt",
         to_warehouse="WH-ST",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add(entry)
@@ -3573,6 +3701,8 @@ def test_stock_transfer_allows_negative_stock_when_item_is_configured(app_ctx):
         purpose="material_transfer",
         from_warehouse="WH-NEG-A",
         to_warehouse="WH-NEG-B",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add(entry)
@@ -3689,6 +3819,8 @@ def test_stock_transfer_preserves_valuation_cost_from_source(app_ctx):
         purpose="material_transfer",
         from_warehouse="WH-A-COST",
         to_warehouse="WH-B-COST",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add(entry)
@@ -3917,6 +4049,8 @@ def test_negative_stock_allowed_when_item_allows(app_ctx):
         posting_date=date(2026, 6, 4),
         purpose="material_issue",
         from_warehouse="WH-NEG-ALLOW",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add(entry)
@@ -4034,7 +4168,13 @@ def test_manual_stock_receipt_uses_adjustment_account_not_bridge(app_ctx):
         ]
     )
     entry = StockEntry(
-        company="cacao", posting_date=date(2026, 7, 1), purpose="material_receipt", to_warehouse="WH-MAN", docstatus=1
+        company="cacao",
+        posting_date=date(2026, 7, 1),
+        purpose="material_receipt",
+        to_warehouse="WH-MAN",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        docstatus=1,
     )
     database.session.add(entry)
     database.session.flush()
@@ -4276,6 +4416,8 @@ def test_stock_reconciliation_value_adjustment_uses_warehouse_inventory_account_
         posting_date=date(2026, 5, 4),
         purpose="stock_reconciliation",
         to_warehouse="WH-REC",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         adjustment_account_id=adjustment_account.id,
         cost_center_code="CCREC",
@@ -4765,6 +4907,8 @@ def test_payment_debit_note_creates_balanced_gl_entries(app_ctx):
         payment_type="debit_note",
         bank_account_id=bank_account.id,
         paid_amount=Decimal("40.00"),
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add(payment)
@@ -4837,6 +4981,8 @@ def test_payment_credit_note_creates_balanced_gl_entries(app_ctx):
         payment_type="credit_note",
         bank_account_id=bank_account.id,
         received_amount=Decimal("60.00"),
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add(payment)
@@ -4911,8 +5057,8 @@ def test_operational_posting_ignores_ledger_code_and_affects_all_active_books(ap
         classification="income",
         account_type="income",
     )
-    fiscal_book = Book(entity="cacao", code="FISC-T1", name="Fiscal Test 1", is_primary=True)
-    ifrs_book = Book(entity="cacao", code="IFRS-T1", name="IFRS Test 1", is_primary=False)
+    fiscal_book = Book(entity="cacao", code="FISC-T1", name="Fiscal Test 1", currency="NIO", is_primary=True)
+    ifrs_book = Book(entity="cacao", code="IFRS-T1", name="IFRS Test 1", currency="NIO", is_primary=False)
     database.session.add_all([receivable_account, income_account, fiscal_book, ifrs_book])
     database.session.flush()
     database.session.add(PartyAccount(party_id="CUST-ML-TEST", company="cacao", receivable_account_id=receivable_account.id))
@@ -4921,6 +5067,8 @@ def test_operational_posting_ignores_ledger_code_and_affects_all_active_books(ap
         company="cacao",
         posting_date=date(2026, 5, 4),
         customer_id="CUST-ML-TEST",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("100.00"),
         grand_total=Decimal("100.00"),
@@ -5238,6 +5386,8 @@ def test_late_two_way_reclassification_deducts_prior_receipts(app_ctx):
         posting_date=date(2026, 5, 4),
         supplier_id=supp_code,
         purchase_order_id=po_id,
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=0,
         total=Decimal("100.00"),
         grand_total=Decimal("100.00"),
@@ -5319,6 +5469,8 @@ def test_late_two_way_reclassification_deducts_prior_receipts(app_ctx):
         posting_date=date(2026, 5, 4),
         supplier_id=supp_code,
         purchase_order_id=po_case_b.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("100.00"),
         grand_total=Decimal("100.00"),

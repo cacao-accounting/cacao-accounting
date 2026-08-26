@@ -226,6 +226,8 @@ def _make_dn(
         customer_id="CUST-RESERVE",
         docstatus=docstatus,
         sales_order_id=sales_order_id,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(dn)
     database.session.flush()
@@ -534,7 +536,9 @@ class TestReservaNotaEntrega:
         assert bin_row2.actual_qty == Decimal("16")
         assert bin_row2.reserved_qty == Decimal("6")
 
-        cancel_resp = client.post("/sales/delivery-note/DN-RES-03/cancel", follow_redirects=True)
+        cancel_resp = client.post(
+            "/sales/delivery-note/DN-RES-03/cancel", data={"reason": "Cancelación de prueba"}, follow_redirects=True
+        )
         assert cancel_resp.status_code == 200
 
         database.session.refresh(dn)

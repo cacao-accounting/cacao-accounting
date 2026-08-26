@@ -62,7 +62,7 @@ def test_qr_validation_lifecycle(app):
         )
         module = Modules(module="accounting", default=True, enabled=True)
         user = User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True)
-        book = Book(entity="VALTEST", code="LOCAL", name="Local", status="activo", is_primary=True)
+        book = Book(entity="VALTEST", code="LOCAL", name="Local", currency="NIO", status="activo", is_primary=True)
         database.session.add_all([entity, module, user, book])
 
         acc1 = Accounts(entity="VALTEST", code="1101", name="Cash", account_type="asset", enabled=True)

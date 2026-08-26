@@ -138,6 +138,8 @@ def _receive_stock(item_code, warehouse, qty, valuation_rate):
         posting_date=date.today(),
         purpose="material_receipt",
         docstatus=0,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(se)
     database.session.flush()
@@ -451,6 +453,8 @@ def test_delivery_note_inventory_deduction_and_overdelivery_prevention(app_ctx):
         posting_date=date.today(),
         total=Decimal("1000"),
         grand_total=Decimal("1000"),
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=0,
     )
     database.session.add(dn)
@@ -493,7 +497,9 @@ def test_delivery_note_inventory_deduction_and_overdelivery_prevention(app_ctx):
     assert bin_row.reserved_qty == Decimal("0")
 
     # 2. Cancelar Nota de Entrega y verificar reversión
-    res_dn_cancel = client.post(f"/sales/delivery-note/{dn.id}/cancel", follow_redirects=True)
+    res_dn_cancel = client.post(
+        f"/sales/delivery-note/{dn.id}/cancel", data={"reason": "Cancelación de prueba"}, follow_redirects=True
+    )
     assert res_dn_cancel.status_code == 200
     database.session.refresh(dn)
     assert dn.docstatus == 2
@@ -530,6 +536,8 @@ def test_sales_invoice_tolerance_and_auto_delivery_note(app_ctx):
         posting_date=date.today(),
         document_type="sales_invoice",
         update_inventory=True,
+        transaction_currency="NIO",
+        base_currency="NIO",
         total=Decimal("1500"),
         grand_total=Decimal("1500"),
         docstatus=0,
@@ -565,7 +573,9 @@ def test_sales_invoice_tolerance_and_auto_delivery_note(app_ctx):
     assert bin_row.actual_qty == Decimal("85")
 
     # Cancelar la Factura de Venta y verificar cancelación en cascada de la Nota de Entrega
-    res_si_cancel = client.post(f"/sales/sales-invoice/{si.id}/cancel", follow_redirects=True)
+    res_si_cancel = client.post(
+        f"/sales/sales-invoice/{si.id}/cancel", data={"reason": "Cancelación de prueba"}, follow_redirects=True
+    )
     assert res_si_cancel.status_code == 200
     database.session.refresh(si)
     assert si.docstatus == 2
@@ -598,6 +608,8 @@ def test_debit_note_credit_note_and_returns(app_ctx):
         posting_date=date.today(),
         document_type="sales_invoice",
         docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
         total=Decimal("1000"),
         grand_total=Decimal("1000"),
         outstanding_amount=Decimal("1000"),
@@ -621,6 +633,8 @@ def test_debit_note_credit_note_and_returns(app_ctx):
         posting_date=date.today(),
         document_type="sales_debit_note",
         reversal_of=si_orig.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
         total=Decimal("200"),
         grand_total=Decimal("200"),
         docstatus=0,
@@ -650,6 +664,8 @@ def test_debit_note_credit_note_and_returns(app_ctx):
         document_type="sales_credit_note",
         reversal_of=si_orig.id,
         is_return=True,
+        transaction_currency="NIO",
+        base_currency="NIO",
         total=Decimal("1500"),
         grand_total=Decimal("1500"),
         docstatus=0,
@@ -679,6 +695,8 @@ def test_debit_note_credit_note_and_returns(app_ctx):
         document_type="sales_credit_note",
         reversal_of=si_orig.id,
         is_return=True,
+        transaction_currency="NIO",
+        base_currency="NIO",
         total=Decimal("400"),
         grand_total=Decimal("400"),
         docstatus=0,
@@ -715,6 +733,8 @@ def test_debit_note_credit_note_and_returns(app_ctx):
         document_type="sales_return",
         reversal_of=si_orig.id,
         is_return=True,
+        transaction_currency="NIO",
+        base_currency="NIO",
         total=Decimal("100"),
         grand_total=Decimal("100"),
         docstatus=0,

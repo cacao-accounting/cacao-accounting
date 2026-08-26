@@ -195,6 +195,7 @@ def test_e2e_journalentry_cancel_submitted_creates_reversal_entries(app_ctx):
         "company": "cacao",
         "posting_date": date.today().isoformat(),
         "books": ["FISC"],
+        "transaction_currency": "NIO",
         "memo": "E2E submitted cancel",
         "lines": [
             {"account": seeded["debit"], "debit": "90.00", "credit": "0"},
@@ -209,7 +210,9 @@ def test_e2e_journalentry_cancel_submitted_creates_reversal_entries(app_ctx):
     submit_response = client.post(f"/accounting/journal/{journal.id}/submit", follow_redirects=False)
     assert submit_response.status_code == 302
 
-    cancel_response = client.post(f"/accounting/journal/{journal.id}/cancel", follow_redirects=False)
+    cancel_response = client.post(
+        f"/accounting/journal/{journal.id}/cancel", data={"reason": "Anulación E2E"}, follow_redirects=False
+    )
     cancelled = database.session.get(ComprobanteContable, journal.id)
     entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
     reversal_entries = [entry for entry in entries if entry.is_reversal]

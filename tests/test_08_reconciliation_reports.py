@@ -889,6 +889,8 @@ def test_posted_payment_bank_dimension_reconciles_with_bank_summary(app_ctx):
         payment_type="pay",
         bank_account_id=bank_account.id,
         paid_amount=Decimal("100.00"),
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add_all(
@@ -2773,6 +2775,8 @@ def test_tax_template_posts_sales_tax_and_price_suggestion(app_ctx):
         posting_date=date(2026, 5, 5),
         customer_id="CUST-T",
         tax_template_id=template.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
         total=Decimal("100.00"),
         grand_total=Decimal("115.00"),
         docstatus=1,
@@ -3476,7 +3480,7 @@ def test_manual_journal_allows_bank_and_untyped_accounts(app_ctx):
     _seed_active_primary_book()
     database.session.flush()
 
-    bank_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual banco")
+    bank_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual banco", transaction_currency="NIO")
     database.session.add(bank_journal)
     database.session.flush()
     database.session.add_all(
@@ -3504,7 +3508,7 @@ def test_manual_journal_allows_bank_and_untyped_accounts(app_ctx):
     bank_entries = post_document_to_gl(bank_journal)
     assert len(bank_entries) == 2
 
-    free_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual libre")
+    free_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual libre", transaction_currency="NIO")
     database.session.add(free_journal)
     database.session.flush()
     database.session.add_all(
@@ -3571,6 +3575,8 @@ def test_sales_tax_uses_default_account_when_tax_has_no_account(app_ctx):
         posting_date=date(2026, 5, 6),
         customer_id="CUST-DF",
         tax_template_id=template.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
         total=Decimal("100.00"),
         grand_total=Decimal("115.00"),
         docstatus=1,
@@ -3654,7 +3660,13 @@ def test_inventory_uom_batch_serial_and_rebuild_stock_bins(app_ctx):
     database.session.flush()
     batch = database.session.execute(database.select(Batch).filter_by(batch_no="B-1")).scalar_one()
     entry = StockEntry(
-        company="cacao", posting_date=date(2026, 5, 5), purpose="material_receipt", to_warehouse="WH-S", docstatus=1
+        company="cacao",
+        posting_date=date(2026, 5, 5),
+        purpose="material_receipt",
+        to_warehouse="WH-S",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        docstatus=1,
     )
     database.session.add(entry)
     database.session.flush()
@@ -4410,7 +4422,9 @@ def test_purchase_invoice_posting_auto_reconciles_two_way_po_only_invoice(app_ct
     cfg = database.session.execute(database.select(PurchaseMatchingConfig).filter_by(company="cacao")).scalar_one()
     cfg.matching_type = MatchingType.TWO_WAY
 
-    order = PurchaseOrder(company="cacao", posting_date=date(2026, 5, 1), supplier_id="SUPP-2WP", docstatus=1)
+    order = PurchaseOrder(
+        company="cacao", posting_date=date(2026, 5, 1), supplier_id="SUPP-2WP", transaction_currency="NIO", docstatus=1
+    )
     database.session.add(order)
     database.session.flush()
     database.session.add(
@@ -4430,6 +4444,8 @@ def test_purchase_invoice_posting_auto_reconciles_two_way_po_only_invoice(app_ct
         posting_date=date(2026, 5, 2),
         supplier_id="SUPP-2WP",
         purchase_order_id=order.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         total=Decimal("36.00"),
         grand_total=Decimal("36.00"),

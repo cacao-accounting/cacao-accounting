@@ -626,6 +626,8 @@ def test_285_recurring_journal_accrual(app_ctx, chart):
     assert generated is not None
     assert generated.status == "draft"
     assert generated.is_recurrent is True
+    generated.transaction_currency = "NIO"
+    database.session.commit()
 
     # --- Submit del journal generado ---
     _submit_journal(generated.id, user_id=uid)

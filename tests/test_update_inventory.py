@@ -139,6 +139,8 @@ def test_submit_with_update_inventory_creates_delivery_note(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
+        transaction_currency="NIO",
+        base_currency="NIO",
         update_inventory=True,
         docstatus=0,
         grand_total=Decimal("500"),
@@ -276,6 +278,8 @@ def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
     returned = DeliveryNote(
         company="cacao",
         posting_date=date(2026, 5, 2),
+        transaction_currency="NIO",
+        base_currency="NIO",
         is_return=True,
         reversal_of=original.id,
         docstatus=1,
@@ -322,6 +326,8 @@ def test_submit_without_update_inventory_does_not_create_dn(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
+        transaction_currency="NIO",
+        base_currency="NIO",
         update_inventory=False,
         docstatus=0,
         grand_total=Decimal("500"),
@@ -365,6 +371,8 @@ def test_cancel_with_update_inventory_cancels_linked_dn(app_ctx):
         company="cacao",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
+        transaction_currency="NIO",
+        base_currency="NIO",
         update_inventory=True,
         docstatus=0,
         grand_total=Decimal("500"),
@@ -387,7 +395,9 @@ def test_cancel_with_update_inventory_cancels_linked_dn(app_ctx):
     dn_id = invoice.delivery_note_id
     assert dn_id is not None
 
-    response = client.post("/sales/sales-invoice/SI-INV-03/cancel", follow_redirects=True)
+    response = client.post(
+        "/sales/sales-invoice/SI-INV-03/cancel", data={"reason": "cancelacion por prueba"}, follow_redirects=True
+    )
     assert response.status_code == 200
 
     database.session.refresh(invoice)

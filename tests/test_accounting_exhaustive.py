@@ -95,7 +95,9 @@ def test_journal_entry_full_lifecycle_exhaustive(client, app):
         assert "MGMT" in books_posted
 
         # 3. Cancel (Reversal)
-        resp = client.post(f"/accounting/journal/{journal.id}/cancel", follow_redirects=True)
+        resp = client.post(
+            f"/accounting/journal/{journal.id}/cancel", data={"reason": "Prueba de anulación"}, follow_redirects=True
+        )
         assert resp.status_code == 200
 
         database.session.refresh(journal)

@@ -787,7 +787,7 @@ def test_payment_cancellation_and_balance_restoration(app_ctx):
     assert compute_outstanding_amount(si) == 0
 
     # Cancel the payment
-    client.post(f"/cash_management/payment/{pe.id}/cancel", follow_redirects=True)
+    client.post(f"/cash_management/payment/{pe.id}/cancel", data={"reason": "Cancelación E2E"}, follow_redirects=True)
 
     database.session.refresh(pe)
     assert pe.docstatus == 2

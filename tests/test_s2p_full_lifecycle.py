@@ -677,6 +677,8 @@ def test_s2p_credit_and_debit_notes_and_returns(app_ctx):
         supplier_id="SUP-S2P-01",
         posting_date=date.today(),
         docstatus=0,
+        transaction_currency="NIO",
+        base_currency="NIO",
         grand_total=Decimal("2500.00"),
     )
     receipt_item = PurchaseReceiptItem(
@@ -707,6 +709,8 @@ def test_s2p_credit_and_debit_notes_and_returns(app_ctx):
         posting_date=date.today(),
         docstatus=0,
         is_return=True,
+        transaction_currency="NIO",
+        base_currency="NIO",
         grand_total=Decimal("1000.00"),
     )
     ret_item = PurchaseReceiptItem(
@@ -851,6 +855,8 @@ def test_s2p_payment_application_and_advance_against_invoice(app_ctx):
         posting_date=date.today(),
         paid_amount=Decimal("7000.00"),
         currency="NIO",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=0,
         bank_account_id="BANK-ACC-S2P",
     )

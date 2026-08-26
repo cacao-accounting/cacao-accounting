@@ -763,6 +763,8 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
         id="PINV-ADV-001",
         company="TEST",
         posting_date=date(2026, 5, 7),
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         grand_total=Decimal("1000"),
         outstanding_amount=Decimal("1000"),
@@ -779,10 +781,11 @@ def test_s2p07_settle_advance_generates_netting_journal(app):
         id="ADV-P-001",
         company="TEST",
         posting_date=date(2026, 5, 7),
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
         payment_type="pay",
         paid_amount=Decimal("500"),
-        currency="NIO",
     )
     database.session.add_all([invoice, inv_item, advance_pay])
     database.session.flush()

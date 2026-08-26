@@ -93,13 +93,16 @@ def _setup_inventory_test_data(app):
                 company_name="Cacao SA",
                 tax_id="J0001",
                 valuation_method="moving_average",
+                currency="NIO",
             )
             database.session.add(company)
 
         # Primary Book
         book = database.session.get(Book, "primary")
         if not book:
-            book = Book(code="primary", name="Libro Primario", entity="cacao", status="activo", is_primary=True)
+            book = Book(
+                code="primary", name="Libro Primario", entity="cacao", status="activo", is_primary=True, currency="NIO"
+            )
             database.session.add(book)
 
         # UOM
@@ -213,6 +216,8 @@ def _create_and_submit_stock_entry(
         from_warehouse=source_warehouse,
         to_warehouse=target_warehouse,
         adjustment_account_id=adjustment_account_id,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(se)
     database.session.flush()
@@ -418,6 +423,8 @@ def test_01_recepcion_ordenes_compra(app):
             posting_date=date(2026, 5, 1),
             supplier_id="SUP-001",
             status="Borrador",
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(pr)
         database.session.flush()
@@ -486,7 +493,14 @@ def test_02_remision_facturas_notas_venta(app):
             target_warehouse="WH-MAIN",
         )
 
-        dn = DeliveryNote(company="cacao", docstatus=0, posting_date=date(2026, 5, 2), customer_id="CUST-001")
+        dn = DeliveryNote(
+            company="cacao",
+            docstatus=0,
+            posting_date=date(2026, 5, 2),
+            customer_id="CUST-001",
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
         database.session.add(dn)
         database.session.flush()
         database.session.add(

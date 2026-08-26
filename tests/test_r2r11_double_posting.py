@@ -81,6 +81,7 @@ def test_post_comprobante_contable_rejects_double_posting(app_ctx):
         entity="cacao",
         date=date(2026, 5, 4),
         memo="Comprobante doble posting",
+        transaction_currency="NIO",
     )
     database.session.add(journal)
     database.session.flush()

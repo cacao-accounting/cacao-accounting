@@ -511,7 +511,13 @@ def test_sales_happy_path(app_ctx):
 
     # We need stock to deliver and reserve. Let's create a manual stock entry to receive some stock first.
     se = StockEntry(
-        purpose="material_receipt", company="cacao", posting_date=date.today(), to_warehouse="PRINCIPAL", docstatus=0
+        purpose="material_receipt",
+        company="cacao",
+        posting_date=date.today(),
+        to_warehouse="PRINCIPAL",
+        docstatus=0,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(se)
     database.session.flush()
@@ -636,6 +642,9 @@ def test_inventory_cycle(app_ctx):
         .scalars()
         .first()
     )
+    mr.transaction_currency = "NIO"
+    mr.base_currency = "NIO"
+    database.session.commit()
     client.post(f"/inventory/stock-entry/{mr.id}/submit", follow_redirects=True)
     database.session.refresh(mr)
     assert mr.docstatus == 1
@@ -664,6 +673,9 @@ def test_inventory_cycle(app_ctx):
         .scalars()
         .first()
     )
+    mt.transaction_currency = "NIO"
+    mt.base_currency = "NIO"
+    database.session.commit()
     client.post(f"/inventory/stock-entry/{mt.id}/submit", follow_redirects=True)
     database.session.refresh(mt)
     assert mt.docstatus == 1
@@ -694,6 +706,9 @@ def test_inventory_cycle(app_ctx):
         .scalars()
         .first()
     )
+    mi.transaction_currency = "NIO"
+    mi.base_currency = "NIO"
+    database.session.commit()
     client.post(f"/inventory/stock-entry/{mi.id}/submit", follow_redirects=True)
     database.session.refresh(mi)
     assert mi.docstatus == 1
@@ -708,7 +723,13 @@ def test_returns(app_ctx):
     # First need a submitted invoice
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
-        company="cacao", customer_id=customer.id, posting_date=date.today(), document_type="sales_invoice", docstatus=1
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(si)
     database.session.flush()
@@ -761,6 +782,8 @@ def test_returns(app_ctx):
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
+        transaction_currency="NIO",
+        base_currency="NIO",
         total=500,
         grand_total=500,
         outstanding_amount=500,
@@ -844,7 +867,13 @@ def test_partial_and_over_deliveries(app_ctx):
 
     # Ensure stock
     se = StockEntry(
-        purpose="material_receipt", company="cacao", posting_date=date.today(), to_warehouse="PRINCIPAL", docstatus=1
+        purpose="material_receipt",
+        company="cacao",
+        posting_date=date.today(),
+        to_warehouse="PRINCIPAL",
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(se)
     database.session.flush()

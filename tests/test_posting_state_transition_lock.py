@@ -178,7 +178,7 @@ def test_submit_and_cancel_roundtrip_operates_on_locked_row(app_ctx):
     database.session.add_all([bank_account, income_account])
     database.session.flush()
 
-    journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 4), memo="Roundtrip con lock")
+    journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 4), memo="Roundtrip con lock", transaction_currency="NIO")
     database.session.add(journal)
     database.session.flush()
     database.session.add_all(
@@ -250,7 +250,7 @@ def test_double_submit_rejected_after_lock(app_ctx):
     database.session.add_all([bank_account, income_account])
     database.session.flush()
 
-    journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 4), memo="Doble aprobación")
+    journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 4), memo="Doble aprobación", transaction_currency="NIO")
     database.session.add(journal)
     database.session.flush()
     database.session.add_all(

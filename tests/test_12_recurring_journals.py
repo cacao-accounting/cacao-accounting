@@ -53,8 +53,8 @@ def app_ctx():
                 Modules(module="accounting", default=True, enabled=True),
                 User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True),
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
-                Book(entity="abc", code="L01", name="Libro principal", status="activo", is_primary=True),
-                Book(entity="abc", code="L02", name="Libro secundario", status="activo"),
+                Book(entity="abc", code="L01", name="Libro principal", status="activo", is_primary=True, currency="NIO"),
+                Book(entity="abc", code="L02", name="Libro secundario", status="activo", currency="NIO"),
                 Accounts(entity="abc", code="6101", name="Gasto", active=True, enabled=True, group=False),
                 Accounts(entity="abc", code="1105", name="Seguro pagado", active=True, enabled=True, group=False),
                 Accounts(entity="abc", code="6000", name="Gasto extendido", active=True, enabled=True, group=False),
@@ -110,6 +110,8 @@ def test_recurring_journal_flow(app_ctx):
         assert app_log.journal_id is not None
 
         journal = database.session.get(ComprobanteContable, app_log.journal_id)
+        journal.transaction_currency = "NIO"
+        database.session.commit()
         assert journal.is_recurrent is True
         assert journal.recurrent_template_id == template.id
         assert json.loads(journal.book_codes) == ["L01", "L02"]
@@ -325,6 +327,8 @@ def test_e2e_recurring_journal_monthly_close_creates_visible_postable_lines(app_
         database.select(RecurringJournalApplication).filter_by(template_id=template.id)
     ).scalar_one()
     journal = database.session.get(ComprobanteContable, application.journal_id)
+    journal.transaction_currency = "NIO"
+    database.session.commit()
     lines = (
         database.session.execute(
             database.select(ComprobanteContableDetalle).filter_by(
@@ -567,6 +571,8 @@ def test_posting_initializes_outstanding_amount(app_ctx):
             docstatus=1,
             document_no="abc-SI-2026-05-00001",
             total=Decimal("150.00"),
+            transaction_currency="NIO",
+            base_currency="NIO",
             # grand_total and outstanding_amount NOT SET
         )
         database.session.add_all([party_account, invoice])

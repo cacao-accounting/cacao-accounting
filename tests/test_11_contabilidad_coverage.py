@@ -380,7 +380,7 @@ def test_journal_service_submit_not_draft(app_ctx):
 
     debit = Accounts(entity="cacao", code="EXP-S1", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-S1", name="Caja", active=True, enabled=True)
-    book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit, credit, book])
     database.session.commit()
 
@@ -418,7 +418,7 @@ def test_journal_service_reject_not_draft(app_ctx):
 
     debit = Accounts(entity="cacao", code="EXP-R1", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-R1", name="Caja", active=True, enabled=True)
-    book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit, credit, book])
     database.session.commit()
 
@@ -1010,7 +1010,7 @@ def test_journal_service_books_from_book_key(app_ctx):
 
     debit = Accounts(entity="cacao", code="EXP-BK", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-BK", name="Caja", active=True, enabled=True)
-    book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit, credit, book])
     database.session.commit()
 
@@ -1523,7 +1523,7 @@ def test_route_libros(app_ctx):
 def test_route_libro_detail(app_ctx):
     from cacao_accounting.database import Book, User, database
 
-    database.session.add(Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True))
+    database.session.add(Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True))
     database.session.commit()
     user = User.query.filter_by(user="admin").first()
     client = app_ctx.test_client()
@@ -2761,7 +2761,7 @@ def test_route_duplicar_comprobante_error(app_ctx):
 
     debit = Accounts(entity="cacao", code="EXP-DC", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-DC", name="Caja", active=True, enabled=True)
-    book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit, credit, book])
     database.session.commit()
 
@@ -2825,7 +2825,7 @@ def test_route_revertir_comprobante_requires_reversal_date(app_ctx):
 
     debit = Accounts(entity="cacao", code="EXP-RD", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-RD", name="Caja", active=True, enabled=True)
-    book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit, credit, book])
     database.session.commit()
 
@@ -2867,7 +2867,7 @@ def test_route_editar_comprobante_not_draft(app_ctx):
 
     debit = Accounts(entity="cacao", code="EXP-ED", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-ED", name="Caja", active=True, enabled=True)
-    book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit, credit, book])
     database.session.commit()
 

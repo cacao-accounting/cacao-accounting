@@ -726,10 +726,20 @@ def test_payment_cancellation_reverts_relations(app_ctx, monkeypatch):
     database.session.commit()
 
     bancos_module = importlib.import_module("cacao_accounting.bancos.routes")
-    monkeypatch.setattr(bancos_module, "cancel_document", lambda document: setattr(document, "docstatus", 2))
+    monkeypatch.setattr(
+        bancos_module,
+        "cancel_document",
+        lambda document, reason=None, actor_user_id=None: setattr(document, "docstatus", 2),
+    )
     monkeypatch.setattr(bancos_module, "exige_acceso_compania", lambda *args, **kwargs: None)
 
-    with app_ctx.test_request_context(f"/cash_management/payment/{payment.id}/cancel", method="POST"):
+    with app_ctx.test_request_context(
+        f"/cash_management/payment/{payment.id}/cancel", method="POST", data={"reason": "Prueba de anulación"}
+    ):
+        from flask_login import login_user
+        from cacao_accounting.database import User
+
+        login_user(database.session.get(User, "user-1"))
         response = unwrap(bancos_pago_cancel)(payment.id)
 
     relation = database.session.execute(database.select(DocumentRelation)).scalar_one()

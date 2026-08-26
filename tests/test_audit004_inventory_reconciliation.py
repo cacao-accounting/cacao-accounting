@@ -209,6 +209,8 @@ def _receive(env: dict, warehouse: str, item: str, qty: Decimal, rate: Decimal, 
         posting_date=day,
         purpose="material_receipt",
         to_warehouse=warehouse,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(doc)
     database.session.flush()
@@ -243,6 +245,8 @@ def _issue(env: dict, warehouse: str, item: str, qty: Decimal, day: date) -> Sto
         posting_date=day,
         purpose="material_issue",
         from_warehouse=warehouse,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(doc)
     database.session.flush()
@@ -274,6 +278,8 @@ def _transfer(env: dict, source: str, target: str, item: str, qty: Decimal, day:
         purpose="material_transfer",
         from_warehouse=source,
         to_warehouse=target,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(doc)
     database.session.flush()
@@ -310,6 +316,8 @@ def _reconcile(
         posting_date=day,
         purpose="stock_reconciliation",
         to_warehouse=warehouse,
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(doc)
     database.session.flush()
@@ -333,7 +341,7 @@ def _reconcile(
 
 def _deliver(env: dict, warehouse: str, item: str, qty: Decimal, price: Decimal, day: date) -> DeliveryNote:
     """Nota de entrega que descarga inventario y publica COGS."""
-    doc = DeliveryNote(company=COMPANY, docstatus=0, posting_date=day)
+    doc = DeliveryNote(company=COMPANY, docstatus=0, posting_date=day, transaction_currency="NIO", base_currency="NIO")
     database.session.add(doc)
     database.session.flush()
     database.session.add(

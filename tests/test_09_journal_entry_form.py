@@ -287,8 +287,8 @@ def test_journal_post_creates_draft_without_gl_entries(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-002", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-002", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
-    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", status="activo")
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
+    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", currency="NIO", status="activo")
     database.session.add_all([debit_account, credit_account, fiscal_book, ifrs_book])
     database.session.commit()
 
@@ -322,7 +322,7 @@ def test_journal_books_endpoint_returns_only_active_books(app_ctx):
 
     database.session.add_all(
         [
-            Book(entity="cacao", code="FISC", name="Fiscal", status="activo"),
+            Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo"),
             Book(entity="cacao", code="IFRS", name="IFRS", status=None),
             Book(entity="cacao", code="TAX", name="Tax", status="inactivo"),
         ]
@@ -352,8 +352,8 @@ def test_submit_journal_posts_only_selected_books(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-003", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-003", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
-    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", status="activo")
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
+    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", currency="NIO", status="activo")
     database.session.add_all(
         [
             debit_account,
@@ -395,8 +395,8 @@ def test_submit_journal_without_selected_books_posts_all_active_books(app_ctx):
     default_book = database.session.execute(database.select(Book).filter_by(entity="cacao", code="DEFAULT_BOOK")).scalar_one()
     debit_account = Accounts(entity="cacao", code="EXP-004", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-004", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
-    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", status="activo")
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
+    ifrs_book = Book(entity="cacao", code="IFRS", name="IFRS", currency="NIO", status="activo")
     database.session.add_all(
         [
             debit_account,
@@ -434,7 +434,7 @@ def test_submit_journal_allows_manual_closing_in_closed_period(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-006", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-006", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all(
         [
             debit_account,
@@ -485,7 +485,7 @@ def test_create_journal_draft_rejects_client_controlled_closing_flags(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-CL-SEC", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-CL-SEC", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit_account, credit_account, fiscal_book])
     database.session.commit()
 
@@ -663,7 +663,7 @@ def test_submit_journal_allows_cash_account_in_manual_entry(app_ctx):
 
     cash_account = Accounts(entity="cacao", code="11.01.001.001", name="Caja General", active=True, enabled=True, group=False)
     capital_account = Accounts(entity="cacao", code="31.01", name="Capital Social", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([cash_account, capital_account, fiscal_book])
     database.session.commit()
 
@@ -722,7 +722,7 @@ def test_submit_journal_persists_advance_and_bank_account_on_gl_entries(app_ctx)
 
     debit_account = Accounts(entity="cacao", code="EXP-010", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-010", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     bank = Bank(name="Banco GL", is_active=True)
     database.session.add_all([debit_account, credit_account, fiscal_book, bank])
     database.session.commit()
@@ -874,8 +874,8 @@ def test_journal_edit_route_rehydrates_draft_and_updates_books(app_ctx):
         [
             debit_account,
             credit_account,
-            Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True),
-            Book(entity="cacao", code="IFRS", name="IFRS", status="activo"),
+            Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True),
+            Book(entity="cacao", code="IFRS", name="IFRS", currency="NIO", status="activo"),
         ]
     )
     database.session.commit()
@@ -941,7 +941,7 @@ def test_reject_journal_draft_changes_status_without_gl_entries(app_ctx):
         [
             debit_account,
             credit_account,
-            Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True),
+            Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True),
         ]
     )
     database.session.commit()
@@ -1021,7 +1021,7 @@ def test_duplicate_journal_creates_new_draft(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-DUP", name="Gasto Duplicable", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-DUP", name="Caja Duplicable", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit_account, credit_account, fiscal_book])
     database.session.commit()
 
@@ -1093,7 +1093,7 @@ def test_revert_journal_creates_reversed_draft_and_redirects_to_edit(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-REV", name="Gasto Revertible", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-REV", name="Caja Revertible", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit_account, credit_account, fiscal_book])
     database.session.commit()
     _seed_accounting_periods(
@@ -1161,7 +1161,7 @@ def test_revert_journal_rejects_same_accounting_period(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-RSP", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-RSP", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit_account, credit_account, fiscal_book])
     database.session.commit()
     _seed_accounting_periods([("2026-05", date(2026, 5, 1), date(2026, 5, 31))])
@@ -1208,7 +1208,7 @@ def test_cancel_journal_works_in_any_open_period(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-CAN", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-CAN", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit_account, credit_account, fiscal_book])
     database.session.commit()
 
@@ -1231,7 +1231,9 @@ def test_cancel_journal_works_in_any_open_period(app_ctx):
     client = app_ctx.test_client()
     _login(client, user.id)
 
-    response = client.post(f"/accounting/journal/{journal.id}/cancel", follow_redirects=True)
+    response = client.post(
+        f"/accounting/journal/{journal.id}/cancel", data={"reason": "Anulación por prueba"}, follow_redirects=True
+    )
     refreshed = database.session.get(ComprobanteContable, journal.id)
 
     assert response.status_code in (200, 302)
@@ -1244,7 +1246,7 @@ def test_update_journal_draft_renumbers_when_posting_date_changes(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-RNM", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-RNM", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit_account, credit_account, fiscal_book])
     database.session.commit()
     _seed_accounting_periods(
@@ -1300,7 +1302,7 @@ def test_journal_list_uses_friendly_document_name_for_reversal_drafts(app_ctx):
 
     debit_account = Accounts(entity="cacao", code="EXP-LST", name="Gasto", active=True, enabled=True, group=False)
     credit_account = Accounts(entity="cacao", code="CASH-LST", name="Caja", active=True, enabled=True, group=False)
-    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", status="activo", is_primary=True)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit_account, credit_account, fiscal_book])
     database.session.commit()
 

@@ -1118,7 +1118,13 @@ def test_r2r_multi_company_isolation_all_ledgers(app_ctx):
 
     # Stock Entry in Company A
     se_a = StockEntry(
-        company="r2r", posting_date=date(2026, 8, 10), purpose="material_receipt", docstatus=1, to_warehouse="WH-A"
+        company="r2r",
+        posting_date=date(2026, 8, 10),
+        purpose="material_receipt",
+        docstatus=1,
+        to_warehouse="WH-A",
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(se_a)
     database.session.flush()
@@ -1136,7 +1142,13 @@ def test_r2r_multi_company_isolation_all_ledgers(app_ctx):
 
     # Stock Entry in Company B
     se_b = StockEntry(
-        company="r2r-b", posting_date=date(2026, 8, 10), purpose="material_receipt", docstatus=1, to_warehouse="WH-B"
+        company="r2r-b",
+        posting_date=date(2026, 8, 10),
+        purpose="material_receipt",
+        docstatus=1,
+        to_warehouse="WH-B",
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(se_b)
     database.session.flush()
@@ -1330,7 +1342,13 @@ def test_r2r_append_only_cancellation_lifecycle(app_ctx):
 
     # 2. Post and cancel Stock Entry
     se = StockEntry(
-        company="r2r", posting_date=date(2026, 8, 12), purpose="material_receipt", docstatus=1, to_warehouse="WH-CANC"
+        company="r2r",
+        posting_date=date(2026, 8, 12),
+        purpose="material_receipt",
+        docstatus=1,
+        to_warehouse="WH-CANC",
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(se)
     database.session.flush()
@@ -1604,7 +1622,13 @@ def test_r2r_kardex_inventory_valuation_and_moving_average(app_ctx):
 
     # 1. Receipt 1: 10 units @ 100 NIO = 1000 NIO
     se1 = StockEntry(
-        company="r2r", posting_date=date(2026, 8, 16), purpose="material_receipt", docstatus=1, to_warehouse="WH-KARD"
+        company="r2r",
+        posting_date=date(2026, 8, 16),
+        purpose="material_receipt",
+        docstatus=1,
+        to_warehouse="WH-KARD",
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(se1)
     database.session.flush()
@@ -1631,7 +1655,13 @@ def test_r2r_kardex_inventory_valuation_and_moving_average(app_ctx):
 
     # 2. Receipt 2: 10 units @ 200 NIO = 2000 NIO (Total stock = 20 units, Total value = 3000 NIO, Avg rate = 150 NIO)
     se2 = StockEntry(
-        company="r2r", posting_date=date(2026, 8, 17), purpose="material_receipt", docstatus=1, to_warehouse="WH-KARD"
+        company="r2r",
+        posting_date=date(2026, 8, 17),
+        purpose="material_receipt",
+        docstatus=1,
+        to_warehouse="WH-KARD",
+        transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(se2)
     database.session.flush()
@@ -1657,7 +1687,9 @@ def test_r2r_kardex_inventory_valuation_and_moving_average(app_ctx):
     assert bin2.valuation_rate == Decimal("150")
 
     # 3. Delivery Note: 5 units delivered. Expected COGS = 5 * 150 = 750 NIO.
-    dn = DeliveryNote(company="r2r", posting_date=date(2026, 8, 18), docstatus=1)
+    dn = DeliveryNote(
+        company="r2r", posting_date=date(2026, 8, 18), docstatus=1, transaction_currency="NIO", base_currency="NIO"
+    )
     database.session.add(dn)
     database.session.flush()
     dn_item = DeliveryNoteItem(
