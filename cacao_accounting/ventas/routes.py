@@ -131,6 +131,7 @@ from cacao_accounting.ventas.services import (
     _cancel_linked_delivery_note,
     _validate_credit_limit_and_overdue,
     _validate_reversal_of,
+    is_sales_price_editor,
     sales_order_is_ready_to_close,
     sales_order_line_closure_reasons,
 )
@@ -232,6 +233,7 @@ def ventas_pedido_venta_nuevo():
     titulo = "Nuevo Pedido de Venta - " + APPNAME
     transaction_config = {
         "formKey": _FORMKEY_SALES_REQUEST,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
@@ -342,6 +344,7 @@ def ventas_pedido_venta_editar(request_id: str):
     lineas = database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=registro.id)).scalars()
     transaction_config = {
         "formKey": _FORMKEY_SALES_REQUEST,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
@@ -933,6 +936,7 @@ def ventas_orden_venta_editar(order_id: str):
     lineas = database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=registro.id)).scalars()
     transaction_config = {
         "formKey": _FORMKEY_SALES_ORDER,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
@@ -955,6 +959,7 @@ def ventas_orden_venta_editar(order_id: str):
                 "qty": str(item.qty),
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
+                "discount_percentage": str(item.discount_percentage or 0),
                 "amount": str(item.amount or 0),
                 "warehouse": item.warehouse or "",
                 **get_target_line_source("sales_order", item.id),
@@ -1073,6 +1078,8 @@ def ventas_cotizacion_nueva():
     titulo = "Nueva Cotización - " + APPNAME
     transaction_config = {
         "formKey": _FORMKEY_SALES_QUOTATION,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
+        "enableLineDiscounts": True,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
@@ -1108,6 +1115,7 @@ def ventas_cotizacion_nueva():
                 transaction_currency=transaction_currency,
                 base_currency=company_currency(company),
                 posting_date=posting_date,
+                valid_until=_parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None,
                 remarks=request.form.get("remarks"),
                 docstatus=0,
             )
@@ -1199,6 +1207,8 @@ def ventas_cotizacion_editar(quotation_id: str):
     lineas = database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id)).scalars()
     transaction_config = {
         "formKey": _FORMKEY_SALES_QUOTATION,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
+        "enableLineDiscounts": True,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
@@ -1217,6 +1227,8 @@ def ventas_cotizacion_editar(quotation_id: str):
                 "qty": str(item.qty),
                 "uom": item.uom or "",
                 "rate": str(item.rate or 0),
+                "discount_percentage": str(item.discount_percentage or 0),
+                "discount_amount": str(item.discount_amount or 0),
                 "amount": str(item.amount or 0),
                 **get_target_line_source("sales_quotation", item.id),
             }
@@ -1257,6 +1269,7 @@ def ventas_cotizacion_duplicar(quotation_id: str):
         base_currency=origen.base_currency,
         exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
+        valid_until=origen.valid_until,
         remarks=origen.remarks,
         docstatus=0,
     )
@@ -1280,6 +1293,8 @@ def ventas_cotizacion_duplicar(quotation_id: str):
             uom=item.uom,
             rate=item.rate,
             amount=item.amount,
+            discount_percentage=item.discount_percentage,
+            discount_amount=item.discount_amount,
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
@@ -1547,6 +1562,7 @@ def ventas_entrega_nuevo():
     titulo = "Nueva Nota de Entrega - " + APPNAME
     transaction_config = {
         "formKey": _FORMKEY_DELIVERY_NOTE,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
         "viewKey": "draft",
         "enableBatchSerial": True,
         "items": items_disponibles,
@@ -1715,6 +1731,7 @@ def ventas_entrega_editar(note_id: str):
     lineas = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=registro.id)).scalars()
     transaction_config = {
         "formKey": _FORMKEY_DELIVERY_NOTE,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
         "viewKey": "draft",
         "enableBatchSerial": True,
         "items": items_disponibles,
@@ -1853,6 +1870,10 @@ def ventas_entrega_submit(note_id: str):
         if ApprovalEngine.handle_submission(registro, current_user, "Nota de entrega"):
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
+        from cacao_accounting.inventario.service import validate_batch_serial_draft
+
+        validate_batch_serial_draft(items)
+
         submit_document(registro)  # type: ignore[misc]
         _release_reservation_for_delivery_note(registro)
         log_submit(registro)
@@ -1945,6 +1966,7 @@ def ventas_factura_venta_nuevo():
 
     transaction_config = {
         "formKey": _FORMKEY_SALES_INVOICE,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
         "viewKey": "draft",
         "enableBatchSerial": True,
         "items": items_disponibles,
@@ -2058,6 +2080,7 @@ def ventas_factura_venta_editar(invoice_id: str):
     lineas = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars()
     transaction_config = {
         "formKey": _FORMKEY_SALES_INVOICE,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
         "viewKey": "draft",
         "enableBatchSerial": True,
         "items": items_disponibles,
@@ -2229,6 +2252,10 @@ def ventas_factura_venta_submit(invoice_id: str):
 
         if ApprovalEngine.handle_submission(registro, current_user, "Factura de venta"):
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
+
+        from cacao_accounting.inventario.service import validate_batch_serial_draft
+
+        validate_batch_serial_draft(items)
 
         submit_document(registro)  # type: ignore[misc]
         _persist_sales_reversal_relation(registro)
