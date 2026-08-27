@@ -2701,10 +2701,12 @@ def ver_cierre_mensual(identifier: str):
                     "comprobantecontable": ("contabilidad.ver_comprobante", "identifier"),
                 }.get(source["voucher_type"].lower().replace("_", "").replace(" ", ""))
                 if endpoint:
+                    ep_name: str = endpoint[0]
+                    ep_param: str = endpoint[1]
                     check.source_links.append(
                         {
                             "label": source["label"],
-                            "url": url_for(endpoint[0], **{endpoint[1]: source["voucher_id"]}),
+                            "url": url_for(ep_name, **{ep_param: source["voucher_id"]}),  # type: ignore[arg-type]
                         }
                     )
                 else:
@@ -2864,7 +2866,7 @@ def finalizar_cierre_mensual(identifier: str) -> "Any":
         flash("El periodo ya se encuentra cerrado.", "warning")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
-    checks = (
+    checks = list(
         database.session.execute(
             database.select(PeriodCloseCheck)
             .filter_by(close_run_id=close_run.id)

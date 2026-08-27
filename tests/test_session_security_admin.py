@@ -37,6 +37,7 @@ def app():
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
             "SECRET_KEY": "test-secret-key",
             "WTF_CSRF_ENABLED": False,
+            "MODO_ESCRITORIO": False,
         }
     )
     with app.app_context():

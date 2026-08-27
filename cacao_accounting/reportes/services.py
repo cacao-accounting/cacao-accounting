@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Sequence, cast
 
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, literal, or_, select
 
 from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
 from cacao_accounting.database import (
@@ -2435,7 +2435,7 @@ def _grouped_account_gl_query(
         movement_conditions.append(GLEntry.posting_date >= period_start)
     if period_end:
         movement_conditions.append(GLEntry.posting_date <= period_end)
-    movement_condition = and_(*movement_conditions) if movement_conditions else True
+    movement_condition = and_(*movement_conditions) if movement_conditions else literal(True)
     opening_value = case((GLEntry.posting_date < period_start, GLEntry.debit - GLEntry.credit), else_=0) if period_start else 0
     movement_debit = case((movement_condition, GLEntry.debit), else_=0)
     movement_credit = case((movement_condition, GLEntry.credit), else_=0)

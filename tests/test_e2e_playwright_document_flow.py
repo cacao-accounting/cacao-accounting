@@ -101,7 +101,12 @@ def flask_server():
         from cacao_accounting.contabilidad.posting import submit_document
 
         se = StockEntry(
-            purpose="material_receipt", company="cacao", posting_date=date.today(), to_warehouse="PRINCIPAL", docstatus=0
+            purpose="material_receipt",
+            company="cacao",
+            posting_date=date.today(),
+            to_warehouse="PRINCIPAL",
+            docstatus=0,
+            transaction_currency="NIO",
         )
         database.session.add(se)
         database.session.flush()

@@ -575,11 +575,11 @@ def _get_templates_and_applied_ids(close_run: Any, period: Any) -> tuple[Sequenc
     return templates, applied_ids
 
 
-def _get_period_close_checks(close_run: Any) -> Sequence[Any]:
+def _get_period_close_checks(close_run: Any) -> list[Any]:
     """Obtiene los checks de cierre mensual."""
     from cacao_accounting.database import PeriodCloseCheck
 
-    return (
+    return list(
         database.session.execute(
             database.select(PeriodCloseCheck)
             .filter_by(close_run_id=close_run.id)
@@ -655,10 +655,10 @@ def _monthly_ledger_source_entries(company: str, period_start: date, period_end:
     seen: set[tuple[str, str]] = set()
     for entry in entries:
         ledger = str(entry.ledger_id or "__default__")
-        key = (str(entry.voucher_type), str(entry.voucher_id))
-        if ledger not in unbalanced or key in seen:
+        voucher_key = (str(entry.voucher_type), str(entry.voucher_id))
+        if ledger not in unbalanced or voucher_key in seen:
             continue
-        seen.add(key)
+        seen.add(voucher_key)
         sources.append(
             {
                 "voucher_type": str(entry.voucher_type),
