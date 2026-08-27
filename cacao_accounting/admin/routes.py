@@ -870,7 +870,7 @@ def config_control_presupuestario():
             return redirect(url_for(ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT))
 
         enabled = request.form.get("enabled") == "on"
-        action = request.form.get("action_on_exceeded") or "do_nothing"
+        action = request.form.get("action_on_exceeded") or "notify"
 
         if action not in BUDGET_CONTROL_VALID_ACTIONS:
             flash(_("Política de control presupuestario no válida."), "danger")
@@ -884,12 +884,12 @@ def config_control_presupuestario():
         return redirect(url_for(ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT, company=company))
 
     enabled_val = get_setup_value(f"budget_control_enabled_{selected_company}", "0") == "1"
-    action_val = get_setup_value(f"budget_control_action_{selected_company}", "do_nothing")
+    action_val = get_setup_value(f"budget_control_action_{selected_company}", "notify")
 
     configs_list = []
     for comp in companies:
         c_enabled = get_setup_value(f"budget_control_enabled_{comp.code}", "0") == "1"
-        c_action = get_setup_value(f"budget_control_action_{comp.code}", "do_nothing")
+        c_action = get_setup_value(f"budget_control_action_{comp.code}", "notify")
         configs_list.append(
             {
                 "company": comp.code,

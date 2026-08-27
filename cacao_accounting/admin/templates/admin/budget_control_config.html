@@ -70,6 +70,13 @@
             </select>
           </div>
 
+          {% if action == "do_nothing" and enabled %}
+          <div class="alert alert-warning" role="alert">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            {{ _("La política <strong>do_nothing</strong> no emitirá avisos ni bloqueará aprobaciones que excedan el presupuesto. Se recomienda usar <em>notify</em> o <em>block</em>.") }}
+          </div>
+          {% endif %}
+
           <button type="submit" class="btn btn-primary mt-2">
             <i class="bi bi-floppy me-1"></i>{{ _("Guardar") }}
           </button>
@@ -107,7 +114,11 @@
                 {% endif %}
               </td>
               <td>
+                {% if cfg.enabled and cfg.action == "do_nothing" %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>{{ cfg.action }}</span>
+                {% else %}
                 <span class="text-monospace">{{ cfg.action }}</span>
+                {% endif %}
               </td>
             </tr>
             {% endfor %}

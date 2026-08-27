@@ -15,9 +15,13 @@ from cacao_accounting.database import (
     Entity,
     FiscalYear,
     GLEntry,
+    Item,
+    ItemAccount,
     Party,
     PurchaseOrder,
     PurchaseOrderItem,
+    PurchaseRequest,
+    PurchaseRequestItem,
     User,
     database,
 )
@@ -615,3 +619,177 @@ def test_budget_control_inactive_ledger_resolution(app_ctx):
     assert val_res["budget"] == Decimal("250")
     assert val_res["committed"] == Decimal("0")
     assert val_res["available"] == Decimal("250")
+
+
+def test_budget_control_default_policy_is_notify(app_ctx):
+    """Verifica que la política por defecto al habilitar control presupuestario sea 'notify'."""
+    from cacao_accounting.compras import check_budget_control
+
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    if not book:
+        book = database.session.query(Book).filter_by(entity="cacao").first()
+
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "DEFAULT-POLICY-2026",
+            "name": "Default Policy Test",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
+    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+
+    service.add_budget_line(
+        budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "period_id": per.id,
+            "amount": 500,
+        },
+        str(admin_user.id),
+    )
+    service.approve_budget(budget.id, str(admin_user.id))
+
+    item = database.session.query(Item).filter_by(is_active=True).first()
+    item_acc = ItemAccount(item_code=item.code, company="cacao", expense_account_id=acc.id, cost_center_code=cc.code)
+    database.session.add(item_acc)
+    database.session.commit()
+
+    set_setup_value("budget_control_enabled_cacao", "1")
+    database.session.commit()
+
+    pr = PurchaseRequest(
+        company="cacao",
+        posting_date=per.start,
+        docstatus=0,
+        grand_total=Decimal("800"),
+    )
+    database.session.add(pr)
+    database.session.flush()
+
+    pr_item = PurchaseRequestItem(
+        purchase_request_id=pr.id, item_code=item.code, qty=Decimal("1"), rate=Decimal("800"), amount=Decimal("800")
+    )
+    database.session.add(pr_item)
+    database.session.commit()
+
+    from flask import get_flashed_messages
+
+    with app_ctx.test_request_context():
+        check_budget_control(
+            company=pr.company,
+            posting_date=pr.posting_date,
+            supplier_id=None,
+            document_id=pr.id,
+            document_type="purchase_request",
+            items=[pr_item],
+        )
+        flashes = get_flashed_messages(with_categories=True)
+        warning_msgs = [msg for cat, msg in flashes if cat == "warning"]
+        assert len(warning_msgs) > 0, "Expected a warning flash when budget is exceeded with default notify policy"
+        assert "excede" in warning_msgs[0].lower()
+
+
+def test_budget_control_admin_warning_do_nothing(app_ctx):
+    """Verifica que la página de admin muestre advertencia cuando la política es do_nothing con control activado."""
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+
+    with app_ctx.test_client() as client:
+        with client.session_transaction() as session:
+            session["_user_id"] = admin_user.id
+            session["_fresh"] = True
+
+        response_post = client.post(
+            "/settings/budget-control",
+            data={"company": "cacao", "enabled": "on", "action_on_exceeded": "do_nothing"},
+        )
+        assert response_post.status_code == 302
+
+        response = client.get("/settings/budget-control?company=cacao")
+        assert response.status_code == 200
+        html = response.data.decode()
+        assert "do_nothing" in html
+        assert "alert-warning" in html
+
+
+def test_budget_control_pr_approval_blocks_on_policy(app_ctx):
+    """Verifica que la aprobación de solicitud de compra bloquea cuando la política es 'block'."""
+    service = BudgetService()
+    admin_user = database.session.query(User).filter_by(user="admin").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
+    book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    if not book:
+        book = database.session.query(Book).filter_by(entity="cacao").first()
+
+    budget = service.create_budget(
+        {
+            "company": "cacao",
+            "ledger_id": book.id,
+            "fiscal_year_id": fy.id,
+            "budget_code": "PR-BLOCK-2026",
+            "name": "PR Block Test",
+            "currency_id": "NIO",
+        },
+        str(admin_user.id),
+    )
+    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
+
+    service.add_budget_line(
+        budget.id,
+        {
+            "account_id": acc.id,
+            "cost_center_id": cc.id,
+            "period_id": per.id,
+            "amount": 200,
+        },
+        str(admin_user.id),
+    )
+    service.approve_budget(budget.id, str(admin_user.id))
+
+    item = database.session.query(Item).filter_by(is_active=True).first()
+    item_acc = ItemAccount(item_code=item.code, company="cacao", expense_account_id=acc.id, cost_center_code=cc.code)
+    database.session.add(item_acc)
+    database.session.commit()
+
+    set_setup_value("budget_control_enabled_cacao", "1")
+    set_setup_value("budget_control_action_cacao", "block")
+    database.session.commit()
+
+    from cacao_accounting.compras import check_budget_control
+
+    pr = PurchaseRequest(
+        company="cacao",
+        posting_date=per.start,
+        docstatus=0,
+        grand_total=Decimal("500"),
+    )
+    database.session.add(pr)
+    database.session.flush()
+
+    pr_item = PurchaseRequestItem(
+        purchase_request_id=pr.id, item_code=item.code, qty=Decimal("1"), rate=Decimal("500"), amount=Decimal("500")
+    )
+    database.session.add(pr_item)
+    database.session.commit()
+
+    with app_ctx.test_request_context():
+        with pytest.raises(ValueError, match="No es posible aprobar el documento."):
+            check_budget_control(
+                company=pr.company,
+                posting_date=pr.posting_date,
+                supplier_id=None,
+                document_id=pr.id,
+                document_type="purchase_request",
+                items=[pr_item],
+            )

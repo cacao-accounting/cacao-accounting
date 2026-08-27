@@ -2801,7 +2801,7 @@ def check_budget_control(
     if not enabled:
         return
 
-    action_policy = get_setup_value(f"budget_control_action_{company}", "do_nothing")
+    action_policy = get_setup_value(f"budget_control_action_{company}", "notify")
     groups = _group_items_by_budget_dimensions(items, company, supplier_id)
     budget_service = BudgetService()
 
