@@ -321,7 +321,6 @@ class FormularioAccountingPeriod(FlaskForm):
     fiscal_year = SelectField("Año Fiscal", validators=[DataRequired()])
     nombre = StringField("Nombre", validators=[DataRequired()])
     habilitado = BooleanField("Habilitado", default=True)
-    cerrado = BooleanField("Cerrado", default=False)
     inicio = DateField(FECHA_INICIO, validators=[DataRequired()])
     fin = DateField(FECHA_FIN, validators=[DataRequired()])
 

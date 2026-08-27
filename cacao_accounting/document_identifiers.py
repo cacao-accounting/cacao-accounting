@@ -66,10 +66,12 @@ def parse_posting_date(posting_date_raw: date | str | None) -> date:
 
 
 def validate_accounting_period(company: str | None, posting_date: date, allow_closing: bool = False) -> None:
-    """Valida que la fecha contable no caiga en un periodo cerrado.
+    """Aplica el cierre operativo y su excepción exclusiva para cierres contables.
 
-    Solo se permite un comprobante manual de cierre (`is_closing=True`) si el periodo
-    contable está cerrado. Si el año fiscal está cerrado, no se permite ningún movimiento.
+    Compras, ventas, bancos e inventario deben postear con ``allow_closing=False`` y
+    quedan bloqueados cuando el periodo está cerrado o deshabilitado. Solo un
+    comprobante de diario marcado como cierre puede usar ``allow_closing=True`` para
+    completar el cierre. Si el año fiscal está cerrado, no se permite ningún movimiento.
     """
     if not company:
         raise IdentifierConfigurationError("Debe indicar la compania del documento.")
