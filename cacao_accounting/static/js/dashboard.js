@@ -183,7 +183,7 @@
           "accountingChart",
           rows.map((row) => this.monthName(row.month)),
           [
-            { label: config.chartLabels.income, data: rows.map((row) => row.income), borderColor: "#2563eb" },
+            { label: config.chartLabels.income, data: rows.map((row) => row.income), borderColor: "#BB6A40" },
             { label: config.chartLabels.expense, data: rows.map((row) => row.expenses), borderColor: "#dc2626" },
           ]
         );
