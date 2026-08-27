@@ -179,6 +179,8 @@ def get_source_items(source_type: str, source_id: str, target_type: str | None =
         raise DocumentFlowError("Documento origen no encontrado.", 404)
     if getattr(source, "docstatus", 0) != 1:
         return []
+    if getattr(source, "status", None) == "closed":
+        return []
     source_items = get_document_items(source_key, source_id)
     return [
         payload

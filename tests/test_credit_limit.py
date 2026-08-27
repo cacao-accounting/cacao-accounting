@@ -265,6 +265,29 @@ def test_credit_exposure_deducts_invoice_created_from_delivery_note(app_ctx):
     assert _approved_customer_order_exposure("cacao", customer.id) == Decimal("0")
 
 
+def test_credit_exposure_excludes_closed_sales_orders(app_ctx):
+    """Closing an approved order releases its remaining customer credit exposure."""
+    customer, _cp = _ensure_customer("CUST-CLOSED-ORDER", "Cliente orden cerrada")
+    order = SalesOrder(
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        grand_total=Decimal("100"),
+        status="open",
+    )
+    database.session.add(order)
+    database.session.commit()
+
+    assert _approved_customer_order_exposure("cacao", customer.id) == Decimal("100")
+
+    order.status = "closed"
+    database.session.commit()
+
+    assert _approved_customer_order_exposure("cacao", customer.id) == Decimal("0")
+
+
 def test_skip_credit_limit_on_return(app_ctx):
     customer, cp = _ensure_customer("CUST-RETURN-LIMIT", "Cliente Return Limit")
 

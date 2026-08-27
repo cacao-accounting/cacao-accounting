@@ -431,6 +431,36 @@ def _release_reservation_for_sales_order(so: SalesOrder) -> None:
         bin_row.reserved_qty = new_reserved
 
 
+def _release_reservation_for_closed_sales_order(so: SalesOrder) -> None:
+    """Release only the inventory reservation abandoned by a closed sales order.
+
+    A delivery note has already released its own reservation.  Closing a
+    partially fulfilled order must therefore release only the remaining
+    delivery balance; subtracting the entire ordered quantity could consume
+    reservations belonging to other sales orders for the same stock bin.
+    """
+    for item in database.session.execute(database.select(SalesOrderItem).filter_by(sales_order_id=so.id)).scalars():
+        delivered_qty = consumed_qty_for_source(
+            "sales_order",
+            so.id,
+            item.id,
+            "delivery_note",
+            exclude_draft_targets=True,
+        )
+        release_qty = max(Decimal("0"), _base_qty_for_sales_line(item, _item_by_code(item.item_code)) - delivered_qty)
+        if release_qty <= 0:
+            continue
+        item_obj = _item_by_code(item.item_code)
+        if item_obj and not item_obj.is_stock_item:
+            continue
+        warehouse = _resolve_item_warehouse(item, item_obj)
+        if not warehouse:
+            continue
+        _require_sales_warehouse(so.company, warehouse)
+        bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
+        bin_row.reserved_qty = max(Decimal("0"), Decimal(str(bin_row.reserved_qty or 0)) - release_qty)
+
+
 def _release_reservation_for_delivery_note(dn: DeliveryNote) -> None:
     """Libera reserva al aprobar una Nota de Entrega vinculada a una OV.
 
@@ -1337,6 +1367,8 @@ def _validate_sales_source_link(document: Any, source_type: str, source_id: str,
         raise ValueError(f"El documento origen '{source_id}' no existe.")
     if source.docstatus != 1:
         raise ValueError(f"El documento origen '{source_id}' debe estar aprobado.")
+    if source_type == "sales_order" and source.status == "closed":
+        raise ValueError(f"La Orden de Venta origen '{source_id}' está cerrada.")
     if source.company != document.company:
         raise ValueError("El documento origen y el documento destino deben pertenecer a la misma compañía.")
     customer_id = getattr(source, "customer_id", None)
@@ -1990,9 +2022,18 @@ def _sales_base_amount(document: Any, amount: Decimal, *, use_stored_total: bool
 
 
 def _approved_customer_order_exposure(company: str, customer_id: str, current_document: Any | None = None) -> Decimal:
-    """Calculate approved sales-order value not yet covered by invoices."""
+    """Calculate exposure from approved sales orders that remain open.
+
+    Closed orders no longer reserve customer credit, even when their approved
+    deliveries or invoices have not covered their full monetary amount.
+    """
     orders = database.session.execute(
-        database.select(SalesOrder).filter_by(company=company, customer_id=customer_id, docstatus=1)
+        database.select(SalesOrder).where(
+            SalesOrder.company == company,
+            SalesOrder.customer_id == customer_id,
+            SalesOrder.docstatus == 1,
+            SalesOrder.status != "closed",
+        )
     ).scalars()
     exposure = Decimal("0")
     current_order_id = getattr(current_document, "sales_order_id", None)

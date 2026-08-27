@@ -39,6 +39,7 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 
 from cacao_accounting.document_flow import (
     DocumentFlowError,
+    close_document_balances,
     get_target_line_source,
     refresh_source_caches_for_target,
     revert_relations_for_target,
@@ -95,6 +96,7 @@ from cacao_accounting.ventas.services import (
     _item_by_code,
     _validate_and_reserve_stock_for_sales_order,
     _release_reservation_for_sales_order,
+    _release_reservation_for_closed_sales_order,
     _release_reservation_for_delivery_note,
     _paginate_list,
     _require_delivery_note_access,
@@ -1463,6 +1465,20 @@ def ventas_orden_venta_close(order_id: str):
             "danger",
         )
         return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
+    close_reason = "Orden de Venta cerrada manualmente."
+    close_document_balances(
+        source_type="sales_order",
+        source_id=registro.id,
+        target_type="delivery_note",
+        reason=close_reason,
+    )
+    close_document_balances(
+        source_type="sales_order",
+        source_id=registro.id,
+        target_type="sales_invoice",
+        reason=close_reason,
+    )
+    _release_reservation_for_closed_sales_order(registro)
     before = {"status": registro.status}
     registro.status = "closed"
     log_update(registro, before=before, after={"status": registro.status})
