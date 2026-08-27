@@ -7,12 +7,12 @@
   <title>{{ texts.title }}</title>
   <style>
     :root {
-      --setup-green: #6fbd2c;
-      --setup-green-dark: #287a3e;
-      --setup-green-soft: #e8f5df;
-      --setup-ink: #102033;
-      --setup-muted: #64748b;
-      --setup-line: #d8e5dc;
+      --setup-primary: #BB6A40;
+      --setup-primary-dark: #512D21;
+      --setup-primary-soft: #F7EDE7;
+      --setup-ink: #2B1B16;
+      --setup-muted: #806B61;
+      --setup-line: #E6DDD6;
       --setup-surface: #ffffff;
     }
 
@@ -25,8 +25,8 @@
     body {
       color: var(--setup-ink);
       background:
-        radial-gradient(circle at 12% 0%, rgba(111, 189, 44, .16), transparent 24rem),
-        linear-gradient(135deg, #f7faf6 0%, #eef5f8 58%, #edf3ed 100%);
+        radial-gradient(circle at 12% 0%, rgba(187, 106, 64, .16), transparent 24rem),
+        linear-gradient(135deg, #FCF9F6 0%, #F7EDE7 58%, #F3E9E1 100%);
     }
 
     .setup-shell {
@@ -40,7 +40,7 @@
     .setup-card {
       width: min(100%, 940px);
       overflow: hidden;
-      border: 1px solid rgba(40, 122, 62, .16);
+      border: 1px solid rgba(81, 45, 33, .16);
       border-radius: 18px;
       background: var(--setup-surface);
       box-shadow: 0 18px 42px rgba(16, 32, 51, .11);
@@ -50,10 +50,10 @@
       display: grid;
       gap: 1rem;
       padding: clamp(1.2rem, 2.5vw, 1.7rem);
-      color: #061625;
+      color: #2B1B16;
       background:
-        linear-gradient(90deg, rgba(232, 245, 223, .92), rgba(255, 255, 255, .96));
-      border-top: 5px solid var(--setup-green);
+        linear-gradient(90deg, rgba(247, 237, 231, .92), rgba(255, 255, 255, .96));
+      border-top: 5px solid var(--setup-primary);
       border-bottom: 1px solid var(--setup-line);
     }
 
@@ -81,7 +81,7 @@
     .setup-subtitle {
       max-width: 42rem;
       margin: .45rem 0 0;
-      color: rgba(6, 22, 37, .76);
+      color: rgba(43, 27, 22, .76);
       font-size: .98rem;
     }
 
@@ -90,7 +90,7 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: .5rem;
       padding: .35rem;
-      border: 1px solid rgba(40, 122, 62, .14);
+      border: 1px solid rgba(81, 45, 33, .14);
       border-radius: 12px;
       background: rgba(255, 255, 255, .72);
     }
@@ -102,16 +102,16 @@
       min-width: 0;
       padding: .5rem .55rem;
       border-radius: 9px;
-      color: rgba(6, 22, 37, .68);
+      color: rgba(43, 27, 22, .68);
       font-weight: 700;
       font-size: .86rem;
       line-height: 1.2;
     }
 
     .setup-step.is-active {
-      color: #061625;
+      color: #2B1B16;
       background: #fff;
-      box-shadow: 0 4px 12px rgba(16, 32, 51, .06);
+      box-shadow: 0 4px 12px rgba(81, 45, 33, .06);
     }
 
     .setup-step-number {
@@ -121,8 +121,8 @@
       height: 1.75rem;
       place-items: center;
       border-radius: 50%;
-      background: var(--setup-green-soft);
-      color: var(--setup-green-dark);
+      background: var(--setup-primary-soft);
+      color: var(--setup-primary-dark);
       font-size: .85rem;
       font-weight: 800;
     }
@@ -130,13 +130,13 @@
     .setup-step.is-active .setup-step-number,
     .setup-step.is-complete .setup-step-number {
       color: #fff;
-      background: var(--setup-green-dark);
+      background: var(--setup-primary-dark);
     }
 
     .setup-body {
       padding: clamp(1.25rem, 2.5vw, 1.85rem);
       background:
-        linear-gradient(180deg, #ffffff 0%, #fbfdf9 100%);
+        linear-gradient(180deg, #FFFDF9 0%, #F8F0E7 100%);
     }
 
     .setup-section-title {
@@ -155,7 +155,7 @@
       border: 1px solid var(--setup-line);
       border-radius: 14px;
       background: #fff;
-      box-shadow: 0 8px 22px rgba(16, 32, 51, .045);
+      box-shadow: 0 8px 22px rgba(81, 45, 33, .045);
     }
 
     .setup-language-panel {
@@ -163,7 +163,7 @@
     }
 
     .setup-panel-soft {
-      background: linear-gradient(135deg, #ffffff 0%, #f7fbf5 100%);
+      background: linear-gradient(135deg, #FFFDF9 0%, #F7EDE7 100%);
     }
 
     .setup-catalog-option {
@@ -188,16 +188,16 @@
     }
 
     .btn-setup-primary {
-      border-color: var(--setup-green-dark);
-      background: var(--setup-green-dark);
-      box-shadow: 0 12px 24px rgba(40, 122, 62, .24);
+      border-color: var(--setup-primary-dark);
+      background: var(--setup-primary-dark);
+      box-shadow: 0 12px 24px rgba(81, 45, 33, .24);
       color: #fff;
       font-weight: 800;
     }
 
     .btn-setup-primary:hover {
-      border-color: #1f6332;
-      background: #1f6332;
+      border-color: #3B241B;
+      background: #3B241B;
       color: #fff;
     }
 
