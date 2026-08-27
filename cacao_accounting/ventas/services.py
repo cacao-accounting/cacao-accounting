@@ -573,6 +573,8 @@ def _capture_sales_state(registro: Any) -> dict[str, Any]:
 
 def _paginate_list(model, search_fields, query=None, *, include_status: bool = True, access_modules=("sales",)):
     """Pagina un listado aplicando los filtros GET comunes."""
+    from cacao_accounting.list_filters import apply_period_filter, attach_period_picker, require_period_company
+
     base_query = query if query is not None else database.select(model)
     if hasattr(model, "company"):
         company = request.args.get("company")
@@ -590,13 +592,25 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
                 base_query = base_query.where(database.false())
             else:
                 base_query = base_query.where(model.company.in_(companies))
+    period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
+    period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
+    if hasattr(model, "posting_date") and (period_from or period_to):
+        base_query = apply_period_filter(
+            base_query,
+            model,
+            require_period_company(access_modules, current_user=current_user),
+            period_from,
+            period_to,
+        )
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
-    return database.paginate(
+    paginated = database.paginate(
         filtered_query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
     )
+    attach_period_picker(paginated, model, access_modules[0], current_user=current_user)
+    return paginated
 
 
 def _require_delivery_note_access(document: DeliveryNote, action: str = "consultar") -> None:

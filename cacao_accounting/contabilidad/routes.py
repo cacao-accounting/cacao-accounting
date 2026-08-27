@@ -2354,12 +2354,34 @@ def periodo_contable():
 def listar_comprobantes():
     """Lista comprobantes contables manuales."""
     from cacao_accounting.contabilidad.journal_service import journal_display_document_name
+    from cacao_accounting.database import Entity
+    from cacao_accounting.reportes.periods import list_periods_for_company, resolve_period_range
 
     query = (
         database.select(ComprobanteContable)
         .where(ComprobanteContable.is_fiscal_year_closing.is_(False))
         .order_by(ComprobanteContable.date.desc(), ComprobanteContable.created.desc())
     )
+
+    period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
+    period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
+    selected_company = request.args.get("company")
+    companies = list(
+        database.session.execute(_accounting_company_scope(database.select(Entity.code), Entity.code, "consultar")).scalars()
+    )
+    period_range = None
+    if period_from or period_to:
+        company = selected_company or (companies[0] if len(companies) == 1 else None)
+        if company is None:
+            abort(400, description=_("Seleccione una compañía para aplicar el filtro por período."))
+        period_range = resolve_period_range(company, period_from, period_to)
+        if period_range is not None:
+            query = query.where(ComprobanteContable.entity == company)
+            query = query.where(ComprobanteContable.date >= period_range.period_start)
+            query = query.where(ComprobanteContable.date <= period_range.period_end)
+    else:
+        company = selected_company or (companies[0] if len(companies) else None)
+
     query = apply_list_filters(
         query,
         ComprobanteContable,
@@ -2380,10 +2402,25 @@ def listar_comprobantes():
     for registro in consulta.items:
         setattr(registro, "display_document_name", journal_display_document_name(registro))
 
+    periods = [
+        {"id": str(item.id), "name": item.name, "is_closed": bool(item.is_closed)}
+        for item in list_periods_for_company(company)
+    ]
+    active_from, active_to = period_from, period_to
+    if period_range is not None:
+        active_from, active_to = period_range.from_id, period_range.to_id
+    elif not (active_from or active_to):
+        current = resolve_period_range(company, None, None)
+        active_from = active_to = current.from_id if current is not None else ""
     return render_template(
         "contabilidad/journal_lista.html",
         consulta=consulta,
         titulo="Comprobantes Contables - " + APPNAME,
+        periods=periods,
+        period_from=active_from,
+        period_to=active_to or active_from,
+        company_choices=_accounting_entity_choices(),
+        selected_company=company or "",
     )
 
 

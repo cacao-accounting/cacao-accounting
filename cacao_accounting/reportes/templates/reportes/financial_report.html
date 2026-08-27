@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% from "reportes/report_macros.html" import smart_select_field %}
+{% from "smart_select_field.html" import smart_select_field %}
+{% from "reportes/report_macros.html" import period_range_field %}
 {% block contenido %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
@@ -28,7 +29,7 @@
         </div>
         {{ smart_select_field("Compañía", "company", "company", report_filters.company, "report-company") }}
         {{ smart_select_field("Libro contable", "ledger", "book", report_filters.ledger or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ smart_select_field("Periodo contable", "accounting_period", "accounting_period", report_filters.accounting_period or '', "report-accounting-period", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ period_range_field("Periodo contable", period_from, period_to) }}
         {{ smart_select_field("Cuenta contable", "account_code", "account_code", report_filters.account_code or '', "report-account-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         <label class="form-check">
           <input class="form-check-input" type="checkbox" name="include_descendants" value="1" {% if report_filters.include_descendants %}checked{% endif %}>

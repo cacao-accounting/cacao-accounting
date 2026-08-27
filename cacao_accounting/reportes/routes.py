@@ -61,7 +61,9 @@ from cacao_accounting.reportes.helpers import (
     _resolve_company,
     _default_ledger_for_company,
     _default_period_for_company,
-    _date_arg,
+    _period_params,
+    _resolve_as_of_date,
+    _resolve_date_bounds,
     _financial_filters,
     _should_run_financial_report,
     _empty_financial_report,
@@ -89,8 +91,6 @@ else:
 
 
 reportes = Blueprint("reportes", __name__, template_folder="templates")
-
-REPORT_TABLE_HTML = "reportes/report_table.html"
 
 _COLUMN_LABELS = {
     "posting_date": "Posting Date",
@@ -325,7 +325,9 @@ def balance_sheet():
 def cash_flow():
     """Estado de Flujo de Efectivo (NIC 7, método indirecto)."""
     filters, selected_view, saved_views = _resolve_view_context("cash-flow", _financial_filters())
-    status = get_cash_flow_configuration_status(filters.company, filters.ledger, filters.accounting_period)
+    status = get_cash_flow_configuration_status(
+        filters.company, filters.ledger, filters.accounting_period, filters.period_from, filters.period_to
+    )
     if not status.complete:
         return render_template(
             "reportes/cash_flow_blocked.html",
@@ -396,15 +398,12 @@ def subledger():
             company=company,
             party_type=party_type,
             party_id=request.args.get("party_id") or None,
-            as_of_date=_date_arg("as_of_date"),
+            as_of_date=_resolve_as_of_date(company),
         )
     )
-    return render_template(
-        REPORT_TABLE_HTML,
-        titulo="Subledger AR/AP - " + APPNAME,
-        report_title="Subledger AR/AP",
-        rows=report.rows,
-        totals=report.totals,
+    return _render_operational_report(
+        _("Subledger AR/AP"),
+        report,
     )
 
 
@@ -422,16 +421,10 @@ def aging():
             company=company,
             party_type=party_type,
             party_id=request.args.get("party_id") or None,
-            as_of_date=_date_arg("as_of_date") or date.today(),
+            as_of_date=_resolve_as_of_date(company) or date.today(),
         )
     )
-    return render_template(
-        REPORT_TABLE_HTML,
-        titulo="Aging AR/AP - " + APPNAME,
-        report_title="Aging AR/AP",
-        rows=report.rows,
-        totals=report.totals,
-    )
+    return _render_operational_report(_("Aging AR/AP"), report)
 
 
 @reportes.route("/reports/kardex")
@@ -440,12 +433,15 @@ def aging():
 def kardex():
     """Report inventory kardex."""
     company = _resolve_company(request.args.get("company", "cacao"))
+    date_from, date_to = _resolve_date_bounds(company)
     filters = KardexFilters(
         company=company,
         item_code=request.args.get("item_code") or None,
         warehouse=request.args.get("warehouse") or None,
-        date_from=_date_arg("date_from"),
-        date_to=_date_arg("date_to"),
+        date_from=date_from,
+        date_to=date_to,
+        period_from=request.args.get("accounting_period_from") or request.args.get("period_from"),
+        period_to=request.args.get("accounting_period_to") or request.args.get("period_to"),
     )
     report = get_kardex(filters)
     return _render_operational_framework(
@@ -477,7 +473,7 @@ def kardex():
 def inventory_existence():
     """Genera reporte de existencias a una fecha clave."""
     company = _resolve_company(request.args.get("company", "cacao"))
-    as_of_date = _date_arg("as_of_date")
+    as_of_date = _resolve_as_of_date(company)
     filters = KardexFilters(
         company=company,
         item_code=request.args.get("item_code") or None,
@@ -516,15 +512,9 @@ def reconciliations():
     exige_acceso_compania("accounting", company, "consultar")
     report = get_reconciliation_report(
         company=company,
-        as_of_date=_date_arg("as_of_date"),
+        as_of_date=_resolve_as_of_date(company),
     )
-    return render_template(
-        REPORT_TABLE_HTML,
-        titulo="Reconciliaciones - " + APPNAME,
-        report_title="Reconciliaciones",
-        rows=report.rows,
-        totals=report.totals,
-    )
+    return _render_operational_report(_("Reconciliaciones"), report)
 
 
 @reportes.route("/reports/reconciliation-matrix")
@@ -534,6 +524,7 @@ def reconciliations():
 def reconciliation_matrix():
     """Reconcilia AR, AP, inventario, bancos e impuestos contra GL."""
     company = _resolve_company(request.args.get("company", "cacao"))
+    period_from, period_to = _period_params()
     period = request.args.get("accounting_period") or _default_period_for_company(company)
     try:
         report = get_reconciliation_matrix(
@@ -541,8 +532,10 @@ def reconciliation_matrix():
                 company=company,
                 ledger=request.args.get("ledger") or _default_ledger_for_company(company),
                 accounting_period=period,
-                as_of_date=_date_arg("as_of_date"),
+                as_of_date=_resolve_as_of_date(company),
                 currency=request.args.get("currency") or None,
+                period_from=period_from,
+                period_to=period_to or period_from,
             )
         )
     except ValueError as exc:
@@ -575,11 +568,14 @@ def reconciliation_matrix():
 def bank_movement():
     """Genera reporte de detalle de movimiento bancario."""
     company = _resolve_company(request.args.get("company", "cacao"))
+    date_from, date_to = _resolve_date_bounds(company)
     filters = BankingFilters(
         company=company,
         bank_account_id=request.args.get("bank_account_id") or None,
-        date_from=_date_arg("date_from"),
-        date_to=_date_arg("date_to"),
+        date_from=date_from,
+        date_to=date_to,
+        period_from=request.args.get("accounting_period_from") or request.args.get("period_from"),
+        period_to=request.args.get("accounting_period_to") or request.args.get("period_to"),
     )
     report = get_bank_movement_detail(filters)
     return _render_operational_framework(
@@ -610,10 +606,11 @@ def bank_movement():
 def bank_balance_summary():
     """Genera reporte de resumen de saldos bancarios."""
     company = _resolve_company(request.args.get("company", "cacao"))
+    as_of_date = _resolve_as_of_date(company)
     filters = BankingFilters(
         company=company,
         bank_account_id=request.args.get("bank_account_id") or None,
-        as_of_date=_date_arg("as_of_date"),
+        as_of_date=as_of_date,
     )
     report = get_bank_balance_summary(filters)
     return _render_operational_framework(
@@ -642,7 +639,7 @@ def bank_balance_summary():
 def accounts_payable():
     """Genera reporte de cuentas por pagar por proveedor a fecha clave."""
     company = _resolve_company(request.args.get("company", "cacao"))
-    as_of_date = _date_arg("as_of_date")
+    as_of_date = _resolve_as_of_date(company)
     party_id = request.args.get("party_id") or None
     report = get_ar_ap_subledger(
         SubledgerFilters(
@@ -680,7 +677,7 @@ def accounts_payable():
 def ap_aging():
     """Genera aging de cuentas por pagar."""
     company = _resolve_company(request.args.get("company", "cacao"))
-    as_of_date = _date_arg("as_of_date") or date.today()
+    as_of_date = _resolve_as_of_date(company) or date.today()
     party_id = request.args.get("party_id") or None
     report = get_aging_report(
         AgingFilters(
@@ -711,7 +708,7 @@ def ap_aging():
 def accounts_receivable():
     """Genera reporte de cuentas por cobrar por cliente a fecha clave."""
     company = _resolve_company(request.args.get("company", "cacao"))
-    as_of_date = _date_arg("as_of_date")
+    as_of_date = _resolve_as_of_date(company)
     party_id = request.args.get("party_id") or None
     report = get_ar_ap_subledger(
         SubledgerFilters(company=company, party_type="customer", party_id=party_id, as_of_date=as_of_date)
@@ -743,7 +740,7 @@ def accounts_receivable():
 def ar_aging():
     """Genera aging de cuentas por cobrar."""
     company = _resolve_company(request.args.get("company", "cacao"))
-    as_of_date = _date_arg("as_of_date") or date.today()
+    as_of_date = _resolve_as_of_date(company) or date.today()
     party_id = request.args.get("party_id") or None
     report = get_aging_report(AgingFilters(company=company, party_type="customer", party_id=party_id, as_of_date=as_of_date))
     return _render_operational_framework(

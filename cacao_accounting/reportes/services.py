@@ -68,6 +68,8 @@ class SubledgerFilters:
     include_returns: bool = True
     page: int = 1
     page_size: int = 100
+    period_from: str | None = None
+    period_to: str | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,8 @@ class AgingFilters:
     as_of_date: date
     party_id: str | None = None
     include_returns: bool = True
+    period_from: str | None = None
+    period_to: str | None = None
 
 
 @dataclass(frozen=True)
@@ -92,6 +96,8 @@ class MaturityFilters:
     horizon_days: int = 365
     page: int = 1
     page_size: int = 100
+    period_from: str | None = None
+    period_to: str | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +111,8 @@ class KardexFilters:
     date_to: date | None = None
     page: int = 1
     page_size: int = 100
+    period_from: str | None = None
+    period_to: str | None = None
 
 
 @dataclass(frozen=True)
@@ -118,6 +126,8 @@ class BankingFilters:
     as_of_date: date | None = None
     page: int = 1
     page_size: int = 100
+    period_from: str | None = None
+    period_to: str | None = None
 
 
 @dataclass(frozen=True)
@@ -132,6 +142,8 @@ class OperationalReportFilters:
     warehouse: str | None = None
     page: int = 1
     page_size: int = 100
+    period_from: str | None = None
+    period_to: str | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +153,8 @@ class FinancialReportFilters:
     company: str
     ledger: str | None = None
     accounting_period: str | None = None
+    period_from: str | None = None
+    period_to: str | None = None
     voucher_number: str | None = None
     account_code: str | None = None
     account_from: str | None = None
@@ -173,6 +187,8 @@ class ReconciliationFilters:
     accounting_period: str | None = None
     as_of_date: date | None = None
     currency: str | None = None
+    period_from: str | None = None
+    period_to: str | None = None
 
 
 @dataclass(frozen=True)
@@ -539,7 +555,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     ).scalar_one_or_none()
     comparison_currency = filters.currency or selected_ledger.currency
     ledger_needs_conversion = selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
-    _, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    _, period_end, _ = _report_period_bounds(filters)
     as_of_date = filters.as_of_date or period_end or date.today()
     defaults = database.session.execute(
         select(CompanyDefaultAccount).where(CompanyDefaultAccount.company == filters.company)
@@ -896,13 +912,16 @@ def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
 
 def get_kardex(filters: KardexFilters) -> PaginatedReport:
     """Devuelve Kardex desde StockLedgerEntry."""
+    window_start, window_end = _report_window(filters)
     query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
     if filters.warehouse:
         query = query.filter_by(warehouse=filters.warehouse)
-    if filters.date_to:
-        query = query.where(StockLedgerEntry.posting_date <= filters.date_to)
+    if window_start:
+        query = query.where(StockLedgerEntry.posting_date >= window_start)
+    if window_end:
+        query = query.where(StockLedgerEntry.posting_date <= window_end)
 
     rows: list[ReportRow] = []
     total_in = Decimal("0")
@@ -964,7 +983,8 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
 
 def get_inventory_existence(filters: KardexFilters) -> PaginatedReport:
     """Devuelve existencias de inventario a una fecha clave desde stock ledger."""
-    as_of_date = filters.date_to or filters.date_from
+    _, window_end = _report_window(filters)
+    as_of_date = filters.date_to or filters.date_from or window_end
     query = exclude_cancelled_stock_entries(select(StockLedgerEntry).filter_by(company=filters.company))
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
@@ -1710,14 +1730,22 @@ def _compute_running_balance(rows: list[ReportRow]) -> Decimal:
 
 def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     """Devuelve detalle de movimiento bancario desde pagos y extractos."""
+    from dataclasses import replace
+
+    window_start, window_end = _report_window(filters)
+    effective_filters = filters
+    if not filters.date_from or not filters.date_to:
+        effective_filters = replace(
+            filters, date_from=filters.date_from or window_start, date_to=filters.date_to or window_end
+        )
     bank_accounts = {
         account.id: account
         for account in database.session.execute(select(BankAccount).where(BankAccount.company == filters.company)).scalars()
     }
     party_names = {party.id: party.name for party in database.session.execute(select(Party)).scalars().all()}
 
-    payment_rows, _, _ = _process_payment_entries(filters, bank_accounts, party_names)
-    transaction_rows = _process_bank_transactions(filters, bank_accounts)
+    payment_rows, _, _ = _process_payment_entries(effective_filters, bank_accounts, party_names)
+    transaction_rows = _process_bank_transactions(effective_filters, bank_accounts)
 
     rows = payment_rows + transaction_rows
     rows.sort(
@@ -2088,6 +2116,36 @@ def _period_bounds(company: str, period_name: str | None) -> tuple[date | None, 
     return period.start, period.end, period
 
 
+def _report_period_bounds(filters: Any) -> tuple[date | None, date | None, AccountingPeriod | None]:
+    """Resuelve los límites temporales de un reporte.
+
+    Prioriza el rango de períodos contables completos (``period_from`` /
+    ``period_to``); cuando no está presente conserva la resolución clásica por
+    el nombre del ``accounting_period`` para compatibilidad con URL anteriores.
+    """
+    period_from = getattr(filters, "period_from", None)
+    period_to = getattr(filters, "period_to", None)
+    if period_from or period_to:
+        from cacao_accounting.reportes.periods import resolve_period_range
+
+        period_range = resolve_period_range(filters.company, period_from, period_to)
+        if period_range is not None:
+            return period_range.period_start, period_range.period_end, period_range.to_period
+    return _period_bounds(filters.company, getattr(filters, "accounting_period", None))
+
+
+def _report_window(filters: Any) -> tuple[date | None, date | None]:
+    """Resuelve la ventana temporal efectiva de un reporte operativo.
+
+    Prioriza las fechas explícitas (``date_from``/``date_to``); cuando están
+    ausentes deriva el rango desde los períodos contables completos.
+    """
+    period_start, period_end, _ = _report_period_bounds(filters)
+    start = getattr(filters, "date_from", None) or period_start
+    end = getattr(filters, "date_to", None) or period_end
+    return start, end
+
+
 def _apply_gl_filters(query: Any, filters: FinancialReportFilters, period_start: date | None, period_end: date | None) -> Any:
     query = _apply_base_filters(query, filters)
     query = _apply_account_filters(query, filters)
@@ -2152,16 +2210,20 @@ def _apply_party_filters(query: Any, filters: FinancialReportFilters) -> Any:
 
 
 def _apply_cancellation_scope(query: Any, filters: FinancialReportFilters) -> Any:
+    from cacao_accounting.cancellation_scope import ordinary_gl_scope
+
     if filters.include_cancellations or filters.status == "cancelled":
         return query
-    return query.where(GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
+    return query.where(*ordinary_gl_scope())
 
 
 def _apply_status_filter(query: Any, filters: FinancialReportFilters) -> Any:
+    from cacao_accounting.cancellation_scope import cancelled_originals_scope, ordinary_gl_scope
+
     if filters.status == "cancelled":
-        query = query.where(GLEntry.is_cancelled.is_(True))
+        query = query.where(*cancelled_originals_scope())
     elif filters.status in {"submitted", "posted"}:
-        query = query.where(GLEntry.is_cancelled.is_(False), GLEntry.is_reversal.is_(False))
+        query = query.where(*ordinary_gl_scope())
     return query
 
 
@@ -2286,7 +2348,7 @@ def _movement_detail_query(
 
 def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedReport:
     """Detalle de movimiento contable (diario + mayor) desde GL."""
-    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    period_start, period_end, _ = _report_period_bounds(filters)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={"debit": Decimal("0"), "credit": Decimal("0")}, columns=[])
@@ -2387,7 +2449,7 @@ def _build_budget_variance_rows(
 
 def get_budget_variance(filters: FinancialReportFilters) -> PaginatedReport:
     """Compara presupuesto aprobado contra GL para un período contable."""
-    period_start, period_end, period = _period_bounds(filters.company, filters.accounting_period)
+    period_start, period_end, period = _report_period_bounds(filters)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if period is None or selected_ledger is None:
         return PaginatedReport(rows=[], totals={"budget": Decimal("0"), "actual": Decimal("0"), "variance": Decimal("0")})
@@ -2464,7 +2526,7 @@ def _account_code_level(account_code: str) -> int:
 
 def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Resumen de movimientos por cuenta contable (Sábana analítica)."""
-    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    period_start, period_end, _ = _report_period_bounds(filters)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
@@ -2525,7 +2587,7 @@ def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedRepo
 
 def get_trial_balance_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Balanza de comprobación por cuenta contable."""
-    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    period_start, period_end, _ = _report_period_bounds(filters)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
@@ -2690,7 +2752,7 @@ def _accumulate_income_entry(
 
 def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Estado de resultado del periodo contable seleccionado."""
-    period_start, period_end, _ = _period_bounds(filters.company, filters.accounting_period)
+    period_start, period_end, _ = _report_period_bounds(filters)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
@@ -2865,7 +2927,7 @@ def _prior_year_retained_earnings_contribution(
 
 def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Balance general por clasificación Activo/Pasivo/Patrimonio."""
-    _, period_end, period_obj = _period_bounds(filters.company, filters.accounting_period)
+    _, period_end, period_obj = _report_period_bounds(filters)
     fiscal_year_start = _fiscal_year_start_for_period(period_obj)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:

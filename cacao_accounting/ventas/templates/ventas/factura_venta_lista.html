@@ -29,7 +29,8 @@
       </a>
     </div>
   </div>
-  {{ macros.list_filters(show_status=True) }}
+  {{ macros.list_filters(show_status=True, placeholder=_("Buscar por documento, cliente o referencia..."), extra_params=consulta.period_extra_params) }}
+  {{ macros.period_list_filters(consulta) }}
   <table class="ca-table">
     <caption style="display: none;">Listado de facturas de venta.</caption>
     <thead>
@@ -53,7 +54,7 @@
       {%- endfor %}
     </tbody>
   </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="ventas.ventas_factura_venta_lista") }}</div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="ventas.ventas_factura_venta_lista", extra_params=consulta.period_extra_params) }}</div>
 </div>
 
 {% endblock %}

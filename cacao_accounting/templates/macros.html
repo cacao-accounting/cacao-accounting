@@ -2,6 +2,7 @@
 {# Referencia: https://jinja.palletsprojects.com/en/2.11.x/templates/#macros #}
 
 {% import "detail_view_macros.html" as dv_macros %}
+{% from "smart_select_field.html" import smart_select_field %}
 
 {# Ayuda a agregar a importar los mismos archivos en el header de los archivos .html #}
 {% macro headertags() -%}

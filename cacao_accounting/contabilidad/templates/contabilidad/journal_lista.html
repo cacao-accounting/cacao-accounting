@@ -26,7 +26,41 @@
     </a>
     {% endif %}
   </div>
-  {{ macros.list_filters(show_status=True, placeholder=_("Buscar por documento, compañía o referencia...")) }}
+  {{ macros.list_filters(show_status=True, placeholder=_("Buscar por documento, compañía o referencia..."), extra_params={'accounting_period_from': period_from or '', 'accounting_period_to': period_to or '', 'company': selected_company or ''}) }}
+
+  <form method="get" action="{{ url_for('contabilidad.listar_comprobantes') }}" class="p-3 border-bottom d-flex flex-wrap gap-2 align-items-end">
+    <div>
+      <label class="form-label small text-muted mb-1">{{ _('Compañía') }}</label>
+      <select name="company" class="form-select form-select-sm">
+        <option value="">{{ _('Todas') }}</option>
+        {% for code, name in company_choices %}
+          {% if code %}
+          <option value="{{ code }}" {% if selected_company == code %}selected{% endif %}>{{ name }}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label small text-muted mb-1">{{ _('Período desde') }}</label>
+      <select name="accounting_period_from" class="form-select form-select-sm">
+        <option value="">{{ _('Período actual') }}</option>
+        {% for period in periods %}
+        <option value="{{ period.id }}" {% if period_from == period.id|string %}selected{% endif %}>{% if period.is_closed %}🔒 {% endif %}{{ period.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label small text-muted mb-1">{{ _('Período hasta') }}</label>
+      <select name="accounting_period_to" class="form-select form-select-sm">
+        <option value="">{{ _('Período actual') }}</option>
+        {% for period in periods %}
+        <option value="{{ period.id }}" {% if period_to == period.id|string %}selected{% endif %}>{% if period.is_closed %}🔒 {% endif %}{{ period.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>{{ _('Filtrar') }}</button>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('contabilidad.listar_comprobantes') }}">{{ _('Limpiar') }}</a>
+  </form>
   <div class="table-responsive">
     <table class="ca-table">
       <caption style="display: none;">{{ _('Listado de comprobantes contables.') }}</caption>
@@ -60,7 +94,7 @@
       </tbody>
     </table>
   </div>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.listar_comprobantes") }}</div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="contabilidad.listar_comprobantes", extra_params={'accounting_period_from': period_from or '', 'accounting_period_to': period_to or '', 'company': selected_company or ''}) }}</div>
 </div>
 
 {% endblock %}

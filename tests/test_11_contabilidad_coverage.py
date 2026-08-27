@@ -2350,6 +2350,67 @@ def test_route_listar_comprobantes(app_ctx):
     assert response.status_code == 200
 
 
+def test_route_listar_comprobantes_filtro_periodo(app_ctx):
+    """El listado de comprobantes se acota a períodos contables completos."""
+    from datetime import date
+
+    from cacao_accounting.database import AccountingPeriod, ComprobanteContable, User, database
+
+    user = User.query.filter_by(user="admin").first()
+    database.session.add_all(
+        [
+            AccountingPeriod(
+                entity="cacao", name="01-2026", enabled=True, is_closed=False, start=date(2026, 1, 1), end=date(2026, 1, 31)
+            ),
+            AccountingPeriod(
+                entity="cacao", name="02-2026", enabled=True, is_closed=True, start=date(2026, 2, 1), end=date(2026, 2, 28)
+            ),
+        ]
+    )
+    database.session.add_all(
+        [
+            ComprobanteContable(entity="cacao", book="DEFAULT_BOOK", date=date(2026, 1, 15), document_no="JE-EN-ENERO"),
+            ComprobanteContable(entity="cacao", book="DEFAULT_BOOK", date=date(2026, 2, 10), document_no="JE-EN-FEBRERO"),
+            ComprobanteContable(entity="cacao", book="DEFAULT_BOOK", date=date(2026, 3, 20), document_no="JE-FUERA-DE-RANGO"),
+        ]
+    )
+    database.session.commit()
+
+    period = database.session.execute(database.select(AccountingPeriod).where(AccountingPeriod.name == "01-2026")).scalar_one()
+
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.get(
+        f"/accounting/journal/list?company=cacao&accounting_period_from={period.id}&accounting_period_to={period.id}"
+    )
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "JE-EN-ENERO" in html
+    assert "JE-EN-FEBRERO" not in html
+    assert "JE-FUERA-DE-RANGO" not in html
+
+
+def test_route_listar_comprobantes_periodo_invalido(app_ctx):
+    """Un período de otra compañía o inexistente se rechaza como petición inválida."""
+    from cacao_accounting.database import AccountingPeriod, User, database
+
+    user = User.query.filter_by(user="admin").first()
+    database.session.add(
+        AccountingPeriod(
+            entity="otra", name="01-2026", enabled=True, is_closed=False, start=date(2026, 1, 1), end=date(2026, 1, 31)
+        )
+    )
+    database.session.commit()
+    other_period = database.session.execute(
+        database.select(AccountingPeriod).where(AccountingPeriod.entity == "otra")
+    ).scalar_one()
+
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    response = client.get(f"/accounting/journal/list?company=cacao&accounting_period_from={other_period.id}")
+    assert response.status_code == 400
+
+
 def test_route_comprobantes_recurrentes(app_ctx):
     from cacao_accounting.database import User
 

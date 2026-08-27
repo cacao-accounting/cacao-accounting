@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "smart_select_field.html" import smart_select_field %}
+{% from "reportes/report_macros.html" import period_range_field %}
 {% block contenido %}
 
 <nav aria-label="breadcrumb">
@@ -28,6 +30,12 @@
       </div>
       <div class="col-md-2">
         <input name="warehouse" value="{{ request.args.get('warehouse', '') }}" class="form-control" placeholder="{{ _('Bodega') }}">
+      </div>
+      <div class="col-md-2">
+        <input name="as_of_date" value="{{ request.args.get('as_of_date', '') }}" type="date" class="form-control" placeholder="{{ _('Fecha clave') }}">
+      </div>
+      <div class="col-12">
+        {{ period_range_field("Periodo contable", period_from, period_to, "report-table") }}
       </div>
       <div class="col-md-2">
         <button class="btn btn-primary w-100" type="submit">{{ _("Filtrar") }}</button>
