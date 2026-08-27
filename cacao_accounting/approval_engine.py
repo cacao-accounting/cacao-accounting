@@ -563,6 +563,10 @@ class ApprovalEngine:
             return
         item_model, foreign_key = item_models[doctype]
         items = db.session.execute(db.select(item_model).filter_by(**{foreign_key: document.id})).scalars().all()
+        if doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"}:
+            from cacao_accounting.inventario.service import validate_batch_serial_draft
+
+            validate_batch_serial_draft(items)
         validate_submit_prerequisites(
             document,
             items=items,

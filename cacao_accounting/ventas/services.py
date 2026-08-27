@@ -802,7 +802,7 @@ def _source_line_rate(index: int, submitted_rate: Decimal) -> Decimal:
     if model_data is None:
         raise DocumentFlowError("El tipo de documento fuente no es válido para ventas.", 400)
     model, document_id_field = model_data
-    source_item = database.session.get(model, source_item_id)
+    source_item: Any = database.session.get(model, source_item_id)
     if source_item is None or getattr(source_item, document_id_field) != source_id:
         raise DocumentFlowError("La línea de documento fuente no existe o no corresponde al documento indicado.", 400)
     return Decimal(str(source_item.rate or "0"))
@@ -821,7 +821,7 @@ def _line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, D
         }
         model_data = models.get(source_type)
         if model_data:
-            source_item = database.session.get(model_data[0], source_item_id)
+            source_item: Any = database.session.get(model_data[0], source_item_id)
             if source_item is not None and getattr(source_item, model_data[1]) == source_id:
                 percentage = Decimal(str(source_item.discount_percentage or "0"))
                 if percentage:

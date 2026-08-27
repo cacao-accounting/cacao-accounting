@@ -2698,6 +2698,9 @@ def compras_recepcion_submit(receipt_id: str):
             .all()
         )
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
+        from cacao_accounting.inventario.service import validate_batch_serial_draft
+
+        validate_batch_serial_draft(items)
         _validate_receipt_quantities_against_po(receipt_id)
         check_budget_control(
             company=registro.company,
@@ -2711,10 +2714,6 @@ def compras_recepcion_submit(receipt_id: str):
 
         if ApprovalEngine.handle_submission(registro, current_user, "Recepción de compra"):
             return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
-
-        from cacao_accounting.inventario.service import validate_batch_serial_draft
-
-        validate_batch_serial_draft(items)
 
         submit_document(registro)  # type: ignore[misc]
         log_submit(registro)

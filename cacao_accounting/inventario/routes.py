@@ -886,14 +886,13 @@ def inventario_entrada_submit(entry_id: str):
             require_warehouse=True,
             require_qty_positive=registro.purpose != "stock_reconciliation",
         )
+        from cacao_accounting.inventario.service import validate_batch_serial_draft
+
+        validate_batch_serial_draft(items)
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Movimiento de inventario"):
             return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
-
-        from cacao_accounting.inventario.service import validate_batch_serial_draft
-
-        validate_batch_serial_draft(items)
 
         submit_document(registro)
         log_submit(registro)

@@ -408,17 +408,17 @@ def _login(client):
 
 def _batch_id_by_no(batch_no: str) -> str:
     """Resuelve el ULID del Batch a partir de su batch_no."""
-    batch = database.session.execute(
-        database.select(Batch).filter_by(item_code="ITEM-BATCH", batch_no=batch_no)
-    ).scalar_one()
+    batch = database.session.execute(database.select(Batch).filter_by(item_code="ITEM-BATCH", batch_no=batch_no)).scalar_one()
     return batch.id
 
 
 def _stock_entry_naming_series() -> str:
     """Retorna el ID de la naming_series activa para stock_entry."""
-    series = database.session.execute(
-        database.select(NamingSeries).filter_by(entity_type="stock_entry", is_active=True)
-    ).scalars().first()
+    series = (
+        database.session.execute(database.select(NamingSeries).filter_by(entity_type="stock_entry", is_active=True))
+        .scalars()
+        .first()
+    )
     assert series is not None, "No hay naming_series activa para stock_entry"
     return series.id
 
@@ -599,9 +599,7 @@ class TestPurchaseReceiptSubmit:
         )
         assert resp.status_code == 200
         receipt = (
-            database.session.execute(
-                database.select(PurchaseReceipt).order_by(PurchaseReceipt.created.desc())
-            )
+            database.session.execute(database.select(PurchaseReceipt).order_by(PurchaseReceipt.created.desc()))
             .scalars()
             .first()
         )
@@ -642,9 +640,7 @@ class TestPurchaseReceiptSubmit:
         resp = client.post("/buying/purchase-receipt/new", data=payload, follow_redirects=True)
         assert resp.status_code == 200
         receipt = (
-            database.session.execute(
-                database.select(PurchaseReceipt).order_by(PurchaseReceipt.created.desc())
-            )
+            database.session.execute(database.select(PurchaseReceipt).order_by(PurchaseReceipt.created.desc()))
             .scalars()
             .first()
         )
@@ -666,9 +662,7 @@ class TestPurchaseReceiptSubmit:
         assert resp.status_code == 200
         database.session.expire_all()
         item = (
-            database.session.execute(
-                database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id)
-            )
+            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id))
             .scalars()
             .first()
         )
@@ -694,16 +688,12 @@ class TestPurchaseReceiptSubmit:
         assert duplicate is not None
         assert duplicate.id != receipt.id
         original_item = (
-            database.session.execute(
-                database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id)
-            )
+            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id))
             .scalars()
             .first()
         )
         duplicate_item = (
-            database.session.execute(
-                database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=duplicate.id)
-            )
+            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=duplicate.id))
             .scalars()
             .first()
         )
@@ -730,9 +720,7 @@ class TestPurchaseInvoiceSubmit:
         )
         assert resp.status_code == 200, resp.data[:500]
         invoice = (
-            database.session.execute(
-                database.select(PurchaseInvoice).order_by(PurchaseInvoice.created.desc())
-            )
+            database.session.execute(database.select(PurchaseInvoice).order_by(PurchaseInvoice.created.desc()))
             .scalars()
             .first()
         )
@@ -771,9 +759,7 @@ class TestPurchaseInvoiceSubmit:
         resp = client.post("/buying/purchase-invoice/new", data=payload, follow_redirects=True)
         assert resp.status_code == 200
         invoice = (
-            database.session.execute(
-                database.select(PurchaseInvoice).order_by(PurchaseInvoice.created.desc())
-            )
+            database.session.execute(database.select(PurchaseInvoice).order_by(PurchaseInvoice.created.desc()))
             .scalars()
             .first()
         )
@@ -791,9 +777,7 @@ class TestPurchaseInvoiceSubmit:
         assert resp.status_code == 200
         database.session.expire_all()
         item = (
-            database.session.execute(
-                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)
-            )
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id))
             .scalars()
             .first()
         )
@@ -818,16 +802,12 @@ class TestPurchaseInvoiceSubmit:
         )
         assert duplicate is not None
         original_item = (
-            database.session.execute(
-                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)
-            )
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id))
             .scalars()
             .first()
         )
         duplicate_item = (
-            database.session.execute(
-                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=duplicate.id)
-            )
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=duplicate.id))
             .scalars()
             .first()
         )
@@ -853,13 +833,7 @@ class TestDeliveryNoteSubmit:
             follow_redirects=True,
         )
         assert resp.status_code == 200, resp.data[:500]
-        note = (
-            database.session.execute(
-                database.select(DeliveryNote).order_by(DeliveryNote.created.desc())
-            )
-            .scalars()
-            .first()
-        )
+        note = database.session.execute(database.select(DeliveryNote).order_by(DeliveryNote.created.desc())).scalars().first()
         return client, note
 
     def test_delivery_note_submit_with_batch_id_passes_posting(self, app_ctx):
@@ -892,13 +866,7 @@ class TestDeliveryNoteSubmit:
         payload["item_name_0"] = "Item con serie"
         resp = client.post("/sales/delivery-note/new", data=payload, follow_redirects=True)
         assert resp.status_code == 200
-        note = (
-            database.session.execute(
-                database.select(DeliveryNote).order_by(DeliveryNote.created.desc())
-            )
-            .scalars()
-            .first()
-        )
+        note = database.session.execute(database.select(DeliveryNote).order_by(DeliveryNote.created.desc())).scalars().first()
         resp = client.post(f"/sales/delivery-note/{note.id}/submit", follow_redirects=True)
         assert resp.status_code == 200
         database.session.expire_all()
@@ -916,11 +884,7 @@ class TestDeliveryNoteSubmit:
         assert resp.status_code == 200
         database.session.expire_all()
         item = (
-            database.session.execute(
-                database.select(DeliveryNoteItem).filter_by(delivery_note_id=note.id)
-            )
-            .scalars()
-            .first()
+            database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=note.id)).scalars().first()
         )
         assert item.batch_id == bid
         assert item.serial_no == "SN-001"
@@ -934,25 +898,17 @@ class TestDeliveryNoteSubmit:
         database.session.expire_all()
         duplicate = (
             database.session.execute(
-                database.select(DeliveryNote)
-                .where(DeliveryNote.id != note.id)
-                .order_by(DeliveryNote.created.desc())
+                database.select(DeliveryNote).where(DeliveryNote.id != note.id).order_by(DeliveryNote.created.desc())
             )
             .scalars()
             .first()
         )
         assert duplicate is not None
         original_item = (
-            database.session.execute(
-                database.select(DeliveryNoteItem).filter_by(delivery_note_id=note.id)
-            )
-            .scalars()
-            .first()
+            database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=note.id)).scalars().first()
         )
         duplicate_item = (
-            database.session.execute(
-                database.select(DeliveryNoteItem).filter_by(delivery_note_id=duplicate.id)
-            )
+            database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=duplicate.id))
             .scalars()
             .first()
         )
@@ -979,11 +935,7 @@ class TestSalesInvoiceSubmit:
         )
         assert resp.status_code == 200, resp.data[:500]
         invoice = (
-            database.session.execute(
-                database.select(SalesInvoice).order_by(SalesInvoice.created.desc())
-            )
-            .scalars()
-            .first()
+            database.session.execute(database.select(SalesInvoice).order_by(SalesInvoice.created.desc())).scalars().first()
         )
         return client, invoice
 
@@ -1018,11 +970,7 @@ class TestSalesInvoiceSubmit:
         resp = client.post("/sales/sales-invoice/new", data=payload, follow_redirects=True)
         assert resp.status_code == 200
         invoice = (
-            database.session.execute(
-                database.select(SalesInvoice).order_by(SalesInvoice.created.desc())
-            )
-            .scalars()
-            .first()
+            database.session.execute(database.select(SalesInvoice).order_by(SalesInvoice.created.desc())).scalars().first()
         )
         resp = client.post(f"/sales/sales-invoice/{invoice.id}/submit", follow_redirects=True)
         assert resp.status_code == 200
@@ -1041,9 +989,7 @@ class TestSalesInvoiceSubmit:
         assert resp.status_code == 200
         database.session.expire_all()
         item = (
-            database.session.execute(
-                database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)
-            )
+            database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id))
             .scalars()
             .first()
         )
@@ -1059,25 +1005,19 @@ class TestSalesInvoiceSubmit:
         database.session.expire_all()
         duplicate = (
             database.session.execute(
-                database.select(SalesInvoice)
-                .where(SalesInvoice.id != invoice.id)
-                .order_by(SalesInvoice.created.desc())
+                database.select(SalesInvoice).where(SalesInvoice.id != invoice.id).order_by(SalesInvoice.created.desc())
             )
             .scalars()
             .first()
         )
         assert duplicate is not None
         original_item = (
-            database.session.execute(
-                database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)
-            )
+            database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id))
             .scalars()
             .first()
         )
         duplicate_item = (
-            database.session.execute(
-                database.select(SalesInvoiceItem).filter_by(sales_invoice_id=duplicate.id)
-            )
+            database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=duplicate.id))
             .scalars()
             .first()
         )
@@ -1103,13 +1043,7 @@ class TestStockEntrySubmit:
             follow_redirects=True,
         )
         assert resp.status_code == 200, resp.data[:500]
-        entry = (
-            database.session.execute(
-                database.select(StockEntry).order_by(StockEntry.created.desc())
-            )
-            .scalars()
-            .first()
-        )
+        entry = database.session.execute(database.select(StockEntry).order_by(StockEntry.created.desc())).scalars().first()
         return client, entry
 
     def test_stock_entry_submit_with_batch_id_passes_posting(self, app_ctx):
@@ -1137,13 +1071,19 @@ class TestStockEntrySubmit:
         assert doc.docstatus == 0
         assert b"lote" in resp.data
 
+    def test_approval_final_validation_rejects_missing_batch(self, app_ctx):
+        """El cierre del flujo de aprobación también rechaza un lote faltante."""
+        client, entry = self._create_doc(app_ctx, None, None, purpose="material_issue")
+        from cacao_accounting.approval_engine import ApprovalEngine
+
+        with pytest.raises(ValueError, match="requiere lote"):
+            ApprovalEngine._validate_final_submission("stock_entry", entry)
+
     def test_stock_entry_submit_without_serial_no_is_rejected(self, app_ctx):
         client, entry = self._create_doc(app_ctx, None, None, purpose="material_receipt")
         # Cambiar item a ITEM-SERIAL (controlado por serie) sin enviar serial_no
         database.session.expire_all()
-        line = database.session.execute(
-            database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)
-        ).scalars().first()
+        line = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)).scalars().first()
         line.item_code = "ITEM-SERIAL"
         line.batch_id = None
         line.serial_no = None
@@ -1162,13 +1102,7 @@ class TestStockEntrySubmit:
         resp = client.post(f"/inventory/stock-entry/{entry.id}/edit", data=edit_payload, follow_redirects=True)
         assert resp.status_code == 200
         database.session.expire_all()
-        item = (
-            database.session.execute(
-                database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)
-            )
-            .scalars()
-            .first()
-        )
+        item = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)).scalars().first()
         assert item.batch_id == bid
         assert item.serial_no == "SN-NEW-002"
         assert item.qty == Decimal("7")
@@ -1181,27 +1115,17 @@ class TestStockEntrySubmit:
         database.session.expire_all()
         duplicate = (
             database.session.execute(
-                database.select(StockEntry)
-                .where(StockEntry.id != entry.id)
-                .order_by(StockEntry.created.desc())
+                database.select(StockEntry).where(StockEntry.id != entry.id).order_by(StockEntry.created.desc())
             )
             .scalars()
             .first()
         )
         assert duplicate is not None
         original_item = (
-            database.session.execute(
-                database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)
-            )
-            .scalars()
-            .first()
+            database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)).scalars().first()
         )
         duplicate_item = (
-            database.session.execute(
-                database.select(StockEntryItem).filter_by(stock_entry_id=duplicate.id)
-            )
-            .scalars()
-            .first()
+            database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=duplicate.id)).scalars().first()
         )
         assert duplicate_item is not None
         assert duplicate_item.batch_id == original_item.batch_id
