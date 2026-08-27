@@ -19,7 +19,6 @@ todo trabajo asociado a un Issue debe ser validado por al menos dos agentes que 
 correcto, robusto, correctamente cubierto por pruebas unitarias, técnicamente válido y con cobertura a posibles
 edge cases asociados al flujo de negocio relacionado a la tarea que se está realizando.
 
-
 Una tarea no se considera completada si no cuenta con pruebas unitarias que validen el funcionamiento
 esperado del sistema y ayuden a evitar que se introduzcan regresiones a funcionalidades validadas en el
 futuro.
@@ -57,7 +56,11 @@ Dado que los tests toman mucho tiempo en ejecutarse durante el desarrollo es ace
 los tests relativos a la tarea que se esta abordando, linters (black, ruff, flake8, mypy, pylint y 
 pydocstyle) toman un tiempo razonable y deben ejecutarse siempre antes de hacer un commit.
 
-Los cambios de deben mantener en local.
+Los cambios deben mantener en local, solo la persona a cargo de la tarea puede hacer push o indicar hacer push.
+
+Respetar la identidad de git configurada, hacer commits semánticos con sign-off. Commits pequeños y acotados, no
+hacer commits gigantes incomprensibles e inaudibles.
+
 
 La suite completa de pruebas debe ejecutarse antes de hacer push al repositorio principal.
 
