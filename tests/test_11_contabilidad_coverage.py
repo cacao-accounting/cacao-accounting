@@ -2143,7 +2143,6 @@ def test_route_accounting_period_new_post(app_ctx):
             "inicio": "2026-05-01",
             "fin": "2026-05-31",
             "habilitado": "y",
-            "cerrado": "",
         },
     )
     assert response.status_code in (200, 302)
@@ -4082,7 +4081,6 @@ def test_route_accounting_period_new_post_success(app_ctx):
             "inicio": "2026-08-01",
             "fin": "2026-08-31",
             "habilitado": "y",
-            "cerrado": "",
             "fiscal_year_id": fy.id,
         },
     )
@@ -4108,7 +4106,6 @@ def test_route_accounting_period_edit_post_success(app_ctx):
             "inicio": "2026-09-01",
             "fin": "2026-09-30",
             "habilitado": "y",
-            "cerrado": "",
         },
     )
     assert response.status_code in (200, 302)

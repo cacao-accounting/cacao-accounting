@@ -599,9 +599,51 @@ def test_accounting_period_edit_prefills_name_dates_status_fiscal_year(app_ctx):
     assert 'name="fin"' in html and 'value="2026-03-31"' in html
     assert re.search(rf'<option selected value="{fiscal_year.id}">', html)
     assert _checkbox_is_checked(html, "habilitado")
-    assert _checkbox_is_checked(html, "cerrado")
+    assert 'class="badge text-bg-secondary"' in html
+    assert "Cerrado" in html
     assert b'initialValue: "cacao"' in response.data
     assert b'initialLabel: "cacao - Cacao Accounting SA"' in response.data
+
+
+def test_accounting_period_edit_cannot_reopen_closed_period(app_ctx):
+    """La edición administrativa no ofrece un segundo camino para reabrir el periodo."""
+    from cacao_accounting.database import AccountingPeriod, FiscalYear, User, database
+
+    fiscal_year = FiscalYear(
+        entity="cacao", name="FY26-EDIT", year_start_date=date(2026, 1, 1), year_end_date=date(2026, 12, 31)
+    )
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-01",
+        status="habilitado_cerrado",
+        enabled=True,
+        is_closed=True,
+        start=date(2026, 1, 1),
+        end=date(2026, 1, 31),
+    )
+    database.session.add_all([fiscal_year, period])
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, User.query.filter_by(user="admin").first().id)
+    response = client.post(
+        f"/accounting/accounting_period/{period.id}/edit",
+        data={
+            "entidad": "cacao",
+            "fiscal_year": fiscal_year.id,
+            "nombre": "2026-01-corregido",
+            "inicio": "2026-01-01",
+            "fin": "2026-01-31",
+            "habilitado": "y",
+            "cerrado": "",
+        },
+    )
+
+    database.session.refresh(period)
+    assert response.status_code == 302
+    assert period.is_closed is True
+    assert period.status == "habilitado_cerrado"
 
 
 def test_accounting_period_list_shows_operational_and_accounting_state(app_ctx):

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José Moreno Reyes
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -55,6 +55,14 @@ def app_ctx():
                 Currency(code="NIO", name="Córdoba", decimals=2, active=True, default=True),
                 Book(entity="abc", code="L01", name="Libro principal", status="activo", is_primary=True, currency="NIO"),
                 Book(entity="abc", code="L02", name="Libro secundario", status="activo", currency="NIO"),
+                Book(
+                    entity="cacao",
+                    code="CFISC",
+                    name="Libro fiscal de cierre",
+                    status="activo",
+                    is_primary=True,
+                    currency="NIO",
+                ),
                 Accounts(entity="abc", code="6101", name="Gasto", active=True, enabled=True, group=False),
                 Accounts(entity="abc", code="1105", name="Seguro pagado", active=True, enabled=True, group=False),
                 Accounts(entity="abc", code="6000", name="Gasto extendido", active=True, enabled=True, group=False),
@@ -447,6 +455,203 @@ def test_e2e_monthly_close_finalizes_and_closes_period(app_ctx):
     assert period.is_closed is True
 
 
+def test_monthly_close_can_be_reopened_and_executed_again(app_ctx):
+    """La única reapertura devuelve el mismo cierre a abierto para repetir el asistente."""
+    from cacao_accounting.database import (
+        AccountingPeriod,
+        AuditTrail,
+        FiscalYear,
+        PeriodCloseCheck,
+        PeriodCloseRun,
+        User,
+        database,
+    )
+
+    user = User.query.filter_by(user="admin").first()
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-CLOSE-REOPEN",
+        year_start_date=date(2026, 7, 1),
+        year_end_date=date(2026, 12, 31),
+    )
+    database.session.add(fiscal_year)
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2026-07",
+        start=date(2026, 7, 1),
+        end=date(2026, 7, 31),
+        enabled=True,
+        is_closed=False,
+    )
+    database.session.add(period)
+    database.session.flush()
+    close_run = PeriodCloseRun(company="cacao", period_id=period.id, run_status="open")
+    database.session.add(close_run)
+    database.session.flush()
+    database.session.add_all(
+        [
+            PeriodCloseCheck(
+                close_run_id=close_run.id,
+                check_type="apply_recurring_journals",
+                check_status="skipped",
+                message="No applicable templates.",
+            ),
+            PeriodCloseCheck(close_run_id=close_run.id, check_type="exchange_revaluation", check_status="passed"),
+            PeriodCloseCheck(close_run_id=close_run.id, check_type="project_capitalization", check_status="passed"),
+        ]
+    )
+    database.session.commit()
+
+    client = app_ctx.test_client()
+    _login(client, user.id)
+    close_response = client.post(f"/accounting/period-close/monthly/{close_run.id}/close")
+    database.session.refresh(close_run)
+    database.session.refresh(period)
+    assert close_response.status_code == 302
+    assert close_run.run_status == "closed"
+    assert period.is_closed is True
+
+    reopen_response = client.post(
+        f"/accounting/accounting_period/{period.id}/reopen",
+        data={"reason": "Corregir una diferencia detectada en la revisión mensual."},
+        follow_redirects=True,
+    )
+    database.session.refresh(close_run)
+    database.session.refresh(period)
+    reopen_events = (
+        database.session.execute(
+            database.select(AuditTrail).where(
+                AuditTrail.document_type == "accounting_period", AuditTrail.document_id == period.id
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert reopen_response.status_code == 200
+    assert period.is_closed is False
+    assert period.enabled is True
+    assert close_run.run_status == "open"
+    assert any(event.action == "reopened" and "Corregir" in (event.comment or "") for event in reopen_events)
+
+    apply_response = client.post(f"/accounting/period-close/monthly/{close_run.id}/apply-recurring")
+    second_close_response = client.post(f"/accounting/period-close/monthly/{close_run.id}/close")
+    database.session.refresh(close_run)
+    database.session.refresh(period)
+    assert apply_response.status_code == 302
+    assert second_close_response.status_code == 302
+    assert close_run.run_status == "closed"
+    assert period.is_closed is True
+
+
+def test_period_reopen_rejects_when_a_later_period_is_closed(app_ctx):
+    """No se puede reabrir enero si febrero ya está cerrado."""
+    from cacao_accounting.contabilidad.services import PeriodCloseError, reopen_accounting_period
+    from cacao_accounting.database import AccountingPeriod, FiscalYear, PeriodCloseRun, User, database
+
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-CLOSE-ORDER",
+        year_start_date=date(2027, 1, 1),
+        year_end_date=date(2027, 12, 31),
+    )
+    database.session.add(fiscal_year)
+    database.session.flush()
+    january = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2027-01",
+        start=date(2027, 1, 1),
+        end=date(2027, 1, 31),
+        enabled=False,
+        is_closed=True,
+    )
+    february = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2027-02",
+        start=date(2027, 2, 1),
+        end=date(2027, 2, 28),
+        enabled=False,
+        is_closed=True,
+    )
+    database.session.add_all([january, february])
+    database.session.flush()
+    close_run = PeriodCloseRun(
+        company="cacao",
+        period_id=january.id,
+        run_status="closed",
+        closed_by="admin",
+        closed_at=datetime(2027, 2, 1, tzinfo=timezone.utc),
+    )
+    database.session.add(close_run)
+    database.session.commit()
+
+    user = User.query.filter_by(user="admin").first()
+    with pytest.raises(PeriodCloseError, match="periodo posterior 2027-02"):
+        reopen_accounting_period(january.id, str(user.id), "Revisión")
+
+    database.session.refresh(january)
+    assert january.is_closed is True
+
+
+def test_period_reopen_rejects_gl_entries_created_after_close(app_ctx):
+    """La reapertura bloquea movimientos GL ingresados después del cierre."""
+    from cacao_accounting.contabilidad.services import PeriodCloseError, reopen_accounting_period
+    from cacao_accounting.database import AccountingPeriod, FiscalYear, GLEntry, PeriodCloseRun, User, database
+
+    fiscal_year = FiscalYear(
+        entity="cacao",
+        name="FY-CLOSE-MOVEMENTS",
+        year_start_date=date(2027, 3, 1),
+        year_end_date=date(2027, 12, 31),
+    )
+    database.session.add(fiscal_year)
+    database.session.flush()
+    period = AccountingPeriod(
+        entity="cacao",
+        fiscal_year_id=fiscal_year.id,
+        name="2027-03",
+        start=date(2027, 3, 1),
+        end=date(2027, 3, 31),
+        enabled=False,
+        is_closed=True,
+    )
+    database.session.add(period)
+    database.session.flush()
+    closed_at = datetime(2027, 4, 1, tzinfo=timezone.utc)
+    close_run = PeriodCloseRun(
+        company="cacao",
+        period_id=period.id,
+        run_status="closed",
+        closed_by="admin",
+        closed_at=closed_at,
+    )
+    database.session.add(close_run)
+    database.session.add(
+        GLEntry(
+            posting_date=date(2027, 3, 15),
+            company="cacao",
+            ledger_id="CFISC",
+            debit=Decimal("10"),
+            credit=Decimal("0"),
+            company_currency="NIO",
+            voucher_type="Test",
+            voucher_id="post-close-entry",
+            created=datetime(2027, 4, 2, tzinfo=timezone.utc),
+        )
+    )
+    database.session.commit()
+
+    user = User.query.filter_by(user="admin").first()
+    with pytest.raises(PeriodCloseError, match="movimientos GL posteriores"):
+        reopen_accounting_period(period.id, str(user.id), "Revisión")
+
+    database.session.refresh(period)
+    assert period.is_closed is True
+
+
 def test_e2e_monthly_close_rejects_missing_mandatory_checks(app_ctx):
     """A period cannot close before every mandatory R2R step has run."""
     from cacao_accounting.database import AccountingPeriod, FiscalYear, PeriodCloseRun, User, database
@@ -525,6 +730,50 @@ def test_monthly_ledger_integrity_rejects_unbalanced_book(app_ctx):
     assert "L01" in message
     sources = _monthly_ledger_source_entries("abc", date(2027, 1, 1), date(2027, 1, 31))
     assert {source["voucher_id"] for source in sources} == {"voucher-debit", "voucher-credit"}
+
+
+def test_monthly_ledger_integrity_rejects_currency_imbalance(app_ctx):
+    """El check aplica también la regla de balance en moneda transaccional."""
+    from cacao_accounting.contabilidad.services import _monthly_ledger_integrity
+    from cacao_accounting.database import GLEntry
+
+    database.session.add_all(
+        [
+            GLEntry(
+                posting_date=date(2027, 2, 10),
+                company="abc",
+                ledger_id="L01",
+                debit=Decimal("100"),
+                credit=Decimal("0"),
+                debit_in_account_currency=Decimal("100"),
+                credit_in_account_currency=Decimal("0"),
+                account_currency="USD",
+                company_currency="NIO",
+                voucher_type="Test",
+                voucher_id="voucher-nio",
+            ),
+            GLEntry(
+                posting_date=date(2027, 2, 10),
+                company="abc",
+                ledger_id="L01",
+                debit=Decimal("0"),
+                credit=Decimal("100"),
+                debit_in_account_currency=Decimal("0"),
+                credit_in_account_currency=Decimal("90"),
+                account_currency="USD",
+                company_currency="NIO",
+                voucher_type="Test",
+                voucher_id="voucher-usd",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    passed, message = _monthly_ledger_integrity("abc", date(2027, 2, 1), date(2027, 2, 28))
+
+    assert passed is False
+    assert "moneda de transacción" in message
+    assert "L01" in message
 
 
 def test_posting_initializes_outstanding_amount(app_ctx):

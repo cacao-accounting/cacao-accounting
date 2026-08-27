@@ -4,12 +4,14 @@ from collections.abc import Sequence
 
 from typing import Any
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 
 from decimal import Decimal
 
 from cacao_accounting.exceptions import flash_error
+
+from cacao_accounting.audit_trail_service import log_task_event
 
 from flask import Blueprint, flash, redirect, render_template, request
 
@@ -127,6 +129,11 @@ REQUIRED_MONTHLY_CLOSE_CHECKS = frozenset(
 )
 
 COMPLETED_MONTHLY_CLOSE_STATUSES = frozenset({"passed", "skipped"})
+
+
+class PeriodCloseError(ValueError):
+    """Error de negocio al cerrar o reabrir un periodo contable."""
+
 
 _TPL_UNIDAD_CREAR = "contabilidad/unidad_crear.html"
 
@@ -604,59 +611,89 @@ def _monthly_close_check_errors(checks: Sequence[Any]) -> tuple[set[str], set[st
     return missing, unsuccessful
 
 
-def _monthly_ledger_integrity(company: str, period_start: date, period_end: date) -> tuple[bool, str]:
-    """Verifica que cada libro contable quede cuadrado en el periodo indicado."""
+def _monthly_ledger_entries(company: str, period_start: date, period_end: date) -> list[Any]:
+    """Obtiene las entradas GL activas del periodo para las verificaciones de cierre."""
     from cacao_accounting.database import GLEntry
 
-    entries = database.session.execute(
-        database.select(GLEntry.ledger_id, GLEntry.debit, GLEntry.credit)
-        .where(GLEntry.company == company)
-        .where(GLEntry.posting_date >= period_start)
-        .where(GLEntry.posting_date <= period_end)
-    ).all()
-    balances: dict[str, tuple[Decimal, Decimal]] = {}
-    for ledger_id, debit, credit in entries:
-        key = str(ledger_id or "__default__")
-        previous_debit, previous_credit = balances.get(key, (Decimal("0"), Decimal("0")))
-        balances[key] = (previous_debit + Decimal(str(debit or 0)), previous_credit + Decimal(str(credit or 0)))
-    differences = {
-        ledger: debit - credit for ledger, (debit, credit) in balances.items() if abs(debit - credit) >= Decimal("0.01")
-    }
-    if differences:
-        detail = ", ".join(f"{ledger}: {difference:.2f}" for ledger, difference in sorted(differences.items()))
-        return False, f"Descuadre GL por libro ({detail})."
-    return True, f"GL cuadrado en {len(balances)} libro(s)."
-
-
-def _monthly_ledger_source_entries(company: str, period_start: date, period_end: date) -> list[dict[str, str]]:
-    """Obtiene vouchers de los libros descuadrados para facilitar su corrección."""
-    from cacao_accounting.database import GLEntry
-
-    entries = (
+    return list(
         database.session.execute(
             database.select(GLEntry)
             .where(
                 GLEntry.company == company,
                 GLEntry.posting_date >= period_start,
                 GLEntry.posting_date <= period_end,
+                GLEntry.is_cancelled.is_(False),
+                GLEntry.is_reversal.is_(False),
             )
             .order_by(GLEntry.posting_date, GLEntry.created, GLEntry.id)
         )
         .scalars()
         .all()
     )
-    balances: dict[str, tuple[Decimal, Decimal]] = {}
+
+
+def _monthly_ledger_balances(entries: Sequence[Any]) -> dict[tuple[str, str], tuple[Decimal, Decimal]]:
+    """Agrupa débitos y créditos por libro y moneda funcional del libro."""
+    balances: dict[tuple[str, str], tuple[Decimal, Decimal]] = {}
     for entry in entries:
-        key = str(entry.ledger_id or "__default__")
+        ledger = str(entry.ledger_id or "__default__")
+        currency = str(entry.company_currency or "__unspecified__")
+        key = (ledger, currency)
         debit, credit = balances.get(key, (Decimal("0"), Decimal("0")))
         balances[key] = (debit + Decimal(str(entry.debit or 0)), credit + Decimal(str(entry.credit or 0)))
-    unbalanced = {ledger for ledger, (debit, credit) in balances.items() if abs(debit - credit) >= Decimal("0.01")}
+    return balances
+
+
+def _monthly_transaction_currency_integrity(entries: Sequence[Any]) -> tuple[bool, str]:
+    """Valida las monedas transaccionales por libro con las reglas del motor de posteo."""
+    from cacao_accounting.contabilidad.posting_service import (
+        PostingError,
+        _assert_currency_balances,
+        _build_currency_groups,
+    )
+
+    entries_by_ledger: dict[str, list[Any]] = {}
+    for entry in entries:
+        entries_by_ledger.setdefault(str(entry.ledger_id or "__default__"), []).append(entry)
+
+    for ledger, ledger_entries in entries_by_ledger.items():
+        try:
+            _assert_currency_balances(_build_currency_groups(ledger_entries))
+        except PostingError as exc:
+            return False, _("Descuadre GL por moneda de transacción ({ledger}): {error}").format(ledger=ledger, error=exc)
+    return True, _("Monedas de transacción balanceadas en {count} libro(s).").format(count=len(entries_by_ledger))
+
+
+def _monthly_ledger_integrity(company: str, period_start: date, period_end: date) -> tuple[bool, str]:
+    """Verifica que cada libro y moneda funcional queden cuadrados en el periodo."""
+    entries = _monthly_ledger_entries(company, period_start, period_end)
+    balances = _monthly_ledger_balances(entries)
+    differences = {key: debit - credit for key, (debit, credit) in balances.items() if abs(debit - credit) >= Decimal("0.01")}
+    if differences:
+        detail = ", ".join(
+            f"{ledger}/{currency}: {difference:.2f}" for (ledger, currency), difference in sorted(differences.items())
+        )
+        return False, _("Descuadre GL por libro y moneda ({detail}).").format(detail=detail)
+    currency_passed, currency_message = _monthly_transaction_currency_integrity(entries)
+    if not currency_passed:
+        return False, currency_message
+    ledgers = {ledger for ledger, _ in balances}
+    return True, _(
+        "GL cuadrado en {ledger_count} libro(s) y {currency_count} combinación(es) de moneda. {currency_message}"
+    ).format(ledger_count=len(ledgers), currency_count=len(balances), currency_message=currency_message)
+
+
+def _monthly_ledger_source_entries(company: str, period_start: date, period_end: date) -> list[dict[str, str]]:
+    """Obtiene vouchers de los libros descuadrados para facilitar su corrección."""
+    entries = _monthly_ledger_entries(company, period_start, period_end)
+    balances = _monthly_ledger_balances(entries)
+    unbalanced = {key for key, (debit, credit) in balances.items() if abs(debit - credit) >= Decimal("0.01")}
     sources: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for entry in entries:
-        ledger = str(entry.ledger_id or "__default__")
+        key = (str(entry.ledger_id or "__default__"), str(entry.company_currency or "__unspecified__"))
         voucher_key = (str(entry.voucher_type), str(entry.voucher_id))
-        if ledger not in unbalanced or voucher_key in seen:
+        if key not in unbalanced or voucher_key in seen:
             continue
         seen.add(voucher_key)
         sources.append(
@@ -674,22 +711,194 @@ def _monthly_ledger_source_entries(company: str, period_start: date, period_end:
 def _monthly_subledger_integrity(company: str, period_name: str, period_end: date) -> tuple[bool, str]:
     """Reconcilia AR/AP e inventario contra el mayor al cierre del periodo."""
     try:
+        from cacao_accounting.database import Book
         from cacao_accounting.reportes.services import ReconciliationFilters, get_reconciliation_matrix
 
-        report = get_reconciliation_matrix(
-            ReconciliationFilters(company=company, accounting_period=period_name, as_of_date=period_end)
+        ledgers = list(
+            database.session.execute(
+                database.select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.code)
+            )
+            .scalars()
+            .all()
         )
+        if not ledgers:
+            return False, _("No existe un libro contable activo para ejecutar la conciliación de submayores.")
+        differences: list[tuple[str, str, Any]] = []
+        for ledger in ledgers:
+            report = get_reconciliation_matrix(
+                ReconciliationFilters(
+                    company=company,
+                    ledger=str(ledger.id),
+                    accounting_period=period_name,
+                    as_of_date=period_end,
+                )
+            )
+            differences.extend(
+                (str(ledger.code), str(row.values.get("area", "subledger")), row.values.get("difference"))
+                for row in report.rows
+                if abs(Decimal(str(row.values.get("difference") or 0))) >= Decimal("0.01")
+            )
     except Exception as exc:  # pragma: no cover - datos de configuración incompletos se reportan como fallo
-        return False, f"No fue posible ejecutar la conciliación de submayores: {exc}"
-    differences = [
-        (str(row.values.get("area", "subledger")), row.values.get("difference"))
-        for row in report.rows
-        if abs(Decimal(str(row.values.get("difference") or 0))) >= Decimal("0.01")
-    ]
+        return False, _("No fue posible ejecutar la conciliación de submayores: {error}").format(error=exc)
     if differences:
-        detail = ", ".join(f"{area}: {difference}" for area, difference in differences)
-        return False, f"Diferencias submayor vs GL ({detail})."
-    return True, "Submayores AR/AP e inventario conciliados contra GL."
+        detail = ", ".join(f"{ledger}/{area}: {difference}" for ledger, area, difference in differences)
+        return False, _("Diferencias submayor vs GL ({detail}).").format(detail=detail)
+    return True, _("Submayores AR/AP e inventario conciliados contra {count} libro(s).").format(count=len(ledgers))
+
+
+def _record_monthly_integrity_checks(close_run: Any, period: Any) -> None:
+    """Ejecuta y persiste los checks de integridad del cierre actual."""
+    from cacao_accounting.database import PeriodCloseCheck
+
+    checks = (
+        ("ledger_integrity", lambda: _monthly_ledger_integrity(close_run.company, period.start, period.end)),
+        ("subledger_integrity", lambda: _monthly_subledger_integrity(close_run.company, period.name, period.end)),
+    )
+    for check_type, evaluator in checks:
+        passed, message = evaluator()
+        database.session.add(
+            PeriodCloseCheck(
+                close_run_id=close_run.id,
+                check_type=check_type,
+                check_status="passed" if passed else "failed",
+                message=message,
+            )
+        )
+
+
+def finalize_monthly_close(close_run_id: str, user_id: str) -> Any:
+    """Valida y finaliza un cierre mensual de forma atómica."""
+    from cacao_accounting.database import AccountingPeriod, PeriodCloseRun
+
+    if not user_id:
+        raise PeriodCloseError(_("El cierre mensual requiere un usuario responsable."))
+    close_run = database.session.get(PeriodCloseRun, close_run_id, with_for_update=True)
+    if close_run is None:
+        raise PeriodCloseError(_("Cierre mensual no encontrado."))
+    period = database.session.get(AccountingPeriod, close_run.period_id, with_for_update=True)
+    if period is None or period.entity != close_run.company:
+        raise PeriodCloseError(_("El periodo del cierre no existe o no pertenece a la compañía."))
+    if period.is_closed or close_run.run_status == "closed":
+        raise PeriodCloseError(_("El periodo ya se encuentra cerrado."))
+
+    try:
+        _record_monthly_integrity_checks(close_run, period)
+        database.session.flush()
+        checks = _get_period_close_checks(close_run)
+        missing, unsuccessful = _monthly_close_check_errors(checks)
+        if missing or unsuccessful:
+            detail = ", ".join(sorted(missing | unsuccessful))
+            database.session.commit()
+            raise PeriodCloseError(
+                _("No se puede cerrar el periodo: faltan verificaciones obligatorias aprobadas ({detail}).").format(
+                    detail=detail
+                )
+            )
+
+        close_run.run_status = "closed"
+        close_run.closed_by = str(user_id)
+        close_run.closed_at = datetime.now(timezone.utc)
+        period.is_closed = True
+        log_task_event(close_run, "closed", f"Cierre mensual completado para el periodo {period.name}.")
+        database.session.commit()
+    except PeriodCloseError:
+        raise
+    except Exception:
+        database.session.rollback()
+        raise
+    return close_run
+
+
+def reopen_accounting_period(period_id: str, user_id: str, reason: str) -> Any:
+    """Reabre un periodo cerrado después de validar su historial posterior."""
+    from cacao_accounting.database import AccountingPeriod, GLEntry, PeriodCloseRun
+
+    normalized_reason = (reason or "").strip()
+    if not user_id:
+        raise PeriodCloseError(_("La reapertura requiere un usuario responsable."))
+    if not normalized_reason:
+        raise PeriodCloseError(_("Debe indicar el motivo de reapertura del período."))
+
+    period = database.session.get(AccountingPeriod, period_id, with_for_update=True)
+    if period is None:
+        raise PeriodCloseError(_("Periodo no encontrado."))
+    if not period.is_closed:
+        raise PeriodCloseError(_("El periodo ya se encuentra abierto."))
+    later_closed_period = (
+        database.session.execute(
+            database.select(AccountingPeriod)
+            .where(
+                AccountingPeriod.entity == period.entity,
+                AccountingPeriod.start > period.start,
+                AccountingPeriod.is_closed.is_(True),
+            )
+            .order_by(AccountingPeriod.start, AccountingPeriod.id)
+        )
+        .scalars()
+        .first()
+    )
+    if later_closed_period is not None:
+        raise PeriodCloseError(
+            _("No se puede reabrir el periodo: el periodo posterior {name} ya está cerrado.").format(
+                name=later_closed_period.name
+            )
+        )
+    close_run = (
+        database.session.execute(
+            database.select(PeriodCloseRun)
+            .where(
+                PeriodCloseRun.company == period.entity,
+                PeriodCloseRun.period_id == period.id,
+                PeriodCloseRun.run_status == "closed",
+                PeriodCloseRun.closed_at.is_not(None),
+            )
+            .order_by(PeriodCloseRun.closed_at.desc(), PeriodCloseRun.id.desc())
+            .with_for_update()
+        )
+        .scalars()
+        .first()
+    )
+    if close_run is None:
+        raise PeriodCloseError(_("El periodo no tiene un cierre mensual controlado que pueda reabrirse."))
+
+    later_entries = list(
+        database.session.execute(
+            database.select(GLEntry)
+            .where(
+                GLEntry.company == period.entity,
+                GLEntry.posting_date >= period.start,
+                GLEntry.posting_date <= period.end,
+                GLEntry.created > close_run.closed_at,
+            )
+            .order_by(GLEntry.created, GLEntry.id)
+            .limit(10)
+        )
+        .scalars()
+        .all()
+    )
+    if later_entries:
+        vouchers = ", ".join(str(entry.document_no or entry.voucher_id) for entry in later_entries)
+        raise PeriodCloseError(
+            _("No se puede reabrir el periodo: existen movimientos GL posteriores al cierre ({vouchers}).").format(
+                vouchers=vouchers
+            )
+        )
+
+    try:
+        period.is_closed = False
+        period.enabled = True
+        period.status = _accounting_period_status_label(True, False)
+        close_run.run_status = "open"
+        log_task_event(
+            period,
+            "reopened",
+            f"Motivo: {normalized_reason}. Cierre mensual de referencia: {close_run.id}.",
+        )
+        database.session.commit()
+    except Exception:
+        database.session.rollback()
+        raise
+    return period
 
 
 def _discover_applicable_templates(company: str, period_end: date) -> list[str]:

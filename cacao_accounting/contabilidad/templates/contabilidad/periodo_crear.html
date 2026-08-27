@@ -87,21 +87,29 @@
       </div>
       <div class="col-12">
         <h6 class="mb-2">{{ _('Estado contable') }}</h6>
-        <div class="form-check form-check-inline">
-          {{ form.cerrado(class="form-check-input", id="cerrado") }}
-          <label class="form-check-label" for="cerrado">{{ _('Cerrado') }}</label>
-        </div>
+        <span class="badge text-bg-{{ 'secondary' if period_is_closed|default(false) else 'success' }}">
+          {{ _('Cerrado') if period_is_closed|default(false) else _('Abierto') }}
+        </span>
+        {% if not edit %}<span class="form-text d-block">{{ _('Se gestiona desde el asistente de cierre mensual.') }}</span>{% endif %}
         <div class="form-text">{{ _('Un período solo acepta registros si está habilitado y no está cerrado.') }}</div>
       </div>
-      {% if edit and form.cerrado.data %}
+    </form>
+      {% if edit and period_is_closed|default(false) %}
       <div class="col-12">
-        <label class="form-label" for="reopen_reason">{{ _('Motivo de reapertura') }}</label>
-        <textarea class="form-control form-control-sm" id="reopen_reason" name="reopen_reason" rows="2"
-          placeholder="{{ _('Explique por qué se reabre el período') }}"></textarea>
-        <div class="form-text">{{ _('El motivo queda registrado en la bitácora de auditoría.') }}</div>
+        <div class="alert alert-warning mb-0">
+          <div class="fw-semibold">{{ _('El período está cerrado') }}</div>
+          <div class="small mb-2">{{ _('La reapertura habilita nuevamente el asistente de cierre para ejecutar sus pasos.') }}</div>
+          <form method="post" action="{{ url_for('contabilidad.accounting_period_reopen', period_id=period_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label class="form-label" for="reopen_reason">{{ _('Motivo de reapertura') }}</label>
+            <textarea class="form-control form-control-sm mb-2" id="reopen_reason" name="reason" rows="2" required
+              placeholder="{{ _('Explique por qué se reabre el período') }}"></textarea>
+            <button type="submit" class="btn btn-sm btn-warning">{{ _('Reabrir período y continuar cierre') }}</button>
+          </form>
+          <div class="form-text">{{ _('El motivo queda registrado en la bitácora de auditoría.') }}</div>
+        </div>
       </div>
       {% endif %}
-    </form>
   </div>
 </div>
 
