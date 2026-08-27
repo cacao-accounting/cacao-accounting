@@ -34,15 +34,23 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 
 from typing import Any
 
-magic: Any = None
-try:
-    import magic as _magic_mod
+_MAGIC_EXCEPTION: type[BaseException] = ImportError
 
-    magic = _magic_mod
-    _MAGIC_EXCEPTION: type[BaseException] = _magic_mod.MagicException
-except ImportError:
-    magic = None  # type: ignore[assignment]
-    _MAGIC_EXCEPTION = ImportError
+
+def _load_magic() -> Any:
+    """Devuelve ``python-magic`` o ``None`` si no se puede importar."""
+    from cacao_accounting.logs import log
+
+    global _MAGIC_EXCEPTION
+
+    try:
+        import magic as _modulo
+    except Exception as exc:  # noqa: BLE001 - libmagic puede faltar o su DLL fallar al cargar
+        log.warning("No se pudo importar python-magic: {}.", exc)
+        return None
+    _MAGIC_EXCEPTION = _modulo.MagicException
+    return _modulo
+
 
 imports = Blueprint("imports", __name__, template_folder="templates")
 
@@ -238,7 +246,8 @@ def _validate_mime_type(file: Any) -> bool:
     """Validate file MIME type using python-magic. Returns True if valid."""
     if is_desktop_mode():
         return True
-    if magic is None:
+    magic_modulo = _load_magic()
+    if magic_modulo is None:
         chunk = file.read(2048)
         file.seek(0)
         extension = _extract_file_extension(getattr(file, "filename", ""))
@@ -253,7 +262,7 @@ def _validate_mime_type(file: Any) -> bool:
     try:
         chunk = file.read(2048)
         file.seek(0)
-        mime = magic.from_buffer(chunk, mime=True)
+        mime = magic_modulo.from_buffer(chunk, mime=True)
     except (ImportError, OSError, _MAGIC_EXCEPTION):
         flash(_INVALID_FILE_TYPE_MSG, "danger")
         return False
