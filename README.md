@@ -1,4 +1,4 @@
-![Logo](https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/main/cacao_accounting/static/media/Cacao%20Accounting-01.png)
+![Logo](https://raw.githubusercontent.com/cacao-accounting/cacao-accounting/main/cacao_accounting/static/media/brand.svg)
 
 # Cacao Accounting
 

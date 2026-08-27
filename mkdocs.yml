@@ -3,10 +3,11 @@ theme:
   name: material
   custom_dir: docs/theme_override_home/
   language: en
-  favicon: media/favicon.png
-  logo: media/cacao_accounting.png
+  favicon: media/brand-mark.svg
+  logo: media/brand.svg
   palette:
-    accent: teal
+    primary: brown
+    accent: deep orange
   icon:
     repo: fontawesome/brands/git-alt
   features:

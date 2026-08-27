@@ -17,8 +17,8 @@
   })();
 </script>
 
-<meta name="theme-color" content="#2E7D32">
-<meta name="msapplication-TileColor" content="#2E7D32">
+<meta name="theme-color" content="#512D21">
+<meta name="msapplication-TileColor" content="#512D21">
 
 <meta name="description" content="Aplicación Contable.">
 <meta name="author" content="William Moreno Reyes">
@@ -31,33 +31,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<link rel="apple-touch-icon" sizes="57x57"
-  href="{{ url_for('static', filename='media/favicon/apple-icon-57x57.png') }}">
-<link rel="apple-touch-icon" sizes="60x60"
-  href="{{ url_for('static', filename='media/favicon/apple-icon-60x60.png') }}">
-<link rel="apple-touch-icon" sizes="72x72"
-  href="{{ url_for('static', filename='media/favicon/apple-icon-72x72.png') }}">
-<link rel="apple-touch-icon" sizes="76x76"
-  href="{{ url_for('static', filename='media/favicon/apple-icon-76x76.png') }}">
-<link rel="apple-touch-icon" sizes="114x114"
-  href="{{ url_for('static', filename='media/favicon/apple-icon-114x114.png') }}">
-<link rel="apple-touch-icon" sizes="120x120"
-  href="{{ url_for('static', filename='media/favicon/apple-icon-120x120.png') }}">
-<link rel="apple-touch-icon" sizes="144x144"
-  href="{{ url_for('static', filename='media/favicon/apple-icon-144x144.png') }}">
-<link rel="apple-touch-icon" sizes="152x152"
-  href="{{ url_for('static', filename='media/favicon/apple-icon-152x152.png') }}">
-<link rel="apple-touch-icon" sizes="180x180"
-  href="{{ url_for('static', filename='media/favicon/apple-icon-180x180.png') }}">
-<link rel="icon" type="image/png" sizes="192x192"
-  href="{{ url_for('static', filename='media/favicon/android-icon-192x192.png') }}">
-<link rel="icon" type="image/png" sizes="32x32"
-  href="{{ url_for('static', filename='media/favicon/favicon-32x32.png') }}">
-<link rel="icon" type="image/png" sizes="96x96"
-  href="{{ url_for('static', filename='media/favicon/favicon-96x96.png') }}">
-<link rel="icon" type="image/png" sizes="16x16"
-  href="{{ url_for('static', filename='media/favicon/favicon-16x16.png') }}">
-<meta name="msapplication-TileImage" content="{{ url_for('static', filename='media/favicon/ms-icon-144x144.png') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='media/brand-mark.svg') }}">
 
 <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
@@ -88,7 +62,7 @@
       <i class="bi bi-list"></i>
     </button>
     <a class="ca-navbar-brand" href="{{ url_for('cacao_app.pagina_inicio') }}">
-      <img height="30" src="{{ url_for('static', filename='media/cacao_accounting _logo.svg') }}" alt="Cacao Accounting"
+      <img height="38" src="{{ url_for('static', filename='media/brand.svg') }}" alt="Cacao Accounting"
         class="d-inline-block align-middle">
     </a>
   </div>
@@ -211,7 +185,7 @@
 {%- endmacro %}
 
 
-{% macro list_filters(show_status=False, placeholder=None) %}
+{% macro list_filters(show_status=False, placeholder=None, extra_params=None) %}
 <div class="p-3 border-bottom">
   <form method="get" action="{{ url_for(request.endpoint) }}" class="row g-2 align-items-end">
     <div class="{% if show_status %}col-md-5{% else %}col-md-8{% endif %}">
@@ -236,6 +210,11 @@
       </select>
     </div>
     {% endif %}
+    {% for key, value in (extra_params or {}).items() %}
+      {% if value is not none and value != '' %}
+      <input type="hidden" name="{{ key }}" value="{{ value }}">
+      {% endif %}
+    {% endfor %}
     <div class="col-auto">
       <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>{{ _('Buscar') }}</button>
       <a href="{{ url_for(request.endpoint) }}" class="btn btn-sm btn-outline-secondary">{{ _('Limpiar') }}</a>
@@ -244,15 +223,37 @@
 </div>
 {% endmacro %}
 
-{% macro rendizar_paginacion(consulta=None, vista=None) %}
+{% macro period_list_filters(consulta) %}
+{% set endpoint = url_for(request.endpoint) %}
+{% if consulta.periods %}
+<form method="get" action="{{ endpoint }}" class="p-3 border-bottom d-flex flex-wrap gap-2 align-items-end">
+  <div>
+    <label class="form-label small text-muted mb-1">{{ _('Compañía') }}</label>
+    {{ smart_select_field(_("Compañía"), "company", "company", consulta.selected_company or '', "list-company", 1, None, [], []) }}
+  </div>
+  <div>
+    <label class="form-label small text-muted mb-1">{{ _('Período desde') }}</label>
+    {{ smart_select_field(_("Período desde"), "accounting_period_from", "accounting_period", consulta.period_from or '', "list-period-from", 1, {"company": {"selector": "#list-company"}}, ["#list-company"], ["company"]) }}
+  </div>
+  <div>
+    <label class="form-label small text-muted mb-1">{{ _('Período hasta') }}</label>
+    {{ smart_select_field(_("Período hasta"), "accounting_period_to", "accounting_period", consulta.period_to or '', "list-period-to", 1, {"company": {"selector": "#list-company"}}, ["#list-company"], ["company"]) }}
+  </div>
+  <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>{{ _('Filtrar') }}</button>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ endpoint }}">{{ _('Limpiar') }}</a>
+</form>
+{% endif %}
+{% endmacro %}
+
+{% macro rendizar_paginacion(consulta=None, vista=None, extra_params=None) %}
 <p class="ca-pagination">{{ consulta.total }} items encontrados.
   <br>
   {% if consulta.has_prev %}
-  <a href="{{ url_for(vista, page=consulta.prev_num, search=request.args.get('search', ''), status=request.args.get('status', '')) }}"><i class="bi bi-arrow-left-short"></i> Anterior</a>
+  <a href="{{ url_for(vista, page=consulta.prev_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}"><i class="bi bi-arrow-left-short"></i> Anterior</a>
   {% endif %}
   Página {{ consulta.page }} de {{ consulta.pages }}
   {% if consulta.has_next %}
-  <a href="{{ url_for(vista, page=consulta.next_num, search=request.args.get('search', ''), status=request.args.get('status', '')) }}">Siguiente <i class="bi bi-arrow-right-short"></i></a>
+  <a href="{{ url_for(vista, page=consulta.next_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}">Siguiente <i class="bi bi-arrow-right-short"></i></a>
   {% endif %}
 </p>
 {% endmacro %}
@@ -281,7 +282,7 @@
 
 <div style="text-align: center; padding: 2rem 0;">
   <p>
-    <img src="{{ url_for('static', filename='media/cacao_accounting.png') }}" height="50" width="50"
+    <img src="{{ url_for('static', filename='media/brand-mark.svg') }}" height="50" width="50"
       alt="Cacao Accounting Logo">
     <br>
     <strong>Bienvenido a Cacao Accounting</strong>
@@ -712,7 +713,7 @@
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="emailNotificationModalLabel">
-          <i class="bi bi-envelope me-2" style="color:#78BF30"></i>{{ _("Notificar por Correo Electrónico") }}
+          <i class="bi bi-envelope me-2" style="color:#BB6A40"></i>{{ _("Notificar por Correo Electrónico") }}
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
       </div>

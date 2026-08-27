@@ -1,11 +1,10 @@
-const CACHE_NAME = 'cacao-accounting-v1';
+const CACHE_NAME = 'cacao-accounting-v2';
 const STATIC_ASSETS = [
   '/',
   '/static/css/cacaoaccounting.css',
   '/static/manifest.json',
-  '/static/media/cacao_accounting _logo.svg',
-  '/static/media/favicon/android-icon-192x192.png',
-  '/static/media/favicon/android-icon-512x512.png'
+  '/static/media/brand.svg',
+  '/static/media/brand-mark.svg'
 ];
 
 self.addEventListener('install', (event) => {
