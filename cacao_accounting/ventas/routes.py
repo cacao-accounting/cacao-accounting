@@ -1866,14 +1866,13 @@ def ventas_entrega_submit(note_id: str):
             _validate_sales_source_link(registro, "sales_order", registro.sales_order_id, items)
         _validate_sales_invoice_line_amounts(registro, items)
         _validate_delivery_quantities_against_so(note_id)
+        from cacao_accounting.inventario.service import validate_batch_serial_draft
+
+        validate_batch_serial_draft(items)
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Nota de entrega"):
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
-
-        from cacao_accounting.inventario.service import validate_batch_serial_draft
-
-        validate_batch_serial_draft(items)
 
         submit_document(registro)  # type: ignore[misc]
         _release_reservation_for_delivery_note(registro)
@@ -2251,14 +2250,13 @@ def ventas_factura_venta_submit(invoice_id: str):
                 posting_date=registro.posting_date,
                 lock_source=True,
             )
+        from cacao_accounting.inventario.service import validate_batch_serial_draft
+
+        validate_batch_serial_draft(items)
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.handle_submission(registro, current_user, "Factura de venta"):
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
-
-        from cacao_accounting.inventario.service import validate_batch_serial_draft
-
-        validate_batch_serial_draft(items)
 
         submit_document(registro)  # type: ignore[misc]
         _persist_sales_reversal_relation(registro)

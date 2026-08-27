@@ -270,7 +270,7 @@ def validate_batch_serial_draft(lines: Sequence[Any]) -> None:
         item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
         if not item or not item.is_stock_item:
             continue
-        if item.has_batch and not getattr(line, "batch_id", None):
+        if (item.has_batch or item.has_expiry_date) and not getattr(line, "batch_id", None):
             raise ValueError(f"El item {item_code} requiere lote.")
         if item.has_serial_no and not getattr(line, "serial_no", None):
             raise ValueError(f"El item {item_code} requiere numero de serie.")
