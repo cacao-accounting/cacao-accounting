@@ -518,3 +518,25 @@ Los listados, dashboard, endpoints de selectores y formularios de compañía usa
 ### Verificación de compatibilidad
 
 Con `DATABASE_URL` desactivada, la suite completa produjo 2.192 tests pasados, 14 fallos y 12 omitidos. Los fallos correspondían a expectativas heredadas del ACL por libro, selección parcial de libros, descubrimiento global de compañías, fixtures con permisos obsoletos y mensajes que revelaban compañías inactivas. Se actualizaron esas expectativas y la batería de regresión resultante pasó 43/43; no quedaron fallos de conexión de base de datos.
+
+## 2026-08-27 (identidad visual autorizada)
+
+### Petición del usuario
+
+Reemplazar en la documentación y la aplicación web el arte de procedencia no confirmada por las marcas finales autorizadas `static/media/brand.svg` y `static/media/brand-mark.svg`, y ajustar la interfaz a tonos chocolate.
+
+### Plan implementado
+
+Las referencias activas de la aplicación, pantallas de autenticación, errores, configuración, impresión, README, manifiesto PWA y service worker ahora usan los dos SVG finales autorizados. `brand.svg` es el logotipo completo y `brand-mark.svg` provee el símbolo para el favicon SVG.
+
+Las copias SVG heredadas se reemplazaron por los dos activos finales. Los favicon PNG, ICO, borradores raster y otros recursos gráficos no referenciados se retiraron; no se generaron recursos raster nuevos.
+
+### Decisiones de diseño
+
+- Los SVG activos no dependen de `<image href=...>` ni de otro recurso gráfico para renderizar el símbolo.
+- La aplicación usa únicamente `brand.svg` para el logotipo y `brand-mark.svg` para el favicon.
+- La paleta primaria se trasladó de verde a chocolate, terracota y crema, sin reutilizar el verde anterior como color de marca y sin modificar los colores semánticos de éxito, alerta y error.
+
+### Verificación
+
+Se verificó estructuralmente que las referencias activas usan los dos SVG finales, que las copias SVG heredadas son idénticas al activo final correspondiente y que no quedan PNG ni ICO de la identidad anterior. Por instrucción expresa del usuario no se añadieron ni ejecutaron pruebas para este cambio visual.

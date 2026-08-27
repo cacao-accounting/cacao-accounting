@@ -193,7 +193,7 @@
         this.renderLineChart(
           "salesChart",
           rows.map((row) => this.monthName(row.month)),
-          [{ label: config.chartLabels.sales, data: rows.map((row) => row.total), borderColor: "#15803d" }]
+          [{ label: config.chartLabels.sales, data: rows.map((row) => row.total), borderColor: "#BB6A40" }]
         );
       },
       renderLineChart(canvasId, labels, datasets) {

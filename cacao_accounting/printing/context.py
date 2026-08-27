@@ -28,7 +28,7 @@ def build_common_context(company_code: str | None, user_name: str) -> dict[str, 
             "phone": _text(entity, "phone1", ""),
             "email": _text(entity, "e_mail", ""),
             "website": _text(entity, "web", ""),
-            "logo_url": "/static/img/logo.png",
+            "logo_url": "/static/media/brand.svg",
             "default_currency": _text(entity, "currency", ""),
         },
         "audit": {
@@ -850,7 +850,7 @@ def _sample_common_context() -> dict[str, Any]:
             "phone": "+505 2222 0000",
             "email": "info@example.com",
             "website": "www.example.com",
-            "logo_url": "/static/img/logo.png",
+            "logo_url": "/static/media/brand.svg",
             "default_currency": "NIO",
         },
         "audit": {
