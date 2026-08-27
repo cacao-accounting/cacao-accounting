@@ -2644,6 +2644,7 @@ class SalesQuotation(database.Model, DocBase):  # type: ignore[name-defined]
     incoterm_code = database.Column(database.String(20), nullable=True, index=True)
     incoterm_version = database.Column(database.String(10), nullable=True)
     delivery_date = database.Column(database.Date(), nullable=True)
+    valid_until = database.Column(database.Date(), nullable=True)
     delivery_place = database.Column(database.String(255), nullable=True)
     sales_terms = database.Column(database.Text(), nullable=True)
 

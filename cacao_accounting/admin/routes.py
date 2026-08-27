@@ -2,13 +2,15 @@
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
-from flask_login import login_required
+from flask_login import current_user, login_required
 
 from sqlalchemy import delete
 
 from sqlalchemy.exc import IntegrityError
 
 from cacao_accounting.auth import helpers, proteger_passwd
+from cacao_accounting.auth.permisos import Permisos
+from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 from cacao_accounting.auth.forms import (
     RoleForm,
@@ -27,6 +29,7 @@ from cacao_accounting.database import (
     Book,
     CompanyDefaultAccount,
     Entity,
+    Item,
     ItemPrice,
     Modules,
     PartyGroup,
@@ -114,6 +117,7 @@ from cacao_accounting.admin.session_security_service import (
     smtp_is_configured,
 )
 from cacao_accounting.runtime_mode import is_desktop_mode
+from cacao_accounting.ventas.services import is_sales_price_editor
 
 from cacao_accounting.tax_rule_service import (
     TaxRuleServiceError,
@@ -130,6 +134,29 @@ from cacao_accounting.contabilidad.ledger_mapping_service import (
     deactivate_ledger_mapping_rule,
     list_ledger_mapping_rules,
 )
+
+
+def _require_price_list_editor() -> None:
+    """Allow catalog maintenance only to system admins and sales managers."""
+    if not current_user.is_authenticated or not is_sales_price_editor(str(current_user.id)):
+        abort(403)
+
+
+def _can_manage_price_list(price_list: PriceList) -> bool:
+    """Return whether the current catalog editor may manage this company list."""
+    if current_user.classification == "admin":
+        return True
+    if not price_list.company:
+        return False
+    permissions = Permisos(modulo=obtener_id_modulo_por_nombre("sales"), usuario=current_user.id)
+    return bool(permissions.tiene_acceso_compania(price_list.company))
+
+
+def _require_price_list_company_access(price_list: PriceList) -> None:
+    """Forbid sales managers from changing a list outside their companies."""
+    if not _can_manage_price_list(price_list):
+        abort(403)
+
 
 admin = Blueprint("admin", __name__, template_folder="templates")
 
@@ -217,7 +244,6 @@ def lista_modulos():
                 ),
             }
         )
-
     return render_template(
         "admin/modulos.html",
         modulos=modulos_por_tipo,
@@ -676,7 +702,7 @@ def desactivar_regla_mapeo_libros(rule_id: str):
 @modulo_activo("admin")
 def lista_precios():
     """Administra listas de precios."""
-    _require_system_admin()
+    _require_price_list_editor()
     if request.method == "POST":
         price_list = PriceList(
             name=request.form.get("name") or "",
@@ -687,11 +713,36 @@ def lista_precios():
             is_default=bool(request.form.get("is_default")),
             is_active=bool(request.form.get("is_active", "1")),
         )
+        _require_price_list_company_access(price_list)
         database.session.add(price_list)
+        database.session.flush()
+        if price_list.is_default and price_list.is_selling:
+            database.session.execute(
+                database.update(PriceList)
+                .where(PriceList.id != price_list.id, PriceList.company == price_list.company, PriceList.is_selling.is_(True))
+                .values(is_default=False)
+            )
+            for item in database.session.execute(
+                database.select(Item).where(
+                    Item.is_active.is_(True), Item.is_sale_item.is_(True), Item.standard_rate.is_not(None)
+                )
+            ).scalars():
+                database.session.add(
+                    ItemPrice(
+                        item_code=item.code,
+                        price_list_id=price_list.id,
+                        uom=item.sale_uom or item.default_uom,
+                        price=item.standard_rate,
+                    )
+                )
         database.session.commit()
         flash(_("Lista de precios creada correctamente."), "success")
         return redirect(url_for("admin.lista_precios"))
-    price_lists = database.session.execute(database.select(PriceList).order_by(PriceList.name)).scalars().all()
+    price_lists = [
+        price_list
+        for price_list in database.session.execute(database.select(PriceList).order_by(PriceList.name)).scalars().all()
+        if _can_manage_price_list(price_list)
+    ]
     return render_template("admin/price_lists.html", price_lists=price_lists, titulo=_("Listas de Precios"))
 
 
@@ -700,8 +751,12 @@ def lista_precios():
 @modulo_activo("admin")
 def precios_item():
     """Administra precios por item."""
-    _require_system_admin()
+    _require_price_list_editor()
     if request.method == "POST":
+        price_list = database.session.get(PriceList, request.form.get("price_list_id") or "")
+        if not price_list:
+            abort(404)
+        _require_price_list_company_access(price_list)
         item_price = ItemPrice(
             item_code=request.form.get("item_code") or "",
             price_list_id=request.form.get("price_list_id") or "",
@@ -715,13 +770,46 @@ def precios_item():
         database.session.commit()
         flash(_("Precio de item creado correctamente."), "success")
         return redirect(url_for("admin.precios_item"))
-    item_prices = database.session.execute(database.select(ItemPrice).order_by(ItemPrice.item_code)).scalars().all()
-    price_lists = (
-        database.session.execute(database.select(PriceList).filter_by(is_active=True).order_by(PriceList.name)).scalars().all()
-    )
+    price_lists = [
+        price_list
+        for price_list in database.session.execute(
+            database.select(PriceList).filter_by(is_active=True).order_by(PriceList.name)
+        )
+        .scalars()
+        .all()
+        if _can_manage_price_list(price_list)
+    ]
+    allowed_list_ids = {price_list.id for price_list in price_lists}
+    item_prices = [
+        item_price
+        for item_price in database.session.execute(database.select(ItemPrice).order_by(ItemPrice.item_code)).scalars().all()
+        if item_price.price_list_id in allowed_list_ids
+    ]
     return render_template(
         "admin/item_prices.html", item_prices=item_prices, price_lists=price_lists, titulo=_("Precios por Item")
     )
+
+
+@admin.route("/settings/item-prices/<item_price_id>", methods=["POST"])
+@login_required
+@modulo_activo("admin")
+def actualizar_precio_item(item_price_id: str):
+    """Actualiza un precio de catálogo sin crear una segunda tarifa."""
+    _require_price_list_editor()
+    item_price = database.session.get(ItemPrice, item_price_id)
+    if not item_price:
+        abort(404)
+    price_list = database.session.get(PriceList, item_price.price_list_id)
+    if not price_list:
+        abort(404)
+    _require_price_list_company_access(price_list)
+    item_price.price = _decimal_form("price")
+    item_price.min_qty = _decimal_form("min_qty", "0")
+    item_price.valid_from = _date_form("valid_from")
+    item_price.valid_upto = _date_form("valid_upto")
+    database.session.commit()
+    flash(_("Precio de item actualizado correctamente."), "success")
+    return redirect(url_for("admin.precios_item"))
 
 
 @admin.route("/settings/purchase-reconciliation", methods=["GET", "POST"])

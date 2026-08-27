@@ -107,4 +107,5 @@ class FormularioCotizacionVenta(FlaskForm):
     company = SelectField(_LABEL_COMPANY, choices=[])
     naming_series = SelectField("Serie", choices=[])
     posting_date = StringField(_LABEL_POSTING_DATE)
+    valid_until = DateField("Válida hasta", format="%Y-%m-%d", validators=[Optional()])
     remarks = TextAreaField("Observaciones")

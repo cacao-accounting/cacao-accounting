@@ -21,6 +21,8 @@ from cacao_accounting.database import (
     ItemPrice,
     Party,
     PriceList,
+    Roles,
+    RolesUser,
     SalesInvoice,
     SalesInvoiceItem,
     SalesMatchingConfig,
@@ -779,6 +781,78 @@ def _line_amount(index: int) -> Decimal:
     return _form_decimal(f"qty_{index}", "1") * _form_decimal(f"rate_{index}", "0")
 
 
+def _source_line_rate(index: int, submitted_rate: Decimal) -> Decimal:
+    """Return the immutable source-line rate instead of trusting form data."""
+    source_type = request.form.get(f"source_type_{index}")
+    source_id = request.form.get(f"source_id_{index}")
+    source_item_id = request.form.get(f"source_item_id_{index}")
+    source_values = (source_type, source_id, source_item_id)
+    if not any(source_values):
+        return submitted_rate
+    if not all(source_values):
+        raise DocumentFlowError("La referencia de documento fuente está incompleta.", 400)
+    models = {
+        "sales_request": (SalesRequestItem, "sales_request_id"),
+        "sales_quotation": (SalesQuotationItem, "sales_quotation_id"),
+        "sales_order": (SalesOrderItem, "sales_order_id"),
+        "delivery_note": (DeliveryNoteItem, "delivery_note_id"),
+        "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
+    }
+    model_data = models.get(str(source_type))
+    if model_data is None:
+        raise DocumentFlowError("El tipo de documento fuente no es válido para ventas.", 400)
+    model, document_id_field = model_data
+    source_item = database.session.get(model, source_item_id)
+    if source_item is None or getattr(source_item, document_id_field) != source_id:
+        raise DocumentFlowError("La línea de documento fuente no existe o no corresponde al documento indicado.", 400)
+    return Decimal(str(source_item.rate or "0"))
+
+
+def _line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, Decimal | None, Decimal]:
+    """Resolve a valid line discount and return percentage, amount and net amount."""
+    source_type = request.form.get(f"source_type_{index}")
+    source_id = request.form.get(f"source_id_{index}")
+    source_item_id = request.form.get(f"source_item_id_{index}")
+    if source_type and source_id and source_item_id:
+        models = {
+            "sales_quotation": (SalesQuotationItem, "sales_quotation_id"),
+            "sales_order": (SalesOrderItem, "sales_order_id"),
+            "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
+        }
+        model_data = models.get(source_type)
+        if model_data:
+            source_item = database.session.get(model_data[0], source_item_id)
+            if source_item is not None and getattr(source_item, model_data[1]) == source_id:
+                percentage = Decimal(str(source_item.discount_percentage or "0"))
+                if percentage:
+                    amount = (gross_amount * percentage / Decimal("100")).quantize(Decimal("0.0001"))
+                else:
+                    source_gross = Decimal(str(source_item.qty or "0")) * Decimal(str(source_item.rate or "0"))
+                    amount = (
+                        (gross_amount * Decimal(str(source_item.discount_amount or "0")) / source_gross)
+                        if source_gross
+                        else Decimal("0")
+                    )
+                return percentage or None, amount or None, gross_amount - amount
+    percentage = _form_decimal(f"discount_percentage_{index}", "0")
+    amount = _form_decimal(f"discount_amount_{index}", "0")
+    if percentage < 0 or percentage > 100 or amount < 0:
+        raise ValueError("El descuento de línea debe estar entre 0% y 100% y no puede ser negativo.")
+    if percentage and amount:
+        raise ValueError("Indique descuento por porcentaje o por importe, no ambos.")
+    if percentage:
+        amount = (gross_amount * percentage / Decimal("100")).quantize(Decimal("0.0001"))
+    if amount > gross_amount:
+        raise ValueError("El descuento de línea no puede exceder el importe bruto.")
+    return percentage or None, amount or None, gross_amount - amount
+
+
+def validate_sales_quotation_expiry(quotation: SalesQuotation, conversion_date: date) -> None:
+    """Reject conversion after a quotation's inclusive validity date."""
+    if quotation.valid_until and conversion_date > quotation.valid_until:
+        raise ValueError("No se puede convertir una cotización vencida.")
+
+
 def _create_line_relation(
     index: int,
     target_type: str,
@@ -811,6 +885,9 @@ def _create_line_relation(
 
 def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una orden de venta desde el formulario."""
+    order = database.session.get(SalesOrder, order_id)
+    if order is None:
+        raise ValueError("La orden de venta no existe.")
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -823,14 +900,15 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
-            rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
+            rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
+            discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
             item_obj = _item_by_code(item_code)
             if not item_obj:
                 raise ValueError(f"El item {item_code} no existe.")
             if not item_obj.is_active or not item_obj.is_sale_item:
                 raise ValueError(f"El item {item_code} no está habilitado para venta.")
+            _validate_sales_catalog_rate(order, i, item_code, qty, uom, rate)
             qty_in_base_uom = convert_item_qty(item_code, qty, uom or item_obj.default_uom, item_obj.default_uom)
             linea = SalesOrderItem(
                 sales_order_id=order_id,
@@ -841,6 +919,8 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
                 qty_in_base_uom=qty_in_base_uom,
                 rate=rate,
                 amount=amount,
+                discount_percentage=discount_percentage,
+                discount_amount=discount_amount,
                 warehouse=request.form.get(f"warehouse_{i}") or None,
             )
             database.session.add(linea)
@@ -857,6 +937,9 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
 
 def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de un pedido de venta desde el formulario."""
+    sales_request = database.session.get(SalesRequest, request_id)
+    if sales_request is None:
+        raise ValueError("El pedido de venta no existe.")
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -869,9 +952,10 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
-            rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
+            rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
+            discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
+            _validate_sales_catalog_rate(sales_request, i, item_code, qty, uom, rate)
             linea = SalesRequestItem(
                 sales_request_id=request_id,
                 item_code=item_code,
@@ -880,6 +964,8 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
+                discount_percentage=discount_percentage,
+                discount_amount=discount_amount,
             )
             database.session.add(linea)
             database.session.flush()
@@ -895,6 +981,9 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
 
 def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una cotización de venta desde el formulario."""
+    quotation = database.session.get(SalesQuotation, quotation_id)
+    if quotation is None:
+        raise ValueError("La cotización de venta no existe.")
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -907,9 +996,10 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
-            rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
+            rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
+            discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
+            _validate_sales_catalog_rate(quotation, i, item_code, qty, uom, rate)
             linea = SalesQuotationItem(
                 sales_quotation_id=quotation_id,
                 item_code=item_code,
@@ -918,6 +1008,8 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
+                discount_percentage=discount_percentage,
+                discount_amount=discount_amount,
             )
             database.session.add(linea)
             database.session.flush()
@@ -933,6 +1025,9 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
 
 def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una nota de entrega desde el formulario."""
+    delivery_note = database.session.get(DeliveryNote, note_id)
+    if delivery_note is None:
+        raise ValueError("La nota de entrega no existe.")
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -945,9 +1040,10 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
-            rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
+            rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
+            amount = qty * rate
             uom = request.form.get(f"uom_{i}") or None
+            _validate_sales_catalog_rate(delivery_note, i, item_code, qty, uom, rate)
             warehouse = (
                 request.form.get(f"warehouse_{i}")
                 or request.form.get("from_warehouse")
@@ -982,6 +1078,9 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
 
 def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una factura de venta desde el formulario."""
+    invoice = database.session.get(SalesInvoice, invoice_id)
+    if invoice is None:
+        raise ValueError("La factura de venta no existe.")
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -994,9 +1093,10 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
-            rate = _form_decimal(f"rate_{i}", "0")
-            amount = _line_amount(i)
+            rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
+            discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
+            _validate_sales_catalog_rate(invoice, i, item_code, qty, uom, rate)
             linea = SalesInvoiceItem(
                 sales_invoice_id=invoice_id,
                 item_code=item_code,
@@ -1005,6 +1105,8 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
+                discount_percentage=discount_percentage,
+                discount_amount=discount_amount,
                 warehouse=request.form.get(f"warehouse_{i}") or None,
                 batch_id=request.form.get(f"batch_id_{i}") or None,
                 serial_no=request.form.get(f"serial_no_{i}") or None,
@@ -1074,6 +1176,8 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
             rate=si_item.rate,
             amount=si_item.amount,
             warehouse=warehouse,
+            batch_id=si_item.batch_id,
+            serial_no=si_item.serial_no,
         )
         database.session.add(dn_item)
         database.session.flush()
@@ -1234,26 +1338,93 @@ def _resolve_sales_price_list(company: str, customer_id: str | None) -> PriceLis
     )
 
 
-def _resolve_catalog_sales_rate(invoice: SalesInvoice, item: SalesInvoiceItem) -> Decimal | None:
-    """Resuelve el precio vigente del catálogo para una línea sin documento fuente."""
-    price_list = _resolve_sales_price_list(invoice.company, invoice.customer_id)
-    if not price_list or not invoice.posting_date:
+def resolve_sales_catalog_price(
+    company: str,
+    customer_id: str | None,
+    item_code: str,
+    qty: Decimal,
+    uom: str | None,
+    pricing_date: date | None,
+) -> tuple[Decimal, PriceList] | None:
+    """Resolve the current selling price for a customer and item.
+
+    A customer's company-specific list takes precedence over the active
+    default selling list.  Quantity breaks and validity dates are evaluated
+    on the document date, so the value returned by the UI is the same value
+    enforced while the document is saved.
+    """
+    price_list = _resolve_sales_price_list(company, customer_id)
+    if not price_list or not pricing_date:
         return None
     query = (
         database.select(ItemPrice)
         .where(
-            ItemPrice.item_code == item.item_code,
+            ItemPrice.item_code == item_code,
             ItemPrice.price_list_id == price_list.id,
-            (ItemPrice.valid_from.is_(None) | (ItemPrice.valid_from <= invoice.posting_date)),
-            (ItemPrice.valid_upto.is_(None) | (ItemPrice.valid_upto >= invoice.posting_date)),
-            (ItemPrice.min_qty.is_(None) | (ItemPrice.min_qty <= item.qty)),
+            (ItemPrice.valid_from.is_(None) | (ItemPrice.valid_from <= pricing_date)),
+            (ItemPrice.valid_upto.is_(None) | (ItemPrice.valid_upto >= pricing_date)),
+            (ItemPrice.min_qty.is_(None) | (ItemPrice.min_qty <= qty)),
         )
         .order_by(ItemPrice.min_qty.desc().nullslast(), ItemPrice.valid_from.desc().nullslast())
     )
-    if item.uom:
-        query = query.where(or_(ItemPrice.uom.is_(None), ItemPrice.uom == item.uom))
-    catalog_price = database.session.execute(query).scalars().first()
-    return Decimal(str(catalog_price.price)) if catalog_price else None
+    if uom:
+        query = query.where(or_(ItemPrice.uom.is_(None), ItemPrice.uom == uom))
+    item_price = database.session.execute(query).scalars().first()
+    if item_price is None:
+        return None
+    return Decimal(str(item_price.price)), price_list
+
+
+def is_sales_price_editor(user_id: str | None) -> bool:
+    """Return whether a user may override a sales catalog price."""
+    if not user_id:
+        return False
+    from cacao_accounting.database import User
+
+    user = database.session.get(User, user_id)
+    if user and user.classification == "admin":
+        return True
+    role_ids = database.select(Roles.id).where((Roles.name == "sales_manager") | (Roles.note == "Gerente de Ventas"))
+    return (
+        database.session.execute(
+            database.select(RolesUser).where(RolesUser.user_id == user_id, RolesUser.role_id.in_(role_ids))
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
+def _validate_sales_catalog_rate(
+    document: Any,
+    index: int,
+    item_code: str,
+    qty: Decimal,
+    uom: str | None,
+    rate: Decimal,
+) -> None:
+    """Reject unauthorized manual rates on catalog-backed sales lines."""
+    if request.form.get(f"source_item_id_{index}") or is_sales_price_editor(str(getattr(current_user, "id", "") or "")):
+        return
+    resolved = resolve_sales_catalog_price(
+        str(document.company),
+        getattr(document, "customer_id", None),
+        item_code,
+        qty,
+        uom,
+        getattr(document, "posting_date", None),
+    )
+    if resolved is None:
+        raise ValueError(f"No existe un precio vigente para el item {item_code} en la lista de precios aplicable.")
+    expected_rate, _price_list = resolved
+    if rate != expected_rate:
+        raise ValueError("Solo el Administrador del Sistema o el Gerente de Ventas puede modificar un precio de venta.")
+
+
+def _resolve_catalog_sales_rate(invoice: SalesInvoice, item: SalesInvoiceItem) -> Decimal | None:
+    """Resuelve el precio vigente del catálogo para una línea sin documento fuente."""
+    resolved = resolve_sales_catalog_price(
+        invoice.company, invoice.customer_id, item.item_code, Decimal(str(item.qty)), item.uom, invoice.posting_date
+    )
+    return resolved[0] if resolved else None
 
 
 def _resolve_source_item_rate(si_item: SalesInvoiceItem, invoice_id: str) -> Decimal | None:
@@ -1557,6 +1728,8 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
         customer = database.session.get(Party, customer_id) if customer_id else None
         posting_date = _parse_date(request.form.get("posting_date"))
         source_type, source_id, source = _sales_order_source(from_quotation_id, from_request_id)
+        if isinstance(source, SalesQuotation):
+            validate_sales_quotation_expiry(source, posting_date)
         company, transaction_currency = validate_immutable_header(
             source,
             request.form.get("company") or None,
@@ -1618,6 +1791,7 @@ def _handle_sales_quotation_edit_post(registro):
         flash("La compañía de un documento existente no puede cambiarse.", "danger")
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
     registro.posting_date = _parse_date(request.form.get("posting_date"))
+    registro.valid_until = _parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None
     registro.remarks = request.form.get("remarks")
     for item in database.session.execute(
         database.select(SalesQuotationItem).filter_by(sales_quotation_id=registro.id)
