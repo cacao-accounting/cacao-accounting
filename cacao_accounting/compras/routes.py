@@ -2712,6 +2712,10 @@ def compras_recepcion_submit(receipt_id: str):
         if ApprovalEngine.handle_submission(registro, current_user, "Recepción de compra"):
             return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
 
+        from cacao_accounting.inventario.service import validate_batch_serial_draft
+
+        validate_batch_serial_draft(items)
+
         submit_document(registro)  # type: ignore[misc]
         log_submit(registro)
         database.session.commit()

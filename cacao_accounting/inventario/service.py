@@ -256,6 +256,26 @@ def validate_batch_serial(
         _validate_serial(line, item, outgoing, warehouse, allow_transfer, allow_return)
 
 
+def validate_batch_serial_draft(lines: Sequence[Any]) -> None:
+    """Valida que lineas con item controlado tengan lote/serial asignado.
+
+    Esta validacion se ejecuta antes del submit para rechazar documentos
+    incompletos con un mensaje accionable, en lugar de fallar durante el
+    posting de stock cuando la correccion ya no es trivial.
+    """
+    for line in lines:
+        item_code = getattr(line, "item_code", None)
+        if not item_code:
+            continue
+        item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
+        if not item or not item.is_stock_item:
+            continue
+        if item.has_batch and not getattr(line, "batch_id", None):
+            raise ValueError(f"El item {item_code} requiere lote.")
+        if item.has_serial_no and not getattr(line, "serial_no", None):
+            raise ValueError(f"El item {item_code} requiere numero de serie.")
+
+
 def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> None:
     """Actualiza estado y bodega del serial despues del movimiento."""
     serial_no = getattr(line, "serial_no", None)
