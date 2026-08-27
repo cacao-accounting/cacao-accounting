@@ -14,6 +14,12 @@ Las siguientes etiquetas son utiles para coordinar el trabajo con issues:
   - needs-work: el fix se considera incompleto y requiere trabajo adicional.
 - fixed: issue con una solución aceptada implementada.
 
+Toda tarea asociada a un Issue debe usar el formato 'Refs: ###' para facilitar triaje, no cerrar issues on push,
+todo trabajo asociado a un Issue debe ser validado por al menos dos agentes que coincidan que el fix aplicado es
+correcto, robusto, correctamente cubierto por pruebas unitarias, técnicamente válido y con cobertura a posibles
+edge cases asociados al flujo de negocio relacionado a la tarea que se está realizando.
+
+
 Una tarea no se considera completada si no cuenta con pruebas unitarias que validen el funcionamiento
 esperado del sistema y ayuden a evitar que se introduzcan regresiones a funcionalidades validadas en el
 futuro.
