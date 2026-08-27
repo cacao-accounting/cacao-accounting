@@ -260,6 +260,7 @@
         { field: 'uom', label: 'UOM', visible: true, width: 1, required: false },
         { field: 'qty', label: 'Cantidad', visible: true, width: 1, required: false },
         { field: 'rate', label: 'Precio', visible: true, width: 1, required: false },
+        { field: 'discount_percentage', label: 'Descuento %', visible: config.enableLineDiscounts === true, width: 1, required: false },
         { field: 'amount', label: 'Monto', visible: true, width: 1, required: false },
         { field: 'batch_id', label: 'Lote', visible: false, width: 1, required: false },
         { field: 'serial_no', label: 'Serie', visible: false, width: 1, required: false },
@@ -310,6 +311,8 @@
       return {
         formKey: config.formKey || '',
         showPricing: config.showPricing !== false,
+        canEditPrices: config.canEditPrices === true || !String(config.formKey || '').startsWith('sales.'),
+        enableSalesPriceLookup: String(config.formKey || '').startsWith('sales.'),
         viewKey: config.viewKey || 'draft',
         flowLockedFields,
         messages,
@@ -383,6 +386,9 @@
           }
           this.lines = (config.initialLines || []).map(normalizeLineWithCb(this));
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
+          this.$watch('header.party', () => this.refreshCatalogPrices());
+          this.$watch('header.company', () => this.refreshCatalogPrices());
+          this.$watch('header.posting_date', () => this.refreshCatalogPrices());
           this.queueTaxPreview();
         },
 
@@ -476,6 +482,7 @@
             qty: 1,
             uom: '',
             rate: 0,
+            discount_percentage: 0,
             amount: 0,
             warehouse: '',
             batch_id: '',
@@ -571,6 +578,34 @@
         onItemChange(line) {
           this.syncLineFromItem(line, false);
           this.calcAmount(line);
+          this.refreshCatalogPrice(line);
+        },
+
+        async refreshCatalogPrice(line) {
+          if (!this.enableSalesPriceLookup || line.source_item_id || !line.item_code || !this.header.company) return;
+          const itemCode = line.item_code;
+          const params = new URLSearchParams({
+            company: this.header.company,
+            customer_id: this.header.party || '',
+            item_code: itemCode,
+            qty: toCurrencyString(line.qty || 1),
+            uom: line.uom || '',
+            posting_date: this.header.posting_date || '',
+          });
+          try {
+            const response = await fetch(`/api/sales/catalog-price?${params.toString()}`, { credentials: 'same-origin' });
+            const payload = await response.json();
+            if (!response.ok || line.item_code !== itemCode || payload.price === null) return;
+            line.rate = toNumber(payload.price);
+            line.price_list_name = payload.price_list_name || '';
+            this.calcAmount(line);
+          } catch (err) {
+            console.warn('transactionForm catalog price lookup failed', err);
+          }
+        },
+
+        refreshCatalogPrices() {
+          for (const line of this.lines) this.refreshCatalogPrice(line);
         },
 
         addRow() {
@@ -615,7 +650,8 @@
         },
 
         calcAmount(line) {
-          line.amount = toNumber(line.qty) * toNumber(line.rate);
+          const gross = toNumber(line.qty) * toNumber(line.rate);
+          line.amount = gross * (1 - (toNumber(line.discount_percentage) / 100));
           this.queueTaxPreview();
         },
 

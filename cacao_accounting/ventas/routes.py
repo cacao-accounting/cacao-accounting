@@ -937,6 +937,7 @@ def ventas_orden_venta_editar(order_id: str):
     transaction_config = {
         "formKey": _FORMKEY_SALES_ORDER,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
+        "enableLineDiscounts": True,
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
@@ -1967,6 +1968,7 @@ def ventas_factura_venta_nuevo():
     transaction_config = {
         "formKey": _FORMKEY_SALES_INVOICE,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
+        "enableLineDiscounts": True,
         "viewKey": "draft",
         "enableBatchSerial": True,
         "items": items_disponibles,
@@ -2081,6 +2083,7 @@ def ventas_factura_venta_editar(invoice_id: str):
     transaction_config = {
         "formKey": _FORMKEY_SALES_INVOICE,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
+        "enableLineDiscounts": True,
         "viewKey": "draft",
         "enableBatchSerial": True,
         "items": items_disponibles,

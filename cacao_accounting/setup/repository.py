@@ -16,6 +16,8 @@ from cacao_accounting.database import (
     CostCenter,
     Entity,
     FiscalYear,
+    Item,
+    ItemPrice,
     PartyGroup,
     PriceList,
     UOM,
@@ -181,6 +183,38 @@ def create_default_price_lists(company: str, currency: str | None, language: str
         )
         database.session.add(price_list)
         created.append(price_list)
+    database.session.flush()
+    selling_lists = database.session.execute(
+        database.select(PriceList).where(
+            PriceList.company == company,
+            PriceList.is_default.is_(True),
+            PriceList.is_selling.is_(True),
+        )
+    ).scalars()
+    items = (
+        database.session.execute(
+            database.select(Item).where(Item.is_active.is_(True), Item.is_sale_item.is_(True), Item.standard_rate.is_not(None))
+        )
+        .scalars()
+        .all()
+    )
+    for price_list in selling_lists:
+        existing_item_codes = set(
+            database.session.execute(
+                database.select(ItemPrice.item_code).where(ItemPrice.price_list_id == price_list.id)
+            ).scalars()
+        )
+        for item in items:
+            if item.code in existing_item_codes:
+                continue
+            database.session.add(
+                ItemPrice(
+                    item_code=item.code,
+                    price_list_id=price_list.id,
+                    uom=item.sale_uom or item.default_uom,
+                    price=item.standard_rate,
+                )
+            )
     return created
 
 

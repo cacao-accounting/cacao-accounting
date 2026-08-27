@@ -44,6 +44,10 @@
         on_select="function(opt){ header.party_label = opt.display_name; }"
         ) }}
       </div>
+      <div class="col-md-3">
+        {{ form.valid_until.label(class="form-label") }}
+        {{ form.valid_until(class="form-control") }}
+      </div>
     </div>
   </div>
   {{ tf_macros.logistics_section(terms_field="sales_terms") }}

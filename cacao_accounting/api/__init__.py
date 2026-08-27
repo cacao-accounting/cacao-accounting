@@ -7,6 +7,8 @@
 # Libreria estandar
 # --------------------------------------------------------------------------------------
 from functools import wraps
+from datetime import date
+from decimal import Decimal
 from typing import Any, cast
 from urllib.parse import urlparse
 
@@ -71,6 +73,7 @@ from cacao_accounting.api.line_import import line_import_bp
 from cacao_accounting.api.dashboard import dashboard_api
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.limiter import rate_limit_blueprint
+from cacao_accounting.ventas.services import resolve_sales_catalog_price
 
 api = Blueprint("api", __name__, template_folder="templates")
 api.register_blueprint(line_import_bp)
@@ -116,6 +119,29 @@ def _module_for_document_type(document_type: str) -> str | None:
         "journal_entry": "accounting",
         "payment_entry": "cash",
     }.get(document_type)
+
+
+@api.route("/api/sales/catalog-price")
+@login_required
+def api_sales_catalog_price():
+    """Return the effective sales-list price for a prospective document line."""
+    company = request.args.get("company") or ""
+    customer_id = request.args.get("customer_id") or None
+    item_code = request.args.get("item_code") or ""
+    uom = request.args.get("uom") or None
+    try:
+        qty = Decimal(str(request.args.get("qty") or "1"))
+        pricing_date = date.fromisoformat(request.args.get("posting_date") or date.today().isoformat())
+    except ValueError:
+        abort(400)
+    if not company or not item_code or qty <= 0:
+        abort(400)
+    exige_acceso_compania("sales", company, "consultar")
+    resolved = resolve_sales_catalog_price(company, customer_id, item_code, qty, uom, pricing_date)
+    if resolved is None:
+        return jsonify({"price": None, "price_list_id": None, "price_list_name": None})
+    price, price_list = resolved
+    return jsonify({"price": str(price), "price_list_id": price_list.id, "price_list_name": price_list.name})
 
 
 def _require_document_read_access(document_type: str, document_id: str) -> Any:

@@ -15,5 +15,24 @@
 </form>
 <table class="table table-sm">
   <caption>{{ _("Lista de precios por ítem") }}</caption>
-  <thead><tr><th>{{ _("Item") }}</th><th>{{ _("Lista") }}</th><th>{{ _("UOM") }}</th><th>{{ _("Precio") }}</th></tr></thead><tbody>{% for item_price in item_prices %}<tr><td>{{ item_price.item_code }}</td><td>{{ item_price.price_list_id }}</td><td>{{ item_price.uom or "" }}</td><td>{{ item_price.price }}</td></tr>{% endfor %}</tbody></table>
+  <thead>
+    <tr><th>{{ _("Item") }}</th><th>{{ _("Lista") }}</th><th>{{ _("UOM") }}</th><th>{{ _("Precio") }}</th><th>{{ _("Acciones") }}</th></tr>
+  </thead>
+  <tbody>
+    {% for item_price in item_prices %}
+    <tr>
+      <td>{{ item_price.item_code }}</td><td>{{ item_price.price_list_id }}</td><td>{{ item_price.uom or "" }}</td><td>{{ item_price.price }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin.actualizar_precio_item', item_price_id=item_price.id) }}" class="d-flex gap-1">
+          <input class="form-control form-control-sm" name="price" type="number" step="0.0001" min="0" value="{{ item_price.price }}" aria-label="{{ _('Precio') }}">
+          <input type="hidden" name="min_qty" value="{{ item_price.min_qty or 0 }}">
+          <input type="hidden" name="valid_from" value="{{ item_price.valid_from or '' }}">
+          <input type="hidden" name="valid_upto" value="{{ item_price.valid_upto or '' }}">
+          <button class="btn btn-sm btn-outline-primary" type="submit">{{ _('Guardar') }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 {% endblock %}
