@@ -1,7 +1,8 @@
 # Introducción
 
-Cacao Accouting es un software contable que busca dar covertura completa y robusto a los siguientes
+Cacao Accouting es un software contable que busca dar cobertura completa y robusta a los siguientes
 flujo de negocio:
+
 - Order to Cash (O2C): Flujo completo del ciclo de venta.
 - Source to Pay (S2P): Flujo completo del proceso de abastecimiento.
 - Record to Report (R2R): Generación robusta de reportes a partir de los registros almacenados en
@@ -21,6 +22,13 @@ Modo desktop se considera la base operativa del sistema, el sistema debe ser com
 modo desktop, el modo cloud es una capa de funcionalidad adicional que agrega funciones utiles para 
 entornos en la nube como: correo electronico, multi usuario, multi moneda.
 
+El Issue (https://github.com/cacao-accounting/cacao-accounting/issues/757) tiene más análisis sobre el
+alcance de modo desktop.
+
+El hecho de tener que correr como un app de escritorio implica mantener un diseño monolítico modular, sin
+depender excesivamente de patrones que hacen solo sentido en entornos en la nube. En la práctica Cacao
+Accounting Desktop solo requiere una base de datos local SQLite.
+
 Dado que en modo desktop solo esta disponible la base de datos local hay que mantener el scope sencillo.
 
 El sistema es:
@@ -37,6 +45,27 @@ El sistema es:
 - El sistema diferencia entre anulaciones (mismo périodo) y reversiones (distintos períodos), dado que
   las anulaciones se efectuan en el mismo período y misma fecha que el registro adicional estas en la
   practica tienen efecto cero y pueden ser excluidos en reportes.
+- AP/AR deben de llevar saldo por documento, el saldo de un cliente o proveedor debe ser la suma
+  de todos aquellos registros que sin haber sido revertidos o anulados no se han cerrado (es decir
+  no han llegado a saldo cero). Por ejemplo anular un pago debe devolver el saldo de las facturas asociadas
+  antes de aplicar el pago, pero el ledger financiero si debe tener el registro del pago original y su
+  posterior anulación, el saldo de un cliente o proveedor a un momento dado debe ser reconciliable con el
+  saldo de todas las transacciones asociadas a ese cliente o proveedor en el ledger financiero.
+- Misma lógica aplica para inventario, inventario no solo lleva valores monetarios, lleva bodegas, ítems,
+  unidades de medida, factores de conversión, etc. 
+
+# Soporte de bases de datos:
+
+- Tier 1: SQLite (Desktop) y Postresql (Cloud). Full soporte errores son bloquers.
+- Tier 2: MySQL. Se prueba en CI pero no bloquea lanzamiento.
+- Tier 3: MariaDB, MS SQL Server. No sé prueban en CI.
+
+# Uso de cache 
+
+El archivo Docker Compose incluye Redis como cache, el sistema no puede depender del servicio de cache para funcionar,
+en desktop no hay caché, el uso de cache solo debe aplicar a asuntos que hagan sentido y siempre debe ser condicional y
+no fallar por falta de cache.
+
 
 # Bitácora de desarrollo
 
