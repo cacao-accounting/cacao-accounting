@@ -24,7 +24,7 @@
       </div>
       <div class="col-md-6">
         <label class="form-label">{{ _("Año Fiscal") }}</label>
-        {% from "reportes/report_macros.html" import smart_select_field %}
+        {% from "smart_select_field.html" import smart_select_field %}
         {{ smart_select_field("Año Fiscal", "fiscal_year_id", "fiscal_year", form.fiscal_year_id.data, "budget-fiscal-year", 1, {"company": {"selector": "#budget-company"}}, ["#budget-company"], ["company"]) }}
       </div>
 

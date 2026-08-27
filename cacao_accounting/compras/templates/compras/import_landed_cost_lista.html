@@ -23,7 +23,8 @@
       </a>
     </div>
   </div>
-  {{ macros.list_filters(show_status=True) }}
+  {{ macros.list_filters(show_status=True, extra_params=consulta.period_extra_params) }}
+  {{ macros.period_list_filters(consulta) }}
   <table class="ca-table">
     <caption style="display: none;">Listado de costos de importacion.</caption>
     <thead>
@@ -47,7 +48,7 @@
       {%- endfor %}
     </tbody>
   </table>
-  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="compras.compras_import_landed_cost_lista") }}</div>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="compras.compras_import_landed_cost_lista", extra_params=consulta.period_extra_params) }}</div>
 </div>
 
 {% endblock %}

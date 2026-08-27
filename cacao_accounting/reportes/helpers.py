@@ -255,13 +255,27 @@ def _build_context_summary(report, report_filters: FinancialReportFilters) -> di
         status_label = _("Todos")
     else:
         status_label = _("Contabilizado")
+    period_label = _period_display_label(report_filters)
     return {
         "company": report_filters.company,
         "ledger": ledger_label,
-        "period": report_filters.accounting_period or "—",
+        "period": period_label,
         "status": status_label,
         "records": str(report.total_rows),
     }
+
+
+def _period_display_label(report_filters: FinancialReportFilters) -> str:
+    """Etiqueta de presentación del período o rango seleccionado."""
+    if getattr(report_filters, "period_from", None) or getattr(report_filters, "period_to", None):
+        from cacao_accounting.reportes.periods import resolve_period_range
+
+        period_range = resolve_period_range(
+            report_filters.company, getattr(report_filters, "period_from", None), getattr(report_filters, "period_to", None)
+        )
+        if period_range is not None:
+            return period_range.label
+    return report_filters.accounting_period or "—"
 
 
 def _is_report_balanced(raw_totals: dict[str, Decimal]) -> bool:
@@ -384,23 +398,31 @@ def _default_ledger_for_company(company_code: str) -> str | None:
 
 def _default_period_for_company(company_code: str, target_date: date | None = None) -> str | None:
     effective_date = target_date or date.today()
-    period_name = database.session.execute(
-        database.select(AccountingPeriod.name)
-        .where(
-            AccountingPeriod.entity == company_code,
-            AccountingPeriod.enabled.is_(True),
-            AccountingPeriod.start <= effective_date,
-            AccountingPeriod.end >= effective_date,
+    period_name = (
+        database.session.execute(
+            database.select(AccountingPeriod.name)
+            .where(
+                AccountingPeriod.entity == company_code,
+                AccountingPeriod.enabled.is_(True),
+                AccountingPeriod.start <= effective_date,
+                AccountingPeriod.end >= effective_date,
+            )
+            .order_by(AccountingPeriod.start.desc())
         )
-        .order_by(AccountingPeriod.start.desc())
-    ).scalar_one_or_none()
+        .scalars()
+        .first()
+    )
     if period_name:
         return period_name
-    return database.session.execute(
-        database.select(AccountingPeriod.name)
-        .where(AccountingPeriod.entity == company_code, AccountingPeriod.enabled.is_(True))
-        .order_by(AccountingPeriod.start.desc())
-    ).scalar_one_or_none()
+    return (
+        database.session.execute(
+            database.select(AccountingPeriod.name)
+            .where(AccountingPeriod.entity == company_code, AccountingPeriod.enabled.is_(True))
+            .order_by(AccountingPeriod.start.desc())
+        )
+        .scalars()
+        .first()
+    )
 
 
 def _build_drill_down_url(
@@ -651,6 +673,91 @@ def _date_arg(name: str) -> date | None:
     return date.fromisoformat(value) if value else None
 
 
+def _period_params() -> tuple[str | None, str | None]:
+    """Devuelve los identificadores de período (inicio y fin) desde la petición.
+
+    Acepta tanto ``accounting_period_from``/``accounting_period_to`` como la
+    variante corta ``period_from``/``period_to`` para compatibilidad.
+    """
+    period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
+    period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
+    return period_from, period_to
+
+
+def _period_picker_payload(company: str, period_from: str | None = None, period_to: str | None = None) -> dict[str, object]:
+    """Construye el contexto del selector de rango de períodos en los templates.
+
+    Devuelve la lista de períodos disponibles y el rango activo (``period_from``
+    y ``period_to`` como ids). Cuando no hay criterio explícito se pre-selecciona
+    el período contable actual para que el selector y el backend coincidan.
+    """
+    from cacao_accounting.reportes.periods import current_period_for_company, list_periods_for_company
+
+    active_from, active_to = _period_params()
+    period_from = period_from or active_from
+    period_to = period_to or active_to
+    periods = [
+        {"id": str(period.id), "name": period.name, "is_closed": bool(period.is_closed)}
+        for period in list_periods_for_company(company)
+    ]
+    if not period_from and not period_to:
+        current = current_period_for_company(company)
+        if current is not None:
+            period_from = period_to = str(current.id)
+    return {
+        "periods": periods,
+        "period_from": period_from or "",
+        "period_to": period_to or period_from or "",
+    }
+
+
+def _resolve_as_of_date(company: str) -> date | None:
+    """Resuelve la fecha de corte desde el rango de períodos o el parámetro manual.
+
+    El corte de los reportes "as of" es el último día del período final del
+    rango seleccionado: el backend lo deriva de ``AccountingPeriod`` y nunca
+    confía en fechas calculadas por el navegador. Sin criterio explícito se
+    selecciona por defecto el período contable actual.
+    """
+    manual = _date_arg("as_of_date")
+    if manual is not None or request.args.get("accounting_period"):
+        return manual
+    period_from, period_to = _period_params()
+    if period_from or period_to:
+        from cacao_accounting.reportes.periods import reject_manual_date_overrides, resolve_period_range
+
+        period_range = resolve_period_range(company, period_from, period_to)
+        if period_range is not None:
+            reject_manual_date_overrides(request.args, period_range)
+            return period_range.period_end
+    from cacao_accounting.reportes.periods import resolve_period_range
+
+    default_range = resolve_period_range(company, None, None)
+    return default_range.period_end if default_range is not None else None
+
+
+def _resolve_date_bounds(company: str) -> tuple[date | None, date | None]:
+    """Resuelve ``(date_from, date_to)`` desde el rango de períodos o parámetros manuales."""
+    date_from = _date_arg("date_from")
+    date_to = _date_arg("date_to")
+    if date_from is not None or date_to is not None:
+        return date_from, date_to
+    period_from, period_to = _period_params()
+    if period_from or period_to:
+        from cacao_accounting.reportes.periods import reject_manual_date_overrides, resolve_period_range
+
+        period_range = resolve_period_range(company, period_from, period_to)
+        if period_range is not None:
+            reject_manual_date_overrides(request.args, period_range)
+            return period_range.period_start, period_range.period_end
+    from cacao_accounting.reportes.periods import resolve_period_range
+
+    default_range = resolve_period_range(company, None, None)
+    if default_range is not None:
+        return default_range.period_start, default_range.period_end
+    return None, None
+
+
 def _int_arg(name: str, default: int) -> int:
     value = request.args.get(name, default=str(default))
     try:
@@ -669,11 +776,30 @@ def _financial_filters() -> FinancialReportFilters:
     requested_status = request.args.get("status") or "submitted"
     status = None if show_cancellations else requested_status
     ledger = request.args.get("ledger") or _default_ledger_for_company(company_code)
-    accounting_period = request.args.get("accounting_period") or _default_period_for_company(company_code)
+    period_from, period_to = _period_params()
+    requested_period = request.args.get("accounting_period")
+    accounting_period = requested_period or _default_period_for_company(company_code)
+    if requested_period is None and not (period_from or period_to):
+        from cacao_accounting.reportes.periods import resolve_period_range
+
+        default_range = resolve_period_range(company_code, None, None)
+        if default_range is not None:
+            period_from, period_to = default_range.from_id, default_range.to_id
+            accounting_period = default_range.to_name
+    if period_from or period_to:
+        from cacao_accounting.reportes.periods import reject_manual_date_overrides, resolve_period_range
+
+        period_range = resolve_period_range(company_code, period_from, period_to)
+        if period_range is not None:
+            reject_manual_date_overrides(request.args, period_range)
+            if requested_period is None:
+                accounting_period = None if not period_range.single_period else period_range.to_name
     return FinancialReportFilters(
         company=company_code,
         ledger=ledger,
         accounting_period=accounting_period,
+        period_from=period_from,
+        period_to=period_to or period_from,
         voucher_number=request.args.get("voucher_number") or None,
         account_code=request.args.get("account_code") or None,
         account_from=request.args.get("account_from") or None,
@@ -1011,6 +1137,9 @@ def _render_financial_report(
     grouped_rows = _apply_grouping(display_rows, source_rows, report, report_code, saved_view)
     display_totals = {key: _format_cell(key, value, report.ledger_currency) for key, value in report.totals.items()}
     unclassified_count = _unclassified_accounts_count(report.totals)
+    period_picker = _period_picker_payload(
+        report_filters.company, getattr(report_filters, "period_from", None), getattr(report_filters, "period_to", None)
+    )
     return render_template(
         "reportes/financial_report.html",
         titulo=f"{report_title} - {APPNAME}",
@@ -1038,6 +1167,9 @@ def _render_financial_report(
         all_columns=all_columns,
         allow_column_selection=allow_column_selection,
         group_by=group_by,
+        periods=period_picker["periods"],
+        period_from=period_picker["period_from"],
+        period_to=period_picker["period_to"],
     )
 
 
@@ -1085,6 +1217,12 @@ def _render_operational_framework(
         return str(url_for(endpoint, **query))  # type: ignore[arg-type]
 
     total_pages = max((total_rows + page_size - 1) // page_size, 1)
+    company = str(filter_state.get("company") or request.args.get("company", "cacao"))
+    period_picker = _period_picker_payload(
+        company,
+        str(filter_state.get("accounting_period_from") or ""),
+        str(filter_state.get("accounting_period_to") or ""),
+    )
     return render_template(
         "reportes/operational_report.html",
         titulo=f"{report_title} - {APPNAME}",
@@ -1106,27 +1244,41 @@ def _render_operational_framework(
         right_align_columns=_RIGHT_ALIGN_COLUMNS,
         module_home_url=url_for(module_home_endpoint),
         module_home_label=module_home_label,
+        periods=period_picker["periods"],
+        period_from=period_picker["period_from"],
+        period_to=period_picker["period_to"],
     )
 
 
 def _operational_filters() -> OperationalReportFilters:
+    period_from, period_to = _period_params()
+    company = request.args.get("company", "cacao")
+    date_from, date_to = _resolve_date_bounds(company)
     return OperationalReportFilters(
-        company=request.args.get("company", "cacao"),
-        date_from=_date_arg("date_from"),
-        date_to=_date_arg("date_to"),
+        company=company,
+        date_from=date_from,
+        date_to=date_to,
         party_id=request.args.get("party_id") or None,
         item_code=request.args.get("item_code") or None,
         warehouse=request.args.get("warehouse") or None,
+        period_from=period_from,
+        period_to=period_to or period_from,
     )
 
 
 def _render_operational_report(report_name: str, report):
+    company = request.args.get("company", "cacao")
+    period_picker = _period_picker_payload(company)
     return render_template(
         REPORT_TABLE_HTML,
         titulo=report_name + " - " + APPNAME,
         report_title=report_name,
         rows=report.rows,
         totals=report.totals,
+        total_rows=getattr(report, "total_rows", len(getattr(report, "rows", []))),
+        periods=period_picker["periods"],
+        period_from=period_picker["period_from"],
+        period_to=period_picker["period_to"],
     )
 
 

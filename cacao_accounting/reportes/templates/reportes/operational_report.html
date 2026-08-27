@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% from "reportes/report_macros.html" import smart_select_field %}
+{% from "smart_select_field.html" import smart_select_field %}
+{% from "reportes/report_macros.html" import period_range_field %}
 {% block contenido %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
@@ -21,6 +22,10 @@
     <div class="p-3" x-show="!collapsed">
       <form method="get" class="d-grid gap-2">
         {{ smart_select_field("Compañía", "company", "company", filter_state.company or '', "report-company") }}
+
+        {% if filter_mode != "withholding_monthly" %}
+          {{ period_range_field("Periodo contable", period_from, period_to) }}
+        {% endif %}
 
         {% if filter_mode in ("bank_movement", "bank_balance_summary") %}
           {{ smart_select_field("Cuenta bancaria", "bank_account_id", "bank_account", filter_state.bank_account_id or '', "report-bank-account", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}

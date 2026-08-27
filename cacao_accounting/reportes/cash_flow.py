@@ -55,6 +55,36 @@ SECTION_CASH = "cash"
 
 VALID_SECTIONS = (SECTION_OPERATING, SECTION_INVESTING, SECTION_FINANCING, SECTION_CASH)
 
+
+def _period_bounds_for(
+    company: str,
+    accounting_period: str | None,
+    period_from: str | None = None,
+    period_to: str | None = None,
+) -> tuple[Any, Any, Any]:
+    """Resuelve los límites del período contable o del rango seleccionado."""
+    from cacao_accounting.reportes.services import _period_bounds, _report_period_bounds
+
+    if not (period_from or period_to):
+        return _period_bounds(company, accounting_period)
+
+    class _FiltersProxy:
+        """Proxy mínimo que expone el contrato que ``_report_period_bounds`` espera."""
+
+        __slots__ = ("company", "accounting_period", "period_from", "period_to")
+        company: str
+        accounting_period: str | None
+        period_from: str | None
+        period_to: str | None
+
+    proxy = _FiltersProxy()
+    proxy.company = company
+    proxy.accounting_period = accounting_period
+    proxy.period_from = period_from
+    proxy.period_to = period_to
+    return _report_period_bounds(proxy)
+
+
 #: Etiquetas visibles de las secciones para la vista dedicada de configuración.
 SECTION_LABELS = {
     SECTION_OPERATING: _("Operación"),
@@ -223,6 +253,8 @@ def get_cash_flow_configuration_status(
     company: str,
     ledger: str | None,
     accounting_period: str | None,
+    period_from: str | None = None,
+    period_to: str | None = None,
 ) -> CashFlowConfigurationStatus:
     """Valida la cobertura del mapeo antes de permitir generar el reporte.
 
@@ -232,12 +264,12 @@ def get_cash_flow_configuration_status(
     al menos una cuenta clasificada como efectivo para poder medir la
     variación que el reporte debe cuadrar.
     """
-    from cacao_accounting.reportes.services import _period_bounds, _resolve_ledger
+    from cacao_accounting.reportes.services import _resolve_ledger
 
     resolved_ledger = _resolve_ledger(company, ledger)
     if resolved_ledger is None:
         return CashFlowConfigurationStatus(pending_accounts=[], has_cash_accounts=False)
-    period_start, period_end, _period = _period_bounds(company, accounting_period)
+    period_start, period_end, _period = _period_bounds_for(company, accounting_period, period_from, period_to)
     mappings = load_cash_flow_mappings(company)
     pending = []
     for account, _delta in _moving_accounts(company, resolved_ledger, period_start, period_end):
@@ -272,17 +304,23 @@ def get_cash_flow_statement(filters: Any) -> Any:
         PaginatedReport,
         ReportRow,
         _decimal_value,
-        _period_bounds,
+        _report_period_bounds,
         _resolve_ledger,
     )
 
     if not isinstance(filters, FinancialReportFilters):  # pragma: no cover - contrato interno
         raise TypeError("get_cash_flow_statement espera FinancialReportFilters")
-    status = get_cash_flow_configuration_status(filters.company, filters.ledger, filters.accounting_period)
+    status = get_cash_flow_configuration_status(
+        filters.company,
+        filters.ledger,
+        filters.accounting_period,
+        getattr(filters, "period_from", None),
+        getattr(filters, "period_to", None),
+    )
     if not status.complete:
         raise ValueError(_("La configuración del flujo de efectivo está incompleta."))
 
-    period_start, period_end, _period = _period_bounds(filters.company, filters.accounting_period)
+    period_start, period_end, _period = _report_period_bounds(filters)
     ledger = _resolve_ledger(filters.company, filters.ledger)
     if ledger is None:  # pragma: no cover - la validación previa ya resuelve el libro
         return PaginatedReport(rows=[], totals={}, columns=[])

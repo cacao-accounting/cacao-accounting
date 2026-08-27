@@ -2508,7 +2508,11 @@ def test_financial_report_filters_prefill_and_hide_columns_for_summary_reports(a
     detail_html = rendered_reports["/reports/account-movement"]
 
     assert 'initialValue: "FISC"' in summary_html
-    assert 'initialValue: "2026-05"' in summary_html
+    # El selector de período contable ahora usa el campo ``period_range_field``
+    # (``Desde``/``Hasta``) en lugar del ``smart_select_field`` histórico.
+    assert 'name="accounting_period_from"' in summary_html
+    assert 'name="accounting_period_to"' in summary_html
+    assert "2026-05" in summary_html
     assert "Columnas visibles" not in summary_html
     assert 'data-bs-target="#saveViewModal">Guardar vista' not in summary_html
     assert 'name="view_action" value="reset">Eliminar vista' not in summary_html
