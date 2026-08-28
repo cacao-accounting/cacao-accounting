@@ -112,6 +112,63 @@ def _inventory_company_scoped_select(model: type[Any]):
     return query.where(model.company.in_(companies))
 
 
+def _paginate_list(model: type[Any], search_fields: tuple[Any, ...], query: Any = None, *, include_status: bool = True) -> Any:
+    """Pagina un listado de inventario aplicando filtro por período contable."""
+    from cacao_accounting.list_filters import (
+        apply_list_filters,
+        apply_period_filter,
+        attach_period_picker,
+        require_period_company,
+    )
+
+    base_query = query if query is not None else database.select(model)
+    if hasattr(model, "company"):
+        company = request.args.get("company")
+        if company:
+            base_query = base_query.filter(model.company == company)
+        elif not getattr(current_user, "classification", None) == "admin":
+            permissions = Permisos(
+                modulo=obtener_id_modulo_por_nombre("inventory"),
+                usuario=current_user.id,
+            )
+            companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
+            if not companies:
+                base_query = base_query.where(database.false())
+            else:
+                base_query = base_query.where(model.company.in_(companies))
+    period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
+    period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
+    if hasattr(model, "posting_date"):
+        period_company: str | None = request.args.get("company")
+        if not period_company and getattr(current_user, "classification", None) != "admin":
+            permissions = Permisos(
+                modulo=obtener_id_modulo_por_nombre("inventory"),
+                usuario=current_user.id,
+            )
+            if permissions.consultar:
+                authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
+                if len(authorized_companies) == 1:
+                    period_company = authorized_companies[0]
+        if period_from or period_to or period_company:
+            base_query = apply_period_filter(
+                base_query,
+                model,
+                require_period_company(("inventory",), current_user=current_user, default_company=period_company),
+                period_from,
+                period_to,
+                default_when_missing=True,
+            )
+    filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
+    paginated = database.paginate(
+        filtered_query,
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    attach_period_picker(paginated, model, "inventory", current_user=current_user)
+    return paginated
+
+
 def _inventory_writable_company_select():
     """Build a query for companies with inventory write access."""
     permissions = Permisos(

@@ -74,7 +74,7 @@ from cacao_accounting.decorators import exige_acceso_compania
 
 from cacao_accounting.fiscal_persistence_service import load_document_fiscal_lines, persist_document_fiscal_snapshot
 
-from cacao_accounting.list_filters import apply_list_filters
+from cacao_accounting.list_filters import apply_list_filters, apply_period_filter, attach_period_picker, require_period_company
 
 from cacao_accounting.ledger_queries import primary_ledger_id
 
@@ -385,13 +385,35 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
                 base_query = base_query.where(database.false())
             else:
                 base_query = base_query.where(model.company.in_(companies))
+    period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
+    period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
+    if hasattr(model, "posting_date"):
+        period_company: str | None = request.args.get("company")
+        if not period_company and getattr(current_user, "classification", None) != "admin":
+            module_id = obtener_id_modulo_por_nombre("cash")
+            permissions = Permisos(modulo=module_id, usuario=current_user.id)
+            if permissions.consultar:
+                authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
+                if len(authorized_companies) == 1:
+                    period_company = authorized_companies[0]
+        if period_from or period_to or period_company:
+            base_query = apply_period_filter(
+                base_query,
+                model,
+                require_period_company(("cash",), current_user=current_user, default_company=period_company),
+                period_from,
+                period_to,
+                default_when_missing=True,
+            )
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
-    return database.paginate(
+    paginated = database.paginate(
         filtered_query,
         page=request.args.get("page", default=1, type=int),
         max_per_page=10,
         count=True,
     )
+    attach_period_picker(paginated, model, "cash", current_user=current_user)
+    return paginated
 
 
 def _bank_account_for_note(bank_account_id: str, company: str | None, amount: Decimal) -> BankAccount:
