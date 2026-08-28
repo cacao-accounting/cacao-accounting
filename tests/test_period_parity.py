@@ -190,6 +190,79 @@ def test_account_movement_without_period_is_unfiltered(parity_app) -> None:
     assert date(2026, 2, 1) in dates
 
 
+def test_account_movement_filters_by_period_dimension(parity_app) -> None:
+    """La dimensión ``accounting_period_id`` gobierna sobre la fecha de publicación.
+
+    Un asiento que pertenece al período 02-2026 pero cuya ``posting_date`` cae
+    dentro de la ventana de 01-2026 (fecha mal asignada) NO debe aparecer al
+    filtrar por 01-2026: el período es la identidad, no un rango de fechas.
+    """
+    from cacao_accounting.database import Accounts, AccountingPeriod, Book, GLEntry, database
+    from cacao_accounting.reportes.services import FinancialReportFilters, get_account_movement_detail
+
+    ids: dict[str, str] = {}
+    for code, name, classification, account_type in ACCOUNTS:
+        account = Accounts(
+            entity="cacao",
+            code=code,
+            name=name,
+            active=True,
+            enabled=True,
+            classification=classification,
+            account_type=account_type,
+        )
+        database.session.add(account)
+        database.session.flush()
+        ids[code] = account.id
+    book_id = database.session.execute(database.select(Book.id).filter_by(code="FISC")).scalar_one()
+    period_jan = database.session.execute(
+        database.select(AccountingPeriod).where(AccountingPeriod.name == "01-2026")
+    ).scalar_one()
+    period_feb = database.session.execute(
+        database.select(AccountingPeriod).where(AccountingPeriod.name == "02-2026")
+    ).scalar_one()
+    base = {
+        "company": "cacao",
+        "ledger_id": book_id,
+        "voucher_type": "journal_entry",
+        "is_cancelled": False,
+        "is_reversal": False,
+    }
+    entries = [
+        # Pertenece a 01-2026 y su fecha está dentro de la ventana.
+        ("IN-FUERA-VENTANA-PERIODO", period_jan.id, date(2026, 1, 15), Decimal("10")),
+        # Fecha dentro de la ventana de 01-2026, pero PERÍODO 02-2026 (fecha mal asignada).
+        ("DENTRO-VENTANA-SESI", period_feb.id, date(2026, 1, 20), Decimal("20")),
+        # Pertenece a 02-2026 y su fecha está dentro de 02-2026.
+        ("EN-PERIODO-SESI", period_feb.id, date(2026, 2, 5), Decimal("30")),
+    ]
+    database.session.add_all(
+        [
+            GLEntry(
+                account_id=ids["1.01"],
+                account_code="1.01",
+                debit=debit,
+                credit=Decimal("0"),
+                posting_date=posting_date,
+                accounting_period_id=period_id,
+                voucher_id=voucher_id,
+                **base,
+            )
+            for voucher_id, period_id, posting_date, debit in entries
+        ]
+    )
+    database.session.commit()
+    jan_id = str(period_jan.id)
+    report = get_account_movement_detail(
+        FinancialReportFilters(company="cacao", ledger="FISC", period_from=jan_id, period_to=jan_id, page_size=500)
+    )
+    seen: set[str] = set()
+    for row in report.rows:
+        seen.add(str(row.values.get("document_no")))
+    # Solo el asiento del período 01-2026; los otros 2 quedan fuera por dimensión.
+    assert seen == {"IN-FUERA-VENTANA-PERIODO"}
+
+
 def test_account_movement_export_csv_uses_same_period(parity_app) -> None:
     """La exportación CSV usa exactamente el mismo período que la vista."""
     from cacao_accounting.database import AccountingPeriod, User, database

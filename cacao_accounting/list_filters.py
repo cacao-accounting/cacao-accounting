@@ -76,7 +76,8 @@ def apply_period_filter(
     if period_range is None:
         return query
     reject_manual_date_overrides(request.args, period_range)
-    query = query.where(model.company == period_company)
+    if hasattr(model, "company"):
+        query = query.where(model.company == period_company)
     query = query.where(model.posting_date >= period_range.period_start)
     query = query.where(model.posting_date <= period_range.period_end)
     return query

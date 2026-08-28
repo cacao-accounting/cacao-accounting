@@ -161,12 +161,18 @@ def test_resolve_as_of_date_single_period(periods_app) -> None:
         assert _resolve_as_of_date("cacao") == date(2026, 1, 31)
 
 
-def test_resolve_as_of_date_backward_compat(periods_app) -> None:
-    """El parámetro legado ``as_of_date`` sigue teniendo prioridad."""
+def test_resolve_as_of_date_manual_must_match_period(periods_app) -> None:
+    """Un ``as_of_date`` manual solo se acepta si coincide con el período resuelto."""
+    from werkzeug.exceptions import BadRequest
+
     from cacao_accounting.reportes.helpers import _resolve_as_of_date
 
-    with periods_app.test_request_context("/reports/aging?company=cacao&as_of_date=2026-03-10"):
-        assert _resolve_as_of_date("cacao") == date(2026, 3, 10)
+    pid = _period_id("cacao", "01-2026")
+    with periods_app.test_request_context(f"/reports/aging?company=cacao&accounting_period_from={pid}&as_of_date=2026-01-31"):
+        assert _resolve_as_of_date("cacao") == date(2026, 1, 31)
+    with periods_app.test_request_context(f"/reports/aging?company=cacao&accounting_period_from={pid}&as_of_date=2026-03-10"):
+        with pytest.raises(BadRequest):
+            _resolve_as_of_date("cacao")
 
 
 def test_resolve_date_bounds_from_range(periods_app) -> None:
@@ -194,11 +200,19 @@ def test_resolve_date_bounds_manual_override_rejected(periods_app) -> None:
             _resolve_date_bounds("cacao")
 
 
-def test_resolve_date_bounds_legacy_compat(periods_app) -> None:
-    """Las fechas manuales legadas siguen teniendo prioridad sin rango de períodos."""
+def test_resolve_date_bounds_rejects_manual_window(periods_app) -> None:
+    """``date_from``/``date_to`` manuales ya no abren un flujo alternativo."""
+    from werkzeug.exceptions import BadRequest
+
     from cacao_accounting.reportes.helpers import _resolve_date_bounds
 
-    with periods_app.test_request_context("/reports/kardex?company=cacao&date_from=2026-01-05&date_to=2026-02-15"):
-        date_from, date_to = _resolve_date_bounds("cacao")
-        assert date_from == date(2026, 1, 5)
-        assert date_to == date(2026, 2, 15)
+    pid = _period_id("cacao", "01-2026")
+    with periods_app.test_request_context(
+        f"/reports/kardex?company=cacao&accounting_period_from={pid}&date_from=2026-01-01&date_to=2026-01-31"
+    ):
+        assert _resolve_date_bounds("cacao") == (date(2026, 1, 1), date(2026, 1, 31))
+    with periods_app.test_request_context(
+        f"/reports/kardex?company=cacao&accounting_period_from={pid}&date_from=2026-01-05&date_to=2026-02-15"
+    ):
+        with pytest.raises(BadRequest):
+            _resolve_date_bounds("cacao")

@@ -105,6 +105,25 @@ def test_require_period_company_uses_param(filters_app) -> None:
         assert period_company_from_request(("sales",), current_user=_User()) == "cacao"
 
 
+def test_apply_period_filter_skips_company_clause_without_column(filters_app) -> None:
+    """``apply_period_filter`` no aplica la cláusula de compañía a modelos sin esa columna.
+
+    BankTransaction (importación bancaria) expone ``posting_date`` pero no tiene
+    columna ``company``; el filtro por período debe acotar por fecha sin fallar.
+    """
+    from cacao_accounting.database import AccountingPeriod, BankTransaction, database
+    from cacao_accounting.list_filters import apply_period_filter
+
+    period = database.session.execute(database.select(AccountingPeriod)).scalar_one()
+    with filters_app.test_request_context("/"):
+        query = apply_period_filter(database.select(BankTransaction), BankTransaction, "cacao", str(period.id), None)
+        compiled = str(query.compile(database.engine))
+        assert "posting_date" in compiled
+        # La ejecución no debe fallar por intentar filtrar una columna inexistente.
+        rows = database.session.execute(query).scalars().all()
+        assert rows == []
+
+
 def test_require_period_company_aborts_when_ambiguous(filters_app) -> None:
     """Sin compañía explícita y varias opciones se rechaza la petición."""
     from werkzeug.exceptions import BadRequest
