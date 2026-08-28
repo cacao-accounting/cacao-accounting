@@ -900,12 +900,21 @@ def inventario_entrada_cancel(entry_id: str):
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.is_enabled(registro.company):
-            ApprovalEngine.request_cancellation(registro)
+            ApprovalEngine.request_cancellation(
+                registro,
+                reason=reason,
+                cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+            )
             database.session.commit()
             flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
             return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry_id))
 
-        cancel_document(registro, reason=reason, actor_user_id=str(current_user.id))
+        cancel_document(
+            registro,
+            reason=reason,
+            actor_user_id=str(current_user.id),
+            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+        )
         revert_relations_for_target("stock_entry", entry_id)
         log_cancel(registro)
         database.session.commit()

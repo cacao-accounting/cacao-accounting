@@ -28,6 +28,7 @@ from cacao_accounting.database import (
     CompanyParty,
     CostCenter,
     DocumentRelation,
+    DocumentTransition,
     Entity,
     ExchangeRate,
     FiscalYear,
@@ -2314,6 +2315,7 @@ def _movement_detail_row_values(
     selected_ledger: Book,
     running_balance: Decimal | None,
     include_running_balance: bool,
+    include_cancellation_metadata: bool = False,
 ) -> dict[str, Any]:
     """Construye el diccionario de salida para una fila de movimiento contable."""
     account_code = entry.account_code or (account.code if account else "") or ""
@@ -2345,6 +2347,39 @@ def _movement_detail_row_values(
         "created_at": entry.created,
         "voucher_status": voucher_status,
     }
+    if include_cancellation_metadata:
+        row_values.update(
+            {
+                "is_cancelled": bool(entry.is_cancelled),
+                "is_reversal": bool(entry.is_reversal),
+                "reversal_of": entry.reversal_of,
+            }
+        )
+        transition = (
+            database.session.execute(
+                select(DocumentTransition)
+                .where(
+                    DocumentTransition.transition_type.in_(("cancellation", "reversal")),
+                    DocumentTransition.source_type == entry.voucher_type,
+                    or_(
+                        DocumentTransition.source_id == entry.voucher_id,
+                        DocumentTransition.target_id == entry.voucher_id,
+                    ),
+                )
+                .order_by(DocumentTransition.executed_at.desc(), DocumentTransition.id.desc())
+            )
+            .scalars()
+            .first()
+        )
+        row_values.update(
+            {
+                "cancellation_date": transition.posting_date if transition else None,
+                "cancellation_requested_at": transition.requested_at if transition else None,
+                "cancellation_executed_at": transition.executed_at if transition else None,
+                "cancellation_actor": transition.actor_user_id if transition else None,
+                "cancellation_reason": transition.reason if transition else None,
+            }
+        )
     if include_running_balance and running_balance is not None:
         row_values["running_balance"] = running_balance
     return row_values
@@ -2380,6 +2415,7 @@ def _collect_movement_detail_rows(
             selected_ledger,
             running_per_account[account_code],
             filters.include_running_balance,
+            filters.include_cancellations or filters.status == "cancelled",
         )
         rows.append(ReportRow(values=row_values))
 

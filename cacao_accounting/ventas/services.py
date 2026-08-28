@@ -1859,10 +1859,19 @@ def _handle_delivery_note_edit_post(registro):
 
 
 def _execute_delivery_note_cancellation(
-    registro: DeliveryNote, note_id: str, reason: str | None = None, actor_user_id: str | None = None
+    registro: DeliveryNote,
+    note_id: str,
+    reason: str | None = None,
+    actor_user_id: str | None = None,
+    cancellation_date: Any = None,
 ) -> None:
     """Ejecuta la cancelacion de una nota de entrega y restaura reservas."""
-    cancel_document(registro, reason=reason, actor_user_id=actor_user_id)  # type: ignore[misc]
+    cancel_document(
+        registro,
+        reason=reason,
+        actor_user_id=actor_user_id,
+        cancellation_date=cancellation_date,
+    )  # type: ignore[misc]
     _restore_reservation_for_delivery_note(registro)
     revert_relations_for_target("delivery_note", note_id)
     refresh_source_caches_for_target("delivery_note", note_id)
@@ -2116,14 +2125,26 @@ def _handle_sales_invoice_edit_post(registro):
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
 
 
-def _cancel_linked_delivery_note(invoice: SalesInvoice, reason: str | None = None, actor_user_id: str | None = None) -> None:
+def _cancel_linked_delivery_note(
+    invoice: SalesInvoice,
+    reason: str | None = None,
+    actor_user_id: str | None = None,
+    cancellation_date: Any = None,
+    requested_at: Any = None,
+) -> None:
     """Cancela la Nota de Entrega vinculada si update_inventory esta activo."""
     if not (invoice.update_inventory and invoice.delivery_note_id):
         return
     dn = database.session.get(DeliveryNote, invoice.delivery_note_id)
     if not dn or dn.docstatus != 1:
         return
-    cancel_document(dn, reason=reason, actor_user_id=actor_user_id)  # type: ignore[misc]
+    cancel_document(
+        dn,
+        reason=reason,
+        actor_user_id=actor_user_id,
+        cancellation_date=cancellation_date,
+        requested_at=requested_at,
+    )  # type: ignore[misc]
     _restore_reservation_for_delivery_note(dn)
     log_cancel(dn)
     flash(

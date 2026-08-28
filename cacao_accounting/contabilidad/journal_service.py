@@ -37,6 +37,7 @@ from cacao_accounting.database import (
     ComprobanteContableDetalle,
     CostCenter,
     Currency,
+    DocumentTransition,
     DocumentRelation,
     Entity,
     FiscalYear,
@@ -269,7 +270,13 @@ def reject_journal_draft(journal_id: str, user_id: str | None = None) -> Comprob
     return journal
 
 
-def cancel_submitted_journal(journal_id: str, user_id: str | None = None, reason: str | None = None) -> list[Any]:
+def cancel_submitted_journal(
+    journal_id: str,
+    user_id: str | None = None,
+    reason: str | None = None,
+    cancellation_date: date | str | None = None,
+    requested_at: Any = None,
+) -> list[Any]:
     """Anula un comprobante contabilizado mediante reversa GL append-only."""
     journal = get_journal(journal_id)
     if journal is None:
@@ -278,7 +285,13 @@ def cancel_submitted_journal(journal_id: str, user_id: str | None = None, reason
         raise JournalValidationError("Solo se puede anular un comprobante contabilizado.")
     setattr(journal, "docstatus", 1)
     try:
-        entries = cancel_document(journal, reason=reason, actor_user_id=user_id)  # type: ignore[misc]
+        entries = cancel_document(
+            journal,
+            reason=reason,
+            actor_user_id=user_id,
+            cancellation_date=cancellation_date,
+            requested_at=requested_at,
+        )  # type: ignore[misc]
         revert_relations_for_target(JOURNAL_TRANSACTION_TYPE, journal.id, reason="journal_cancelled")
     except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
@@ -388,13 +401,21 @@ def duplicate_journal_as_draft(journal_id: str, user_id: str) -> ComprobanteCont
     return duplicated
 
 
-def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str, reversal_date_raw: date | str) -> ComprobanteContable:
+def duplicate_journal_as_reversal_draft(
+    journal_id: str,
+    user_id: str,
+    reversal_date_raw: date | str,
+    reason: str | None = None,
+) -> ComprobanteContable:
     """Genera borrador de reversión invirtiendo debe/haber del comprobante origen."""
     source = get_journal(journal_id)
     if source is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
-    if source.status not in JOURNAL_DUPLICABLE_STATUSES:
-        raise JournalValidationError("Solo se puede revertir un comprobante en borrador, rechazado o contabilizado.")
+    if source.status != JOURNAL_STATUS_SUBMITTED:
+        raise JournalValidationError("Solo se puede revertir un comprobante contabilizado.")
+    normalized_reason = (reason or "").strip()
+    if not normalized_reason:
+        raise JournalValidationError("Debe indicar el motivo de la reversión.")
 
     reversal_date = parse_posting_date(reversal_date_raw)
     source_period = _accounting_period_for_date(source.entity, source.date)
@@ -405,6 +426,8 @@ def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str, reversal_
     # Para corregir en el mismo periodo, usar cancel_submitted_journal (ver R2R-03 / ISSUE #128).
     if source_period.id == reversal_period.id:
         raise JournalValidationError("La reversión debe registrarse en un periodo contable distinto al comprobante origen.")
+    if bool(reversal_period.is_closed) or not bool(reversal_period.enabled):
+        raise JournalValidationError("No puede crear una reversión en un periodo contable cerrado o deshabilitado.")
     if source.is_fiscal_year_closing:
         raise JournalValidationError("El cierre fiscal debe revertirse desde el flujo de cierre fiscal.")
     payload = serialize_journal_for_form(source)
@@ -414,12 +437,29 @@ def duplicate_journal_as_reversal_draft(journal_id: str, user_id: str, reversal_
     payload["is_closing"] = False
     payload["is_fiscal_year_closing"] = False
     payload["fiscal_year_id"] = None
+    payload["reversal_of"] = source.id
     payload["lines"] = _reversed_payload_lines(payload.get("lines", []))
 
     reversed_draft = create_journal_draft(payload, user_id=user_id, assign_identifier=False)
     reversed_draft.status = JOURNAL_STATUS_DRAFT
+    reversed_draft.reversal_of = source.id
     _assign_identifier_if_needed(reversed_draft, source.naming_series_id or reversed_draft.naming_series_id)
     database.session.add(reversed_draft)
+    database.session.flush()
+    database.session.add(
+        DocumentTransition(
+            source_type=JOURNAL_TRANSACTION_TYPE,
+            source_id=source.id,
+            target_type=JOURNAL_TRANSACTION_TYPE,
+            target_id=reversed_draft.id,
+            transition_type="reversal",
+            company=source.entity,
+            posting_date=reversal_date,
+            accounting_period_id=reversal_period.id,
+            actor_user_id=user_id,
+            reason=normalized_reason,
+        )
+    )
     log_reversal_draft_created(reversed_draft)
     database.session.commit()
     return reversed_draft

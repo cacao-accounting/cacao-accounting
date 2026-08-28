@@ -196,7 +196,11 @@ def test_fiscal_year_closing_cycle(app, setup_data):
         assert fy.closing_voucher_id == closing_journal.id
 
         # 3. Cancel Closing Voucher
-        cancel_submitted_journal(closing_journal.id, user_id=setup_data["admin_user_id"])
+        cancel_submitted_journal(
+            closing_journal.id,
+            user_id=setup_data["admin_user_id"],
+            reason="Reversion administrativa del cierre fiscal",
+        )
         assert closing_journal.status == "cancelled"
 
         fy = database.session.get(FiscalYear, setup_data["fiscal_year_id"])

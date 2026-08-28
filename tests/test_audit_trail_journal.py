@@ -23,7 +23,7 @@ def app_ctx():
         }
     )
     with app.app_context():
-        from cacao_accounting.database import Book, Entity, Modules, User, database
+        from cacao_accounting.database import AccountingPeriod, Book, Entity, Modules, User, database
 
         database.create_all()
         database.session.add_all(
@@ -32,6 +32,14 @@ def app_ctx():
                 Modules(module="accounting", default=True, enabled=True),
                 User(id="admin", user="admin", name="Admin", password=b"x", classification="admin", active=True),
                 Book(entity="cacao", code="DEFAULT_BOOK", name="Default", status="activo", is_primary=True, currency="NIO"),
+                AccountingPeriod(
+                    entity="cacao",
+                    name=date.today().strftime("%Y-%m"),
+                    enabled=True,
+                    is_closed=False,
+                    start=date.today().replace(day=1),
+                    end=date.today(),
+                ),
             ]
         )
         database.session.commit()
@@ -108,7 +116,7 @@ def test_audit_trail_submit_and_cancel_events(app_ctx):
     debit_account, credit_account = _seed_accounts()
     journal = create_journal_draft(_journal_payload(debit_account.id, credit_account.id), user_id="admin")
     submit_journal(journal.id)
-    cancel_submitted_journal(journal.id, user_id="admin")
+    cancel_submitted_journal(journal.id, user_id="admin", reason="Prueba de anulacion")
     actions = [
         row.action
         for row in database.session.execute(

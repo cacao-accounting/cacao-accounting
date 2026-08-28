@@ -3188,12 +3188,21 @@ def anular_comprobante(identifier: str):
 
     try:
         if ApprovalEngine.is_enabled(journal.entity):
-            ApprovalEngine.request_cancellation(journal)
+            ApprovalEngine.request_cancellation(
+                journal,
+                reason=reason,
+                cancellation_date=request.form.get("cancellation_date") or journal.date,
+            )
             database.session.commit()
             flash("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).", "info")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
-        cancel_submitted_journal(identifier, user_id=str(current_user.id), reason=reason)
+        cancel_submitted_journal(
+            identifier,
+            user_id=str(current_user.id),
+            reason=reason,
+            cancellation_date=request.form.get("cancellation_date") or journal.date,
+        )
     except JournalValidationError as exc:
         flash_error(exc)
     else:
@@ -3303,8 +3312,12 @@ def revertir_comprobante(identifier: str):
     exige_acceso_compania("accounting", journal.entity, "crear")
 
     reversal_date = request.form.get("reversal_date")
+    reason = (request.form.get("reason") or "").strip()
     if not reversal_date:
         flash(_("Debe seleccionar la fecha de reversión."), "danger")
+        return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
+    if not reason:
+        flash(_("Debe indicar el motivo de la reversión."), "danger")
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
     try:
@@ -3312,6 +3325,7 @@ def revertir_comprobante(identifier: str):
             identifier,
             user_id=str(current_user.id),
             reversal_date_raw=reversal_date,
+            reason=reason,
         )
     except JournalValidationError as exc:
         flash_error(exc)

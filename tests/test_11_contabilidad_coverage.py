@@ -511,7 +511,7 @@ def test_journal_service_cancel_submitted(app_ctx):
         user_id="user-1",
     )
     submit_journal(journal.id)
-    entries = cancel_submitted_journal(journal.id, user_id="admin")
+    entries = cancel_submitted_journal(journal.id, user_id="admin", reason="Prueba de anulacion")
     assert len(entries) >= 0
 
 

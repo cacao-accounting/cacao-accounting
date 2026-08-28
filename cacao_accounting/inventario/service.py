@@ -188,6 +188,7 @@ def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None
                 StockLedgerEntry.batch_id == batch_id,
                 StockLedgerEntry.warehouse == warehouse,
                 StockLedgerEntry.is_cancelled.is_(False),
+                StockLedgerEntry.is_reversal.is_(False),
             )
         ).scalar_one()
         requested = Decimal(str(getattr(line, "qty", 0) or 0))
@@ -871,7 +872,11 @@ def _item_has_records(item_code: str) -> bool:
     stock_statement = (
         select(1)
         .select_from(StockLedgerEntry)
-        .where(StockLedgerEntry.item_code == item_code, StockLedgerEntry.is_cancelled.is_(False))
+        .where(
+            StockLedgerEntry.item_code == item_code,
+            StockLedgerEntry.is_cancelled.is_(False),
+            StockLedgerEntry.is_reversal.is_(False),
+        )
         .limit(1)
     )
     if database.session.execute(stock_statement).first():

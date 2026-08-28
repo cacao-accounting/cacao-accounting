@@ -1025,12 +1025,21 @@ def bancos_pago_cancel(payment_id: str):
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.is_enabled(registro.company):
-            ApprovalEngine.request_cancellation(registro)
+            ApprovalEngine.request_cancellation(
+                registro,
+                reason=reason,
+                cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+            )
             database.session.commit()
             flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
             return redirect(url_for(BANCOS_BANCOS_PAGO, payment_id=payment_id))
 
-        cancel_document(registro, reason=reason, actor_user_id=str(current_user.id))  # type: ignore[misc]
+        cancel_document(
+            registro,
+            reason=reason,
+            actor_user_id=str(current_user.id),
+            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+        )  # type: ignore[misc]
         _apply_payment_cancellation_hooks(registro)
         log_cancel(registro)
         database.session.commit()

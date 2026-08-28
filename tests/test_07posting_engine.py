@@ -13,6 +13,45 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 
 
+def _cancellation_metadata(posting_date: date, reason: str = "Prueba de anulacion") -> dict[str, str]:
+    """Create the actor and open period required by the cancellation contract."""
+    from cacao_accounting.database import AccountingPeriod, User, database
+
+    if database.session.get(User, "admin") is None:
+        database.session.add(
+            User(
+                id="admin",
+                user="admin",
+                name="Administrator",
+                password=b"x",
+                classification="admin",
+                active=True,
+            )
+        )
+    period = database.session.execute(
+        database.select(AccountingPeriod)
+        .where(
+            AccountingPeriod.entity == "cacao",
+            AccountingPeriod.start <= posting_date,
+            AccountingPeriod.end >= posting_date,
+        )
+        .order_by(AccountingPeriod.start.desc())
+    ).scalar_one_or_none()
+    if period is None:
+        database.session.add(
+            AccountingPeriod(
+                entity="cacao",
+                name=f"Cancellation {posting_date:%Y-%m-%d}",
+                enabled=True,
+                is_closed=False,
+                start=posting_date.replace(day=1),
+                end=posting_date,
+            )
+        )
+    database.session.commit()
+    return {"actor_user_id": "admin", "reason": reason}
+
+
 @pytest.fixture()
 def app_ctx():
     app = create_app(
@@ -912,7 +951,10 @@ def test_cancel_document_creates_gl_reversals(app_ctx):
 
     post_document_to_gl(invoice)
     database.session.commit()
-    reversals = cancel_document(invoice, reason="Factura emitida por error")
+    reversals = cancel_document(
+        invoice,
+        **_cancellation_metadata(invoice.posting_date, "Factura emitida por error"),
+    )
     database.session.commit()
 
     entries = (
@@ -942,7 +984,7 @@ def test_cancel_document_requires_reason_when_transition_is_requested(app_ctx):
     database.session.commit()
 
     with pytest.raises(PostingError, match="motivo"):
-        cancel_document(invoice, reason=" ")
+        cancel_document(invoice, **_cancellation_metadata(invoice.posting_date, " "))
 
     database.session.refresh(invoice)
     assert invoice.docstatus == 1
@@ -1030,7 +1072,7 @@ def test_cancel_purchase_receipt_reverts_stock_and_gl(app_ctx):
 
     post_document_to_gl(receipt)
     database.session.commit()
-    reversals = cancel_document(receipt)
+    reversals = cancel_document(receipt, **_cancellation_metadata(receipt.posting_date))
     database.session.commit()
 
     stock_movements = (
@@ -1333,7 +1375,7 @@ def test_cancel_delivery_note_reverts_stock_and_gl(app_ctx):
 
     post_document_to_gl(note)
     database.session.commit()
-    reversals = cancel_document(note)
+    reversals = cancel_document(note, **_cancellation_metadata(note.posting_date))
     database.session.commit()
 
     stock_movements = (
@@ -2071,7 +2113,7 @@ def test_cancel_document_rejects_closed_accounting_period(app_ctx):
     database.session.commit()
 
     with pytest.raises(PostingError, match="periodo contable cerrado"):
-        cancel_document(invoice)
+        cancel_document(invoice, **_cancellation_metadata(invoice.posting_date))
 
 
 def test_compute_outstanding_amount_from_payment_references(app_ctx):
@@ -4487,7 +4529,7 @@ def test_stock_reconciliation_value_adjustment_uses_warehouse_inventory_account_
     assert bin_row.stock_value == Decimal("120.0000")
     assert bin_row.valuation_rate == Decimal("12.000000000")
 
-    reversals = cancel_document(entry)
+    reversals = cancel_document(entry, **_cancellation_metadata(entry.posting_date))
     database.session.commit()
 
     refreshed_bin = database.session.execute(
@@ -5208,7 +5250,7 @@ def test_operational_posting_multimoneda_real(app_ctx):
 
     from cacao_accounting.contabilidad.posting import cancel_document
 
-    cancel_document(invoice)
+    cancel_document(invoice, **_cancellation_metadata(invoice.posting_date))
     database.session.flush()
     reversals = (
         database.session.execute(

@@ -21,6 +21,45 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 
 
+def _cancellation_metadata(posting_date: date) -> dict[str, str]:
+    """Create the actor and open period required by the cancellation contract."""
+    from cacao_accounting.database import AccountingPeriod, User, database
+
+    if database.session.get(User, "admin") is None:
+        database.session.add(
+            User(
+                id="admin",
+                user="admin",
+                name="Administrator",
+                password=b"x",
+                classification="admin",
+                active=True,
+            )
+        )
+    period = database.session.execute(
+        database.select(AccountingPeriod)
+        .where(
+            AccountingPeriod.entity == "cacao",
+            AccountingPeriod.start <= posting_date,
+            AccountingPeriod.end >= posting_date,
+        )
+        .order_by(AccountingPeriod.start.desc())
+    ).scalar_one_or_none()
+    if period is None:
+        database.session.add(
+            AccountingPeriod(
+                entity="cacao",
+                name=f"Cancellation {posting_date:%Y-%m-%d}",
+                enabled=True,
+                is_closed=False,
+                start=posting_date.replace(day=1),
+                end=posting_date,
+            )
+        )
+    database.session.commit()
+    return {"actor_user_id": "admin", "reason": "Prueba de anulacion"}
+
+
 @pytest.fixture()
 def app_ctx():
     """Aplicación Flask aislada con compañía y libro primario."""
@@ -210,7 +249,7 @@ def test_submit_and_cancel_roundtrip_operates_on_locked_row(app_ctx):
     assert len(entries) == 2
     assert journal.docstatus == 1
 
-    reversals = cancel_document(journal)
+    reversals = cancel_document(journal, **_cancellation_metadata(journal.date))
     database.session.commit()
     assert len(reversals) == 2
     database.session.expire(journal)
