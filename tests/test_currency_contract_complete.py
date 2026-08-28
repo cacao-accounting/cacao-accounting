@@ -394,3 +394,204 @@ def test_resolve_rejects_company_without_functional_currency(app_ctx):
     database.session.commit()
     with pytest.raises(DocumentFlowError, match="moneda funcional configurada"):
         resolve_transaction_currency(company="no-cur", context="documento")
+
+
+# --------------------------------------------------------------------------- #
+# Primitivas del contrato (resolver, validation, context)
+# --------------------------------------------------------------------------- #
+
+
+def test_assert_currency_explicit_returns_currency(app_ctx):
+    from cacao_accounting.document_flow.currency_resolver import assert_currency_explicit
+
+    document = SimpleNamespace(transaction_currency="USD")
+    assert assert_currency_explicit(document, context="documento") == "USD"
+
+
+def test_assert_currency_explicit_rejects_missing(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.currency_resolver import assert_currency_explicit
+
+    with pytest.raises(DocumentFlowError, match="transaction_currency explicita"):
+        assert_currency_explicit(SimpleNamespace(transaction_currency=None), context="documento")
+
+
+def test_assert_currency_explicit_rejects_blank(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.currency_resolver import assert_currency_explicit
+
+    with pytest.raises(DocumentFlowError, match="transaction_currency explicita"):
+        assert_currency_explicit(SimpleNamespace(transaction_currency="  "), context="documento")
+
+
+def test_assert_base_currency_snapshot_accepts_matching(app_ctx):
+    from cacao_accounting.document_flow.currency_resolver import assert_base_currency_snapshot
+
+    document = SimpleNamespace(base_currency="NIO")
+    assert assert_base_currency_snapshot(document, company="cacao", context="documento") == "NIO"
+
+
+def test_assert_base_currency_snapshot_rejects_mismatch(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.currency_resolver import assert_base_currency_snapshot
+
+    with pytest.raises(DocumentFlowError, match="no coincide con la moneda funcional"):
+        assert_base_currency_snapshot(SimpleNamespace(base_currency="USD"), company="cacao", context="documento")
+
+
+def test_assert_base_currency_snapshot_rejects_missing(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.currency_resolver import assert_base_currency_snapshot
+
+    with pytest.raises(DocumentFlowError, match="snapshot de base_currency"):
+        assert_base_currency_snapshot(SimpleNamespace(base_currency=None), company="cacao", context="documento")
+
+
+def test_source_transaction_currencies_collects_all(app_ctx):
+    from cacao_accounting.document_flow.currency_resolver import source_transaction_currencies
+
+    sources = [SimpleNamespace(transaction_currency="USD"), SimpleNamespace(transaction_currency="USD")]
+    assert source_transaction_currencies(sources) == ["USD", "USD"]
+
+
+def test_source_transaction_currencies_rejects_missing(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.currency_resolver import source_transaction_currencies
+
+    with pytest.raises(DocumentFlowError, match="moneda transaccional explicita"):
+        source_transaction_currencies([SimpleNamespace(transaction_currency=None)])
+
+
+def test_resolve_party_currency_uses_default(app_ctx):
+    from cacao_accounting.document_flow.currency_resolver import resolve_party_currency
+
+    assert resolve_party_currency(SimpleNamespace(default_currency="USD")) == "USD"
+
+
+def test_resolve_party_currency_none_without_currency(app_ctx):
+    from cacao_accounting.document_flow.currency_resolver import resolve_party_currency
+
+    assert resolve_party_currency(SimpleNamespace(default_currency=None, currency=None)) is None
+    assert resolve_party_currency(None) is None
+
+
+def test_collect_sources_from_relations_skips_empty(app_ctx):
+    from cacao_accounting.document_flow.currency_resolver import collect_sources_from_relations
+
+    source = SimpleNamespace(transaction_currency="USD")
+    document = SimpleNamespace(source_relations=[SimpleNamespace(source=source), SimpleNamespace(source=None)])
+    assert collect_sources_from_relations(document) == [source]
+
+
+def test_assert_currency_contract_or_raise_homogeneous(app_ctx):
+    from cacao_accounting.document_flow.validation import assert_currency_contract_or_raise
+
+    document = SimpleNamespace(company="cacao", transaction_currency="USD", base_currency="NIO")
+    sources = [SimpleNamespace(transaction_currency="USD")]
+    assert assert_currency_contract_or_raise(document, context="documento", sources=sources) is None
+
+
+def test_assert_currency_contract_or_raise_rejects_heterogeneous(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.validation import assert_currency_contract_or_raise
+
+    document = SimpleNamespace(company="cacao", transaction_currency="USD", base_currency="NIO")
+    sources = [SimpleNamespace(transaction_currency="USD"), SimpleNamespace(transaction_currency="EUR")]
+    with pytest.raises(DocumentFlowError, match="moneda"):
+        assert_currency_contract_or_raise(document, context="documento", sources=sources)
+
+
+def test_validate_currency_contract_requires_base_snapshot(app_ctx):
+    from cacao_accounting.database import StockEntry
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.validation import validate_currency_contract
+
+    document = StockEntry(
+        company="cacao", posting_date=date(2026, 5, 4), purpose="material_receipt", transaction_currency="USD", docstatus=1
+    )
+    with pytest.raises(DocumentFlowError, match="base_currency"):
+        validate_currency_contract(document, context="stock_entry")
+
+
+def test_validate_immutable_header_accepts_source(app_ctx):
+    from cacao_accounting.document_flow.context import validate_immutable_header
+
+    source = SimpleNamespace(company="cacao", transaction_currency="USD")
+    company, currency = validate_immutable_header(source, "cacao", "USD")
+    assert company == "cacao"
+    assert currency == "USD"
+
+
+def test_validate_immutable_header_rejects_source_without_currency(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.context import validate_immutable_header
+
+    source = SimpleNamespace(company="cacao", transaction_currency=None)
+    with pytest.raises(DocumentFlowError, match="moneda transaccional explicita"):
+        validate_immutable_header(source, "cacao", "USD")
+
+
+def test_validate_immutable_header_rejects_company_mismatch(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.context import validate_immutable_header
+
+    source = SimpleNamespace(company="cacao", transaction_currency="USD")
+    with pytest.raises(DocumentFlowError, match="compania debe coincidir"):
+        validate_immutable_header(source, "otra", "USD")
+
+
+def test_validate_immutable_header_rejects_currency_mismatch(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.document_flow.context import validate_immutable_header
+
+    source = SimpleNamespace(company="cacao", transaction_currency="USD")
+    with pytest.raises(DocumentFlowError, match="moneda debe coincidir"):
+        validate_immutable_header(source, "cacao", "EUR")
+
+
+# --------------------------------------------------------------------------- #
+# Cambios de dominio: rechazo sin moneda explicita
+# --------------------------------------------------------------------------- #
+
+
+def test_set_sales_document_totals_rejects_missing_currency(app_ctx):
+    from cacao_accounting.ventas.services import _set_sales_document_totals
+
+    document = SimpleNamespace(company="cacao", transaction_currency=None, posting_date=date(2026, 5, 4))
+    with pytest.raises(ValueError, match="moneda transaccional explicita"):
+        _set_sales_document_totals(document, Decimal("100"))
+
+
+def test_set_purchase_receipt_totals_rejects_missing_currency(app_ctx):
+    from cacao_accounting.compras.services import _set_purchase_receipt_totals
+
+    receipt = SimpleNamespace(company="cacao", transaction_currency=None)
+    with pytest.raises(ValueError, match="moneda transaccional explicita"):
+        _set_purchase_receipt_totals(receipt, Decimal("100"))
+
+
+def test_set_purchase_document_totals_rejects_missing_currency(app_ctx):
+    from cacao_accounting.compras.services import _set_purchase_document_totals
+
+    document = SimpleNamespace(company="cacao", transaction_currency=None)
+    with pytest.raises(ValueError, match="moneda transaccional explicita"):
+        _set_purchase_document_totals(document, Decimal("100"))
+
+
+def test_sales_invoice_currency_and_rate_inherits_source_rate(app_ctx):
+    from cacao_accounting.ventas.services import _sales_invoice_currency_and_rate
+
+    source = SimpleNamespace(transaction_currency="USD", exchange_rate=Decimal("36.5"))
+    transaction_currency, base_currency, rate = _sales_invoice_currency_and_rate("cacao", date(2026, 5, 4), source, "USD")
+    assert transaction_currency == "USD"
+    assert base_currency == "NIO"
+    assert rate == Decimal("36.5")
+
+
+def test_sales_invoice_currency_and_rate_rejects_override(app_ctx):
+    from cacao_accounting.document_flow import DocumentFlowError
+    from cacao_accounting.ventas.services import _sales_invoice_currency_and_rate
+
+    source = SimpleNamespace(transaction_currency="USD", exchange_rate=Decimal("36.5"))
+    with pytest.raises(DocumentFlowError, match="heredada"):
+        _sales_invoice_currency_and_rate("cacao", date(2026, 5, 4), source, "EUR")
