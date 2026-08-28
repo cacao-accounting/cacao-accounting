@@ -26,6 +26,7 @@ from cacao_accounting.database import (
 from cacao_accounting.reportes.services import (
     FinancialReportFilters,
     _grouped_account_gl_query,
+    _report_period_ids,
     get_account_summary_report,
     get_trial_balance_report,
 )
@@ -183,7 +184,7 @@ def test_summary_and_trial_balance_receive_grouped_rows_from_database(app_ctx):
     database.session.commit()
     filters = FinancialReportFilters(company="cacao", ledger="FISC", accounting_period="2026-05")
 
-    grouped_query = _grouped_account_gl_query(filters, period.start, period.end, book.id)
+    grouped_query = _grouped_account_gl_query(filters, period.start, period.end, _report_period_ids(filters), book.id)
     compiled = str(grouped_query.compile(database.engine))
     raw_count = database.session.execute(select(func.count()).select_from(GLEntry)).scalar_one()
     grouped_rows = database.session.execute(grouped_query).all()

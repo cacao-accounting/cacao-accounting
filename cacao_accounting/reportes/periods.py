@@ -116,6 +116,32 @@ def current_period_for_company(company: str, target_date: date | None = None) ->
     )
 
 
+def period_ids_in_range(company: str, period_from: str | None, period_to: str | None) -> list[str]:
+    """Devuelve los identificadores de los períodos contables del rango contiguo.
+
+    Útil para que los reportes filtren por la dimensión ``accounting_period_id``
+    (``entry.accounting_period_id IN (ids)``) en lugar de sustituirla por un
+    rango de fechas. Si no se puede resolver el rango, devuelve una lista vacía.
+    """
+    period_range = resolve_period_range(company, period_from, period_to)
+    if period_range is None:
+        return []
+    rows = (
+        database.session.execute(
+            select(AccountingPeriod.id)
+            .where(
+                AccountingPeriod.entity == company,
+                AccountingPeriod.start >= period_range.from_period.start,
+                AccountingPeriod.start <= period_range.to_period.start,
+            )
+            .order_by(AccountingPeriod.start.asc())
+        )
+        .scalars()
+        .all()
+    )
+    return [str(item) for item in rows]
+
+
 def resolve_period(company: str, period_id: str) -> AccountingPeriod | None:
     """Resuelve un período validando que el identificador pertenezca a la compañía."""
     normalized = period_id.strip()

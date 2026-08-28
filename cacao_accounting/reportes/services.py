@@ -2131,8 +2131,7 @@ def _report_period_bounds(filters: Any) -> tuple[date | None, date | None, Accou
 
     Prioriza el rango de períodos contables completos (``period_from`` /
     ``period_to``); cuando no está presente conserva la resolución clásica por
-    el nombre o id del ``accounting_period`` para compatibilidad con URL
-    anteriores.
+    el nombre o id del ``accounting_period``.
     """
     period_from = getattr(filters, "period_from", None)
     period_to = getattr(filters, "period_to", None)
@@ -2143,6 +2142,25 @@ def _report_period_bounds(filters: Any) -> tuple[date | None, date | None, Accou
         if period_range is not None:
             return period_range.period_start, period_range.period_end, period_range.to_period
     return _period_bounds(filters.company, getattr(filters, "accounting_period", None))
+
+
+def _report_period_ids(filters: Any) -> list[str]:
+    """Devuelve los identificadores de período del filtro dimensional.
+
+    El período contable es una dimensión: la consulta del reporte acota por
+    ``accounting_period_id IN (ids)``. Se resuelve desde el rango de períodos
+    completos (ids de primera prioridad) o, en su defecto, desde el único período
+    indicado por nombre. Devuelve una lista vacía cuando no hay período resuelto.
+    """
+    period_from = getattr(filters, "period_from", None)
+    period_to = getattr(filters, "period_to", None)
+    if period_from or period_to:
+        from cacao_accounting.reportes.periods import period_ids_in_range
+
+        return period_ids_in_range(filters.company, period_from, period_to)
+    period_value = getattr(filters, "accounting_period", None)
+    _, _, period = _period_bounds(filters.company, period_value)
+    return [str(period.id)] if period is not None else []
 
 
 def _report_window(filters: Any) -> tuple[date | None, date | None]:
@@ -2157,13 +2175,19 @@ def _report_window(filters: Any) -> tuple[date | None, date | None]:
     return start, end
 
 
-def _apply_gl_filters(query: Any, filters: FinancialReportFilters, period_start: date | None, period_end: date | None) -> Any:
+def _apply_gl_filters(
+    query: Any,
+    filters: FinancialReportFilters,
+    period_start: date | None,
+    period_end: date | None,
+    period_ids: list[str] | None = None,
+) -> Any:
     query = _apply_base_filters(query, filters)
     query = _apply_account_filters(query, filters)
     query = _apply_party_filters(query, filters)
     query = _apply_cancellation_scope(query, filters)
     query = _apply_status_filter(query, filters)
-    query = _apply_period_filter(query, period_start, period_end)
+    query = _apply_period_filter(query, period_ids, period_start, period_end)
     return query
 
 
@@ -2238,10 +2262,32 @@ def _apply_status_filter(query: Any, filters: FinancialReportFilters) -> Any:
     return query
 
 
-def _apply_period_filter(query: Any, period_start: date | None, period_end: date | None) -> Any:
-    if period_start:
+def _period_dimension_clause(period_ids: list[str] | None, period_start: date | None, period_end: date | None) -> Any:
+    """Construye el predicado dimensional del período, sin sustituirlo por fechas.
+
+    El filtro principal es ``GLEntry.accounting_period_id IN (period_ids)``. Las
+    fechas solo actúan como transición controlada para asientos sin período
+    asignado (``accounting_period_id IS NULL``, datos heredados); nunca reemplazan
+    la identidad dimensional. Devuelve ``None`` cuando no hay período resuelto.
+    """
+    if not period_ids:
+        return None
+    null_fallback_conditions: list[Any] = []
+    if period_start is not None:
+        null_fallback_conditions.append(GLEntry.posting_date >= period_start)
+    if period_end is not None:
+        null_fallback_conditions.append(GLEntry.posting_date <= period_end)
+    null_fallback = and_(GLEntry.accounting_period_id.is_(None), *null_fallback_conditions)
+    return or_(GLEntry.accounting_period_id.in_(period_ids), null_fallback)
+
+
+def _apply_period_filter(query: Any, period_ids: list[str] | None, period_start: date | None, period_end: date | None) -> Any:
+    dimension_clause = _period_dimension_clause(period_ids, period_start, period_end)
+    if dimension_clause is not None:
+        return query.where(dimension_clause)
+    if period_start is not None:
         query = query.where(GLEntry.posting_date >= period_start)
-    if period_end:
+    if period_end is not None:
         query = query.where(GLEntry.posting_date <= period_end)
     return query
 
@@ -2344,27 +2390,35 @@ def _movement_detail_query(
     filters: FinancialReportFilters,
     period_start: date | None,
     period_end: date | None,
+    period_ids: list[str],
     selected_ledger: Book,
 ) -> Any:
-    """Construye la consulta base del detalle de movimiento contable."""
+    """Construye la consulta base del detalle de movimiento contable.
+
+    El filtro del período es dimensional: se acota por ``accounting_period_id``
+    (la fuente de verdad), no por un rango de fechas sustituto.
+    """
     query = (
         select(GLEntry, Accounts, AccountingPeriod, Party)
         .join(Accounts, (Accounts.id == GLEntry.account_id), isouter=True)
         .join(AccountingPeriod, (AccountingPeriod.id == GLEntry.accounting_period_id), isouter=True)
         .join(Party, (Party.id == GLEntry.party_id), isouter=True)
     )
-    query = _apply_gl_filters(query, filters, period_start, period_end).where(GLEntry.ledger_id == selected_ledger.id)
+    query = _apply_gl_filters(query, filters, period_start, period_end, period_ids).where(
+        GLEntry.ledger_id == selected_ledger.id
+    )
     return _sorted_gl_query(query, filters.sort_by, filters.sort_dir)
 
 
 def get_account_movement_detail(filters: FinancialReportFilters) -> PaginatedReport:
     """Detalle de movimiento contable (diario + mayor) desde GL."""
     period_start, period_end, _ = _report_period_bounds(filters)
+    period_ids = _report_period_ids(filters)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={"debit": Decimal("0"), "credit": Decimal("0")}, columns=[])
 
-    query = _movement_detail_query(filters, period_start, period_end, selected_ledger)
+    query = _movement_detail_query(filters, period_start, period_end, period_ids, selected_ledger)
 
     count_query = query.order_by(None).with_only_columns(func.count())
     total_rows = database.session.execute(count_query).scalar_one()
@@ -2499,16 +2553,21 @@ def _grouped_account_gl_query(
     filters: FinancialReportFilters,
     period_start: date | None,
     period_end: date | None,
+    period_ids: list[str],
     ledger_id: str,
 ) -> Any:
-    """Devuelve agregados GL por cuenta para los reportes resumidos."""
+    """Devuelve agregados GL por cuenta para los reportes resumidos.
+
+    La ventana de movimiento se acota por la dimensión ``accounting_period_id``
+    (identidad del período), mientras que el saldo inicial conserva su
+    acumulado anterior a la ventana mediante ``period_start``.
+    """
     account_code = func.coalesce(GLEntry.account_code, Accounts.code, "")
-    movement_conditions = []
-    if period_start:
-        movement_conditions.append(GLEntry.posting_date >= period_start)
-    if period_end:
-        movement_conditions.append(GLEntry.posting_date <= period_end)
-    movement_condition = and_(*movement_conditions) if movement_conditions else literal(True)
+    dimension_clause = _period_dimension_clause(period_ids, period_start, period_end)
+    movement_condition = dimension_clause if dimension_clause is not None else literal(True)
+    # El saldo inicial es el acumulado anterior a la ventana: se conserva la
+    # frontera temporal (``posting_date < period_start``) porque no pertenece a
+    # la identidad dimensional del período sino al arrastre de saldos.
     opening_value = case((GLEntry.posting_date < period_start, GLEntry.debit - GLEntry.credit), else_=0) if period_start else 0
     movement_debit = case((movement_condition, GLEntry.debit), else_=0)
     movement_credit = case((movement_condition, GLEntry.credit), else_=0)
@@ -2526,7 +2585,7 @@ def _grouped_account_gl_query(
         func.min(case((movement_condition, GLEntry.posting_date), else_=None)).label("first_movement"),
         func.max(case((movement_condition, GLEntry.posting_date), else_=None)).label("last_movement"),
     ).join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-    query = _apply_gl_filters(query, filters, None, None).where(GLEntry.ledger_id == ledger_id)
+    query = _apply_gl_filters(query, filters, None, None, period_ids).where(GLEntry.ledger_id == ledger_id)
     return query.group_by(account_code, Accounts.name, Accounts.account_type, Accounts.classification, Accounts.currency)
 
 
@@ -2538,11 +2597,12 @@ def _account_code_level(account_code: str) -> int:
 def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Resumen de movimientos por cuenta contable (Sábana analítica)."""
     period_start, period_end, _ = _report_period_bounds(filters)
+    period_ids = _report_period_ids(filters)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
 
-    grouped_query = _grouped_account_gl_query(filters, period_start, period_end, selected_ledger.id)
+    grouped_query = _grouped_account_gl_query(filters, period_start, period_end, period_ids, selected_ledger.id)
     account_totals = {
         str(row.account_code): {
             "account_code": str(row.account_code),
@@ -2599,11 +2659,12 @@ def get_account_summary_report(filters: FinancialReportFilters) -> PaginatedRepo
 def get_trial_balance_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Balanza de comprobación por cuenta contable."""
     period_start, period_end, _ = _report_period_bounds(filters)
+    period_ids = _report_period_ids(filters)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
 
-    grouped_query = _grouped_account_gl_query(filters, period_start, period_end, selected_ledger.id)
+    grouped_query = _grouped_account_gl_query(filters, period_start, period_end, period_ids, selected_ledger.id)
     account_totals = {
         str(row.account_code): {
             "account_code": str(row.account_code),
@@ -2764,6 +2825,7 @@ def _accumulate_income_entry(
 def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Estado de resultado del periodo contable seleccionado."""
     period_start, period_end, _ = _report_period_bounds(filters)
+    period_ids = _report_period_ids(filters)
     selected_ledger = _resolve_ledger(filters.company, filters.ledger)
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
@@ -2774,7 +2836,7 @@ def get_income_statement_report(filters: FinancialReportFilters) -> PaginatedRep
         func.coalesce(func.sum(GLEntry.debit), 0).label("debit"),
         func.coalesce(func.sum(GLEntry.credit), 0).label("credit"),
     ).join(Accounts, Accounts.id == GLEntry.account_id)
-    base_query = _apply_gl_filters(base_query, filters, period_start, period_end).where(
+    base_query = _apply_gl_filters(base_query, filters, period_start, period_end, period_ids).where(
         GLEntry.ledger_id == selected_ledger.id
     )
     base_query = base_query.group_by(Accounts.code, Accounts.name, Accounts.classification)
