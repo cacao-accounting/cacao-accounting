@@ -121,13 +121,13 @@
        font-size="115.547px"
        font-weight="700"
        id="text1"
-       style="font-family:'Open Sans', Arial, sans-serif;text-anchor:middle;fill:#512d21;stroke-width:1.52036">Cacao</text>
+       style="font-family:'Open Sans', Arial, sans-serif;text-anchor:middle;fill:#E8D6BE;stroke-width:1.52036">Cacao</text>
     <text
        x="918.59723"
        y="407.76559"
        font-size="82.4689px"
        font-weight="600"
        id="text2"
-       style="font-family:'Open Sans', Arial, sans-serif;text-anchor:middle;fill:#512d21;stroke-width:1.39778">Accounting</text>
+       style="font-family:'Open Sans', Arial, sans-serif;text-anchor:middle;fill:#E8D6BE;stroke-width:1.39778">Accounting</text>
   </g>
 </svg>

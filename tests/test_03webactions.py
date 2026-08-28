@@ -1251,7 +1251,7 @@ def test_modules_and_imports_are_settings_links_not_primary_sidebar_items(reques
                 assert 'href="/imports/"' not in sidebar
 
 
-def test_accounting_module_badges_are_semantic_for_admin(request):
+def test_accounting_module_badges_show_normal_access_for_admin(request):
 
     if request.config.getoption("--slow") == "True":
 
@@ -1297,6 +1297,7 @@ def test_logout_invalidates_session_and_token(request):
                     assert sess.get("_user_id") is None
 
                 assert old_user.token is None
+
 
 def test_setup_entity_type_choices_follow_selected_language():
     """The setup company form localizes entity type labels without changing values."""
