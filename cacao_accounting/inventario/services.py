@@ -45,7 +45,7 @@ from cacao_accounting.document_flow import (
 
 from cacao_accounting.document_flow.status import _
 
-from cacao_accounting.document_flow.context import company_currency
+from cacao_accounting.document_flow.context import company_currency  # noqa: F401  - legacy import retained for downstream
 
 from cacao_accounting.document_identifiers import assign_document_identifier
 
@@ -686,6 +686,14 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
         posting_date = _validate_stock_entry_posting_date(form_data)
         posted_purpose = _validate_stock_entry_purpose(form_data.get("purpose") or "material_receipt")
         company = _validate_stock_entry_company(form_data.get("company"), "crear")
+        from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+
+        base_currency_value = company_functional_currency(company)
+        if not base_currency_value:
+            raise ValueError("La compania requiere una moneda funcional configurada.")
+        raw_currency = form_data.get("transaction_currency") or form_data.get("currency") or ""
+        if not raw_currency:
+            raise ValueError("La entrada de inventario requiere una moneda transaccional explicita.")
         entry = StockEntry(
             purpose=posted_purpose,
             company=company,
@@ -697,8 +705,8 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
             unit_code=form_data.get("unit_code") or None,
             project_code=form_data.get("project_code") or None,
             remarks=form_data.get("remarks"),
-            transaction_currency=company_currency(company),
-            base_currency=company_currency(company),
+            transaction_currency=str(raw_currency).strip(),
+            base_currency=base_currency_value,
             docstatus=0,
         )
         database.session.add(entry)
@@ -785,8 +793,17 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
     registro.unit_code = request.form.get("unit_code") or None
     registro.project_code = request.form.get("project_code") or None
     registro.remarks = request.form.get("remarks")
-    registro.transaction_currency = registro.transaction_currency or company_currency(company)
-    registro.base_currency = company_currency(company)
+    raw_currency = request.form.get("transaction_currency") or request.form.get("currency") or ""
+    if not raw_currency and not registro.transaction_currency:
+        raise ValueError("La entrada de inventario requiere una moneda transaccional explicita.")
+    if raw_currency:
+        registro.transaction_currency = str(raw_currency).strip()
+    from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+
+    base_currency_value = company_functional_currency(company)
+    if not base_currency_value:
+        raise ValueError("La compania requiere una moneda funcional configurada.")
+    registro.base_currency = base_currency_value
 
 
 def _delete_and_resave_stock_entry_items(registro: StockEntry) -> None:

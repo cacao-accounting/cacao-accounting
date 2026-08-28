@@ -209,16 +209,18 @@
     </div>
     {% if include_currency %}
     <div class="col-md-6">
-      <label class="form-label" for="currency">{{ _('Moneda') }}</label>
+      <label class="form-label" for="currency">{{ _('Moneda') }} <span class="text-danger">*</span></label>
       {{ smart_select(
           doctype="currency",
           name="currency",
           initial_value_expr="header.currency",
           initial_label_expr="header.currency",
           label=_("Moneda"),
+          required=True,
           locked_expr="typeof isFlowFieldLocked === 'function' && isFlowFieldLocked('currency')",
           x_model="header.currency"
       ) }}
+      <div class="invalid-feedback d-block" x-show="!header.currency" x-cloak>{{ _('La moneda transaccional es obligatoria.') }}</div>
     </div>
     {% endif %}
     <div class="col-md-6">

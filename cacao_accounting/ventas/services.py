@@ -182,9 +182,16 @@ def _sales_exchange_rate(company: str | None, posting_date: Any, transaction_cur
 
 def _set_sales_document_totals(document: Any, total: Decimal) -> None:
     """Calcula totales funcionales de un documento comercial de ventas."""
-    transaction_currency = getattr(document, "transaction_currency", None) or company_currency(document.company)
+    from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+
+    transaction_currency = getattr(document, "transaction_currency", None)
+    if not transaction_currency:
+        raise ValueError("El documento de ventas requiere una moneda transaccional explicita antes de recalcular totales.")
+    base_currency_value = company_functional_currency(document.company)
+    if not base_currency_value:
+        raise ValueError("La compania requiere una moneda funcional configurada.")
     document.transaction_currency = transaction_currency
-    document.base_currency = company_currency(document.company)
+    document.base_currency = base_currency_value
     document.exchange_rate = _sales_exchange_rate(document.company, document.posting_date, transaction_currency)
     document.total = total
     document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))
@@ -195,16 +202,30 @@ def _set_sales_document_totals(document: Any, total: Decimal) -> None:
 
 def _sales_invoice_currency_and_rate(
     company: str | None, posting_date: Any, source: Any | None, requested_currency: str | None
-) -> tuple[str | None, str | None, Decimal]:
-    """Resuelve moneda, moneda funcional y tasa, conservando la tasa del origen."""
-    source_currency = effective_currency(source)
-    transaction_currency = source_currency or requested_currency
-    base_currency = company_currency(company)
-    if source is not None and source_currency == transaction_currency and getattr(source, "exchange_rate", None):
-        exchange_rate = Decimal(str(source.exchange_rate))
+) -> tuple[str, str, Decimal]:
+    """Resuelve moneda, moneda funcional y tasa, conservando la tasa del origen.
+
+    Cuando hay un documento origen de Document Flow la moneda se hereda; si el
+    usuario envia una moneda distinta se rechaza. Sin origen, se exige moneda
+    del usuario; en su defecto se usa la moneda del tercero. La moneda de la
+    compania actua como ultimo recurso explicito.
+    """
+    from cacao_accounting.document_flow.currency_resolver import resolve_transaction_currency
+
+    party = getattr(source, "customer", None) if source is not None else None
+    resolved = resolve_transaction_currency(
+        company=company,
+        party=party,
+        user_selection=requested_currency,
+        sources=[source] if source is not None else None,
+        context="documento de ventas",
+    )
+    source_rate = getattr(source, "exchange_rate", None) if source is not None else None
+    if resolved.source == "source" and source_rate:
+        exchange_rate = Decimal(str(source_rate))
     else:
-        exchange_rate = _sales_exchange_rate(company, posting_date, transaction_currency)
-    return transaction_currency, base_currency, exchange_rate
+        exchange_rate = _sales_exchange_rate(company, posting_date, resolved.transaction_currency)
+    return resolved.transaction_currency, resolved.base_currency, exchange_rate
 
 
 def _set_sales_invoice_totals(invoice: SalesInvoice, total: Decimal, grand_total: Decimal, source: Any | None = None) -> None:
@@ -1160,14 +1181,28 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     if not items:
         raise PostingError("La factura no tiene ítems para crear la Nota de Entrega.")
 
+    if not invoice.transaction_currency:
+        raise PostingError(
+            "La factura origen no tiene moneda transaccional explicita; " "no se puede derivar la Nota de Entrega."
+        )
+    if not invoice.base_currency:
+        from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+
+        base_currency_value = company_functional_currency(invoice.company)
+        if not base_currency_value:
+            raise PostingError(
+                "La compania de la factura no tiene moneda funcional configurada; " "no se puede derivar la Nota de Entrega."
+            )
+    else:
+        base_currency_value = invoice.base_currency
     dn = DeliveryNote(
         customer_id=invoice.customer_id,
         customer_name=invoice.customer_name,
         company=invoice.company,
         posting_date=invoice.posting_date,
         sales_order_id=invoice.sales_order_id,
-        transaction_currency=invoice.transaction_currency or company_currency(invoice.company),
-        base_currency=invoice.base_currency or company_currency(invoice.company),
+        transaction_currency=invoice.transaction_currency,
+        base_currency=base_currency_value,
         exchange_rate=invoice.exchange_rate or Decimal("1"),
         remarks=f"Nota de Entrega auto-generada desde factura {invoice.document_no or invoice.id}",
         docstatus=0,

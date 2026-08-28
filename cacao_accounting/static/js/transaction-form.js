@@ -326,6 +326,7 @@
           company: '',
           naming_series: '',
           currency: '',
+          currency_explicit: false,
           posting_date: new Date().toISOString().slice(0, 10),
           party_type: '',
           party: '',
@@ -386,10 +387,19 @@
           }
           this.lines = (config.initialLines || []).map(normalizeLineWithCb(this));
           if (!this.lines.length) this.addMultipleRows(config.defaultRows || 2);
-          this.$watch('header.party', () => this.refreshCatalogPrices());
-          this.$watch('header.company', () => this.refreshCatalogPrices());
-          this.$watch('header.posting_date', () => this.refreshCatalogPrices());
+          if (typeof this.$watch === 'function') {
+            this.$watch('header.party', () => this.refreshCatalogPrices());
+            this.$watch('header.company', () => this.refreshCatalogPrices());
+            this.$watch('header.posting_date', () => this.refreshCatalogPrices());
+            this.$watch('header.currency', (value) => this.onCurrencyChange(value));
+          }
           this.queueTaxPreview();
+        },
+
+        onCurrencyChange(value) {
+          if (value && !this.flowLockedFields.includes('currency')) {
+            this.header.currency_explicit = true;
+          }
         },
 
         isFlowFieldLocked(field) {
@@ -401,6 +411,11 @@
           this.syncLineInputs();
           if (this.sourceHydrationPending || this.loadingSource) {
             this.submitError = 'Espere a que termine la carga del documento origen.';
+            event.preventDefault();
+            return;
+          }
+          if (!this.header.currency) {
+            this.submitError = 'La moneda transaccional es obligatoria.';
             event.preventDefault();
             return;
           }

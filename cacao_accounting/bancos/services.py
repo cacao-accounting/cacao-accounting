@@ -749,12 +749,7 @@ def _build_payment_reference(
         party_type=_reference_party_info(document)[0],
         party_id=_reference_party_info(document)[1],
         company=getattr(document, "company", None),
-        currency=(
-            getattr(document, "transaction_currency", None)
-            or getattr(document, "currency", None)
-            or getattr(document, "base_currency", None)
-            or getattr(payment, "currency", None)
-        ),
+        currency=getattr(document, "transaction_currency", None) or getattr(payment, "currency", None),
         total_amount=document.grand_total,
         outstanding_amount=outstanding,
         outstanding_amount_after=outstanding_after,

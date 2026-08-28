@@ -102,12 +102,13 @@ def _payment_candidate_date(document: Any) -> date | None:
 
 
 def _document_transaction_currency(document: Any) -> str | None:
-    """Resolve a document's currency across modern and legacy schemas."""
-    currency = (
-        getattr(document, "transaction_currency", None)
-        or getattr(document, "currency", None)
-        or getattr(document, "base_currency", None)
-    )
+    """Resolve a document's currency without silent fallback.
+
+    Solo se considera ``transaction_currency`` explicita. Los campos
+    ``currency`` y ``base_currency`` quedan disponibles pero no se usan como
+    inferencia silenciosa para preservar el contrato de moneda completa.
+    """
+    currency = getattr(document, "transaction_currency", None)
     return str(currency) if currency else None
 
 
@@ -1041,6 +1042,8 @@ def _post_advance_settlement_journal(
         voucher_type="journal_entry",
         book_codes=json.dumps([book.code for book in books]) if books else None,
         transaction_currency=payment.transaction_currency or invoice.transaction_currency,
+        base_currency=payment.base_currency or invoice.base_currency,
+        exchange_rate=payment.exchange_rate or invoice.exchange_rate,
     )
     database.session.add(journal)
     database.session.flush()

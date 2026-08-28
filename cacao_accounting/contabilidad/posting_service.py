@@ -243,7 +243,14 @@ def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) 
 
 
 def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = None) -> list[LedgerContext]:
-    """Build explicit, auditable currency contexts for every posted ledger."""
+    """Build explicit, auditable currency contexts for every posted ledger.
+
+    El contrato de moneda exige que toda transaccion persistida tenga
+    ``transaction_currency`` y snapshot de ``base_currency``. Ademas, todas
+    las tasas faltantes se acumulan y reportan juntas para evitar efectos
+    parciales: si falta al menos una tasa para uno de los libros activos,
+    el posting se rechaza sin crear GL/SLE en ningun libro.
+    """
     if type(document).__name__ != "ComprobanteContable":
         ledger_code = None
     company = _company_for(document)
@@ -260,21 +267,33 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
         raise PostingError("El documento requiere moneda transaccional antes de contabilizarse.")
     if not default_company_currency:
         raise PostingError("La compañía requiere una moneda funcional configurada antes de contabilizarse.")
+    if not document_base_currency:
+        raise PostingError("El documento requiere un snapshot explicito de base_currency antes de contabilizarse.")
+    if document_base_currency != default_company_currency:
+        raise PostingError(
+            f"El snapshot de base_currency ({document_base_currency!r}) no coincide con la moneda "
+            f"funcional vigente ({default_company_currency!r}); el documento requiere revalidacion."
+        )
     contexts: list[LedgerContext] = []
     is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
+    missing_rates: list[str] = []
     for book in _active_books(company, ledger_code):
         book_currency = getattr(book, "currency", None)
         if not book_currency:
             raise PostingError(f"El libro contable {book.code} requiere una moneda funcional configurada.")
         company_currency = book_currency
-        exchange_rate = _ledger_exchange_rate(
-            transaction_currency=transaction_currency,
-            ledger_currency=company_currency,
-            document_base_currency=document_base_currency,
-            document_exchange_rate=document_exchange_rate,
-            posting_date=posting_date,
-            is_fiscal_year_closing=is_fy_closing,
-        )
+        try:
+            exchange_rate = _ledger_exchange_rate(
+                transaction_currency=transaction_currency,
+                ledger_currency=company_currency,
+                document_base_currency=document_base_currency,
+                document_exchange_rate=document_exchange_rate,
+                posting_date=posting_date,
+                is_fiscal_year_closing=is_fy_closing,
+            )
+        except PostingError:
+            missing_rates.append(f"- {transaction_currency} -> {company_currency} para {posting_date}, libro {book.code}.")
+            continue
         contexts.append(
             LedgerContext(
                 company=company,
@@ -293,6 +312,9 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
                 document_remarks=getattr(document, "remarks", None),
             )
         )
+    if missing_rates:
+        joined = "\n".join(missing_rates)
+        raise PostingError("No se puede aprobar el registro. Faltan tipos de cambio:\n" + joined)
     return contexts
 
 
@@ -658,13 +680,13 @@ def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
 
 
 def _inventory_currency(document: Any) -> str | None:
-    """Return the functional currency used by StockBin and valuation layers."""
-    entity = database.session.execute(select(Entity).filter_by(code=document.company)).scalars().first()
-    return (
-        getattr(entity, "currency", None)
-        or getattr(document, "base_currency", None)
-        or getattr(document, "transaction_currency", None)
-    )
+    """Return the functional currency used by StockBin and valuation layers.
+
+    Sin fallback silencioso: la moneda funcional debe estar en el snapshot
+    ``base_currency`` del documento persistido. Si falta, devuelve ``None``
+    para que el consumidor decida como rechazar la operacion.
+    """
+    return getattr(document, "base_currency", None)
 
 
 def _inventory_value_in_functional_currency(document: Any, amount: Decimal) -> Decimal:

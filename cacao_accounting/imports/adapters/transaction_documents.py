@@ -271,13 +271,28 @@ class TransactionDocumentAdapter(BaseImportAdapter):
     def _currency_and_rate(
         self, first_row: dict[str, Any], source: Any | None, company: str, posting_date: date
     ) -> tuple[str | None, str | None, Decimal]:
-        """Resuelve moneda funcional y tasa, rechazando conversiones implícitas 1:1."""
+        """Resuelve moneda funcional y tasa, rechazando conversiones implicitas 1:1.
+
+        La moneda transaccional debe venir explicita en la primera fila o
+        heredarse del documento origen. No se permite inferir desde la
+        compania: si falta, se rechaza con ``ValueError``.
+        """
         base_currency = company_currency(company)
-        transaction_currency = (
-            first_row.get("moneda") or first_row.get("transaction_currency") or effective_currency(source) or base_currency
-        )
+        if not base_currency:
+            raise ValueError("La compania no tiene moneda funcional configurada.")
+        row_currency = first_row.get("moneda") or first_row.get("transaction_currency")
+        source_currency = effective_currency(source)
+        if row_currency:
+            transaction_currency = str(row_currency).strip()
+        elif source_currency:
+            transaction_currency = source_currency
+        else:
+            raise ValueError(
+                "El documento importado requiere una moneda transaccional explicita en la primera fila "
+                "o un documento origen con moneda transaccional persistida."
+            )
         explicit_rate = first_row.get("tipo_cambio") or first_row.get("exchange_rate")
-        if transaction_currency == base_currency or not transaction_currency or not base_currency:
+        if transaction_currency == base_currency:
             return transaction_currency, base_currency, Decimal("1")
         if explicit_rate not in (None, ""):
             rate = Decimal(str(explicit_rate))

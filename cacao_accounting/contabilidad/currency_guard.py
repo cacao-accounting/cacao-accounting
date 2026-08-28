@@ -1,4 +1,11 @@
-"""Validaciones reutilizables para el uso operativo de monedas."""
+"""Validaciones reutilizables para el uso operativo de monedas.
+
+Refs: #758
+
+Este modulo concentra reglas de activacion y consistencia entre monedas.
+La primitiva ``validate_currency_pair`` exige que ambas puntas del par de
+conversion existan y esten activas antes de que un documento sea aprobado.
+"""
 
 from __future__ import annotations
 
@@ -72,3 +79,16 @@ class CurrencyGuard:
             company.currency,
             "La moneda funcional de la compania debe existir y estar activa.",
         )
+
+    def validate_currency_pair(self, origin: str | None, destination: str | None) -> tuple[Currency, Currency]:
+        """Valida que ambas monedas de un par de conversion existan y esten activas.
+
+        Pensada para validacion previa al posting: garantiza que toda conversion
+        entre libros opera con monedas catalogadas, evitando referencias a
+        monedas huerfanas o inactivas que harian fallar el lookup de tasas.
+        """
+        origin_currency = self.validate_active_currency(origin, "La moneda origen debe existir y estar activa.")
+        destination_currency = self.validate_active_currency(destination, "La moneda destino debe existir y estar activa.")
+        if origin_currency.code == destination_currency.code:
+            return origin_currency, destination_currency
+        return origin_currency, destination_currency
