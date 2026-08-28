@@ -584,9 +584,9 @@ def test_280_refund_settles_credit_note_in_subledger(app_ctx, chart):
 # --------------------------------------------------------------------------- #
 
 
-def test_280_payment_cancellation_blocks_active_effect(app_ctx, chart):
-    """Un efecto posterior activo bloquea la anulacion directa de un pago."""
-    from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document
+def test_280_payment_cancellation_restores_active_effect(app_ctx, chart):
+    """Cancelar un pago aplicado restaura el saldo y agrega reversos al GL."""
+    from cacao_accounting.contabilidad.posting_service import cancel_document
     from cacao_accounting.database import GLEntry, PaymentReference, database
 
     invoice = _make_invoice(amount=Decimal("1000"))
@@ -605,22 +605,23 @@ def test_280_payment_cancellation_blocks_active_effect(app_ctx, chart):
     )
     original_ids = {entry.id for entry in original_entries}
 
-    with pytest.raises(PostingError, match="efectos activos"):
-        cancel_document(payment, **_cancellation_metadata(payment.posting_date))
-    database.session.rollback()
+    cancel_document(payment, **_cancellation_metadata(payment.posting_date))
 
-    assert payment.docstatus == 1
-    # Las referencias y el GL permanecen intactos; la corrección debe hacerse
-    # mediante el documento compensatorio del flujo de pagos.
+    database.session.refresh(payment)
+    assert payment.docstatus == 2
+    # La referencia se conserva como evidencia tras la compensación append-only.
     references = database.session.execute(select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
     assert len(references) == 1
-    assert _outstanding(invoice) == Decimal("600")
-    assert original_ids == {
-        entry.id
-        for entry in database.session.execute(
-            select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id)
-        ).scalars()
-    }
+    assert _outstanding(invoice) == Decimal("1000")
+    reversal_entries = (
+        database.session.execute(
+            select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id, is_reversal=True)
+        )
+        .scalars()
+        .all()
+    )
+    assert reversal_entries
+    assert original_ids.isdisjoint({entry.id for entry in reversal_entries})
 
 
 def test_280_posting_and_application_are_idempotent(app_ctx, chart):
