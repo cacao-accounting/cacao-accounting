@@ -185,15 +185,26 @@ def test_e2e_journalentry_reject_draft_does_not_touch_ledger(app_ctx):
 
 
 def test_e2e_journalentry_cancel_submitted_creates_reversal_entries(app_ctx):
-    from cacao_accounting.database import ComprobanteContable, GLEntry, database
+    from cacao_accounting.database import AccountingPeriod, ComprobanteContable, GLEntry, database
 
     seeded = _seed_journal_catalog()
+    database.session.add(
+        AccountingPeriod(
+            entity="cacao",
+            name="2026-05",
+            enabled=True,
+            is_closed=False,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+    )
+    database.session.commit()
     client = app_ctx.test_client()
     _login(client, seeded["user_id"])
 
     payload = {
         "company": "cacao",
-        "posting_date": date.today().isoformat(),
+        "posting_date": "2026-05-09",
         "books": ["FISC"],
         "transaction_currency": "NIO",
         "memo": "E2E submitted cancel",
@@ -327,7 +338,7 @@ def test_e2e_journalentry_revert_creates_editable_reversed_draft(app_ctx):
 
     revert_response = client.post(
         f"/accounting/journal/{journal.id}/revert",
-        data={"reversal_date": "2026-06-03"},
+        data={"reversal_date": "2026-06-03", "reason": "Corrección contable E2E"},
         follow_redirects=False,
     )
     reversed_journal = (

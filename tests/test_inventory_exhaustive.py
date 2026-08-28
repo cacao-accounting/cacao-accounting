@@ -30,6 +30,8 @@ from cacao_accounting.database import (
     Accounts,
     Book,
     CompanyDefaultAccount,
+    User,
+    AccountingPeriod,
     StockEntry,
     StockEntryItem,
     PurchaseReceipt,
@@ -133,6 +135,22 @@ def _setup_inventory_test_data(app):
                 )
 
         # Company Defaults
+        if not database.session.get(User, "test-user"):
+            database.session.add(
+                User(id="test-user", user="test-user", name="Test User", password=b"x", classification="admin", active=True)
+            )
+        if not database.session.execute(database.select(AccountingPeriod).filter_by(entity="cacao", name="2026-05")).scalar_one_or_none():
+            database.session.add(
+                AccountingPeriod(
+                    entity="cacao",
+                    name="2026-05",
+                    enabled=True,
+                    is_closed=False,
+                    start=date(2026, 5, 1),
+                    end=date(2026, 5, 31),
+                )
+            )
+
         defaults = database.session.execute(
             database.select(CompanyDefaultAccount).filter_by(company="cacao")
         ).scalar_one_or_none()
@@ -720,7 +738,7 @@ def test_08_kardex_confiable_y_reconstructibilidad(app):
         assert _get_bin().actual_qty == Decimal("15.0")
         assert _get_bin().stock_value == Decimal("1600.00")
 
-        cancel_document(se2)
+        cancel_document(se2, reason="Corrección de inventario", actor_user_id="test-user")
 
         assert _get_bin().actual_qty == Decimal("10.0")
         assert _get_bin().stock_value == Decimal("1000.00")

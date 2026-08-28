@@ -81,7 +81,28 @@ def _login(client, user_id: str) -> None:
 
 def test_recurring_journal_flow(app_ctx):
     with app_ctx.app_context():
-        from cacao_accounting.database import GLEntry
+        from cacao_accounting.database import AccountingPeriod, FiscalYear, GLEntry
+
+        fiscal_year = FiscalYear(
+            entity="abc",
+            name="FY-REC-2026",
+            year_start_date=date(2026, 1, 1),
+            year_end_date=date(2026, 12, 31),
+        )
+        database.session.add(fiscal_year)
+        database.session.flush()
+        database.session.add(
+            AccountingPeriod(
+                entity="abc",
+                fiscal_year_id=fiscal_year.id,
+                name="2026-05",
+                start=date(2026, 5, 1),
+                end=date(2026, 5, 31),
+                enabled=True,
+                is_closed=False,
+            )
+        )
+        database.session.commit()
 
         # 1. Crear plantilla
         data = {
@@ -142,7 +163,7 @@ def test_recurring_journal_flow(app_ctx):
             database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().first() is not None
         )
 
-        cancel_submitted_journal(journal.id, user_id="admin")
+        cancel_submitted_journal(journal.id, user_id="admin", reason="Cierre de aplicación recurrente")
         database.session.refresh(app_log)
         database.session.refresh(template)
         assert app_log.status == "reversed"

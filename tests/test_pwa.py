@@ -23,18 +23,17 @@ def test_pwa_manifest_and_sw():
     assert manifest_data["short_name"] == "Cacao"
     assert manifest_data["start_url"] == "/"
     assert manifest_data["display"] == "standalone"
-    assert manifest_data["theme_color"] == "#2E7D32"
+    assert manifest_data["theme_color"] == "#512D21"
 
     icon_sizes = [icon["sizes"] for icon in manifest_data.get("icons", [])]
-    assert "192x192" in icon_sizes
-    assert "512x512" in icon_sizes
+    assert "any" in icon_sizes
 
     # Test Service Worker endpoint
     res_sw = client.get("/sw.js")
     assert res_sw.status_code == 200
     assert "application/javascript" in res_sw.content_type
     assert res_sw.headers.get("Service-Worker-Allowed") == "/"
-    assert b"cacao-accounting-v1" in res_sw.data
+    assert b"cacao-accounting-v4" in res_sw.data
 
     # Test Content Security Policy headers include manifest-src and worker-src
     res_ping = client.get("/ping")

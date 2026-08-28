@@ -437,6 +437,8 @@ def _make_comprobantes_contables() -> list:
             "company": "cacao",
             "posting_date": today.isoformat(),
             "books": ["LOCAL"],
+            "transaction_currency": "NIO",
+            "base_currency": "NIO",
             "reference": "INIT-NIO",
             "memo": "Asiento inicial en Córdobas",
             "lines": [
@@ -449,6 +451,7 @@ def _make_comprobantes_contables() -> list:
             "posting_date": today.isoformat(),
             "books": ["FIN"],
             "transaction_currency": "USD",
+            "base_currency": "NIO",
             "reference": "INIT-USD",
             "memo": "Asiento inicial en Dólares",
             "lines": [
@@ -461,6 +464,7 @@ def _make_comprobantes_contables() -> list:
             "posting_date": today.isoformat(),
             "books": ["MGMT"],
             "transaction_currency": "EUR",
+            "base_currency": "NIO",
             "reference": "INIT-EUR",
             "memo": "Asiento inicial en Euros",
             "lines": [
@@ -473,6 +477,7 @@ def _make_comprobantes_contables() -> list:
             "posting_date": today.isoformat(),
             "books": ["LOCAL", "FIN", "MGMT"],
             "transaction_currency": "NIO",
+            "base_currency": "NIO",
             "reference": "MULTI-BOOK-NIO",
             "memo": "Asiento multi-libro con conversión desde Córdobas",
             "lines": [

@@ -158,7 +158,7 @@ def inventario_bodega_lista():
 @login_required
 def inventario_entrada_lista():
     """Listado de entradas de almacen."""
-    consulta = _paginate_list(StockEntry, (StockEntry.name,))
+    consulta = _paginate_list(StockEntry, (StockEntry.document_no,))
     titulo = "Listado de Movimientos de Inventario - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO)
     return render_template(
@@ -176,7 +176,9 @@ def inventario_entrada_lista():
 def inventario_material_receipt_lista():
     """Listado de recepciones de material."""
     consulta = _paginate_list(
-        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_receipt")
+        StockEntry,
+        (StockEntry.document_no,),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_receipt"),
     )
     titulo = "Listado de Recepciones de Material - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_receipt")
@@ -195,7 +197,7 @@ def inventario_material_receipt_lista():
 def inventario_material_issue_lista():
     """Listado de salidas de material."""
     consulta = _paginate_list(
-        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_issue")
+        StockEntry, (StockEntry.document_no,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_issue")
     )
     titulo = "Listado de Salidas de Material - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_issue")
@@ -214,7 +216,9 @@ def inventario_material_issue_lista():
 def inventario_material_transfer_lista():
     """Listado de transferencias de material."""
     consulta = _paginate_list(
-        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_transfer")
+        StockEntry,
+        (StockEntry.document_no,),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_transfer"),
     )
     titulo = "Listado de Transferencias de Material - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_transfer")
@@ -233,7 +237,9 @@ def inventario_material_transfer_lista():
 def inventario_ajuste_lista():
     """Listado de ajustes de inventario."""
     consulta = _paginate_list(
-        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_adjustment")
+        StockEntry,
+        (StockEntry.document_no,),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_adjustment"),
     )
     titulo = "Listado de Ajustes de Inventario - " + APPNAME
     new_url = url_for("inventario.inventario_ajuste_nuevo")
@@ -252,7 +258,9 @@ def inventario_ajuste_lista():
 def inventario_reconciliacion_lista():
     """Listado de conciliaciones físicas de inventario."""
     consulta = _paginate_list(
-        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_reconciliation")
+        StockEntry,
+        (StockEntry.document_no,),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_reconciliation"),
     )
     titulo = "Listado de Conciliaciones de Inventario - " + APPNAME
     new_url = url_for("inventario.inventario_reconciliacion_nueva")
@@ -271,7 +279,9 @@ def inventario_reconciliacion_lista():
 def inventario_ajuste_positivo_lista():
     """Listado de ajustes positivos de inventario."""
     consulta = _paginate_list(
-        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_positive")
+        StockEntry,
+        (StockEntry.document_no,),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_positive"),
     )
     titulo = "Listado de Ajustes Positivos - " + APPNAME
     return render_template(
@@ -289,7 +299,9 @@ def inventario_ajuste_positivo_lista():
 def inventario_salida_inventario_lista():
     """Listado de salidas de inventario (incluyendo ajustes negativos)."""
     consulta = _paginate_list(
-        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_negative")
+        StockEntry,
+        (StockEntry.document_no,),
+        _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_negative"),
     )
     titulo = "Listado de Salidas de Inventario - " + APPNAME
     return render_template(

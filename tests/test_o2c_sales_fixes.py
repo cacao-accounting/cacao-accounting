@@ -16,7 +16,9 @@ from cacao_accounting.database import (
     DocumentRelation,
     ExchangeRate,
     Item,
+    ItemPrice,
     Party,
+    PriceList,
     SalesInvoice,
     SalesInvoiceItem,
     SalesMatchingConfig,
@@ -161,7 +163,12 @@ def test_sales_order_items_reject_duplicate_item_codes(app_ctx):
     order = SalesOrder(company="cacao", posting_date=date.today(), docstatus=0)
     database.session.add(order)
     database.session.flush()
-    _ensure_item("ART-O2C-DUP")
+    item = _ensure_item("ART-O2C-DUP")
+    price_list = PriceList(name="Default O2C Duplicate", company="cacao", is_selling=True, is_default=True, is_active=True)
+    database.session.add(price_list)
+    database.session.flush()
+    database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, uom="UND", price=Decimal("10")))
+    database.session.commit()
 
     with app_ctx.test_request_context(
         "/sales/sales-order/new",

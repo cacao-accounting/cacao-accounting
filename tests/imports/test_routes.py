@@ -4,6 +4,9 @@
 """Pruebas de rutas y plantillas del módulo de importaciones."""
 
 from pathlib import Path
+import sys
+
+import pytest
 
 from cacao_accounting import create_app
 from cacao_accounting.database import database
@@ -113,9 +116,7 @@ def test_new_template_orders_company_record_type_then_sequence():
 
 def test_smart_select_macro_uses_full_width_layout():
     """El macro compartido debe ocupar el ancho disponible del contenedor."""
-    macro_path = (
-        Path(__file__).resolve().parents[2] / "cacao_accounting" / "reportes" / "templates" / "reportes" / "report_macros.html"
-    )
+    macro_path = Path(__file__).resolve().parents[2] / "cacao_accounting" / "templates" / "smart_select_field.html"
     content = macro_path.read_text(encoding="utf-8")
 
     assert '<label class="form-label mb-0 w-100">' in content
@@ -158,6 +159,7 @@ def test_max_content_length_is_configured():
     assert app.config["MAX_CONTENT_LENGTH"] == 16 * 1024 * 1024
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="python-magic requiere libmagic nativo no disponible en Windows")
 def test_upload_mime_type_validation():
     """Verificar que la validación del MIME type del archivo funciona correctamente al subirlo."""
     from io import BytesIO

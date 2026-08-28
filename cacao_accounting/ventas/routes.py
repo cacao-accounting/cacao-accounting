@@ -422,6 +422,8 @@ def ventas_pedido_venta_duplicar(request_id: str):
             uom=item.uom,
             rate=item.rate,
             amount=item.amount,
+            discount_percentage=item.discount_percentage,
+            discount_amount=item.discount_amount,
         )
         database.session.add(linea)
         total += item.amount or Decimal("0")
@@ -1608,6 +1610,8 @@ def ventas_entrega_nuevo():
                 customer_id=customer_id,
                 customer_name=customer.name if customer else None,
                 company=company,
+                transaction_currency=_source_currency,
+                base_currency=company_currency(company),
                 posting_date=posting_date,
                 sales_order_id=from_order,
                 is_return=is_return,

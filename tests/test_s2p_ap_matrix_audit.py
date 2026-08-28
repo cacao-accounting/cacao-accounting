@@ -52,6 +52,7 @@ def _seed_base_data() -> dict:
     """Siembra entidad, monedas, cuentas AP/GRNI/banco y proveedor."""
     from cacao_accounting.database import (
         Accounts,
+        AccountingPeriod,
         Bank,
         BankAccount,
         Book,
@@ -62,6 +63,7 @@ def _seed_base_data() -> dict:
         Party,
         PartyAccount,
         UOM,
+        User,
         Warehouse,
         WarehouseCompanyAccount,
     )
@@ -71,6 +73,14 @@ def _seed_base_data() -> dict:
             Entity(code=COMPANY, name="S2P", company_name="S2P Corp", tax_id="S2P-1", currency="NIO"),
             Currency(code="NIO", name="Cordobas", decimals=2, active=True, default=True),
             Currency(code="USD", name="Dolares", decimals=2, active=True),
+            AccountingPeriod(
+                entity=COMPANY,
+                name="2026",
+                start=date(2026, 1, 1),
+                end=date(2026, 12, 31),
+                enabled=True,
+                is_closed=False,
+            ),
         ]
     )
     database.session.commit()
@@ -139,6 +149,7 @@ def _seed_base_data() -> dict:
             ),
             PartyAccount(party_id="SUP-S2P", company=COMPANY, payable_account_id=ap.id),
             Party(id="SUP-S2P", code="SUP-S2P", name="Proveedor S2P", is_supplier=True, is_active=True),
+            User(id="s2p-actor", user="s2p-actor", name="S2P Actor", password=b"x", classification="admin", active=True),
         ]
     )
     database.session.commit()
@@ -152,6 +163,7 @@ def _seed_base_data() -> dict:
         "inventory_id": inventory.id,
         "warehouse": "ALM-S2P",
         "bank_account_id": bank_account.id,
+        "actor_id": "s2p-actor",
     }
 
 
@@ -176,6 +188,8 @@ def _make_receipt(*, amount: Decimal, chart: dict, posting_date: date = AS_OF, p
         purchase_order_id=po.id if po is not None else None,
         grand_total=amount,
         transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     database.session.add(receipt)
     database.session.flush()
@@ -585,7 +599,7 @@ def test_281_supplier_credit_refund_discount_and_duplicate_controls(app_ctx, cha
     assert _outstanding(note) == Decimal("0")
 
     # --- Cancelacion del pago restaura saldos (append-only).
-    cancel_document(payment)
+    cancel_document(payment, reason="Correccion de pago", actor_user_id=chart["actor_id"])
     _apply_payment_cancellation_hooks(payment)
     revert_relations_for_target("payment_entry", payment.id)
     database.session.commit()
@@ -736,6 +750,8 @@ def test_281_landed_cost_posts_gl_against_ap_control(app_ctx, chart):
         grand_total=Decimal("100"),
         total_charges_amount=Decimal("100"),
         transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     database.session.add(landed)
     database.session.flush()

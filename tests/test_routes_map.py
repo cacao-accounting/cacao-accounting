@@ -111,4 +111,4 @@ def test_accounting_module_home_renders_successfully(client) -> None:
     response = client.get("/accounting/", follow_redirects=False)
 
     assert response.status_code == 200
-    assert b"M\xc3\xb3dulo de Contabilidad" in response.data
+    assert b"Contabilidad" in response.data

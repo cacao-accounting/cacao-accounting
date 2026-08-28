@@ -88,6 +88,10 @@ class PostingError(ValueError):
     """Error controlado del motor de contabilizacion."""
 
 
+class InvalidExchangeRateError(PostingError):
+    """Tasa de cambio invalida (cero o negativa)."""
+
+
 @dataclass(frozen=True)
 class LedgerContext:
     """Contexto comun para generar lineas contables por libro."""
@@ -291,6 +295,8 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
                 posting_date=posting_date,
                 is_fiscal_year_closing=is_fy_closing,
             )
+        except InvalidExchangeRateError:
+            raise
         except PostingError:
             missing_rates.append(f"- {transaction_currency} -> {company_currency} para {posting_date}, libro {book.code}.")
             continue
@@ -335,7 +341,7 @@ def _ledger_exchange_rate(
     if ledger_currency == document_base_currency and document_exchange_rate is not None:
         rate = _decimal_value(document_exchange_rate)
         if rate <= 0:
-            raise PostingError("El tipo de cambio debe ser mayor que cero.")
+            raise InvalidExchangeRateError("El tipo de cambio debe ser mayor que cero.")
         return rate
     return _lookup_exchange_rate(transaction_currency, ledger_currency, posting_date)
 
@@ -739,7 +745,7 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> D
             return None
         value = _decimal_value(rate.rate)
         if value <= 0:
-            raise PostingError("El tipo de cambio debe ser mayor que cero.")
+            raise InvalidExchangeRateError("El tipo de cambio debe ser mayor que cero.")
         return value
 
     direct = latest_rate(origin, destination)

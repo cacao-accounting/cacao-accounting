@@ -25,6 +25,7 @@ from cacao_accounting.database import (
     DocumentRelation,
     GLEntry,
     SalesOrder,
+    AccountingPeriod,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
 from cacao_accounting.search_select import search_select
@@ -39,6 +40,7 @@ def app_ctx():
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "WTF_CSRF_ENABLED": False,
+            "MODO_ESCRITORIO": True,
         }
     )
     with app.app_context():
@@ -751,11 +753,24 @@ def test_payment_cancellation_and_balance_restoration(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
+    transaction_date = date.today()
+    database.session.add(
+        AccountingPeriod(
+            entity="cacao",
+            name=transaction_date.strftime("%Y-%m"),
+            start=transaction_date.replace(day=1),
+            end=transaction_date,
+            enabled=True,
+            is_closed=False,
+        )
+    )
+    database.session.commit()
+
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
         company="cacao",
         customer_id=customer.id,
-        posting_date=date.today(),
+        posting_date=transaction_date,
         docstatus=1,
         grand_total=1000,
         outstanding_amount=1000,
@@ -769,7 +784,7 @@ def test_payment_cancellation_and_balance_restoration(app_ctx):
         "payment_type": "receive",
         "company": "cacao",
         "bank_account_id": bank.id,
-        "posting_date": date.today().isoformat(),
+        "posting_date": transaction_date.isoformat(),
         "paid_amount": 1000,
         "party_id": customer.id,
         "party_type": "customer",
