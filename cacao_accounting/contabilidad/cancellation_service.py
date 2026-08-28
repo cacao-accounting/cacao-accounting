@@ -221,12 +221,9 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
         )
 
     if isinstance(document, PaymentEntry):
-        payment_references = database.session.execute(
-            select(PaymentReference).where(PaymentReference.payment_id == source_id)
-        ).scalars()
-        dependencies.extend(
-            CancellationDependency("aplicacion de pago", str(row.id), "payment_reference") for row in payment_references
-        )
+        # Las referencias del pago son efectos internos reversibles. El hook de
+        # cancelación revierte sus relaciones y refresca los saldos afectados;
+        # bloquearlas aquí haría imposible cancelar cualquier pago aplicado.
         certificates = database.session.execute(
             select(WithholdingCertificate).where(
                 WithholdingCertificate.payment_id == source_id,

@@ -3874,6 +3874,10 @@ def cancel_document(
 
         _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id, cancellation_context.effective_date)
         _emit_cancel_events(document, voucher_id, company)
+        if isinstance(document, PaymentEntry):
+            from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
+
+            _apply_payment_cancellation_hooks(document)
 
         return _add_entries(reversals)
 

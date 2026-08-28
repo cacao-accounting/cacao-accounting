@@ -326,4 +326,4 @@ def test_cancellation_dependency_catalog_checks_payment_bank_purchase_and_stock(
     )
     database.session.commit()
     dependencies = active_cancellation_dependencies(payment, "payment_entry", payment.id)
-    assert any(dependency.kind == "aplicacion de pago" for dependency in dependencies)
+    assert not any(dependency.detail == "payment_reference" for dependency in dependencies)

@@ -144,10 +144,6 @@ def _cancel_payment_or_stock(
         cancellation_date=cancellation_date,
         requested_at=requested_at,
     )  # type: ignore[misc]
-    if doctype == "payment_entry":
-        from cacao_accounting.bancos import _apply_payment_cancellation_hooks
-
-        _apply_payment_cancellation_hooks(document)
     log_cancel(document)
 
 

@@ -90,7 +90,6 @@ from cacao_accounting.bancos.services import (
     _reference_outstanding,
     _create_payment_from_request,
     _payment_source_rows_from_request,
-    _apply_payment_cancellation_hooks,
 )
 
 bancos = Blueprint("bancos", __name__, template_folder="templates")
@@ -1040,7 +1039,6 @@ def bancos_pago_cancel(payment_id: str):
             actor_user_id=str(current_user.id),
             cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
         )  # type: ignore[misc]
-        _apply_payment_cancellation_hooks(registro)
         log_cancel(registro)
         database.session.commit()
     except PostingError as exc:  # type: ignore[misc]
