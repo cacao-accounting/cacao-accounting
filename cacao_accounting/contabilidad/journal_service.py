@@ -413,6 +413,15 @@ def duplicate_journal_as_reversal_draft(
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if source.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError("Solo se puede revertir un comprobante contabilizado.")
+    existing_reversal = database.session.execute(
+        select(DocumentTransition.id).where(
+            DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
+            DocumentTransition.source_id == source.id,
+            DocumentTransition.transition_type == "reversal",
+        )
+    ).scalar_one_or_none()
+    if existing_reversal is not None:
+        raise JournalValidationError("El comprobante ya tiene una reversión registrada.")
     normalized_reason = (reason or "").strip()
     if not normalized_reason:
         raise JournalValidationError("Debe indicar el motivo de la reversión.")

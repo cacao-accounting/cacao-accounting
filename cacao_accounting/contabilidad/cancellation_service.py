@@ -165,11 +165,11 @@ def _ensure_no_previous_cancellation(source_type: str, source_id: str) -> None:
         select(DocumentTransition.id).where(
             DocumentTransition.source_type == source_type,
             DocumentTransition.source_id == source_id,
-            DocumentTransition.transition_type == "cancellation",
+            DocumentTransition.transition_type.in_(("cancellation", "reversal")),
         )
     ).scalar_one_or_none()
     if existing is not None:
-        raise CancellationPolicyError("El documento ya tiene una anulacion registrada.")
+        raise CancellationPolicyError("El documento ya tiene una anulacion o una reversion registrada.")
 
 
 def active_cancellation_dependencies(document: Any, source_type: str, source_id: str) -> list[CancellationDependency]:
