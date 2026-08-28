@@ -54,6 +54,7 @@ from cacao_accounting.inventario.service import (
 
 from cacao_accounting.inventario.services import (
     _inventory_company_scoped_select,
+    _paginate_list,
     _series_choices,
     _item_params_from_form,
     _process_item_edit,
@@ -157,12 +158,7 @@ def inventario_bodega_lista():
 @login_required
 def inventario_entrada_lista():
     """Listado de entradas de almacen."""
-    consulta = database.paginate(
-        _inventory_company_scoped_select(StockEntry),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
-    )
+    consulta = _paginate_list(StockEntry, (StockEntry.name,))
     titulo = "Listado de Movimientos de Inventario - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO)
     return render_template(
@@ -179,11 +175,8 @@ def inventario_entrada_lista():
 @login_required
 def inventario_material_receipt_lista():
     """Listado de recepciones de material."""
-    consulta = database.paginate(
-        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_receipt"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_receipt")
     )
     titulo = "Listado de Recepciones de Material - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_receipt")
@@ -201,11 +194,8 @@ def inventario_material_receipt_lista():
 @login_required
 def inventario_material_issue_lista():
     """Listado de salidas de material."""
-    consulta = database.paginate(
-        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_issue"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_issue")
     )
     titulo = "Listado de Salidas de Material - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_issue")
@@ -223,11 +213,8 @@ def inventario_material_issue_lista():
 @login_required
 def inventario_material_transfer_lista():
     """Listado de transferencias de material."""
-    consulta = database.paginate(
-        _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_transfer"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_transfer")
     )
     titulo = "Listado de Transferencias de Material - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_transfer")
@@ -245,11 +232,8 @@ def inventario_material_transfer_lista():
 @login_required
 def inventario_ajuste_lista():
     """Listado de ajustes de inventario."""
-    consulta = database.paginate(
-        _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_adjustment"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_adjustment")
     )
     titulo = "Listado de Ajustes de Inventario - " + APPNAME
     new_url = url_for("inventario.inventario_ajuste_nuevo")
@@ -267,11 +251,8 @@ def inventario_ajuste_lista():
 @login_required
 def inventario_reconciliacion_lista():
     """Listado de conciliaciones físicas de inventario."""
-    consulta = database.paginate(
-        _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_reconciliation"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_reconciliation")
     )
     titulo = "Listado de Conciliaciones de Inventario - " + APPNAME
     new_url = url_for("inventario.inventario_reconciliacion_nueva")
@@ -289,11 +270,8 @@ def inventario_reconciliacion_lista():
 @login_required
 def inventario_ajuste_positivo_lista():
     """Listado de ajustes positivos de inventario."""
-    consulta = database.paginate(
-        _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_positive"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_positive")
     )
     titulo = "Listado de Ajustes Positivos - " + APPNAME
     return render_template(
@@ -310,11 +288,8 @@ def inventario_ajuste_positivo_lista():
 @login_required
 def inventario_salida_inventario_lista():
     """Listado de salidas de inventario (incluyendo ajustes negativos)."""
-    consulta = database.paginate(
-        _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_negative"),
-        page=request.args.get("page", default=1, type=int),
-        max_per_page=10,
-        count=True,
+    consulta = _paginate_list(
+        StockEntry, (StockEntry.name,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_negative")
     )
     titulo = "Listado de Salidas de Inventario - " + APPNAME
     return render_template(
