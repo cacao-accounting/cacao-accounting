@@ -1,0 +1,4 @@
+Deep Cocoa Brown (#3D2314): RGB(61, 35, 20)
+Warm Terracotta  (#C36550): RGB(195, 101, 80)
+Leaf Green       (#606600): RGB(96, 102, 0)
+Creamy Vanilla   (#FFFDEA): RGB(255, 253, 234)
