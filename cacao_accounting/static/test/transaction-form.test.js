@@ -128,6 +128,24 @@ describe('transaction-form', function () {
     assert.strictEqual(emptyEvent.prevented, true);
   });
 
+  it('accepts a purchase transaction currency when the generic currency field is absent', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      formKey: 'purchases.purchase_order',
+      initialHeader: { transaction_currency: 'NIO' },
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+
+    const event = { prevented: false, preventDefault() { this.prevented = true; } };
+    component.prepareSubmit(event);
+
+    assert.strictEqual(event.prevented, false);
+    assert.strictEqual(component.submitError, '');
+  });
+
   it('always returns all default columns regardless of config', function () {
     const create = loadTransactionForm();
     const component = create({

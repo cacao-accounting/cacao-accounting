@@ -77,7 +77,7 @@ def login(page, base_url, username, password):
 
 @pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
 def test_transaction_form_multi_source_autofill(flask_server, browser):
-    context = browser.new_context()
+    context = browser.new_context(service_workers="block")
     page = context.new_page()
     base_url = flask_server
 
@@ -118,7 +118,7 @@ def test_transaction_form_multi_source_autofill(flask_server, browser):
 
 @pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
 def test_smart_select_filtering(flask_server, browser):
-    context = browser.new_context()
+    context = browser.new_context(service_workers="block")
     page = context.new_page()
     base_url = flask_server
 
