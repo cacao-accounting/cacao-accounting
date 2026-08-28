@@ -17,6 +17,7 @@ from cacao_accounting import create_app
 from cacao_accounting.config import configuracion
 from cacao_accounting.database import (
     Batch,
+    Currency,
     DeliveryNote,
     DeliveryNoteItem,
     Item,
@@ -29,6 +30,7 @@ from cacao_accounting.database import (
     StockEntry,
     StockEntryItem,
     Warehouse,
+    Entity,
     database,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -53,6 +55,22 @@ def app_ctx():
 
 def _setup_test_data():
     """Crea datos de prueba: warehouse, batch y items controlados."""
+    currency = database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none()
+    if currency is None:
+        database.session.add(Currency(code="NIO", name="Cordoba", decimals=2, active=True))
+    company = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one_or_none()
+    if company is None:
+        company = Entity(
+            code="cacao",
+            name="Cacao",
+            company_name="Cacao",
+            tax_id="CACAO-TEST",
+            currency="NIO",
+            enabled=True,
+        )
+        database.session.add(company)
+    else:
+        company.currency = "NIO"
     warehouse = Warehouse(code="WH-TEST", name="Warehouse Test", company="cacao", is_active=True)
     existing_warehouse = database.session.execute(database.select(Warehouse).filter_by(code="WH-TEST")).scalar_one_or_none()
     if not existing_warehouse:
@@ -104,6 +122,7 @@ class TestPurchaseReceiptBatchSerial:
             "/buying/purchase-receipt/new",
             data={
                 "company": "cacao",
+                "transaction_currency": "NIO",
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ITEM-BATCH",
                 "qty_0": "5",
@@ -141,6 +160,7 @@ class TestPurchaseReceiptBatchSerial:
             "/buying/purchase-receipt/new",
             data={
                 "company": "cacao",
+                "transaction_currency": "NIO",
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ITEM-SERIAL",
                 "qty_0": "1",
@@ -178,6 +198,7 @@ class TestPurchaseReceiptBatchSerial:
             "/buying/purchase-receipt/new",
             data={
                 "company": "cacao",
+                "transaction_currency": "NIO",
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ITEM-BATCH",
                 "qty_0": "1",
@@ -215,6 +236,7 @@ class TestPurchaseInvoiceBatchSerial:
             "/buying/purchase-invoice/new",
             data={
                 "company": "cacao",
+                "transaction_currency": "NIO",
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ITEM-BATCH",
                 "qty_0": "3",
@@ -251,6 +273,7 @@ class TestPurchaseInvoiceBatchSerial:
             "/buying/purchase-invoice/new",
             data={
                 "company": "cacao",
+                "transaction_currency": "NIO",
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ITEM-SERIAL",
                 "qty_0": "1",
@@ -291,6 +314,7 @@ class TestDeliveryNoteBatchSerial:
             "/sales/delivery-note/new",
             data={
                 "company": "cacao",
+                "transaction_currency": "NIO",
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ITEM-BATCH",
                 "qty_0": "2",
@@ -322,6 +346,7 @@ class TestDeliveryNoteBatchSerial:
             "/sales/delivery-note/new",
             data={
                 "company": "cacao",
+                "transaction_currency": "NIO",
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ITEM-SERIAL",
                 "qty_0": "1",
@@ -357,6 +382,7 @@ class TestSalesInvoiceBatchSerial:
             "/sales/sales-invoice/new",
             data={
                 "company": "cacao",
+                "transaction_currency": "NIO",
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ITEM-BATCH",
                 "qty_0": "4",
@@ -392,6 +418,7 @@ class TestSalesInvoiceBatchSerial:
             "/sales/sales-invoice/new",
             data={
                 "company": "cacao",
+                "transaction_currency": "NIO",
                 "posting_date": date.today().isoformat(),
                 "item_code_0": "ITEM-SERIAL",
                 "qty_0": "1",
