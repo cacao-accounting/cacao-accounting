@@ -1,11 +1,108 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 - 2026 William Jose Moreno Reyes
 
-"""Validaciones pre-submit para documentos transaccionales."""
+"""Validaciones pre-submit para documentos transaccionales.
 
-from typing import Any
+Refs: #758
+
+El contrato de moneda exige que cada documento aprobable tenga moneda
+transaccional y snapshot de moneda base persistidos. Este modulo concentra
+la validacion previa al submit; los servicios de cada dominio la invocan
+antes de cambiar el ``docstatus``.
+"""
+
+from typing import Any, Iterable
 
 from cacao_accounting.database import DocumentRelation, database
+from cacao_accounting.document_flow import DocumentFlowError
+
+
+def _collect_currency_sources(registro: Any) -> list[Any]:
+    """Devuelve los documentos origen asociados a un documento via relaciones activas."""
+    target_type = getattr(registro, "voucher_type", None) or type(registro).__tablename__
+    target_id = str(getattr(registro, "id", "") or "")
+    if not target_id:
+        return []
+    rows = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                target_type=target_type,
+                target_id=target_id,
+                status="active",
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sources: list[Any] = []
+    for row in rows:
+        source = getattr(row, "source", None)
+        if source is not None:
+            sources.append(source)
+    return sources
+
+
+def validate_currency_contract(registro: Any, *, context: str = "documento") -> None:
+    """Valida el contrato de moneda explicita previo al submit.
+
+    Reglas:
+
+    - ``transaction_currency`` no vacia en el documento persistido.
+    - ``base_currency`` snapshot presente y consistente con la compania.
+    - Si hay origenes de Document Flow, todos comparten la misma moneda
+      transaccional; en caso contrario se rechaza antes de crear GL/SLE.
+    """
+    from cacao_accounting.document_flow.currency_resolver import (
+        assert_base_currency_snapshot,
+        assert_currency_explicit,
+        validate_flow_currency_homogeneity,
+    )
+
+    assert_currency_explicit(registro, context=context)
+    assert_base_currency_snapshot(registro, company=getattr(registro, "company", None), context=context)
+    sources = _collect_currency_sources(registro)
+    if sources:
+        inherited = validate_flow_currency_homogeneity(sources)
+        document_currency = str(getattr(registro, "transaction_currency", "") or "")
+        if inherited and inherited != document_currency:
+            raise DocumentFlowError(
+                f"La moneda del {context} ({document_currency!r}) no coincide con la moneda "
+                f"heredada de Document Flow ({inherited!r}).",
+                400,
+            )
+
+
+def assert_currency_contract_or_raise(
+    registro: Any,
+    *,
+    context: str = "documento",
+    sources: Iterable[Any] | None = None,
+) -> None:
+    """Variante con fuentes externas; util cuando el documento aun no fue persistido.
+
+    Permite a las pruebas y a las rutas que derivan documentos validar el
+    contrato de moneda antes de que la relacion DocumentRelation haya sido
+    persistida. Si ``sources`` es ``None`` se calcula desde las relaciones
+    activas del registro.
+    """
+    from cacao_accounting.document_flow.currency_resolver import (
+        assert_base_currency_snapshot,
+        assert_currency_explicit,
+        validate_flow_currency_homogeneity,
+    )
+
+    assert_currency_explicit(registro, context=context)
+    assert_base_currency_snapshot(registro, company=getattr(registro, "company", None), context=context)
+    resolved_sources = list(sources) if sources is not None else _collect_currency_sources(registro)
+    if resolved_sources:
+        inherited = validate_flow_currency_homogeneity(resolved_sources)
+        document_currency = str(getattr(registro, "transaction_currency", "") or "")
+        if inherited and inherited != document_currency:
+            raise DocumentFlowError(
+                f"La moneda del {context} ({document_currency!r}) no coincide con la moneda "
+                f"heredada de Document Flow ({inherited!r}).",
+                400,
+            )
 
 
 def _validate_basic_document_fields(registro):

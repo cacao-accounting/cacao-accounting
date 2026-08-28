@@ -27,12 +27,18 @@ from cacao_accounting.document_flow.payment import (
 )
 from cacao_accounting.document_flow.status import calculate_document_status
 from cacao_accounting.document_flow.tracing import get_create_actions
-from cacao_accounting.document_flow.validation import require_line_relations, validate_submit_prerequisites
+from cacao_accounting.document_flow.validation import (
+    assert_currency_contract_or_raise,
+    require_line_relations,
+    validate_currency_contract,
+    validate_submit_prerequisites,
+)
 
 __all__ = [
     "DocumentFlowError",
     "apply_advance_to_invoice",
     "apply_payment_reconciliation",
+    "assert_currency_contract_or_raise",
     "calculate_document_status",
     "close_document_balances",
     "close_line_balance",
@@ -51,5 +57,6 @@ __all__ = [
     "refresh_source_caches_for_target",
     "require_line_relations",
     "revert_relations_for_target",
+    "validate_currency_contract",
     "validate_submit_prerequisites",
 ]

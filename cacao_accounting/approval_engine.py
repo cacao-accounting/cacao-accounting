@@ -601,6 +601,9 @@ class ApprovalEngine:
             from cacao_accounting.inventario.service import validate_batch_serial_draft
 
             validate_batch_serial_draft(items)
+        from cacao_accounting.document_flow import validate_currency_contract
+
+        validate_currency_contract(document, context=doctype)
         validate_submit_prerequisites(
             document,
             items=items,

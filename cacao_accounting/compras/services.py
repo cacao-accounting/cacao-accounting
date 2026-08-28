@@ -1638,20 +1638,32 @@ def _handle_purchase_receipt_edit_post(registro):
 
 def _set_purchase_receipt_totals(receipt: PurchaseReceipt, total: Decimal) -> None:
     """Recalcula importes transaccionales y funcionales de una recepción."""
+    from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+
     receipt.total = receipt.grand_total = total
-    receipt.transaction_currency = receipt.transaction_currency or company_currency(receipt.company)
-    receipt.base_currency = company_currency(receipt.company)
+    if not receipt.transaction_currency:
+        raise ValueError("La recepción requiere una moneda transaccional explicita antes de recalcular totales.")
+    base_currency_value = company_functional_currency(receipt.company)
+    if not base_currency_value:
+        raise ValueError("La compania requiere una moneda funcional configurada.")
+    receipt.base_currency = base_currency_value
     receipt.exchange_rate = _purchase_exchange_rate(receipt.company, receipt.posting_date, receipt.transaction_currency)
     receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
 
 
 def _set_purchase_document_totals(document: Any, total: Decimal) -> None:
     """Recalcula totales transaccionales y funcionales de documentos de compras."""
+    from cacao_accounting.document_flow.currency_resolver import company_functional_currency
+
     document.total = total
     if hasattr(document, "grand_total"):
         document.grand_total = total
-    document.transaction_currency = document.transaction_currency or company_currency(document.company)
-    document.base_currency = company_currency(document.company)
+    if not document.transaction_currency:
+        raise ValueError("El documento de compras requiere una moneda transaccional explicita antes de recalcular totales.")
+    base_currency_value = company_functional_currency(document.company)
+    if not base_currency_value:
+        raise ValueError("La compania requiere una moneda funcional configurada.")
+    document.base_currency = base_currency_value
     document.exchange_rate = _purchase_exchange_rate(document.company, document.posting_date, document.transaction_currency)
     document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))
 
