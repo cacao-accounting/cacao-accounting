@@ -886,6 +886,7 @@ class ExchangeRevaluationService:
             voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
             voucher_id=run.id,
             transaction_currency=None,
+            base_currency=self._document_currency(run, run.company) or None,
         )
         database.session.add(journal)
         database.session.flush()
