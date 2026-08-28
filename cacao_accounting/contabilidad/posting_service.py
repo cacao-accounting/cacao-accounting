@@ -696,18 +696,25 @@ def _inventory_currency(document: Any) -> str | None:
 
 
 def _inventory_value_in_functional_currency(document: Any, amount: Decimal) -> Decimal:
-    """Convert an inbound inventory value into the single stock-ledger currency."""
+    """Convert an inbound inventory value into the single stock-ledger currency.
+
+    Refs: #758
+
+    ``transaction_currency`` es obligatoria; el contrato de moneda la exige
+    antes de llegar al posting (``_document_contexts`` valida aguas arriba).
+    Si falta, se rechaza explicitamente en lugar de inferir desde
+    ``base_currency`` o la moneda funcional.
+    """
     functional_currency = _inventory_currency(document)
-    transaction_currency = (
-        getattr(document, "transaction_currency", None) or getattr(document, "base_currency", None) or functional_currency
-    )
-    if not functional_currency or not transaction_currency or transaction_currency == functional_currency:
+    transaction_currency = getattr(document, "transaction_currency", None)
+    if not transaction_currency:
+        raise PostingError("El documento requiere moneda transaccional explicita para valorar inventario.")
+    if not functional_currency or transaction_currency == functional_currency:
         return amount
-    base_currency = getattr(document, "base_currency", None)
     document_rate = _decimal_value(getattr(document, "exchange_rate", None))
     rate = (
         document_rate
-        if functional_currency == base_currency and document_rate > 0
+        if functional_currency == getattr(document, "base_currency", None) and document_rate > 0
         else _lookup_exchange_rate(transaction_currency, functional_currency, _posting_date_for(document))
     )
     return _to_company_currency(amount, rate)
