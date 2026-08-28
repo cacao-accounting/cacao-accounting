@@ -1,8 +1,8 @@
-# Instrucciones 
+# Instrucciones
 
 Si la tarea en que se esta trabajando tiene un issue asociado en Github utilizar el issue como bitacora
 de desarrollo de la tarea: comentarios de analisis de codigo, verificaciones, fixes propuestos, limitaciones,
-decisiones de diseño. 
+decisiones de diseño.
 
 Las siguientes etiquetas son utiles para coordinar el trabajo con issues:
 
@@ -48,21 +48,25 @@ Siempre considera los siguientes controles de calidad:
 
 Valida la estrategia de pruebas de calidad en el directorio: .github/workflows
 
-Los tests unitarios se ejecutan con este comando:
-
-CACAO_TEST=True LOGURU_LEVEL=WARNING SECRET_KEY=ASD123kljaAddS python -m pytest --full --tb=line --disable-warnings --slow=True **test file**
-
 Dado que los tests toman mucho tiempo en ejecutarse durante el desarrollo es aceptable ejecutar solo
-los tests relativos a la tarea que se esta abordando, linters (black, ruff, flake8, mypy, pylint y 
+los tests relativos a la tarea que se esta abordando, linters (black, ruff, flake8, mypy, pylint y
 pydocstyle) toman un tiempo razonable y deben ejecutarse siempre antes de hacer un commit.
 
 Los cambios deben mantener en local, solo la persona a cargo de la tarea puede hacer push o indicar hacer push.
 
+La suite completa de pruebas debe ejecutarse antes de hacer push al repositorio principal. Dado que la suite completa es
+extensa y tarda mucho en ejecutarse la mejor forma de ejecutar los tests es:
+
+- No ejecutar toda la suite en una sola corrida.
+- Ejecutar los tests test file por test file:
+  - Excluye tests\__init__.py y tests\conftest.py
+  - No esperes a tener todos los resultados antes de corregir.
+  - Corrige los issues que aparezcan segun vallan apareciendo.
+  - Los lints toman un tiempo razonable y siempre deben ejecutarse.
+- El archivo scripts\run_tests_by_file.sh ayuda a ejecutar los test ejecutando ese patron.
+
 Respetar la identidad de git configurada, hacer commits semánticos con sign-off. Commits pequeños y acotados, no
 hacer commits gigantes incomprensibles e inaudibles.
-
-
-La suite completa de pruebas debe ejecutarse antes de hacer push al repositorio principal.
 
 Solo se consideran validos cambios que han sido validados por dos agentes: un implementador y un
 QA ademas de feedback del desarrollar a cargo de la tares.
@@ -86,10 +90,10 @@ de Jinja2 que será renderizado server side antes de llegar al cliente.
 
 Todas las cadenas de texto visibles al usuario deben de marcarse para traducción.
 
-## Dependencias 
+## Dependencias
 
 Hay que evitar agregar dependencias al proyecto, solo agregar dependencias que agreguen un valor agregado real
-las dependencias deben quedar pineadas a una versión conocida como segura. 
+las dependencias deben quedar pineadas a una versión conocida como segura.
 
 Depender de los checks de Dependabot para actualizar versión de dependencias.
 
