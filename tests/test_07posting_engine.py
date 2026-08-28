@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -226,6 +227,16 @@ def test_foreign_currency_inventory_uses_functional_valuation_and_cogs(app_ctx):
 
     delivery_entries = post_delivery_note(delivery)
     assert sum(entry.debit for entry in delivery_entries if entry.account_id == cogs.id) == Decimal("3600.0000")
+
+
+def test_inventory_valuation_rejects_missing_transaction_currency(app_ctx):
+    """Inventory valuation never infers a missing source currency from its base snapshot."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, _inventory_value_in_functional_currency
+
+    document = SimpleNamespace(base_currency="NIO", transaction_currency=None)
+
+    with pytest.raises(PostingError, match="moneda transaccional explicita"):
+        _inventory_value_in_functional_currency(document, Decimal("100"))
 
 
 def test_posting_rejects_company_without_active_ledger(app_ctx):
