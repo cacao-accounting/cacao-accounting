@@ -53,6 +53,8 @@ docs.txt
 build/
 dist/
 
+tests/
+
 # Tests dentro de cacao_accounting (no se necesitan en produccion)
 cacao_accounting/query_tools/tests
 cacao_accounting/static/test
