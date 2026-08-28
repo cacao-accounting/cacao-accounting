@@ -1458,6 +1458,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
     mode_of_payment = str(payload.get("mode_of_payment") or "").strip().lower()
 
     exchange_rate = _resolve_payment_exchange_rate(payload, payment_currency, company)
+    base_currency = _payment_base_currency(company)
     payment = _create_payment_entry(
         payload=payload,
         payment_type=payment_type,
@@ -1471,6 +1472,7 @@ def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, 
         paid_from_account_id=paid_from_account_id,
         paid_to_account_id=paid_to_account_id,
         exchange_rate=exchange_rate,
+        base_currency=base_currency,
     )
     _update_payment_amounts(payment, payment_type, amount)
     _apply_internal_transfer_amounts(payment, payload, payment_type, amount, target_bank)
@@ -1543,6 +1545,16 @@ def _get_payment_currency(bank_account_id: str | None) -> str:
     return payment_currency
 
 
+def _payment_base_currency(company: str | None) -> str | None:
+    """Return the company functional currency snapshot for a payment."""
+    if not company:
+        return None
+    company_entity = (
+        database.session.execute(database.select(Entity).filter(Entity.code == company)).scalars().first() if company else None
+    )
+    return str(company_entity.currency) if company_entity and company_entity.currency else None
+
+
 def _create_payment_entry(
     payload: PaymentPayload,
     payment_type: str,
@@ -1556,6 +1568,7 @@ def _create_payment_entry(
     paid_from_account_id: str | None,
     paid_to_account_id: str | None,
     exchange_rate: Decimal | None = None,
+    base_currency: str | None = None,
 ) -> PaymentEntry:
     """Create a PaymentEntry object from payload data."""
     return PaymentEntry(
@@ -1565,6 +1578,7 @@ def _create_payment_entry(
         target_bank_account_id=target_bank_account_id,
         currency=payment_currency,
         transaction_currency=payment_currency,
+        base_currency=base_currency,
         exchange_rate=exchange_rate,
         paid_amount=amount if payment_type in ("pay", "debit_note", "internal_transfer") else Decimal("0"),
         received_amount=amount if payment_type in ("receive", "credit_note", "internal_transfer") else Decimal("0"),
