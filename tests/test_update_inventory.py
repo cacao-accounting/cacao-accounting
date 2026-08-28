@@ -230,6 +230,8 @@ def test_auto_delivery_note_rejects_default_warehouse_from_another_company(app_c
         company="cacao",
         posting_date=date(2026, 5, 1),
         document_type="sales_invoice",
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=0,
     )
     invoice_item = SalesInvoiceItem(
