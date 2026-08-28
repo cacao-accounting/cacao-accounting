@@ -227,6 +227,10 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
+                        <label class="form-label" for="reason">{{ _('Motivo de reversión') }}</label>
+                        <textarea class="form-control" id="reason" name="reason" rows="2" required></textarea>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label" for="reversal_date">{{ _('Fecha de reversión') }}</label>
                         <input class="form-control" id="reversal_date" name="reversal_date" type="date"
                             value="{{ registro.date.isoformat() if registro.date else '' }}" required>

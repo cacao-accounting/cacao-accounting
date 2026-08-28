@@ -38,9 +38,8 @@ def exclude_cancelled_stock_entries(query: Any) -> Any:
     """Excluye todos los movimientos de un voucher de inventario anulado.
 
     ``StockLedgerEntry`` marca el movimiento original como cancelado y conserva
-    el contramovimiento como una fila nueva. Como el modelo no tiene
-    ``is_reversal``, la existencia de un movimiento cancelado en el mismo voucher
-    identifica el grupo completo que debe ocultarse en reportes operativos.
+    el contramovimiento como una fila nueva. La existencia de un movimiento
+    cancelado en el mismo voucher mantiene compatibilidad con datos históricos.
     """
     cancelled = aliased(StockLedgerEntry)
     cancelled_sibling = exists(
@@ -51,4 +50,8 @@ def exclude_cancelled_stock_entries(query: Any) -> Any:
             cancelled.is_cancelled.is_(True),
         )
     )
-    return query.where(~cancelled_sibling)
+    return query.where(
+        StockLedgerEntry.is_cancelled.is_(False),
+        StockLedgerEntry.is_reversal.is_(False),
+        ~cancelled_sibling,
+    )

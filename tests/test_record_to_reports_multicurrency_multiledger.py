@@ -31,6 +31,45 @@ def app_ctx():
         yield app
 
 
+def _cancellation_metadata(posting_date: date) -> dict[str, str]:
+    """Create the actor and open period required by the cancellation contract."""
+    from cacao_accounting.database import AccountingPeriod, User, database
+
+    if database.session.get(User, "admin") is None:
+        database.session.add(
+            User(
+                id="admin",
+                user="admin",
+                name="Administrator",
+                password=b"x",
+                classification="admin",
+                active=True,
+            )
+        )
+    period = database.session.execute(
+        database.select(AccountingPeriod)
+        .where(
+            AccountingPeriod.entity == "r2r",
+            AccountingPeriod.start <= posting_date,
+            AccountingPeriod.end >= posting_date,
+        )
+        .order_by(AccountingPeriod.start.desc())
+    ).scalar_one_or_none()
+    if period is None:
+        database.session.add(
+            AccountingPeriod(
+                entity="r2r",
+                name=f"Cancellation {posting_date:%Y-%m-%d}",
+                enabled=True,
+                is_closed=False,
+                start=posting_date.replace(day=1),
+                end=posting_date,
+            )
+        )
+    database.session.commit()
+    return {"actor_user_id": "admin", "reason": "Prueba de anulacion"}
+
+
 def test_foreign_invoice_reaches_reports_in_each_book_currency(app_ctx):
     """Post one USD invoice into NIO/EUR books and reconcile their reports."""
     from cacao_accounting.contabilidad.posting import post_document_to_gl
@@ -1320,7 +1359,7 @@ def test_r2r_append_only_cancellation_lifecycle(app_ctx):
     assert all(not e.is_cancelled and not e.is_reversal for e in entries_before)
 
     # Cancel Sales Invoice
-    cancel_document(invoice)
+    cancel_document(invoice, **_cancellation_metadata(invoice.posting_date))
     database.session.commit()
 
     assert invoice.docstatus == 2
@@ -1376,7 +1415,7 @@ def test_r2r_append_only_cancellation_lifecycle(app_ctx):
     assert sles_before[0].qty_change == Decimal("50")
 
     # Cancel Stock Entry
-    cancel_document(se)
+    cancel_document(se, **_cancellation_metadata(se.posting_date))
     database.session.commit()
 
     assert se.docstatus == 2

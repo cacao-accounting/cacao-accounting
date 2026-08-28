@@ -2737,6 +2737,10 @@ def compras_recepcion_cancel(receipt_id: str):
     exige_acceso_compania("inventory", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    reason = (request.form.get("reason") or "").strip()
+    if not reason:
+        flash(_("Debe indicar el motivo de la anulacion."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
     if has_active_source_relations("purchase_receipt", receipt_id):
         flash("No se puede cancelar la recepción de compra porque tiene facturas de compra activas.", "danger")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
@@ -2744,7 +2748,11 @@ def compras_recepcion_cancel(receipt_id: str):
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.is_enabled(registro.company):
-            ApprovalEngine.request_cancellation(registro)
+            ApprovalEngine.request_cancellation(
+                registro,
+                reason=reason,
+                cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+            )
             database.session.commit()
             flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
@@ -2753,7 +2761,10 @@ def compras_recepcion_cancel(receipt_id: str):
         flash_error(exc)
     try:
         cancel_document(
-            registro, reason=(request.form.get("reason") or "").strip(), actor_user_id=str(current_user.id)
+            registro,
+            reason=reason,
+            actor_user_id=str(current_user.id),
+            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
         )  # type: ignore[misc]
         emit_goods_received_cancelled(receipt_id, registro.company)
         revert_relations_for_target("purchase_receipt", receipt_id)
@@ -3106,6 +3117,10 @@ def compras_factura_compra_cancel(invoice_id: str):
     exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    reason = (request.form.get("reason") or "").strip()
+    if not reason:
+        flash(_("Debe indicar el motivo de la anulacion."), "danger")
+        return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     active_payment = (
         database.select(PaymentReference.id)
         .join(
@@ -3131,7 +3146,11 @@ def compras_factura_compra_cancel(invoice_id: str):
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.is_enabled(registro.company):
-            ApprovalEngine.request_cancellation(registro)
+            ApprovalEngine.request_cancellation(
+                registro,
+                reason=reason,
+                cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+            )
             database.session.commit()
             flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
@@ -3140,7 +3159,10 @@ def compras_factura_compra_cancel(invoice_id: str):
         flash_error(exc)
     try:
         cancel_document(
-            registro, reason=(request.form.get("reason") or "").strip(), actor_user_id=str(current_user.id)
+            registro,
+            reason=reason,
+            actor_user_id=str(current_user.id),
+            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
         )  # type: ignore[misc]
         log_cancel(registro)
         target_type = registro.document_type or "purchase_invoice"
@@ -3295,11 +3317,19 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
     exige_acceso_compania("purchases", registro.company, "anular")
     if registro.docstatus != 1:
         abort(400)
+    reason = (request.form.get("reason") or "").strip()
+    if not reason:
+        flash(_("Debe indicar el motivo de la anulacion."), "danger")
+        return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.is_enabled(registro.company):
-            ApprovalEngine.request_cancellation(registro)
+            ApprovalEngine.request_cancellation(
+                registro,
+                reason=reason,
+                cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+            )
             database.session.commit()
             flash(_("Solicitud de cancelacion enviada para aprobacion."), "info")
             return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
@@ -3308,7 +3338,10 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
         flash_error(exc)
     try:
         cancel_document(
-            registro, reason=(request.form.get("reason") or "").strip(), actor_user_id=str(current_user.id)
+            registro,
+            reason=reason,
+            actor_user_id=str(current_user.id),
+            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
         )  # type: ignore[misc]
         log_cancel(registro)
         revert_relations_for_target("import_landed_cost", landed_cost_id)

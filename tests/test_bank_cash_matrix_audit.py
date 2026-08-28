@@ -37,6 +37,45 @@ COMPANY = "bnk7"
 AS_OF = date(2026, 8, 21)
 
 
+def _cancellation_metadata(posting_date: date) -> dict[str, str]:
+    """Create the actor and open period required by the cancellation contract."""
+    from cacao_accounting.database import AccountingPeriod, User, database
+
+    if database.session.get(User, "admin") is None:
+        database.session.add(
+            User(
+                id="admin",
+                user="admin",
+                name="Administrator",
+                password=b"x",
+                classification="admin",
+                active=True,
+            )
+        )
+    period = database.session.execute(
+        database.select(AccountingPeriod)
+        .where(
+            AccountingPeriod.entity == COMPANY,
+            AccountingPeriod.start <= posting_date,
+            AccountingPeriod.end >= posting_date,
+        )
+        .order_by(AccountingPeriod.start.desc())
+    ).scalar_one_or_none()
+    if period is None:
+        database.session.add(
+            AccountingPeriod(
+                entity=COMPANY,
+                name=f"Cancellation {posting_date:%Y-%m-%d}",
+                enabled=True,
+                is_closed=False,
+                start=posting_date.replace(day=1),
+                end=posting_date,
+            )
+        )
+    database.session.commit()
+    return {"actor_user_id": "admin", "reason": "Prueba de anulacion"}
+
+
 @pytest.fixture()
 def app_ctx():
     """Aplicacion aislada con base SQLite en memoria."""
@@ -540,31 +579,20 @@ def test_bank_fee_and_interest_reconcile_gl_entry_targets(app_ctx, chart):
 # 4. Returned payments y reversals
 
 
-def test_returned_payment_cancellation_unlinks_and_restores_equation(app_ctx, chart):
-    """El reverso de un cobro devuelto desvincula extracto y cancela asignaciones."""
-    from cacao_accounting.contabilidad.posting_service import cancel_document
-    from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
-    from cacao_accounting.database import ReconciliationItem, database
+def test_returned_payment_cancellation_blocks_active_reconciliation(app_ctx, chart):
+    """Una conciliacion activa bloquea la anulacion directa de un cobro."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document
 
     deposit = _make_bank_transaction(chart["account_a"], deposit=Decimal("100.00"), reference="CHQ-DEV")
     collection = _make_payment(amount=Decimal("100.00"), bank_account=chart["account_a"])
     _reconcile(deposit, "payment_entry", collection.id, Decimal("100.00"))
     _assert_cash_equation(chart, chart["account_a"], expected_reconciling_items=Decimal("0"))
 
-    cancel_document(collection)
-    _apply_payment_cancellation_hooks(collection)
-    database.session.commit()
-
-    assert collection.docstatus == 2
-    assert deposit.is_reconciled is False
-    assert deposit.payment_entry_id is None
-    items = database.session.execute(select(ReconciliationItem)).scalars().all()
-    assert {item.status for item in items} == {"cancelled"}
-
-    # El cheque devuelto aparece en el extracto como retiro; ambos saldos vuelven a cero.
-    _make_bank_transaction(chart["account_a"], withdrawal=Decimal("100.00"), reference="CHQ-DEV-RET")
-    _assert_cash_equation(chart, chart["account_a"], expected_reconciling_items=Decimal("0"))
-    assert _statement_balance(chart["account_a"]) == Decimal("0")
+    with pytest.raises(PostingError, match="efectos activos"):
+        cancel_document(collection, **_cancellation_metadata(collection.posting_date))
+    database.session.rollback()
+    assert collection.docstatus == 1
+    assert deposit.is_reconciled is True
 
 
 def test_cancelled_collection_is_not_offered_again_as_candidate(app_ctx, chart):
@@ -574,7 +602,7 @@ def test_cancelled_collection_is_not_offered_again_as_candidate(app_ctx, chart):
 
     deposit = _make_bank_transaction(chart["account_a"], deposit=Decimal("80.00"))
     collection = _make_payment(amount=Decimal("80.00"), bank_account=chart["account_a"])
-    cancel_document(collection)
+    cancel_document(collection, **_cancellation_metadata(collection.posting_date))
     database.session.commit()
 
     candidates = [

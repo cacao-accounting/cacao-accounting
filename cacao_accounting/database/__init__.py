@@ -181,6 +181,9 @@ class BaseTransaccion(BaseTabla):
     memo = database.Column(database.String(200), nullable=True)
     canceled = database.Column(database.DateTime(timezone=True), nullable=True)
     canceled_by = database.Column(database.String(26), nullable=True)
+    cancelled_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    cancelled_by = database.Column(database.String(26), nullable=True)
+    cancel_reason = database.Column(database.Text(), nullable=True)
     applied = database.Column(database.DateTime(timezone=True), nullable=True)
     applied_by = database.Column(database.String(26), nullable=True)
     serie = database.Column(database.String(100), nullable=True)
@@ -246,6 +249,9 @@ class DocBase(BaseTabla):
     voucher_id = database.Column(database.String(26), nullable=True, index=True)
     # Optimistic locking — increment on each save to detect concurrent edits
     version = database.Column(database.Integer(), default=1, nullable=False)
+    cancelled_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    cancelled_by = database.Column(database.String(26), nullable=True)
+    cancel_reason = database.Column(database.Text(), nullable=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -1542,6 +1548,12 @@ class StockLedgerEntry(database.Model):  # type: ignore[name-defined]
     )
     serial_no = database.Column(database.String(100), nullable=True)
     is_cancelled = database.Column(database.Boolean(), default=False, nullable=False)
+    is_reversal = database.Column(database.Boolean(), default=False, nullable=False)
+    reversal_of = database.Column(
+        database.String(26),
+        database.ForeignKey("stock_ledger_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+    )
     created = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
     created_by = database.Column(database.String(26), nullable=True)
 
@@ -3165,6 +3177,7 @@ class DocumentTransition(database.Model, BaseTabla):  # type: ignore[name-define
 
     __tablename__ = "document_transition"
     __table_args__ = (
+        database.UniqueConstraint("source_type", "source_id", "transition_type", name="uq_document_transition_effective"),
         database.Index("ix_document_transition_source", "source_type", "source_id", "transition_type"),
         database.Index("ix_document_transition_company_period", "company", "accounting_period_id"),
     )
@@ -3183,12 +3196,14 @@ class DocumentTransition(database.Model, BaseTabla):  # type: ignore[name-define
     accounting_period_id = database.Column(
         database.String(26),
         database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
-        nullable=True,
+        nullable=False,
     )
     actor_user_id = database.Column(
-        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
     )
     reason = database.Column(database.Text(), nullable=False)
+    requested_at = database.Column(database.DateTime(timezone=True), nullable=True)
+    executed_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
 
 
 class DocumentLineFlowState(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -3358,6 +3373,7 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
 
     voucher_type = database.Column(database.String(50), nullable=True, index=True)
     voucher_id = database.Column(database.String(26), nullable=True, index=True)
+    reversal_of = database.Column(database.String(26), nullable=True, index=True)
     document_no = database.Column(database.String(100), nullable=True, index=True)
     naming_series_id = database.Column(
         database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
@@ -5282,6 +5298,8 @@ class ApprovalRequest(database.Model, BaseTabla):  # type: ignore[name-defined]
     required_level = database.Column(database.Integer(), nullable=False, default=1)
     status = database.Column(database.String(50), nullable=False, default="Pending Approval")
     created_at = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
+    cancellation_date = database.Column(database.Date(), nullable=True)
+    cancellation_reason = database.Column(database.Text(), nullable=True)
 
 
 class ApprovalAction(database.Model, BaseTabla):  # type: ignore[name-defined]

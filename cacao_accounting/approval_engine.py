@@ -71,7 +71,15 @@ def _cancel_relation_only_document(doctype: str, document: Any) -> None:
     refresh_source_caches_for_target(doctype, document.id)
 
 
-def _cancel_posted_document(doctype: str, document: Any) -> None:
+def _cancel_posted_document(
+    doctype: str,
+    document: Any,
+    *,
+    reason: str | None,
+    cancellation_date: Any = None,
+    requested_at: Any = None,
+    actor_user_id: str,
+) -> None:
     """Cancel a posted document and refresh reversal-dependent caches."""
     from cacao_accounting.audit_trail_service import log_cancel
     from cacao_accounting.contabilidad.posting import cancel_document
@@ -84,8 +92,20 @@ def _cancel_posted_document(doctype: str, document: Any) -> None:
     elif doctype == "sales_invoice":
         from cacao_accounting.ventas import _cancel_linked_delivery_note
 
-        _cancel_linked_delivery_note(document)
-    cancel_document(document)  # type: ignore[misc]
+        _cancel_linked_delivery_note(
+            document,
+            reason=reason,
+            actor_user_id=actor_user_id,
+            cancellation_date=cancellation_date,
+            requested_at=requested_at,
+        )
+    cancel_document(
+        document,
+        reason=reason,
+        actor_user_id=actor_user_id,
+        cancellation_date=cancellation_date,
+        requested_at=requested_at,
+    )  # type: ignore[misc]
     log_cancel(document)
     target_type = getattr(document, "document_type", None) or doctype
     revert_relations_for_target(target_type, document.id)
@@ -104,12 +124,26 @@ def _refresh_reversal_cache(document: Any, target_type: str) -> None:
         refresh_outstanding_amount_cache(source)
 
 
-def _cancel_payment_or_stock(doctype: str, document: Any) -> None:
+def _cancel_payment_or_stock(
+    doctype: str,
+    document: Any,
+    *,
+    reason: str | None,
+    cancellation_date: Any = None,
+    requested_at: Any = None,
+    actor_user_id: str,
+) -> None:
     """Cancel a payment or stock entry, applying payment-specific hooks."""
     from cacao_accounting.audit_trail_service import log_cancel
     from cacao_accounting.contabilidad.posting import cancel_document
 
-    cancel_document(document)  # type: ignore[misc]
+    cancel_document(
+        document,
+        reason=reason,
+        actor_user_id=actor_user_id,
+        cancellation_date=cancellation_date,
+        requested_at=requested_at,
+    )  # type: ignore[misc]
     if doctype == "payment_entry":
         from cacao_accounting.bancos import _apply_payment_cancellation_hooks
 
@@ -623,7 +657,9 @@ class ApprovalEngine:
         return req
 
     @classmethod
-    def request_cancellation(cls, document: Any) -> ApprovalRequest | None:
+    def request_cancellation(
+        cls, document: Any, *, reason: str | None = None, cancellation_date: Any = None
+    ) -> ApprovalRequest | None:
         """Crea una solicitud de cancelación para el documento si no existe."""
         company_id = getattr(document, "company", None) or getattr(document, "company_id", None)
         if not company_id or not cls.is_enabled(company_id):
@@ -631,6 +667,9 @@ class ApprovalEngine:
 
         base_doctype = cls._resolve_doctype(document)
         doctype = f"cancel_{base_doctype}"
+        if base_doctype in _POSTED_CANCEL_DOCTYPES or base_doctype == "journal_entry":
+            if not (reason or "").strip():
+                raise ValueError("Debe indicar el motivo de la anulacion.")
         amount = cls.get_document_amount(document)
 
         req = database.session.execute(
@@ -652,6 +691,8 @@ class ApprovalEngine:
             current_level=1,
             required_level=req_level,
             status=PENDING_CANCELLATION_STATUS,
+            cancellation_date=cancellation_date,
+            cancellation_reason=(reason or "").strip() or None,
         )
         database.session.add(req)
         database.session.flush()
@@ -688,7 +729,14 @@ class ApprovalEngine:
             actual_doc_type = req.document_type[7:]
             actual_doc = database.session.get(get_model_class(actual_doc_type), req.document_id)
             cls._validate_final_cancellation(actual_doc_type, actual_doc)
-            cls._execute_cancel(actual_doc_type, actual_doc, user)
+            cls._execute_cancel(
+                actual_doc_type,
+                actual_doc,
+                user,
+                reason=req.cancellation_reason,
+                cancellation_date=req.cancellation_date,
+                requested_at=req.created_at,
+            )
         else:
             cls._execute_submit(req.document_type, document, user)
         database.session.flush()
@@ -815,21 +863,50 @@ class ApprovalEngine:
             log_submit(document)
 
     @classmethod
-    def _execute_cancel(cls, doctype: str, document: Any, user: Any) -> None:
+    def _execute_cancel(
+        cls,
+        doctype: str,
+        document: Any,
+        user: Any,
+        *,
+        reason: str | None = None,
+        cancellation_date: Any = None,
+        requested_at: Any = None,
+    ) -> None:
         """Ejecuta de manera segura la cancelacion de un documento con todos sus hooks."""
         if doctype == "journal_entry":
             from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
 
-            cancel_submitted_journal(document.id, user_id=user.id)
+            cancel_submitted_journal(
+                document.id,
+                user_id=user.id,
+                reason=reason,
+                cancellation_date=cancellation_date,
+                requested_at=requested_at,
+            )
             return
         if doctype in _RELATION_ONLY_CANCEL_DOCTYPES:
             _cancel_relation_only_document(doctype, document)
             return
         if doctype in _POSTED_CANCEL_DOCTYPES:
-            _cancel_posted_document(doctype, document)
+            _cancel_posted_document(
+                doctype,
+                document,
+                reason=reason,
+                cancellation_date=cancellation_date,
+                requested_at=requested_at,
+                actor_user_id=str(user.id),
+            )
             return
         if doctype in {"payment_entry", "stock_entry"}:
-            _cancel_payment_or_stock(doctype, document)
+            _cancel_payment_or_stock(
+                doctype,
+                document,
+                reason=reason,
+                cancellation_date=cancellation_date,
+                requested_at=requested_at,
+                actor_user_id=str(user.id),
+            )
 
     @classmethod
     def reject(cls, document: Any, user: Any, comments: str | None = None) -> None:

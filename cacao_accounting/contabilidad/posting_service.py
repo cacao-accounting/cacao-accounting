@@ -62,6 +62,13 @@ from cacao_accounting.warehouse_accounting import (
 
 from cacao_accounting.contabilidad.default_accounts import DefaultAccountError, validate_gl_account_usage
 
+from cacao_accounting.contabilidad.cancellation_service import (
+    CancellationContext,
+    CancellationPolicyError,
+    CancellationRequest,
+    resolve_cancellation,
+)
+
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, validate_accounting_period
 
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
@@ -3114,11 +3121,11 @@ def _reversed_stock_layer_id(movement: StockLedgerEntry) -> str | None:
     return str(original_layer) if original_layer is not None else None
 
 
-def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLedgerEntry:
+def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellation_date: Any) -> StockLedgerEntry:
     qty_change = -_decimal_value(movement.qty_change)
     value_change = -_decimal_value(movement.stock_value_difference)
     valuation_rate = _decimal_value(movement.valuation_rate)
-    posting_date = _posting_date_for(document)
+    posting_date = cancellation_date
     qty_after, stock_value_after = _upsert_stock_bin(
         company=movement.company,
         item_code=movement.item_code,
@@ -3165,6 +3172,8 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry) -> StockLe
         voucher_id=movement.voucher_id,
         batch_id=movement.batch_id,
         serial_no=movement.serial_no,
+        is_reversal=True,
+        reversal_of=movement.id,
     )
 
 
@@ -3758,7 +3767,14 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
     return entries
 
 
-def cancel_document(document: Any, *, reason: str | None = None, actor_user_id: str | None = None) -> list[GLEntry]:
+def cancel_document(
+    document: Any,
+    *,
+    reason: str | None = None,
+    actor_user_id: str | None = None,
+    cancellation_date: Any = None,
+    requested_at: Any = None,
+) -> list[GLEntry]:
     """Cancela un documento aprobado mediante reversos append-only.
 
     La fecha, periodo y tasas de las contrapartidas se toman de cada asiento
@@ -3769,6 +3785,15 @@ def cancel_document(document: Any, *, reason: str | None = None, actor_user_id: 
     if getattr(document, "docstatus", 0) != 1:
         raise PostingError("Solo se puede cancelar un documento aprobado.")
 
+    if getattr(document, "is_fiscal_year_closing", False):
+        return _cancel_fiscal_year_closing_document(
+            document,
+            reason=reason,
+            actor_user_id=actor_user_id,
+            cancellation_date=cancellation_date,
+            requested_at=requested_at,
+        )
+
     if type(document).__name__ == "ComprobanteContable":
         if getattr(document, "voucher_type", None) == "Capitalización Automática de Proyecto":
             raise PostingError("No se puede anular un comprobante de capitalización automática.")
@@ -3777,27 +3802,84 @@ def cancel_document(document: Any, *, reason: str | None = None, actor_user_id: 
                 "No se puede anular una transacción que ya ha sido capitalizada. Bloquear anular pero permitir revertir."
             )
 
-    company = _company_for(document)
-    _validate_cancel_accounting_period(document, company)
     voucher_type = _get_voucher_type(document)
     voucher_id = _get_voucher_id(document)
-    _validate_cancellation_reason(reason)
+    try:
+        cancellation_context = resolve_cancellation(
+            CancellationRequest(
+                document=document,
+                effective_date=cancellation_date,
+                actor_user_id=actor_user_id,
+                reason=reason,
+                requested_at=requested_at,
+            ),
+            source_type=voucher_type,
+            source_id=voucher_id,
+        )
+    except CancellationPolicyError as exc:
+        raise PostingError(str(exc)) from exc
+    company = cancellation_context.company
     original_entries = _get_original_gl_entries(company, voucher_type, voucher_id, document)
 
     with database.session.begin_nested():
-        _record_cancellation_transition(document, company, reason, actor_user_id)
+        _record_cancellation_transition(document, cancellation_context)
         document.docstatus = 2
+        document.cancelled_at = database.func.now()
+        document.cancelled_by = cancellation_context.actor_user_id
+        document.cancel_reason = cancellation_context.reason
         if isinstance(document, PaymentEntry):
             from cacao_accounting.withholding_service import cancel_withholding_certificate
 
             cancel_withholding_certificate(document.id)
         _update_validation_service(document)
 
-        reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id)
+        reversals = _create_gl_reversals(
+            document, original_entries, voucher_type, voucher_id, cancellation_context.effective_date
+        )
 
-        _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id)
+        _cancel_stock_movements_if_needed(document, company, voucher_type, voucher_id, cancellation_context.effective_date)
         _emit_cancel_events(document, voucher_id, company)
 
+        return _add_entries(reversals)
+
+
+def _cancel_fiscal_year_closing_document(
+    document: Any,
+    *,
+    reason: str | None,
+    actor_user_id: str | None,
+    cancellation_date: Any,
+    requested_at: Any,
+) -> list[GLEntry]:
+    """Reverse a fiscal closing through its dedicated administrative flow.
+
+    Fiscal closing is intentionally outside the ordinary cancellation policy:
+    it may be posted on the fiscal year boundary without a monthly period and
+    is undone only by reopening that fiscal year. The GL remains append-only;
+    the normal cancellation transition is not fabricated for this special
+    flow because its period invariant does not apply.
+    """
+    normalized_reason = str(reason or "").strip()
+    if not normalized_reason:
+        raise PostingError("Debe indicar el motivo de la anulacion.")
+    normalized_actor = str(actor_user_id or "").strip()
+    if not normalized_actor:
+        raise PostingError("Debe indicar el usuario que ejecuta la anulacion.")
+
+    voucher_type = _get_voucher_type(document)
+    voucher_id = _get_voucher_id(document)
+    company = _company_for(document)
+    original_entries = _get_original_gl_entries(company, voucher_type, voucher_id, document)
+    posting_date = _posting_date_for(document)
+
+    with database.session.begin_nested():
+        document.docstatus = 2
+        document.cancelled_at = database.func.now()
+        document.cancelled_by = normalized_actor
+        document.cancel_reason = normalized_reason
+        _update_validation_service(document)
+        reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id, posting_date)
+        _emit_cancel_events(document, voucher_id, company)
         return _add_entries(reversals)
 
 
@@ -3813,41 +3895,23 @@ def _lock_document_for_transition(document: Any) -> Any:
     return locked
 
 
-def _record_cancellation_transition(document: Any, company: str, reason: str | None, actor_user_id: str | None) -> None:
-    """Persist cancellation metadata when the transition was user initiated."""
-    if reason is None:
-        return
-    normalized_reason = reason.strip()
+def _record_cancellation_transition(document: Any, context: CancellationContext) -> None:
+    """Persist mandatory cancellation metadata in the same transaction."""
     source_type = _get_voucher_type(document)
     source_id = _get_voucher_id(document)
-    existing = database.session.execute(
-        select(DocumentTransition.id).where(
-            DocumentTransition.source_type == source_type,
-            DocumentTransition.source_id == source_id,
-            DocumentTransition.transition_type == "cancellation",
-        )
-    ).scalar_one_or_none()
-    if existing is not None:
-        raise PostingError("El documento ya tiene una anulación registrada.")
-    period_id, _ = _find_period_ids(company, _posting_date_for(document))
     database.session.add(
         DocumentTransition(
             source_type=source_type,
             source_id=source_id,
             transition_type="cancellation",
-            company=company,
-            posting_date=_posting_date_for(document),
-            accounting_period_id=period_id,
-            actor_user_id=actor_user_id,
-            reason=normalized_reason,
+            company=context.company,
+            posting_date=context.effective_date,
+            accounting_period_id=context.accounting_period_id,
+            actor_user_id=context.actor_user_id,
+            reason=context.reason,
+            requested_at=context.requested_at,
         )
     )
-
-
-def _validate_cancellation_reason(reason: str | None) -> None:
-    """Reject an explicitly requested cancellation without an audit reason."""
-    if reason is not None and not reason.strip():
-        raise PostingError("Debe indicar el motivo de la anulación.")
 
 
 def _validate_cancel_accounting_period(document: Any, company: str) -> None:
@@ -3891,15 +3955,14 @@ def _create_gl_reversals(
     original_entries: list[GLEntry],
     voucher_type: str,
     voucher_id: str,
+    cancellation_date: Any,
 ) -> list[GLEntry]:
     """Crea entradas de reversal para las entradas GL originales."""
     reversals: list[GLEntry] = []
     for entry in original_entries:
         context = LedgerContext(
             company=entry.company,
-            # A cancellation reverses the historical entry at its original
-            # date and period, avoiding a newly calculated FX difference.
-            posting_date=entry.posting_date,
+            posting_date=cancellation_date,
             ledger_id=entry.ledger_id,
             voucher_type=voucher_type,
             voucher_id=voucher_id,
@@ -3939,10 +4002,12 @@ def _create_gl_reversals(
     return reversals
 
 
-def _cancel_stock_movements_if_needed(document: Any, company: str, voucher_type: str, voucher_id: str) -> None:
+def _cancel_stock_movements_if_needed(
+    document: Any, company: str, voucher_type: str, voucher_id: str, cancellation_date: Any
+) -> None:
     """Cancela movimientos de inventario si el documento tiene stock."""
     if isinstance(document, (PurchaseInvoice, ImportLandedCost)):
-        _cancel_landed_cost_valuations(document, company, voucher_type, voucher_id)
+        _cancel_landed_cost_valuations(document, company, voucher_type, voucher_id, cancellation_date)
         return
     if not isinstance(document, (StockEntry, PurchaseReceipt, DeliveryNote)):
         return
@@ -3965,13 +4030,16 @@ def _cancel_stock_movements_if_needed(document: Any, company: str, voucher_type:
     _validate_stock_reversal_capacity(original_movements)
     stock_reversals: list[StockLedgerEntry] = []
     for movement in original_movements:
-        stock_reversals.append(_create_stock_reversal(document, movement))
+        stock_reversals.append(_create_stock_reversal(document, movement, cancellation_date))
         movement.is_cancelled = True
     database.session.add_all(stock_reversals)
 
 
-def _cancel_landed_cost_valuations(document: Any, company: str, voucher_type: str, voucher_id: str) -> None:
+def _cancel_landed_cost_valuations(
+    document: Any, company: str, voucher_type: str, voucher_id: str, cancellation_date: Any = None
+) -> None:
     """Revierte ajustes de valoración capitalizados por una factura o landed cost."""
+    cancellation_date = cancellation_date or _posting_date_for(document)
     allocations = (
         database.session.execute(
             select(LandedCostAllocation).filter_by(
@@ -4018,7 +4086,7 @@ def _cancel_landed_cost_valuations(document: Any, company: str, voucher_type: st
                 ),
                 voucher_type=voucher_type,
                 voucher_id=voucher_id,
-                posting_date=_posting_date_for(document),
+                posting_date=cancellation_date,
             )
         )
 

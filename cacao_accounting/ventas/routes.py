@@ -1908,12 +1908,22 @@ def ventas_entrega_cancel(note_id: str):
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.is_enabled(registro.company):
-            ApprovalEngine.request_cancellation(registro)
+            ApprovalEngine.request_cancellation(
+                registro,
+                reason=reason,
+                cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+            )
             database.session.commit()
             flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
-        _execute_delivery_note_cancellation(registro, note_id, reason=reason, actor_user_id=str(current_user.id))
+        _execute_delivery_note_cancellation(
+            registro,
+            note_id,
+            reason=reason,
+            actor_user_id=str(current_user.id),
+            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+        )
         flash("Nota de entrega cancelada.", "warning")
     except PostingError as exc:  # type: ignore[misc]
         database.session.rollback()
@@ -2301,13 +2311,27 @@ def ventas_factura_venta_cancel(invoice_id: str):
         from cacao_accounting.approval_engine import ApprovalEngine
 
         if ApprovalEngine.is_enabled(registro.company):
-            ApprovalEngine.request_cancellation(registro)
+            ApprovalEngine.request_cancellation(
+                registro,
+                reason=reason,
+                cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+            )
             database.session.commit()
             flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
-        _cancel_linked_delivery_note(registro, reason=reason, actor_user_id=str(current_user.id))
-        cancel_document(registro, reason=reason, actor_user_id=str(current_user.id))  # type: ignore[misc]
+        _cancel_linked_delivery_note(
+            registro,
+            reason=reason,
+            actor_user_id=str(current_user.id),
+            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+        )
+        cancel_document(
+            registro,
+            reason=reason,
+            actor_user_id=str(current_user.id),
+            cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
+        )  # type: ignore[misc]
         log_cancel(registro)
         target_type = registro.document_type or "sales_invoice"
         revert_relations_for_target(target_type, invoice_id)

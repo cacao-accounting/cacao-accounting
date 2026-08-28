@@ -43,6 +43,45 @@ AS_OF = date(2026, 8, 20)
 OPEN_END = date(2026, 12, 31)
 
 
+def _cancellation_metadata(posting_date: date) -> dict[str, str]:
+    """Create the actor and open period required by the cancellation contract."""
+    from cacao_accounting.database import AccountingPeriod, User, database
+
+    if database.session.get(User, "admin") is None:
+        database.session.add(
+            User(
+                id="admin",
+                user="admin",
+                name="Administrator",
+                password=b"x",
+                classification="admin",
+                active=True,
+            )
+        )
+    period = database.session.execute(
+        database.select(AccountingPeriod)
+        .where(
+            AccountingPeriod.entity == COMPANY,
+            AccountingPeriod.start <= posting_date,
+            AccountingPeriod.end >= posting_date,
+        )
+        .order_by(AccountingPeriod.start.desc())
+    ).scalar_one_or_none()
+    if period is None:
+        database.session.add(
+            AccountingPeriod(
+                entity=COMPANY,
+                name=f"Cancellation {posting_date:%Y-%m-%d}",
+                enabled=True,
+                is_closed=False,
+                start=posting_date.replace(day=1),
+                end=posting_date,
+            )
+        )
+    database.session.commit()
+    return {"actor_user_id": "admin", "reason": "Prueba de anulacion"}
+
+
 @pytest.fixture()
 def app_ctx():
     """Aplicacion aislada con base SQLite en memoria."""
@@ -545,9 +584,8 @@ def test_280_refund_settles_credit_note_in_subledger(app_ctx, chart):
 # --------------------------------------------------------------------------- #
 
 
-def test_280_payment_cancellation_restores_balances_append_only(app_ctx, chart):
-    """Cancelar un pago restaura el outstanding y reversa el GL sin borrar filas."""
-    from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
+def test_280_payment_cancellation_blocks_active_effect(app_ctx, chart):
+    """Un efecto posterior activo bloquea la anulacion directa de un pago."""
     from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document
     from cacao_accounting.database import GLEntry, PaymentReference, database
 
@@ -567,34 +605,22 @@ def test_280_payment_cancellation_restores_balances_append_only(app_ctx, chart):
     )
     original_ids = {entry.id for entry in original_entries}
 
-    cancel_document(payment)
-    _apply_payment_cancellation_hooks(payment)
-    database.session.commit()
+    with pytest.raises(PostingError, match="efectos activos"):
+        cancel_document(payment, **_cancellation_metadata(payment.posting_date))
+    database.session.rollback()
 
-    assert payment.docstatus == 2
-    # Las referencias son append-only: no se eliminan.
+    assert payment.docstatus == 1
+    # Las referencias y el GL permanecen intactos; la corrección debe hacerse
+    # mediante el documento compensatorio del flujo de pagos.
     references = database.session.execute(select(PaymentReference).filter_by(payment_id=payment.id)).scalars().all()
     assert len(references) == 1
-    assert _outstanding(invoice) == Decimal("1000")
-
-    # Reversal append-only: las filas originales persisten marcadas como anuladas.
-    after_entries = (
-        database.session.execute(select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id))
-        .scalars()
-        .all()
-    )
-    assert original_ids.issubset({entry.id for entry in after_entries})
-    cancelled_originals = [entry for entry in after_entries if entry.id in original_ids]
-    assert all(entry.is_cancelled for entry in cancelled_originals)
-    reversals = [entry for entry in after_entries if entry.is_reversal]
-    assert len(reversals) == len(cancelled_originals)
-
-    # La matriz oculta el par anulado y sigue cuadrando.
-    _assert_ar_reconciled(chart)
-
-    # Idempotencia: cancelar dos veces falla de forma controlada.
-    with pytest.raises(PostingError):
-        cancel_document(payment)
+    assert _outstanding(invoice) == Decimal("600")
+    assert original_ids == {
+        entry.id
+        for entry in database.session.execute(
+            select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id)
+        ).scalars()
+    }
 
 
 def test_280_posting_and_application_are_idempotent(app_ctx, chart):
@@ -640,7 +666,7 @@ def test_280_invoice_cancellation_excluded_from_subledger(app_ctx, chart):
     removed = _make_invoice(amount=Decimal("300"))
     _post_invoice(removed)
 
-    cancel_document(removed)
+    cancel_document(removed, **_cancellation_metadata(removed.posting_date))
     database.session.commit()
 
     assert removed.docstatus == 2

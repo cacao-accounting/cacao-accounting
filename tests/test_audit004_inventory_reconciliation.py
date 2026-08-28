@@ -103,6 +103,45 @@ OPEN_END = date(2026, 12, 31)
 Q = Decimal
 
 
+def _cancellation_metadata(posting_date: date) -> dict[str, str]:
+    """Create the actor and open period required by the cancellation contract."""
+    from cacao_accounting.database import AccountingPeriod, User
+
+    if database.session.get(User, "admin") is None:
+        database.session.add(
+            User(
+                id="admin",
+                user="admin",
+                name="Administrator",
+                password=b"x",
+                classification="admin",
+                active=True,
+            )
+        )
+    period = database.session.execute(
+        database.select(AccountingPeriod)
+        .where(
+            AccountingPeriod.entity == COMPANY,
+            AccountingPeriod.start <= posting_date,
+            AccountingPeriod.end >= posting_date,
+        )
+        .order_by(AccountingPeriod.start.desc())
+    ).scalar_one_or_none()
+    if period is None:
+        database.session.add(
+            AccountingPeriod(
+                entity=COMPANY,
+                name=f"Cancellation {posting_date:%Y-%m-%d}",
+                enabled=True,
+                is_closed=False,
+                start=posting_date.replace(day=1),
+                end=posting_date,
+            )
+        )
+    database.session.commit()
+    return {"actor_user_id": "admin", "reason": "Prueba de anulacion"}
+
+
 def _dec(value: Any) -> Decimal:
     """Normaliza valores numericos de la base a Decimal."""
     return Decimal(str(value if value is not None else 0))
@@ -572,7 +611,7 @@ def test_cancel_nota_entrega_restaura_bin_y_espeja_gl(env):
     _receive(env, WH_A, "ITF", Q("12"), Q("100"), D_MAY_02)
     _receive(env, WH_A, "ITF", Q("12"), Q("140"), D_MAY_05)
     dn1 = _deliver(env, WH_A, "ITF", Q("15"), Q("200"), D_JUN_01)
-    cancel_document(dn1)
+    cancel_document(dn1, **_cancellation_metadata(dn1.posting_date))
     database.session.commit()
 
     bin_row = _bin(env, "ITF", WH_A)
@@ -602,7 +641,7 @@ def test_cancel_recepcion_sin_consumo_libera_disponibilidad(env):
     _receive(env, WH_A, "ITF", Q("12"), Q("100"), D_MAY_02)
     receipt2 = _receive(env, WH_A, "ITF", Q("12"), Q("140"), D_MAY_05)
 
-    cancel_document(receipt2)
+    cancel_document(receipt2, **_cancellation_metadata(receipt2.posting_date))
     database.session.commit()
 
     reversal_rows = (
@@ -838,7 +877,7 @@ def test_cancel_devuelve_valor_a_la_capa_origen_fifo(env):
     _receive(env, WH_A, "ITF", Q("10"), Q("100"), D_MAY_02)
     receipt_l2 = _receive(env, WH_A, "ITF", Q("10"), Q("200"), D_MAY_05)
     dn1 = _deliver(env, WH_A, "ITF", Q("10"), Q("300"), D_JUN_01)
-    cancel_document(dn1)
+    cancel_document(dn1, **_cancellation_metadata(dn1.posting_date))
     database.session.commit()
 
     reversal_row = (

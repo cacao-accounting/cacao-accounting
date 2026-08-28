@@ -398,7 +398,7 @@ def test_285_reversal_append_only_and_audit_trail(app_ctx, chart):
     assert all(not entry.is_cancelled for entry in original_entries)
 
     # --- Cancelar (reversión append-only) ---
-    cancel_submitted_journal(journal.id, user_id=uid)
+    cancel_submitted_journal(journal.id, user_id=uid, reason="Prueba de anulacion")
 
     all_entries = _gl_entries_for_voucher(journal.id)
     reversal_entries = [e for e in all_entries if e.is_reversal]
@@ -533,7 +533,7 @@ def test_285_period_close_reopen_blocks_posting(app_ctx, chart):
 
     # --- Intentar cancelar un asiento del período cerrado: debe fallar ---
     with pytest.raises(JournalValidationError, match="cerrado|deshabilitado"):
-        cancel_submitted_journal(journal_open.id, user_id=uid)
+        cancel_submitted_journal(journal_open.id, user_id=uid, reason="Prueba de anulacion")
     database.session.rollback()
 
     # --- Reabrir el período ---
@@ -547,7 +547,7 @@ def test_285_period_close_reopen_blocks_posting(app_ctx, chart):
     assert db_journal.status == "submitted"
 
     # --- Cancelar el asiento del periodo ahora abierto: OK ---
-    cancel_submitted_journal(journal_open.id, user_id=uid)
+    cancel_submitted_journal(journal_open.id, user_id=uid, reason="Prueba de anulacion")
     db_cancelled = database.session.get(ComprobanteContable, journal_open.id)
     assert db_cancelled.status == "cancelled"
 
