@@ -235,6 +235,7 @@ def test_purchase_happy_path(app_ctx):
     # 1. Create Purchase Request
     pr_data = {
         "company": "cacao",
+        "transaction_currency": "NIO",
         "posting_date": date.today().isoformat(),
         "requested_by": "Test User",
         "department": "IT",
@@ -349,6 +350,7 @@ def test_purchase_happy_path(app_ctx):
         "company": "cacao",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
+        "from_supplier_quotation": sq.id,
         "item_code_0": "ART-001",
         "qty_0": "10",
         "rate_0": "45",
@@ -446,6 +448,7 @@ def test_sales_happy_path(app_ctx):
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     sr_data = {
         "company": "cacao",
+        "transaction_currency": "NIO",
         "customer_id": customer.id,
         "posting_date": date.today().isoformat(),
         "item_code_0": "ART-001",
@@ -623,6 +626,7 @@ def test_inventory_cycle(app_ctx):
     # 1. Material Receipt
     mr_data = {
         "company": "cacao",
+        "transaction_currency": "NIO",
         "purpose": "material_receipt",
         "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
@@ -642,9 +646,6 @@ def test_inventory_cycle(app_ctx):
         .scalars()
         .first()
     )
-    mr.transaction_currency = "NIO"
-    mr.base_currency = "NIO"
-    database.session.commit()
     client.post(f"/inventory/stock-entry/{mr.id}/submit", follow_redirects=True)
     database.session.refresh(mr)
     assert mr.docstatus == 1
@@ -653,6 +654,7 @@ def test_inventory_cycle(app_ctx):
     # 2. Material Transfer
     mt_data = {
         "company": "cacao",
+        "transaction_currency": "NIO",
         "purpose": "material_transfer",
         "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
@@ -673,9 +675,6 @@ def test_inventory_cycle(app_ctx):
         .scalars()
         .first()
     )
-    mt.transaction_currency = "NIO"
-    mt.base_currency = "NIO"
-    database.session.commit()
     client.post(f"/inventory/stock-entry/{mt.id}/submit", follow_redirects=True)
     database.session.refresh(mt)
     assert mt.docstatus == 1
@@ -687,6 +686,7 @@ def test_inventory_cycle(app_ctx):
     # 3. Material Issue (e.g., for internal use)
     mi_data = {
         "company": "cacao",
+        "transaction_currency": "NIO",
         "purpose": "material_issue",
         "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
@@ -706,9 +706,6 @@ def test_inventory_cycle(app_ctx):
         .scalars()
         .first()
     )
-    mi.transaction_currency = "NIO"
-    mi.base_currency = "NIO"
-    database.session.commit()
     client.post(f"/inventory/stock-entry/{mi.id}/submit", follow_redirects=True)
     database.session.refresh(mi)
     assert mi.docstatus == 1
@@ -839,7 +836,14 @@ def test_partial_and_over_deliveries(app_ctx):
 
     # 1. Partial Delivery
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    so = SalesOrder(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1)
+    so = SalesOrder(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        transaction_currency="NIO",
+        base_currency="NIO",
+        docstatus=1,
+    )
     database.session.add(so)
     database.session.flush()
     soi = SalesOrderItem(sales_order_id=so.id, item_code="ART-001", qty=20, rate=100, amount=2000)
@@ -1116,6 +1120,8 @@ def test_receipt_edit_updates_supplier_name(app_ctx):
         supplier_name=supplier_a.name,
         company="cacao",
         posting_date=date.today(),
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=0,
     )
     database.session.add(receipt)
@@ -1273,7 +1279,7 @@ def test_purchase_invoice_from_order_hydrates_immutable_header(app_ctx):
         supplier_id=supplier.id,
         supplier_name=supplier.name,
         posting_date=date.today(),
-        transaction_currency=None,
+        transaction_currency="NIO",
         docstatus=1,
     )
     database.session.add(order)
