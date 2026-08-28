@@ -729,7 +729,7 @@ def test_payment_cancellation_reverts_relations(app_ctx, monkeypatch):
     monkeypatch.setattr(
         bancos_module,
         "cancel_document",
-        lambda document, reason=None, actor_user_id=None: setattr(document, "docstatus", 2),
+        lambda document, reason=None, actor_user_id=None, cancellation_date=None: setattr(document, "docstatus", 2),
     )
     monkeypatch.setattr(bancos_module, "exige_acceso_compania", lambda *args, **kwargs: None)
 

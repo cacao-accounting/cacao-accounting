@@ -2627,6 +2627,8 @@ class SalesRequestItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_rate = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    discount_percentage = database.Column(database.Numeric(precision=10, scale=4), nullable=True)
+    discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     warehouse = database.Column(
         database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )

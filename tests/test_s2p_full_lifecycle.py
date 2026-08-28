@@ -36,6 +36,7 @@ from cacao_accounting.database import (
     Warehouse,
     WarehouseCompanyAccount,
     Accounts,
+    AccountingPeriod,
     CompanyDefaultAccount,
     Bank,
     BankAccount,
@@ -106,6 +107,7 @@ def app_ctx():
 
 
 def _setup_base_data():
+    today = date.today()
     """Configura los maestros básicos de entidad, almacén, unidades, cuentas por defecto y proveedores."""
     entity = Entity(code="cacao", name="Cacao Corp", company_name="Cacao Corp", tax_id="J0310000000001", currency="NIO")
     uom = UOM(code="UND", name="Unidad")
@@ -171,6 +173,14 @@ def _setup_base_data():
     database.session.add_all(
         [
             entity,
+            AccountingPeriod(
+                entity="cacao",
+                name=str(today.year),
+                start=date(today.year, 1, 1),
+                end=date(today.year, 12, 31),
+                enabled=True,
+                is_closed=False,
+            ),
             uom,
             item,
             warehouse,
@@ -485,6 +495,8 @@ def test_s2p_operational_execution_and_3way_matching(app_ctx):
         docstatus=1,
         grand_total=Decimal("8800.00"),
         transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     po_item = PurchaseOrderItem(
         id="POI-EXEC-01",
@@ -509,6 +521,8 @@ def test_s2p_operational_execution_and_3way_matching(app_ctx):
         purchase_order_id=po.id,
         grand_total=Decimal("8800.00"),
         transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     receipt_item = PurchaseReceiptItem(
         id="PRECI-EXEC-01",
@@ -551,6 +565,8 @@ def test_s2p_operational_execution_and_3way_matching(app_ctx):
         outstanding_amount=Decimal("8800.00"),
         base_outstanding_amount=Decimal("8800.00"),
         transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     invoice_item = PurchaseInvoiceItem(
         id="PINVI-EXEC-01",
@@ -898,7 +914,7 @@ def test_s2p_payment_application_and_advance_against_invoice(app_ctx):
     # 6. Pago por Cancelación: Se cancela el pago final PAY-FINAL-01
     from cacao_accounting.contabilidad.posting import cancel_document
 
-    cancel_document(payment_final)
+    cancel_document(payment_final, reason="Correccion de pago", actor_user_id="user-manager")
     revert_relations_for_target("payment_entry", payment_final.id)
     refresh_source_caches_for_target("payment_entry", payment_final.id)
     refresh_outstanding_amount_cache(invoice)

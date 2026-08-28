@@ -18,6 +18,8 @@ from cacao_accounting.database import (
     PurchaseReceipt,
     DocumentRelation,
     User,
+    Entity,
+    Currency,
 )
 from cacao_accounting.document_flow.payment import compute_outstanding_amount, refresh_outstanding_amount_cache
 from cacao_accounting.compras import (
@@ -34,6 +36,13 @@ def app_ctx():
     app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
     with app.app_context():
         database.create_all()
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Cordobas", decimals=2, active=True, default=True),
+                Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="S2P-NOTES", currency="NIO"),
+            ]
+        )
+        database.session.commit()
         yield
         database.session.remove()
         database.drop_all()
@@ -173,6 +182,9 @@ def test_purchase_note_from_reconciled_invoice_skips_upstream_receipt_matching(a
         company="cacao",
         posting_date=date.today(),
         docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     database.session.add(receipt)
     database.session.flush()
@@ -185,6 +197,9 @@ def test_purchase_note_from_reconciled_invoice_skips_upstream_receipt_matching(a
         purchase_receipt_id=receipt.id,
         grand_total=Decimal("100"),
         outstanding_amount=Decimal("100"),
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     database.session.add(source_invoice)
     database.session.commit()
@@ -465,6 +480,9 @@ def test_approval_engine_execute_submit_and_cancel_purchase_credit_note(app_ctx)
         grand_total=Decimal("600.00"),
         outstanding_amount=Decimal("600.00"),
         base_outstanding_amount=Decimal("600.00"),
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     credit_note = PurchaseInvoice(
         id="PINV-CN-AE",
@@ -477,6 +495,9 @@ def test_approval_engine_execute_submit_and_cancel_purchase_credit_note(app_ctx)
         outstanding_amount=Decimal("200.00"),
         reversal_of="PINV-ORIG-AE",
         is_return=True,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     database.session.add_all([source_invoice, credit_note])
     database.session.flush()
@@ -501,7 +522,7 @@ def test_approval_engine_execute_submit_and_cancel_purchase_credit_note(app_ctx)
     def fake_submit(doc):
         doc.docstatus = 1
 
-    def fake_cancel(doc):
+    def fake_cancel(doc, **kwargs):
         doc.docstatus = 2
 
     with (
@@ -520,7 +541,10 @@ def test_approval_engine_execute_submit_and_cancel_purchase_credit_note(app_ctx)
 
         # ApprovalEngine._execute_cancel
         ApprovalEngine._execute_cancel("purchase_invoice", credit_note, user)
-        mock_cancel.assert_called_once_with(credit_note)
+        mock_cancel.assert_called_once()
+        cancel_args, cancel_kwargs = mock_cancel.call_args
+        assert cancel_args == (credit_note,)
+        assert cancel_kwargs["actor_user_id"] == user.id
         database.session.commit()
 
         # Verify relation reverted and outstanding restored

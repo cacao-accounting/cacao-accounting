@@ -531,7 +531,7 @@ def test_submit_journal_rejects_missing_exchange_rate_for_foreign_currency(app_c
         user_id="user-1",
     )
 
-    with pytest.raises(JournalValidationError, match="No existe tipo de cambio registrado"):
+    with pytest.raises(JournalValidationError, match="Faltan tipos de cambio"):
         submit_journal(journal.id)
 
 
@@ -1124,7 +1124,7 @@ def test_revert_journal_creates_reversed_draft_and_redirects_to_edit(app_ctx):
 
     response = client.post(
         f"/accounting/journal/{journal.id}/revert",
-        data={"reversal_date": "2026-06-02"},
+        data={"reversal_date": "2026-06-02", "reason": "Corrección contable"},
         follow_redirects=False,
     )
     reversed_journal = (
@@ -1187,7 +1187,7 @@ def test_revert_journal_rejects_same_accounting_period(app_ctx):
 
     response = client.post(
         f"/accounting/journal/{journal.id}/revert",
-        data={"reversal_date": "2026-05-20"},
+        data={"reversal_date": "2026-05-20", "reason": "Corrección contable"},
         follow_redirects=True,
     )
     html = response.get_data(as_text=True)
@@ -1211,6 +1211,7 @@ def test_cancel_journal_works_in_any_open_period(app_ctx):
     fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
     database.session.add_all([debit_account, credit_account, fiscal_book])
     database.session.commit()
+    _seed_accounting_periods([("2026-05", date(2026, 5, 1), date(2026, 5, 31))])
 
     journal = create_journal_draft(
         {

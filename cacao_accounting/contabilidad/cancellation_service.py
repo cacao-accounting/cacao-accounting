@@ -191,15 +191,7 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
     ).scalars()
     dependencies.extend(_relation_dependencies(relation_rows))
 
-    if isinstance(document, PaymentEntry):
-        payment_rows = database.session.execute(
-            select(PaymentReference).where(PaymentReference.payment_id == document.id)
-        ).scalars()
-        dependencies.extend(
-            CancellationDependency("aplicacion de pago", str(row.reference_id), str(row.reference_type))
-            for row in payment_rows
-        )
-    else:
+    if not isinstance(document, PaymentEntry):
         payment_rows = database.session.execute(
             select(PaymentReference)
             .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
@@ -213,7 +205,7 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
             CancellationDependency("aplicacion de pago", str(row.payment_id), "payment_entry") for row in payment_rows
         )
 
-    if isinstance(document, (BankTransaction, PaymentEntry)):
+    if isinstance(document, BankTransaction):
         reconciliation_rows = database.session.execute(
             select(ReconciliationItem).where(
                 or_(

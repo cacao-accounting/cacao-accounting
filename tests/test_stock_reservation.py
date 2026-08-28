@@ -27,6 +27,7 @@ from cacao_accounting.database import (
     Accounts,
     CompanyDefaultAccount,
     ExchangeRate,
+    AccountingPeriod,
     database,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
@@ -54,6 +55,22 @@ def app_ctx():
 
 
 def _seed_data():
+    period = database.session.execute(
+        database.select(AccountingPeriod).filter_by(entity="cacao", name="2026-06")
+    ).scalar_one_or_none()
+    if period is None:
+        period = AccountingPeriod(
+            entity="cacao",
+            name="2026-06",
+            start=date(2026, 6, 1),
+            end=date(2026, 6, 30),
+            enabled=True,
+            is_closed=False,
+        )
+        database.session.add(period)
+    else:
+        period.enabled = True
+        period.is_closed = False
     database.session.add_all(
         [
             ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.0273224044"), date=date(2026, 6, 16)),
@@ -193,7 +210,16 @@ def _make_so(
     company: str = "cacao",
     docstatus: int = 0,
 ) -> SalesOrder:
-    so = SalesOrder(id=so_id, company=company, posting_date=date(2026, 6, 15), docstatus=docstatus, customer_id="CUST-RESERVE")
+    so = SalesOrder(
+        id=so_id,
+        company=company,
+        posting_date=date(2026, 6, 15),
+        docstatus=docstatus,
+        customer_id="CUST-RESERVE",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+    )
     database.session.add(so)
     database.session.flush()
     so_item = SalesOrderItem(

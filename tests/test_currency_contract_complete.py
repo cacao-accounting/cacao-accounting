@@ -262,8 +262,8 @@ def test_posting_rejects_base_currency_snapshot_mismatch(app_ctx):
 
 
 def test_posting_rejects_zero_exchange_rate(app_ctx):
-    """Posting rechaza tasa cero en documento con monedas distintas."""
-    from cacao_accounting.contabilidad.posting_service import PostingError, _document_contexts
+    """Posting rechaza tasa cero con mensaje especifico de tasa invalida."""
+    from cacao_accounting.contabilidad.posting_service import InvalidExchangeRateError, PostingError, _document_contexts
     from cacao_accounting.database import StockEntry
 
     document = StockEntry(
@@ -275,7 +275,9 @@ def test_posting_rejects_zero_exchange_rate(app_ctx):
         exchange_rate=Decimal("0"),
         docstatus=1,
     )
-    with pytest.raises(PostingError, match="Faltan tipos de cambio"):
+    with pytest.raises(PostingError, match="tipo de cambio debe ser mayor que cero"):
+        _document_contexts(document)
+    with pytest.raises(InvalidExchangeRateError, match="tipo de cambio debe ser mayor que cero"):
         _document_contexts(document)
 
 

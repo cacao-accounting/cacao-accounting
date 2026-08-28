@@ -375,7 +375,7 @@ def test_routes_list_and_details():
                 db.session.commit()
 
 
-@pytest.mark.skipif(is_desktop_mode(), reason="Requires cloud mode")
+@pytest.mark.skipif(sys.platform == "win32" or is_desktop_mode(), reason="Requires cloud mode with libmagic")
 def test_routes_import_entries():
     """Test importing manual entries from CSV and XLSX via the shared import wizard."""
     from cacao_accounting.imports.models import ImportBatch
