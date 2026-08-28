@@ -292,14 +292,26 @@ def _paginate_list(model, search_fields, query=None, *, include_status: bool = T
                 base_query = base_query.where(model.company.in_(companies))
     period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
     period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
-    if hasattr(model, "posting_date") and (period_from or period_to):
-        base_query = apply_period_filter(
-            base_query,
-            model,
-            require_period_company(access_modules, current_user=current_user),
-            period_from,
-            period_to,
-        )
+    if hasattr(model, "posting_date"):
+        period_company: str | None = request.args.get("company")
+        if not period_company and getattr(current_user, "classification", None) != "admin":
+            for module in access_modules:
+                module_id = obtener_id_modulo_por_nombre(module)
+                permissions = Permisos(modulo=module_id, usuario=current_user.id)
+                if permissions.consultar:
+                    authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
+                    if len(authorized_companies) == 1:
+                        period_company = authorized_companies[0]
+                        break
+        if period_from or period_to or period_company:
+            base_query = apply_period_filter(
+                base_query,
+                model,
+                require_period_company(access_modules, current_user=current_user, default_company=period_company),
+                period_from,
+                period_to,
+                default_when_missing=True,
+            )
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     paginated = database.paginate(
         filtered_query,

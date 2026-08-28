@@ -716,33 +716,78 @@ def _resolve_as_of_date(company: str) -> date | None:
 
     El corte de los reportes "as of" es el último día del período final del
     rango seleccionado: el backend lo deriva de ``AccountingPeriod`` y nunca
-    confía en fechas calculadas por el navegador. Sin criterio explícito se
-    selecciona por defecto el período contable actual.
+    confía en fechas calculadas por el navegador. Si el llamador envía un
+    ``as_of_date`` junto con cualquier criterio de período, la fecha manual
+    debe coincidir con el extremo resuelto o la petición se rechaza. Sin
+    ningún criterio de período se conserva la compat con URL legadas.
     """
     manual = _date_arg("as_of_date")
-    if manual is not None or request.args.get("accounting_period"):
-        return manual
     period_from, period_to = _period_params()
-    if period_from or period_to:
-        from cacao_accounting.reportes.periods import reject_manual_date_overrides, resolve_period_range
+    has_period_criterion = bool(period_from or period_to or request.args.get("accounting_period"))
+    if has_period_criterion:
+        from cacao_accounting.reportes.periods import (
+            reject_manual_date_overrides,
+            resolve_period_range,
+        )
 
+        if not (period_from or period_to):
+            legacy_name = request.args.get("accounting_period")
+            if legacy_name:
+                period_from = period_to = _resolve_period_id_by_name(company, legacy_name)
         period_range = resolve_period_range(company, period_from, period_to)
         if period_range is not None:
             reject_manual_date_overrides(request.args, period_range)
-            return period_range.period_end
+            return manual if manual is not None else period_range.period_end
+    if manual is not None:
+        return manual
     from cacao_accounting.reportes.periods import resolve_period_range
 
     default_range = resolve_period_range(company, None, None)
     return default_range.period_end if default_range is not None else None
 
 
+def _resolve_period_id_by_name(company: str, period_name: str) -> str | None:
+    """Resuelve el id de un ``AccountingPeriod`` por nombre dentro de la compañía.
+
+    Devuelve ``None`` si no existe un período con ese nombre para evitar que un
+    id inválido llegue a ``resolve_period_range`` y aborte la petición.
+    """
+    from cacao_accounting.database import AccountingPeriod, database
+    from sqlalchemy import select
+
+    return database.session.execute(
+        select(AccountingPeriod.id).where(AccountingPeriod.entity == company, AccountingPeriod.name == period_name)
+    ).scalar_one_or_none()
+
+
 def _resolve_date_bounds(company: str) -> tuple[date | None, date | None]:
-    """Resuelve ``(date_from, date_to)`` desde el rango de períodos o parámetros manuales."""
+    """Resuelve ``(date_from, date_to)`` desde el rango de períodos o parámetros manuales.
+
+    Si el llamador envía fechas manuales junto con cualquier criterio de
+    período, ambos extremos deben coincidir con el rango resuelto. Sin
+    ningún criterio de período, las fechas manuales se respetan para no
+    romper compat con URL legadas.
+    """
     date_from = _date_arg("date_from")
     date_to = _date_arg("date_to")
+    period_from, period_to = _period_params()
+    has_period_criterion = bool(period_from or period_to or request.args.get("accounting_period"))
+    if has_period_criterion and (date_from is not None or date_to is not None):
+        from cacao_accounting.reportes.periods import (
+            reject_manual_date_overrides,
+            resolve_period_range,
+        )
+
+        if not (period_from or period_to):
+            legacy_name = request.args.get("accounting_period")
+            if legacy_name:
+                period_from = period_to = _resolve_period_id_by_name(company, legacy_name)
+        period_range = resolve_period_range(company, period_from, period_to)
+        if period_range is not None:
+            reject_manual_date_overrides(request.args, period_range)
+            return period_range.period_start, period_range.period_end
     if date_from is not None or date_to is not None:
         return date_from, date_to
-    period_from, period_to = _period_params()
     if period_from or period_to:
         from cacao_accounting.reportes.periods import reject_manual_date_overrides, resolve_period_range
 

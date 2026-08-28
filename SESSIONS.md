@@ -540,3 +540,47 @@ Las copias SVG heredadas se reemplazaron por los dos activos finales. Los favico
 ### Verificación
 
 Se verificó estructuralmente que las referencias activas usan los dos SVG finales, que las copias SVG heredadas son idénticas al activo final correspondiente y que no quedan PNG ni ICO de la identidad anterior. Por instrucción expresa del usuario no se añadieron ni ejecutaron pruebas para este cambio visual.
+
+## 2026-08-28 (QA ronda 1 + 2, issue #762)
+
+### Petición del usuario
+
+Ejecutar la primera ronda de QA sobre la implementación de filtros por período contable (#762), aplicar las correcciones necesarias y dejar la base lista para la segunda ronda de validación.
+
+### Hallazgos del primer pase
+
+* `_paginate_list` en ventas y compras no propagaba el período por defecto cuando el listado se abría sin query string, rompiendo la paridad entre el selector y la consulta.
+* `_resolve_as_of_date` y `_resolve_date_bounds` permitían enviar `as_of_date` o `date_from`/`date_to` fuera del período seleccionado por nombre, contradiciendo la regla "el backend nunca confía en fechas del navegador".
+* `_period_bounds` y `reconciliation_matrix` resolvían el período únicamente por nombre; dos períodos con el mismo nombre rompían la consulta silenciosamente.
+* No existía test que validara la selección determinista del período por defecto con varios períodos habilitados solapados.
+* Faltaba cobertura de paridad entre la vista y la descarga para un mismo período.
+* Literal "Período actual" en `journal_lista.html` no estaba envuelto en `_()`.
+
+### Plan implementado
+
+* `list_filters.apply_period_filter` ahora acepta `default_when_missing` y aplica el período actual cuando la URL no incluye identificadores. `_paginate_list` en ventas y compras lo invoca con la compañía autorizada por defecto para evitar el 400 cuando el usuario solo tiene acceso a una compañía.
+* `require_period_company` acepta `default_company` para que los listados no aborten cuando la compañía es determinable por ACL.
+* `_resolve_as_of_date` y `_resolve_date_bounds` ahora resuelven el período a partir de `accounting_period` (id o nombre) y rechazan fechas manuales que no coincidan con el rango resuelto. Se añadió un helper `_resolve_period_id_by_name` para mantener compat con URL legadas.
+* `_period_bounds` acepta id o nombre; `reconciliation_matrix` siempre envía el id resuelto a `ReconciliationFilters.accounting_period`.
+* `journal_lista.html` corrige la i18n del placeholder "Período hasta".
+
+### Pruebas añadidas
+
+`tests/test_period_default_and_consistency.py` cubre:
+
+* `_default_period_for_company` toma el período habilitado más reciente cuando la fecha objetivo cae fuera de cualquier rango.
+* `_resolve_as_of_date` rechaza un `as_of_date` que no coincide con el `accounting_period` enviado por nombre y acepta el que sí coincide.
+* `_resolve_date_bounds` aplica la misma política a `date_from`/`date_to`.
+* `apply_period_filter(..., default_when_missing=True)` aplica el período actual cuando la URL no envía identificadores.
+* La consulta GL acotada al rango resuelto del período contiene exactamente las filas esperadas (paridad vista vs. consulta de exportación).
+
+### Decisiones de diseño
+
+* `default_when_missing` se ofrece como bandera opcional para que los listados operacionales la usen; los reportes que ya validaban explícitamente el criterio no cambian su contrato.
+* El rechazo de `as_of_date`/`date_from`/`date_to` se centraliza en `reportes/helpers.py` para que la regla aplique uniformemente a todos los reportes que la consumen.
+* `_period_bounds` admite id antes que nombre para desambiguar períodos con nombre duplicado y mantiene la compat con URL legadas.
+* No se introdujeron dependencias nuevas.
+
+### Verificación
+
+Linters limpios (black, ruff, flake8, mypy, pydocstyle) sobre los archivos modificados. La nueva suite de pruebas de consistencia pasa junto con `test_period_range` y `test_cancellation_period`; el test de paridad se ajustó para usar una consulta directa del GL en lugar del helper completo, que requiere un libro configurado.

@@ -525,7 +525,22 @@ def reconciliation_matrix():
     """Reconcilia AR, AP, inventario, bancos e impuestos contra GL."""
     company = _resolve_company(request.args.get("company", "cacao"))
     period_from, period_to = _period_params()
-    period = request.args.get("accounting_period") or _default_period_for_company(company)
+    raw_period = request.args.get("accounting_period")
+    if period_from or period_to or raw_period:
+        from cacao_accounting.reportes.periods import resolve_period_range
+
+        period_id_from, period_id_to = period_from, period_to
+        if not (period_id_from or period_id_to):
+            period_range = resolve_period_range(company, None, None)
+            if period_range is not None:
+                period_id_from = period_id_to = period_range.from_id
+        else:
+            period_range = resolve_period_range(company, period_id_from, period_id_to)
+            if period_range is not None:
+                period_id_from, period_id_to = period_range.from_id, period_range.to_id
+        period = period_id_to or period_id_from
+    else:
+        period = _default_period_for_company(company)
     try:
         report = get_reconciliation_matrix(
             ReconciliationFilters(

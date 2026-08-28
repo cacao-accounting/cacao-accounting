@@ -47,6 +47,8 @@ def apply_period_filter(
     period_company: str,
     period_from: str | None,
     period_to: str | None,
+    *,
+    default_when_missing: bool = False,
 ) -> Select[Any]:
     """Acota una consulta de documento a un rango de períodos contables completos.
 
@@ -54,9 +56,22 @@ def apply_period_filter(
     período debe pertenecer a ``period_company``; de lo contrario la resolución
     dispara un error 400. Solo tiene sentido para modelos que exponen ``company``
     y ``posting_date`` (documentos transaccionales).
-    """
-    from cacao_accounting.reportes.periods import reject_manual_date_overrides, resolve_period_range
 
+    Cuando ``default_when_missing`` es verdadero y no se reciben identificadores
+    de período, se aplica el período contable actual de la compañía. Esto
+    garantiza que vista, paginación, totales y exportaciones operen sobre el
+    mismo rango sin depender de la URL.
+    """
+    from cacao_accounting.reportes.periods import (
+        current_period_for_company,
+        reject_manual_date_overrides,
+        resolve_period_range,
+    )
+
+    if default_when_missing and not (period_from or period_to):
+        current = current_period_for_company(period_company)
+        if current is not None:
+            period_from = period_to = str(current.id)
     period_range = resolve_period_range(period_company, period_from, period_to)
     if period_range is None:
         return query
@@ -77,15 +92,19 @@ def period_company_from_request(
 
     Prioriza el parámetro explícito ``company``; si no hay un único origen
     de datos no ambiguo (una sola compañía autorizada) devuelve ``None`` para
-    que el llamador decida cómo comunicar la restricción.
+    que el llamador decida cómo comunicar la restricción. Si el llamador
+    conoce la compañía activa (por ejemplo, una sola compañía autorizada
+    para el usuario) puede inyectarla como ``default_company``.
     """
+    company = request.args.get("company")
+    if company:
+        return company
+    if default_company:
+        return default_company
     period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
     period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
     if not (period_from or period_to):
         return None
-    company = request.args.get("company")
-    if company:
-        return company
     if getattr(current_user, "classification", None) != "admin":
         from cacao_accounting.auth.permisos import Permisos
         from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
@@ -101,9 +120,19 @@ def period_company_from_request(
     return default_company
 
 
-def require_period_company(access_modules: tuple[str, ...], *, current_user: Any) -> str:
-    """Resuelve la compañía para el período o dispara 400 si es ambigua."""
-    company = period_company_from_request(access_modules, current_user=current_user)
+def require_period_company(
+    access_modules: tuple[str, ...],
+    *,
+    current_user: Any,
+    default_company: str | None = None,
+) -> str:
+    """Resuelve la compañía para el período o dispara 400 si es ambigua.
+
+    Si el llamador conoce la compañía activa (por ejemplo, una sola compañía
+    autorizada para el usuario), puede inyectarla como ``default_company`` para
+    evitar el 400 cuando la URL no la incluye.
+    """
+    company = period_company_from_request(access_modules, current_user=current_user, default_company=default_company)
     if company is None:
         from flask_babel import gettext as _babel_gettext
 
