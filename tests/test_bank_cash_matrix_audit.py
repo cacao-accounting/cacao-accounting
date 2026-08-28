@@ -579,20 +579,21 @@ def test_bank_fee_and_interest_reconcile_gl_entry_targets(app_ctx, chart):
 # 4. Returned payments y reversals
 
 
-def test_returned_payment_cancellation_blocks_active_reconciliation(app_ctx, chart):
-    """Una conciliacion activa bloquea la anulacion directa de un cobro."""
-    from cacao_accounting.contabilidad.posting_service import PostingError, cancel_document
+def test_returned_payment_cancellation_reverts_active_reconciliation(app_ctx, chart):
+    """Cancelar un cobro revierte su conciliación bancaria activa."""
+    from cacao_accounting.contabilidad.posting_service import cancel_document
 
     deposit = _make_bank_transaction(chart["account_a"], deposit=Decimal("100.00"), reference="CHQ-DEV")
     collection = _make_payment(amount=Decimal("100.00"), bank_account=chart["account_a"])
     _reconcile(deposit, "payment_entry", collection.id, Decimal("100.00"))
     _assert_cash_equation(chart, chart["account_a"], expected_reconciling_items=Decimal("0"))
 
-    with pytest.raises(PostingError, match="efectos activos"):
-        cancel_document(collection, **_cancellation_metadata(collection.posting_date))
-    database.session.rollback()
-    assert collection.docstatus == 1
-    assert deposit.is_reconciled is True
+    cancel_document(collection, **_cancellation_metadata(collection.posting_date))
+    database.session.refresh(collection)
+    database.session.refresh(deposit)
+    assert collection.docstatus == 2
+    assert deposit.is_reconciled is False
+    assert deposit.payment_entry_id is None
 
 
 def test_cancelled_collection_is_not_offered_again_as_candidate(app_ctx, chart):
