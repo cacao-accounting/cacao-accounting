@@ -3382,6 +3382,9 @@ class ComprobanteContable(database.Model, BaseTransaccion):  # type: ignore[name
     transaction_currency = database.Column(
         database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    base_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     is_closing = database.Column(database.Boolean(), default=False, nullable=False)
     is_fiscal_year_closing = database.Column(database.Boolean(), default=False, nullable=False)

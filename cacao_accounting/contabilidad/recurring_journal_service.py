@@ -4,6 +4,7 @@
 """Servicio para gestión de comprobantes recurrentes."""
 
 from datetime import date
+from decimal import Decimal
 import json
 from typing import Any, Dict, List, Sequence
 from sqlalchemy import or_, select
@@ -17,6 +18,7 @@ from cacao_accounting.database import (
     RecurringJournalApplication,
     ComprobanteContable,
     ComprobanteContableDetalle,
+    Entity,
 )
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
@@ -185,6 +187,9 @@ def apply_recurring_template(
     if not items:
         raise RecurringJournalError("La plantilla aprobada no tiene líneas contables.")
 
+    base_currency = database.session.execute(select(Entity.currency).filter_by(code=template.company)).scalar_one_or_none()
+    transaction_currency = template.currency or base_currency
+
     # Generar ComprobanteContable
     journal = ComprobanteContable(
         entity=template.company,
@@ -197,6 +202,9 @@ def apply_recurring_template(
         user_id=user_id,
         is_recurrent=True,
         recurrent_template_id=template.id,
+        transaction_currency=transaction_currency,
+        base_currency=base_currency,
+        exchange_rate=Decimal("1") if transaction_currency == base_currency else None,
     )
     database.session.add(journal)
     database.session.flush()

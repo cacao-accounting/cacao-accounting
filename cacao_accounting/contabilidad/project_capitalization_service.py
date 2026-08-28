@@ -93,6 +93,7 @@ def _create_capitalization_journal(
         date=entry.posting_date,
         status="draft",
         transaction_currency=transaction_currency,
+        base_currency=entry.company_currency or transaction_currency,
         # Resolve the rate independently for each active book at posting time.
         exchange_rate=None,
         voucher_type="Capitalización Automática de Proyecto",

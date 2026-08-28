@@ -103,6 +103,7 @@ class JournalDraftInput:
     reference: str | None
     memo: str | None
     transaction_currency: str | None
+    base_currency: str | None
     exchange_rate: Decimal | None
     is_closing: bool
     is_fiscal_year_closing: bool
@@ -145,6 +146,7 @@ def create_journal_draft(
         naming_series_id=data.naming_series_id,
         book_codes=_serialize_book_codes(data.books),
         transaction_currency=data.transaction_currency,
+        base_currency=data.base_currency,
         exchange_rate=data.exchange_rate,
         is_closing=data.is_closing,
         is_fiscal_year_closing=data.is_fiscal_year_closing,
@@ -637,8 +639,8 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     if books is None and (book := _optional_text(payload.get("book"))):
         books = [book]
     transaction_currency, lines = _normalize_transaction_currency(_optional_text(payload.get("transaction_currency")), lines)
+    company_currency = database.session.execute(database.select(Entity.currency).filter_by(code=company)).scalar_one()
     if transaction_currency is None:
-        company_currency = database.session.execute(database.select(Entity.currency).filter_by(code=company)).scalar_one()
         if company_currency:
             transaction_currency = str(company_currency)
             lines = _apply_currency_to_lines(lines, transaction_currency)
@@ -649,6 +651,8 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     )
     if explicit_currency:
         _validate_active_transaction_currency(transaction_currency)
+    base_currency = _optional_text(payload.get("base_currency")) or str(company_currency or "") or None
+    _validate_active_transaction_currency(base_currency)
     exchange_rate = _optional_decimal(payload.get("exchange_rate"))
     if exchange_rate is not None and exchange_rate <= 0:
         raise JournalValidationError("El tipo de cambio debe ser mayor que cero.")
@@ -660,6 +664,7 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
         reference=_optional_text(payload.get("reference")),
         memo=_optional_text(payload.get("memo")),
         transaction_currency=transaction_currency,
+        base_currency=base_currency,
         exchange_rate=exchange_rate,
         is_closing=_optional_bool(payload.get("is_closing")),
         is_fiscal_year_closing=_optional_bool(payload.get("is_fiscal_year_closing")),

@@ -491,6 +491,7 @@ def create_bank_difference_journal(
         book=books[0].code if books else None,
         book_codes=json.dumps([book.code for book in books]) if books else None,
         transaction_currency=transaction_currency,
+        base_currency=entity.currency if entity else transaction_currency,
     )
     database.session.add(journal)
     database.session.flush()

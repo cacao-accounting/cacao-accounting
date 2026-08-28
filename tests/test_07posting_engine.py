@@ -659,6 +659,7 @@ def test_post_comprobante_contable_creates_balanced_gl_entries(app_ctx):
         date=date(2026, 5, 4),
         memo="Comprobante de diario prueba",
         transaction_currency="NIO",
+        base_currency="NIO",
     )
     database.session.add(journal)
     database.session.flush()
