@@ -427,6 +427,8 @@ def test_delivery_note_inventory_deduction_and_overdelivery_prevention(app_ctx):
         posting_date=date.today(),
         total=Decimal("1000"),
         grand_total=Decimal("1000"),
+        transaction_currency="NIO",
+        base_currency="NIO",
         docstatus=1,
     )
     database.session.add(so)
