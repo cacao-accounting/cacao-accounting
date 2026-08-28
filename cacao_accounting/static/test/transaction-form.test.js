@@ -151,6 +151,7 @@ describe('transaction-form', function () {
     const component = create({
       formKey: 'inventory.stock_entry',
       enableBatchSerial: true,
+      initialHeader: { currency: 'NIO' },
       items: [{ code: 'LOT-ITEM', name: 'Artículo con lote', uom: 'UND', has_batch: true }],
       uoms: [{ code: 'UND', name: 'Unidad' }],
       defaultRows: 1,

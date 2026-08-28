@@ -975,6 +975,26 @@ def test_stock_entry_edit_route_is_independent(isolated_stock_entry_app):
             )
             assert response.status_code in (302, 303)
 
+            response = client.post(
+                edit_url,
+                data={
+                    "company": "cacao",
+                    "naming_series": naming_series.id,
+                    "posting_date": "2026-05-16",
+                    "purpose": "material_receipt",
+                    "to_warehouse": "PRINCIPAL",
+                    "remarks": "independent edit",
+                    "transaction_currency": "NIO",
+                    "item_code_0": item.code,
+                    "qty_0": "1",
+                    "uom_0": uom.code,
+                    "rate_0": "1",
+                    "amount_0": "1",
+                    "warehouse_0": "PRINCIPAL",
+                },
+            )
+            assert response.status_code in (302, 303)
+
         database.session.expire_all()
         stored_entry = database.session.get(StockEntry, entry.id)
         stored_lines = (

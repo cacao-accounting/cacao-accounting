@@ -757,6 +757,7 @@ def _handle_stock_entry_edit_post(registro: StockEntry):
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
+        return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=registro.id))
 
 
 def _capture_stock_entry_state(registro: StockEntry) -> dict:
