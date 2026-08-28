@@ -3484,7 +3484,13 @@ def test_manual_journal_allows_bank_and_untyped_accounts(app_ctx):
     _seed_active_primary_book()
     database.session.flush()
 
-    bank_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual banco", transaction_currency="NIO")
+    bank_journal = ComprobanteContable(
+        entity="cacao",
+        date=date(2026, 5, 6),
+        memo="Manual banco",
+        transaction_currency="NIO",
+        base_currency="NIO",
+    )
     database.session.add(bank_journal)
     database.session.flush()
     database.session.add_all(
@@ -3512,7 +3518,13 @@ def test_manual_journal_allows_bank_and_untyped_accounts(app_ctx):
     bank_entries = post_document_to_gl(bank_journal)
     assert len(bank_entries) == 2
 
-    free_journal = ComprobanteContable(entity="cacao", date=date(2026, 5, 6), memo="Manual libre", transaction_currency="NIO")
+    free_journal = ComprobanteContable(
+        entity="cacao",
+        date=date(2026, 5, 6),
+        memo="Manual libre",
+        transaction_currency="NIO",
+        base_currency="NIO",
+    )
     database.session.add(free_journal)
     database.session.flush()
     database.session.add_all(
@@ -4627,7 +4639,14 @@ def test_purchase_receipt_posting_allows_missing_bridge_when_not_required(app_ct
             Warehouse(code="WH-NB", name="Bodega No Bridge", company="cacao"),
         ]
     )
-    receipt = PurchaseReceipt(company="cacao", posting_date=date(2026, 5, 1), supplier_id="SUPP-NB", docstatus=1)
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        supplier_id="SUPP-NB",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        docstatus=1,
+    )
     database.session.add(receipt)
     database.session.flush()
     database.session.add(
