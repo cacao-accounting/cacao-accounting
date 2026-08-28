@@ -2101,16 +2101,26 @@ def _resolve_ledger(company: str, ledger: str | None) -> Book | None:
     return database.session.execute(query).scalars().first()
 
 
-def _period_bounds(company: str, period_name: str | None) -> tuple[date | None, date | None, AccountingPeriod | None]:
-    if not period_name:
+def _period_bounds(company: str, period_value: str | None) -> tuple[date | None, date | None, AccountingPeriod | None]:
+    """Resuelve un ``AccountingPeriod`` por id o por nombre dentro de la compañía.
+
+    Acepta ambas formas para que las URL legadas que pasan el nombre sigan
+    funcionando, mientras que el contrato moderno (selector de período) usa
+    el id. Si dos períodos comparten nombre, el id permite desambiguar.
+    """
+    if not period_value:
         return None, None, None
-    period = (
-        database.session.execute(
-            select(AccountingPeriod).where(AccountingPeriod.entity == company, AccountingPeriod.name == period_name)
+    period = database.session.execute(
+        select(AccountingPeriod).where(AccountingPeriod.entity == company, AccountingPeriod.id == period_value)
+    ).scalar_one_or_none()
+    if period is None:
+        period = (
+            database.session.execute(
+                select(AccountingPeriod).where(AccountingPeriod.entity == company, AccountingPeriod.name == period_value)
+            )
+            .scalars()
+            .first()
         )
-        .scalars()
-        .first()
-    )
     if period is None:
         return None, None, None
     return period.start, period.end, period
@@ -2121,7 +2131,8 @@ def _report_period_bounds(filters: Any) -> tuple[date | None, date | None, Accou
 
     Prioriza el rango de períodos contables completos (``period_from`` /
     ``period_to``); cuando no está presente conserva la resolución clásica por
-    el nombre del ``accounting_period`` para compatibilidad con URL anteriores.
+    el nombre o id del ``accounting_period`` para compatibilidad con URL
+    anteriores.
     """
     period_from = getattr(filters, "period_from", None)
     period_to = getattr(filters, "period_to", None)

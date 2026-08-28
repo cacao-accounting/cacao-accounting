@@ -52,7 +52,7 @@
     <div>
       <label class="form-label small text-muted mb-1">{{ _('Período hasta') }}</label>
       <select name="accounting_period_to" class="form-select form-select-sm">
-        <option value="">{{ _('Período actual') }}</option>
+        <option value="">{{ _('Período hasta') }}</option>
         {% for period in periods %}
         <option value="{{ period.id }}" {% if period_to == period.id|string %}selected{% endif %}>{% if period.is_closed %}🔒 {% endif %}{{ period.name }}</option>
         {% endfor %}
