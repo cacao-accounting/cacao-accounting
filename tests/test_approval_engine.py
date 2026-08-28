@@ -19,8 +19,10 @@ from cacao_accounting.database import (
     ApprovalRequest,
     ApprovalAction,
     CacaoConfig,
+    Currency,
     ComprobanteContable,
     DocumentRelation,
+    Entity,
     Item,
     Party,
     PurchaseOrder,
@@ -58,6 +60,20 @@ def fixture_app():
     )
     with app.app_context():
         database.create_all()
+        database.session.add_all(
+            [
+                Currency(code="NIO", name="Cordoba", decimals=2, active=True),
+                Entity(
+                    code="comp_test",
+                    name="Compañía de pruebas",
+                    company_name="Compañía de pruebas",
+                    tax_id="COMP-TEST",
+                    currency="NIO",
+                    enabled=True,
+                ),
+            ]
+        )
+        database.session.commit()
         yield app
         database.session.remove()
         database.drop_all()
@@ -230,6 +246,8 @@ def test_approval_flow_draft_to_approved(app):
             docstatus=0,
             posting_date=date(2026, 1, 1),
             supplier_id="PARTY-TEST",
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(po)
         database.session.flush()
@@ -385,6 +403,8 @@ def test_multilevel_approval_three_levels(app):
             docstatus=0,
             posting_date=date(2026, 1, 1),
             supplier_id="PARTY-TEST",
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(po)
         database.session.flush()
@@ -432,6 +452,8 @@ def test_multilevel_approval_tiers(app):
             docstatus=0,
             posting_date=date(2026, 1, 1),
             supplier_id="PARTY-TEST",
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(po_low)
         database.session.flush()
@@ -453,6 +475,8 @@ def test_multilevel_approval_tiers(app):
             docstatus=0,
             posting_date=date(2026, 1, 1),
             supplier_id="PARTY-TEST",
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(po_high)
         database.session.flush()
@@ -665,6 +689,8 @@ def test_approve_already_approved_request(app):
             docstatus=0,
             posting_date=date(2026, 1, 1),
             supplier_id="PARTY-TEST",
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(po)
         database.session.flush()
@@ -752,6 +778,8 @@ def test_approval_action_on_approve(app):
             docstatus=0,
             posting_date=date(2026, 1, 1),
             supplier_id="PARTY-TEST",
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(po)
         database.session.flush()
@@ -803,7 +831,13 @@ def test_execute_submit_purchase_request(app):
         user_juan = _create_user("juan")
         _seed_item()
         pr = PurchaseRequest(
-            id="pr_exec", company="comp_test", grand_total=Decimal("1000"), docstatus=0, posting_date=date(2026, 1, 1)
+            id="pr_exec",
+            company="comp_test",
+            grand_total=Decimal("1000"),
+            docstatus=0,
+            posting_date=date(2026, 1, 1),
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         pr_item = PurchaseRequestItem(
             purchase_request_id="pr_exec",
@@ -832,6 +866,8 @@ def test_execute_submit_purchase_order(app):
             docstatus=0,
             posting_date=date(2026, 1, 1),
             supplier_id="PARTY-TEST",
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(po)
         database.session.flush()
@@ -913,6 +949,8 @@ def test_handle_submission_auto_approve(app):
             docstatus=0,
             posting_date=date(2026, 1, 1),
             supplier_id="PARTY-TEST",
+            transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(po)
         database.session.flush()
@@ -1028,7 +1066,13 @@ def test_final_payment_submission_revalidates_header(app):
 def test_final_purchase_receipt_revalidates_order_quantities(app, monkeypatch):
     """Una aprobación diferida vuelve a comprobar la sobre-recepción."""
     with app.app_context():
-        receipt = PurchaseReceipt(id="receipt_final_recheck", company="comp_test", docstatus=0)
+        receipt = PurchaseReceipt(
+            id="receipt_final_recheck",
+            company="comp_test",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            docstatus=0,
+        )
         item = PurchaseReceiptItem(
             purchase_receipt_id=receipt.id,
             item_code="ITEM-TEST",
@@ -1061,12 +1105,16 @@ def test_final_purchase_credit_note_revalidates_source_balance(app, monkeypatch)
         source = PurchaseInvoice(
             id="invoice_final_recheck",
             company="comp_test",
+            transaction_currency="NIO",
+            base_currency="NIO",
             docstatus=1,
             grand_total=Decimal("100"),
         )
         note = PurchaseInvoice(
             id="credit_final_recheck",
             company="comp_test",
+            transaction_currency="NIO",
+            base_currency="NIO",
             docstatus=0,
             document_type="purchase_credit_note",
             reversal_of=source.id,
