@@ -18,8 +18,8 @@
   })();
 </script>
 
-<meta name="theme-color" content="#512D21">
-<meta name="msapplication-TileColor" content="#512D21">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="msapplication-TileColor" content="#FFFFFF">
 
 <meta name="description" content="Aplicación Contable.">
 <meta name="author" content="William Moreno Reyes">
@@ -63,8 +63,15 @@
       <i class="bi bi-list"></i>
     </button>
     <a class="ca-navbar-brand" href="{{ url_for('cacao_app.pagina_inicio') }}">
-      <img height="38" src="{{ url_for('static', filename='media/brand.svg') }}" alt="Cacao Accounting"
-        class="d-inline-block align-middle">
+      <img
+        id="ca-navbar-brand-logo"
+        height="38"
+        src="{{ url_for('static', filename='media/brand.svg') }}?v=20260828-2"
+        data-light-src="{{ url_for('static', filename='media/brand.svg') }}?v=20260828-2"
+        data-dark-src="{{ url_for('static', filename='media/brand-dark.svg') }}?v=20260828-2"
+        alt="Cacao Accounting"
+        class="ca-brand-logo d-inline-block align-middle"
+      >
     </a>
   </div>
   <div class="ca-navbar-end">
@@ -91,9 +98,11 @@
 <script>
   (function () {
     var icon = document.getElementById('ca-theme-icon');
+    var brandLogo = document.getElementById('ca-navbar-brand-logo');
     function syncIcon() {
       var t = document.documentElement.getAttribute('data-theme');
       if (icon) icon.className = (t === 'dark') ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+      if (brandLogo) brandLogo.src = t === 'dark' ? brandLogo.dataset.darkSrc : brandLogo.dataset.lightSrc;
     }
     syncIcon();
     globalThis.caToggleTheme = function () {
@@ -171,7 +180,12 @@
         Administración
         {% set ap_count = pending_approval_count() %}
         {% if ap_count > 0 %}
-        <span class="badge bg-warning text-dark ms-1">{{ ap_count }}</span>
+        <span class="ca-approval-count" data-status="pending_approval"
+          title="{{ _('%(count)s registros pendientes de aprobaciÃ³n', count=ap_count) }}">
+          <i class="bi bi-clock-history" aria-hidden="true"></i>
+          <span>{{ ap_count }}</span>
+          <span class="visually-hidden">{{ _('%(count)s registros pendientes de aprobaciÃ³n', count=ap_count) }}</span>
+        </span>
         {% endif %}
       </a>
     </li>
@@ -269,12 +283,26 @@
 
 {% macro module_status_badge(status_info) %}
 <span
-  class="ca-status-dot {{ status_info.css_class }}"
+  class="ca-module-state {{ status_info.css_class }}"
   title="{{ status_info.title }}"
   aria-label="{{ status_info.label }}"
   data-status="{{ status_info.status }}"
   role="img"
 >
+  {% if status_info.status == "ok" %}
+  <i class="bi bi-check-circle-fill" aria-hidden="true"></i>
+  {% elif status_info.status == "no_access" %}
+  <i class="bi bi-lock-fill" aria-hidden="true"></i>
+  {% elif status_info.status == "view_only" %}
+  <i class="bi bi-eye-fill" aria-hidden="true"></i>
+  {% elif status_info.status == "pending_approval" %}
+  <i class="bi bi-clock-history" aria-hidden="true"></i>
+  {% else %}
+  <i class="bi bi-exclamation-circle-fill" aria-hidden="true"></i>
+  {% endif %}
+  {% if status_info.status != "ok" %}
+  <span class="ca-module-state__label">{{ status_info.label }}</span>
+  {% endif %}
   <span class="visually-hidden">{{ status_info.label }}</span>
 </span>
 {% endmacro %}

@@ -7,25 +7,30 @@
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos.html"></div>
 {%- endif -%}
 
+<div class="ca-module-workspace">
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item active" aria-current="page">
+    <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
-        <i class="bi bi-house"></i> Inicio
+        <i class="bi bi-house"></i> {{ _("Inicio") }}
       </a>
     </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Caja y Bancos") }}</li>
   </ol>
 </nav>
 
 <div class="ca-page-header">
-  <h4><i class="bi bi-bank me-2" style="color:#BB6A40"></i>Módulo de Caja y Bancos</h4>
+  <div>
+    <h1><i class="bi bi-bank me-2"></i>{{ _("Caja y Bancos") }}</h1>
+    <p>{{ _("Gestiona cuentas, pagos, transferencias y conciliaciones.") }}</p>
+  </div>
 </div>
 
-<div class="ca-module-grid">
+<div class="ca-module-grid ca-module-workspace-grid">
 
   {# ── Columna 1: Configuración ─────────────────────── #}
-  <div class="ca-module-card">
-    <h5><i class="bi bi-sliders"></i> Configuración del Módulo</h5>
+  <div class="ca-module-card ca-module-card--secondary">
+    <h5><i class="bi bi-sliders"></i> {{ _("Configuración") }}</h5>
     <ul class="ca-module-links">
 
       {% if acceso.configurar %}
@@ -56,8 +61,8 @@
   </div>
 
   {# ── Columna 2: Registros ─────────────────────────── #}
-  <div class="ca-module-card">
-    <h5><i class="bi bi-card-list"></i> Registros del Módulo</h5>
+  <div class="ca-module-card ca-module-card--primary">
+    <h5><i class="bi bi-card-list"></i> {{ _("Operaciones") }}</h5>
     <ul class="ca-module-links">
 
       {% if acceso.autorizado %}
@@ -109,7 +114,7 @@
 
   {# ── Columna 3: Proyección de Flujo de Caja ───────── #}
   {% if not MODO_ESCRITORIO %}
-  <div class="ca-module-card">
+  <div class="ca-module-card ca-module-card--secondary">
     <h5><i class="bi bi-graph-up-arrow"></i> Proyección de Flujo de Caja</h5>
     <ul class="ca-module-links">
 
@@ -138,8 +143,8 @@
   {% endif %}
 
   {# ── Columna 4: Reportes ──────────────────────────── #}
-  <div class="ca-module-card">
-    <h5><i class="bi bi-bar-chart-fill"></i> Reportes del Módulo</h5>
+  <div class="ca-module-card ca-module-card--secondary">
+    <h5><i class="bi bi-bar-chart-fill"></i> {{ _("Reportes") }}</h5>
     <ul class="ca-module-links">
 
       {% if acceso.autorizado %}
@@ -161,5 +166,6 @@
     </ul>
   </div>
 
+</div>
 </div>
 {% endblock %}

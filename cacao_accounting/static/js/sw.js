@@ -1,9 +1,9 @@
-const CACHE_NAME = 'cacao-accounting-v2';
+const CACHE_NAME = 'cacao-accounting-v4';
 const STATIC_ASSETS = [
-  '/',
   '/static/css/cacaoaccounting.css',
   '/static/manifest.json',
   '/static/media/brand.svg',
+  '/static/media/brand-dark.svg',
   '/static/media/brand-mark.svg'
 ];
 

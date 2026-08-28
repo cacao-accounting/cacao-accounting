@@ -6,8 +6,16 @@ from cacao_accounting.module_badges import module_badge
 def test_module_badge_semantic_precedence():
     access = SimpleNamespace(access=True, consultar=True, autorizar=True)
 
-    assert module_badge(access=access, required="access").status == "ok"
-    assert module_badge(access=access, required="autorizar", pending_count=2).status == "pending_approval"
+    ok_badge = module_badge(access=access, required="access")
+    assert ok_badge.status == "ok"
+    assert ok_badge.css_class == "ca-status-ok"
+    assert ok_badge.label == "Todo ok"
+
+    pending_badge = module_badge(access=access, required="autorizar", pending_count=2)
+    assert pending_badge.status == "pending_approval"
+    assert pending_badge.css_class == "ca-status-pending-approval"
+    assert pending_badge.title == "2 registro(s) pendiente(s) de aprobación"
+
     assert module_badge(access=access, required="access", requires_attention=True).status == "attention"
 
 

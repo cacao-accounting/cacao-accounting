@@ -8,7 +8,7 @@ body {
   align-items: center;
   padding-top: 40px;
   padding-bottom: 40px;
-  background-color: #f5f5f5;
+  background: #faf6f1;
 }
 
 .form-signin {
@@ -44,4 +44,60 @@ body {
   margin-bottom: 10px;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
+}
+
+/* Authentication is deliberately theme-independent: a familiar, calm entry
+   point avoids a sudden dark screen when the saved application preference is
+   dark. */
+.login-page,
+html[data-theme="dark"] .login-page {
+  background: #faf6f1 !important;
+  color: #3e302a !important;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  padding: 2.25rem 2rem 1.75rem;
+  margin: auto;
+  background: #ffffff !important;
+  border: 1px solid #e4d7cc !important;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(90, 59, 46, .10);
+}
+
+.login-card .form-control {
+  min-height: 2.5rem;
+  margin-bottom: .85rem;
+  color: #3e302a !important;
+  background: #ffffff !important;
+  border-color: #d8c8bb !important;
+}
+
+.login-card .form-control:focus {
+  border-color: #af795f !important;
+  box-shadow: 0 0 0 .2rem rgba(175, 121, 95, .16) !important;
+}
+
+.login-card label,
+.login-title {
+  color: #3e302a !important;
+}
+
+.login-subtitle,
+.login-footer,
+.login-card .login-link {
+  color: #725e52 !important;
+}
+
+.login-card .btn-primary {
+  background: #825843 !important;
+  border-color: #825843 !important;
+  box-shadow: none !important;
+}
+
+.login-card .btn-primary:hover,
+.login-card .btn-primary:focus {
+  background: #5a3b2e !important;
+  border-color: #5a3b2e !important;
 }

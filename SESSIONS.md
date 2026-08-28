@@ -3,6 +3,25 @@
 Cacao Accouting es un software contable que busca dar cobertura completa y robusta a los siguientes
 flujo de negocio:
 
+## 2026-08-27 (refinamiento final de identidad visual)
+
+### Decisiones aplicadas
+
+- El tema claro usa superficies neutras y acento verde hoja; el oscuro conserva superficies grafito y acento naranja.
+  Son identidades de tema distintas, mientras que el verde de exito se mantiene reservado para estados semanticos.
+- Se mantienen todos los badges informativos. El estado normal se representa con un icono de verificacion y los estados
+  de acceso, solo lectura, pendiente y atencion conservan su icono, etiqueta accesible y `data-status`.
+- La marca de la barra superior no lleva una tarjeta de color. Se creo `brand-dark.svg` para el modo oscuro: conserva
+  el isotipo aprobado y usa un wordmark crema de alto contraste. En claro, el logo original cuenta con un margen blanco
+  muy sutil y un borde tenue para separar los detalles claros del isotipo sin cargar la navbar.
+
+### Verificacion
+
+- `tests/test_theme_styles.py` y el caso de badges de `tests/test_03webactions.py`: 6 pruebas aprobadas.
+- `ruff check cacao_accounting tests/test_theme_styles.py tests/test_03webactions.py`: aprobado.
+- `git diff --check`: sin errores. La prueba de rutas completa previamente detecto un error ajeno a este alcance en
+  `inventario/routes.py` (`StockEntry.name`), por lo que no se altero backend.
+
 - Order to Cash (O2C): Flujo completo del ciclo de venta.
 - Source to Pay (S2P): Flujo completo del proceso de abastecimiento.
 - Record to Report (R2R): Generación robusta de reportes a partir de los registros almacenados en
@@ -584,3 +603,40 @@ Ejecutar la primera ronda de QA sobre la implementación de filtros por período
 ### Verificación
 
 Linters limpios (black, ruff, flake8, mypy, pydocstyle) sobre los archivos modificados. La nueva suite de pruebas de consistencia pasa junto con `test_period_range` y `test_cancellation_period`; el test de paridad se ajustó para usar una consulta directa del GL en lugar del helper completo, que requiere un libro configurado.
+
+## 2026-08-27
+
+### Petición del usuario
+
+Actualizar la apariencia usando la propuesta visual: Cacao debe tener una identidad moderna, fresca y agradable, con colores tierra sutiles y elegantes. El login debe mantenerse blanco para todos los temas.
+
+### Plan implementado
+
+Se definió una paleta final de marfil cálido, arcilla apagada, oliva seco y cacao profundo como ancla puntual. La aplicación deja de usar grises fríos o masas de chocolate saturado. El login tiene fondo y superficie blanca cálida independientes de la preferencia de tema guardada.
+
+### Decisiones de diseño
+
+- El cacao oscuro se reserva para navegación y jerarquía, no para fondos extensos.
+- La terracota y el oliva se emplean como acentos discretos que aportan frescura.
+- El modo oscuro conserva contraste y matiz cálido con capas umber suaves.
+
+## 2026-08-27
+
+### Petición del usuario
+
+Rehacer la dirección visual de Cacao Accounting: evitar superficies marrones saturadas, mantener el login claro,
+convertir las portadas en workspaces jerárquicos y reservar los colores de marca para acentos.
+
+### Plan implementado
+
+Se sustituyó la capa visual final por superficies neutrales profesionales: claro con fondo gris suave, sidebar cálido y
+topbar crema; oscuro con grafito neutral y tarjetas separadas. Las portadas de Compras, Ventas, Inventario, Caja y
+Bancos y Contabilidad ahora presentan Operaciones como tarjeta principal y agrupan las áreas secundarias debajo.
+Los indicadores verdes para acceso normal se eliminan, preservando estados excepcionales accesibles.
+
+### Decisiones de diseño
+
+- Los tonos Cacao se usan en acciones, selección y detalles, no como fondos estructurales.
+- El workspace se limita a 1280 px y responde de tres a dos y una columna según el ancho disponible.
+- El login conserva una superficie clara aunque la preferencia de aplicación sea oscura.
+- QA independiente verificó la cascada, el contraste de estados, la responsividad y las pruebas focalizadas.
