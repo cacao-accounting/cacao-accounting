@@ -326,7 +326,6 @@
           company: '',
           naming_series: '',
           currency: '',
-          currency_explicit: false,
           posting_date: new Date().toISOString().slice(0, 10),
           party_type: '',
           party: '',
@@ -391,15 +390,8 @@
             this.$watch('header.party', () => this.refreshCatalogPrices());
             this.$watch('header.company', () => this.refreshCatalogPrices());
             this.$watch('header.posting_date', () => this.refreshCatalogPrices());
-            this.$watch('header.currency', (value) => this.onCurrencyChange(value));
           }
           this.queueTaxPreview();
-        },
-
-        onCurrencyChange(value) {
-          if (value && !this.flowLockedFields.includes('currency')) {
-            this.header.currency_explicit = true;
-          }
         },
 
         isFlowFieldLocked(field) {
