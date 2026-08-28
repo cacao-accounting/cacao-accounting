@@ -221,6 +221,12 @@ def active_cancellation_dependencies(document: Any, source_type: str, source_id:
         )
 
     if isinstance(document, PaymentEntry):
+        payment_references = database.session.execute(
+            select(PaymentReference).where(PaymentReference.payment_id == source_id)
+        ).scalars()
+        dependencies.extend(
+            CancellationDependency("aplicacion de pago", str(row.id), "payment_reference") for row in payment_references
+        )
         certificates = database.session.execute(
             select(WithholdingCertificate).where(
                 WithholdingCertificate.payment_id == source_id,
