@@ -652,7 +652,8 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     if explicit_currency:
         _validate_active_transaction_currency(transaction_currency)
     base_currency = _optional_text(payload.get("base_currency")) or str(company_currency or "") or None
-    _validate_active_transaction_currency(base_currency)
+    if _optional_text(payload.get("base_currency")):
+        _validate_active_transaction_currency(base_currency)
     exchange_rate = _optional_decimal(payload.get("exchange_rate"))
     if exchange_rate is not None and exchange_rate <= 0:
         raise JournalValidationError("El tipo de cambio debe ser mayor que cero.")
