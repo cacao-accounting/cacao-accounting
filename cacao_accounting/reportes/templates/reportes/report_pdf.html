@@ -1,0 +1,46 @@
+{# SPDX-License-Identifier: Apache-2.0 - Plantilla PDF genérica para reportes. #}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { size: A4 landscape; margin: 1.2cm; }
+    body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 11px; color: #1a1a1a; }
+    h1 { font-size: 16px; margin: 0 0 0.2cm 0; }
+    .meta { font-size: 10px; color: #444; margin: 0 0 0.4cm 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #bbb; padding: 3px 5px; text-align: left; }
+    th { background: #f0f0f0; }
+    tr.total td { font-weight: bold; background: #fafafa; }
+    td.num { text-align: right; }
+    .note { margin-top: 0.3cm; font-size: 9px; color: #444; }
+  </style>
+</head>
+<body>
+  <h1>{{ title }}</h1>
+  <p class="meta">
+    {{ _("Compañía") }}: {{ company }} | {{ _("Libro") }}: {{ ledger }} |
+    {{ _("Período") }}: {{ period }} | {{ _("Fecha de generación") }}: {{ generated_on }}
+  </p>
+  <table>
+    <thead>
+      <tr>
+        {% for column in columns %}<th>{{ column }}</th>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        {% for cell in row %}<td>{{ cell }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+      {% for total_row in total_rows %}
+      <tr class="total">
+        {% for cell in total_row %}<td>{{ cell }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="note">{{ _("Documento generado por Cacao Accounting.") }}</p>
+</body>
+</html>

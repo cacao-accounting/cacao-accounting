@@ -97,8 +97,14 @@
     <div class="ca-card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
       <h5 class="ca-card-title mb-0">{{ report_title }}</h5>
       <div class="d-flex gap-2">
+        {% if pdf_supported %}
+        <a class="btn btn-sm btn-outline-secondary" href="{{ request.path }}?{{ request.query_string.decode() }}{% if request.query_string %}&{% endif %}export=pdf">{{ _("Exportar PDF") }}</a>
         <a class="btn btn-sm btn-outline-success" href="{{ request.path }}?{{ request.query_string.decode() }}{% if request.query_string %}&{% endif %}export=xlsx">{{ _("Exportar Excel") }}</a>
         <a class="btn btn-sm btn-outline-secondary" href="{{ request.path }}?{{ request.query_string.decode() }}{% if request.query_string %}&{% endif %}export=csv">{{ _("Exportar CSV") }}</a>
+        {% else %}
+        <a class="btn btn-sm btn-outline-success" href="{{ request.path }}?{{ request.query_string.decode() }}{% if request.query_string %}&{% endif %}export=xlsx">{{ _("Exportar Excel") }}</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ request.path }}?{{ request.query_string.decode() }}{% if request.query_string %}&{% endif %}export=csv">{{ _("Exportar CSV") }}</a>
+        {% endif %}
       </div>
     </div>
     <div class="ca-report-context">

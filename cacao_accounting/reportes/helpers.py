@@ -12,7 +12,7 @@ from decimal import DecimalException
 from io import BytesIO, StringIO
 from typing import Any
 
-from flask import Blueprint, render_template, request, send_file, url_for
+from flask import Blueprint, abort, render_template, request, send_file, url_for
 from flask_login import current_user
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
@@ -48,6 +48,59 @@ else:
 reportes = Blueprint("reportes", __name__, template_folder="templates")
 
 REPORT_TABLE_HTML = "reportes/report_table.html"
+
+REPORT_PDF_TEMPLATE = "reportes/report_pdf.html"
+
+_SUPPORTED_EXPORT_FORMATS = {"csv", "xlsx", "pdf"}
+
+
+def _pdf_support_available() -> bool:
+    """Indica si la exportación PDF está disponible en este despliegue.
+
+    El renderizado PDF depende de WeasyPrint y sus dependencias nativas
+    (pango/cairo), que no están garantizadas en el modo desktop. Se reutiliza
+    el mismo criterio que la interfaz de impresión: en desktop la opción PDF se
+    oculta y el reporte ofrece CSV/XLSX como alternativa.
+    """
+    from cacao_accounting.runtime_mode import is_desktop_mode
+
+    if is_desktop_mode():
+        return False
+    try:  # practica de defensa: no fallar si WeasyPrint no está instalado.
+        import flask_weasyprint  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def _write_report_pdf(
+    report_code: str,
+    title: str,
+    columns: list[str],
+    rows: list[list[object]],
+    *,
+    company: str,
+    ledger: str,
+    period: str,
+    total_rows: list[list[object]] | None = None,
+) -> bytes:
+    """Renderiza la matriz de un reporte como PDF mediante Jinja2 + WeasyPrint."""
+    from flask_weasyprint import HTML
+
+    html_string = render_template(
+        REPORT_PDF_TEMPLATE,
+        title=title,
+        columns=columns,
+        rows=rows,
+        total_rows=total_rows or [],
+        company=company,
+        ledger=ledger,
+        period=period,
+        generated_on=date.today().isoformat(),
+    )
+    return bytes(HTML(string=html_string).write_pdf())
+
 
 _COLUMN_LABELS = {
     "posting_date": "Posting Date",
@@ -875,6 +928,17 @@ def _report_to_matrix(report) -> tuple[list[str], list[list[object]]]:
     return columns, data_rows
 
 
+def _pdf_total_rows(report) -> list[list[object]]:
+    """Construye las filas de totales para la exportación PDF de un reporte."""
+    totals_raw = getattr(report, "totals", {}) or {}
+    ledger_currency = getattr(report, "ledger_currency", None)
+    return [
+        [_column_label(name, ledger_currency), _format_cell(name, value, ledger_currency)]
+        for name, value in totals_raw.items()
+        if value is not None
+    ]
+
+
 def _write_operational_report_xlsx(report, report_code: str, title: str, filter_payload: dict[str, object]) -> bytes:
     columns, rows = _report_to_matrix(report)
     workbook = Workbook()
@@ -920,7 +984,7 @@ def _write_operational_report_xlsx(report, report_code: str, title: str, filter_
 
 def _export_operational_report(report, report_code: str, title: str, filter_payload: dict[str, object]):
     export_format = request.args.get("export")
-    if export_format not in {"csv", "xlsx"}:
+    if export_format not in _SUPPORTED_EXPORT_FORMATS:
         return None
 
     columns, rows = _report_to_matrix(report)
@@ -936,13 +1000,39 @@ def _export_operational_report(report, report_code: str, title: str, filter_payl
             download_name=f"{report_code}.csv",
         )
 
-    xlsx_content = _write_operational_report_xlsx(report, report_code, title, filter_payload)
-    return send_file(
-        BytesIO(xlsx_content),
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True,
-        download_name=f"{report_code}.xlsx",
-    )
+    if export_format == "xlsx":
+        xlsx_content = _write_operational_report_xlsx(report, report_code, title, filter_payload)
+        return send_file(
+            BytesIO(xlsx_content),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=f"{report_code}.xlsx",
+        )
+
+    if export_format == "pdf":
+        if not _pdf_support_available():
+            abort(400, description=_("La exportación PDF no está disponible en este despliegue; use Excel o CSV."))
+        pdf_content = _write_report_pdf(
+            report_code,
+            title,
+            [_column_label(column, report.ledger_currency) for column in columns],
+            [
+                [_format_cell(column, row[index], report.ledger_currency) for index, column in enumerate(columns)]
+                for row in rows
+            ],
+            company=str(filter_payload.get("company") or ""),
+            ledger=str(filter_payload.get("ledger") or "") or "—",
+            period=str(filter_payload.get("period") or "—"),
+            total_rows=_pdf_total_rows(report),
+        )
+        return send_file(
+            BytesIO(pdf_content),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"{report_code}.pdf",
+        )
+
+    return None
 
 
 def _write_financial_report_xlsx(report, report_code: str, title: str, report_filters: FinancialReportFilters) -> bytes:
@@ -992,7 +1082,7 @@ def _write_financial_report_xlsx(report, report_code: str, title: str, report_fi
 
 def _export_financial_report(report, report_code: str, title: str, report_filters: FinancialReportFilters):
     export_format = request.args.get("export")
-    if export_format not in {"csv", "xlsx"}:
+    if export_format not in _SUPPORTED_EXPORT_FORMATS:
         return None
 
     columns, rows = _report_to_matrix(report)
@@ -1008,13 +1098,39 @@ def _export_financial_report(report, report_code: str, title: str, report_filter
             download_name=f"{report_code}.csv",
         )
 
-    xlsx_content = _write_financial_report_xlsx(report, report_code, title, report_filters)
-    return send_file(
-        BytesIO(xlsx_content),
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True,
-        download_name=f"{report_code}.xlsx",
-    )
+    if export_format == "xlsx":
+        xlsx_content = _write_financial_report_xlsx(report, report_code, title, report_filters)
+        return send_file(
+            BytesIO(xlsx_content),
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=f"{report_code}.xlsx",
+        )
+
+    if export_format == "pdf":
+        if not _pdf_support_available():
+            abort(400, description=_("La exportación PDF no está disponible en este despliegue; use Excel o CSV."))
+        pdf_content = _write_report_pdf(
+            report_code,
+            title,
+            [_column_label(column, report.ledger_currency) for column in columns],
+            [
+                [_format_cell(column, row[index], report.ledger_currency) for index, column in enumerate(columns)]
+                for row in rows
+            ],
+            company=report_filters.company,
+            ledger=report_filters.ledger or "—",
+            period=_period_display_label(report_filters),
+            total_rows=_pdf_total_rows(report),
+        )
+        return send_file(
+            BytesIO(pdf_content),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"{report_code}.pdf",
+        )
+
+    return None
 
 
 def _compute_display_columns(report, report_code: str, saved_view: str) -> list[str]:
@@ -1207,6 +1323,7 @@ def _render_financial_report(
         period_to=period_picker["period_to"],
         period_from_label=period_picker["period_from_label"],
         period_to_label=period_picker["period_to_label"],
+        pdf_supported=_pdf_support_available(),
     )
 
 
@@ -1286,6 +1403,7 @@ def _render_operational_framework(
         period_to=period_picker["period_to"],
         period_from_label=period_picker["period_from_label"],
         period_to_label=period_picker["period_to_label"],
+        pdf_supported=_pdf_support_available(),
     )
 
 
