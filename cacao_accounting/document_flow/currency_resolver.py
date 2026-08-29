@@ -236,32 +236,10 @@ def assert_base_currency_snapshot(
     return expected
 
 
-def collect_sources_from_relations(
-    document: Any,
-    relation_attr: str = "source_relations",
-) -> list[Any]:
-    """Recupera los documentos origen desde una coleccion de relaciones.
-
-    Helper que evita repetir la logica de extraccion de fuentes en cada
-    consumidor. Devuelve una lista de instancias ``Any`` con
-    ``transaction_currency`` accesible.
-    """
-    relations = getattr(document, relation_attr, None)
-    if not relations:
-        return []
-    sources: list[Any] = []
-    for relation in relations:
-        source = getattr(relation, "source", None)
-        if source is not None:
-            sources.append(source)
-    return sources
-
-
 __all__ = [
     "ResolvedCurrency",
     "assert_base_currency_snapshot",
     "assert_currency_explicit",
-    "collect_sources_from_relations",
     "company_functional_currency",
     "resolve_party_currency",
     "resolve_transaction_currency",
