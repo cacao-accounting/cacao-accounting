@@ -15,6 +15,14 @@
   </div>
   <form method="post" action="{{ url_for('bancos.bancos_conciliacion_bancaria_aplicar') }}" class="p-3">
     <input type="hidden" name="company" value="{{ company or 'cacao' }}">
+    <div class="mb-3 row">
+      <label for="reconciliation_date" class="col-sm-2 col-form-label">{{ _("Fecha de conciliación") }}</label>
+      <div class="col-sm-4">
+        <input type="date" name="reconciliation_date" id="reconciliation_date" class="form-control form-control-sm"
+               value="{{ reconciliation_date or '' }}">
+        <div class="form-text">{{ _("Puede conciliar un período pasado mientras no esté cerrado.") }}</div>
+      </div>
+    </div>
     <table class="ca-table">
       <caption style="display:none;">{{ _("Conciliación bancaria") }}</caption>
       <thead>
