@@ -1562,6 +1562,11 @@ def ventas_entrega_nuevo():
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
     titulo = "Nueva Nota de Entrega - " + APPNAME
+    initial_source_type = ""
+    if from_order_id:
+        initial_source_type = "sales_order"
+    elif from_note_id:
+        initial_source_type = "delivery_note"
     transaction_config = {
         "formKey": _FORMKEY_DELIVERY_NOTE,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
@@ -1570,7 +1575,7 @@ def ventas_entrega_nuevo():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "initialSourceType": "sales_order" if from_order_id else ("delivery_note" if from_note_id else ""),
+        "initialSourceType": initial_source_type,
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
             {"value": "delivery_note", "label": _("Nota de Entrega")},
