@@ -166,7 +166,7 @@ def _seed_test_data():
         code="21.01.002",
         name="Cuentas por Pagar",
         entity="cacao",
-        account_type="liability",
+        account_type="payable",
     )
     bank_acc = Accounts(
         id="ACC-BANK-720",
@@ -244,7 +244,7 @@ def _seed_test_data():
         code="11.02.001",
         name="Cuentas por Cobrar",
         entity="cacao",
-        account_type="asset",
+        account_type="receivable",
     )
     c_party_customer_receivable = PartyAccount(
         party_id="CUST-720",

@@ -534,6 +534,7 @@ def test_submit_sales_invoice_uses_persisted_fiscal_snapshot(app_ctx):
         active=True,
         enabled=True,
         classification="asset",
+        account_type="receivable",
     )
     income_account = Accounts(
         entity="cacao",

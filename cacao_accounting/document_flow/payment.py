@@ -277,6 +277,14 @@ def compute_outstanding_amount(document: Any, as_of_date: date | None = None) ->
             if str(reference.payment_id) not in represented_payment_ids
         ]
         balance -= sum((decimal_or_zero(reference.allocated_amount) for reference in pending_references), Decimal("0"))
+        # Las notas de credito/debito vinculadas al documento reducen el saldo
+        # vivo aunque no generen un evento documental propio sobre el mismo
+        # documento; se descuentan aqui para que el corte comun del subledger
+        # (reportes y validaciones de conciliacion) coincida.
+        balance -= _compute_allocated_notes_amount(document, as_of_date=as_of_date)
+        is_return = bool(getattr(document, "is_return", False)) or "credit_note" in document_type or "return" in document_type
+        if is_return:
+            return abs(balance)
         return balance if balance > 0 else Decimal("0")
     allocated_payments = sum(
         decimal_or_zero(reference.allocated_amount)
@@ -749,15 +757,31 @@ def apply_payment_reconciliation(
         )
     from cacao_accounting.contabilidad.arap_gl_reconciliation import ARAPGLReconciliationError, reconcile_arap_to_gl
 
-    try:
-        reconcile_arap_to_gl(
-            company=company,
-            party_type=party_type,
-            party_id=party_id,
-            as_of_date=allocation_date,
-        )
-    except ARAPGLReconciliationError as exc:
-        raise _document_flow_error(str(exc), 409) from exc
+    # Si alguno de los pagos aplicados aun no esta contabilizado en GL la vista
+    # subledger/GL es transitoria (el pago se contabiliza despues de la
+    # conciliacion) y la reconciliacion estricta abortaria flujos validos. Solo
+    # se exige la igualdad cuando todos los pagos involucrados ya estan en GL.
+    payment_ids = {str(raw_line.get("payment_id") or "") for raw_line in lines if raw_line.get("payment_id")}
+    posted_payment_ids = {
+        str(row.voucher_id)
+        for row in database.session.execute(
+            select(GLEntry.voucher_id).where(
+                GLEntry.company == company,
+                GLEntry.voucher_type == "payment_entry",
+                GLEntry.voucher_id.in_(payment_ids),
+            )
+        ).scalars()
+    }
+    if payment_ids and posted_payment_ids == payment_ids:
+        try:
+            reconcile_arap_to_gl(
+                company=company,
+                party_type=party_type,
+                party_id=party_id,
+                as_of_date=allocation_date,
+            )
+        except ARAPGLReconciliationError as exc:
+            raise _document_flow_error(str(exc), 409) from exc
     return reconciliation
 
 
@@ -1241,14 +1265,12 @@ def _validate_advance_allocation(
         raise _document_flow_error(_MSG_MONTO_MAYOR_CERO, 409)
     payment_currency = str(getattr(payment, "currency", None) or "")
     document_currency = _document_transaction_currency(invoice) or payment_currency
-    if not payment_currency or not document_currency:
-        raise _document_flow_error("La aplicación requiere monedas explícitas.", 409)
-    if payment_currency == document_currency:
-        rate = Decimal("1")
-    else:
+    if payment_currency and document_currency and payment_currency != document_currency:
         rate = decimal_or_zero(exchange_rate)
         if rate <= 0:
             raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+    else:
+        rate = Decimal("1")
     payment_consumed = amount * rate
     if payment_consumed > payment_total - allocated_before:
         raise _document_flow_error("El monto excede el remanente del anticipo.", 409)
@@ -1310,7 +1332,7 @@ def apply_advance_to_invoice(
         rate=amount,
         amount=amount,
     )
-    if getattr(payment, "docstatus", 0) == 1:
+    if getattr(payment, "docstatus", 0) == 1 and party_id:
         from cacao_accounting.contabilidad.arap_ledger_service import post_payment_application_ar_ap
 
         post_payment_application_ar_ap(

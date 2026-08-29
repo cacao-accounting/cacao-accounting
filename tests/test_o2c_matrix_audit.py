@@ -124,10 +124,12 @@ def chart(app_ctx):
         database,
     )
 
-    ar = Accounts(entity=COMPANY, code="1101", name="Cuentas por Cobrar", classification="asset")
+    ar = Accounts(entity=COMPANY, code="1101", name="Cuentas por Cobrar", classification="asset", account_type="receivable")
     income = Accounts(entity=COMPANY, code="4101", name="Ingreso", classification="income", account_type="income")
     bank_gl = Accounts(entity=COMPANY, code="1001", name="Banco", classification="asset", account_type="bank")
-    advance = Accounts(entity=COMPANY, code="1102", name="Anticipo Clientes", classification="asset")
+    advance = Accounts(
+        entity=COMPANY, code="1102", name="Anticipo Clientes", classification="asset", account_type="customer_advance"
+    )
     discount = Accounts(entity=COMPANY, code="6101", name="Descuentos", classification="expense")
     fx_gain = Accounts(entity=COMPANY, code="4102", name="Ganancia Cambiaria", classification="income")
     fx_loss = Accounts(entity=COMPANY, code="6102", name="Perdida Cambiaria", classification="expense")

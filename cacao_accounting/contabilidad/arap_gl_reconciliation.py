@@ -26,6 +26,7 @@ from cacao_accounting.database import (
 
 ReconciliationMode = Literal["strict", "warn", "log"]
 AR_AP_ACCOUNT_TYPES = frozenset({"receivable", "payable", "customer_advance", "supplier_advance"})
+EXCHANGE_REVALUATION_VOUCHER_TYPE = "exchange_revaluation"
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -220,12 +221,23 @@ def _gl_totals(
     ledger_ids: set[str] | None = None,
     currencies: set[str] | None = None,
 ) -> dict[ARAPGLReconciliationKey, Decimal]:
-    """Aggregate control-account GL entries using the subledger sign convention."""
+    """Aggregate control-account GL entries using the subledger sign convention.
+
+    Las revalorizaciones cambiarias no realizada son ajustes de valuacion y no
+    eventos documentales AR/AP; no se reflejan en el subledger documental, por
+    lo que se excluyen de los totales de las cuentas de control para evitar
+    desviaciones espurias en la conciliacion.
+    """
     query = (
         select(GLEntry, Accounts, Book)
         .join(Accounts, Accounts.id == GLEntry.account_id)
         .join(Book, Book.id == GLEntry.ledger_id)
-        .where(GLEntry.company == company, GLEntry.posting_date <= as_of_date, GLEntry.party_id.is_not(None))
+        .where(
+            GLEntry.company == company,
+            GLEntry.posting_date <= as_of_date,
+            GLEntry.party_id.is_not(None),
+            GLEntry.voucher_type != EXCHANGE_REVALUATION_VOUCHER_TYPE,
+        )
     )
     if party_type:
         query = query.where(GLEntry.party_type == party_type)

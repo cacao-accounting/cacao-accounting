@@ -304,11 +304,30 @@ def _book_exchange_rate(company: str, source: str, target: str, posting_date: da
 
 
 def post_document_ar_ap(document: Any, entries: Iterable[GLEntry]) -> list[ARAPLedgerEntry]:
-    """Registra la apertura documental y la valoración GL de una factura."""
+    """Registra la apertura documental y la valoración GL de una factura.
+
+    La apertura es idempotente: si el movimiento de apertura del documento ya
+    existe no se duplica, lo que permite invocar la función desde
+    ``post_document_to_gl`` y desde ``submit_document`` sin riesgo de
+    registrar dos veces el mismo documento.
+    """
     if not isinstance(document, (SalesInvoice, PurchaseInvoice)):
         return []
     if _party_id(document) is None or not _currency(document):
         return []
+    existing = database.session.execute(
+        select(ARAPLedgerEntry)
+        .where(
+            ARAPLedgerEntry.document_type == _document_type(document),
+            ARAPLedgerEntry.document_id == str(document.id),
+            ARAPLedgerEntry.event_type == "opening",
+            ARAPLedgerEntry.is_reversal.is_(False),
+        )
+        .order_by(ARAPLedgerEntry.id)
+        .limit(1)
+    ).scalar_one_or_none()
+    if existing is not None:
+        return [existing]
     # Devoluciones/credit notes reduce the documentary balance and therefore
     # enter the subledger with the opposite sign of a normal invoice.
     sign = Decimal("-1") if getattr(document, "is_return", False) else Decimal("1")
@@ -338,13 +357,57 @@ def post_document_ar_ap(document: Any, entries: Iterable[GLEntry]) -> list[ARAPL
 
 
 def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> list[ARAPLedgerEntry]:
-    """Registra el saldo propio del pago y sus aplicaciones documentales."""
+    """Registra el saldo propio del pago y sus aplicaciones documentales.
+
+    Es idempotente por pago: si la apertura del pago ya fue materializada (por
+    ``submit_document`` o por ``post_payment_application_ar_ap`` durante la
+    conciliación) no se duplican movimientos. Esto permite invocarla desde
+    ``post_document_to_gl`` y desde el flujo de conciliación sin riesgo de
+    registrar dos veces el mismo pago.
+    """
     references = list(
         database.session.execute(select(PaymentReference).where(PaymentReference.payment_id == document.id)).scalars().all()
     )
     if not references and not _party_id(document):
         return []
+    existing_opening = database.session.execute(
+        select(ARAPLedgerEntry)
+        .where(
+            ARAPLedgerEntry.document_type == "payment_entry",
+            ARAPLedgerEntry.document_id == str(document.id),
+            ARAPLedgerEntry.event_type == "opening",
+            ARAPLedgerEntry.is_reversal.is_(False),
+        )
+        .order_by(ARAPLedgerEntry.id)
+        .limit(1)
+    ).scalar_one_or_none()
     total = _decimal(document.paid_amount or document.received_amount)
+    if existing_opening is not None:
+        # La apertura pudo haber sido materializada sin valoración por libro por
+        # ``post_payment_application_ar_ap`` durante la conciliación (cuando el
+        # pago aún no estaba en GL). Al contabilizar el pago se completa la
+        # valoración para que el subledger cuadre contra el GL.
+        if not existing_opening.book_entries and total:
+            party_entries = _party_gl_entries(entries, _party_id(document))
+            payment_currency = str(_currency(document) or "")
+            payment_date = getattr(document, "posting_date", None) or date.today()
+            for book in _active_books(str(document.company)):
+                rate = _book_exchange_rate(
+                    str(document.company),
+                    payment_currency,
+                    str(book.currency or payment_currency),
+                    payment_date,
+                    _decimal(document.exchange_rate),
+                )
+                candidates = _book_entries_for(str(book.id), party_entries)
+                opening_gl = candidates[0] if candidates else None
+                _add_book_entry(
+                    existing_opening,
+                    book=book,
+                    amount=-(total * rate).quantize(Decimal("0.0001")),
+                    gl_entry=opening_gl,
+                )
+        return [existing_opening]
     movements: list[ARAPLedgerEntry] = []
     party_entries = _party_gl_entries(entries, _party_id(document))
     payment_currency = str(_currency(document) or "")
@@ -391,6 +454,23 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
             SalesInvoice if str(reference.reference_type).startswith("sales_") else PurchaseInvoice, reference.reference_id
         )
         if target is None:
+            continue
+        # Si la conciliación ya materializó la aplicación
+        # (``post_payment_application_ar_ap``), no se duplica el movimiento.
+        already_applied = database.session.execute(
+            select(ARAPLedgerEntry)
+            .where(
+                ARAPLedgerEntry.document_type == _document_type(target),
+                ARAPLedgerEntry.document_id == str(target.id),
+                ARAPLedgerEntry.event_type == "allocation",
+                ARAPLedgerEntry.reference_type == "payment_entry",
+                ARAPLedgerEntry.reference_id == str(document.id),
+                ARAPLedgerEntry.is_reversal.is_(False),
+            )
+            .order_by(ARAPLedgerEntry.id)
+            .limit(1)
+        ).scalar_one_or_none()
+        if already_applied is not None:
             continue
         amount = _decimal(reference.allocated_amount)
         target_cache = database.session.execute(
@@ -624,6 +704,21 @@ def post_payment_application_ar_ap(
         else ("debit" if _decimal(target_opening.document_amount) > 0 else "credit")
     )
     target_delta = -amount if target_direction == "debit" else amount
+    already_applied = database.session.execute(
+        select(ARAPLedgerEntry)
+        .where(
+            ARAPLedgerEntry.document_type == document_type,
+            ARAPLedgerEntry.document_id == str(document.id),
+            ARAPLedgerEntry.event_type == "allocation",
+            ARAPLedgerEntry.reference_type == "payment_entry",
+            ARAPLedgerEntry.reference_id == payment_id,
+            ARAPLedgerEntry.is_reversal.is_(False),
+        )
+        .order_by(ARAPLedgerEntry.id)
+        .limit(1)
+    ).scalar_one_or_none()
+    if already_applied is not None:
+        return []
     target_movement = _new_movement(
         payment,
         amount=target_delta,

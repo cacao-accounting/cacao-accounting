@@ -410,8 +410,11 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
             .limit(1)
         ).scalar_one_or_none()
         if ledger_balance is not None and opening_exists is not None:
-            outstanding_original_currency = max(_decimal_value(ledger_balance), Decimal("0"))
-            paid_original_currency = max(original_original_currency - outstanding_original_currency, Decimal("0"))
+            from cacao_accounting.document_flow.payment import _compute_allocated_notes_amount
+
+            notes = _compute_allocated_notes_amount(document, as_of_date=effective_as_of)
+            outstanding_original_currency = max(_decimal_value(ledger_balance) - notes, Decimal("0"))
+            paid_original_currency = max(original_original_currency - _decimal_value(ledger_balance), Decimal("0"))
         else:
             paid_original_currency = _payment_allocations(document_type, document.id, filters.company, effective_as_of)
             outstanding_original_currency = compute_outstanding_amount(document, as_of_date=effective_as_of)
