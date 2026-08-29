@@ -406,7 +406,7 @@ def _create_supplier_quotation_from_request():
         database.session.commit()
         flash("Cotización de proveedor creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
-    except (IdentifierConfigurationError, DocumentFlowError, PurchaseSourcingError, ValueError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
     return None
@@ -1511,7 +1511,7 @@ def _create_purchase_quotation_from_request():
         database.session.commit()
         flash("Solicitud de cotización creada correctamente.", "success")
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=cotizacion.id))
-    except (IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
     return None
@@ -1605,7 +1605,7 @@ def _create_purchase_receipt_from_form():
         database.session.commit()
         flash("Recepción de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt.id))
-    except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
+    except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
         return None
