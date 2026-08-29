@@ -406,7 +406,7 @@
             event.preventDefault();
             return;
           }
-          if (!this.header.currency) {
+          if (!this.header.currency && !this.header.transaction_currency) {
             this.submitError = 'La moneda transaccional es obligatoria.';
             event.preventDefault();
             return;

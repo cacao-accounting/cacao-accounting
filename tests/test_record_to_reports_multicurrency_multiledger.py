@@ -627,6 +627,7 @@ def test_r2r_multi_currency_journal_entry_all_reports(app_ctx):
         entity="r2r",
         date=date(2026, 8, 7),
         transaction_currency="GBP",
+        base_currency="NIO",
         memo="Manual multi-currency JE",
     )
     database.session.add(journal)

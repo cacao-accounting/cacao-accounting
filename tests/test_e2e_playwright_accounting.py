@@ -125,7 +125,7 @@ def login(page, base_url, username, password):
 
 @pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
 def test_reports_navigation(flask_server, browser):
-    context = browser.new_context()
+    context = browser.new_context(service_workers="block")
     page = context.new_page()
     base_url = flask_server
 
@@ -146,7 +146,7 @@ def test_reports_navigation(flask_server, browser):
 
 @pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
 def test_journal_entry_list_visibility(flask_server, browser):
-    context = browser.new_context()
+    context = browser.new_context(service_workers="block")
     page = context.new_page()
     base_url = flask_server
 
@@ -163,7 +163,7 @@ def test_journal_entry_list_visibility(flask_server, browser):
 
 @pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
 def test_journal_company_smart_select_updates_hidden_filters_and_state(flask_server, browser):
-    context = browser.new_context()
+    context = browser.new_context(service_workers="block")
     page = context.new_page()
     base_url = flask_server
 
@@ -187,7 +187,7 @@ def test_journal_company_smart_select_updates_hidden_filters_and_state(flask_ser
 
 @pytest.mark.skipif(not HAS_PLAYWRIGHT, reason="Playwright not installed")
 def test_rbac_user_restricted_visibility(flask_server, browser):
-    context = browser.new_context()
+    context = browser.new_context(service_workers="block")
     page = context.new_page()
     base_url = flask_server
 
