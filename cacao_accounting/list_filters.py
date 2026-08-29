@@ -154,10 +154,7 @@ def period_picker_context(company: str, period_from: str | None, period_to: str 
 
     periods = list(list_periods_for_company(company))
     labels_by_id = {str(item.id): item.name for item in periods}
-    serialized_periods = [
-        {"id": str(item.id), "name": item.name, "is_closed": bool(item.is_closed)}
-        for item in periods
-    ]
+    serialized_periods = [{"id": str(item.id), "name": item.name, "is_closed": bool(item.is_closed)} for item in periods]
     active_from, active_to = period_from, period_to
     if period_from or period_to:
         resolved = resolve_period_range(company, period_from, period_to)
