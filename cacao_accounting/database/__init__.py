@@ -65,6 +65,7 @@ ACCOUNTING_PERIOD_ID = "accounting_period.id"
 PAYMENT_ENTRY_ID = "payment_entry.id"
 AR_AP_LEDGER_ENTRY_ID = "ar_ap_ledger_entry.id"
 AR_AP_LEDGER_BOOK_ENTRY_ID = "ar_ap_ledger_book_entry.id"
+AR_AP_OPEN_ITEM_ID = "ar_ap_open_item.id"
 PURCHASE_REQUEST_ID = "purchase_request.id"
 PURCHASE_REQUEST_COMPARISON_ID = "purchase_request_comparison.id"
 SUPPLIER_QUOTATION_ID = "supplier_quotation.id"
@@ -3093,6 +3094,66 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
     notes = database.Column(database.Text(), nullable=True)
 
 
+class ARAPOpenItem(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Documento abierto del subledger AP/AR.
+
+    El importe histórico se conserva en los eventos de ``ARAPLedgerEntry``;
+    ``unallocated_amount`` es solamente una caché positiva para consultas
+    rápidas. ``direction`` indica si el documento aumenta el saldo deudor o
+    acreedor y evita inferir el sentido a partir de signos mezclados.
+    """
+
+    __tablename__ = "ar_ap_open_item"
+    __table_args__ = (
+        UniqueConstraint("document_type", "document_id", "economic_line_id", name="uq_ar_ap_open_item_source_line"),
+        Index("ix_ar_ap_open_item_party_open", "company", "party_type", "party_id", "unallocated_amount"),
+        Index("ix_ar_ap_open_item_reference", "document_type", "document_id", "line_number"),
+        CheckConstraint("original_amount > 0", name="ck_ar_ap_open_item_original_positive"),
+        CheckConstraint("unallocated_amount >= 0", name="ck_ar_ap_open_item_unallocated_nonnegative"),
+        CheckConstraint("direction IN ('debit', 'credit')", name="ck_ar_ap_open_item_direction"),
+    )
+
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    ledger_type = database.Column(database.String(10), nullable=False, index=True)
+    party_type = database.Column(database.String(20), nullable=False, index=True)
+    party_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    document_type = database.Column(database.String(50), nullable=False, index=True)
+    document_id = database.Column(database.String(26), nullable=False, index=True)
+    document_no = database.Column(database.String(100), nullable=True, index=True)
+    economic_line_id = database.Column(database.String(26), nullable=False, index=True)
+    line_number = database.Column(database.Integer(), nullable=True)
+    posting_date = database.Column(database.Date(), nullable=False, index=True)
+    document_date = database.Column(database.Date(), nullable=True)
+    due_date = database.Column(database.Date(), nullable=True)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    original_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    unallocated_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    direction = database.Column(database.String(10), nullable=False)
+    status = database.Column(database.String(20), nullable=False, default="open", index=True)
+    source_voucher_type = database.Column(database.String(50), nullable=True, index=True)
+    source_voucher_id = database.Column(database.String(26), nullable=True, index=True)
+    version = database.Column(database.Integer(), nullable=False, default=1)
+    memo = database.Column(database.Text(), nullable=True)
+
+
 class ARAPLedgerEntry(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Movimiento documental inmutable del subledger de cuentas por cobrar y pagar.
 
@@ -3142,6 +3203,9 @@ class ARAPLedgerEntry(database.Model, BaseTabla):  # type: ignore[name-defined]
         nullable=False,
     )
     document_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    # Línea económica que originó el movimiento (necesaria para reconstruir
+    # saldos por línea de comprobantes contables sin mutar la evidencia).
+    economic_line_id = database.Column(database.String(26), nullable=True, index=True)
     # Optional duplicate references make the row traceable to legacy vouchers.
     reference_type = database.Column(database.String(50), nullable=True, index=True)
     reference_id = database.Column(database.String(26), nullable=True, index=True)
@@ -3808,6 +3872,14 @@ class ComprobanteContableDetalle(database.Model, GLBase):  # type: ignore[name-d
         nullable=True,
         index=True,
     )
+    # Identidad estable de la línea económica y referencia AP/AR estructurada.
+    economic_line_id = database.Column(database.String(26), nullable=True, index=True)
+    reference_open_item_id = database.Column(
+        database.String(26), database.ForeignKey(AR_AP_OPEN_ITEM_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    reference_type = database.Column(database.String(50), nullable=True, index=True)
+    reference_name = database.Column(database.String(100), nullable=True, index=True)
+    reference_exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
 
 
 class GLEntry(database.Model):  # type: ignore[name-defined]
@@ -3907,6 +3979,12 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
         database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
     )
+    reference_type = database.Column(database.String(50), nullable=True, index=True)
+    reference_name = database.Column(database.String(100), nullable=True, index=True)
+    reference_open_item_id = database.Column(
+        database.String(26), database.ForeignKey(AR_AP_OPEN_ITEM_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    economic_line_id = database.Column(database.String(26), nullable=True, index=True)
     # Dimensiones analiticas de primer nivel
     cost_center_code = database.Column(database.String(10), nullable=True)
     # Unidad de negocio como dimension analitica (sucursal, oficina, punto de venta)

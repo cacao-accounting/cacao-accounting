@@ -83,6 +83,11 @@
         <i class="bi bi-check2-circle me-1"></i>{{ _("Aplicar conciliación") }}
       </button>
       <span class="text-danger small align-self-center" x-text="error"></span>
+      <label class="btn btn-sm btn-outline-secondary mb-0">
+        <i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ _("Importar Excel") }}
+        <input type="file" class="d-none" accept=".xlsx" @change="importExcel($event)">
+      </label>
+      <span class="text-danger small align-self-center" x-text="importError"></span>
     </div>
   </div>
 
@@ -194,6 +199,7 @@ function paymentReconciliation() {
     lines: [],
     payload: '{}',
     error: '',
+    importError: '',
     formatMoney(value) {
       return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
@@ -219,6 +225,53 @@ function paymentReconciliation() {
       this.payments = data.payments || [];
       this.documents = data.documents || [];
       this.lines = [];
+    },
+    async importExcel(event) {
+      const file = event && event.target && event.target.files ? event.target.files[0] : null;
+      if (!file) return;
+      this.importError = '';
+      const formData = new FormData();
+      formData.append('doctype', 'payment_reconciliation');
+      formData.append('file', file);
+      const csrf = document.querySelector('input[name="csrf_token"]');
+      try {
+        const parsedResponse = await fetch('/api/line-import/parse-xlsx', {
+          method: 'POST', headers: { 'X-CSRFToken': csrf ? csrf.value : '' }, credentials: 'same-origin', body: formData,
+        });
+        const parsed = await parsedResponse.json();
+        if (!parsedResponse.ok || !parsed.valid) {
+          this.importError = (parsed.errors || []).map((item) => item.message).join(' | ');
+          return;
+        }
+        const validationResponse = await fetch('/api/line-import/validate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf ? csrf.value : '' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ doctype: 'payment_reconciliation', context: { company_id: this.filters.company }, rows: parsed.rows }),
+        });
+        const validation = await validationResponse.json();
+        if (!validationResponse.ok || !validation.valid) {
+          this.importError = (validation.errors || []).map((item) => item.message).join(' | ');
+          return;
+        }
+        this.lines = (validation.rows || []).map((row) => ({
+          uid: `${Date.now()}-${Math.random()}`,
+          payment_id: row.payment_id,
+          reference_key: `${row.reference_type}:${row.reference_id}`,
+          reference_type: row.reference_type,
+          flow_source_type: row.reference_type,
+          reference_id: row.reference_id,
+          outstanding_amount: 0,
+          allocated_amount: Number(row.allocated_amount || 0),
+          discount_amount: Number(row.discount_amount || 0),
+          gain_loss_amount: Number(row.gain_loss_amount || 0),
+          payment_exchange_rate: row.payment_exchange_rate || '',
+          notes: row.notes || '',
+        }));
+      } catch (error) {
+        this.importError = '{{ _("No se pudo validar el archivo.") }}';
+      } finally {
+        if (event && event.target) event.target.value = '';
+      }
     },
     addLine() {
       this.lines.push({
@@ -260,6 +313,7 @@ function paymentReconciliation() {
             allocated_amount: line.allocated_amount,
             discount_amount: line.discount_amount || 0,
             gain_loss_amount: line.gain_loss_amount || 0,
+            payment_exchange_rate: line.payment_exchange_rate || 0,
             difference_amount: line.gain_loss_amount || 0,
             notes: line.notes || '',
           })),

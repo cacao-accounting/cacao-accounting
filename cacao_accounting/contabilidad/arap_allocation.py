@@ -59,6 +59,9 @@ class ARAPOpenItem:
     party_id: str | None = None
     ledger_type: str | None = None
     posting_date: Any = None
+    direction: str | None = None
+    open_item_id: str | None = None
+    line_number: int | None = None
 
     def __post_init__(self) -> None:
         """Valida identificadores y saldo no negativo."""
@@ -68,6 +71,8 @@ class ARAPOpenItem:
         if amount < 0:
             raise AllocationError("El saldo pendiente no puede ser negativo.")
         object.__setattr__(self, "outstanding", amount)
+        if self.direction is not None and self.direction not in {"debit", "credit"}:
+            raise AllocationError("La dirección del open item debe ser debit o credit.")
 
     @classmethod
     def from_model(cls, model: Any) -> "ARAPOpenItem":
@@ -85,6 +90,9 @@ class ARAPOpenItem:
             party_id=getattr(model, "party_id", None),
             ledger_type=getattr(model, "ledger_type", None),
             posting_date=getattr(model, "posting_date", None),
+            direction=getattr(model, "direction", None),
+            open_item_id=getattr(model, "id", None),
+            line_number=getattr(model, "line_number", None),
         )
 
 
@@ -154,6 +162,13 @@ class OpenItemResolver:
         for item in items:
             self.add(item)
 
+    @staticmethod
+    def _key(item: ARAPOpenItem) -> str:
+        """Build a stable in-memory key without exposing a synthetic database ID."""
+        return item.open_item_id or (
+            f"{item.document_id}:{item.economic_line_id}" if item.economic_line_id else item.document_id
+        )
+
     @classmethod
     def from_ledger(cls, **filters: Any) -> "OpenItemResolver":
         """Construye un resolver leyendo saldos reconstruidos del ledger."""
@@ -166,16 +181,22 @@ class OpenItemResolver:
 
     def add(self, item: ARAPOpenItem) -> None:
         """Añade un documento al índice."""
-        if item.document_id in self._items:
+        key = self._key(item)
+        if key in self._items:
             raise AllocationError(f"El documento {item.document_id} está duplicado.")
-        self._items[item.document_id] = item
+        self._items[key] = item
 
     def resolve(self, document_id: str) -> ARAPOpenItem:
         """Obtiene un documento por id."""
-        try:
-            return self._items[document_id]
-        except KeyError as exc:
-            raise AllocationError(f"No existe open item para {document_id}.") from exc
+        exact = self._items.get(document_id)
+        if exact is not None:
+            return exact
+        matches = [item for item in self._items.values() if item.document_id == document_id]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise AllocationError(f"El documento {document_id} tiene varias líneas abiertas; indique el open item.")
+        raise AllocationError(f"No existe open item para {document_id}.")
 
     def all(self) -> tuple[ARAPOpenItem, ...]:
         """Devuelve una instantánea de los documentos indexados."""
@@ -184,10 +205,11 @@ class OpenItemResolver:
     def consume(self, document_id: str, amount: Decimal) -> None:
         """Consume saldo después de persistir una línea."""
         item = self.resolve(document_id)
+        key = self._key(item)
         amount = _decimal(amount)
         if amount <= 0 or amount > item.outstanding:
             raise AllocationOverpaymentError(f"La asignación excede el saldo de {document_id}.")
-        self._items[document_id] = ARAPOpenItem(
+        self._items[key] = ARAPOpenItem(
             document_id=item.document_id,
             document_type=item.document_type,
             currency=item.currency,
@@ -200,6 +222,9 @@ class OpenItemResolver:
             party_id=item.party_id,
             ledger_type=item.ledger_type,
             posting_date=item.posting_date,
+            direction=item.direction,
+            open_item_id=item.open_item_id,
+            line_number=item.line_number,
         )
 
     def snapshot(self) -> dict[str, ARAPOpenItem]:
@@ -230,6 +255,7 @@ def list_open_items(
         ARAPLedgerEntry.party_type,
         ARAPLedgerEntry.party_id,
         ARAPLedgerEntry.ledger_type,
+        ARAPLedgerEntry.economic_line_id,
         func.sum(ARAPLedgerEntry.document_amount).label("outstanding"),
         func.max(ARAPLedgerEntry.posting_date).label("posting_date"),
     ).group_by(
@@ -240,6 +266,7 @@ def list_open_items(
         ARAPLedgerEntry.party_type,
         ARAPLedgerEntry.party_id,
         ARAPLedgerEntry.ledger_type,
+        ARAPLedgerEntry.economic_line_id,
     )
     if company is not None:
         query = query.where(ARAPLedgerEntry.company == company)
@@ -257,18 +284,19 @@ def list_open_items(
             document_id=str(row.document_id),
             document_type=str(row.document_type),
             currency=str(row.currency),
-            outstanding=_decimal(row.outstanding),
+            outstanding=abs(_decimal(row.outstanding)),
             company=row.company,
             document_no=None,
-            economic_line_id=None,
+            economic_line_id=row.economic_line_id,
             account_id=None,
             party_type=row.party_type,
             party_id=row.party_id,
             ledger_type=row.ledger_type,
             posting_date=row.posting_date,
+            direction="debit" if _decimal(row.outstanding) > 0 else "credit",
         )
         for row in rows
-        if _decimal(row.outstanding) > 0
+        if _decimal(row.outstanding) != 0
     )
 
 
@@ -349,10 +377,11 @@ class AllocationPlanner:
             amount = item.outstanding if request.amount is None else _decimal(request.amount)
             if amount <= 0:
                 raise AllocationError(f"El importe aplicado a {item.document_id} debe ser mayor que cero.")
-            total = requested.get(item.document_id, Decimal("0")) + amount
+            item_key = self.resolver._key(item)
+            total = requested.get(item_key, Decimal("0")) + amount
             if total > item.outstanding:
                 raise AllocationOverpaymentError(f"La asignación excede el saldo de {item.document_id}.")
-            requested[item.document_id] = total
+            requested[item_key] = total
             rate = self._rate(item.currency, source_currency, request.rate)
             source_line = (amount * rate).quantize(Decimal("0.0001"))
             if consumed + source_line > available:

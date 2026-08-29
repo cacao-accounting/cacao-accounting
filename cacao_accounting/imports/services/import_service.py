@@ -146,6 +146,14 @@ class ImportService:
     def _collect_structural_errors(self, batch_id: str, table: Any, adapter: Any) -> List[ImportBatchError]:
         """Recolecta errores estructurales de columnas."""
         errors = []
+        available_columns = set(table.columns)
+        journal_aliases = {
+            "document_ref": {"document_ref", "reference", "document_reference"},
+            "fecha": {"fecha", "posting_date", "date"},
+            "cuenta": {"cuenta", "account", "account_code"},
+            "debito": {"debito", "debe", "debit"},
+            "credito": {"credito", "haber", "credit"},
+        }
         for col in table.columns:
             if col.lower() in self.FORBIDDEN_COLUMNS:
                 errors.append(
@@ -158,7 +166,8 @@ class ImportService:
                 )
 
         for req_col in adapter.required_columns:
-            if req_col not in table.columns:
+            accepted = journal_aliases.get(req_col, {req_col}) if isinstance(adapter, JournalEntryAdapter) else {req_col}
+            if not available_columns.intersection(accepted):
                 errors.append(
                     ImportBatchError(
                         batch_id=batch_id,
@@ -412,12 +421,15 @@ class ImportService:
 
     def _group_by_reference(self, columns: List[str], rows: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
         """Agrupa las filas por la columna document_ref."""
-        if "document_ref" not in columns:
+        reference_column = next(
+            (column for column in ("document_ref", "reference", "document_reference") if column in columns), None
+        )
+        if reference_column is None:
             return {f"row_{i}": [row] for i, row in enumerate(rows)}
 
         docs: Dict[str, List[Dict[str, Any]]] = {}
         for row in rows:
-            ref = str(row.get("document_ref") or "no_ref")
+            ref = str(row.get(reference_column) or "no_ref")
             if ref not in docs:
                 docs[ref] = []
             docs[ref].append(row)

@@ -155,3 +155,16 @@ def test_resolver_adapts_cached_ar_ap_open_item_rows():
     assert isinstance(item, ARAPOpenItem)
     assert item.outstanding == Decimal("25")
     assert item.economic_line_id == "LINE-1"
+
+
+def test_resolver_requires_line_identity_when_document_has_multiple_open_items():
+    """Una referencia a un comprobante con varias líneas no puede ser ambigua."""
+    resolver = OpenItemResolver(
+        [
+            ARAPOpenItem("JE-1", "journal_entry", "USD", Decimal("50"), economic_line_id="L1", open_item_id="OI-1"),
+            ARAPOpenItem("JE-1", "journal_entry", "USD", Decimal("75"), economic_line_id="L2", open_item_id="OI-2"),
+        ]
+    )
+    with pytest.raises(ValueError, match="varias líneas"):
+        resolver.resolve("JE-1")
+    assert resolver.resolve("OI-2").outstanding == Decimal("75")

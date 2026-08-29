@@ -40,6 +40,15 @@ class JournalEntryAdapter(BaseImportAdapter):
     ]
     required_columns = ["document_ref", "fecha", "cuenta", "debito", "credito"]
 
+    @staticmethod
+    def _value(row: Dict[str, Any], *keys: str, default: Any = None) -> Any:
+        """Return the first populated value, accepting legacy and canonical headers."""
+        for key in keys:
+            value = row.get(key)
+            if value not in (None, ""):
+                return value
+        return default
+
     def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
         """Valida que el comprobante tenga al menos dos líneas y esté balanceado."""
         errors = []
@@ -50,23 +59,46 @@ class JournalEntryAdapter(BaseImportAdapter):
         total_credit = Decimal("0")
         for row in document_data:
             try:
-                total_debit += self._amount(row.get("debito"))
-                total_credit += self._amount(row.get("credito"))
+                total_debit += self._amount(self._value(row, "debito", "debit"))
+                total_credit += self._amount(self._value(row, "credito", "credit"))
             except (InvalidOperation, ValueError, TypeError):
-                errors.append(f"Monto inválido en referencia {row.get('document_ref')}")
+                errors.append(f"Monto inválido en referencia {self._value(row, 'document_ref', 'reference')}")
 
         if abs(total_debit - total_credit) > self._BALANCE_TOLERANCE:
-            errors.append(f"El comprobante {document_data[0].get('document_ref')} no está balanceado.")
+            errors.append(f"El comprobante {self._value(document_data[0], 'document_ref', 'reference')} no está balanceado.")
 
         # Período contable
         try:
-            posting_date = date.fromisoformat(str(document_data[0].get("fecha")))
+            posting_date = date.fromisoformat(str(self._value(document_data[0], "fecha", "posting_date")))
             company_id = (context or {}).get("company_id") or ""
             if not is_period_open(company_id, posting_date):
                 errors.append(f"El periodo contable para la fecha {posting_date} está cerrado o no existe.")
         except (ValueError, TypeError):
             # Formato de fecha inválido se manejará en otro lugar o ya fue reportado
             pass
+
+        # Reuse the same line and AP/AR validation used by the interactive
+        # journal form.  This keeps the batch importer from accepting a file
+        # that would fail when the voucher is later posted.
+        if not errors:
+            try:
+                from cacao_accounting.contabilidad.journal_service import (
+                    _normalize_line,
+                    _validate_ar_ap_lines,
+                    _validate_balanced_lines,
+                    _validate_line_books,
+                )
+
+                canonical_rows = self.build_document(document_data, context or {}).get("lines", [])
+                lines = [_normalize_line(row, index + 1) for index, row in enumerate(canonical_rows)]
+                company = str((context or {}).get("company_id") or "")
+                _validate_balanced_lines(company, lines, (context or {}).get("transaction_currency"))
+                _validate_line_books(company, (context or {}).get("books"), lines)
+                _validate_ar_ap_lines(company, lines)
+            except (RuntimeError, ValueError, InvalidOperation) as exc:
+                if isinstance(exc, RuntimeError):
+                    return errors
+                errors.append(str(exc))
 
         return errors
 
@@ -77,23 +109,39 @@ class JournalEntryAdapter(BaseImportAdapter):
             lines.append(
                 {
                     "order": index + 1,
-                    "account": row.get("cuenta"),
-                    "cost_center": row.get("centro_costo"),
-                    "party_type": None,  # Should be inferred or provided
-                    "party": row.get("tercero"),
-                    "debit": row.get("debito") or 0,
-                    "credit": row.get("credito") or 0,
-                    "remarks": row.get("descripcion") or row.get("referencia"),
+                    "account": self._value(row, "cuenta", "account"),
+                    "cost_center": self._value(row, "centro_costo", "cost_center"),
+                    "party_type": self._value(row, "party_type", "tipo_tercero"),
+                    "party": self._value(row, "tercero", "party"),
+                    "debit": self._value(row, "debito", "debit", default=0),
+                    "credit": self._value(row, "credito", "credit", default=0),
+                    "currency": self._value(row, "moneda", "currency"),
+                    "exchange_rate": self._value(row, "tipo_cambio", "exchange_rate"),
+                    "reference_type": self._value(row, "reference_type", "tipo_referencia"),
+                    "reference_name": self._value(
+                        row, "reference_name", "reference_document", "documento_referencia", "referencia"
+                    ),
+                    "reference_open_item_id": self._value(row, "reference_open_item_id"),
+                    "reference_exchange_rate": self._value(row, "reference_exchange_rate"),
+                    "project": self._value(row, "project", "proyecto"),
+                    "unit": self._value(row, "unit", "unidad"),
+                    "bank_account": self._value(row, "bank_account", "bank_account_id"),
+                    "is_advance": self._value(row, "is_advance", default=False),
+                    "remarks": self._value(row, "descripcion", "description", "referencia"),
                 }
             )
 
+        posting_date = self._value(document_data[0], "fecha", "posting_date")
+        reference = self._value(document_data[0], "document_ref", "reference", default="no_ref")
         payload = {
             "company": context.get("company_id"),
-            "posting_date": document_data[0].get("fecha"),
+            "posting_date": posting_date,
             "books": self._resolve_books(context),
             "naming_series_id": context.get("sequence_id"),
-            "reference": document_data[0].get("document_ref"),
-            "memo": f"Importación masiva: {document_data[0].get('document_ref')}",
+            "reference": reference,
+            "memo": f"Importación masiva: {reference}",
+            "transaction_currency": context.get("transaction_currency") or self._value(document_data[0], "moneda", "currency"),
+            "exchange_rate": context.get("exchange_rate"),
             "lines": lines,
             "created_by": context.get("created_by"),
         }

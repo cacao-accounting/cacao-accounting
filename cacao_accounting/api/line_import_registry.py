@@ -23,6 +23,22 @@ LABEL_DATE = "Fecha"
 LABEL_DISCOUNT = "Descuento"
 LABEL_SOURCE_WAREHOUSE = "Bodega origen"
 LABEL_TARGET_WAREHOUSE = "Bodega destino"
+LABEL_BOOK = "Libro"
+LABEL_PARTY_TYPE = "Tipo de tercero"
+LABEL_PARTY = "Tercero"
+LABEL_CURRENCY = "Moneda"
+LABEL_EXCHANGE_RATE = "Tipo de cambio"
+LABEL_REFERENCE_EXCHANGE_RATE = "Tipo de cambio de referencia"
+LABEL_REFERENCE_TYPE = "Tipo de referencia"
+LABEL_REFERENCE_DOCUMENT = "Documento de referencia"
+LABEL_REFERENCE_LINE = "Línea de referencia"
+LABEL_UNIT = "Unidad de negocio"
+LABEL_BANK_ACCOUNT = "Cuenta bancaria"
+LABEL_IS_ADVANCE = "Es anticipo"
+LABEL_PAYMENT_ID = "ID del pago"
+LABEL_ALLOCATED_AMOUNT = "Monto aplicado"
+LABEL_DISCOUNT_AMOUNT = "Descuento"
+LABEL_GAIN_LOSS_AMOUNT = "Diferencia de cambio"
 
 ALIASES_ITEM_CODE = ["producto", "item", "codigo", "código", "article", "product", "item code", "item_code", "code"]
 ALIASES_DESCRIPTION = ["nombre", "description", "item name", "item_name", "name"]
@@ -42,12 +58,101 @@ ALIASES_DISCOUNT = ["discount"]
 ALIASES_DELIVERY_DATE = ["delivery date", "delivery_date"]
 ALIASES_SOURCE_WAREHOUSE = ["source warehouse", "source_warehouse", "from warehouse", "bodega salida"]
 ALIASES_TARGET_WAREHOUSE = ["target warehouse", "target_warehouse", "to warehouse", "bodega entrada"]
+ALIASES_BOOK = ["libro", "libro contable", "accounting book", "book"]
+ALIASES_PARTY_TYPE = ["tipo de tercero", "party type", "party_type", "tipo tercero"]
+ALIASES_PARTY = ["tercero", "party", "party id", "party_id", "cliente", "proveedor"]
+ALIASES_CURRENCY = ["moneda", "currency", "currency code", "currency_code"]
+ALIASES_EXCHANGE_RATE = ["tipo de cambio", "exchange rate", "exchange_rate", "tasa"]
+ALIASES_REFERENCE_EXCHANGE_RATE = [
+    "tipo de cambio de referencia",
+    "reference exchange rate",
+    "reference_exchange_rate",
+    "tasa referencia",
+]
+ALIASES_REFERENCE_TYPE = ["tipo de referencia", "reference type", "reference_type", "tipo referencia"]
+ALIASES_REFERENCE_DOCUMENT = [
+    "documento de referencia",
+    "reference document",
+    "reference_document",
+    "reference name",
+    "reference_name",
+]
+ALIASES_REFERENCE_LINE = ["línea de referencia", "linea de referencia", "reference line", "reference_line"]
+ALIASES_UNIT = ["unidad de negocio", "business unit", "unit"]
+ALIASES_BANK_ACCOUNT = ["cuenta bancaria", "bank account", "bank_account", "bank_account_id"]
+ALIASES_IS_ADVANCE = ["es anticipo", "is advance", "is_advance", "anticipo"]
+ALIASES_PAYMENT_ID = ["id del pago", "payment id", "payment_id", "pago"]
+ALIASES_ALLOCATED_AMOUNT = ["monto aplicado", "allocated amount", "allocated_amount", "importe aplicado"]
+ALIASES_DISCOUNT_AMOUNT = ["descuento", "discount amount", "discount_amount"]
+ALIASES_GAIN_LOSS_AMOUNT = ["diferencia de cambio", "gain loss", "gain_loss_amount", "fx difference"]
 
 
 class LineImportSchemaRegistry:
     """Registry for document line import schemas."""
 
     SCHEMAS: Dict[str, Dict[str, Any]] = {
+        "payment_reconciliation": {
+            "doctype": "payment_reconciliation",
+            "label": "Conciliación de pagos",
+            "columns": [
+                {
+                    "key": "payment_id",
+                    "label": LABEL_PAYMENT_ID,
+                    "required": True,
+                    "type": "string",
+                    "aliases": ALIASES_PAYMENT_ID,
+                },
+                {
+                    "key": "reference_type",
+                    "label": LABEL_REFERENCE_TYPE,
+                    "required": True,
+                    "type": "string",
+                    "aliases": ALIASES_REFERENCE_TYPE,
+                },
+                {
+                    "key": "reference_id",
+                    "label": LABEL_REFERENCE_DOCUMENT,
+                    "required": True,
+                    "type": "string",
+                    "aliases": ALIASES_REFERENCE_DOCUMENT,
+                },
+                {
+                    "key": "allocated_amount",
+                    "label": LABEL_ALLOCATED_AMOUNT,
+                    "required": True,
+                    "type": "decimal",
+                    "aliases": ALIASES_ALLOCATED_AMOUNT,
+                },
+                {
+                    "key": "payment_exchange_rate",
+                    "label": LABEL_REFERENCE_EXCHANGE_RATE,
+                    "required": False,
+                    "type": "decimal",
+                    "aliases": ALIASES_REFERENCE_EXCHANGE_RATE,
+                },
+                {
+                    "key": "discount_amount",
+                    "label": LABEL_DISCOUNT_AMOUNT,
+                    "required": False,
+                    "type": "decimal",
+                    "aliases": ALIASES_DISCOUNT_AMOUNT,
+                },
+                {
+                    "key": "gain_loss_amount",
+                    "label": LABEL_GAIN_LOSS_AMOUNT,
+                    "required": False,
+                    "type": "decimal",
+                    "aliases": ALIASES_GAIN_LOSS_AMOUNT,
+                },
+                {
+                    "key": "notes",
+                    "label": LABEL_DESCRIPTION,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_DESCRIPTION,
+                },
+            ],
+        },
         "purchase_request": {
             "doctype": "purchase_request",
             "label": "Solicitud de compra",
@@ -365,6 +470,7 @@ class LineImportSchemaRegistry:
             "doctype": "journal_entry",
             "label": "Comprobante contable",
             "columns": [
+                {"key": "book", "label": LABEL_BOOK, "required": False, "type": "string", "aliases": ALIASES_BOOK},
                 {
                     "key": "account",
                     "label": LABEL_ACCOUNT,
@@ -382,6 +488,35 @@ class LineImportSchemaRegistry:
                 {"key": "debit", "label": LABEL_DEBIT, "required": False, "type": "decimal", "aliases": ALIASES_DEBIT},
                 {"key": "credit", "label": LABEL_CREDIT, "required": False, "type": "decimal", "aliases": ALIASES_CREDIT},
                 {
+                    "key": "party_type",
+                    "label": LABEL_PARTY_TYPE,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_PARTY_TYPE,
+                },
+                {"key": "party", "label": LABEL_PARTY, "required": False, "type": "string", "aliases": ALIASES_PARTY},
+                {
+                    "key": "currency",
+                    "label": LABEL_CURRENCY,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_CURRENCY,
+                },
+                {
+                    "key": "exchange_rate",
+                    "label": LABEL_EXCHANGE_RATE,
+                    "required": False,
+                    "type": "decimal",
+                    "aliases": ALIASES_EXCHANGE_RATE,
+                },
+                {
+                    "key": "reference_exchange_rate",
+                    "label": LABEL_REFERENCE_EXCHANGE_RATE,
+                    "required": False,
+                    "type": "decimal",
+                    "aliases": ALIASES_REFERENCE_EXCHANGE_RATE,
+                },
+                {
                     "key": "cost_center",
                     "label": LABEL_COST_CENTER,
                     "required": False,
@@ -390,11 +525,54 @@ class LineImportSchemaRegistry:
                 },
                 {"key": "project", "label": LABEL_PROJECT, "required": False, "type": "string", "aliases": ALIASES_PROJECT},
                 {
-                    "key": "reference",
-                    "label": LABEL_REFERENCE,
+                    "key": "reference_type",
+                    "label": LABEL_REFERENCE_TYPE,
                     "required": False,
                     "type": "string",
-                    "aliases": ALIASES_REFERENCE,
+                    "aliases": ALIASES_REFERENCE_TYPE,
+                },
+                {
+                    "key": "reference_document",
+                    "label": LABEL_REFERENCE_DOCUMENT,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_REFERENCE_DOCUMENT,
+                },
+                {
+                    "key": "reference_line",
+                    "label": LABEL_REFERENCE_LINE,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_REFERENCE_LINE,
+                },
+                {"key": "unit", "label": LABEL_UNIT, "required": False, "type": "string", "aliases": ALIASES_UNIT},
+                {
+                    "key": "bank_account",
+                    "label": LABEL_BANK_ACCOUNT,
+                    "required": False,
+                    "type": "string",
+                    "aliases": ALIASES_BANK_ACCOUNT,
+                },
+                {
+                    "key": "is_advance",
+                    "label": LABEL_IS_ADVANCE,
+                    "required": False,
+                    "type": "boolean",
+                    "aliases": ALIASES_IS_ADVANCE,
+                },
+                {
+                    "key": "reference_1",
+                    "label": "Referencia 1",
+                    "required": False,
+                    "type": "string",
+                    "aliases": ["referencia 1", "reference 1", "reference_1"],
+                },
+                {
+                    "key": "reference_2",
+                    "label": "Referencia 2",
+                    "required": False,
+                    "type": "string",
+                    "aliases": ["referencia 2", "reference 2", "reference_2"],
                 },
             ],
         },

@@ -277,6 +277,243 @@ def test_post_document_records_return_and_book_valuation(arap_app):
     assert ARAPLedgerEntry.document_balance("sales_invoice", returned.id) == Decimal("-100.0000")
 
 
+def test_manual_journal_party_line_creates_reconstructible_open_item(arap_app):
+    """Una línea de diario AR crea saldo rápido y movimiento documental."""
+    from cacao_accounting.contabilidad.arap_ledger_service import post_journal_ar_ap
+    from cacao_accounting.database import Accounts, ComprobanteContable, ComprobanteContableDetalle, database
+
+    account = Accounts(
+        entity="cacao", code="AR-MANUAL", name="Clientes", active=True, enabled=True, group=False, account_type="receivable"
+    )
+    journal = ComprobanteContable(entity="cacao", date=date(2026, 8, 2), status="submitted")
+    database.session.add_all([account, journal])
+    database.session.flush()
+    line = ComprobanteContableDetalle(
+        entity="cacao",
+        account=account.code,
+        transaction="journal_entry",
+        transaction_id=journal.id,
+        order=1,
+        value=Decimal("250"),
+        currency_id="USD",
+        third_type="customer",
+        third_code="P-ARAP",
+        economic_line_id="manual-line-1",
+    )
+    database.session.add(line)
+    database.session.flush()
+    movements = post_journal_ar_ap(journal, [])
+    database.session.commit()
+
+    from cacao_accounting.database import ARAPLedgerEntry, ARAPOpenItem
+
+    item = database.session.query(ARAPOpenItem).filter_by(document_type="journal_entry", document_id=journal.id).one()
+    assert item.unallocated_amount == Decimal("250.0000")
+    assert item.direction == "debit"
+    assert ARAPLedgerEntry.document_balance("journal_entry", journal.id) == Decimal("250.0000")
+    assert len(movements) == 1
+
+
+def test_manual_journal_reference_allocates_and_cancellation_restores_open_items(arap_app):
+    """La aplicación inmediata y su anulación conservan saldos auditables."""
+    from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap, post_journal_ar_ap
+    from cacao_accounting.database import Accounts, ARAPOpenItem, ComprobanteContable, ComprobanteContableDetalle, database
+
+    account = Accounts(
+        entity="cacao", code="AR-ALLOC", name="Clientes", active=True, enabled=True, group=False, account_type="receivable"
+    )
+    target = ARAPOpenItem(
+        company="cacao",
+        ledger_type="AR",
+        party_type="customer",
+        party_id="P-ARAP",
+        account_id=account.id,
+        document_type="sales_invoice",
+        document_id="INV-ALLOC",
+        document_no="INV-ALLOC",
+        economic_line_id="invoice-line",
+        posting_date=date(2026, 8, 1),
+        currency="USD",
+        original_amount=Decimal("100"),
+        unallocated_amount=Decimal("100"),
+        direction="debit",
+    )
+    journal = ComprobanteContable(entity="cacao", date=date(2026, 8, 2), status="submitted")
+    database.session.add(account)
+    database.session.flush()
+    target.account_id = account.id
+    database.session.add_all([target, journal])
+    database.session.flush()
+    line = ComprobanteContableDetalle(
+        entity="cacao",
+        account=account.code,
+        transaction="journal_entry",
+        transaction_id=journal.id,
+        order=1,
+        value=Decimal("-40"),
+        currency_id="USD",
+        third_type="customer",
+        third_code="P-ARAP",
+        reference_type="invoice",
+        reference_name=target.document_id,
+        economic_line_id="allocation-line",
+    )
+    database.session.add(line)
+    database.session.flush()
+    post_journal_ar_ap(journal, [])
+    database.session.commit()
+
+    database.session.refresh(target)
+    assert target.unallocated_amount == Decimal("60.0000")
+    database.session.refresh(journal)
+    cancel_document_ar_ap(journal, cancellation_date=date(2026, 8, 2))
+    database.session.commit()
+    database.session.refresh(target)
+    source = database.session.query(ARAPOpenItem).filter_by(document_type="journal_entry", document_id=journal.id).one()
+    assert target.unallocated_amount == Decimal("100.0000")
+    assert source.unallocated_amount == Decimal("40.0000")
+
+
+def test_list_open_items_exposes_payment_credit_as_positive_available_balance(arap_app):
+    """Los pagos abiertos se muestran positivos, conservando su dirección crédito."""
+    from cacao_accounting.contabilidad.arap_allocation import list_open_items
+    from cacao_accounting.database import ARAPLedgerEntry, database
+
+    database.session.add(
+        ARAPLedgerEntry(
+            company="cacao",
+            ledger_type="AR",
+            party_type="customer",
+            party_id="P-ARAP",
+            document_type="payment_entry",
+            document_id="PAY-OPEN",
+            posting_date=date(2026, 8, 2),
+            event_type="opening",
+            currency="USD",
+            document_amount=Decimal("-500"),
+            economic_line_id="PAY-OPEN",
+        )
+    )
+    database.session.commit()
+
+    items = list_open_items(company="cacao", party_type="customer", party_id="P-ARAP")
+    payment = next(item for item in items if item.document_id == "PAY-OPEN")
+    assert payment.outstanding == Decimal("500.0000")
+    assert payment.direction == "credit"
+
+
+def test_post_late_payment_application_updates_reconstructible_balances(arap_app):
+    """Una conciliación posterior agrega eventos y restaura ambos saldos al anular."""
+    from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap, post_payment_application_ar_ap
+    from cacao_accounting.database import ARAPLedgerEntry, ARAPOpenItem, Accounts, PaymentEntry, SalesInvoice, database
+
+    account = Accounts(
+        entity="cacao", code="AR-LATE", name="Clientes", active=True, enabled=True, group=False, account_type="receivable"
+    )
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id="P-ARAP",
+        transaction_currency="USD",
+        grand_total=Decimal("1000"),
+        posting_date=date(2026, 8, 1),
+        document_type="sales_invoice",
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        payment_type="receive",
+        party_type="customer",
+        party_id="P-ARAP",
+        transaction_currency="USD",
+        currency="USD",
+        posting_date=date(2026, 8, 2),
+        paid_amount=Decimal("500"),
+        received_amount=Decimal("500"),
+        docstatus=1,
+    )
+    database.session.add_all([account, invoice, payment])
+    database.session.flush()
+    database.session.add_all(
+        [
+            ARAPLedgerEntry(
+                company="cacao",
+                ledger_type="AR",
+                party_type="customer",
+                party_id="P-ARAP",
+                document_type="sales_invoice",
+                document_id=invoice.id,
+                posting_date=invoice.posting_date,
+                event_type="opening",
+                currency="USD",
+                document_amount=Decimal("1000"),
+                economic_line_id=invoice.id,
+            ),
+            ARAPLedgerEntry(
+                company="cacao",
+                ledger_type="AR",
+                party_type="customer",
+                party_id="P-ARAP",
+                document_type="payment_entry",
+                document_id=payment.id,
+                posting_date=payment.posting_date,
+                event_type="opening",
+                currency="USD",
+                document_amount=Decimal("-500"),
+                economic_line_id=payment.id,
+            ),
+            ARAPOpenItem(
+                company="cacao",
+                ledger_type="AR",
+                party_type="customer",
+                party_id="P-ARAP",
+                account_id=account.id,
+                document_type="sales_invoice",
+                document_id=invoice.id,
+                economic_line_id=invoice.id,
+                posting_date=invoice.posting_date,
+                currency="USD",
+                original_amount=Decimal("1000"),
+                unallocated_amount=Decimal("1000"),
+                direction="debit",
+            ),
+            ARAPOpenItem(
+                company="cacao",
+                ledger_type="AR",
+                party_type="customer",
+                party_id="P-ARAP",
+                account_id=account.id,
+                document_type="payment_entry",
+                document_id=payment.id,
+                economic_line_id=payment.id,
+                posting_date=payment.posting_date,
+                currency="USD",
+                original_amount=Decimal("500"),
+                unallocated_amount=Decimal("500"),
+                direction="credit",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    post_payment_application_ar_ap(
+        payment,
+        invoice,
+        document_amount=Decimal("500"),
+        payment_amount=Decimal("500"),
+        allocation_date=date(2026, 8, 2),
+    )
+    database.session.commit()
+    assert ARAPLedgerEntry.document_balance("sales_invoice", invoice.id) == Decimal("500.0000")
+    assert ARAPLedgerEntry.document_balance("payment_entry", payment.id) == Decimal("0.0000")
+    assert database.session.query(ARAPOpenItem).filter_by(document_id=invoice.id).one().unallocated_amount == Decimal(
+        "500.0000"
+    )
+
+    cancel_document_ar_ap(payment, cancellation_date=date(2026, 8, 2))
+    database.session.commit()
+    assert ARAPLedgerEntry.document_balance("sales_invoice", invoice.id) == Decimal("1000.0000")
+    assert ARAPLedgerEntry.document_balance("payment_entry", payment.id) == Decimal("0.0000")
+
+
 def test_post_payment_records_allocations_in_both_currencies(arap_app):
     """Una aplicación conserva el monto documental y el equivalente del banco."""
     from cacao_accounting.contabilidad.arap_ledger_service import post_payment_ar_ap

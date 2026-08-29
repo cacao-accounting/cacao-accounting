@@ -42,6 +42,7 @@ from cacao_accounting.database import (
     Entity,
     FiscalYear,
     NamingSeries,
+    Party,
     RecurringJournalApplication,
     RecurringJournalTemplate,
     database,
@@ -85,6 +86,8 @@ class JournalLineInput:
     exchange_rate: Decimal | None
     reference_type: str | None
     reference_name: str | None
+    reference_open_item_id: str | None
+    reference_exchange_rate: Decimal | None
     reference1: str | None
     reference2: str | None
     remarks: str | None
@@ -131,8 +134,9 @@ def create_journal_draft(
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "crear"),
     )
-    _validate_balanced_lines(data.company, data.lines)
+    _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
     _validate_line_books(data.company, data.books, data.lines)
+    _validate_ar_ap_lines(data.company, data.lines)
     primary_book = data.books[0] if data.books else None
     journal = ComprobanteContable(
         entity=data.company,
@@ -179,9 +183,12 @@ def _post_and_sync_journal(journal: ComprobanteContable, commit: bool) -> list[A
     """Realiza la contabilización y sincronización del comprobante contable."""
     try:
         entries = post_comprobante_contable(journal)  # type: ignore[misc]
+        from cacao_accounting.contabilidad.arap_ledger_service import post_journal_ar_ap
+
+        post_journal_ar_ap(journal, entries)
         sync_journal_document_relations(journal)
         return entries
-    except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
+    except (PostingError, IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:
         if commit:
             database.session.rollback()
         raise JournalValidationError(str(exc)) from exc
@@ -494,8 +501,9 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "editar"),
     )
-    _validate_balanced_lines(data.company, data.lines)
+    _validate_balanced_lines(data.company, data.lines, data.transaction_currency, data.exchange_rate, data.books)
     _validate_line_books(data.company, data.books, data.lines)
+    _validate_ar_ap_lines(data.company, data.lines)
     primary_book = data.books[0] if data.books else None
 
     journal.entity = data.company
@@ -642,7 +650,8 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     company_currency = database.session.execute(database.select(Entity.currency).filter_by(code=company)).scalar_one()
     if transaction_currency is None and company_currency:
         transaction_currency = str(company_currency)
-        lines = _apply_currency_to_lines(lines, transaction_currency)
+        if not any(line.currency for line in lines):
+            lines = _apply_currency_to_lines(lines, transaction_currency)
     # Las empresas antiguas pueden no tener todavía la moneda en el catálogo;
     # un borrador puede conservar el valor y validarlo estrictamente al enviar.
     explicit_currency = _optional_text(payload.get("transaction_currency")) or any(
@@ -693,6 +702,8 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
         exchange_rate=_optional_decimal(raw_line.get("exchange_rate")),
         reference_type=_optional_text(raw_line.get("reference_type")),
         reference_name=_optional_text(raw_line.get("reference_name")),
+        reference_open_item_id=_optional_text(raw_line.get("reference_open_item_id")),
+        reference_exchange_rate=_optional_decimal(raw_line.get("reference_exchange_rate")),
         reference1=_optional_text(raw_line.get("reference1")),
         reference2=_optional_text(raw_line.get("reference2")),
         remarks=_optional_text(raw_line.get("remarks")),
@@ -711,6 +722,10 @@ def _validate_journal_line(company: str, line: JournalLineInput, account_cache: 
         raise JournalValidationError("Una linea no puede tener debe y haber positivos al mismo tiempo.")
     if line.debit == 0 and line.credit == 0:
         raise JournalValidationError("Cada linea debe tener un importe en debe o en haber.")
+    if line.exchange_rate is not None and line.exchange_rate <= 0:
+        raise JournalValidationError("El tipo de cambio de la línea debe ser mayor que cero.")
+    if line.reference_exchange_rate is not None and line.reference_exchange_rate <= 0:
+        raise JournalValidationError("El tipo de cambio de la referencia debe ser mayor que cero.")
     account = account_cache.get(line.account)
     if line.account not in account_cache:
         account = _account_record(company, line.account)
@@ -719,15 +734,161 @@ def _validate_journal_line(company: str, line: JournalLineInput, account_cache: 
         raise JournalValidationError("Las cuentas de gasto requieren centro de costo.")
 
 
-def _validate_balanced_lines(company: str, lines: list[JournalLineInput]) -> None:
+def _validate_balanced_lines(
+    company: str,
+    lines: list[JournalLineInput],
+    transaction_currency: str | None = None,
+    header_exchange_rate: Decimal | None = None,
+    books: list[str] | None = None,
+) -> None:
     account_cache: dict[str, Accounts | None] = {}
     totals: dict[str | None, tuple[Decimal, Decimal]] = {}
+    explicit_books = {line.book for line in lines if line.book}
+    if explicit_books and any(not line.book for line in lines):
+        raise JournalValidationError("Todas las líneas deben indicar libro cuando alguna línea está asignada a un libro.")
+    company_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
     for line in lines:
         _validate_journal_line(company, line, account_cache)
+        line_currency = line.currency or transaction_currency or company_currency
+        rate = line.exchange_rate
+        if rate is None and line_currency != company_currency:
+            rate = header_exchange_rate if line_currency == transaction_currency else None
+        # Un borrador puede conservar moneda extranjera sin tasa; el posting
+        # exige resolverla (por línea, cabecera o tabla histórica) antes de GL.
+        effective_rate = rate or Decimal("1")
         debit, credit = totals.get(line.book, (Decimal("0"), Decimal("0")))
-        totals[line.book] = debit + line.debit, credit + line.credit
+        totals[line.book] = debit + line.debit * effective_rate, credit + line.credit * effective_rate
     if any(debit != credit for debit, credit in totals.values()):
         raise JournalValidationError("El comprobante contable no esta balanceado por libro.")
+
+
+def _normalize_party_type(value: str | None) -> str | None:
+    """Normaliza el tipo de tercero del formulario y del importador."""
+    normalized = (value or "").strip().lower()
+    return {"cliente": "customer", "customer": "customer", "proveedor": "supplier", "supplier": "supplier"}.get(
+        normalized
+    ) or (normalized or None)
+
+
+def _party_id_for_line(company: str, party_value: str | None) -> str | None:
+    """Resuelve un tercero por su id o código dentro de la compañía."""
+    if not party_value:
+        return None
+    party = database.session.get(Party, party_value)
+    if party is None:
+        party = database.session.execute(select(Party).where(Party.code == party_value)).scalar_one_or_none()
+    return str(party.id) if party is not None else str(party_value)
+
+
+def _reference_document_type(reference_type: str, party_type: str) -> str:
+    """Convierte referencias visibles a los tipos documentales del subledger."""
+    value = reference_type.strip().lower().replace(" ", "_")
+    aliases = {
+        "factura": "invoice",
+        "invoice": "invoice",
+        "debit_note": "debit_note",
+        "debitnote": "debit_note",
+        "nota_debito": "debit_note",
+        "credit_note": "credit_note",
+        "creditnote": "credit_note",
+        "nota_credito": "credit_note",
+        "payment": "payment_entry",
+        "pago": "payment_entry",
+        "journal_entry": "journal_entry",
+        "comprobante_contable": "journal_entry",
+        "otro_comprobante_contable": "journal_entry",
+    }
+    value = aliases.get(value, value)
+    if value == "invoice":
+        return "sales_invoice" if party_type == "customer" else "purchase_invoice"
+    if value == "debit_note":
+        return "sales_debit_note" if party_type == "customer" else "purchase_debit_note"
+    if value == "credit_note":
+        return "sales_credit_note" if party_type == "customer" else "purchase_credit_note"
+    return value
+
+
+def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
+    """Valida terceros y referencias AP/AR antes de guardar el borrador."""
+    from cacao_accounting.contabilidad.arap_allocation import list_open_items
+    from cacao_accounting.database import ARAPOpenItem, CompanyParty
+
+    for line in lines:
+        account = _account_record(company, line.account)
+        account_type = str(getattr(account, "account_type", None) or "").lower()
+        ar_ap_type = account_type in {"receivable", "payable", "customer_advance", "supplier_advance"}
+        party_type = _normalize_party_type(line.party_type)
+        if ar_ap_type:
+            expected_party = "customer" if account_type in {"receivable", "customer_advance"} else "supplier"
+            if party_type != expected_party or not line.party:
+                raise JournalValidationError("Las cuentas AP/AR requieren tercero del tipo correspondiente.")
+            party = database.session.get(Party, line.party)
+            if party is None:
+                party = database.session.execute(select(Party).where(Party.code == line.party)).scalar_one_or_none()
+            if party is None or not bool(getattr(party, "is_active", True)):
+                raise JournalValidationError("El tercero AP/AR no existe o está inactivo.")
+            company_party = database.session.execute(
+                select(CompanyParty).where(CompanyParty.company == company, CompanyParty.party_id == party.id)
+            ).scalar_one_or_none()
+            if company_party is None or not bool(getattr(company_party, "is_active", True)):
+                raise JournalValidationError("El tercero AP/AR no está activo en la compañía.")
+            if expected_party == "customer" and not bool(getattr(party, "is_customer", False)):
+                raise JournalValidationError("El tercero seleccionado no está habilitado como cliente.")
+            if expected_party == "supplier" and not bool(getattr(party, "is_supplier", False)):
+                raise JournalValidationError("El tercero seleccionado no está habilitado como proveedor.")
+
+        if bool(line.reference_type) != bool(line.reference_name or line.reference_open_item_id):
+            raise JournalValidationError("La referencia AP/AR requiere tipo y documento.")
+        if not line.reference_type:
+            continue
+        if not ar_ap_type:
+            # Compatibilidad con comprobantes históricos que usaban la
+            # referencia libre en cuentas no auxiliares; no abren un open item.
+            continue
+        reference_name = line.reference_open_item_id or line.reference_name or ""
+        document_type = _reference_document_type(line.reference_type, party_type or "")
+        target = (
+            database.session.execute(
+                select(ARAPOpenItem)
+                .where(
+                    ARAPOpenItem.company == company,
+                    ARAPOpenItem.party_type == party_type,
+                    ARAPOpenItem.party_id == _party_id_for_line(company, line.party),
+                    ARAPOpenItem.document_type == document_type,
+                    ARAPOpenItem.unallocated_amount > 0,
+                )
+                .where(
+                    (ARAPOpenItem.id == reference_name)
+                    | (ARAPOpenItem.document_id == reference_name)
+                    | (ARAPOpenItem.document_no == reference_name)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not target:
+            target = [
+                item
+                for item in list_open_items(
+                    company=company, party_type=party_type, party_id=_party_id_for_line(company, line.party)
+                )
+                if item.document_type == document_type and item.document_id == reference_name and item.outstanding > 0
+            ]
+        if len(target) != 1:
+            raise JournalValidationError("El documento de referencia AP/AR no tiene un saldo abierto único.")
+        target_direction = getattr(target[0], "direction", None)
+        source_direction = (
+            "debit"
+            if (
+                (line.debit - line.credit)
+                if account_type in {"receivable", "customer_advance"}
+                else (line.credit - line.debit)
+            )
+            > 0
+            else "credit"
+        )
+        if target_direction and target_direction == source_direction:
+            raise JournalValidationError("La referencia AP/AR debe tener sentido contrario al movimiento.")
 
 
 def _validate_line_books(company: str, books: list[str] | None, lines: list[JournalLineInput]) -> None:
@@ -799,7 +960,7 @@ def _line_model(
         transaction=JOURNAL_TRANSACTION_TYPE,
         order=line.order,
         value=amount,
-        currency_id=transaction_currency,
+        currency_id=line.currency or transaction_currency,
         exchange_rate=line.exchange_rate,
         value_default=amount,
         memo=line.remarks,
@@ -807,10 +968,14 @@ def _line_model(
         line_memo=line.remarks,
         internal_reference=line.reference_type,
         internal_reference_id=line.reference_name,
+        reference_type=line.reference_type,
+        reference_name=line.reference_name,
+        reference_open_item_id=line.reference_open_item_id,
+        reference_exchange_rate=line.reference_exchange_rate,
         reference1=line.reference1,
         reference2=line.reference2,
-        third_type=line.party_type,
-        third_code=line.party,
+        third_type=_normalize_party_type(line.party_type),
+        third_code=_party_id_for_line(company, line.party),
         bank_account_id=line.bank_account_id,
         is_advance=line.is_advance,
         voucher_type=JOURNAL_TRANSACTION_TYPE,
@@ -902,8 +1067,10 @@ def _serialize_journal_line(
         "project": line.project or "",
         "currency": line.currency_id or "",
         "exchange_rate": _safe_str(line.exchange_rate),
-        "reference_type": line.internal_reference or "",
-        "reference_name": values["reference_name"],
+        "reference_type": getattr(line, "reference_type", None) or line.internal_reference or "",
+        "reference_name": getattr(line, "reference_name", None) or values["reference_name"],
+        "reference_open_item_id": getattr(line, "reference_open_item_id", None) or "",
+        "reference_exchange_rate": _safe_str(getattr(line, "reference_exchange_rate", None)),
         "reference1": line.reference1 or "",
         "reference2": line.reference2 or "",
         "remarks": line.memo or line.line_memo or "",
@@ -979,15 +1146,19 @@ def _normalize_transaction_currency(
 ) -> tuple[str | None, list[JournalLineInput]]:
     line_currencies = {line.currency for line in lines if line.currency}
     if transaction_currency:
-        if line_currencies and line_currencies != {transaction_currency}:
-            raise JournalValidationError("Todas las lineas deben usar la moneda del comprobante.")
-        return transaction_currency, _apply_currency_to_lines(lines, transaction_currency)
-    if len(line_currencies) > 1:
-        raise JournalValidationError("No se permite mezclar monedas en un mismo comprobante.")
+        # ``transaction_currency`` is the header fallback.  Account rows may
+        # intentionally use different currencies, as in a real multi-currency
+        # journal; explicit line currencies are never overwritten.
+        return transaction_currency, [replace(line, currency=line.currency or transaction_currency) for line in lines]
     if not line_currencies:
         return None, lines
-    inferred_currency = next(iter(line_currencies))
-    return inferred_currency, _apply_currency_to_lines(lines, inferred_currency)
+    if len(line_currencies) == 1:
+        inferred_currency = next(iter(line_currencies))
+        return inferred_currency, _apply_currency_to_lines(lines, inferred_currency)
+    # Mixed line currencies have no single document currency.  The company
+    # currency is used as the header fallback while each line keeps its own
+    # account currency and exchange rate.
+    return None, lines
 
 
 def _apply_currency_to_lines(lines: list[JournalLineInput], currency: str) -> list[JournalLineInput]:
