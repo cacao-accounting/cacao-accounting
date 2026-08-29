@@ -25,8 +25,10 @@ from cacao_accounting.database import (
     Party,
     CompanyParty,
     AuditTrail,
+    ARAPLedgerEntry,
 )
 from cacao_accounting.document_flow.payment import compute_outstanding_amount
+from cacao_accounting.contabilidad.arap_allocation import list_open_items
 from cacao_accounting.audit_trail_service import log_balance_confirmation_event
 
 # Helper functions for calculations
@@ -117,6 +119,35 @@ def compute_payment_unallocated_amount_at_date(
     if payment_total <= 0:
         return Decimal("0")
 
+    # El ledger documental es la fuente canónica cuando el pago ya fue
+    # contabilizado. El cálculo legacy se conserva para datos anteriores al
+    # subledger y para borradores que aún no tienen movimiento AR/AP.
+    party_type = getattr(payment, "party_type", None)
+    party_id = getattr(payment, "party_id", None)
+    if party_type and party_id:
+        canonical = next(
+            (
+                item
+                for item in list_open_items(
+                    company=payment.company,
+                    party_type=party_type,
+                    party_id=party_id,
+                    as_of_date=as_of_date,
+                )
+                if item.document_type == "payment_entry" and item.document_id == str(payment.id)
+            ),
+            None,
+        )
+        if canonical is not None:
+            return abs(
+                ARAPLedgerEntry.document_balance(
+                    "payment_entry",
+                    str(payment.id),
+                    as_of_date=as_of_date,
+                    currency=getattr(payment, "currency", None),
+                )
+            )
+
     # Obtener todas las aplicaciones del pago realizadas antes o en la fecha de corte
     stmt = select(PaymentReference).where(
         PaymentReference.payment_id == payment.id,
@@ -145,6 +176,26 @@ def compute_applied_credit_document_amount(document: Any, as_of_date: date) -> D
     if document_type not in {"sales_credit_note", "sales_debit_note", "purchase_credit_note", "purchase_debit_note"}:
         return Decimal("0")
     document_id = getattr(document, "id", "")
+
+    currency = getattr(document, "transaction_currency", None) or getattr(document, "currency", None)
+    canonical_rows = database.session.execute(
+        select(ARAPLedgerEntry.id)
+        .where(
+            ARAPLedgerEntry.document_type == document_type,
+            ARAPLedgerEntry.document_id == str(document_id),
+            ARAPLedgerEntry.posting_date <= as_of_date,
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if canonical_rows is not None:
+        balance = ARAPLedgerEntry.document_balance(
+            document_type,
+            str(document_id),
+            as_of_date=as_of_date,
+            currency=currency,
+        )
+        original = abs(Decimal(str(getattr(document, "grand_total", 0) or 0)))
+        return max(Decimal("0"), original - abs(balance))
 
     def _sum_applied(source_types: tuple[str, ...], invoice_model: Any) -> Decimal:
         query = (
@@ -217,6 +268,10 @@ def _invoice_open_items(
         SalesInvoice.customer_id == party_id if party_type == "customer" else PurchaseInvoice.supplier_id == party_id
     )
     default_label = "Factura" if party_type == "customer" else "Factura de Compra"
+    canonical_items = {
+        (item.document_type, item.document_id)
+        for item in list_open_items(company=company_id, party_type=party_type, party_id=party_id, as_of_date=cutoff_date)
+    }
     stmt = select(model_class).where(
         model_class.company == company_id,
         party_filter,
@@ -230,7 +285,18 @@ def _invoice_open_items(
         ):
             continue
         is_credit = _invoice_is_credit(document)
-        outstanding = compute_outstanding_amount(document, as_of_date=cutoff_date)
+        canonical_key = (str(document.document_type or model_class.__tablename__), str(document.id))
+        if canonical_key in canonical_items:
+            outstanding = abs(
+                ARAPLedgerEntry.document_balance(
+                    canonical_key[0],
+                    canonical_key[1],
+                    as_of_date=cutoff_date,
+                    currency=getattr(document, "transaction_currency", None),
+                )
+            )
+        else:
+            outstanding = compute_outstanding_amount(document, as_of_date=cutoff_date)
         if is_credit:
             outstanding -= compute_applied_credit_document_amount(document, cutoff_date)
         if outstanding <= 0:
@@ -257,10 +323,25 @@ def _payment_open_items(
         PaymentEntry.docstatus.in_((1, 2)),
     )
     items: list[dict[str, Any]] = []
+    canonical_items = {
+        (item.document_type, item.document_id)
+        for item in list_open_items(company=company_id, party_type=party_type, party_id=party_id, as_of_date=cutoff_date)
+    }
     for payment in database.session.execute(stmt).scalars().all():
         if _payment_cancelled_at_cutoff(payment, cutoff_date, cancelled_map):
             continue
-        unapplied = compute_payment_unallocated_amount_at_date(payment, cutoff_date, cancelled_map)
+        payment_key = ("payment_entry", str(payment.id))
+        if payment_key in canonical_items:
+            unapplied = abs(
+                ARAPLedgerEntry.document_balance(
+                    payment_key[0],
+                    payment_key[1],
+                    as_of_date=cutoff_date,
+                    currency=getattr(payment, "currency", None),
+                )
+            )
+        else:
+            unapplied = compute_payment_unallocated_amount_at_date(payment, cutoff_date, cancelled_map)
         if unapplied == 0:
             continue
         original_amount = Decimal(str(payment.paid_amount or payment.received_amount or 0))

@@ -374,6 +374,70 @@ def test_manual_journal_reference_allocates_and_cancellation_restores_open_items
     assert source.unallocated_amount == Decimal("40.0000")
 
 
+def test_manual_journal_reversal_links_subledger_and_closes_cache(arap_app):
+    """La reversión publicada enlaza su movimiento AR con el origen y cierra cachés."""
+    from cacao_accounting.contabilidad.arap_ledger_service import post_journal_ar_ap
+    from cacao_accounting.database import (
+        ARAPLedgerEntry,
+        ARAPOpenItem,
+        Accounts,
+        ComprobanteContable,
+        ComprobanteContableDetalle,
+        database,
+    )
+
+    account = Accounts(
+        entity="cacao", code="AR-REV", name="Clientes", active=True, enabled=True, group=False, account_type="receivable"
+    )
+    source = ComprobanteContable(entity="cacao", date=date(2026, 8, 2), status="submitted")
+    reversal = ComprobanteContable(entity="cacao", date=date(2026, 8, 3), status="submitted", reversal_of=None)
+    database.session.add_all([account, source, reversal])
+    database.session.flush()
+    reversal.reversal_of = source.id
+    database.session.add_all(
+        [
+            ComprobanteContableDetalle(
+                entity="cacao",
+                account=account.code,
+                transaction="journal_entry",
+                transaction_id=source.id,
+                order=1,
+                value=Decimal("100"),
+                currency_id="USD",
+                third_type="customer",
+                third_code="P-ARAP",
+                economic_line_id="REV-LINE",
+            ),
+            ComprobanteContableDetalle(
+                entity="cacao",
+                account=account.code,
+                transaction="journal_entry",
+                transaction_id=reversal.id,
+                order=1,
+                value=Decimal("-100"),
+                currency_id="USD",
+                third_type="customer",
+                third_code="P-ARAP",
+                economic_line_id="REV-LINE",
+            ),
+        ]
+    )
+    database.session.flush()
+    post_journal_ar_ap(source, [])
+    database.session.commit()
+    post_journal_ar_ap(reversal, [])
+    database.session.commit()
+
+    source_rows = database.session.query(ARAPLedgerEntry).filter_by(document_id=source.id).all()
+    original = next(row for row in source_rows if not row.is_reversal)
+    reversed_entry = next(row for row in source_rows if row.is_reversal)
+    assert reversed_entry.is_reversal is True
+    assert reversed_entry.reversal_of == original.id
+    assert ARAPLedgerEntry.document_balance("journal_entry", source.id) == Decimal("0.0000")
+    source_cache = database.session.query(ARAPOpenItem).filter_by(document_id=source.id).one()
+    assert source_cache.unallocated_amount == Decimal("0.0000")
+
+
 def test_list_open_items_exposes_payment_credit_as_positive_available_balance(arap_app):
     """Los pagos abiertos se muestran positivos, conservando su dirección crédito."""
     from cacao_accounting.contabilidad.arap_allocation import list_open_items

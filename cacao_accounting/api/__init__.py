@@ -981,6 +981,87 @@ def api_document_flow_payment_reconciliation_candidates():
     return jsonify(candidates)
 
 
+@api.route("/api/accounting/arap-reconciliation", methods=["GET", "POST"])
+@login_required
+def api_accounting_arap_reconciliation():
+    """Diagnostica o configura la política de conciliación continua AR/AP↔GL."""
+    from cacao_accounting.database import ArApReconciliationPolicy, database
+
+    company = str(request.args.get("company") or request.args.get("company_id") or "").strip()
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        company = str(payload.get("company") or payload.get("company_id") or company).strip()
+    if not company:
+        return jsonify({"error": "La compañía es obligatoria."}), 400
+    exige_acceso_compania("accounting", company, "autorizar" if request.method == "POST" else "consultar")
+
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        mode = str(payload.get("mode") or "strict").strip().lower()
+        if mode not in {"strict", "warn", "log"}:
+            return jsonify({"error": "La política debe ser strict, warn o log."}), 400
+        try:
+            tolerance = Decimal(str(payload.get("tolerance", "0.01")))
+        except Exception:  # noqa: BLE001
+            return jsonify({"error": "La tolerancia debe ser decimal."}), 400
+        if not tolerance.is_finite() or tolerance < 0:
+            return jsonify({"error": "La tolerancia debe ser finita y no negativa."}), 400
+        row = database.session.execute(
+            database.select(ArApReconciliationPolicy).where(ArApReconciliationPolicy.company == company)
+        ).scalar_one_or_none()
+        if row is None:
+            row = ArApReconciliationPolicy(company=company)
+            database.session.add(row)
+        row.mode = mode
+        row.tolerance = tolerance
+        row.enabled = bool(payload.get("enabled", True))
+        database.session.commit()
+        return jsonify({"company": company, "mode": row.mode, "tolerance": str(row.tolerance), "enabled": row.enabled})
+
+    from cacao_accounting.contabilidad.arap_gl_reconciliation import ARAPGLReconciliationError, reconcile_arap_to_gl
+
+    try:
+        cutoff = date.fromisoformat(request.args.get("as_of_date") or date.today().isoformat())
+    except ValueError:
+        return jsonify({"error": "La fecha de corte no es válida."}), 400
+    try:
+        result = reconcile_arap_to_gl(company=company, as_of_date=cutoff)
+    except ARAPGLReconciliationError as exc:
+        result = exc.result
+        status = 409
+    else:
+        status = 200
+    return (
+        jsonify(
+            {
+                "company": result.company,
+                "as_of_date": result.as_of_date.isoformat(),
+                "mode": result.mode,
+                "tolerance": str(result.tolerance),
+                "balanced": result.is_balanced,
+                "blocked": result.blocked,
+                "message": result.message,
+                "lines": [
+                    {
+                        "ledger_id": line.key.ledger_id,
+                        "ledger_type": line.key.ledger_type,
+                        "party_type": line.key.party_type,
+                        "party_id": line.key.party_id,
+                        "currency": line.key.currency,
+                        "subledger_amount": str(line.subledger_amount),
+                        "gl_amount": str(line.gl_amount),
+                        "difference": str(line.difference),
+                        "tolerance": str(line.tolerance),
+                        "balanced": line.is_balanced,
+                    }
+                    for line in result.lines
+                ],
+            }
+        ),
+        status,
+    )
+
+
 @api.route("/api/inventory/stock-bin-snapshot")
 @login_required
 def api_inventory_stock_bin_snapshot():

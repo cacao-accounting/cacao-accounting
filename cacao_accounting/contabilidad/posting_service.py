@@ -3824,6 +3824,7 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
             post_journal_ar_ap(document, entries)
         else:
             post_document_ar_ap(document, entries)
+        _validate_arap_gl_transition(document)
         # QR Validation support
         from cacao_accounting.printing.validation import ValidationService
 
@@ -3912,7 +3913,46 @@ def cancel_document(
         from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
 
         cancel_document_ar_ap(document, cancellation_date=cancellation_context.effective_date)
+        _validate_arap_gl_transition(document, as_of_date=cancellation_context.effective_date)
         return result
+
+
+def _validate_arap_gl_transition(document: Any, *, as_of_date: Any = None) -> None:
+    """Validate AR/AP against GL before the surrounding savepoint can commit."""
+    from cacao_accounting.contabilidad.arap_gl_reconciliation import (
+        ARAPGLReconciliationError,
+        reconcile_arap_to_gl,
+    )
+
+    effective_date = as_of_date or _posting_date_for(document)
+    company = _company_for(document)
+    voucher_type = _get_voucher_type(document)
+    voucher_id = _get_voucher_id(document)
+    dimensions = database.session.execute(
+        select(GLEntry.party_type, GLEntry.party_id, GLEntry.ledger_id).where(
+            GLEntry.company == company,
+            GLEntry.voucher_type == voucher_type,
+            GLEntry.voucher_id == voucher_id,
+            GLEntry.party_id.is_not(None),
+        )
+    ).all()
+    grouped: dict[tuple[str, str], set[str]] = {}
+    for party_type, party_id, ledger_id in dimensions:
+        if party_type and party_id:
+            grouped.setdefault((str(party_type), str(party_id)), set()).add(str(ledger_id))
+    if not grouped:
+        return
+    try:
+        for (party_type, party_id), ledger_ids in grouped.items():
+            reconcile_arap_to_gl(
+                company=company,
+                as_of_date=effective_date,
+                party_type=party_type,
+                party_id=party_id,
+                ledger_ids=ledger_ids,
+            )
+    except ARAPGLReconciliationError as exc:
+        raise PostingError(str(exc)) from exc
 
 
 def _cancel_fiscal_year_closing_document(
@@ -3952,7 +3992,12 @@ def _cancel_fiscal_year_closing_document(
         _update_validation_service(document)
         reversals = _create_gl_reversals(document, original_entries, voucher_type, voucher_id, posting_date)
         _emit_cancel_events(document, voucher_id, company)
-        return _add_entries(reversals)
+        result = _add_entries(reversals)
+        from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+
+        cancel_document_ar_ap(document, cancellation_date=posting_date)
+        _validate_arap_gl_transition(document, as_of_date=posting_date)
+        return result
 
 
 def _lock_document_for_transition(document: Any) -> Any:

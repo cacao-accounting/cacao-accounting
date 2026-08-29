@@ -747,6 +747,17 @@ def apply_payment_reconciliation(
         _process_reconciliation_line(
             raw_line, company, party_type, party_id, allocation_date, reconciliation.id, processed, payment_remaining
         )
+    from cacao_accounting.contabilidad.arap_gl_reconciliation import ARAPGLReconciliationError, reconcile_arap_to_gl
+
+    try:
+        reconcile_arap_to_gl(
+            company=company,
+            party_type=party_type,
+            party_id=party_id,
+            as_of_date=allocation_date,
+        )
+    except ARAPGLReconciliationError as exc:
+        raise _document_flow_error(str(exc), 409) from exc
     return reconciliation
 
 
@@ -1017,6 +1028,9 @@ def _persist_reconciliation_allocation(
             allocation_date=allocation_ctx.allocation_date,
             reference_type=flow_source_type,
         )
+        from cacao_accounting.contabilidad.posting_service import _validate_arap_gl_transition
+
+        _validate_arap_gl_transition(payment, as_of_date=allocation_ctx.allocation_date)
     _update_document_outstanding(document, allocation_ctx.outstanding, allocation_ctx.allocated)
     _create_reconciliation_item(
         reconciliation_id,
@@ -1307,6 +1321,9 @@ def apply_advance_to_invoice(
             allocation_date=allocation_date,
             reference_type=reference_type,
         )
+        from cacao_accounting.contabilidad.posting_service import _validate_arap_gl_transition
+
+        _validate_arap_gl_transition(payment, as_of_date=allocation_date)
     refresh_outstanding_amount_cache(invoice)
     _maybe_settle_advance_against_invoice(payment, invoice, reference_type, amount, allocation_date)
     return reference
@@ -1828,6 +1845,9 @@ def _persist_payment_target_allocation(
             allocation_date=getattr(payment, "posting_date", None) or date.today(),
             reference_type=reference_type,
         )
+        from cacao_accounting.contabilidad.posting_service import _validate_arap_gl_transition
+
+        _validate_arap_gl_transition(payment, as_of_date=getattr(payment, "posting_date", None) or date.today())
 
 
 def _update_payment_target_amounts(payment: PaymentEntry, total: Decimal) -> None:

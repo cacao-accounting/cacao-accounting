@@ -257,6 +257,24 @@ def _decrease_open_item_cache(open_item_id: str | None, amount: Decimal) -> None
     database.session.add(row)
 
 
+def _close_open_item_cache_for_movement(movement: ARAPLedgerEntry) -> None:
+    """Cierra el snapshot rápido cuando una reversa ya neutraliza su origen."""
+    economic_line_id = movement.economic_line_id or movement.document_id
+    row = database.session.execute(
+        select(ARAPOpenItem).where(
+            ARAPOpenItem.document_type == movement.document_type,
+            ARAPOpenItem.document_id == movement.document_id,
+            ARAPOpenItem.economic_line_id == economic_line_id,
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return
+    row.unallocated_amount = Decimal("0")
+    row.status = "closed"
+    row.version = int(row.version or 1) + 1
+    database.session.add(row)
+
+
 def _book_exchange_rate(company: str, source: str, target: str, posting_date: date, fallback: Decimal) -> Decimal:
     """Obtiene una tasa snapshot entre la moneda documental y la del libro."""
     if source == target:
@@ -842,6 +860,8 @@ def _apply_journal_open_item(
         document_type=target.document_type,
         document_id=target.document_id,
         economic_line_id=target.economic_line_id,
+        voucher_type="journal_entry",
+        voucher_id=str(document.id),
     )
     source_allocation = _new_movement(
         document,
@@ -854,6 +874,8 @@ def _apply_journal_open_item(
         party_id=source.party_id,
         currency=source.currency,
         document_type="journal_entry",
+        voucher_type="journal_entry",
+        voucher_id=str(document.id),
         economic_line_id=source.economic_line_id,
     )
     posting_date = getattr(document, "date", None) or date.today()
@@ -881,6 +903,21 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
     ``economic_line_id`` y el saldo rápido se actualiza sin reemplazar el
     ledger append-only.
     """
+    existing = (
+        database.session.execute(
+            select(ARAPLedgerEntry)
+            .where(
+                ARAPLedgerEntry.document_type == "journal_entry",
+                ARAPLedgerEntry.voucher_type == "journal_entry",
+                ARAPLedgerEntry.voucher_id == str(document.id),
+            )
+            .order_by(ARAPLedgerEntry.id)
+        )
+        .scalars()
+        .all()
+    )
+    if existing:
+        return list(existing)
     entry_list = list(entries)
     movements: list[ARAPLedgerEntry] = []
     for line in _journal_party_lines(document):
@@ -899,6 +936,19 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
         if not currency:
             raise ValueError("La línea AP/AR requiere moneda documental explícita.")
         economic_line_id = str(getattr(line, "economic_line_id", None) or line.id)
+        reversal_source = None
+        if getattr(document, "reversal_of", None):
+            reversal_source = database.session.execute(
+                select(ARAPLedgerEntry)
+                .where(
+                    ARAPLedgerEntry.document_type == "journal_entry",
+                    ARAPLedgerEntry.document_id == str(document.reversal_of),
+                    ARAPLedgerEntry.economic_line_id == economic_line_id,
+                    ARAPLedgerEntry.is_reversal.is_(False),
+                )
+                .order_by(ARAPLedgerEntry.id)
+                .limit(1)
+            ).scalar_one_or_none()
         source = _new_movement(
             document,
             amount=source_signed,
@@ -908,7 +958,12 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
             party_id=party_id,
             currency=currency,
             document_type="journal_entry",
+            document_id=reversal_source.document_id if reversal_source is not None else str(document.id),
             economic_line_id=economic_line_id,
+            voucher_type="journal_entry",
+            is_reversal=reversal_source is not None,
+            reversal_of=str(reversal_source.id) if reversal_source is not None else None,
+            voucher_id=str(document.id),
         )
         movements.append(source)
         direction = "debit" if source_signed > 0 else "credit"
@@ -918,7 +973,10 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
             direction=direction,
             account_id=str(account.id),
             economic_line_id=economic_line_id,
+            unallocated_amount=Decimal("0") if reversal_source is not None else None,
         )
+        if reversal_source is not None:
+            _close_open_item_cache_for_movement(reversal_source)
         for book in _active_books(str(document.entity)):
             candidates = [
                 entry
@@ -928,7 +986,19 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
             ]
             if candidates:
                 book_value = sum((_book_value_from_gl(entry, ledger_type) for entry in candidates), Decimal("0"))
-                _add_book_entry(source, book=book, amount=book_value, gl_entry=candidates[0])
+                source_book = (
+                    next((row for row in reversal_source.book_entries if row.ledger_id == book.id), None)
+                    if reversal_source is not None
+                    else None
+                )
+                _add_book_entry(
+                    source,
+                    book=book,
+                    amount=book_value,
+                    gl_entry=candidates[0],
+                    is_reversal=reversal_source is not None,
+                    reversal_of=source_book,
+                )
         reference_type = (
             _normalize_journal_reference_type(str(getattr(line, "reference_type", None) or ""), party_type)
             if getattr(line, "reference_type", None)

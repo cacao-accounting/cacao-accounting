@@ -186,6 +186,9 @@ def _post_and_sync_journal(journal: ComprobanteContable, commit: bool) -> list[A
         from cacao_accounting.contabilidad.arap_ledger_service import post_journal_ar_ap
 
         post_journal_ar_ap(journal, entries)
+        from cacao_accounting.contabilidad.posting_service import _validate_arap_gl_transition
+
+        _validate_arap_gl_transition(journal)
         sync_journal_document_relations(journal)
         return entries
     except (PostingError, IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:

@@ -205,6 +205,32 @@ def test_outstanding_balance_calculation_at_cutoff(app_ctx) -> None:
     assert totals["USD"] == Decimal("3500.00")
 
 
+def test_balance_confirmation_uses_canonical_ar_ap_ledger(app_ctx) -> None:
+    """La confirmación toma el saldo documental del ledger, no el cache de factura."""
+    from cacao_accounting.database import ARAPLedgerEntry
+
+    database.session.add(
+        ARAPLedgerEntry(
+            company="cacao",
+            ledger_type="AR",
+            party_type="customer",
+            party_id="cust-1",
+            document_type="sales_invoice",
+            document_id="inv-1",
+            posting_date=date(2026, 5, 10),
+            event_type="opening",
+            currency="USD",
+            document_amount=Decimal("4200"),
+            economic_line_id="inv-1",
+        )
+    )
+    database.session.commit()
+
+    items = get_open_documents_at_cutoff("cacao", "cust-1", "customer", date(2026, 5, 31))
+    invoice = next(item for item in items if item["document_no"] == "FV-00123")
+    assert invoice["outstanding_amount"] == "4200.0000"
+
+
 def test_desktop_mode_rejection(app_ctx) -> None:
     """Desktop mode must completely reject any backend endpoints and hide buttons."""
     app_ctx.config["MODO_ESCRITORIO"] = True
