@@ -3505,26 +3505,34 @@ def test_journal_service_transaction_currency_mismatch(app_ctx):
 
 
 def test_journal_service_mixed_currencies_no_transaction_currency(app_ctx):
-    from cacao_accounting.contabilidad.journal_service import JournalValidationError, create_journal_draft
-    from cacao_accounting.database import Accounts, database
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft
+    from cacao_accounting.database import Accounts, Currency, database
+
+    if database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one_or_none() is None:
+        database.session.add(Currency(code="NIO", name="Cordobas", decimals=2, active=True, default=True))
+    database.session.commit()
 
     debit = Accounts(entity="cacao", code="EXP-MC1", name="Gasto", active=True, enabled=True)
     credit = Accounts(entity="cacao", code="CAJ-MC1", name="Caja", active=True, enabled=True)
     database.session.add_all([debit, credit])
     database.session.commit()
 
-    with pytest.raises(JournalValidationError, match="mezclar monedas"):
-        create_journal_draft(
-            {
-                "company": "cacao",
-                "posting_date": "2026-05-01",
-                "lines": [
-                    {"account": debit.id, "debit": "10.00", "credit": "0", "currency": "USD"},
-                    {"account": credit.id, "debit": "0", "credit": "10.00", "currency": "EUR"},
-                ],
-            },
-            user_id="admin",
-        )
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-01",
+            "lines": [
+                {"account": debit.id, "debit": "10.00", "credit": "0", "currency": "USD"},
+                {"account": credit.id, "debit": "0", "credit": "10.00", "currency": "EUR"},
+            ],
+        },
+        user_id="admin",
+    )
+
+    # Los comprobantes con líneas de moneda mixta se soportan: cada línea
+    # conserva su propia moneda y la moneda de la compañía actúa como fallback
+    # del encabezado (antes se rechazaban con "mezclar monedas").
+    assert journal is not None
 
 
 def test_journal_service_rejects_inactive_transaction_currency(app_ctx):
