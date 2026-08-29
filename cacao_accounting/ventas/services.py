@@ -1973,10 +1973,15 @@ def _create_sales_invoice_from_form():
         posting_date = _parse_date(request.form.get("posting_date"))
         reversal_of = _sales_reversal_source(document_type)
         source_company = request.form.get("company") or None
-        source_id = request.form.get("from_order") or request.form.get("from_note") or reversal_of
-        source_model = (
-            SalesOrder if request.form.get("from_order") else DeliveryNote if request.form.get("from_note") else SalesInvoice
-        )
+        from_order_id = request.form.get("from_order") or None
+        from_note_id = request.form.get("from_note") or None
+        source_id = from_order_id or from_note_id or reversal_of
+        if from_order_id:
+            source_model = SalesOrder
+        elif from_note_id:
+            source_model = DeliveryNote
+        else:
+            source_model = SalesInvoice
         source_document = database.session.get(source_model, source_id) if source_id else None
         source_company = getattr(source_document, "company", None) or source_company
         exige_acceso_compania("sales", source_company, "crear")

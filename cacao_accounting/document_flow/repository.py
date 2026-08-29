@@ -177,11 +177,12 @@ def recompute_line_flow_state(
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
     source_item = get_document_item(source_key, source_item_id)
-    source_qty = (
-        decimal_or_zero(getattr(source_item, "qty_in_base_uom", None))
-        if source_item and getattr(source_item, "qty_in_base_uom", None) is not None
-        else (decimal_or_zero(getattr(source_item, "qty", 0)) if source_item else Decimal("0"))
-    )
+    if source_item is None:
+        source_qty = Decimal("0")
+    elif getattr(source_item, "qty_in_base_uom", None) is not None:
+        source_qty = decimal_or_zero(getattr(source_item, "qty_in_base_uom"))
+    else:
+        source_qty = decimal_or_zero(getattr(source_item, "qty", 0))
     state = get_line_flow_state(source_key, source_id, source_item_id, target_key)
     if state is None:
         state = DocumentLineFlowState(

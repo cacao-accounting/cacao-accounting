@@ -88,6 +88,24 @@ no fallar por falta de cache.
 
 # Bitácora de desarrollo
 
+## 2026-08-29 (extracción de condicionales anidados SonarCloud)
+
+### Petición del usuario
+
+Atender el siguiente easy fix de SonarCloud: `Extract this nested conditional expression into an independent statement.`
+
+### Plan implementado
+
+Se extrajeron las tres expresiones anidadas detectadas por `python:S3358`: el tipo de origen inicial de una nota de
+entrega, el modelo de documento origen de una factura de venta y la cantidad origen usada para recalcular el flujo de
+líneas. Los fallbacks y la prioridad de cada selección se mantienen explícitos mediante bloques `if`/`elif`/`else`.
+
+### Verificación
+
+Las pruebas `tests/test_o2c_full_cycle.py` y `tests/test_document_flow_tree.py` pasaron 5/5 y 25/25, respectivamente.
+Black, Ruff, Flake8 y pydocstyle pasan en los tres archivos modificados. Mypy no pudo iniciar porque el entorno `.venv`
+no contiene `pathspec.patterns.gitignore`.
+
 ## 2026-08-29 (limpieza de strings concatenados SonarCloud)
 
 ### Petición del usuario
