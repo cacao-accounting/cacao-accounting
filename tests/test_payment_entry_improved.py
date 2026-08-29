@@ -19,6 +19,7 @@ from cacao_accounting.database import (
     SalesInvoice,
     SalesInvoiceItem,
     PurchaseInvoice,
+    PurchaseInvoiceItem,
     PurchaseOrder,
     PaymentEntry,
     PaymentReference,
@@ -930,6 +931,9 @@ def test_accounting_entries_for_payment_variants(
             supplier_id=party.id,
             posting_date=date.today(),
             document_type=document_type,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
             docstatus=1,
             grand_total=1000,
             outstanding_amount=1000,
@@ -941,6 +945,9 @@ def test_accounting_entries_for_payment_variants(
             customer_id=party.id,
             posting_date=date.today(),
             document_type=document_type,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
             docstatus=1,
             grand_total=1000,
             outstanding_amount=1000,
@@ -948,6 +955,41 @@ def test_accounting_entries_for_payment_variants(
         )
     database.session.add(doc)
     database.session.commit()
+
+    # Las notas de credito son devoluciones (is_return) y deben contabilizarse
+    # en GL antes de aplicarles un reembolso; sin lineas la contabilizacion
+    # falla, por lo que se agregan lineas como en el flujo real del formulario.
+    if "credit_note" in document_type:
+        doc.is_return = True
+        (
+            database.session.add(
+                SalesInvoiceItem(
+                    sales_invoice_id=doc.id,
+                    item_code="ART-CN",
+                    qty=Decimal("1"),
+                    rate=1000,
+                    amount=1000,
+                    base_amount=1000,
+                )
+            )
+            if isinstance(doc, SalesInvoice)
+            else database.session.add(
+                PurchaseInvoiceItem(
+                    purchase_invoice_id=doc.id,
+                    item_code="ART-CN",
+                    item_name="Item",
+                    qty=Decimal("1"),
+                    uom="UND",
+                    rate=1000,
+                    amount=1000,
+                )
+            )
+        )
+        database.session.commit()
+        from cacao_accounting.contabilidad.posting import post_document_to_gl
+
+        post_document_to_gl(doc)
+        database.session.commit()
 
     payment_payload = {
         "payment_type": payment_type,
