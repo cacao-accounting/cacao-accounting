@@ -19,6 +19,18 @@ from typing import Any
 
 from sqlalchemy import func, or_, select
 
+from cacao_accounting.contabilidad.arap_allocation import (
+    ARAPOpenItem,
+    AllocationLine,
+    AllocationCurrencyError,
+    AllocationError,
+    AllocationOverpaymentError,
+    AllocationRequest,
+    OpenItemResolver,
+    apply_allocation,
+    list_open_items,
+    plan_allocation,
+)
 from cacao_accounting.database import (
     Accounts,
     Book,
@@ -473,16 +485,29 @@ def _apply_candidate_party_filter(query: Any, party_type: str, party_id: str) ->
 def _collect_candidates_from_documents(
     query: Any, source_type: str, party_type: str, party_id: str, company: str
 ) -> list[dict[str, Any]]:
+    open_items = {
+        (item.document_type, item.document_id): item
+        for item in list_open_items(company=company, party_type=party_type, party_id=party_id)
+    }
     rows: list[dict[str, Any]] = []
     for document in database.session.execute(query).scalars().all():
-        outstanding = _payment_candidate_outstanding(document, source_type)
+        open_item = open_items.get((source_type, str(document.id)))
+        outstanding = open_item.outstanding if open_item is not None else _payment_candidate_outstanding(document, source_type)
         if outstanding <= 0:
             continue
-        rows.append(_build_candidate_row(document, source_type, party_type, party_id, company))
+        rows.append(_build_candidate_row(document, source_type, party_type, party_id, company, outstanding=outstanding))
     return rows
 
 
-def _build_candidate_row(document: Any, flow_source_type: str, party_type: str, party_id: str, company: str) -> dict[str, Any]:
+def _build_candidate_row(
+    document: Any,
+    flow_source_type: str,
+    party_type: str,
+    party_id: str,
+    company: str,
+    *,
+    outstanding: Decimal | None = None,
+) -> dict[str, Any]:
     """Serializa un documento candidato para conciliacion AR/AP."""
     document_date = _payment_candidate_date(document)
     physical_type = _payment_candidate_physical_type(flow_source_type)
@@ -497,7 +522,9 @@ def _build_candidate_row(document: Any, flow_source_type: str, party_type: str, 
         "company": company,
         "currency": _document_transaction_currency(document) or "",
         "grand_total": _to_json_number(getattr(document, "grand_total", None)),
-        "pending_amount": _to_json_number(_payment_candidate_outstanding(document, flow_source_type)),
+        "pending_amount": _to_json_number(
+            outstanding if outstanding is not None else _payment_candidate_outstanding(document, flow_source_type)
+        ),
     }
 
 
@@ -534,9 +561,20 @@ def _candidate_payments(
     if currency:
         payment_query = payment_query.filter_by(currency=currency)
 
+    open_items = {
+        item.document_id: item
+        for item in list_open_items(
+            company=company,
+            party_type=party_type,
+            party_id=party_id,
+            currency=currency,
+        )
+        if item.document_type == "payment_entry"
+    }
     rows: list[dict[str, Any]] = []
     for payment in database.session.execute(payment_query.order_by(PaymentEntry.posting_date, PaymentEntry.id)).scalars():
-        unallocated = compute_payment_unallocated_amount(payment)
+        open_item = open_items.get(str(payment.id))
+        unallocated = open_item.outstanding if open_item is not None else compute_payment_unallocated_amount(payment)
         if unallocated <= 0:
             continue
         rows.append(
@@ -718,14 +756,36 @@ def _process_reconciliation_line(
 
     if payment_id not in payment_remaining:
         payment_remaining[payment_id] = compute_payment_unallocated_amount(payment)
-    consumed = _cash_consumed(allocated, discount, gain_loss)
-    if consumed > payment_remaining[payment_id] + Decimal("0.01"):
-        raise _document_flow_error("El monto aplicado excede el saldo disponible del pago.", 409)
-
     document = _get_reference_document(flow_source_type, document_id, company, party_type, party_id)
-    _validate_payment_currency_match(payment, document)
     _check_duplicate_application(payment.id, flow_source_type, document_id)
     outstanding = _validate_and_get_outstanding(document, allocated, allocation_date)
+    if discount or gain_loss:
+        _validate_payment_currency_match(payment, document)
+        consumed = _cash_consumed(allocated, discount, gain_loss)
+        if consumed > payment_remaining[payment_id] + Decimal("0.01"):
+            raise _document_flow_error("El monto aplicado excede el saldo disponible del pago.", 409)
+        allocation_line = AllocationLine(
+            document_id=document_id,
+            document_type=flow_source_type,
+            document_currency=str(_document_transaction_currency(document) or payment.currency),
+            source_currency=str(payment.currency),
+            document_amount=allocated,
+            source_amount=consumed,
+            rate=Decimal("1"),
+            idempotency_key=f"{payment.id}:{flow_source_type}:{document_id}",
+        )
+    else:
+        allocation_line = _plan_reconciliation_allocation(
+            raw_line=raw_line,
+            payment=payment,
+            document=document,
+            flow_source_type=flow_source_type,
+            document_id=document_id,
+            outstanding=outstanding,
+            allocated=allocated,
+            available=payment_remaining[payment_id],
+        )
+    consumed = allocation_line.source_amount
     allocation_ctx = PaymentAllocationContext(
         allocation_date=allocation_date,
         allocated=allocated,
@@ -735,8 +795,145 @@ def _process_reconciliation_line(
         outstanding=outstanding,
     )
 
+    if discount or gain_loss:
+        _persist_reconciliation_allocation(
+            raw_line=raw_line,
+            payment=payment,
+            document=document,
+            flow_source_type=flow_source_type,
+            model_type=model_type,
+            document_id=document_id,
+            allocation_ctx=allocation_ctx,
+            allocation_line=allocation_line,
+            reconciliation_id=reconciliation_id,
+        )
+        payment_remaining[payment_id] -= consumed
+        return
+    resolver = OpenItemResolver(
+        [
+            ARAPOpenItem(
+                document_id=document_id,
+                document_type=flow_source_type,
+                currency=allocation_line.document_currency,
+                outstanding=outstanding,
+                company=company,
+                party_type=party_type,
+                party_id=party_id,
+            )
+        ]
+    )
+    plan = plan_allocation(
+        payment_remaining[payment_id],
+        allocation_line.source_currency,
+        [
+            AllocationRequest(
+                document_id=document_id,
+                amount=allocated,
+                rate=allocation_line.rate,
+                idempotency_key=allocation_line.idempotency_key,
+            )
+        ],
+        resolver=resolver,
+    )
+    apply_allocation(
+        plan,
+        resolver=resolver,
+        persist=lambda line: _persist_reconciliation_allocation(
+            raw_line=raw_line,
+            payment=payment,
+            document=document,
+            flow_source_type=flow_source_type,
+            model_type=model_type,
+            document_id=document_id,
+            allocation_ctx=allocation_ctx,
+            allocation_line=line,
+            reconciliation_id=reconciliation_id,
+        ),
+    )
+    payment_remaining[payment_id] -= consumed
+
+
+def _plan_reconciliation_allocation(
+    *,
+    raw_line: dict[str, Any],
+    payment: PaymentEntry,
+    document: Any,
+    flow_source_type: str,
+    document_id: str,
+    outstanding: Decimal,
+    allocated: Decimal,
+    available: Decimal,
+) -> AllocationLine:
+    """Valida una línea con el motor AR/AP y devuelve importes en ambas monedas."""
+    payment_currency = str(getattr(payment, "currency", None) or "")
+    # Las filas legacy pueden no tener snapshot documental. Conservamos esa
+    # compatibilidad únicamente cuando no se solicita una conversión; los
+    # documentos nuevos siguen llegando con ``transaction_currency``.
+    document_currency = _document_transaction_currency(document) or payment_currency
+    if not payment_currency:
+        raise _document_flow_error("La conciliacion requiere moneda explicita en el pago.", 409)
+    requested_rate = raw_line.get("payment_exchange_rate")
+    if requested_rate is None and document_currency != payment_currency:
+        requested_rate = raw_line.get("exchange_rate")
+    if document_currency == payment_currency:
+        effective_rate = Decimal("1")
+    else:
+        if requested_rate is None:
+            raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+        effective_rate = decimal_or_zero(requested_rate)
+    resolver = OpenItemResolver(
+        [
+            ARAPOpenItem(
+                document_id=document_id,
+                document_type=flow_source_type,
+                currency=document_currency,
+                outstanding=outstanding,
+            )
+        ]
+    )
+    try:
+        plan = plan_allocation(
+            available,
+            payment_currency,
+            [
+                AllocationRequest(
+                    document_id=document_id,
+                    amount=allocated,
+                    rate=effective_rate,
+                    idempotency_key=f"{payment.id}:{flow_source_type}:{document_id}",
+                )
+            ],
+            resolver=resolver,
+        )
+    except (AllocationCurrencyError, AllocationOverpaymentError, AllocationError) as exc:
+        raise _document_flow_error(str(exc), 409) from exc
+    line = plan.lines[0]
+    if line.source_amount > available + Decimal("0.01"):
+        raise _document_flow_error("El monto aplicado excede el saldo disponible del pago.", 409)
+    return line
+
+
+def _persist_reconciliation_allocation(
+    *,
+    raw_line: dict[str, Any],
+    payment: PaymentEntry,
+    document: Any,
+    flow_source_type: str,
+    model_type: str,
+    document_id: str,
+    allocation_ctx: PaymentAllocationContext,
+    allocation_line: AllocationLine,
+    reconciliation_id: str,
+) -> None:
+    """Persiste los artefactos legacy desde una línea AR/AP ya validada."""
+    enriched_line = {
+        **raw_line,
+        "payment_currency": allocation_line.source_currency,
+        "payment_amount": allocation_line.source_amount,
+        "payment_exchange_rate": allocation_line.rate,
+    }
     _create_payment_reference_and_relation(
-        raw_line,
+        enriched_line,
         payment,
         document,
         flow_source_type,
@@ -744,16 +941,15 @@ def _process_reconciliation_line(
         document_id,
         allocation_ctx,
     )
-    _update_document_outstanding(document, outstanding, allocated)
+    _update_document_outstanding(document, allocation_ctx.outstanding, allocation_ctx.allocated)
     _create_reconciliation_item(
         reconciliation_id,
         flow_source_type,
         document_id,
         payment.id,
-        allocated,
-        allocation_date,
+        allocation_ctx.allocated,
+        allocation_ctx.allocation_date,
     )
-    payment_remaining[payment_id] -= consumed
 
 
 def _validate_payment(payment: Any, company: str, party_type: str, party_id: str, flow_source_type: str) -> None:
@@ -846,6 +1042,9 @@ def _create_payment_reference_and_relation(
         outstanding_amount=allocation_ctx.outstanding,
         outstanding_amount_after=outstanding_after,
         allocated_amount=allocation_ctx.allocated,
+        payment_currency=raw_line.get("payment_currency"),
+        payment_amount=decimal_or_zero(raw_line.get("payment_amount")),
+        payment_exchange_rate=decimal_or_zero(raw_line.get("payment_exchange_rate")),
         exchange_rate=decimal_or_zero(raw_line.get("exchange_rate"))
         or decimal_or_zero(getattr(document, "exchange_rate", None))
         or Decimal("1"),
