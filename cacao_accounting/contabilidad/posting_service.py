@@ -124,6 +124,10 @@ class GLEntryParams:
     exchange_rate: Decimal | None = None
     party_type: str | None = None
     party_id: str | None = None
+    reference_type: str | None = None
+    reference_name: str | None = None
+    reference_open_item_id: str | None = None
+    economic_line_id: str | None = None
     bank_account_id: str | None = None
     is_advance: bool = False
     cost_center_code: str | None = None
@@ -530,6 +534,10 @@ def _create_gl_entry(
         exchange_rate=exchange_rate,
         party_type=params.party_type,
         party_id=params.party_id,
+        reference_type=params.reference_type,
+        reference_name=params.reference_name,
+        reference_open_item_id=params.reference_open_item_id,
+        economic_line_id=params.economic_line_id,
         bank_account_id=params.bank_account_id,
         is_advance=params.is_advance,
         is_fiscal_year_closing=params.is_fiscal_year_closing,
@@ -3441,6 +3449,13 @@ def _comprobante_entry_params(
         credit_in_account_currency=abs(original_value) if not is_debit and context.transaction_currency else None,
         party_type=getattr(line, "third_type", None),
         party_id=getattr(line, "third_code", None),
+        reference_type=getattr(line, "reference_type", None) or getattr(line, "internal_reference", None),
+        reference_name=getattr(line, "reference_name", None)
+        or getattr(line, "reference_open_item_id", None)
+        or getattr(line, "internal_reference_id", None)
+        or getattr(line, "reference", None),
+        reference_open_item_id=getattr(line, "reference_open_item_id", None),
+        economic_line_id=getattr(line, "economic_line_id", None) or getattr(line, "id", None),
         bank_account_id=getattr(line, "bank_account_id", None),
         is_advance=bool(getattr(line, "is_advance", False)),
         cost_center_code=getattr(line, "cost_center", None),
@@ -3474,8 +3489,10 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
                 raise PostingError("Las lineas del comprobante contable deben tener un valor distinto de cero.")
 
             account_id = _account_id_for_comprobante_line(line, company)
-            context, company_value = _comprobante_line_value(context, original_value)
-            params = _comprobante_entry_params(context, line, account_id, company_value, original_value, is_fy_closing)
+            line_currency = getattr(line, "currency_id", None) or context.transaction_currency
+            line_context = _ledger_context_with_currency(context, line_currency, getattr(line, "exchange_rate", None))
+            line_context, company_value = _comprobante_line_value(line_context, original_value)
+            params = _comprobante_entry_params(line_context, line, account_id, company_value, original_value, is_fy_closing)
             entries.append(_create_gl_entry(context=context, params=params))
 
     total_value = sum((_decimal_value(getattr(line, "value", None)) for line in lines), Decimal("0"))
@@ -3795,10 +3812,16 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
     with database.session.begin_nested():
         document.docstatus = 1
         entries = post_document_to_gl(document, ledger_code=ledger_code)
-        from cacao_accounting.contabilidad.arap_ledger_service import post_document_ar_ap, post_payment_ar_ap
+        from cacao_accounting.contabilidad.arap_ledger_service import (
+            post_document_ar_ap,
+            post_journal_ar_ap,
+            post_payment_ar_ap,
+        )
 
         if isinstance(document, PaymentEntry):
             post_payment_ar_ap(document, entries)
+        elif isinstance(document, ComprobanteContable):
+            post_journal_ar_ap(document, entries)
         else:
             post_document_ar_ap(document, entries)
         # QR Validation support

@@ -2,9 +2,11 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José MORENO Reyes
 
 import json
+from io import BytesIO
 import pytest
+from openpyxl import Workbook
 from cacao_accounting import create_app
-from cacao_accounting.database import database, Entity, Item, UOM, User, Roles, Modules, RolesUser, RolesAccess
+from cacao_accounting.database import Accounts, database, Entity, Item, UOM, User, Roles, Modules, RolesUser, RolesAccess
 from flask_login import login_user
 
 
@@ -83,6 +85,35 @@ def test_get_line_import_schema(logged_in_client):
     data = response.get_json()
     assert data["doctype"] == "purchase_request"
     assert any(col["key"] == "item_code" for col in data["columns"])
+
+
+def test_get_payment_reconciliation_import_schema(logged_in_client):
+    """La conciliación usa el mismo contrato de carga XLSX del backend."""
+    response = logged_in_client.get("/api/line-import/schema?doctype=payment_reconciliation")
+    assert response.status_code == 200
+    keys = {column["key"] for column in response.get_json()["columns"]}
+    assert {"payment_id", "reference_type", "reference_id", "allocated_amount"}.issubset(keys)
+
+
+def test_validate_payment_reconciliation_rejects_unknown_documents(logged_in_client):
+    """La validación previa evita importar pagos o referencias inexistentes."""
+    payload = {
+        "doctype": "payment_reconciliation",
+        "context": {"company_id": "cacao"},
+        "rows": [
+            {
+                "payment_id": "missing-payment",
+                "reference_type": "sales_invoice",
+                "reference_id": "missing-invoice",
+                "allocated_amount": "10",
+            }
+        ],
+    }
+    response = logged_in_client.post("/api/line-import/validate", json=payload)
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["valid"] is False
+    assert {error["field"] for error in data["errors"]} >= {"payment_id", "reference_id"}
 
 
 @pytest.mark.parametrize(
@@ -220,6 +251,52 @@ def test_validate_journal_entry_conflict(logged_in_client):
     data = response.get_json()
     assert data["valid"] is False
     assert any("misma línea" in err["message"] for err in data["errors"])
+
+
+def test_parse_xlsx_journal_uses_server_schema_and_rejects_formulas(logged_in_client):
+    """El parser XLSX canónico acepta encabezados localizados y bloquea fórmulas."""
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Lineas"
+    worksheet.append(["Cuenta", "Débito", "Crédito"])
+    worksheet.append(["1010", 100, "=SUM(1,2)"])
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+
+    response = logged_in_client.post(
+        "/api/line-import/parse-xlsx",
+        data={"doctype": "journal_entry", "file": (stream, "journal.xlsx")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["valid"] is False
+    assert any(error["field"] == "credit" and "fórmulas" in error["message"] for error in data["errors"])
+
+
+def test_validate_journal_import_includes_existing_lines(logged_in_client):
+    """La validación combina filas importadas con las líneas ya capturadas."""
+    database.session.add_all(
+        [
+            Accounts(entity="cacao", code="1010", name="Debe", active=True, enabled=True, group=False),
+            Accounts(entity="cacao", code="2020", name="Haber", active=True, enabled=True, group=False),
+        ]
+    )
+    database.session.commit()
+    payload = {
+        "doctype": "journal_entry",
+        "context": {
+            "company_id": "cacao",
+            "existing_lines": [{"account": "1010", "debit": "100", "credit": "0"}],
+        },
+        "rows": [{"account": "2020", "debit": "0", "credit": "60"}],
+    }
+    response = logged_in_client.post("/api/line-import/validate", json=payload)
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["valid"] is False
+    assert any(error["field"] == "voucher" and "balanceado" in error["message"] for error in data["errors"])
 
 
 def test_validate_empty_import(logged_in_client):

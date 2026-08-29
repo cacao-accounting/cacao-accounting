@@ -169,6 +169,49 @@ def test_journal_import_with_book_uses_only_selected_book():
         assert payload["books"] == ["FISC"]
 
 
+def test_journal_import_builds_structured_ar_ap_and_currency_fields():
+    """The legacy batch adapter accepts the canonical journal line contract too."""
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+    with app.app_context():
+        from cacao_accounting.database import database
+
+        database.create_all()
+        adapter = JournalEntryAdapter()
+        payload = adapter.build_document(
+            [
+                {
+                    "reference": "JE-AR-1",
+                    "posting_date": "2026-01-10",
+                    "account": "AR-1105",
+                    "debit": "100",
+                    "credit": "0",
+                    "party_type": "customer",
+                    "party": "CUS-1",
+                    "currency": "USD",
+                    "exchange_rate": "36.5",
+                    "reference_type": "invoice",
+                    "reference_name": "INV-1",
+                    "reference_exchange_rate": "1.25",
+                },
+                {
+                    "reference": "JE-AR-1",
+                    "posting_date": "2026-01-10",
+                    "account": "BANK-1100",
+                    "debit": "0",
+                    "credit": "100",
+                    "currency": "USD",
+                },
+            ],
+            {"company_id": "cacao", "accounting_book_id": None},
+        )
+
+        assert payload["reference"] == "JE-AR-1"
+        assert payload["lines"][0]["party_type"] == "customer"
+        assert payload["lines"][0]["reference_name"] == "INV-1"
+        assert payload["lines"][0]["reference_exchange_rate"] == "1.25"
+        assert payload["lines"][0]["currency"] == "USD"
+
+
 def test_journal_import_rejects_book_from_another_company():
     """El adaptador no puede convertir un libro cross-company en contexto válido."""
     app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})

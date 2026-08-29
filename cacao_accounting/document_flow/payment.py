@@ -15,22 +15,10 @@ import json
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, or_, select
 
-from cacao_accounting.contabilidad.arap_allocation import (
-    ARAPOpenItem,
-    AllocationLine,
-    AllocationCurrencyError,
-    AllocationError,
-    AllocationOverpaymentError,
-    AllocationRequest,
-    OpenItemResolver,
-    apply_allocation,
-    list_open_items,
-    plan_allocation,
-)
 from cacao_accounting.database import (
     Accounts,
     Book,
@@ -52,9 +40,19 @@ from cacao_accounting.database import (
 from cacao_accounting.document_flow.registry import normalize_doctype
 from cacao_accounting.document_flow.repository import decimal_or_zero
 
+if TYPE_CHECKING:
+    from cacao_accounting.contabilidad.arap_allocation import AllocationLine
+
 _MSG_MONTO_MAYOR_CERO = "El monto aplicado debe ser mayor que cero."
 
 MAX_RECONCILIATION_LINES = 100
+
+
+def _list_open_items(**filters: Any) -> tuple[Any, ...]:
+    """Importa el resolver tarde para evitar ciclos al cargar Flask."""
+    from cacao_accounting.contabilidad.arap_allocation import list_open_items
+
+    return list_open_items(**filters)
 
 
 def _document_flow_error(message: str, status_code: int = 400) -> ValueError:
@@ -260,6 +258,25 @@ def compute_outstanding_amount(document: Any, as_of_date: date | None = None) ->
             .limit(1)
         ).scalar_one_or_none()
         balance = decimal_or_zero(ledger_rows) if opening_exists else grand_total + decimal_or_zero(ledger_rows)
+        # Pagos/anticipos legacy pueden haberse aplicado después del posting
+        # del documento y todavía no tener un evento documental. Se agregan
+        # solo las referencias cuyo pago no aparece ya en el ledger, evitando
+        # doble descuento de aplicaciones que sí fueron posteadas.
+        represented_payment_ids = set(
+            database.session.execute(
+                select(ARAPLedgerEntry.reference_id).where(
+                    ARAPLedgerEntry.document_type == document_type,
+                    ARAPLedgerEntry.document_id == str(getattr(document, "id", "")),
+                    ARAPLedgerEntry.event_type == "allocation",
+                )
+            ).scalars()
+        )
+        pending_references = [
+            reference
+            for reference in _document_payment_references(document, as_of_date=as_of_date)
+            if str(reference.payment_id) not in represented_payment_ids
+        ]
+        balance -= sum((decimal_or_zero(reference.allocated_amount) for reference in pending_references), Decimal("0"))
         return balance if balance > 0 else Decimal("0")
     allocated_payments = sum(
         decimal_or_zero(reference.allocated_amount)
@@ -362,6 +379,24 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
     ).scalar_one_or_none()
     if ledger_balance is not None:
         remaining = -decimal_or_zero(ledger_balance)
+        represented_reference_ids = set(
+            database.session.execute(
+                select(ARAPLedgerEntry.reference_id).where(
+                    ARAPLedgerEntry.document_type == "payment_entry",
+                    ARAPLedgerEntry.document_id == str(payment.id),
+                    ARAPLedgerEntry.event_type == "allocation",
+                )
+            ).scalars()
+        )
+        pending_reference_amount = database.session.execute(
+            select(
+                func.coalesce(func.sum(func.coalesce(PaymentReference.payment_amount, PaymentReference.allocated_amount)), 0)
+            ).where(
+                PaymentReference.payment_id == payment.id,
+                ~PaymentReference.reference_id.in_(represented_reference_ids or {"__none__"}),
+            )
+        ).scalar_one()
+        remaining -= decimal_or_zero(pending_reference_amount)
         return remaining if remaining > 0 else Decimal("0")
     reference_rows = database.session.execute(
         select(
@@ -487,7 +522,7 @@ def _collect_candidates_from_documents(
 ) -> list[dict[str, Any]]:
     open_items = {
         (item.document_type, item.document_id): item
-        for item in list_open_items(company=company, party_type=party_type, party_id=party_id)
+        for item in _list_open_items(company=company, party_type=party_type, party_id=party_id)
     }
     rows: list[dict[str, Any]] = []
     for document in database.session.execute(query).scalars().all():
@@ -563,7 +598,7 @@ def _candidate_payments(
 
     open_items = {
         item.document_id: item
-        for item in list_open_items(
+        for item in _list_open_items(
             company=company,
             party_type=party_type,
             party_id=party_id,
@@ -725,6 +760,15 @@ def _process_reconciliation_line(
     processed: set[tuple[str, str, str]],
     payment_remaining: dict[str, Decimal],
 ) -> None:
+    from cacao_accounting.contabilidad.arap_allocation import (
+        ARAPOpenItem,
+        AllocationLine,
+        AllocationRequest,
+        OpenItemResolver,
+        apply_allocation,
+        plan_allocation,
+    )
+
     payment_id = str(raw_line.get("payment_id") or "")
     document_id = str(raw_line.get("reference_id") or raw_line.get("document_id") or "")
     flow_source_type = normalize_doctype(str(raw_line.get("flow_source_type") or raw_line.get("reference_type") or ""))
@@ -760,8 +804,16 @@ def _process_reconciliation_line(
     _check_duplicate_application(payment.id, flow_source_type, document_id)
     outstanding = _validate_and_get_outstanding(document, allocated, allocation_date)
     if discount or gain_loss:
-        _validate_payment_currency_match(payment, document)
-        consumed = _cash_consumed(allocated, discount, gain_loss)
+        payment_currency = str(getattr(payment, "currency", None) or "")
+        document_currency = _document_transaction_currency(document) or payment_currency
+        requested_rate = raw_line.get("payment_exchange_rate") or raw_line.get("exchange_rate")
+        if payment_currency == document_currency:
+            effective_rate = Decimal("1")
+        else:
+            effective_rate = decimal_or_zero(requested_rate)
+            if effective_rate <= 0:
+                raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+        consumed = _cash_consumed(allocated, discount, gain_loss) * effective_rate
         if consumed > payment_remaining[payment_id] + Decimal("0.01"):
             raise _document_flow_error("El monto aplicado excede el saldo disponible del pago.", 409)
         allocation_line = AllocationLine(
@@ -771,7 +823,7 @@ def _process_reconciliation_line(
             source_currency=str(payment.currency),
             document_amount=allocated,
             source_amount=consumed,
-            rate=Decimal("1"),
+            rate=effective_rate,
             idempotency_key=f"{payment.id}:{flow_source_type}:{document_id}",
         )
     else:
@@ -865,6 +917,16 @@ def _plan_reconciliation_allocation(
     available: Decimal,
 ) -> AllocationLine:
     """Valida una línea con el motor AR/AP y devuelve importes en ambas monedas."""
+    from cacao_accounting.contabilidad.arap_allocation import (
+        ARAPOpenItem,
+        AllocationCurrencyError,
+        AllocationError,
+        AllocationOverpaymentError,
+        AllocationRequest,
+        OpenItemResolver,
+        plan_allocation,
+    )
+
     payment_currency = str(getattr(payment, "currency", None) or "")
     # Las filas legacy pueden no tener snapshot documental. Conservamos esa
     # compatibilidad únicamente cuando no se solicita una conversión; los
@@ -906,7 +968,10 @@ def _plan_reconciliation_allocation(
             resolver=resolver,
         )
     except (AllocationCurrencyError, AllocationOverpaymentError, AllocationError) as exc:
-        raise _document_flow_error(str(exc), 409) from exc
+        message = str(exc)
+        if isinstance(exc, AllocationOverpaymentError) and "efectivo" in message.lower():
+            message = "El monto aplicado excede el saldo disponible del pago."
+        raise _document_flow_error(message, 409) from exc
     line = plan.lines[0]
     if line.source_amount > available + Decimal("0.01"):
         raise _document_flow_error("El monto aplicado excede el saldo disponible del pago.", 409)
@@ -925,7 +990,7 @@ def _persist_reconciliation_allocation(
     allocation_line: AllocationLine,
     reconciliation_id: str,
 ) -> None:
-    """Persiste los artefactos legacy desde una línea AR/AP ya validada."""
+    """Persist legacy artifacts from an already validated AR/AP line."""
     enriched_line = {
         **raw_line,
         "payment_currency": allocation_line.source_currency,
@@ -941,6 +1006,17 @@ def _persist_reconciliation_allocation(
         document_id,
         allocation_ctx,
     )
+    if getattr(payment, "docstatus", 0) == 1:
+        from cacao_accounting.contabilidad.arap_ledger_service import post_payment_application_ar_ap
+
+        post_payment_application_ar_ap(
+            payment,
+            document,
+            document_amount=allocation_line.document_amount,
+            payment_amount=allocation_line.source_amount,
+            allocation_date=allocation_ctx.allocation_date,
+            reference_type=flow_source_type,
+        )
     _update_document_outstanding(document, allocation_ctx.outstanding, allocation_ctx.allocated)
     _create_reconciliation_item(
         reconciliation_id,
@@ -1120,7 +1196,7 @@ def _load_advance_invoice(invoice_id: str) -> tuple[SalesInvoice | PurchaseInvoi
 def _advance_allocated_amount(payment_id: str) -> Decimal:
     """Sum active advance applications, excluding reverted document relations."""
     allocated = database.session.execute(
-        select(func.coalesce(func.sum(PaymentReference.allocated_amount), 0))
+        select(func.coalesce(func.sum(func.coalesce(PaymentReference.payment_amount, PaymentReference.allocated_amount)), 0))
         .outerjoin(DocumentRelation, DocumentRelation.target_item_id == PaymentReference.id)
         .where(
             PaymentReference.payment_id == payment_id,
@@ -1136,7 +1212,8 @@ def _validate_advance_allocation(
     party_id: str | None,
     amount: Decimal,
     allocation_date: date,
-) -> tuple[Decimal, Decimal]:
+    exchange_rate: Decimal | None = None,
+) -> tuple[Decimal, Decimal, Decimal]:
     """Valida la aplicacion del anticipo y devuelve el outstanding antes/despues."""
     if payment.company != invoice.company:
         raise _document_flow_error("El anticipo y la factura pertenecen a companias distintas.", 409)
@@ -1148,13 +1225,24 @@ def _validate_advance_allocation(
     current_outstanding = compute_outstanding_amount(invoice)
     if amount <= 0:
         raise _document_flow_error(_MSG_MONTO_MAYOR_CERO, 409)
-    if amount > payment_total - allocated_before:
+    payment_currency = str(getattr(payment, "currency", None) or "")
+    document_currency = _document_transaction_currency(invoice) or payment_currency
+    if not payment_currency or not document_currency:
+        raise _document_flow_error("La aplicación requiere monedas explícitas.", 409)
+    if payment_currency == document_currency:
+        rate = Decimal("1")
+    else:
+        rate = decimal_or_zero(exchange_rate)
+        if rate <= 0:
+            raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+    payment_consumed = amount * rate
+    if payment_consumed > payment_total - allocated_before:
         raise _document_flow_error("El monto excede el remanente del anticipo.", 409)
     if amount > outstanding:
         raise _document_flow_error("El monto excede el saldo pendiente de la factura.", 409)
     if amount > current_outstanding:
         raise _document_flow_error("El monto excede el saldo pendiente vigente de la factura.", 409)
-    return outstanding, outstanding - amount
+    return outstanding, outstanding - amount, rate
 
 
 def apply_advance_to_invoice(
@@ -1162,6 +1250,7 @@ def apply_advance_to_invoice(
     invoice_id: str,
     amount: Decimal,
     allocation_date: date,
+    exchange_rate: Decimal | None = None,
 ) -> PaymentReference:
     """Aplica un anticipo existente contra una factura AR/AP."""
     payment = database.session.get(PaymentEntry, payment_entry_id, with_for_update=True)
@@ -1170,7 +1259,9 @@ def apply_advance_to_invoice(
     if payment.docstatus != 1:
         raise _document_flow_error("El pago/anticipo debe estar aprobado.", 409)
     invoice, reference_type, party_id = _load_advance_invoice(invoice_id)
-    outstanding, outstanding_after = _validate_advance_allocation(payment, invoice, party_id, amount, allocation_date)
+    outstanding, outstanding_after, effective_rate = _validate_advance_allocation(
+        payment, invoice, party_id, amount, allocation_date, exchange_rate
+    )
     reference = PaymentReference(
         payment_id=payment.id,
         reference_type=reference_type,
@@ -1185,6 +1276,9 @@ def apply_advance_to_invoice(
         outstanding_amount=outstanding,
         outstanding_amount_after=outstanding_after,
         allocated_amount=amount,
+        payment_currency=getattr(payment, "currency", None),
+        payment_amount=amount * effective_rate,
+        payment_exchange_rate=effective_rate,
         allocation_date=allocation_date,
     )
     database.session.add(reference)
@@ -1202,6 +1296,17 @@ def apply_advance_to_invoice(
         rate=amount,
         amount=amount,
     )
+    if getattr(payment, "docstatus", 0) == 1:
+        from cacao_accounting.contabilidad.arap_ledger_service import post_payment_application_ar_ap
+
+        post_payment_application_ar_ap(
+            payment,
+            invoice,
+            document_amount=amount,
+            payment_amount=amount * effective_rate,
+            allocation_date=allocation_date,
+            reference_type=reference_type,
+        )
     refresh_outstanding_amount_cache(invoice)
     _maybe_settle_advance_against_invoice(payment, invoice, reference_type, amount, allocation_date)
     return reference
@@ -1641,10 +1746,22 @@ def _apply_payment_target_line(
         raise _document_flow_error("El tipo de pago no corresponde con la factura origen.", 409)
 
     allocated = decimal_or_zero(selected.get("qty") or selected.get("allocated_amount"))
-    _validate_payment_currency_match(payment, invoice, infer_missing=True)
+    payment_currency = str(getattr(payment, "currency", None) or "")
+    document_currency = _document_transaction_currency(invoice) or payment_currency
+    if not payment_currency and document_currency:
+        payment.currency = document_currency
+        payment.transaction_currency = document_currency
+        payment_currency = document_currency
+    requested_rate = selected.get("payment_exchange_rate") or selected.get("exchange_rate")
+    if payment_currency == document_currency:
+        effective_rate = Decimal("1")
+    else:
+        effective_rate = decimal_or_zero(requested_rate)
+        if effective_rate <= 0:
+            raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
     outstanding = compute_outstanding_amount(invoice)
     _validate_payment_target_allocation(allocated, outstanding)
-    _persist_payment_target_allocation(payment, reference_type, reference_id, invoice, allocated, outstanding)
+    _persist_payment_target_allocation(payment, reference_type, reference_id, invoice, allocated, outstanding, effective_rate)
     return allocated
 
 
@@ -1663,6 +1780,7 @@ def _persist_payment_target_allocation(
     invoice: Any,
     allocated: Decimal,
     outstanding: Decimal,
+    exchange_rate: Decimal = Decimal("1"),
 ) -> None:
     """Persist the payment reference and document relation for an allocation."""
     reference = PaymentReference(
@@ -1672,6 +1790,9 @@ def _persist_payment_target_allocation(
         total_amount=getattr(invoice, "grand_total", None),
         outstanding_amount=outstanding,
         allocated_amount=allocated,
+        payment_currency=getattr(payment, "currency", None),
+        payment_amount=allocated * exchange_rate,
+        payment_exchange_rate=exchange_rate,
         allocation_date=payment.posting_date,
         exchange_rate=getattr(payment, "exchange_rate", None),
         discount_amount=getattr(payment, "discount_amount", None),
@@ -1696,6 +1817,17 @@ def _persist_payment_target_allocation(
     )
     setattr(invoice, "outstanding_amount", outstanding - allocated)
     setattr(invoice, "base_outstanding_amount", _base_amount(outstanding - allocated, invoice))
+    if getattr(payment, "docstatus", 0) == 1:
+        from cacao_accounting.contabilidad.arap_ledger_service import post_payment_application_ar_ap
+
+        post_payment_application_ar_ap(
+            payment,
+            invoice,
+            document_amount=allocated,
+            payment_amount=allocated * exchange_rate,
+            allocation_date=getattr(payment, "posting_date", None) or date.today(),
+            reference_type=reference_type,
+        )
 
 
 def _update_payment_target_amounts(payment: PaymentEntry, total: Decimal) -> None:

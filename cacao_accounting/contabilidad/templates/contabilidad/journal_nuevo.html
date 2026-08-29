@@ -221,6 +221,7 @@
       lines: (config.initialJournal && config.initialJournal.lines) || [],
       activeIndex: null,
       modalLine: null,
+      referenceOptions: [],
       importModal: {
         doctype: 'journal_entry',
         schema: null,
@@ -350,6 +351,7 @@
         if (globalThis.crypto && globalThis.crypto.randomUUID) uid = globalThis.crypto.randomUUID();
         return {
           uid: uid,
+          book: '',
           account: '',
           account_label: '',
           cost_center: '',
@@ -363,6 +365,8 @@
           currency: '',
           reference_type: '',
           reference_name: '',
+          reference_open_item_id: '',
+          reference_exchange_rate: '',
           reference1: '',
           reference2: '',
           remarks: '',
@@ -400,6 +404,7 @@
       openDetails: function (index) {
         this.activeIndex = index;
         this.modalLine = { ...this.lines[index] };
+        this.referenceOptions = [];
         bootstrap.Modal.getOrCreateInstance(document.getElementById('lineDetailModal')).show();
       },
 
@@ -408,6 +413,31 @@
           this.lines[this.activeIndex] = { ...this.modalLine };
         }
         bootstrap.Modal.getOrCreateInstance(document.getElementById('lineDetailModal')).hide();
+      },
+
+      loadReferenceOptions: function () {
+        if (!this.modalLine || !this.modalLine.party || !this.modalLine.party_type) {
+          this.referenceOptions = [];
+          return;
+        }
+        var company = this.resolveCompanyValue();
+        var params = new URLSearchParams({
+          company: company,
+          party_type: String(this.modalLine.party_type).toLowerCase(),
+          party: this.modalLine.party,
+          reference_type: this.modalLine.reference_type || '',
+          q: this.modalLine.reference_name || ''
+        });
+        fetch('/api/line-import/open-items?' + params.toString(), { credentials: 'same-origin' })
+          .then((response) => response.json())
+          .then((payload) => {
+            this.referenceOptions = payload.results || [];
+            var selected = this.referenceOptions.find((option) =>
+              option.value === this.modalLine.reference_name || option.document_id === this.modalLine.reference_name
+            );
+            if (selected) this.modalLine.reference_open_item_id = selected.id;
+          })
+          .catch(() => { this.referenceOptions = []; });
       },
 
       openImportModal: function () {
@@ -489,18 +519,25 @@
         this.importModal.isValidated = false;
         this.importModal.errors = [];
         if (!file) return;
-        if (!globalThis.ExcelJS) {
-          this.importModal.errors = [{ message: '{{ _("No se pudo leer el archivo seleccionado.") }}' }];
-          return;
-        }
         this.importModal.fileLoading = true;
         try {
-          var workbook = new ExcelJS.Workbook();
-          var buffer = await file.arrayBuffer();
-          await workbook.xlsx.load(buffer);
-          var worksheet = workbook.worksheets[0];
-          var rows = journalWorksheetToRows(worksheet);
-          this.importModal.parsedRows = mapJournalImportedRows(rows, this.importModal.schema);
+          var formData = new FormData();
+          formData.append('doctype', 'journal_entry');
+          formData.append('file', file);
+          var csrfTokenInput = document.querySelector('input[name="csrf_token"]');
+          var response = await fetch('/api/line-import/parse-xlsx', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfTokenInput ? csrfTokenInput.value : '' },
+            credentials: 'same-origin',
+            body: formData
+          });
+          var payload = await response.json();
+          if (!response.ok || !payload.valid) {
+            this.importModal.errors = payload.errors || [{ message: '{{ _('No se pudo leer el archivo seleccionado.') }}' }];
+            this.importModal.parsedRows = [];
+          } else {
+            this.importModal.parsedRows = payload.rows || [];
+          }
           this.importModal.pastedText = '';
         } catch {
           this.importModal.parsedRows = [];
@@ -526,7 +563,16 @@
           credentials: 'same-origin',
           body: JSON.stringify({
             doctype: 'journal_entry',
-            context: { company_id: company },
+            context: {
+              company_id: company,
+              posting_date: this.header.posting_date,
+              books: this.allBooksSelected ? [] : this.selectedBooks.slice(),
+              transaction_currency: this.header.transaction_currency || '',
+              exchange_rate: this.header.exchange_rate || '',
+              existing_lines: this.lines.filter(function (line) {
+                return line.account || line.debit || line.credit || line.remarks;
+              })
+            },
             rows: this.importModal.parsedRows
           })
         })
@@ -566,7 +612,20 @@
           line.debit = row.debit || '';
           line.credit = row.credit || '';
           line.project = row.project || '';
-          line.reference_name = row.reference || '';
+          line.book = row.book || '';
+          line.party_type = row.party_type || '';
+          line.party = row.party || '';
+          line.currency = row.currency || '';
+          line.exchange_rate = row.exchange_rate || '';
+          line.reference_type = row.reference_type || '';
+          line.reference_name = row.reference_document || row.reference_name || '';
+          line.reference_open_item_id = row.reference_open_item_id || '';
+          line.reference_exchange_rate = row.reference_exchange_rate || '';
+          line.reference1 = row.reference_1 || '';
+          line.reference2 = row.reference_2 || '';
+          line.unit = row.unit || '';
+          line.bank_account = row.bank_account || '';
+          line.is_advance = row.is_advance === true || ['1', 'true', 'yes', 'si', 'sí'].indexOf(String(row.is_advance || '').toLowerCase()) >= 0;
           line.remarks = row.description || '';
           this.lines.push(line);
         }, this);
@@ -647,7 +706,7 @@
             return { ...line,
               order: index + 1,
               account: account,
-              currency: this.header.transaction_currency || null
+              currency: line.currency || this.header.transaction_currency || null
             };
           }, this).filter(function (line) {
             return line.account || Number(line.debit || 0) || Number(line.credit || 0);
@@ -1247,7 +1306,7 @@
               </div>
               <div>
                 <label class="form-label">{{ _('Tipo de tercero') }}</label>
-                <select class="form-select" x-model="modalLine.party_type">
+                <select class="form-select" x-model="modalLine.party_type" @change="loadReferenceOptions()">
                   <option value=""></option>
                   <option value="customer">{{ _('Cliente') }}</option>
                   <option value="supplier">{{ _('Proveedor') }}</option>
@@ -1309,11 +1368,24 @@
               </div>
               <div>
                 <label class="form-label">{{ _('Tipo de referencia') }}</label>
-                <input class="form-control" x-model="modalLine.reference_type">
+                <select class="form-select" x-model="modalLine.reference_type" @change="loadReferenceOptions()">
+                  <option value="">{{ _('Sin referencia') }}</option>
+                  <option value="invoice">{{ _('Factura') }}</option>
+                  <option value="debit_note">{{ _('Nota de débito') }}</option>
+                  <option value="credit_note">{{ _('Nota de crédito') }}</option>
+                  <option value="payment_entry">{{ _('Entrada de pago') }}</option>
+                  <option value="journal_entry">{{ _('Comprobante contable') }}</option>
+                </select>
               </div>
               <div>
                 <label class="form-label">{{ _('Nombre de referencia') }}</label>
-                <input class="form-control" x-model="modalLine.reference_name">
+                <input class="form-control" list="journal-open-item-options" x-model="modalLine.reference_name"
+                  @focus="loadReferenceOptions()" @input="loadReferenceOptions()">
+                <datalist id="journal-open-item-options">
+                  <template x-for="option in referenceOptions" :key="option.id">
+                    <option :value="option.id" x-text="option.display_name"></option>
+                  </template>
+                </datalist>
               </div>
               <div>
                 <label class="form-label">{{ _('Referencia 1') }}</label>
