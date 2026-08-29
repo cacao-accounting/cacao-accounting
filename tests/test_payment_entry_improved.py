@@ -2299,6 +2299,57 @@ def test_payment_auto_populates_exchange_rate_different_currency(app_ctx):
     assert payment.currency == "USD"
 
 
+def test_payment_in_bank_currency_applies_invoice_in_document_currency(app_ctx, monkeypatch):
+    """Una cuenta USD puede liquidar una factura NIO sin forzar moneda documental."""
+    from cacao_accounting.database import BankAccount, PaymentReference, SalesInvoice, database
+
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        posting_date=date.today(),
+        document_type="sales_invoice",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+        docstatus=1,
+        grand_total=Decimal("100"),
+        outstanding_amount=Decimal("100"),
+        base_outstanding_amount=Decimal("100"),
+    )
+    database.session.add(invoice)
+    database.session.commit()
+    import importlib
+
+    bancos_services = importlib.import_module("cacao_accounting.bancos.services")
+    monkeypatch.setattr(bancos_services, "_lookup_exchange_rate", lambda *_args: Decimal("36"))
+    payload = {
+        "payment_type": "receive",
+        "company": "cacao",
+        "bank_account_id": bank.id,
+        "posting_date": date.today().isoformat(),
+        "paid_amount": "3",
+        "party_id": customer.id,
+        "party_type": "customer",
+        "lines": [{"reference_type": "sales_invoice", "reference_id": invoice.id, "allocated_amount": "100"}],
+    }
+    response = client.post(
+        "/cash_management/payment/new", data={"payment_payload": json.dumps(payload)}, follow_redirects=True
+    )
+    assert b"Pago registrado correctamente" in response.data
+    reference = (
+        database.session.execute(database.select(PaymentReference).order_by(PaymentReference.created.desc())).scalars().first()
+    )
+    assert reference.currency == "NIO"
+    assert reference.payment_currency == "USD"
+    assert reference.payment_exchange_rate == Decimal("0.027777778")
+    assert reference.payment_amount == Decimal("2.7778")
+    assert abs(reference.fx_difference_amount) <= Decimal("0.0010")
+
+
 def test_payment_reference_loads_with_row_lock(app_ctx):
     """Verifica que _load_payment_reference_document usa FOR UPDATE (no debe romper flujo normal)."""
     from cacao_accounting.database import PurchaseInvoice

@@ -249,13 +249,18 @@
         const outstanding = this.parseNumber(line.outstanding_amount || 0);
         if (allocated < 0) {
           line.allocated_amount = 0;
-          return line;
-        }
-        if (outstanding > 0 && allocated > outstanding) {
+        } else if (outstanding > 0 && allocated > outstanding) {
           line.allocated_amount = outstanding;
-          return line;
+        } else {
+          line.allocated_amount = allocated;
         }
-        line.allocated_amount = allocated;
+        const documentCurrency = line.currency || this.header.currency;
+        const paymentCurrency = this.header.currency;
+        let crossRate = this.parseNumber(line.payment_exchange_rate || 0);
+        if (!crossRate && documentCurrency === paymentCurrency) crossRate = 1;
+        line.payment_exchange_rate = crossRate || line.payment_exchange_rate || 0;
+        const cashDocumentAmount = Math.max(allocated - this.parseNumber(line.discount_amount || 0) - this.parseNumber(line.gain_loss_amount || 0), 0);
+        line.payment_amount = cashDocumentAmount * this.parseNumber(line.payment_exchange_rate || 0);
         return line;
       },
 
@@ -265,7 +270,7 @@
       },
 
       totalApplied: function () {
-        return this.lines.reduce((sum, line) => sum + this.parseNumber(line.allocated_amount || 0), 0);
+        return this.lines.reduce((sum, line) => sum + this.parseNumber(line.payment_amount || 0), 0);
       },
 
       withholdingTotal: function () {
@@ -349,6 +354,8 @@
                   discount_amount: 0,
                   gain_loss_amount: 0,
                   exchange_rate: 1,
+                  payment_exchange_rate: item.payment_exchange_rate || (item.currency === this.header.currency ? 1 : 0),
+                  payment_amount: 0,
                   notes: ''
                 });
               }
@@ -534,6 +541,8 @@
           lines: this.lines.map((line) => ({
             ...line,
             allocated_amount: this.toCurrencyString(line.allocated_amount),
+            payment_amount: this.toCurrencyString(line.payment_amount),
+            payment_exchange_rate: this.toCurrencyString(line.payment_exchange_rate),
             outstanding_amount: this.toCurrencyString(line.outstanding_amount),
           })),
           tax_lines: (this.taxCharges.lines || []).map((line) => ({
@@ -791,9 +800,10 @@
                     <th style="width: 40px;">{{ _('No.') }}</th>
                     <th>{{ _('Tipo') }}</th>
                     <th>{{ _('Nombre') }}</th>
-                    <th class="text-end">{{ _('Total') }} (<span x-text="header.currency || 'NIO'"></span>)</th>
-                    <th class="text-end">{{ _('Saldo pendiente') }} (<span x-text="header.currency || 'NIO'"></span>)</th>
-                    <th class="text-end">{{ _('Monto aplicado') }} (<span x-text="header.currency || 'NIO'"></span>)</th>
+          <th class="text-end">{{ _('Total documental') }}</th>
+                    <th class="text-end">{{ _('Saldo documental') }}</th>
+                    <th class="text-end">{{ _('Aplicado documental') }}</th>
+                    <th class="text-end">{{ _('Consumido banco') }} (<span x-text="header.currency || 'NIO'"></span>)</th>
                     <th style="width: 60px;"></th>
                 </tr>
             </thead>
@@ -804,12 +814,13 @@
                         <td class="text-center" x-text="index + 1"></td>
                         <td x-text="line.reference_label || line.flow_source_type || line.reference_type"></td>
                         <td x-text="line.document_no"></td>
-                        <td class="text-end" x-text="parseNumber(line.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
-                        <td class="text-end" x-text="parseNumber(line.outstanding_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
+                        <td class="text-end" x-text="(line.currency || '') + ' ' + parseNumber(line.total_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
+                        <td class="text-end" x-text="(line.currency || '') + ' ' + parseNumber(line.outstanding_amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></td>
                         <td class="text-end">
                             <input type="number" step="0.01" min="0" class="form-control form-control-sm text-end border-0 bg-transparent"
                                    x-model="line.allocated_amount" @input="normalizeReferenceAllocation(line); calculateTotal()">
                         </td>
+                        <td class="text-end" x-text="formatCurrency(line.payment_amount || 0)"></td>
                          <td>
                              <div class="ca-payment-actions">
                                <button class="btn btn-sm text-primary p-0" type="button" @click="openReferenceLineDetails(index)" title="{{ _('Editar') }}">
@@ -826,7 +837,7 @@
                      </tr>
                  </template>
                  <tr x-show="!lines.length">
-                     <td colspan="8" class="text-center text-muted py-4">{{ _('No hay documentos referenciados.') }}</td>
+                     <td colspan="9" class="text-center text-muted py-4">{{ _('No hay documentos referenciados.') }}</td>
                  </tr>
             </tbody>
         </table>
@@ -1050,6 +1061,14 @@
                           <div class="col-md-4">
                               <label class="form-label text-muted small mb-1">{{ _('Ganancia/Pérdida') }}</label>
                               <input class="form-control text-end" type="number" step="0.01" x-model="references.modalLine.gain_loss_amount">
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Tasa documento a banco') }}</label>
+                              <input class="form-control text-end" type="number" step="0.000000001" min="0" x-model="references.modalLine.payment_exchange_rate">
+                          </div>
+                          <div class="col-md-4">
+                              <label class="form-label text-muted small mb-1">{{ _('Equivalente bancario') }}</label>
+                              <input class="form-control bg-light text-end" type="number" step="0.0001" x-model="references.modalLine.payment_amount" readonly>
                           </div>
                           <div class="col-md-8">
                               <label class="form-label text-muted small mb-1">{{ _('Observaciones') }}</label>

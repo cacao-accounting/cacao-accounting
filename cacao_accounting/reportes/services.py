@@ -17,6 +17,7 @@ from sqlalchemy import and_, case, func, literal, or_, select
 from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
 from cacao_accounting.database import (
     AccountingPeriod,
+    ARAPLedgerEntry,
     Accounts,
     Batch,
     BankAccount,
@@ -392,8 +393,28 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
         sign = _document_sign(document)
         base_factor = _document_base_factor(document)
         original_original_currency = _decimal_value(document.grand_total)
-        paid_original_currency = _payment_allocations(document_type, document.id, filters.company, effective_as_of)
-        outstanding_original_currency = compute_outstanding_amount(document, as_of_date=effective_as_of)
+        ledger_balance = database.session.execute(
+            select(func.sum(ARAPLedgerEntry.document_amount)).where(
+                ARAPLedgerEntry.document_type == document_type,
+                ARAPLedgerEntry.document_id == str(document.id),
+                ARAPLedgerEntry.posting_date <= effective_as_of,
+            )
+        ).scalar_one_or_none()
+        opening_exists = database.session.execute(
+            select(ARAPLedgerEntry.id)
+            .where(
+                ARAPLedgerEntry.document_type == document_type,
+                ARAPLedgerEntry.document_id == str(document.id),
+                ARAPLedgerEntry.event_type == "opening",
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if ledger_balance is not None and opening_exists is not None:
+            outstanding_original_currency = max(_decimal_value(ledger_balance), Decimal("0"))
+            paid_original_currency = max(original_original_currency - outstanding_original_currency, Decimal("0"))
+        else:
+            paid_original_currency = _payment_allocations(document_type, document.id, filters.company, effective_as_of)
+            outstanding_original_currency = compute_outstanding_amount(document, as_of_date=effective_as_of)
         original = sign * original_original_currency * base_factor
         paid = sign * paid_original_currency * base_factor
         outstanding = sign * outstanding_original_currency * base_factor

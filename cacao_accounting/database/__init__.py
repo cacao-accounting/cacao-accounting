@@ -15,8 +15,9 @@ import hashlib
 from cuid2 import Cuid
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint, event, inspect, select, text
+from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint, event, func, inspect, select, text
 from ulid import ULID
+from sqlalchemy.orm import synonym
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -62,6 +63,8 @@ BOOK_ID = "book.id"
 WORKFLOW_STATE_ID = "workflow_state.id"
 ACCOUNTING_PERIOD_ID = "accounting_period.id"
 PAYMENT_ENTRY_ID = "payment_entry.id"
+AR_AP_LEDGER_ENTRY_ID = "ar_ap_ledger_entry.id"
+AR_AP_LEDGER_BOOK_ENTRY_ID = "ar_ap_ledger_book_entry.id"
 PURCHASE_REQUEST_ID = "purchase_request.id"
 PURCHASE_REQUEST_COMPARISON_ID = "purchase_request_comparison.id"
 SUPPLIER_QUOTATION_ID = "supplier_quotation.id"
@@ -3032,6 +3035,8 @@ class PaymentEntry(database.Model, DocBase):  # type: ignore[name-defined]
     base_paid_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     received_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     base_received_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    # Caché de consulta rápida; el saldo canónico vive en ARAPLedgerEntry.
+    unallocated_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     paid_from_account_id = database.Column(
         database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
@@ -3074,12 +3079,245 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
     outstanding_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     outstanding_amount_after = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     allocated_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    payment_currency = database.Column(database.String(10), nullable=True)
+    payment_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    payment_exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    base_allocated_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    base_payment_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    fx_difference_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     difference_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     allocation_date = database.Column(database.Date(), nullable=True, index=True)
     discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     gain_loss_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     notes = database.Column(database.Text(), nullable=True)
+
+
+class ARAPLedgerEntry(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Movimiento documental inmutable del subledger de cuentas por cobrar y pagar.
+
+    ``document_amount`` es el importe firmado en la moneda del documento: un
+    documento que origina saldo lleva signo positivo y una aplicación,
+    devolución o reversión lleva el signo que corresponda. El saldo de un
+    documento se reconstruye sumando estos movimientos; ningún valor cacheado
+    de una factura o pago es la fuente histórica de verdad.
+
+    Las valoraciones por libro viven en :class:`ARAPLedgerBookEntry` para que
+    el mismo movimiento documental pueda conciliarse con cada libro financiero
+    y con sus líneas de GL, incluso cuando el libro usa otra moneda.
+    """
+
+    __tablename__ = "ar_ap_ledger_entry"
+    __table_args__ = (
+        Index("ix_ar_ap_ledger_entry_company_party_date", "company", "party_type", "party_id", "posting_date"),
+        Index("ix_ar_ap_ledger_entry_document", "document_type", "document_id", "posting_date"),
+        Index("ix_ar_ap_ledger_entry_reversal", "reversal_of"),
+        Index("ix_ar_ap_ledger_entry_voucher", "voucher_type", "voucher_id"),
+        CheckConstraint("document_amount <> 0", name="ck_ar_ap_ledger_entry_amount_nonzero"),
+    )
+
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    ledger_type = database.Column(database.String(10), nullable=False, index=True)  # AR o AP
+    party_type = database.Column(database.String(20), nullable=False, index=True)
+    party_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PARTY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    document_type = database.Column(database.String(50), nullable=False, index=True)
+    document_id = database.Column(database.String(26), nullable=False, index=True)
+    document_no = database.Column(database.String(100), nullable=True, index=True)
+    posting_date = database.Column(database.Date(), nullable=False, index=True)
+    document_date = database.Column(database.Date(), nullable=True)
+    event_type = database.Column(database.String(30), nullable=False, index=True)
+    currency = database.Column(
+        database.String(10),
+        database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+    )
+    document_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    # Optional duplicate references make the row traceable to legacy vouchers.
+    reference_type = database.Column(database.String(50), nullable=True, index=True)
+    reference_id = database.Column(database.String(26), nullable=True, index=True)
+    voucher_type = database.Column(database.String(50), nullable=True, index=True)
+    voucher_id = database.Column(database.String(26), nullable=True, index=True)
+    fiscal_year_id = database.Column(
+        database.String(26), database.ForeignKey(FISCAL_YEAR_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    accounting_period_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNTING_PERIOD_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+    )
+    is_reversal = database.Column(database.Boolean(), default=False, nullable=False, index=True)
+    reversal_of = database.Column(
+        database.String(26),
+        database.ForeignKey(AR_AP_LEDGER_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+    )
+    is_cancelled = database.Column(database.Boolean(), default=False, nullable=False, index=True)
+    memo = database.Column(database.Text(), nullable=True)
+
+    # Names used by integrations and reports that predate the explicit schema.
+    amount = synonym("document_amount")
+    signed_amount = synonym("document_amount")
+    transaction_currency = synonym("currency")
+
+    book_entries = database.relationship(
+        "ARAPLedgerBookEntry",
+        back_populates="ledger_entry",
+        foreign_keys="ARAPLedgerBookEntry.ledger_entry_id",
+        passive_deletes=True,
+    )
+
+    @classmethod
+    def document_balance(
+        cls,
+        document_type: str,
+        document_id: str,
+        *,
+        as_of_date=None,
+        currency: str | None = None,
+    ) -> Decimal:
+        """Reconstruye el saldo documental hasta ``as_of_date``.
+
+        Se incluyen los movimientos cancelados y sus contrapartidas: una
+        anulación es evidencia append-only y su suma neta debe ser cero.
+        """
+        query = select(func.coalesce(func.sum(cls.document_amount), 0)).where(
+            cls.document_type == document_type,
+            cls.document_id == document_id,
+        )
+        if as_of_date is not None:
+            query = query.where(cls.posting_date <= as_of_date)
+        if currency is not None:
+            query = query.where(cls.currency == currency)
+        value = database.session.execute(query).scalar_one()
+        return Decimal(str(value or 0))
+
+
+class ARAPLedgerBookEntry(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Valoración de un movimiento AR/AP en un libro financiero.
+
+    ``document_amount`` conserva el importe documental y ``book_amount`` su
+    importe firmado en la moneda destino del libro. La tasa y las monedas son
+    snapshots del posting; cambiar tasas posteriormente no altera una fila
+    histórica. ``debit`` y ``credit`` son el importe positivo que se concilia
+    con la línea correspondiente de ``GLEntry``.
+    """
+
+    __tablename__ = "ar_ap_ledger_book_entry"
+    __table_args__ = (
+        UniqueConstraint("ledger_entry_id", "ledger_id", name="uq_ar_ap_ledger_book_entry_ledger"),
+        Index("ix_ar_ap_ledger_book_entry_ledger_date", "ledger_id", "posting_date"),
+        Index("ix_ar_ap_ledger_book_entry_gl", "gl_entry_id"),
+        CheckConstraint("exchange_rate > 0", name="ck_ar_ap_ledger_book_entry_rate_positive"),
+        CheckConstraint("book_amount <> 0", name="ck_ar_ap_ledger_book_entry_amount_nonzero"),
+        CheckConstraint(
+            "(debit > 0 AND credit = 0) OR (debit = 0 AND credit > 0)",
+            name="ck_ar_ap_ledger_book_entry_debit_credit_integrity",
+        ),
+    )
+
+    ledger_entry_id = database.Column(
+        database.String(26),
+        database.ForeignKey(AR_AP_LEDGER_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    ledger_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BOOK_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    posting_date = database.Column(database.Date(), nullable=False, index=True)
+    document_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    book_currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    document_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    book_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=Decimal("1"))
+    debit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=Decimal("0"))
+    credit = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=Decimal("0"))
+    account_id = database.Column(
+        database.String(26),
+        database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    account_code = database.Column(database.String(50), nullable=True, index=True)
+    gl_entry_id = database.Column(
+        database.String(26), database.ForeignKey(GL_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    is_reversal = database.Column(database.Boolean(), default=False, nullable=False, index=True)
+    reversal_of = database.Column(
+        database.String(26),
+        database.ForeignKey(AR_AP_LEDGER_BOOK_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+    )
+    is_cancelled = database.Column(database.Boolean(), default=False, nullable=False, index=True)
+    memo = database.Column(database.Text(), nullable=True)
+
+    amount_document = synonym("document_amount")
+    amount_in_book_currency = synonym("book_amount")
+    functional_amount = synonym("book_amount")
+    functional_currency = synonym("book_currency")
+    book_id = synonym("ledger_id")
+    source_currency = synonym("document_currency")
+    destination_currency = synonym("book_currency")
+    amount_in_document_currency = synonym("document_amount")
+    amount_in_functional_currency = synonym("book_amount")
+
+    ledger_entry = database.relationship(
+        "ARAPLedgerEntry",
+        back_populates="book_entries",
+        foreign_keys=[ledger_entry_id],
+    )
+
+
+@event.listens_for(ARAPLedgerEntry, "before_update")
+def _reject_ar_ap_ledger_mutation(mapper, connection, target) -> None:
+    """Keep AR/AP documentary evidence immutable except for cancellation state."""
+    _reject_ledger_mutation(mapper, connection, target)
+
+
+@event.listens_for(ARAPLedgerEntry, "before_delete")
+def _reject_ar_ap_ledger_delete(mapper, connection, target) -> None:
+    """Prevent physical deletion of AR/AP documentary evidence."""
+    _reject_ledger_delete(mapper, connection, target)
+
+
+@event.listens_for(ARAPLedgerBookEntry, "before_update")
+def _reject_ar_ap_book_ledger_mutation(mapper, connection, target) -> None:
+    """Keep book valuations immutable except for cancellation state."""
+    _reject_ledger_mutation(mapper, connection, target)
+
+
+@event.listens_for(ARAPLedgerBookEntry, "before_insert")
+def _populate_ar_ap_book_debit_credit(mapper, connection, target: ARAPLedgerBookEntry) -> None:
+    """Derive the GL debit/credit snapshot when only the signed value is supplied."""
+    if target.debit in (None, Decimal("0")) and target.credit in (None, Decimal("0")):
+        amount = Decimal(str(target.book_amount))
+        if amount > 0:
+            target.debit = amount
+        elif amount < 0:
+            target.credit = abs(amount)
+
+
+@event.listens_for(ARAPLedgerBookEntry, "before_delete")
+def _reject_ar_ap_book_ledger_delete(mapper, connection, target) -> None:
+    """Prevent physical deletion of book valuations."""
+    _reject_ledger_delete(mapper, connection, target)
 
 
 class WithholdingCertificate(database.Model, DocBase):  # type: ignore[name-defined]
