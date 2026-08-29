@@ -85,11 +85,13 @@ def _seed_base_data() -> dict:
     )
     database.session.commit()
 
-    ap = Accounts(entity=COMPANY, code="2101", name="Cuentas por Pagar", classification="liability")
+    ap = Accounts(entity=COMPANY, code="2101", name="Cuentas por Pagar", classification="liability", account_type="payable")
     grni = Accounts(entity=COMPANY, code="2102", name="Puente Recepciones no Facturadas", classification="liability")
     expense = Accounts(entity=COMPANY, code="6101", name="Gasto Operativo", classification="expense")
     bank_gl = Accounts(entity=COMPANY, code="1001", name="Banco", classification="asset", account_type="bank")
-    advance = Accounts(entity=COMPANY, code="1103", name="Anticipo a Proveedores", classification="asset")
+    advance = Accounts(
+        entity=COMPANY, code="1103", name="Anticipo a Proveedores", classification="asset", account_type="supplier_advance"
+    )
     discount = Accounts(entity=COMPANY, code="4101", name="Descuento Compras", classification="income")
     inventory = Accounts(entity=COMPANY, code="1105", name="Inventario", classification="asset")
     fx_gain = Accounts(entity=COMPANY, code="4102", name="Ganancia Cambiaria", classification="income")

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from decimal import Decimal, InvalidOperation
 
-from typing import Any, Sequence
+from typing import Any, Iterable, Sequence
 
 from sqlalchemy import func, select
 
@@ -3771,28 +3771,60 @@ def _add_reconciliation_entries(
 
 
 def post_document_to_gl(document: Any, ledger_code: str | None = None) -> list[GLEntry]:
-    """Genera entradas contables para un documento ya aprobado."""
+    """Genera entradas contables para un documento ya aprobado.
+
+    Además de las líneas GL, mantiene el subledger documental AR/AP
+    consistente para los documentos que abren saldos de tercero (facturas,
+    notas de crédito/débito y comprobantes con líneas de tercero). La apertura
+    es idempotente; ``submit_document`` sigue llamando a los servicios del
+    subledger sin duplicar movimientos.
+    """
     if not isinstance(document, StockEntry) and _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if isinstance(document, SalesInvoice):
-        return post_sales_invoice(document, ledger_code=ledger_code)
-    if isinstance(document, PurchaseInvoice):
-        return post_purchase_invoice(document, ledger_code=ledger_code)
-    if isinstance(document, PurchaseReceipt):
-        return post_purchase_receipt(document, ledger_code=ledger_code)
-    if isinstance(document, DeliveryNote):
-        return post_delivery_note(document, ledger_code=ledger_code)
+        entries = post_sales_invoice(document, ledger_code=ledger_code)
+    elif isinstance(document, PurchaseInvoice):
+        entries = post_purchase_invoice(document, ledger_code=ledger_code)
+    elif isinstance(document, PurchaseReceipt):
+        entries = post_purchase_receipt(document, ledger_code=ledger_code)
+    elif isinstance(document, DeliveryNote):
+        entries = post_delivery_note(document, ledger_code=ledger_code)
+    elif isinstance(document, PaymentEntry):
+        entries = post_payment_entry(document, ledger_code=ledger_code)
+    elif isinstance(document, StockEntry):
+        entries = post_stock_entry(document, ledger_code=ledger_code)
+    elif isinstance(document, BankTransaction):
+        entries = post_bank_transaction(document, ledger_code=ledger_code)
+    elif isinstance(document, ComprobanteContable):
+        entries = post_comprobante_contable(document, ledger_code=ledger_code)
+    elif isinstance(document, ImportLandedCost):
+        entries = post_import_landed_cost(document, ledger_code=ledger_code)
+    else:
+        raise PostingError("Tipo de documento no soportado para posting contable.")
+    _post_document_ar_ap(document, entries)
+    return entries
+
+
+def _post_document_ar_ap(document: Any, entries: Iterable[GLEntry]) -> None:
+    """Mantiene el subledger AR/AP consistente con las líneas GL generadas.
+
+    Facturas, notas y pagos mantienen su subledger documental desde
+    ``post_document_to_gl``. Las funciones son idempotentes por documento, de
+    modo que la conciliación posterior (``post_payment_application_ar_ap``) no
+    duplica movimientos.
+    """
+    from cacao_accounting.contabilidad.arap_ledger_service import (
+        post_document_ar_ap,
+        post_journal_ar_ap,
+        post_payment_ar_ap,
+    )
+
     if isinstance(document, PaymentEntry):
-        return post_payment_entry(document, ledger_code=ledger_code)
-    if isinstance(document, StockEntry):
-        return post_stock_entry(document, ledger_code=ledger_code)
-    if isinstance(document, BankTransaction):
-        return post_bank_transaction(document, ledger_code=ledger_code)
-    if isinstance(document, ComprobanteContable):
-        return post_comprobante_contable(document, ledger_code=ledger_code)
-    if isinstance(document, ImportLandedCost):
-        return post_import_landed_cost(document, ledger_code=ledger_code)
-    raise PostingError("Tipo de documento no soportado para posting contable.")
+        post_payment_ar_ap(document, entries)
+    elif isinstance(document, ComprobanteContable):
+        post_journal_ar_ap(document, entries)
+    else:
+        post_document_ar_ap(document, entries)
 
 
 def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEntry]:
@@ -3812,18 +3844,6 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
     with database.session.begin_nested():
         document.docstatus = 1
         entries = post_document_to_gl(document, ledger_code=ledger_code)
-        from cacao_accounting.contabilidad.arap_ledger_service import (
-            post_document_ar_ap,
-            post_journal_ar_ap,
-            post_payment_ar_ap,
-        )
-
-        if isinstance(document, PaymentEntry):
-            post_payment_ar_ap(document, entries)
-        elif isinstance(document, ComprobanteContable):
-            post_journal_ar_ap(document, entries)
-        else:
-            post_document_ar_ap(document, entries)
         _validate_arap_gl_transition(document)
         # QR Validation support
         from cacao_accounting.printing.validation import ValidationService
