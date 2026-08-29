@@ -142,12 +142,21 @@ def require_period_company(
 
 
 def period_picker_context(company: str, period_from: str | None, period_to: str | None) -> dict[str, Any]:
-    """Construye el contexto del selector de rango de períodos para un listado."""
+    """Construye el contexto del selector de rango de períodos para un listado.
+
+    Devuelve la lista de períodos disponibles, los identificadores activos
+    (``period_from``/``period_to``) y la cadena legible correspondiente a cada
+    identificador (``period_from_label``/``period_to_label``) para que el
+    frontend pueda mostrar el nombre del período (e.g. ``01-2026``) en lugar
+    del ULID en los selectores de rango.
+    """
     from cacao_accounting.reportes.periods import list_periods_for_company, resolve_period_range
 
-    periods = [
+    periods = list(list_periods_for_company(company))
+    labels_by_id = {str(item.id): item.name for item in periods}
+    serialized_periods = [
         {"id": str(item.id), "name": item.name, "is_closed": bool(item.is_closed)}
-        for item in list_periods_for_company(company)
+        for item in periods
     ]
     active_from, active_to = period_from, period_to
     if period_from or period_to:
@@ -157,7 +166,14 @@ def period_picker_context(company: str, period_from: str | None, period_to: str 
     elif not (active_from or active_to):
         resolved = resolve_period_range(company, None, None)
         active_from = active_to = resolved.from_id if resolved is not None else ""
-    return {"periods": periods, "period_from": active_from, "period_to": active_to or active_from}
+    active_to = active_to or active_from
+    return {
+        "periods": serialized_periods,
+        "period_from": active_from,
+        "period_to": active_to,
+        "period_from_label": labels_by_id.get(active_from, active_from),
+        "period_to_label": labels_by_id.get(active_to, active_to),
+    }
 
 
 def company_choices_for_module(module: str, *, current_user: Any) -> list[tuple[str, str]]:
@@ -216,4 +232,6 @@ def attach_period_picker(paginated: Any, model: type[Any], module: str, *, curre
     paginated.periods = picker["periods"]
     paginated.period_from = picker["period_from"]
     paginated.period_to = picker["period_to"]
+    paginated.period_from_label = picker["period_from_label"]
+    paginated.period_to_label = picker["period_to_label"]
     paginated.period_extra_params = params

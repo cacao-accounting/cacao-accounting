@@ -1,5 +1,5 @@
-{# smart_select_field: label, name, doctype, value, field_id, min_chars, filters(dict), filter_sources(list), required_filters(list) #}
-{% macro smart_select_field(label, name, doctype, value='', field_id='', min_chars=1, filters=None, filter_sources=None, required_filters=None) -%}
+{# smart_select_field: label, name, doctype, value, field_id, min_chars, filters(dict), filter_sources(list), required_filters(list), initial_label #}
+{% macro smart_select_field(label, name, doctype, value='', field_id='', min_chars=1, filters=None, filter_sources=None, required_filters=None, initial_label='') -%}
 <label class="form-label mb-0 w-100">
   {{ _(label) }}
   <div class="ca-smart-select" x-data='smartSelect({
@@ -10,7 +10,7 @@
       preloadOnFocus: true,
       loadOnFilterChange: true,
       initialValue: {{ value|tojson }},
-      initialLabel: {{ value|tojson }},
+      initialLabel: {{ (initial_label or value)|tojson }},
       filters: {{ (filters or {})|tojson }},
       filterSources: {{ (filter_sources or [])|tojson }},
       requiredFilters: {{ (required_filters or [])|tojson }},
