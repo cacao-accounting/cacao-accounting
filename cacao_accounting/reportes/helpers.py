@@ -715,12 +715,14 @@ def _period_picker_payload(company: str, period_from: str | None = None, period_
         if current is not None:
             period_from = period_to = str(current.id)
     period_to = period_to or period_from or ""
+    pf = period_from or ""
+    pt = period_to or ""
     return {
         "periods": serialized_periods,
-        "period_from": period_from or "",
-        "period_to": period_to,
-        "period_from_label": labels_by_id.get(period_from, period_from or ""),
-        "period_to_label": labels_by_id.get(period_to, period_to or ""),
+        "period_from": pf,
+        "period_to": pt,
+        "period_from_label": labels_by_id.get(pf, pf),
+        "period_to_label": labels_by_id.get(pt, pt),
     }
 
 

@@ -164,12 +164,14 @@ def period_picker_context(company: str, period_from: str | None, period_to: str 
         resolved = resolve_period_range(company, None, None)
         active_from = active_to = resolved.from_id if resolved is not None else ""
     active_to = active_to or active_from
+    from_key = active_from or ""
+    to_key = active_to or ""
     return {
         "periods": serialized_periods,
         "period_from": active_from,
         "period_to": active_to,
-        "period_from_label": labels_by_id.get(active_from, active_from),
-        "period_to_label": labels_by_id.get(active_to, active_to),
+        "period_from_label": labels_by_id.get(from_key, from_key),
+        "period_to_label": labels_by_id.get(to_key, to_key),
     }
 
 

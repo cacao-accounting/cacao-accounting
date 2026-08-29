@@ -24,7 +24,7 @@
         {{ smart_select_field("Compañía", "company", "company", filter_state.company or '', "report-company") }}
 
         {% if filter_mode != "withholding_monthly" %}
-          {{ period_range_field("Periodo contable", period_from, period_to) }}
+          {{ period_range_field("Periodo contable", period_from, period_to, period_from_label=period_from_label, period_to_label=period_to_label) }}
         {% endif %}
 
         {% if filter_mode in ("bank_movement", "bank_balance_summary") %}

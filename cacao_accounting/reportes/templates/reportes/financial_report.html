@@ -29,7 +29,7 @@
         </div>
         {{ smart_select_field("Compañía", "company", "company", report_filters.company, "report-company") }}
         {{ smart_select_field("Libro contable", "ledger", "book", report_filters.ledger or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ period_range_field("Periodo contable", period_from, period_to) }}
+        {{ period_range_field("Periodo contable", period_from, period_to, period_from_label=period_from_label, period_to_label=period_to_label) }}
         {{ smart_select_field("Cuenta contable", "account_code", "account_code", report_filters.account_code or '', "report-account-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         <label class="form-check">
           <input class="form-check-input" type="checkbox" name="include_descendants" value="1" {% if report_filters.include_descendants %}checked{% endif %}>
