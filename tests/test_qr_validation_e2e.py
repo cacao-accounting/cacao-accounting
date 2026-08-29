@@ -86,6 +86,7 @@ def test_qr_validation_lifecycle(app):
             status="draft",
             voucher_type="journal_entry",
             transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(journal)
         database.session.flush()
@@ -226,6 +227,7 @@ def test_draft_never_updates_existing_validation(app):
             status="draft",
             voucher_type="journal_entry",
             transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(journal)
         existing = PublicDocumentValidation(
