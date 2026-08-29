@@ -35,7 +35,7 @@
         <input name="as_of_date" value="{{ request.args.get('as_of_date', '') }}" type="date" class="form-control" placeholder="{{ _('Fecha clave') }}">
       </div>
       <div class="col-12">
-        {{ period_range_field("Periodo contable", period_from, period_to, "report-table") }}
+        {{ period_range_field("Periodo contable", period_from, period_to, "report-table", period_from_label=period_from_label, period_to_label=period_to_label) }}
       </div>
       <div class="col-md-2">
         <button class="btn btn-primary w-100" type="submit">{{ _("Filtrar") }}</button>
