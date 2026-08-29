@@ -88,6 +88,25 @@ no fallar por falta de cache.
 
 # Bitácora de desarrollo
 
+## 2026-08-29 (fusión de condiciones anidadas SonarCloud)
+
+### Petición del usuario
+
+Atender el siguiente easy fix de SonarCloud: `Merge this if statement with the enclosing one.`
+
+### Plan implementado
+
+Se fusionaron las tres condiciones anidadas detectadas por `python:S1066` y `shelldre:S1066`: asignación de moneda
+transaccional en comprobantes, exclusión de cierres fiscales en el resumen contable y selección de un intérprete Python
+con pytest en `scripts/run_tests_by_file.sh`. Se conservaron las mismas condiciones y el cortocircuito original.
+
+### Verificación
+
+Las pruebas `tests/test_09_journal_entry_form.py`, `tests/test_report_account_summary.py` y
+`tests/test_document_flow_tree.py` pasaron 29/29, 2/2 y 25/25. Black, Ruff, Flake8, pydocstyle y `bash -n` pasan;
+ShellCheck no está instalado. Mypy no pudo iniciar porque el entorno `.venv` no contiene
+`pathspec.patterns.gitignore`.
+
 ## 2026-08-29 (extracción de condicionales anidados SonarCloud)
 
 ### Petición del usuario

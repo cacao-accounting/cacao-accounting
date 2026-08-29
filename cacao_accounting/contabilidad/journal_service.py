@@ -640,10 +640,9 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
         books = [book]
     transaction_currency, lines = _normalize_transaction_currency(_optional_text(payload.get("transaction_currency")), lines)
     company_currency = database.session.execute(database.select(Entity.currency).filter_by(code=company)).scalar_one()
-    if transaction_currency is None:
-        if company_currency:
-            transaction_currency = str(company_currency)
-            lines = _apply_currency_to_lines(lines, transaction_currency)
+    if transaction_currency is None and company_currency:
+        transaction_currency = str(company_currency)
+        lines = _apply_currency_to_lines(lines, transaction_currency)
     # Las empresas antiguas pueden no tener todavía la moneda en el catálogo;
     # un borrador puede conservar el valor y validarlo estrictamente al enviar.
     explicit_currency = _optional_text(payload.get("transaction_currency")) or any(
