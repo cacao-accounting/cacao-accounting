@@ -28,6 +28,8 @@ from cacao_accounting.database import (
     ApprovalMatrix,
     Book,
     CompanyDefaultAccount,
+    DimensionType,
+    DimensionValue,
     Entity,
     Item,
     ItemPrice,
@@ -606,6 +608,102 @@ def alternar_grupo_tercero(group_id: str):
     database.session.commit()
     flash(_("Estado del tipo de tercero actualizado correctamente."), "success")
     return redirect(url_for(ADMIN_LISTA_GRUPOS_TERCEROS, group_type=group.group_type))
+
+
+ADMIN_LISTA_DIMENSIONES = "admin.lista_dimensiones"
+
+
+@admin.route("/settings/dimensions", methods=["GET", "POST"])
+@login_required
+@modulo_activo("admin")
+def lista_dimensiones():
+    """Administra tipos y valores de dimensiones analíticas extensibles."""
+    _require_system_admin()
+    if request.method == "POST":
+        action = request.form.get("action") or ""
+        if action == "create_type":
+            name = (request.form.get("name") or "").strip()
+            if not name:
+                flash(_("El nombre del tipo de dimensión es obligatorio."), "danger")
+                return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+            dimension_type = DimensionType(name=name, is_active=bool(request.form.get("is_active", "1")))
+            database.session.add(dimension_type)
+            try:
+                database.session.commit()
+            except IntegrityError:
+                database.session.rollback()
+                flash(_("Ya existe un tipo de dimensión con ese nombre."), "danger")
+            else:
+                flash(_("Tipo de dimensión creado correctamente."), "success")
+            return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+        if action == "add_value":
+            dimension_type_id = request.form.get("dimension_type_id") or ""
+            value = (request.form.get("value") or "").strip()
+            company = (request.form.get("company") or "").strip() or None
+            if not dimension_type_id or not value:
+                flash(_("Seleccione un tipo de dimensión y proporcione un valor."), "danger")
+                return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+            database.session.add(
+                DimensionValue(
+                    dimension_type_id=dimension_type_id,
+                    value=value,
+                    company=company,
+                    is_active=True,
+                )
+            )
+            database.session.commit()
+            flash(_("Valor de dimensión agregado correctamente."), "success")
+            return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+
+    dimension_types = database.session.execute(database.select(DimensionType).order_by(DimensionType.name)).scalars().all()
+    dimension_values = (
+        database.session.execute(
+            database.select(DimensionValue).order_by(DimensionValue.dimension_type_id, DimensionValue.value)
+        )
+        .scalars()
+        .all()
+    )
+    values_by_type: dict[str, list[DimensionValue]] = {}
+    for dimension_value in dimension_values:
+        values_by_type.setdefault(dimension_value.dimension_type_id, []).append(dimension_value)
+    companies = database.session.execute(database.select(Entity).order_by(Entity.name)).scalars().all()
+    return render_template(
+        "admin/dimension_values.html",
+        dimension_types=dimension_types,
+        values_by_type=values_by_type,
+        companies=companies,
+        titulo=_("Dimensiones Analíticas"),
+    )
+
+
+@admin.route("/settings/dimensions/values/<value_id>/toggle", methods=["POST"])
+@login_required
+@modulo_activo("admin")
+def alternar_valor_dimension(value_id: str):
+    """Activa o desactiva un valor de dimensión analítica."""
+    _require_system_admin()
+    dimension_value = database.session.get(DimensionValue, value_id)
+    if not dimension_value:
+        abort(404)
+    dimension_value.is_active = not dimension_value.is_active
+    database.session.commit()
+    flash(_("Estado del valor de dimensión actualizado correctamente."), "success")
+    return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+
+
+@admin.route("/settings/dimensions/types/<dimension_type_id>/toggle", methods=["POST"])
+@login_required
+@modulo_activo("admin")
+def alternar_tipo_dimension(dimension_type_id: str):
+    """Activa o desactiva un tipo de dimensión analítica."""
+    _require_system_admin()
+    dimension_type = database.session.get(DimensionType, dimension_type_id)
+    if not dimension_type:
+        abort(404)
+    dimension_type.is_active = not dimension_type.is_active
+    database.session.commit()
+    flash(_("Estado del tipo de dimensión actualizado correctamente."), "success")
+    return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
 
 
 @admin.route("/settings/tax-rules/<rule_id>/edit", methods=["GET", "POST"])

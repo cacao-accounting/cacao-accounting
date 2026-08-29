@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">{{ _("Dimensiones Analíticas") }}</h5>
+  </div>
+  <form method="post" action="{{ url_for('admin.lista_dimensiones') }}" class="row g-3 p-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="create_type">
+    <div class="col-md-4">
+      <label class="form-label" for="name">{{ _("Nombre del tipo de dimensión") }}</label>
+      <input class="form-control" id="name" name="name" placeholder="{{ _('Ej. Segmento, Región') }}" required>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+        <label class="form-check-label" for="is_active">{{ _("Activo") }}</label>
+      </div>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <button class="btn btn-primary" type="submit">{{ _("Crear tipo") }}</button>
+    </div>
+  </form>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Agregar valor") }}</h6>
+  </div>
+  <form method="post" action="{{ url_for('admin.lista_dimensiones') }}" class="row g-3 p-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="add_value">
+    <div class="col-md-4">
+      <label class="form-label" for="dimension_type_id">{{ _("Tipo de dimensión") }}</label>
+      <select class="form-select" id="dimension_type_id" name="dimension_type_id" required>
+        {% for dimension_type in dimension_types %}
+        <option value="{{ dimension_type.id }}">{{ dimension_type.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="value">{{ _("Valor") }}</label>
+      <input class="form-control" id="value" name="value" required>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label" for="company">{{ _("Compañía (opcional)") }}</label>
+      <select class="form-select" id="company" name="company">
+        <option value="">{{ _("Global") }}</option>
+        {% for company in companies %}
+        <option value="{{ company.code }}">{{ company.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-flex align-items-end">
+      <button class="btn btn-primary" type="submit">{{ _("Agregar valor") }}</button>
+    </div>
+  </form>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h6 class="ca-card-title">{{ _("Catálogo de tipos") }}</h6>
+  </div>
+  <div class="p-3">
+    <table class="ca-table">
+      <caption style="display:none;">{{ _("Tipos y valores de dimensiones analíticas") }}</caption>
+      <thead>
+        <tr>
+          <th>{{ _("Tipo") }}</th>
+          <th>{{ _("Valores") }}</th>
+          <th>{{ _("Activo") }}</th>
+          <th>{{ _("Acciones") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dimension_type in dimension_types %}
+        <tr>
+          <td>{{ dimension_type.name }}</td>
+          <td>
+            <ul class="mb-0">
+              {% for dimension_value in values_by_type.get(dimension_type.id, []) %}
+              <li class="d-flex align-items-center gap-2">
+                <span>{{ dimension_value.value }}{% if dimension_value.company %} ({{ dimension_value.company }}){% endif %}</span>
+                {% if not dimension_value.is_active %}<span class="badge bg-secondary">{{ _("Inactivo") }}</span>{% endif %}
+                <form method="post" action="{{ url_for('admin.alternar_valor_dimension', value_id=dimension_value.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-link btn-sm p-0" type="submit">{{ _("Desactivar") if dimension_value.is_active else _("Reactivar") }}</button>
+                </form>
+              </li>
+              {% else %}
+              <li class="text-muted">{{ _("Sin valores") }}</li>
+              {% endfor %}
+            </ul>
+          </td>
+          <td>{{ _("Sí") if dimension_type.is_active else _("No") }}</td>
+          <td>
+            <form method="post" action="{{ url_for('admin.alternar_tipo_dimension', dimension_type_id=dimension_type.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-link btn-sm p-0" type="submit">{{ _("Desactivar") if dimension_type.is_active else _("Reactivar") }}</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">{{ _("No hay registros") }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
