@@ -226,7 +226,12 @@ def _legacy_forecast_amount(invoice, company_currency: str, flow_date: date) -> 
 
 def _forecast_base_amount(outstanding: Decimal, invoice, company_currency: str, flow_date: date) -> Decimal:
     """Convert a canonical outstanding amount to company currency for forecast use."""
-    transaction_currency = getattr(invoice, "transaction_currency", None) or company_currency
+    transaction_currency = getattr(invoice, "transaction_currency", None)
+    if not transaction_currency:
+        raise CashForecastConversionError(
+            f"El documento no tiene moneda transaccional explicita; "
+            f"no se puede convertir al pronostico de {company_currency} en {flow_date}."
+        )
     if transaction_currency == company_currency:
         return outstanding
     raw_exchange_rate = getattr(invoice, "exchange_rate", None)
