@@ -718,7 +718,7 @@ def _validate_document_payment_exchange_rate(document: Any, document_currency: s
         return
     exchange_rate = getattr(document, "exchange_rate", None)
     if exchange_rate is None or Decimal(str(exchange_rate)) <= 0:
-        raise ValueError(_("El documento referenciado no tiene un tipo de cambio válido para " "su moneda de transacción."))
+        raise ValueError(_("El documento referenciado no tiene un tipo de cambio válido para su moneda de transacción."))
 
 
 def _build_payment_reference(

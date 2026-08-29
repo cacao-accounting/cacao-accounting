@@ -75,7 +75,7 @@ def source_transaction_currencies(sources: Sequence[Any] | None) -> list[str]:
         currency = getattr(source, "transaction_currency", None)
         if not currency:
             raise DocumentFlowError(
-                "El documento origen no tiene moneda transaccional explicita; " "no se permite inferirla desde la compania.",
+                "El documento origen no tiene moneda transaccional explicita; no se permite inferirla desde la compania.",
                 400,
             )
         currencies.append(str(currency))

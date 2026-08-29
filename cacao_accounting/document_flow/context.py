@@ -46,7 +46,7 @@ def validate_immutable_header(source: Any | None, company: str | None, currency:
     source_currency = effective_currency(source)
     if not source_currency:
         raise DocumentFlowError(
-            "El documento origen no tiene moneda transaccional explicita; " "no se permite inferirla desde la compania.",
+            "El documento origen no tiene moneda transaccional explicita; no se permite inferirla desde la compania.",
             400,
         )
     if company != source_company:

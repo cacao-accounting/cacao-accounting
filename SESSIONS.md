@@ -88,6 +88,24 @@ no fallar por falta de cache.
 
 # Bitácora de desarrollo
 
+## 2026-08-29 (limpieza de strings concatenados SonarCloud)
+
+### Petición del usuario
+
+Atender el siguiente easy fix de SonarCloud: `Merge these implicitly concatenated strings; or did you forget a comma?`
+
+### Plan implementado
+
+Se fusionaron las cinco parejas de literales adyacentes detectadas por `python:S5799` en validación de moneda, creación
+automática de notas de entrega y validación de tasas de pago. El texto resultante permanece idéntico; únicamente se
+eliminó la concatenación implícita que podía ocultar una coma faltante.
+
+### Verificación
+
+La prueba `tests/test_currency_contract_complete.py` pasó 58/58 y la batería previa `tests/test_e2e_modules.py` pasó
+17/17. Black, Ruff, Flake8 y pydocstyle pasan en los cuatro archivos modificados. Mypy no pudo iniciar porque el entorno
+`.venv` no contiene `pathspec.patterns.gitignore`.
+
 ## 2026-08-29 (limpieza de excepciones redundantes SonarCloud)
 
 ### Petición del usuario
