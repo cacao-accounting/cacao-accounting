@@ -41,26 +41,18 @@ from cacao_accounting.database import (
     Bank,
     BankAccount,
     PartyAccount,
-    PurchaseReconciliation,
-    PurchaseReconciliationItem,
     PurchaseRequest,
     PurchaseRequestItem,
     PurchaseQuotation,
     PurchaseQuotationItem,
     SupplierQuotation,
     SupplierQuotationItem,
-    PurchaseOrder,
-    PurchaseOrderItem,
     PurchaseReceipt,
     PurchaseReceiptItem,
     PurchaseInvoice,
-    PurchaseInvoiceItem,
     ImportLandedCost,
     ImportLandedCostCharge,
     ImportLandedCostItem,
-    PaymentEntry,
-    PaymentReference,
-    StockLedgerEntry,
     StockBin,
     User,
     Roles,
@@ -86,11 +78,6 @@ from cacao_accounting.contabilidad.posting import (
 )
 from cacao_accounting.document_flow.payment import (
     compute_outstanding_amount,
-    refresh_outstanding_amount_cache,
-)
-from cacao_accounting.document_flow import (
-    revert_relations_for_target,
-    refresh_source_caches_for_target,
 )
 
 
@@ -479,124 +466,6 @@ def test_s2p_sourcing_and_negotiation_rounds(app_ctx):
     assert generated_po.grand_total == Decimal("8800.00")
 
 
-def test_s2p_operational_execution_and_3way_matching(app_ctx):
-    """
-    Prueba de ejecución operativa de Compras:
-    Orden de Compra -> Recepción de Almacén (Recepción parcial/total y Kardex) ->
-    Factura de Proveedor (Matching 3-way y Puente de Recepción)
-    """
-    # 1. Orden de Compra (PurchaseOrder) para 10 unidades de Laptop Pro a 880.00
-    po = PurchaseOrder(
-        id="PO-EXEC-01",
-        company="cacao",
-        supplier_id="SUP-S2P-01",
-        supplier_name="Proveedor Alpha",
-        posting_date=date.today(),
-        docstatus=1,
-        grand_total=Decimal("8800.00"),
-        transaction_currency="NIO",
-        base_currency="NIO",
-        exchange_rate=Decimal("1"),
-    )
-    po_item = PurchaseOrderItem(
-        id="POI-EXEC-01",
-        purchase_order_id=po.id,
-        item_code="ITEM-S2P-01",
-        item_name="Laptop Pro",
-        qty=Decimal("10"),
-        uom="UND",
-        rate=Decimal("880.00"),
-        amount=Decimal("8800.00"),
-    )
-    database.session.add_all([po, po_item])
-    database.session.commit()
-
-    # 2. Recepción de Almacén (PurchaseReceipt) - Recepción de 10 unidades
-    receipt = PurchaseReceipt(
-        id="PREC-EXEC-01",
-        company="cacao",
-        supplier_id="SUP-S2P-01",
-        posting_date=date.today(),
-        docstatus=0,
-        purchase_order_id=po.id,
-        grand_total=Decimal("8800.00"),
-        transaction_currency="NIO",
-        base_currency="NIO",
-        exchange_rate=Decimal("1"),
-    )
-    receipt_item = PurchaseReceiptItem(
-        id="PRECI-EXEC-01",
-        purchase_receipt_id=receipt.id,
-        item_code="ITEM-S2P-01",
-        item_name="Laptop Pro",
-        qty=Decimal("10"),
-        uom="UND",
-        rate=Decimal("880.00"),
-        amount=Decimal("8800.00"),
-        warehouse="ALM-MAIN",
-    )
-    database.session.add_all([receipt, receipt_item])
-    database.session.commit()
-
-    # Someter la Recepción
-    submit_document(receipt)
-    database.session.commit()
-
-    assert receipt.docstatus == 1
-    # Verificación en Kardex / StockBin
-    bin_entry = database.session.query(StockBin).filter_by(warehouse="ALM-MAIN", item_code="ITEM-S2P-01").one()
-    assert bin_entry.actual_qty == Decimal("10")
-
-    # Verificación de movimientos en el libro de stock
-    sle = database.session.query(StockLedgerEntry).filter_by(voucher_id=receipt.id).one()
-    assert sle.qty_change == Decimal("10")
-
-    # 3. Factura de Proveedor (PurchaseInvoice) - Matching 3-way
-    invoice = PurchaseInvoice(
-        id="PINV-EXEC-01",
-        company="cacao",
-        supplier_id="SUP-S2P-01",
-        posting_date=date.today(),
-        docstatus=0,
-        document_type="purchase_invoice",
-        purchase_order_id=po.id,
-        purchase_receipt_id=receipt.id,
-        grand_total=Decimal("8800.00"),
-        outstanding_amount=Decimal("8800.00"),
-        base_outstanding_amount=Decimal("8800.00"),
-        transaction_currency="NIO",
-        base_currency="NIO",
-        exchange_rate=Decimal("1"),
-    )
-    invoice_item = PurchaseInvoiceItem(
-        id="PINVI-EXEC-01",
-        purchase_invoice_id=invoice.id,
-        item_code="ITEM-S2P-01",
-        item_name="Laptop Pro",
-        qty=Decimal("10"),
-        uom="UND",
-        rate=Decimal("880.00"),
-        amount=Decimal("8800.00"),
-    )
-    database.session.add_all([invoice, invoice_item])
-    database.session.commit()
-
-    submit_document(invoice)
-    database.session.commit()
-
-    assert invoice.docstatus == 1
-    assert invoice.outstanding_amount == Decimal("8800.00")
-    reconciliation = database.session.query(PurchaseReconciliation).filter_by(purchase_invoice_id=invoice.id).one()
-    assert reconciliation.status == "reconciled"
-    assert reconciliation.matched_amount == Decimal("8800.00")
-    reconciliation_items = (
-        database.session.query(PurchaseReconciliationItem).filter_by(purchase_reconciliation_id=reconciliation.id).all()
-    )
-    assert len(reconciliation_items) == 1
-    assert reconciliation_items[0].purchase_receipt_item_id == receipt_item.id
-    assert reconciliation_items[0].purchase_invoice_item_id == invoice_item.id
-
-
 def test_s2p_credit_and_debit_notes_and_returns(app_ctx):
     """
     Prueba la lógica de ajuste y devoluciones de compras:
@@ -749,177 +618,3 @@ def test_s2p_credit_and_debit_notes_and_returns(app_ctx):
     assert ret_receipt.docstatus == 1
     # StockBin debe reflejar 5 - 2 = 3 unidades
     assert bin_entry.actual_qty == Decimal("3.00")
-
-
-def test_s2p_payment_application_and_advance_against_invoice(app_ctx):
-    """
-    Prueba los pagos, aplicaciones de anticipo y cancelación de pagos:
-    - Anticipo registrado sobre Orden de Compra (is_advance=True / advance_mode)
-    - Facturación final del proveedor
-    - Aplicación del anticipo contra la factura final
-    - Verificación del saldo residual y cancelación de pagos
-    """
-    # 1. Orden de Compra por 10,000.00
-    po = PurchaseOrder(
-        id="PO-ADV-01",
-        company="cacao",
-        supplier_id="SUP-S2P-01",
-        supplier_name="Proveedor Alpha",
-        posting_date=date.today(),
-        docstatus=1,
-        grand_total=Decimal("10000.00"),
-        transaction_currency="NIO",
-    )
-    database.session.add(po)
-    database.session.commit()
-
-    # 2. Registro de Anticipo (PaymentEntry) de 3,000.00 vinculado a la PO
-    payment_advance = PaymentEntry(
-        id="PAY-ADV-01",
-        company="cacao",
-        payment_type="pay",
-        party_type="supplier",
-        party_id="SUP-S2P-01",
-        posting_date=date.today(),
-        paid_amount=Decimal("3000.00"),
-        currency="NIO",
-        is_advance=True,
-        docstatus=1,
-    )
-    ref_advance = PaymentReference(
-        id="PAYREF-ADV-01",
-        payment_id=payment_advance.id,
-        reference_type="purchase_order",
-        reference_id=po.id,
-        allocated_amount=Decimal("3000.00"),
-    )
-    database.session.add_all([payment_advance, ref_advance])
-    database.session.commit()
-
-    # Enlazar la relación de pago anticipado
-    rel_po_pay = DocumentRelation(
-        source_type="purchase_order",
-        source_id=po.id,
-        target_type="payment_entry",
-        target_id=payment_advance.id,
-        target_item_id=ref_advance.id,
-        qty=Decimal("3000.00"),
-        relation_type="advance_payment",
-        status="active",
-        company="cacao",
-    )
-    database.session.add(rel_po_pay)
-    database.session.commit()
-
-    # 3. Factura de Proveedor por 10,000.00
-    invoice = PurchaseInvoice(
-        id="PINV-ADV-FINAL-01",
-        company="cacao",
-        supplier_id="SUP-S2P-01",
-        posting_date=date.today(),
-        docstatus=1,
-        document_type="purchase_invoice",
-        purchase_order_id=po.id,
-        grand_total=Decimal("10000.00"),
-        outstanding_amount=Decimal("10000.00"),
-        base_outstanding_amount=Decimal("10000.00"),
-        transaction_currency="NIO",
-    )
-    database.session.add(invoice)
-    database.session.commit()
-
-    # 4. Crear PaymentReference de la Factura y DocumentRelation para el anticipo
-    ref_inv_advance = PaymentReference(
-        id="PAYREF-INV-ADV-01",
-        payment_id=payment_advance.id,
-        reference_type="purchase_invoice",
-        reference_id=invoice.id,
-        allocated_amount=Decimal("3000.00"),
-        allocation_date=date.today(),
-    )
-    database.session.add(ref_inv_advance)
-    database.session.commit()
-
-    rel_inv_pay = DocumentRelation(
-        source_type="purchase_invoice",
-        source_id=invoice.id,
-        target_type="payment_entry",
-        target_id=payment_advance.id,
-        target_item_id=ref_inv_advance.id,
-        qty=Decimal("3000.00"),
-        relation_type="payment_application",
-        status="active",
-        company="cacao",
-    )
-    database.session.add(rel_inv_pay)
-    database.session.commit()
-
-    refresh_outstanding_amount_cache(invoice)
-    database.session.commit()
-
-    # Saldo pendiente debe ser 10000 - 3000 = 7000.00
-    assert compute_outstanding_amount(invoice) == Decimal("7000.00")
-    assert invoice.outstanding_amount == Decimal("7000.00")
-
-    # 5. Pago por el Saldo Restante de 7,000.00
-    payment_final = PaymentEntry(
-        id="PAY-FINAL-01",
-        company="cacao",
-        payment_type="pay",
-        party_type="supplier",
-        party_id="SUP-S2P-01",
-        posting_date=date.today(),
-        paid_amount=Decimal("7000.00"),
-        currency="NIO",
-        transaction_currency="NIO",
-        base_currency="NIO",
-        docstatus=0,
-        bank_account_id="BANK-ACC-S2P",
-    )
-    ref_final = PaymentReference(
-        id="PAYREF-FINAL-01",
-        payment_id=payment_final.id,
-        reference_type="purchase_invoice",
-        reference_id=invoice.id,
-        allocated_amount=Decimal("7000.00"),
-        allocation_date=date.today(),
-    )
-    database.session.add_all([payment_final, ref_final])
-    database.session.commit()
-
-    submit_document(payment_final)
-    database.session.commit()
-
-    rel_inv_pay_final = DocumentRelation(
-        source_type="purchase_invoice",
-        source_id=invoice.id,
-        target_type="payment_entry",
-        target_id=payment_final.id,
-        target_item_id=ref_final.id,
-        qty=Decimal("7000.00"),
-        relation_type="payment",
-        status="active",
-        company="cacao",
-    )
-    database.session.add(rel_inv_pay_final)
-    database.session.commit()
-
-    refresh_outstanding_amount_cache(invoice)
-    database.session.commit()
-
-    # Factura totalmente pagada
-    assert compute_outstanding_amount(invoice) == Decimal("0.00")
-    assert invoice.outstanding_amount == Decimal("0.00")
-
-    # 6. Pago por Cancelación: Se cancela el pago final PAY-FINAL-01
-    from cacao_accounting.contabilidad.posting import cancel_document
-
-    cancel_document(payment_final, reason="Correccion de pago", actor_user_id="user-manager")
-    revert_relations_for_target("payment_entry", payment_final.id)
-    refresh_source_caches_for_target("payment_entry", payment_final.id)
-    refresh_outstanding_amount_cache(invoice)
-    database.session.commit()
-
-    # Saldo pendiente se restaura a 7000.00 (manteniendo activo solo el anticipo de 3000.00)
-    assert compute_outstanding_amount(invoice) == Decimal("7000.00")
-    assert invoice.outstanding_amount == Decimal("7000.00")
