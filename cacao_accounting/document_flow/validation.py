@@ -18,7 +18,16 @@ from cacao_accounting.document_flow import DocumentFlowError
 
 
 def _collect_currency_sources(registro: Any) -> list[Any]:
-    """Devuelve los documentos origen asociados a un documento via relaciones activas."""
+    """Devuelve los documentos origen asociados a un documento via relaciones activas.
+
+    DocumentRelation no expone una relacion polimorfica ``source``; los
+    documentos origen se resuelven con ``get_document`` contra el registro.
+    Los tipos documentales no registrados (por ejemplo ``bank_transaction`` o
+    ``gl_entry``) se omiten: solo interesan origenes con ``transaction_currency``
+    para validar el contrato de moneda.
+    """
+    from cacao_accounting.document_flow.registry import get_document_type
+
     target_type = getattr(registro, "voucher_type", None) or type(registro).__tablename__
     target_id = str(getattr(registro, "id", "") or "")
     if not target_id:
@@ -36,7 +45,15 @@ def _collect_currency_sources(registro: Any) -> list[Any]:
     )
     sources: list[Any] = []
     for row in rows:
-        source = getattr(row, "source", None)
+        source_type = str(row.source_type or "")
+        source_id = str(row.source_id or "")
+        if not source_type or not source_id:
+            continue
+        try:
+            spec = get_document_type(source_type)
+        except ValueError:
+            continue
+        source = database.session.get(spec.header_model, source_id)
         if source is not None:
             sources.append(source)
     return sources
