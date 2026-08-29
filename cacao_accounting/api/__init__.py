@@ -79,6 +79,8 @@ api = Blueprint("api", __name__, template_folder="templates")
 api.register_blueprint(line_import_bp)
 api.register_blueprint(dashboard_api)
 
+HOME_ENDPOINT = "cacao_app.pagina_inicio"
+
 rate_limit_blueprint(api)
 rate_limit_blueprint(line_import_bp)
 rate_limit_blueprint(dashboard_api)
@@ -544,7 +546,7 @@ def api_document_comment(document_type: str, document_id: str):
         parsed = urlparse(request.referrer)
         if parsed.netloc == "" or parsed.netloc == request.host:
             return redirect(request.referrer)
-        return redirect(url_for("cacao_app.pagina_inicio"))
+        return redirect(url_for(HOME_ENDPOINT))
     return jsonify({"id": entry.id, "action": entry.action}), 201
 
 
@@ -561,7 +563,7 @@ def api_document_task(document_type: str, document_id: str):
         parsed = urlparse(request.referrer)
         if parsed.netloc == "" or parsed.netloc == request.host:
             return redirect(request.referrer)
-        return redirect(url_for("cacao_app.pagina_inicio"))
+        return redirect(url_for(HOME_ENDPOINT))
     return jsonify({"id": task.id, "status": task.status}), 201
 
 
@@ -649,7 +651,7 @@ def api_upload_attachment(reference_type: str, reference_id: str):
             parsed = urlparse(request.referrer)
             if parsed.netloc == "" or parsed.netloc == request.host:
                 return redirect(request.referrer)
-            return redirect(url_for("cacao_app.pagina_inicio"))
+            return redirect(url_for(HOME_ENDPOINT))
         return jsonify({"error": str(exc)}), exc.status_code
 
     if request.form and request.referrer:
@@ -657,7 +659,7 @@ def api_upload_attachment(reference_type: str, reference_id: str):
         parsed = urlparse(request.referrer)
         if parsed.netloc == "" or parsed.netloc == request.host:
             return redirect(request.referrer)
-        return redirect(url_for("cacao_app.pagina_inicio"))
+        return redirect(url_for(HOME_ENDPOINT))
 
     return jsonify(result), 201
 
@@ -704,7 +706,7 @@ def api_delete_attachment(file_id: str):
             parsed = urlparse(request.referrer)
             if parsed.netloc == "" or parsed.netloc == request.host:
                 return redirect(request.referrer)
-            return redirect(url_for("cacao_app.pagina_inicio"))
+            return redirect(url_for(HOME_ENDPOINT))
         return jsonify({"error": str(exc)}), exc.status_code
 
     if request.form and request.referrer:
@@ -712,7 +714,7 @@ def api_delete_attachment(file_id: str):
         parsed = urlparse(request.referrer)
         if parsed.netloc == "" or parsed.netloc == request.host:
             return redirect(request.referrer)
-        return redirect(url_for("cacao_app.pagina_inicio"))
+        return redirect(url_for(HOME_ENDPOINT))
 
     return jsonify({"success": True})
 
@@ -731,7 +733,7 @@ def api_upload_item_image(item_id: str):
             parsed = urlparse(request.referrer)
             if parsed.netloc == "" or parsed.netloc == request.host:
                 return redirect(request.referrer)
-            return redirect(url_for("cacao_app.pagina_inicio"))
+            return redirect(url_for(HOME_ENDPOINT))
         return jsonify({"error": str(exc)}), exc.status_code
 
     if request.form and request.referrer:
@@ -739,7 +741,7 @@ def api_upload_item_image(item_id: str):
         parsed = urlparse(request.referrer)
         if parsed.netloc == "" or parsed.netloc == request.host:
             return redirect(request.referrer)
-        return redirect(url_for("cacao_app.pagina_inicio"))
+        return redirect(url_for(HOME_ENDPOINT))
 
     return jsonify(result), 200
 
@@ -776,7 +778,7 @@ def api_delete_item_image(item_id: str):
             parsed = urlparse(request.referrer)
             if parsed.netloc == "" or parsed.netloc == request.host:
                 return redirect(request.referrer)
-            return redirect(url_for("cacao_app.pagina_inicio"))
+            return redirect(url_for(HOME_ENDPOINT))
         return jsonify({"error": str(exc)}), exc.status_code
 
     if request.form and request.referrer:
@@ -784,7 +786,7 @@ def api_delete_item_image(item_id: str):
         parsed = urlparse(request.referrer)
         if parsed.netloc == "" or parsed.netloc == request.host:
             return redirect(request.referrer)
-        return redirect(url_for("cacao_app.pagina_inicio"))
+        return redirect(url_for(HOME_ENDPOINT))
 
     return jsonify({"success": True})
 

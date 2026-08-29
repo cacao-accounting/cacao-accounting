@@ -14,22 +14,28 @@ LANGUAGE_CHOICES = [
     ("en", "English"),
 ]
 
+ENTITY_TYPE_ASSOCIATION = "Asociación"
+ENTITY_TYPE_LIMITED_COMPANY = "Compañia Limitada"
+ENTITY_TYPE_CORPORATION = "Sociedad Anonima"
+ENTITY_TYPE_NONPROFIT = "Organización sin Fines de Lucro"
+ENTITY_TYPE_INDIVIDUAL = "Persona Natural"
+
 ENTITY_TYPE_LABELS: dict[str, dict[str, str]] = {
     "es": {
-        "Asociación": "Asociación",
-        "Compañia Limitada": "Compañia Limitada",
+        ENTITY_TYPE_ASSOCIATION: ENTITY_TYPE_ASSOCIATION,
+        ENTITY_TYPE_LIMITED_COMPANY: ENTITY_TYPE_LIMITED_COMPANY,
         "Cooperativa": "Cooperativa",
-        "Sociedad Anonima": "Sociedad Anonima",
-        "Organización sin Fines de Lucro": "Organización sin Fines de Lucro",
-        "Persona Natural": "Persona Natural",
+        ENTITY_TYPE_CORPORATION: ENTITY_TYPE_CORPORATION,
+        ENTITY_TYPE_NONPROFIT: ENTITY_TYPE_NONPROFIT,
+        ENTITY_TYPE_INDIVIDUAL: ENTITY_TYPE_INDIVIDUAL,
     },
     "en": {
-        "Asociación": "Association",
-        "Compañia Limitada": "Limited Liability Company",
+        ENTITY_TYPE_ASSOCIATION: "Association",
+        ENTITY_TYPE_LIMITED_COMPANY: "Limited Liability Company",
         "Cooperativa": "Cooperative",
-        "Sociedad Anonima": "Corporation",
-        "Organización sin Fines de Lucro": "Nonprofit Organization",
-        "Persona Natural": "Individual",
+        ENTITY_TYPE_CORPORATION: "Corporation",
+        ENTITY_TYPE_NONPROFIT: "Nonprofit Organization",
+        ENTITY_TYPE_INDIVIDUAL: "Individual",
     },
 }
 

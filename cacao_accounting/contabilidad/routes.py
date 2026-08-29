@@ -203,6 +203,9 @@ CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = "Cierre mensual no encontrado."
 ENTIDAD_NO_EXISTE_MSG = "La entidad indicada no existe."
 
 CONTABILIDAD_CUENTAS_ENDPOINT = "contabilidad.cuentas"
+CONTABILIDAD_ENTIDAD_ENDPOINT = "contabilidad.entidad"
+ENTRADAS_GL_LABEL = "entradas GL"
+MOVIMIENTOS_INVENTARIO_LABEL = "movimientos de inventario"
 
 _TPL_UNIDAD_CREAR = "contabilidad/unidad_crear.html"
 
@@ -539,7 +542,7 @@ def editar_entidad(id_entidad):
         ENTIDAD.enabled = bool(request.form.get("habilitado"))
         database.session.add(ENTIDAD)
         database.session.commit()
-        return redirect(url_for("contabilidad.entidad", entidad_id=ENTIDAD.code))
+        return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=ENTIDAD.code))
     else:
         DATA = {
             "nombre_comercial": ENTIDAD.name,
@@ -601,11 +604,11 @@ def eliminar_entidad(id_entidad):
             ("proyectos", database.select(Project.id).filter_by(entity=company)),
             ("presupuestos", database.select(Budget.id).filter_by(company=company)),
             ("comprobantes", database.select(ComprobanteContable.id).filter_by(entity=company)),
-            ("entradas GL", database.select(GLEntry.id).filter_by(company=company)),
+            (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(company=company)),
             ("cuentas bancarias", database.select(BankAccount.id).filter_by(company=company)),
         ],
     ):
-        return redirect(url_for("contabilidad.entidad", entidad_id=company))
+        return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=company))
     database.session.delete(ENTIDAD[0])
     database.session.commit()
 
@@ -627,7 +630,7 @@ def inactivar_entidad(id_entidad):
         _validate_entity_can_be_deactivated(ENTIDAD[0].code)
     except ValueError as error:
         flash_error(error, "warning")
-        return redirect(url_for("contabilidad.entidad", entidad_id=ENTIDAD[0].code))
+        return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=ENTIDAD[0].code))
     ENTIDAD[0].enabled = False
     ENTIDAD[0].status = "inactivo"
     database.session.commit()
@@ -738,9 +741,9 @@ def eliminar_unidad(id_unidad):
             f"la unidad {id_unidad}",
             [
                 ("presupuestos", database.select(BudgetLine.id).filter_by(business_unit_id=unidad.id)),
-                ("entradas GL", database.select(GLEntry.id).filter_by(unit_code=unidad.code)),
+                (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(unit_code=unidad.code)),
                 ("comprobantes", database.select(ComprobanteContableDetalle.id).filter_by(unit=unidad.code)),
-                ("movimientos de inventario", database.select(StockEntry.id).filter_by(unit_code=unidad.code)),
+                (_(MOVIMIENTOS_INVENTARIO_LABEL), database.select(StockEntry.id).filter_by(unit_code=unidad.code)),
             ],
         ):
             return redirect(url_for(CONTABILIDAD_UNIDADES))
@@ -929,7 +932,7 @@ def eliminar_libro(id_unidad):
             [
                 ("presupuestos", database.select(Budget.id).filter_by(ledger_id=libro.id)),
                 ("comprobantes", database.select(ComprobanteContable.id).filter_by(book=libro.code)),
-                ("entradas GL", database.select(GLEntry.id).filter_by(ledger_id=libro.id)),
+                (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(ledger_id=libro.id)),
                 ("plantillas recurrentes", database.select(RecurringJournalTemplate.id).filter_by(ledger_id=libro.id)),
                 (
                     "aplicaciones recurrentes",
@@ -1537,9 +1540,9 @@ def eliminar_centro_costo(id_cc):
             f"el centro de costo {id_cc}",
             [
                 ("presupuestos", database.select(BudgetLine.id).filter_by(cost_center_id=registro.id)),
-                ("entradas GL", database.select(GLEntry.id).filter_by(cost_center_code=registro.code)),
+                (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(cost_center_code=registro.code)),
                 ("comprobantes", database.select(ComprobanteContableDetalle.id).filter_by(cost_center=registro.code)),
-                ("movimientos de inventario", database.select(StockEntry.id).filter_by(cost_center_code=registro.code)),
+                (_(MOVIMIENTOS_INVENTARIO_LABEL), database.select(StockEntry.id).filter_by(cost_center_code=registro.code)),
             ],
         ):
             return redirect(url_for(CONTABILIDAD_CCOSTOS))
@@ -1724,9 +1727,9 @@ def eliminar_proyecto(project_id):
             f"el proyecto {project_id}",
             [
                 ("presupuestos", database.select(BudgetLine.id).filter_by(project_id=proyecto.id)),
-                ("entradas GL", database.select(GLEntry.id).filter_by(project_code=proyecto.code)),
+                (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(project_code=proyecto.code)),
                 ("comprobantes", database.select(ComprobanteContableDetalle.id).filter_by(project=proyecto.code)),
-                ("movimientos de inventario", database.select(StockEntry.id).filter_by(project_code=proyecto.code)),
+                (_(MOVIMIENTOS_INVENTARIO_LABEL), database.select(StockEntry.id).filter_by(project_code=proyecto.code)),
             ],
         ):
             return redirect(url_for(CONTABILIDAD_PROYECTOS))
@@ -1897,7 +1900,7 @@ def fiscal_year_delete(fy_id):
                 ("presupuestos", database.select(Budget.id).filter_by(fiscal_year_id=fiscal_year.id)),
                 ("pronósticos de caja", database.select(CashForecast.id).filter_by(fiscal_year_id=fiscal_year.id)),
                 ("comprobantes", database.select(ComprobanteContable.id).filter_by(fiscal_year_id=fiscal_year.id)),
-                ("entradas GL", database.select(GLEntry.id).filter_by(fiscal_year_id=fiscal_year.id)),
+                (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(fiscal_year_id=fiscal_year.id)),
             ],
         ):
             (
@@ -2090,7 +2093,7 @@ def accounting_period_delete(period_id):
             [
                 ("presupuesto", database.select(BudgetLine.id).filter_by(period_id=period.id)),
                 ("cierre mensual", database.select(PeriodCloseRun.id).filter_by(period_id=period.id)),
-                ("entradas GL", database.select(GLEntry.id).filter_by(accounting_period_id=period.id)),
+                (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(accounting_period_id=period.id)),
                 (
                     "entradas GL por fecha",
                     database.select(GLEntry.id).filter(

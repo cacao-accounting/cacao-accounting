@@ -55,6 +55,7 @@ def _load_magic() -> Any:
 imports = Blueprint("imports", __name__, template_folder="templates")
 
 _ENDPOINT_IMPORTS_DETAIL = "imports.detail"
+_ENDPOINT_IMPORTS_NEW = "imports.new"
 _INVALID_FILE_TYPE_MSG = "Error al validar el tipo de archivo"
 
 
@@ -124,18 +125,18 @@ def new():
 
         if not company_id or not record_type:
             flash("Debe seleccionar compañía y tipo de registro.", "danger")
-            return redirect(url_for("imports.new"))
+            return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
 
         exige_acceso_compania("imports", company_id, "crear")
 
         if record_type != "journal_entry" and accounting_book_id:
             flash("El libro contable solo se permite para comprobantes contables.", "danger")
-            return redirect(url_for("imports.new"))
+            return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
 
         book = _resolve_company_book(company_id, accounting_book_id)
         if accounting_book_id and not book:
             flash("El libro contable no pertenece a la compañía seleccionada.", "danger")
-            return redirect(url_for("imports.new"))
+            return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
         if book:
             accounting_book_id = book.code
 

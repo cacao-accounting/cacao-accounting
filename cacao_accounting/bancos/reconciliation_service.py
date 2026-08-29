@@ -28,6 +28,7 @@ from cacao_accounting.database import (
 from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, primary_ledger_id
 
 UNSUPPORTED_TARGET_TYPE_ERROR = "Tipo de destino no soportado para conciliacion bancaria."
+BANK_TRANSACTION_NOT_FOUND_ERROR = "La transaccion bancaria no existe."
 
 
 class BankReconciliationError(ValueError):
@@ -587,7 +588,7 @@ def find_bank_reconciliation_candidates(
     """
     transaction = database.session.get(BankTransaction, bank_transaction_id, with_for_update=lock)
     if not transaction:
-        raise BankReconciliationError("La transaccion bancaria no existe.")
+        raise BankReconciliationError(BANK_TRANSACTION_NOT_FOUND_ERROR)
     company = _bank_company(transaction)
     amount = _bank_amount(transaction)
     if amount <= 0:
@@ -761,7 +762,7 @@ def _lock_request_transactions(request: BankReconciliationRequest) -> None:
     for transaction_id in sorted({match.bank_transaction_id for match in request.matches}):
         transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)
         if transaction is None:
-            raise BankReconciliationError("La transaccion bancaria no existe.")
+            raise BankReconciliationError(BANK_TRANSACTION_NOT_FOUND_ERROR)
         if _bank_company(transaction) != request.company:
             raise BankReconciliationError("La transaccion bancaria pertenece a otra compania.")
 
@@ -842,7 +843,7 @@ def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: s
     # CAS-02: FOR UPDATE para prevenir duplicación concurrente
     transaction = database.session.get(BankTransaction, match.bank_transaction_id, with_for_update=True)
     if not transaction:
-        raise BankReconciliationError("La transaccion bancaria no existe.")
+        raise BankReconciliationError(BANK_TRANSACTION_NOT_FOUND_ERROR)
     if _bank_company(transaction) != company:
         raise BankReconciliationError("La transaccion bancaria pertenece a otra compania.")
     _lock_reconciliation_target(match.target_type, match.target_id)

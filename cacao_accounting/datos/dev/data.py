@@ -45,6 +45,7 @@ from cacao_accounting.database import (
 
 CHOCOLATE_100G = "Chocolate 100g"
 DEMO_SUPPLIER_ID = "PARTY-DEMO-SUPPLIER"
+DEMO_SUPPLIER_NAME = "Proveedor Demo SA"
 
 BASE_USUARIOS = [
     {"user": "admin", "e_mail": "a@dm.com", "password": _pg("admin"), "active": True, "classification": "system"},
@@ -548,7 +549,7 @@ def _make_terceros() -> tuple:
             id=DEMO_SUPPLIER_ID,
             code="P001",
             is_supplier=True,
-            name="Proveedor Demo SA",
+            name=DEMO_SUPPLIER_NAME,
             comercial_name="Demo Proveedor",
             tax_id="P001",
             is_active=True,
@@ -609,7 +610,7 @@ def _make_documentos() -> tuple:
             document_no="POR-DEMO-2025-001",
             company="cacao",
             supplier_id=DEMO_SUPPLIER_ID,
-            supplier_name="Proveedor Demo SA",
+            supplier_name=DEMO_SUPPLIER_NAME,
             posting_date=date(2025, 1, 15),
             docstatus=1,
             remarks="Orden de compra de demostración",
@@ -619,7 +620,7 @@ def _make_documentos() -> tuple:
             document_no="REC-DEMO-2025-001",
             company="cacao",
             supplier_id=DEMO_SUPPLIER_ID,
-            supplier_name="Proveedor Demo SA",
+            supplier_name=DEMO_SUPPLIER_NAME,
             posting_date=date(2025, 1, 20),
             purchase_order_id=PURCHASE_ORDER_ID,
             docstatus=1,
@@ -647,7 +648,7 @@ def _make_documentos() -> tuple:
             document_no="FCC-DEMO-2025-001",
             company="cacao",
             supplier_id=DEMO_SUPPLIER_ID,
-            supplier_name="Proveedor Demo SA",
+            supplier_name=DEMO_SUPPLIER_NAME,
             posting_date=date(2025, 1, 25),
             purchase_order_id=PURCHASE_ORDER_ID,
             purchase_receipt_id=PURCHASE_RECEIPT_ID,

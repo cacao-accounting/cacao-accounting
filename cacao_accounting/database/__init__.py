@@ -61,6 +61,11 @@ RECURRING_JOURNAL_TEMPLATE_ID = "recurring_journal_template.id"
 BOOK_ID = "book.id"
 WORKFLOW_STATE_ID = "workflow_state.id"
 ACCOUNTING_PERIOD_ID = "accounting_period.id"
+PAYMENT_ENTRY_ID = "payment_entry.id"
+PURCHASE_REQUEST_ID = "purchase_request.id"
+PURCHASE_REQUEST_COMPARISON_ID = "purchase_request_comparison.id"
+SUPPLIER_QUOTATION_ID = "supplier_quotation.id"
+SUPPLIER_QUOTATION_ITEM_ID = "supplier_quotation_item.id"
 
 ROLES_ID_COLUMN = "roles.id"
 AMOUNT_NON_NEGATIVE_CHECK = "amount >= 0"
@@ -1759,7 +1764,7 @@ class PurchaseOrder(database.Model, DocBase):  # type: ignore[name-defined]
     )
     purchase_request_comparison_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_request_comparison.id", ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_REQUEST_COMPARISON_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
@@ -1882,7 +1887,7 @@ class PurchaseRequestItem(database.Model, BaseTabla):  # type: ignore[name-defin
     __table_args__ = (database.CheckConstraint(QTY_POSITIVE_CHECK, name="ck_preqi_qty_positive"),)
     purchase_request_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_REQUEST_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -1974,7 +1979,7 @@ class SupplierQuotationItem(database.Model, BaseTabla):  # type: ignore[name-def
     )
     supplier_quotation_id = database.Column(
         database.String(26),
-        database.ForeignKey("supplier_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(SUPPLIER_QUOTATION_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -2009,7 +2014,7 @@ class PurchaseOrderComparison(database.Model, BaseTabla):  # type: ignore[name-d
     )
     purchase_request_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_REQUEST_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
@@ -2100,7 +2105,7 @@ class PurchaseRequestComparison(database.Model, BaseTabla):  # type: ignore[name
     )
     purchase_request_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_request.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_REQUEST_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -2121,13 +2126,13 @@ class PurchaseRequestComparisonOffer(database.Model, BaseTabla):  # type: ignore
     )
     comparison_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_request_comparison.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PURCHASE_REQUEST_COMPARISON_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
     supplier_quotation_id = database.Column(
         database.String(26),
-        database.ForeignKey("supplier_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(SUPPLIER_QUOTATION_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -2144,7 +2149,7 @@ class PurchaseRequestComparisonLine(database.Model, BaseTabla):  # type: ignore[
     )
     comparison_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_request_comparison.id", ondelete=FK_RESTRICT),
+        database.ForeignKey(PURCHASE_REQUEST_COMPARISON_ID, ondelete=FK_RESTRICT),
         nullable=False,
         index=True,
     )
@@ -2155,20 +2160,20 @@ class PurchaseRequestComparisonLine(database.Model, BaseTabla):  # type: ignore[
         index=True,
     )
     recommended_supplier_quotation_id = database.Column(
-        database.String(26), database.ForeignKey("supplier_quotation.id", ondelete=FK_SET_NULL), nullable=True, index=True
+        database.String(26), database.ForeignKey(SUPPLIER_QUOTATION_ID, ondelete=FK_SET_NULL), nullable=True, index=True
     )
     recommended_supplier_quotation_item_id = database.Column(
         database.String(26),
-        database.ForeignKey("supplier_quotation_item.id", ondelete=FK_SET_NULL),
+        database.ForeignKey(SUPPLIER_QUOTATION_ITEM_ID, ondelete=FK_SET_NULL),
         nullable=True,
         index=True,
     )
     selected_supplier_quotation_id = database.Column(
-        database.String(26), database.ForeignKey("supplier_quotation.id", ondelete=FK_SET_NULL), nullable=True, index=True
+        database.String(26), database.ForeignKey(SUPPLIER_QUOTATION_ID, ondelete=FK_SET_NULL), nullable=True, index=True
     )
     selected_supplier_quotation_item_id = database.Column(
         database.String(26),
-        database.ForeignKey("supplier_quotation_item.id", ondelete=FK_SET_NULL),
+        database.ForeignKey(SUPPLIER_QUOTATION_ITEM_ID, ondelete=FK_SET_NULL),
         nullable=True,
         index=True,
     )
@@ -2225,12 +2230,12 @@ class PurchaseQuotationAwardItem(database.Model):  # type: ignore[name-defined]
     )
     supplier_quotation_id = database.Column(
         database.String(26),
-        database.ForeignKey("supplier_quotation.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(SUPPLIER_QUOTATION_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
     )
     supplier_quotation_item_id = database.Column(
         database.String(26),
-        database.ForeignKey("supplier_quotation_item.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(SUPPLIER_QUOTATION_ITEM_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
     )
     item_code = database.Column(database.String(50), nullable=False, index=True)
@@ -3050,7 +3055,7 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
     __table_args__ = (UniqueConstraint("payment_id", "reference_type", "reference_id", name="uq_payment_reference"),)
     payment_id = database.Column(
         database.String(26),
-        database.ForeignKey("payment_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PAYMENT_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -3094,7 +3099,7 @@ class WithholdingCertificate(database.Model, DocBase):  # type: ignore[name-defi
     document_type = database.Column(database.String(50), nullable=False, default="withholding_certificate")
     payment_id = database.Column(
         database.String(26),
-        database.ForeignKey("payment_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PAYMENT_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -3269,7 +3274,7 @@ class BankTransaction(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_reconciled = database.Column(database.Boolean(), default=False, nullable=False)
     payment_entry_id = database.Column(
         database.String(26),
-        database.ForeignKey("payment_entry.id", ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        database.ForeignKey(PAYMENT_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
