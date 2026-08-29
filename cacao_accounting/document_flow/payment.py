@@ -227,7 +227,28 @@ def compute_outstanding_amount(document: Any, as_of_date: date | None = None) ->
     """Calcula el saldo vivo de una factura usando las referencias de pago y notas de credito/debito."""
     if as_of_date is None:
         as_of_date = date.today()
+    from cacao_accounting.database import ARAPLedgerEntry
+
+    document_type = normalize_doctype(str(getattr(document, "document_type", None) or getattr(document, "__tablename__", "")))
+    ledger_query = select(func.sum(ARAPLedgerEntry.document_amount)).where(
+        ARAPLedgerEntry.document_type == document_type,
+        ARAPLedgerEntry.document_id == str(getattr(document, "id", "")),
+        ARAPLedgerEntry.posting_date <= as_of_date,
+    )
     grand_total = decimal_or_zero(getattr(document, "grand_total", None))
+    ledger_rows = database.session.execute(ledger_query).scalar_one_or_none()
+    if ledger_rows is not None:
+        opening_exists = database.session.execute(
+            select(ARAPLedgerEntry.id)
+            .where(
+                ARAPLedgerEntry.document_type == document_type,
+                ARAPLedgerEntry.document_id == str(getattr(document, "id", "")),
+                ARAPLedgerEntry.event_type == "opening",
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        balance = decimal_or_zero(ledger_rows) if opening_exists else grand_total + decimal_or_zero(ledger_rows)
+        return balance if balance > 0 else Decimal("0")
     allocated_payments = sum(
         decimal_or_zero(reference.allocated_amount)
         for reference in _document_payment_references(document, as_of_date=as_of_date)
@@ -291,13 +312,22 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
 
 
 def _compute_cash_consumed_from_reference(
-    reference_id, reference_type, flow_source_type, allocated_amount, discount_amount, gain_loss_amount, relation_status
+    reference_id,
+    reference_type,
+    flow_source_type,
+    allocated_amount,
+    discount_amount,
+    gain_loss_amount,
+    relation_status,
+    payment_amount=None,
 ):
     """Calcula el efectivo consumido por una referencia de pago."""
     source_type = normalize_doctype(str(flow_source_type or reference_type or ""))
     if source_type in {"purchase_order", "sales_order"}:
         return Decimal("0"), None
-    cash_consumed = decimal_or_zero(allocated_amount) - decimal_or_zero(discount_amount) - decimal_or_zero(gain_loss_amount)
+    cash_consumed = decimal_or_zero(payment_amount) or decimal_or_zero(allocated_amount) - decimal_or_zero(
+        discount_amount
+    ) - decimal_or_zero(gain_loss_amount)
     if cash_consumed < 0:
         cash_consumed = Decimal("0")
     return cash_consumed, str(relation_status) if relation_status else None
@@ -310,6 +340,17 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
     payment_total = decimal_or_zero(payment.paid_amount or payment.received_amount)
     if payment_total <= 0:
         return Decimal("0")
+    from cacao_accounting.database import ARAPLedgerEntry
+
+    ledger_balance = database.session.execute(
+        select(func.sum(ARAPLedgerEntry.document_amount)).where(
+            ARAPLedgerEntry.document_type == "payment_entry",
+            ARAPLedgerEntry.document_id == str(payment.id),
+        )
+    ).scalar_one_or_none()
+    if ledger_balance is not None:
+        remaining = -decimal_or_zero(ledger_balance)
+        return remaining if remaining > 0 else Decimal("0")
     reference_rows = database.session.execute(
         select(
             PaymentReference.id,
@@ -318,6 +359,7 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
             PaymentReference.allocated_amount,
             PaymentReference.discount_amount,
             PaymentReference.gain_loss_amount,
+            PaymentReference.payment_amount,
             DocumentRelation.status,
         )
         .outerjoin(
@@ -331,7 +373,9 @@ def compute_payment_unallocated_amount(payment: PaymentEntry) -> Decimal:
     consumed_by_reference: dict[str, Decimal] = {}
     relation_status_by_reference: dict[str, set[str]] = {}
     for row in reference_rows:
-        cash_consumed, relation_status = _compute_cash_consumed_from_reference(*row)
+        cash_consumed, relation_status = _compute_cash_consumed_from_reference(
+            row[0], row[1], row[2], row[3], row[4], row[5], row[7], payment_amount=row[6]
+        )
         if cash_consumed == Decimal("0") and relation_status is None:
             continue
         reference_id_str = str(row[0])

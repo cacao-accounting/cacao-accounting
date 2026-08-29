@@ -3795,6 +3795,12 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
     with database.session.begin_nested():
         document.docstatus = 1
         entries = post_document_to_gl(document, ledger_code=ledger_code)
+        from cacao_accounting.contabilidad.arap_ledger_service import post_document_ar_ap, post_payment_ar_ap
+
+        if isinstance(document, PaymentEntry):
+            post_payment_ar_ap(document, entries)
+        else:
+            post_document_ar_ap(document, entries)
         # QR Validation support
         from cacao_accounting.printing.validation import ValidationService
 
@@ -3879,7 +3885,11 @@ def cancel_document(
 
             _apply_payment_cancellation_hooks(document)
 
-        return _add_entries(reversals)
+        result = _add_entries(reversals)
+        from cacao_accounting.contabilidad.arap_ledger_service import cancel_document_ar_ap
+
+        cancel_document_ar_ap(document, cancellation_date=cancellation_context.effective_date)
+        return result
 
 
 def _cancel_fiscal_year_closing_document(

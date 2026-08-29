@@ -692,18 +692,7 @@ def _validate_payment_reference_document(
     expected_payment_type = _payment_reference_expected_payment_type(flow_source_type)
     if expected_payment_type and payment.payment_type != expected_payment_type:
         raise ValueError(_("El tipo de pago no corresponde con el tipo de nota referenciada."))
-    # CAS-03: Validación cruzada de moneda entre pago y documento referenciado.
-    payment_currency = getattr(payment, "currency", None)
     document_currency = getattr(document, "transaction_currency", None) or getattr(document, "currency", None)
-    if payment_currency and document_currency and payment_currency != document_currency:
-        from werkzeug.exceptions import Conflict
-
-        raise Conflict(
-            _(
-                "La moneda del pago ({0}) no coincide con la moneda del documento referenciado ({1}). "
-                "No se permiten aplicaciones cruzadas de moneda."
-            ).format(payment_currency, document_currency)
-        )
     _validate_document_payment_exchange_rate(document, document_currency)
 
 
@@ -736,6 +725,38 @@ def _build_payment_reference(
     discount_amount = Decimal(str(line.get("discount_amount") or "0"))
     gain_loss_amount = Decimal(str(line.get("gain_loss_amount") or "0"))
     difference_amount = Decimal(str(line.get("difference_amount") or gain_loss_amount or "0"))
+    document_currency = str(
+        getattr(document, "transaction_currency", None) or getattr(document, "currency", None) or payment.currency or ""
+    )
+    payment_currency = str(payment.currency or "")
+    allocation_date = payment.posting_date or date.today()
+    company_entity = database.session.execute(database.select(Entity).filter_by(code=payment.company)).scalar_one_or_none()
+    company_currency = str(getattr(company_entity, "currency", None) or payment.base_currency or payment_currency)
+    document_rate = Decimal(str(getattr(document, "exchange_rate", None) or "0"))
+    if document_currency == company_currency:
+        document_rate = Decimal("1")
+    elif document_rate <= 0:
+        document_rate = _lookup_exchange_rate(document_currency, company_currency, allocation_date)
+    payment_rate = Decimal(str(getattr(payment, "exchange_rate", None) or "0"))
+    if payment_currency == company_currency:
+        payment_rate = Decimal("1")
+    elif payment_rate <= 0:
+        payment_rate = _lookup_exchange_rate(payment_currency, company_currency, allocation_date)
+    if document_rate <= 0 or payment_rate <= 0:
+        raise ValueError(_("No existe una tasa de cambio positiva para aplicar el documento."))
+    cross_rate = Decimal(str(line.get("payment_exchange_rate") or "0"))
+    if cross_rate <= 0:
+        cross_rate = (document_rate / payment_rate).quantize(Decimal("0.000000001"))
+    if cross_rate <= 0:
+        raise ValueError(_("La tasa de cambio de la referencia debe ser mayor que cero."))
+    cash_document_amount = allocated - discount_amount - gain_loss_amount
+    if cash_document_amount < 0:
+        raise ValueError(_("Los ajustes no pueden superar el importe aplicado."))
+    payment_amount = (cash_document_amount * cross_rate).quantize(Decimal("0.0001"))
+    base_allocated_amount = (allocated * document_rate).quantize(Decimal("0.0001"))
+    base_payment_amount = (payment_amount * payment_rate).quantize(Decimal("0.0001"))
+    non_cash_base_amount = ((discount_amount + gain_loss_amount) * document_rate).quantize(Decimal("0.0001"))
+    fx_difference_amount = base_allocated_amount - non_cash_base_amount - base_payment_amount
     reference_date = _payment_reference_date(document)
     outstanding_after = outstanding - allocated
     physical_reference_type = _physical_reference_type(reference_type, flow_source_type)
@@ -749,14 +770,20 @@ def _build_payment_reference(
         party_type=_reference_party_info(document)[0],
         party_id=_reference_party_info(document)[1],
         company=getattr(document, "company", None),
-        currency=getattr(document, "transaction_currency", None) or getattr(payment, "currency", None),
+        currency=document_currency,
         total_amount=document.grand_total,
         outstanding_amount=outstanding,
         outstanding_amount_after=outstanding_after,
         allocated_amount=allocated,
-        exchange_rate=Decimal(str(line.get("exchange_rate") or getattr(document, "exchange_rate", None) or 1)),
-        difference_amount=difference_amount,
-        allocation_date=payment.posting_date,
+        payment_currency=payment_currency,
+        payment_amount=payment_amount,
+        payment_exchange_rate=cross_rate,
+        base_allocated_amount=base_allocated_amount,
+        base_payment_amount=base_payment_amount,
+        fx_difference_amount=fx_difference_amount,
+        exchange_rate=document_rate,
+        difference_amount=difference_amount or fx_difference_amount,
+        allocation_date=allocation_date,
         discount_amount=discount_amount,
         gain_loss_amount=gain_loss_amount,
         notes=line.get("notes"),
@@ -1168,6 +1195,7 @@ def _payment_reference_totals() -> dict[str, Decimal]:
     """Inicializa el acumulador de totales de referencias de pago."""
     return {
         "allocated": Decimal("0"),
+        "payment_amount": Decimal("0"),
         "discount": Decimal("0"),
         "gain_loss": Decimal("0"),
     }
@@ -1259,6 +1287,7 @@ def _apply_payment_reference_line(
             Decimal(str(getattr(document, "exchange_rate", None) or 1))
         )
     totals["allocated"] += allocated
+    totals["payment_amount"] += Decimal(str(reference.payment_amount or "0"))
     totals["discount"] += reference.discount_amount
     totals["gain_loss"] += reference.gain_loss_amount
     return totals
@@ -1320,6 +1349,9 @@ def _finalize_and_commit_payment(
         payload.get("lines") or [],
         allow_order_references=bool(payload.get("advance_mode")),
     )
+    from cacao_accounting.document_flow.service import compute_payment_unallocated_amount
+
+    payment.unallocated_amount = compute_payment_unallocated_amount(payment)
     persist_document_fiscal_snapshot(
         company=str(payment.company or ""),
         document_type="payment_entry",
@@ -1582,6 +1614,7 @@ def _create_payment_entry(
         exchange_rate=exchange_rate,
         paid_amount=amount if payment_type in ("pay", "debit_note", "internal_transfer") else Decimal("0"),
         received_amount=amount if payment_type in ("receive", "credit_note", "internal_transfer") else Decimal("0"),
+        unallocated_amount=amount,
         party_type=cast(str | None, payload.get("party_type")),
         party_id=cast(str | None, payload.get("party_id")),
         party_name=cast(str | None, payload.get("party_name")),
@@ -1640,9 +1673,8 @@ def _validate_payment_reference_totals(
 ) -> None:
     """Validate the totals assigned to payment references."""
     allocated = ref_totals["allocated"]
-    discount = ref_totals["discount"]
-    gain_loss = ref_totals["gain_loss"]
-    if (allocated - discount - gain_loss) > amount + withholding_total:
+    payment_amount = ref_totals.get("payment_amount", allocated)
+    if payment_amount > amount + withholding_total + Decimal("0.0001"):
         raise ValueError(_("El monto aplicado no puede ser mayor al monto total del pago."))
 
 
@@ -1681,6 +1713,7 @@ def _payment_source_rows_from_request() -> list[dict[str, object]]:
 
 def _apply_payment_cancellation_hooks(payment: PaymentEntry) -> None:
     """Revert payment relations and bank reconciliation links atomically."""
+    payment.unallocated_amount = Decimal("0")
     revert_relations_for_target("payment_entry", payment.id, reason="payment_cancelled")
     linked_transactions = (
         database.session.execute(database.select(BankTransaction).filter_by(payment_entry_id=payment.id)).scalars().all()
