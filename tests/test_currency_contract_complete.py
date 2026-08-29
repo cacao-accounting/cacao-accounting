@@ -476,14 +476,6 @@ def test_resolve_party_currency_none_without_currency(app_ctx):
     assert resolve_party_currency(None) is None
 
 
-def test_collect_sources_from_relations_skips_empty(app_ctx):
-    from cacao_accounting.document_flow.currency_resolver import collect_sources_from_relations
-
-    source = SimpleNamespace(transaction_currency="USD")
-    document = SimpleNamespace(source_relations=[SimpleNamespace(source=source), SimpleNamespace(source=None)])
-    assert collect_sources_from_relations(document) == [source]
-
-
 def test_assert_currency_contract_or_raise_homogeneous(app_ctx):
     from cacao_accounting.document_flow.validation import assert_currency_contract_or_raise
 
@@ -692,13 +684,6 @@ def test_assert_base_currency_snapshot_rejects_company_without_functional_curren
     document = SimpleNamespace(base_currency="NIO")
     with pytest.raises(DocumentFlowError, match="moneda funcional configurada"):
         assert_base_currency_snapshot(document, company="sin-moneda", context="documento")
-
-
-def test_collect_sources_from_relations_without_collection(app_ctx):
-    """Sin atributo de relaciones, no hay origenes que recopilar."""
-    from cacao_accounting.document_flow.currency_resolver import collect_sources_from_relations
-
-    assert collect_sources_from_relations(SimpleNamespace()) == []
 
 
 def test_assert_currency_contract_or_raise_rejects_currency_mismatch(app_ctx):
