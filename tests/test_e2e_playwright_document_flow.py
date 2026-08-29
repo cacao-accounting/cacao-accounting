@@ -107,6 +107,7 @@ def flask_server():
             to_warehouse="PRINCIPAL",
             docstatus=0,
             transaction_currency="NIO",
+            base_currency="NIO",
         )
         database.session.add(se)
         database.session.flush()
@@ -123,6 +124,25 @@ def flask_server():
         database.session.add(sei)
         database.session.commit()
         submit_document(se)
+        database.session.commit()
+
+        from cacao_accounting.database import ItemPrice, PriceList
+
+        price_list = database.session.execute(
+            database.select(PriceList).filter_by(company="cacao", is_selling=True, is_default=True)
+        ).scalars().first()
+        if price_list is None:
+            price_list = PriceList(
+                name="Lista de ventas E2E",
+                company="cacao",
+                currency="NIO",
+                is_selling=True,
+                is_default=True,
+                is_active=True,
+            )
+            database.session.add(price_list)
+            database.session.flush()
+        database.session.add(ItemPrice(item_code="ART-001", price_list_id=price_list.id, uom="UND", price=Decimal("100")))
         database.session.commit()
 
     server = make_server("127.0.0.1", 0, app)
@@ -172,7 +192,7 @@ def login(page, base_url, username, password):
 def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     artifact_dir = Path(os.environ.get("PLAYWRIGHT_ARTIFACT_DIR", str(tmp_path)))
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    context = browser.new_context()
+    context = browser.new_context(service_workers="block")
     page = context.new_page()
     base_url = flask_server
 
@@ -195,6 +215,14 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     page.locator(".ca-smart-select-option", has_text="Choco Sonrisas Sociedad Anonima").click()
     page.wait_for_timeout(500)
 
+    # Select the explicit transaction currency required by sales documents.
+    currency_select = page.locator(".ca-smart-select", has=page.locator('input[name="currency"]'))
+    currency_input = currency_select.locator("input.ca-smart-select-input")
+    currency_input.click()
+    currency_input.fill("NIO")
+    page.locator(".ca-smart-select-option", has_text="NIO").click()
+    page.wait_for_timeout(500)
+
     # Select Customer
     customer_select = page.locator(".ca-smart-select", has=page.locator('input[name="customer_id"]'))
     customer_input = customer_select.locator("input.ca-smart-select-input")
@@ -212,7 +240,6 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     page.wait_for_timeout(500)
 
     page.locator('input[name="qty_0"]').fill("5")
-    page.locator('input[name="rate_0"]').fill("100")
     page.wait_for_timeout(500)
 
     # Set Warehouse in the order form via line details modal
@@ -245,8 +272,12 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     page.locator(".ca-smart-select-option >> text=Cliente Demo").click()
     page.wait_for_timeout(500)
 
+    # The form preselects the default series after the flow filters are applied.
+    expect(page.locator('input[name="naming_series"]')).not_to_have_value("")
+
     # Wait for the background prefill to load line items into the grid
     expect(page.locator('input[name="item_code_0"]')).to_have_value("ART-001")
+    page.locator('select[name="warehouse_0"]').select_option("PRINCIPAL")
 
     # Click "Guardar" to save it as draft
     page.get_by_role("button", name="Guardar").click()
@@ -298,6 +329,14 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     page.locator(".ca-smart-select-option", has_text="Choco Sonrisas Sociedad Anonima").click()
     page.wait_for_timeout(500)
 
+    # Purchase orders retain the transaction-currency snapshot required at posting time.
+    currency_select = page.locator(".ca-smart-select", has=page.locator('input[name="transaction_currency"]'))
+    currency_input = currency_select.locator("input.ca-smart-select-input")
+    currency_input.click()
+    currency_input.fill("NIO")
+    currency_select.locator(".ca-smart-select-option", has_text="NIO").click()
+    page.wait_for_timeout(500)
+
     # Select Supplier
     supplier_select = page.locator(".ca-smart-select", has=page.locator('input[name="supplier_id"]'))
     supplier_input = supplier_select.locator("input.ca-smart-select-input")
@@ -317,6 +356,7 @@ def test_document_flow_happy_paths_o2c_and_s2p(flask_server, browser, tmp_path):
     page.locator('input[name="qty_0"]').fill("10")
     page.locator('input[name="rate_0"]').fill("50")
     page.wait_for_timeout(500)
+    expect(page.locator('input[name="naming_series"]')).not_to_have_value("")
 
     # Submit to save Purchase Order
     page.get_by_role("button", name="Guardar").click()

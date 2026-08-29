@@ -704,6 +704,7 @@ class TestValidatePaymentCurrencyMatch:
 
         class FakeDoc:
             currency = "NIO"
+            transaction_currency = "NIO"
 
         _validate_payment_currency_match(FakePayment(), FakeDoc())
 
@@ -715,6 +716,7 @@ class TestValidatePaymentCurrencyMatch:
 
         class FakeDoc:
             currency = "NIO"
+            transaction_currency = "NIO"
 
         with pytest.raises(ValueError, match="moneda del pago"):
             _validate_payment_currency_match(FakePayment(), FakeDoc())
