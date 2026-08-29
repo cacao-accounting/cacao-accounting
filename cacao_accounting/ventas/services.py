@@ -1183,7 +1183,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
 
     if not invoice.transaction_currency:
         raise PostingError(
-            "La factura origen no tiene moneda transaccional explicita; " "no se puede derivar la Nota de Entrega."
+            "La factura origen no tiene moneda transaccional explicita; no se puede derivar la Nota de Entrega."
         )
     if not invoice.base_currency:
         from cacao_accounting.document_flow.currency_resolver import company_functional_currency
@@ -1191,7 +1191,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         base_currency_value = company_functional_currency(invoice.company)
         if not base_currency_value:
             raise PostingError(
-                "La compania de la factura no tiene moneda funcional configurada; " "no se puede derivar la Nota de Entrega."
+                "La compania de la factura no tiene moneda funcional configurada; no se puede derivar la Nota de Entrega."
             )
     else:
         base_currency_value = invoice.base_currency
