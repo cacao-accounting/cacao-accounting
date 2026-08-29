@@ -53,7 +53,7 @@ from cacao_accounting.database.helpers import get_active_naming_series
 
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
-from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
+from cacao_accounting.contabilidad.posting_service import _lookup_exchange_rate
 
 from cacao_accounting.document_flow import create_document_relation, revert_relations_for_target
 

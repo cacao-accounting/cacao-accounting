@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, Sequence
 
-from sqlalchemy import Select, and_, case, cast, func, or_, select, true
+from sqlalchemy import ColumnElement, Select, and_, case, cast, func, literal, or_, select, true
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 from cacao_accounting.database import (
@@ -875,15 +875,23 @@ def _apply_search(statement: Select[tuple[Any]], spec: SearchSelectSpec, query: 
     # Relevancia portable (SQLite/PostgreSQL): exacto tiene el menor puntaje,
     # seguido de prefijo y, por último, coincidencia por substring. Se suman los
     # puntajes por término para ordenar primero los registros más relevantes.
-    relevance = 0
-    for term in terms:
-        for column_value in lowered:
-            relevance = relevance + case(
-                (column_value == term, 0),
-                (column_value.like(f"{term}%"), 1),
-                (column_value.like(f"%{term}%"), 2),
-                else_=3,
-            )
+    score_terms: list[ColumnElement[Any]] = [
+        case(
+            (column_value == term, 0),
+            (column_value.like(f"{term}%"), 1),
+            (column_value.like(f"%{term}%"), 2),
+            else_=3,
+        )
+        for term in terms
+        for column_value in lowered
+    ]
+    relevance: ColumnElement[Any]
+    if score_terms:
+        relevance = score_terms[0]
+        for score in score_terms[1:]:
+            relevance = relevance + score
+    else:
+        relevance = literal(0)
     return statement.where(and_(*term_conditions)).order_by(relevance, first_sort)
 
 

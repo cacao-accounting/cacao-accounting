@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Any, Iterable
+from typing import Any, Iterable, cast
 
 from sqlalchemy import select
 
@@ -1116,7 +1116,14 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
             if candidates:
                 book_value = sum((_book_value_from_gl(entry, ledger_type) for entry in candidates), Decimal("0"))
                 source_book = (
-                    next((row for row in reversal_source.book_entries if row.ledger_id == book.id), None)
+                    next(
+                        (
+                            row
+                            for row in cast(list[ARAPLedgerBookEntry], reversal_source.book_entries)
+                            if row.ledger_id == book.id
+                        ),
+                        None,
+                    )
                     if reversal_source is not None
                     else None
                 )
@@ -1226,7 +1233,7 @@ def cancel_document_ar_ap(document: Any, *, cancellation_date: date | None = Non
             .scalars()
             .all()
         )
-    originals.sort(key=lambda row: 0 if row.event_type == "opening" else 1)
+    originals = sorted(originals, key=lambda row: 0 if row.event_type == "opening" else 1)
     reversals: list[ARAPLedgerEntry] = []
     for original in originals:
         reversal = ARAPLedgerEntry(
@@ -1252,7 +1259,7 @@ def cancel_document_ar_ap(document: Any, *, cancellation_date: date | None = Non
         )
         database.session.add(reversal)
         database.session.flush()
-        for book_row in original.book_entries:
+        for book_row in cast(list[ARAPLedgerBookEntry], original.book_entries):
             book = database.session.get(Book, book_row.ledger_id)
             if book:
                 _add_book_entry(

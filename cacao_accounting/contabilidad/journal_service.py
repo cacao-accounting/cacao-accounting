@@ -9,7 +9,7 @@ import json
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, Sequence
 
 from sqlalchemy import select
 
@@ -850,7 +850,7 @@ def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
             continue
         reference_name = line.reference_open_item_id or line.reference_name or ""
         document_type = _reference_document_type(line.reference_type, party_type or "")
-        target = (
+        target: Sequence[Any] = (
             database.session.execute(
                 select(ARAPOpenItem)
                 .where(
