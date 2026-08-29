@@ -35,10 +35,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from cacao_accounting.contabilidad.posting import PostingError, cancel_document, submit_document
 
-from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
+from cacao_accounting.document_identifiers import assign_document_identifier
 
 from cacao_accounting.document_flow import (
-    DocumentFlowError,
     close_document_balances,
     get_target_line_source,
     refresh_source_caches_for_target,
@@ -273,7 +272,7 @@ def ventas_pedido_venta_nuevo():
             database.session.commit()
             flash("Pedido de venta creado correctamente.", "success")
             return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=pedido.id))
-        except (IdentifierConfigurationError, ValueError) as exc:
+        except ValueError as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -1143,7 +1142,7 @@ def ventas_cotizacion_nueva():
             database.session.commit()
             flash("Cotización creada correctamente.", "success")
             return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=cotizacion.id))
-        except (IdentifierConfigurationError, ValueError) as exc:
+        except ValueError as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
@@ -1644,7 +1643,7 @@ def ventas_entrega_nuevo():
             database.session.commit()
             flash("Nota de entrega creada correctamente.", "success")
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=entrega.id))
-        except (DocumentFlowError, IdentifierConfigurationError, ValueError) as exc:
+        except ValueError as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(

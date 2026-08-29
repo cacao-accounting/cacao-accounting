@@ -404,7 +404,7 @@ def compras_solicitud_compra_nueva():
             database.session.commit()
             flash("Solicitud de compra creada correctamente.", "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=solicitud.id))
-        except (IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:
+        except ValueError as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(

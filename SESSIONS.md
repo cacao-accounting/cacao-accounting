@@ -88,6 +88,25 @@ no fallar por falta de cache.
 
 # Bitácora de desarrollo
 
+## 2026-08-29 (limpieza de excepciones redundantes SonarCloud)
+
+### Petición del usuario
+
+Atender el siguiente easy fix de SonarCloud: `Remove this redundant Exception class; it derives from another which is
+already caught.`
+
+### Plan implementado
+
+Se simplificaron las ocho ocurrencias de `python:S5713` en los flujos de compras y ventas. Las excepciones
+`IdentifierConfigurationError`, `DocumentFlowError` y `PurchaseSourcingError` heredan de `ValueError`, por lo que cada
+cláusula podía capturar directamente `ValueError` sin alterar el rollback ni el mensaje mostrado. También se retiraron
+dos imports que quedaron sin uso en `ventas/routes.py`.
+
+### Verificación
+
+La batería modular `tests/test_e2e_modules.py` pasó 17/17. Black, Ruff, Flake8 y pydocstyle pasan en los tres archivos
+modificados. Mypy no pudo iniciar porque el entorno `.venv` no contiene `pathspec.patterns.gitignore`.
+
 ## 2026-08-29 (corrección rápida de accesibilidad SonarCloud)
 
 ### Petición del usuario
