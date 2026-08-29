@@ -806,3 +806,40 @@ def test_cash_forecast_foreign_currency_without_rate_is_explicit_error():
     # sin tasa y debe fallar de forma explícita.
     with test_app.app_context(), pytest.raises(CashForecastConversionError, match="USD -> NIO"):
         get_base_amount(Decimal("10"), "USD", "NIO", date(2020, 1, 1))
+
+
+def test_forecast_base_amount_rejects_document_without_transaction_currency():
+    """Un documento sin moneda transaccional no se infiere desde la moneda funcional (#758)."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.bancos.cash_forecast_service import _forecast_base_amount
+
+    invoice_without_currency = SimpleNamespace(transaction_currency=None, exchange_rate=Decimal("36.5"))
+    with test_app.app_context():
+        with pytest.raises(CashForecastConversionError, match="moneda transaccional explicita"):
+            _forecast_base_amount(Decimal("100"), invoice_without_currency, "NIO", date(2026, 8, 29))
+
+
+def test_forecast_base_amount_converts_with_explicit_currency():
+    """Un documento con moneda explicita y tasa valida convierte al pronostico funcional."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.bancos.cash_forecast_service import _forecast_base_amount
+
+    invoice = SimpleNamespace(transaction_currency="USD", exchange_rate=Decimal("36.5"))
+    with test_app.app_context():
+        base_amount = _forecast_base_amount(Decimal("100"), invoice, "NIO", date(2026, 8, 29))
+    assert base_amount == Decimal("3650.0")
+
+
+def test_forecast_base_amount_rejects_non_positive_rate():
+    """Un documento con moneda explicita pero tasa invalida se rechaza explicitamente."""
+    from types import SimpleNamespace
+
+    from cacao_accounting.bancos.cash_forecast_service import _forecast_base_amount
+
+    for invalid_rate in (None, Decimal("0"), Decimal("-1")):
+        invoice = SimpleNamespace(transaction_currency="USD", exchange_rate=invalid_rate)
+        with test_app.app_context():
+            with pytest.raises(CashForecastConversionError, match="No existe tipo de cambio"):
+                _forecast_base_amount(Decimal("100"), invoice, "NIO", date(2026, 8, 29))
