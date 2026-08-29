@@ -708,8 +708,7 @@ def _period_picker_payload(company: str, period_from: str | None = None, period_
     periods = list(list_periods_for_company(company))
     labels_by_id = {str(period.id): period.name for period in periods}
     serialized_periods = [
-        {"id": str(period.id), "name": period.name, "is_closed": bool(period.is_closed)}
-        for period in periods
+        {"id": str(period.id), "name": period.name, "is_closed": bool(period.is_closed)} for period in periods
     ]
     if not period_from and not period_to:
         current = current_period_for_company(company)
