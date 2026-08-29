@@ -29,6 +29,7 @@ from cacao_accounting.bancos.statement_service import (
 
 from cacao_accounting.database import (
     Accounts,
+    AccountingPeriod,
     Bank,
     BankAccount,
     BankAccountNumberingConfig,
@@ -115,6 +116,38 @@ LABEL_FACTURA_COMPRA = "Factura de Compra"
 LABEL_FACTURA_VENTA = "Factura de Venta"
 
 PAYMENT_TYPES = ("pay", "receive", "internal_transfer", "debit_note", "credit_note")
+
+
+def _bank_reconciliation_date(company: str) -> date:
+    """Resuelve y valida la fecha de cierre de una conciliación bancaria.
+
+    Lee ``reconciliation_date`` del formulario (o de la query string) y la
+    valida contra la fuente de verdad contable: debe caer dentro de un período
+    contable habilitado y no cerrado de la compañía. Si el operador no la
+    envía, se usa ``date.today()``. Un período cerrado (o inexistente) se
+    rechaza con HTTP 400 para impedir cierres retroactivos sobre períodos ya
+    bloqueados.
+    """
+    raw = (request.form.get("reconciliation_date") or request.args.get("reconciliation_date") or "").strip()
+    try:
+        reconciliation_date = date.fromisoformat(raw) if raw else date.today()
+    except ValueError as exc:
+        abort(400, description=_("La fecha de conciliación no es una fecha válida (ISO 8601)."))
+        raise ValueError from exc
+
+    period = database.session.execute(
+        database.select(AccountingPeriod).where(
+            AccountingPeriod.entity == company,
+            AccountingPeriod.enabled.is_(True),
+            AccountingPeriod.start <= reconciliation_date,
+            AccountingPeriod.end >= reconciliation_date,
+        )
+    ).scalar_one_or_none()
+    if period is None:
+        abort(400, description=_("La fecha de conciliación no pertenece a un período contable habilitado."))
+    if period.is_closed:
+        abort(400, description=_("La fecha de conciliación pertenece a un período contable ya cerrado."))
+    return reconciliation_date
 
 
 def _cash_accessible_companies():
@@ -338,11 +371,12 @@ def bancos_transaccion_reconciliar():
         abort(404)
     exige_acceso_compania("cash", company, "editar")
 
+    reconciliation_date = _bank_reconciliation_date(str(company))
     try:
         reconcile_bank_items(
             BankReconciliationRequest(
                 company=str(company),
-                reconciliation_date=date.today(),
+                reconciliation_date=reconciliation_date,
                 matches=[
                     BankReconciliationMatch(
                         bank_transaction_id=transaction.id,
@@ -395,6 +429,7 @@ def bancos_conciliacion_bancaria():
         transactions=transactions,
         suggestions=suggestions,
         company=company,
+        reconciliation_date=date.today().isoformat(),
     )
 
 
@@ -423,6 +458,7 @@ def bancos_conciliacion_bancaria_cuenta(bank_account_id: str):
         transactions=transactions,
         suggestions=suggestions,
         company=bank_account.company,
+        reconciliation_date=date.today().isoformat(),
     )
 
 
@@ -480,9 +516,10 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
                 allocated_amount=amount,
             )
         )
+    reconciliation_date = _bank_reconciliation_date(company)
     try:
         reconciliation = reconcile_bank_items(
-            BankReconciliationRequest(company=company, reconciliation_date=date.today(), matches=matches)
+            BankReconciliationRequest(company=company, reconciliation_date=reconciliation_date, matches=matches)
         )
         for transaction_id, difference in difference_requests:
             transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)

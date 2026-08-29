@@ -39,6 +39,7 @@ from cacao_accounting.database import (
     PaymentReference,
     PurchaseInvoice,
     PurchaseOrder,
+    Reconciliation,
     ReconciliationItem,
     SalesOrder,
     SalesInvoice,
@@ -445,6 +446,9 @@ def _post_bank_difference_adjustment(
     """Post and attach a bank-difference journal to its reconciliation."""
     from cacao_accounting.contabilidad.journal_service import JournalValidationError, submit_journal
 
+    reconciliation = database.session.get(Reconciliation, reconciliation_id)
+    reconciliation_date = reconciliation.recon_date if reconciliation is not None else date.today()
+
     signed_difference_amount = difference_amount
     if transaction.deposit is not None and transaction.deposit > 0:
         signed_difference_amount = -abs(difference_amount)
@@ -483,7 +487,7 @@ def _post_bank_difference_adjustment(
         raise BankReconciliationError("No se encontró la línea bancaria del ajuste contabilizado.")
     from cacao_accounting.bancos.reconciliation_service import _allocation_context
 
-    context = _allocation_context(transaction, str(bank_account.company), date.today())
+    context = _allocation_context(transaction, str(bank_account.company), reconciliation_date)
     database.session.add(
         ReconciliationItem(
             reconciliation_id=reconciliation_id,
@@ -491,7 +495,7 @@ def _post_bank_difference_adjustment(
             reference_id=transaction.id,
             amount=difference_amount,
             allocated_amount=difference_amount,
-            reconciliation_date=date.today(),
+            reconciliation_date=reconciliation_date,
             status="reconciled",
             source_type="bank_transaction",
             source_id=transaction.id,
@@ -731,7 +735,11 @@ def _build_payment_reference(
     payment_currency = str(payment.currency or "")
     allocation_date = payment.posting_date or date.today()
     company_entity = database.session.execute(database.select(Entity).filter_by(code=payment.company)).scalar_one_or_none()
-    company_currency = str(getattr(company_entity, "currency", None) or payment.base_currency or payment_currency)
+    company_currency = str(getattr(company_entity, "currency", None) or payment.base_currency or "")
+    if not payment_currency:
+        payment_currency = company_currency
+    if not document_currency:
+        document_currency = company_currency
     document_rate = Decimal(str(getattr(document, "exchange_rate", None) or "0"))
     if document_currency == company_currency:
         document_rate = Decimal("1")
