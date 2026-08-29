@@ -165,6 +165,8 @@ _LABEL_PEDIDO_VENTA = "Pedido de Venta"
 
 _LABEL_ORDEN_VENTA = "Orden de Venta"
 
+_LABEL_NOTA_ENTREGA = "Nota de Entrega"
+
 DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
 
 SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
@@ -1578,7 +1580,7 @@ def ventas_entrega_nuevo():
         "initialSourceType": initial_source_type,
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _("Nota de Entrega")},
+            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
         ],
     }
     if source_document:
@@ -1995,7 +1997,7 @@ def ventas_factura_venta_nuevo():
         "initialSourceType": initial_source_type,
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _("Nota de Entrega")},
+            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
         "initialHeader": {"company": company_id or "", "posting_date": str(date.today())},
@@ -2109,7 +2111,7 @@ def ventas_factura_venta_editar(invoice_id: str):
         "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "availableSourceTypes": [
             {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _("Nota de Entrega")},
+            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
         "initialHeader": {

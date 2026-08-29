@@ -88,6 +88,32 @@ no fallar por falta de cache.
 
 # Bitácora de desarrollo
 
+## 2026-08-29 (constantes para literales duplicados SonarCloud)
+
+### Petición del usuario
+
+Atender el siguiente easy fix de SonarCloud: `Define a constant instead of duplicating this literal.`
+
+### Plan implementado
+
+Se centralizaron los 24 literales duplicados reportados por `python:S1192` en constantes de módulo para rutas,
+servicios, formularios, catálogos de configuración, datos de desarrollo y claves foráneas de la base de datos. Se
+conservaron los valores funcionales, los endpoints y los mensajes existentes; los mensajes que ya usaban traducción
+continúan resolviéndose mediante el helper de internacionalización.
+
+### Verificación
+
+`git diff --check` pasó y los archivos modificados se compilaron con Python. Las pruebas focalizadas pasaron: Contabilidad
+257/257, AUDIT-004 28/28, O2C 28/28, importaciones 14/14, seguridad de sesión 15/15, formularios 1/1, conciliación de
+compras 3/3, conciliación bancaria 5/5, semillas 9/9, reportes 6/6 y comparación de solicitudes 1/1. El esquema pasó
+213/213 usando SQLite aislado; con el `DATABASE_URL` PostgreSQL compartido fallan dos pruebas por estado externo
+obsoleto (`account_balance_snapshot` existente y tabla `item` sin `image_path`). El caso FIFO que había fallado en la
+ejecución global pasa aislado y dentro de AUDIT-004.
+
+Black, Ruff, pydocstyle y `git diff --check` pasan. Flake8 no está instalado en `.venv`, Pylint no tiene ejecutable y
+Mypy no puede iniciar porque el entorno no contiene `pathspec.patterns.gitignore`. Las pruebas no requieren cambios de
+comportamiento: validan los flujos existentes mientras el refactor elimina únicamente la duplicación de literales.
+
 ## 2026-08-29 (fusión de condiciones anidadas SonarCloud)
 
 ### Petición del usuario

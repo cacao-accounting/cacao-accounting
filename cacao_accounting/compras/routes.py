@@ -300,6 +300,8 @@ COMPARATIVO_OFERTAS_TITULO = "Comparativo de Ofertas - "
 
 COMPRAS_COMPARATIVO_ORDENES = "compras.compras_comparativo_ordenes"
 
+CANCELLATION_REASON_REQUIRED_MSG = "Debe indicar el motivo de la anulacion."
+
 DOCUMENT_TYPE_LABELS: dict[str, str] = {
     PURCHASE_INVOICE: FACTURA_DE_COMPRA,
     PURCHASE_DEBIT_NOTE: "Nota de Débito de Compra",
@@ -2739,7 +2741,7 @@ def compras_recepcion_cancel(receipt_id: str):
         abort(400)
     reason = (request.form.get("reason") or "").strip()
     if not reason:
-        flash(_("Debe indicar el motivo de la anulacion."), "danger")
+        flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
     if has_active_source_relations("purchase_receipt", receipt_id):
         flash("No se puede cancelar la recepción de compra porque tiene facturas de compra activas.", "danger")
@@ -3119,7 +3121,7 @@ def compras_factura_compra_cancel(invoice_id: str):
         abort(400)
     reason = (request.form.get("reason") or "").strip()
     if not reason:
-        flash(_("Debe indicar el motivo de la anulacion."), "danger")
+        flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     active_payment = (
         database.select(PaymentReference.id)
@@ -3319,7 +3321,7 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
         abort(400)
     reason = (request.form.get("reason") or "").strip()
     if not reason:
-        flash(_("Debe indicar el motivo de la anulacion."), "danger")
+        flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine

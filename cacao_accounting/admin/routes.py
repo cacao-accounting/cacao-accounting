@@ -184,6 +184,8 @@ ADMIN_CONTROL_PRESUPUESTARIO_ENDPOINT = "admin.config_control_presupuestario"
 
 DEBE_SELECCIONAR_COMPANIA_MSG = "Debe seleccionar una compania."
 
+SESSION_SECURITY_SETTINGS_ENDPOINT = "admin.session_security_settings"
+
 
 @admin.route("/admin")
 @admin.route("/ajustes")
@@ -1469,25 +1471,25 @@ def session_security_settings():
                     _("Debe configurar el servidor SMTP antes de activar la protección de orígenes."),
                     "danger",
                 )
-                return redirect(url_for("admin.session_security_settings"))
+                return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
             new_state = request.form.get("enabled") == "on"
             set_session_security_enabled(new_state)
             database.session.commit()
             estado = _("activada") if new_state else _("desactivada")
             flash(_("Protección de orígenes {}.").format(estado), "success")
-            return redirect(url_for("admin.session_security_settings"))
+            return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
         if action == "revoke":
             device_id = request.form.get("device_id")
             if device_id and revocar_dispositivo(device_id):
                 database.session.commit()
                 flash(_("Dispositivo revocado correctamente."), "success")
-            return redirect(url_for("admin.session_security_settings"))
+            return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
         if action == "unlock":
             user_id = request.form.get("user_id")
             if user_id and desbloquear_cuenta_usuario(user_id):
                 database.session.commit()
                 flash(_("Cuenta desbloqueada correctamente."), "success")
-            return redirect(url_for("admin.session_security_settings"))
+            return redirect(url_for(SESSION_SECURITY_SETTINGS_ENDPOINT))
 
     enabled = is_session_security_enabled()
     smtp_ok = smtp_is_configured()

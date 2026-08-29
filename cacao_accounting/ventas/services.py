@@ -149,6 +149,8 @@ _LABEL_PEDIDO_VENTA = "Pedido de Venta"
 
 _LABEL_ORDEN_VENTA = "Orden de Venta"
 
+DOCUMENT_COMPANY_IMMUTABLE_MSG = "La compañía de un documento existente no puede cambiarse."
+
 DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
 
 SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
@@ -775,7 +777,7 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
     requested_company = form.get("company") or registro.company
     if requested_company != registro.company:
         database.session.rollback()
-        flash("La compañía de un documento existente no puede cambiarse.", "danger")
+        flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(endpoint, request_id=request_id))
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
@@ -802,7 +804,7 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
     requested_company = form.get("company") or registro.company
     if requested_company != registro.company:
         database.session.rollback()
-        flash("La compañía de un documento existente no puede cambiarse.", "danger")
+        flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(endpoint, order_id=order_id))
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
@@ -1849,7 +1851,7 @@ def _handle_sales_quotation_edit_post(registro):
     requested_company = request.form.get("company") or registro.company
     if requested_company != registro.company:
         database.session.rollback()
-        flash("La compañía de un documento existente no puede cambiarse.", "danger")
+        flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.valid_until = _parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None
@@ -1878,7 +1880,7 @@ def _handle_delivery_note_edit_post(registro):
     requested_company = request.form.get("company") or registro.company
     if requested_company != registro.company:
         database.session.rollback()
-        flash("La compañía de un documento existente no puede cambiarse.", "danger")
+        flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
@@ -2109,7 +2111,7 @@ def _handle_sales_invoice_edit_post(registro):
     try:
         requested_company = request.form.get("company") or registro.company
         if requested_company != registro.company:
-            flash(_("La compañía de un documento existente no puede cambiarse."), "danger")
+            flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
         before_state = _capture_sales_state(registro)
         revert_relations_for_target("sales_invoice", registro.id, reason="draft_edited")

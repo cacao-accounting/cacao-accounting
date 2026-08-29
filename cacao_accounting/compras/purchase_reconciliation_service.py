@@ -38,6 +38,8 @@ from cacao_accounting.database import (
     database,
 )
 
+RECEIPT_LINE_NOT_FOUND_ERROR = "No existe linea de recepcion compatible para la linea de factura."
+
 # ---------------------------------------------------------------------------
 # Enums publicos para estados y tipos
 # ---------------------------------------------------------------------------
@@ -331,7 +333,7 @@ def _find_receipt_item_for_invoice_line(
         and (invoice_item.warehouse is None or ri.warehouse == invoice_item.warehouse)
     ]
     if not candidates:
-        raise PurchaseReconciliationError("No existe linea de recepcion compatible para la linea de factura.")
+        raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
     if len(candidates) > 1 and invoice_item.warehouse is None:
         raise PurchaseReconciliationError("La linea de factura requiere almacen para conciliar sin ambiguedad.")
     return candidates[0]
@@ -719,7 +721,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     for key, invoice_group in invoice_groups.items():
         receipt_group = _compatible_group(receipt_groups, invoice_group.lines[0])
         if receipt_group is None:
-            raise PurchaseReconciliationError("No existe linea de recepcion compatible para la linea de factura.")
+            raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
         if invoice_group.qty <= 0:
             raise PurchaseReconciliationError("La cantidad facturada debe ser positiva.")
         pending_qty = sum(
@@ -763,7 +765,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
         for invoice_item in invoice_items:
             receipt_group = _compatible_group(receipt_groups, invoice_item)
             if receipt_group is None:
-                raise PurchaseReconciliationError("No existe linea de recepcion compatible para la linea de factura.")
+                raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
             slices = _available_line_slices(receipt_group.lines, _line_qty(invoice_item), order_mode=False)
             if not slices:
                 raise PurchaseReconciliationError("No queda cantidad pendiente en la recepción para la factura.")

@@ -21,6 +21,7 @@ CORREO_ELECTRONICO = "Correo electrónico"
 TELEFONO = "Teléfono"
 CONFIRMAR_CONTRASENA = "Confirmar contraseña"
 CONTRASENAS_DEBEN_COINCIDIR = "Las contraseñas deben coincidir"
+NUEVA_CONTRASENA = "Nueva contraseña"
 
 
 class LoginForm(FlaskForm):
@@ -56,7 +57,7 @@ class PasswordChangeForm(FlaskForm):
     """Formulario para cambiar la contraseña del usuario."""
 
     current_password = PasswordField("Contraseña actual", validators=[DataRequired()])
-    new_password = PasswordField("Nueva contraseña", validators=[DataRequired()])
+    new_password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired()])
     confirm_password = PasswordField(
         CONFIRMAR_CONTRASENA,
         validators=[DataRequired(), EqualTo("new_password", message=CONTRASENAS_DEBEN_COINCIDIR)],
@@ -121,7 +122,7 @@ class UserEditForm(FlaskForm):
 class UserPasswordForm(FlaskForm):
     """Formulario para cambiar contraseña de usuario desde administración."""
 
-    password = PasswordField("Nueva contraseña", validators=[DataRequired(), Length(min=8)])
+    password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
         CONFIRMAR_CONTRASENA,
         validators=[DataRequired(), EqualTo("password", message=CONTRASENAS_DEBEN_COINCIDIR)],
@@ -175,7 +176,7 @@ class ForgotPasswordForm(FlaskForm):
 class ResetPasswordForm(FlaskForm):
     """Formulario para restablecer contraseña con token de recuperación."""
 
-    new_password = PasswordField("Nueva contraseña", validators=[DataRequired(), Length(min=8)])
+    new_password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
         "Confirmar contraseña",
         validators=[DataRequired(), EqualTo("new_password", message="Las contraseñas deben coincidir")],

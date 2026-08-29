@@ -92,6 +92,8 @@ else:
 
 reportes = Blueprint("reportes", __name__, template_folder="templates")
 
+PURCHASES_HOME_ENDPOINT = "compras.compras_"
+
 _COLUMN_LABELS = {
     "posting_date": "Posting Date",
     "accounting_period": "Period",
@@ -377,7 +379,7 @@ def monthly_withholdings():
         "withholdings-monthly",
         _("Reporte fiscal mensual de retenciones aplicadas"),
         report,
-        module_home_endpoint="compras.compras_",
+        module_home_endpoint=PURCHASES_HOME_ENDPOINT,
         module_home_label=_("Compras"),
         filter_mode="withholding_monthly",
         filter_state={"company": company, "month": month_value},
@@ -675,7 +677,7 @@ def accounts_payable():
         "accounts-payable",
         _("Cuentas por Pagar"),
         report,
-        module_home_endpoint="compras.compras_",
+        module_home_endpoint=PURCHASES_HOME_ENDPOINT,
         module_home_label=_("Compras"),
         filter_mode="accounts_payable",
         filter_state={
@@ -713,7 +715,7 @@ def ap_aging():
         "ap-aging",
         _("Aging de Cuentas por Pagar"),
         report,
-        module_home_endpoint="compras.compras_",
+        module_home_endpoint=PURCHASES_HOME_ENDPOINT,
         module_home_label=_("Compras"),
         filter_mode="ap_aging",
         filter_state={"company": company, "party_id": party_id or "", "as_of_date": as_of_date.isoformat()},
