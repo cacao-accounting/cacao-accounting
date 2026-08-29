@@ -444,8 +444,15 @@ class TestSchemaTableCreation(unittest.TestCase):
 
     def test_unused_balance_snapshot_tables_are_not_created(self):
         """Los snapshots de balance retirados no forman parte del esquema nuevo."""
-        self.assertNotIn("account_balance_snapshot", self.tables)
-        self.assertNotIn("stock_balance_snapshot", self.tables)
+        # Se valida contra los metadatos declarados por los modelos y no contra el
+        # estado fisico del motor: ``create_all`` nunca elimina tablas, por lo que
+        # una base de datos compartida puede arrastrar residuos de esquemas
+        # anteriores y producir falsos positivos.
+        from cacao_accounting.database import database
+
+        declared_tables = set(database.metadata.tables)
+        self.assertNotIn("account_balance_snapshot", declared_tables)
+        self.assertNotIn("stock_balance_snapshot", declared_tables)
 
     # Budgeting
     def test_budget_table_exists(self):
