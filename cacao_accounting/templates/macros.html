@@ -248,11 +248,11 @@
   </div>
   <div>
     <label class="form-label small text-muted mb-1">{{ _('Período desde') }}</label>
-    {{ smart_select_field(_("Período desde"), "accounting_period_from", "accounting_period", consulta.period_from or '', "list-period-from", 1, {"company": {"selector": "#list-company"}}, ["#list-company"], ["company"]) }}
+    {{ smart_select_field(_("Período desde"), "accounting_period_from", "accounting_period_id", consulta.period_from or '', "list-period-from", 1, {"company": {"selector": "#list-company"}}, ["#list-company"], ["company"], initial_label=consulta.period_from_label or '') }}
   </div>
   <div>
     <label class="form-label small text-muted mb-1">{{ _('Período hasta') }}</label>
-    {{ smart_select_field(_("Período hasta"), "accounting_period_to", "accounting_period", consulta.period_to or '', "list-period-to", 1, {"company": {"selector": "#list-company"}}, ["#list-company"], ["company"]) }}
+    {{ smart_select_field(_("Período hasta"), "accounting_period_to", "accounting_period_id", consulta.period_to or '', "list-period-to", 1, {"company": {"selector": "#list-company"}}, ["#list-company"], ["company"], initial_label=consulta.period_to_label or '') }}
   </div>
   <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>{{ _('Filtrar') }}</button>
   <a class="btn btn-sm btn-outline-secondary" href="{{ endpoint }}">{{ _('Limpiar') }}</a>

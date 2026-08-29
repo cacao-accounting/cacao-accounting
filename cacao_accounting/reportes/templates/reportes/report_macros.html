@@ -1,14 +1,14 @@
 {% from "smart_select_field.html" import smart_select_field %}
 
-{# period_range_field: label, period_from, period_to, id_prefix #}
-{% macro period_range_field(label, period_from='', period_to='', id_prefix='report') -%}
+{# period_range_field: label, period_from, period_to, id_prefix, period_from_label, period_to_label #}
+{% macro period_range_field(label, period_from='', period_to='', id_prefix='report', period_from_label='', period_to_label='') -%}
 <fieldset class="ca-period-range">
   <legend class="form-label mb-0">{{ _(label) }}</legend>
   <div class="d-flex gap-2">
     {% set from_filters = {"company": {"selector": "#report-company"}} %}
     {% set to_filters = {"company": {"selector": "#report-company"}} %}
-    {{ smart_select_field(_("Desde"), "accounting_period_from", "accounting_period", period_from, id_prefix ~ "-period-from", 1, from_filters, ["#report-company"], ["company"]) }}
-    {{ smart_select_field(_("Hasta"), "accounting_period_to", "accounting_period", period_to, id_prefix ~ "-period-to", 1, to_filters, ["#report-company"], ["company"]) }}
+    {{ smart_select_field(_("Desde"), "accounting_period_from", "accounting_period_id", period_from, id_prefix ~ "-period-from", 1, from_filters, ["#report-company"], ["company"], initial_label=period_from_label or '') }}
+    {{ smart_select_field(_("Hasta"), "accounting_period_to", "accounting_period_id", period_to, id_prefix ~ "-period-to", 1, to_filters, ["#report-company"], ["company"], initial_label=period_to_label or '') }}
   </div>
 </fieldset>
 {%- endmacro %}

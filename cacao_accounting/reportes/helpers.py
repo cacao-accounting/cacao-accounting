@@ -693,27 +693,35 @@ def _period_params() -> tuple[str | None, str | None]:
 def _period_picker_payload(company: str, period_from: str | None = None, period_to: str | None = None) -> dict[str, object]:
     """Construye el contexto del selector de rango de períodos en los templates.
 
-    Devuelve la lista de períodos disponibles y el rango activo (``period_from``
-    y ``period_to`` como ids). Cuando no hay criterio explícito se pre-selecciona
-    el período contable actual para que el selector y el backend coincidan.
+    Devuelve la lista de períodos disponibles, el rango activo (``period_from``
+    y ``period_to`` como ids) y la cadena legible correspondiente a cada
+    identificador (``period_from_label``/``period_to_label``) para que el
+    frontend pueda mostrar el nombre del período (e.g. ``01-2026``) en lugar
+    del ULID. Cuando no hay criterio explícito se pre-selecciona el período
+    contable actual para que el selector y el backend coincidan.
     """
     from cacao_accounting.reportes.periods import current_period_for_company, list_periods_for_company
 
     active_from, active_to = _period_params()
     period_from = period_from or active_from
     period_to = period_to or active_to
-    periods = [
+    periods = list(list_periods_for_company(company))
+    labels_by_id = {str(period.id): period.name for period in periods}
+    serialized_periods = [
         {"id": str(period.id), "name": period.name, "is_closed": bool(period.is_closed)}
-        for period in list_periods_for_company(company)
+        for period in periods
     ]
     if not period_from and not period_to:
         current = current_period_for_company(company)
         if current is not None:
             period_from = period_to = str(current.id)
+    period_to = period_to or period_from or ""
     return {
-        "periods": periods,
+        "periods": serialized_periods,
         "period_from": period_from or "",
-        "period_to": period_to or period_from or "",
+        "period_to": period_to,
+        "period_from_label": labels_by_id.get(period_from, period_from or ""),
+        "period_to_label": labels_by_id.get(period_to, period_to or ""),
     }
 
 
@@ -1196,6 +1204,8 @@ def _render_financial_report(
         periods=period_picker["periods"],
         period_from=period_picker["period_from"],
         period_to=period_picker["period_to"],
+        period_from_label=period_picker["period_from_label"],
+        period_to_label=period_picker["period_to_label"],
     )
 
 
@@ -1273,6 +1283,8 @@ def _render_operational_framework(
         periods=period_picker["periods"],
         period_from=period_picker["period_from"],
         period_to=period_picker["period_to"],
+        period_from_label=period_picker["period_from_label"],
+        period_to_label=period_picker["period_to_label"],
     )
 
 
@@ -1305,6 +1317,8 @@ def _render_operational_report(report_name: str, report):
         periods=period_picker["periods"],
         period_from=period_picker["period_from"],
         period_to=period_picker["period_to"],
+        period_from_label=period_picker["period_from_label"],
+        period_to_label=period_picker["period_to_label"],
     )
 
 
