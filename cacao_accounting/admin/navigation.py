@@ -80,6 +80,7 @@ CONFIGURATION_SECTIONS: tuple[ConfigurationSection, ...] = (
             ConfigurationLink("admin.lista_reglas_mapeo_libros", "Mapeo entre libros"),
             ConfigurationLink("admin.config_control_presupuestario", "Control presupuestario"),
             ConfigurationLink("admin.config_approval_matrix", "Matriz de aprobaciones"),
+            ConfigurationLink("admin.lista_dimensiones", "Dimensiones analíticas"),
         ),
     ),
     ConfigurationSection(
