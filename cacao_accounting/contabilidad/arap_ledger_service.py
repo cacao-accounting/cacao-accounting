@@ -43,15 +43,39 @@ def _document_type(document: Any) -> str:
     return str(getattr(document, "document_type", None) or getattr(document, "__tablename__", ""))
 
 
+def _is_return_document(document: Any) -> bool:
+    """Identifica devoluciones/notas de credito con el mismo criterio del GL.
+
+    El motor contable revierte una nota de credito cuando ``is_return`` es
+    verdadero o cuando el ``document_type`` es ``sales_credit_note`` /
+    ``purchase_credit_note``. El subledger debe usar el mismo criterio para no
+    divergir de las lineas de la cuenta de control.
+    """
+    if bool(getattr(document, "is_return", False)) or bool(getattr(document, "is_reversal", False)):
+        return True
+    return _document_type(document).lower() in {"sales_credit_note", "purchase_credit_note"}
+
+
 def _ledger_type(document: Any) -> str:
     """Resuelve AR para ventas y AP para compras."""
     if isinstance(document, PaymentEntry):
-        return (
-            "AR"
-            if getattr(document, "payment_type", None) == "receive" or getattr(document, "party_type", None) == "customer"
-            else "AP"
-        )
+        return "AR" if getattr(document, "party_type", None) == "customer" else "AP"
     return "AR" if isinstance(document, SalesInvoice) or _document_type(document).startswith("sales_") else "AP"
+
+
+def _payment_party_sign(document: PaymentEntry) -> Decimal:
+    """Signo del movimiento del pago sobre el saldo documental del tercero.
+
+    Un cobro de cliente y un pago a proveedor LIQUIDAN el saldo del tercero (lo
+    reducen): signo -1. Un reembolso (pago a cliente / cobro de proveedor, por
+    ejemplo contra una nota de credito) AUMENTA el saldo documental: signo +1.
+    Asi el subledger sigue el mismo sentido que las lineas GL de la cuenta de
+    control del tercero.
+    """
+    receive = getattr(document, "payment_type", "") == "receive"
+    if _ledger_type(document) == "AR":
+        return Decimal("-1") if receive else Decimal("1")
+    return Decimal("1") if receive else Decimal("-1")
 
 
 def _party_id(document: Any) -> str | None:
@@ -330,7 +354,7 @@ def post_document_ar_ap(document: Any, entries: Iterable[GLEntry]) -> list[ARAPL
         return [existing]
     # Devoluciones/credit notes reduce the documentary balance and therefore
     # enter the subledger with the opposite sign of a normal invoice.
-    sign = Decimal("-1") if getattr(document, "is_return", False) else Decimal("1")
+    sign = Decimal("-1") if _is_return_document(document) else Decimal("1")
     movement = _new_movement(document, amount=sign * _document_amount(document), event_type="opening")
     party_entries = _party_gl_entries(entries, _party_id(document))
     account_id = str(getattr(party_entries[0], "account_id", None) or "") if party_entries else ""
@@ -382,6 +406,7 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
         .limit(1)
     ).scalar_one_or_none()
     total = _decimal(document.paid_amount or document.received_amount)
+    payment_sign = _payment_party_sign(document)
     if existing_opening is not None:
         # La apertura pudo haber sido materializada sin valoración por libro por
         # ``post_payment_application_ar_ap`` durante la conciliación (cuando el
@@ -404,7 +429,7 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
                 _add_book_entry(
                     existing_opening,
                     book=book,
-                    amount=-(total * rate).quantize(Decimal("0.0001")),
+                    amount=(payment_sign * total * rate).quantize(Decimal("0.0001")),
                     gl_entry=opening_gl,
                 )
         return [existing_opening]
@@ -413,7 +438,9 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
     payment_currency = str(_currency(document) or "")
     payment_date = getattr(document, "posting_date", None) or date.today()
     if total:
-        payment_opening = _new_movement(document, amount=-total, event_type="opening", economic_line_id=str(document.id))
+        payment_opening = _new_movement(
+            document, amount=payment_sign * total, event_type="opening", economic_line_id=str(document.id)
+        )
         movements.append(payment_opening)
         payment_account_id = str(getattr(party_entries[0], "account_id", None) or "") if party_entries else ""
         if payment_account_id:
@@ -444,7 +471,7 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
             _add_book_entry(
                 payment_opening,
                 book=book,
-                amount=-(total * rate).quantize(Decimal("0.0001")),
+                amount=(payment_sign * total * rate).quantize(Decimal("0.0001")),
                 gl_entry=opening_gl,
             )
     for reference in references:
@@ -484,9 +511,13 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
             .limit(1)
         ).scalar_one_or_none()
         target_economic_line_id = str(target_cache.economic_line_id if target_cache is not None else target.id)
+        target_direction = (
+            target_cache.direction if target_cache is not None else ("credit" if _is_return_document(target) else "debit")
+        )
+        target_delta = -amount if target_direction == "debit" else amount
         target_movement = _new_movement(
             target,
-            amount=-amount,
+            amount=target_delta,
             event_type="allocation",
             reference_type="payment_entry",
             reference_id=str(document.id),
@@ -507,12 +538,12 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
                 payment_date,
                 _decimal(target.exchange_rate),
             )
-            book_amount = -(amount * target_rate).quantize(Decimal("0.0001"))
+            book_amount = (target_delta * target_rate).quantize(Decimal("0.0001"))
             candidates = _book_entries_for(str(book.id), party_entries)
             _add_book_entry(target_movement, book=book, amount=book_amount, gl_entry=candidates[0] if candidates else None)
         applied = _new_movement(
             document,
-            amount=_decimal(reference.payment_amount or reference.allocated_amount),
+            amount=-payment_sign * _decimal(reference.payment_amount or reference.allocated_amount),
             event_type="allocation",
             reference_type=str(reference.reference_type),
             reference_id=str(reference.reference_id),
@@ -530,7 +561,9 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
             _add_book_entry(
                 applied,
                 book=book,
-                amount=_decimal(reference.payment_amount or reference.allocated_amount) * rate,
+                amount=(-payment_sign * _decimal(reference.payment_amount or reference.allocated_amount) * rate).quantize(
+                    Decimal("0.0001")
+                ),
                 gl_entry=None,
             )
     return movements
@@ -607,7 +640,7 @@ def post_payment_application_ar_ap(
     movements: list[ARAPLedgerEntry] = []
     if target_opening is None:
         opening_amount = _document_amount(document) or amount
-        signed_target = -opening_amount if getattr(document, "is_return", False) else opening_amount
+        signed_target = -opening_amount if _is_return_document(document) else opening_amount
         target_opening = _new_movement(
             document,
             amount=signed_target,
@@ -663,12 +696,13 @@ def post_payment_application_ar_ap(
         .limit(1)
     ).scalar_one_or_none()
     payment_total = _decimal(payment.paid_amount or payment.received_amount)
+    payment_sign = _payment_party_sign(payment)
     if consumed > payment_total:
         raise ValueError("La aplicación excede el saldo nominal del pago.")
     if payment_opening is None:
         payment_opening = _new_movement(
             payment,
-            amount=-payment_total,
+            amount=payment_sign * payment_total,
             event_type="opening",
             ledger_type=target_ledger_type,
             party_type=party_type,
@@ -690,7 +724,7 @@ def post_payment_application_ar_ap(
                 payment_cache = _upsert_open_item_cache(
                     movement=payment_opening,
                     amount=payment_total,
-                    direction="credit",
+                    direction="debit" if payment_opening.document_amount > 0 else "credit",
                     account_id=account_id,
                     economic_line_id=payment_id,
                     unallocated_amount=payment_total,
@@ -738,7 +772,7 @@ def post_payment_application_ar_ap(
     )
     payment_movement = _new_movement(
         payment,
-        amount=consumed,
+        amount=-payment_sign * consumed,
         event_type="allocation",
         reference_type=reference_type or document_type,
         reference_id=str(document.id),
@@ -770,7 +804,7 @@ def post_payment_application_ar_ap(
             _decimal(getattr(payment, "exchange_rate", None)),
         )
         _add_book_entry(target_movement, book=book, amount=target_delta * target_rate, gl_entry=None)
-        _add_book_entry(payment_movement, book=book, amount=consumed * payment_rate, gl_entry=None)
+        _add_book_entry(payment_movement, book=book, amount=(-payment_sign * consumed * payment_rate), gl_entry=None)
     if target_cache is not None:
         _decrease_open_item_cache(target_cache.id, amount)
     if payment_cache is not None:

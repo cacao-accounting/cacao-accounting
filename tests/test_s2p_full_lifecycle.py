@@ -117,7 +117,7 @@ def _setup_base_data():
     inv_acc = Accounts(id="ACC-INV", code="11.01.001", name="Inventario", entity="cacao", account_type="asset")
     bridge_acc = Accounts(id="ACC-BRIDGE", code="21.01.001", name="Cuenta Puente", entity="cacao", account_type="liability")
     exp_acc = Accounts(id="ACC-EXP", code="51.01.001", name="Gasto", entity="cacao", account_type="expense")
-    pay_acc = Accounts(id="ACC-PAY", code="21.01.002", name="Cuentas por Pagar", entity="cacao", account_type="liability")
+    pay_acc = Accounts(id="ACC-PAY", code="21.01.002", name="Cuentas por Pagar", entity="cacao", account_type="payable")
     bank_acc = Accounts(id="ACC-BANK", code="11.01.002", name="Banco", entity="cacao", account_type="bank")
     book = Book(code="S2P", name="S2P", entity="cacao", currency="NIO", is_primary=True, status="activo")
 
