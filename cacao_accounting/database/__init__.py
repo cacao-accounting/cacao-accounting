@@ -3094,6 +3094,34 @@ class PaymentReference(database.Model, BaseTabla):  # type: ignore[name-defined]
     notes = database.Column(database.Text(), nullable=True)
 
 
+class ArApReconciliationPolicy(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Política por compañía para validar el subledger AR/AP contra GL.
+
+    La configuración es deliberadamente pequeña y se crea con ``create_all``
+    junto con el resto del esquema de desarrollo. Un registro ausente no
+    desactiva la validación: el servicio aplica su política segura por defecto.
+    """
+
+    __tablename__ = "ar_ap_reconciliation_policy"
+    __table_args__ = (
+        database.UniqueConstraint("company", name="uq_ar_ap_reconciliation_policy_company"),
+        CheckConstraint("mode IN ('strict', 'warn', 'log')", name="ck_ar_ap_reconciliation_policy_mode"),
+        CheckConstraint("tolerance >= 0", name="ck_ar_ap_reconciliation_policy_tolerance_nonnegative"),
+    )
+
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    mode = database.Column(database.String(10), nullable=False, default="strict")
+    tolerance = database.Column(database.Numeric(precision=20, scale=9), nullable=False, default=Decimal("0.01"))
+    enabled = database.Column(database.Boolean(), nullable=False, default=True)
+    # Alias retained for callers that used the earlier all-caps model name.
+    is_enabled = synonym("enabled")
+
+
 class ARAPOpenItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Documento abierto del subledger AP/AR.
 
@@ -3152,6 +3180,13 @@ class ARAPOpenItem(database.Model, BaseTabla):  # type: ignore[name-defined]
     source_voucher_id = database.Column(database.String(26), nullable=True, index=True)
     version = database.Column(database.Integer(), nullable=False, default=1)
     memo = database.Column(database.Text(), nullable=True)
+
+
+# Backwards-compatible spelling used by the AR/AP ledger service.  Keep one
+# mapped class for this table: declaring a second SQLAlchemy model with the
+# same ``__tablename__`` makes application imports fail before the metadata can
+# be created.
+ARAPReconciliationPolicy = ArApReconciliationPolicy
 
 
 class ARAPLedgerEntry(database.Model, BaseTabla):  # type: ignore[name-defined]

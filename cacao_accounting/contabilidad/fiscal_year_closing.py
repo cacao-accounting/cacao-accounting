@@ -123,6 +123,7 @@ def _closing_line_payload(
     fiscal_year_name: str,
     order: int,
     balance_row: dict[str, Any],
+    book_currency: str | None = None,
 ) -> dict[str, Any]:
     """Construye una línea de cierre para una cuenta de resultados."""
     debit, credit = _closing_entry_amounts(Decimal(str(balance_row["balance"])))
@@ -133,6 +134,7 @@ def _closing_line_payload(
         "cost_center": balance_row["cost_center"],
         "unit": balance_row["unit"],
         "project": balance_row["project"],
+        "currency": book_currency,
         "debit": str(debit) if debit > 0 else "",
         "credit": str(credit) if credit > 0 else "",
         "remarks": f"Cierre año fiscal {fiscal_year_name}",
@@ -146,6 +148,7 @@ def _closing_retain_earnings_payload(
     total_net_balance: Decimal,
     retained_earnings_code: str,
     book: str,
+    book_currency: str | None = None,
 ) -> dict[str, Any]:
     """Construye la línea de contrapartida para utilidades acumuladas."""
     debit = Decimal("0")
@@ -158,6 +161,7 @@ def _closing_retain_earnings_payload(
         "order": order,
         "book": book,
         "account": retained_earnings_code,
+        "currency": book_currency,
         "debit": str(debit) if debit > 0 else "",
         "credit": str(credit) if credit > 0 else "",
         "remarks": f"Resultado neto año fiscal {fiscal_year_name}",
@@ -174,6 +178,10 @@ def _build_closing_voucher_payload(
     """Construye el payload completo del comprobante de cierre."""
     lines: list[dict[str, Any]] = []
     order = 1
+    book_currencies = {
+        book.code: str(book.currency or "")
+        for book in database.session.execute(select(Book).where(Book.entity == company)).scalars().all()
+    }
     for book in sorted({str(row["book"]) for row in balances}):
         book_balances = [row for row in balances if row["book"] == book]
         total_net_balance = Decimal("0")
@@ -183,6 +191,7 @@ def _build_closing_voucher_payload(
                     fiscal_year_name=fiscal_year.name,
                     order=order,
                     balance_row=balance_row,
+                    book_currency=book_currencies.get(book),
                 )
             )
             total_net_balance += Decimal(str(balance_row["balance"]))
@@ -195,6 +204,7 @@ def _build_closing_voucher_payload(
                     total_net_balance=total_net_balance,
                     retained_earnings_code=retained_earnings_code,
                     book=book,
+                    book_currency=book_currencies.get(book),
                 )
             )
             order += 1
@@ -286,7 +296,13 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
         allow_closing=True,
         allow_fiscal_year_closing=True,
     )
-    submit_journal(journal.id, user_id=user_id)
+    posted_entries = submit_journal(journal.id, user_id=user_id)
+    # ``submit_journal`` sincroniza normalmente el subledger; la llamada
+    # idempotente explícita deja documentado el contrato del cierre fiscal y
+    # cubre implementaciones que publiquen el comprobante por otro adaptador.
+    from cacao_accounting.contabilidad.arap_ledger_service import post_journal_ar_ap
+
+    post_journal_ar_ap(journal, posted_entries)
     return journal
 
 
