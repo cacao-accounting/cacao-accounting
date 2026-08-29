@@ -88,6 +88,24 @@ no fallar por falta de cache.
 
 # Bitácora de desarrollo
 
+## 2026-08-29 (corrección rápida de accesibilidad SonarCloud)
+
+### Petición del usuario
+
+Atender los issues abiertos más obvios de SonarCloud: `Web:TableWithoutCaptionCheck` solicita agregar una descripción a
+las tablas HTML.
+
+### Plan implementado
+
+Se añadieron captions descriptivos, ocultos visualmente y marcados para traducción a las dos tablas condicionales de
+seguridad de sesión, la tabla de clasificación del Estado de Flujo de Efectivo y la tabla de cuentas pendientes del
+reporte EFE bloqueado.
+
+### Verificación
+
+Se comprobó el diff con `git diff --check` y se ejecutaron las pruebas focalizadas existentes de seguridad de sesión y
+Estado de Flujo de Efectivo. No se añadió una prueba nueva porque el usuario indicó que este ajuste HTML no la requiere.
+
 ## 2026-08-26
 
 ### Petición del usuario
