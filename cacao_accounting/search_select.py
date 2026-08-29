@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, Sequence
 
-from sqlalchemy import Select, case, cast, func, or_, select, true
+from sqlalchemy import Select, and_, case, cast, func, or_, select, true
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 from cacao_accounting.database import (
@@ -861,14 +861,30 @@ def _apply_search(statement: Select[tuple[Any]], spec: SearchSelectSpec, query: 
         searchable_columns = [_column_for(spec.model, field) for field in spec.search_fields]
         first_sort = searchable_columns[0]
         return statement.order_by(first_sort)
-    like_query = f"%{query.lower()}%"
-    prefix_query = f"{query.lower()}%"
+    normalized = query.strip().lower()
     searchable_columns = [_column_for(spec.model, field) for field in spec.search_fields]
-    search_conditions = [func.lower(cast(column, database.String)).like(like_query) for column in searchable_columns]
-    prefix_conditions = [func.lower(cast(column, database.String)).like(prefix_query) for column in searchable_columns]
-    priority = case((or_(*prefix_conditions), 0), else_=1)
     first_sort = searchable_columns[0]
-    return statement.where(or_(*search_conditions)).order_by(priority, first_sort)
+    lowered = [func.lower(cast(column, database.String)) for column in searchable_columns]
+    terms = [term for term in normalized.split() if term]
+    if not terms:
+        return statement.order_by(first_sort)
+    # Cada término debe aparecer en al menos uno de los campos buscables. Una
+    # consulta con varios términos refina el resultado en lugar de devolver la
+    # unión de patrones sueltos (búsqueda por palabras múltiples).
+    term_conditions = [or_(*[col.like(f"%{term}%") for col in lowered]) for term in terms]
+    # Relevancia portable (SQLite/PostgreSQL): exacto tiene el menor puntaje,
+    # seguido de prefijo y, por último, coincidencia por substring. Se suman los
+    # puntajes por término para ordenar primero los registros más relevantes.
+    relevance = 0
+    for term in terms:
+        for column_value in lowered:
+            relevance = relevance + case(
+                (column_value == term, 0),
+                (column_value.like(f"{term}%"), 1),
+                (column_value.like(f"%{term}%"), 2),
+                else_=3,
+            )
+    return statement.where(and_(*term_conditions)).order_by(relevance, first_sort)
 
 
 def _condition_for(column: InstrumentedAttribute[Any], values: Sequence[str | bool]) -> Any:
