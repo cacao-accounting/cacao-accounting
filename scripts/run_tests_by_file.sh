@@ -34,11 +34,10 @@ candidates=(
 PYTHON=""
 for candidate in "${candidates[@]}"; do
     [[ -z "$candidate" ]] && continue
-    if [[ "$candidate" == "python" ]] || [[ -x "$candidate" ]]; then
-        if "$candidate" -c "import pytest" >/dev/null 2>&1; then
-            PYTHON="$candidate"
-            break
-        fi
+    if { [[ "$candidate" == "python" ]] || [[ -x "$candidate" ]]; } && \
+        "$candidate" -c "import pytest" >/dev/null 2>&1; then
+        PYTHON="$candidate"
+        break
     fi
 done
 
