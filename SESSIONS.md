@@ -1,5 +1,141 @@
 # Bitácora de desarrollo
 
+## 2026-08-30 (refactor S3776 — `post_payment_ar_ap` cx=68)
+
+### Petición del usuario
+
+Atacar el peor foco individual de complejidad cognitiva del proyecto:
+`post_payment_ar_ap` en `cacao_accounting/contabilidad/arap_ledger_service.py`,
+issue SonarCloud `AaBPsMNkkZtwr73q0yZ3` (regla `python:S3776`, severidad CRITICAL,
+umbral 15, cx=68). El reporte inicial listaba la línea 383 (dato desactualizado);
+la API de SonarCloud en este momento reporta la línea 517, donde efectivamente
+arranca la función.
+
+Alcance acordado: solo este issue, trabajo local sin abrir issues de GitHub ni
+referenciar #757/#759/#760. Bitácora en SESSIONS.md, commits locales.
+
+### Plan implementado
+
+Extract Method + dataclass de contexto. Cero cambios en firmas públicas,
+cero cambios de comportamiento, cero dependencias nuevas.
+
+- Nuevo tipo `@dataclass(frozen=True) _PaymentPostingContext` que consolida
+  `document`, `party_entries`, `references`, `total`, `payment_sign`,
+  `payment_currency`, `payment_date` y `payment_account_id`. Evita pasar
+  siete argumentos por posición a los helpers.
+- Siete helpers privados nuevos:
+  - `_load_payment_references(document)` — carga las `PaymentReference` del pago.
+  - `_find_existing_payment_opening(document)` — encapsula la consulta
+    idempotente de la apertura previa.
+  - `_has_postable_payment_context(document, references)` — combina las
+    guard clauses iniciales con un solo predicado.
+  - `_build_payment_posting_context(document, references, entries)` — arma el
+    dataclass con todos los datos derivados.
+  - `_create_payment_opening_movement(context)` — crea el `ARAPLedgerEntry`
+    de apertura.
+  - `_record_payment_open_item_cache(movement, context)` — materializa el
+    `ARAPOpenItem` con la porción no consumida por las references.
+  - `_value_payment_movement_in_books(movement, context, *,
+    associate_opening_gl)` — itera libros activos, resuelve tasa snapshot y
+    registra el book entry. Centraliza la decisión "asociar GL de apertura
+    solo si no hay references" mediante un kw-only bool en lugar del cálculo
+    inline previo.
+- `post_payment_ar_ap` reescrita como orquestador lineal de 35 líneas (cx=7
+  según `radon cc`); sin anidamiento > 2 niveles.
+
+Cuatro tests nuevos cubren ramas que el refactor toca y que la batería previa
+no ejercitaba:
+
+- `test_post_payment_with_zero_total_skips_opening` — total = 0 → no se crea
+  apertura propia, solo allocations.
+- `test_post_payment_fully_allocated_closes_open_item` — references cubren el
+  100 % del total → `ARAPOpenItem.status = "closed"`,
+  `unallocated_amount = 0`.
+- `test_post_payment_without_references_associates_opening_gl_per_book` — sin
+  references y con GL del libro fiscal → el book entry del FISC debe tener
+  `gl_entry_id` no nulo (regresión explícita del kw-only
+  `associate_opening_gl=True`).
+- `test_post_payment_opening_gl_for_books_is_none_when_references_exist` —
+  con references, ningún book entry de apertura debe apuntar al GL
+  (regresión del kw-only `associate_opening_gl=False`).
+
+### Decisiones de diseño
+
+- `_PaymentPostingContext.consumed_cash` se calcula como `@property` para
+  mantener la dataclass frozen y no derivar un campo mutable. La suma sobre
+  references vive en un solo lugar.
+- `_value_payment_movement_in_books` recibe la decisión booleana como kw-only
+  argument en lugar de pasar el `GLEntry | None` resuelto. Esto preserva la
+  regla original ("el GL de apertura se asocia solo si no hay references")
+  sin filtrar lógica de libros al orquestador, y mantiene el helper
+  reutilizable en futuras llamadas.
+- `_process_payment_reference` queda intacta: ya tiene su propia lógica y
+  cambiar su firma rompería un par de paths sutiles. Marcar como follow-up
+  natural en una iteración futura; podría cerrar también los issues
+  `AaBPsMNkkZtwr73q0yZ7` y `AaBPsMNkkZtwr73q0yZ5` si en esa iteración se
+  extrae un helper común entre las tres apariciones del patrón "para cada
+  libro activo: resolver tasa + añadir book entry".
+- Los branches que ya estaban sin cobertura en el código original (la rama
+  `if existing_opening is not None:` del orquestador) se preservan sin
+  tocarlos; el plan no agrega cobertura donde no la había.
+
+### Verificación
+
+- `python -m pytest tests/test_ar_ap_ledger_model.py -x -q` → 18/18 verde
+  (14 originales + 4 nuevos). Antes del refactor: 14/14.
+- `python -m pytest tests/test_payment_reconciliation_arap_adapter.py
+  tests/test_arap_gl_reconciliation.py -x -q` → 14/14 verde. Adaptador AR/AP
+  y reconciliación GL/subledger intactos.
+- `python -m flake8 cacao_accounting/contabilidad/arap_ledger_service.py` →
+  limpio.
+- `python -m ruff check cacao_accounting/contabilidad/arap_ledger_service.py`
+  → All checks passed!
+- `python -m black --check --line-length 127
+  cacao_accounting/contabilidad/arap_ledger_service.py` → All done! 1 file
+  would be left unchanged.
+- `python -m mypy cacao_accounting/contabilidad/arap_ledger_service.py` →
+  Success: no issues found in 1 source file. A diferencia de sesiones previas,
+  `pathspec.patterns.gitignore` sí está disponible en el `.venv` actual, por
+  lo que el chequeo de tipos se ejecutó completo.
+- `python -m pydocstyle cacao_accounting/contabilidad/arap_ledger_service.py`
+  → limpio.
+- `python -m radon cc -s -a
+  cacao_accounting/contabilidad/arap_ledger_service.py` →
+  `post_payment_ar_ap` queda en **cx=7** (ranking B). Todos los helpers
+  nuevos quedan en rango A (cx ≤ 5), salvo `_build_payment_posting_context`
+  (cx=6, B). El umbral del proyecto es 15; **todos los cx quedan ≤ 7**.
+- `pytest --cov=cacao_accounting.contabilidad.arap_ledger_service
+  tests/test_ar_ap_ledger_model.py tests/test_payment_reconciliation_arap_adapter.py
+  tests/test_arap_gl_reconciliation.py` → cobertura del archivo 82 % (87/482
+  stmts sin cubrir). **Todas las líneas introducidas por el refactor
+  (519–685) están cubiertas**; las 87 líneas no cubiertas son código
+  preexistente que no se tocó (anulación de documentos, posting de journals,
+  reconciliación, etc., cubiertos por sus propios módulos de test fuera de
+  esta sesión).
+
+### Issue SonarCloud
+
+La key `AaBPsMNkkZtwr73q0yZ3` permanece OPEN en la API pública; SonarCloud
+cierra los issues solo cuando el siguiente escaneo detecta que la métrica
+bajó del umbral. El commit menciona `Refs: SonarCloud AaBPsMNkkZtwr73q0yZ3`
+para facilitar el mapeo cuando el escaneo automático recorra la rama.
+
+### Notas para iteraciones futuras
+
+- Los dos issues restantes en `arap_ledger_service.py` listados originalmente
+  con cx alto (`AaBPsMNkkZtwr73q0yZ7` y `AaBPsMNkkZtwr73q0yZ5`) ya no
+  aparecen en la respuesta actual de la API: o fueron cerrados por commits
+  recientes, o nunca existieron bajo ese identificador en este escaneo. Si
+  reaparecen tras el cierre de este issue, abordarlos es straightforward
+  siguiendo el mismo patrón Extract Method + dataclass.
+- El patrón "para cada libro activo: resolver tasa + añadir book entry" se
+  repite tres veces en el archivo: en `post_document_ar_ap`,
+  `post_payment_ar_ap` (ahora `_value_payment_movement_in_books`) y
+  `_process_payment_reference`. Una segunda iteración podría extraer un
+  helper compartido `value_movement_in_active_books(movement, amount,
+  currency, party_entries, opening_gl=None)` y reutilizarlo en los tres
+  sitios, eliminando las últimas duplicaciones del archivo.
+
 ## 2026-08-29 (constantes para literales duplicados SonarCloud)
 
 ### Petición del usuario
