@@ -352,7 +352,6 @@ def _validate_complete_journal_import(
 ) -> None:
     """Validate imported lines together with the lines already in the voucher."""
     from cacao_accounting.contabilidad.journal_service import (
-        JournalValidationError,
         _normalize_line,
         _validate_ar_ap_lines,
         _validate_balanced_lines,
@@ -386,7 +385,7 @@ def _validate_complete_journal_import(
         )
         _validate_line_books(company_id, context.get("books") or None, lines)
         _validate_ar_ap_lines(company_id, lines)
-    except (JournalValidationError, ValueError, InvalidOperation) as exc:
+    except (ValueError, InvalidOperation) as exc:
         errors.append({"row": None, "field": "voucher", "message": str(exc)})
 
 
