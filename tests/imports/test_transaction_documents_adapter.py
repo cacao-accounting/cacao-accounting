@@ -97,6 +97,7 @@ class _DummyItem:
     """Objeto mínimo para validar asignaciones opcionales del adaptador."""
 
     def __init__(self) -> None:
+        self.item_code = "ITEM-BATCH-IMP"
         self.rate = Decimal("12.50")
         self.base_amount = Decimal("0")
         self.base_rate = Decimal("0")
@@ -128,35 +129,42 @@ class _ImportItem:
         self.valuation_rate = Decimal("0")
 
 
-def test_optional_item_fields_are_applied_consistently() -> None:
+def test_optional_item_fields_are_applied_consistently(app_ctx) -> None:
     """El adaptador llena los campos opcionales sin mezclar la lógica."""
 
-    adapter = TransactionDocumentAdapter(
-        TransactionImportConfig(
-            entity_type="purchase_order",
-            header_model=object,
-            item_model=object,
-            parent_field="purchase_order_id",
-            receipt_fields=("received_qty",),
-            invoice_fields=("billed_qty",),
-            include_batch_serial=True,
+    from cacao_accounting.database import Batch
+
+    with app_ctx.app_context():
+        lot = Batch(item_code="ITEM-BATCH-IMP", batch_no="LOT-001", is_active=True)
+        database.session.add(lot)
+        database.session.commit()
+
+        adapter = TransactionDocumentAdapter(
+            TransactionImportConfig(
+                entity_type="purchase_order",
+                header_model=object,
+                item_model=object,
+                parent_field="purchase_order_id",
+                receipt_fields=("received_qty",),
+                invoice_fields=("billed_qty",),
+                include_batch_serial=True,
+            )
         )
-    )
-    item = _DummyItem()
+        item = _DummyItem()
 
-    adapter._apply_optional_item_fields(  # noqa: SLF001
-        item,
-        Decimal("31.25"),
-        {"lote": "LOT-001", "serie": "SER-009"},
-    )
+        adapter._apply_optional_item_fields(  # noqa: SLF001
+            item,
+            Decimal("31.25"),
+            {"lote": "LOT-001", "serie": "SER-009"},
+        )
 
-    assert item.base_amount == Decimal("31.25")
-    assert item.base_rate == Decimal("12.50")
-    assert item.valuation_rate == Decimal("12.50")
-    assert item.received_qty == Decimal("0")
-    assert item.billed_qty == Decimal("0")
-    assert item.batch_id == "LOT-001"
-    assert item.serial_no == "SER-009"
+        assert item.base_amount == Decimal("31.25")
+        assert item.base_rate == Decimal("12.50")
+        assert item.valuation_rate == Decimal("12.50")
+        assert item.received_qty == Decimal("0")
+        assert item.billed_qty == Decimal("0")
+        assert item.batch_id == lot.id
+        assert item.serial_no == "SER-009"
 
 
 def test_build_document_keeps_transaction_and_base_amounts(monkeypatch) -> None:
