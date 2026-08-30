@@ -511,9 +511,12 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
             .limit(1)
         ).scalar_one_or_none()
         target_economic_line_id = str(target_cache.economic_line_id if target_cache is not None else target.id)
-        target_direction = (
-            target_cache.direction if target_cache is not None else ("credit" if _is_return_document(target) else "debit")
-        )
+        if target_cache is not None:
+            target_direction = target_cache.direction
+        elif _is_return_document(target):
+            target_direction = "credit"
+        else:
+            target_direction = "debit"
         target_delta = -amount if target_direction == "debit" else amount
         target_movement = _new_movement(
             target,
@@ -732,11 +735,12 @@ def post_payment_application_ar_ap(
     if payment_cache is not None and consumed > _decimal(payment_cache.unallocated_amount):
         raise ValueError("La aplicación excede el saldo disponible del pago.")
 
-    target_direction = (
-        target_cache.direction
-        if target_cache is not None
-        else ("debit" if _decimal(target_opening.document_amount) > 0 else "credit")
-    )
+    if target_cache is not None:
+        target_direction = target_cache.direction
+    elif _decimal(target_opening.document_amount) > 0:
+        target_direction = "debit"
+    else:
+        target_direction = "credit"
     target_delta = -amount if target_direction == "debit" else amount
     already_applied = database.session.execute(
         select(ARAPLedgerEntry)
