@@ -413,7 +413,13 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
             from cacao_accounting.document_flow.payment import _compute_allocated_notes_amount
 
             notes = _compute_allocated_notes_amount(document, as_of_date=effective_as_of)
-            outstanding_original_currency = max(_decimal_value(ledger_balance) - notes, Decimal("0"))
+            if getattr(document, "is_return", False):
+                # Las devoluciones posteadas al subledger abren con importe
+                # negativo; se presentan como saldo vivo negativo para
+                # compensar el saldo del tercero en el corte del subledger.
+                outstanding_original_currency = abs(_decimal_value(ledger_balance)) - notes
+            else:
+                outstanding_original_currency = max(_decimal_value(ledger_balance) - notes, Decimal("0"))
             paid_original_currency = max(original_original_currency - _decimal_value(ledger_balance), Decimal("0"))
         else:
             paid_original_currency = _payment_allocations(document_type, document.id, filters.company, effective_as_of)

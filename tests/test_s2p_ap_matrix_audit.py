@@ -524,6 +524,101 @@ def test_281_prepayment_po_applies_to_invoice_with_gl_netting(app_ctx, chart):
     _assert_ap_reconciled(chart)
 
 
+def test_281_supplier_credit_refund_discount_and_duplicate_controls(app_ctx, chart):
+    """Nota de credito, reembolso, write-off por descuento, duplicados y cancelaciones."""
+    from cacao_accounting.compras.services import _validate_duplicate_supplier_invoice
+    from cacao_accounting.contabilidad.posting_service import cancel_document
+    from cacao_accounting.bancos.services import _apply_payment_cancellation_hooks
+    from cacao_accounting.document_flow.service import revert_relations_for_target
+    from cacao_accounting.document_flow.payment import compute_outstanding_amount
+
+    # --- Factura origen 800 con numero de factura del proveedor.
+    invoice = _make_invoice(amount=Decimal("800"), chart=chart, supplier_invoice_no="FAC-DUP")
+    _post_invoice(invoice)
+
+    # --- S2P-24: rechazo de numero de factura duplicado para el mismo proveedor.
+    with pytest.raises(ValueError, match="ya está registrado"):
+        _validate_duplicate_supplier_invoice(_supplier_id(), "FAC-DUP")
+
+    # --- Nota de credito de proveedor por 200 vinculada a la factura.
+    note = _make_invoice(
+        amount=Decimal("200"),
+        chart=chart,
+        document_type="purchase_credit_note",
+        reversal_of=invoice,
+    )
+    _link_purchase_reversal(note)
+    _post_invoice(note)
+
+    # Ecuacion: 800 - 200 = 600.
+    assert _outstanding(invoice) == Decimal("600")
+
+    # --- Pago 550 con write-off por descuento de 50: aplica 600 en total.
+    payment = _make_payment(amount=Decimal("550"), chart=chart)
+    _apply(
+        payment,
+        [
+            {
+                "reference_type": "purchase_invoice",
+                "reference_id": invoice.id,
+                "allocated_amount": 600,
+                "discount_amount": 50,
+            }
+        ],
+    )
+    _post_payment(payment)
+
+    assert _outstanding(invoice) == Decimal("0")
+    assert invoice.base_outstanding_amount == Decimal("0")
+
+    totals = _subledger_totals(OPEN_END)
+    assert totals["original_amount"] == Decimal("800")
+    assert totals["paid_amount"] == Decimal("600")
+    assert totals["outstanding_amount"] == Decimal("0")
+
+    # GL AP: 800 Cr - 200 Dr (nota) - 600 Dr (pago) = 0; el write-off de 50
+    # debita la cuenta de descuentos y el banco solo entrega 550 en efectivo.
+    assert _ap_gl_balance(chart) == Decimal("0")
+    from cacao_accounting.database import GLEntry
+
+    # El descuento recibido acredita la cuenta de descuentos (ingreso).
+    discount_rows = (
+        database.session.execute(
+            select(GLEntry).filter_by(voucher_type="payment_entry", voucher_id=payment.id, account_id=chart["discount_id"])
+        )
+        .scalars()
+        .all()
+    )
+    assert sum(Decimal(str(row.credit)) for row in discount_rows) == Decimal("50")
+
+    _assert_ap_reconciled(chart)
+
+    # --- Reembolso de la nota de credito: pago receive contra purchase_credit_note.
+    refund = _make_payment(amount=Decimal("200"), chart=chart, payment_type="receive")
+    _apply(refund, [{"reference_type": "purchase_credit_note", "reference_id": note.id, "allocated_amount": 200}])
+    _post_payment(refund)
+
+    assert _outstanding(note) == Decimal("0")
+
+    # --- Cancelacion del pago restaura saldos (append-only).
+    cancel_document(payment, reason="Correccion de pago", actor_user_id=chart["actor_id"])
+    _apply_payment_cancellation_hooks(payment)
+    revert_relations_for_target("payment_entry", payment.id)
+    database.session.commit()
+    refreshed_invoice = database.session.get(type(invoice), invoice.id)
+    assert compute_outstanding_amount(refreshed_invoice) == Decimal("600")
+
+    # La nota sigue liquidada por el reembolso.
+    refreshed_note = database.session.get(type(note), note.id)
+    assert compute_outstanding_amount(refreshed_note) == Decimal("0")
+
+    # El reembolso de la nota no figura en el submayor: las notas vinculadas
+    # por reversal_of se excluyen de las filas del reporte.
+    totals_after = _subledger_totals(OPEN_END)
+    assert totals_after["paid_amount"] == Decimal("0")
+    assert totals_after["outstanding_amount"] == Decimal("600")
+
+
 def test_281_fx_supplier_invoice_payment_equation_and_isolation(app_ctx, chart):
     """Factura USD de proveedor: ecuacion en ambas monedas y aislamiento."""
     from cacao_accounting.database import Entity, PurchaseInvoice, PurchaseInvoiceItem, database
