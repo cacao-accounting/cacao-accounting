@@ -462,6 +462,59 @@ def bancos_conciliacion_bancaria_cuenta(bank_account_id: str):
     )
 
 
+def _validate_bank_reconciliation_transactions_access(transaction_ids: list[str], company: str) -> bool:
+    """Valida el acceso a las transacciones de conciliacion bancaria."""
+    if not transaction_ids:
+        return True
+    transactions = (
+        database.session.execute(database.select(BankTransaction).filter(BankTransaction.id.in_(transaction_ids)))
+        .scalars()
+        .all()
+    )
+    companies: set[str] = set()
+    for transaction in transactions:
+        bank_account = database.session.get(BankAccount, transaction.bank_account_id)
+        if bank_account:
+            companies.add(str(bank_account.company))
+    if len(companies) != 1 or company not in companies:
+        abort(403)
+    exige_acceso_compania("cash", company, "editar")
+    if any(txn.is_reconciled for txn in transactions):
+        flash(_("Una o mas transacciones ya estan reconciliadas."), "danger")
+        return False
+    return True
+
+
+def _parse_reconciliation_item_from_form(
+    transaction_id: str,
+) -> tuple[BankReconciliationMatch | None, tuple[str, Decimal] | None, str | None]:
+    """Parsea una fila de conciliacion bancaria desde el formulario."""
+    target = request.form.get(f"target_{transaction_id}") or ""
+    amount = _form_decimal(f"amount_{transaction_id}")
+    difference = _form_decimal(f"difference_{transaction_id}")
+    if not target or amount <= 0:
+        if difference > 0:
+            return None, None, _("Una diferencia bancaria requiere un candidato y un monto conciliado.")
+        return None, None, None
+    if difference < 0:
+        return None, None, _("La diferencia bancaria debe ser mayor o igual a cero.")
+    diff_req = None
+    if difference > 0:
+        transaction = database.session.get(BankTransaction, transaction_id)
+        bank_amount = _bank_reconciliation_allocated_amount(transaction) if transaction else None
+        if bank_amount is None or amount + difference != bank_amount:
+            return None, None, _("El monto conciliado más la diferencia debe coincidir con el monto bancario.")
+        diff_req = (transaction_id, difference)
+    target_type, target_id = target.split(":", 1)
+    match = BankReconciliationMatch(
+        bank_transaction_id=transaction_id,
+        target_type=target_type,
+        target_id=target_id,
+        allocated_amount=amount,
+    )
+    return match, diff_req, None
+
+
 @bancos.route("/bank-reconciliation/apply", methods=["POST"])
 @modulo_activo("cash")
 @login_required
@@ -469,53 +522,21 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
     """Aplica conciliaciones bancarias seleccionadas."""
     company = request.form.get("company") or "cacao"
     transaction_ids = request.form.getlist("bank_transaction_id")
-    if transaction_ids:
-        transactions = (
-            database.session.execute(database.select(BankTransaction).filter(BankTransaction.id.in_(transaction_ids)))
-            .scalars()
-            .all()
-        )
-        companies: set[str] = set()
-        for transaction in transactions:
-            bank_account = database.session.get(BankAccount, transaction.bank_account_id)
-            if bank_account:
-                companies.add(str(bank_account.company))
-        if len(companies) != 1 or company not in companies:
-            abort(403)
-        exige_acceso_compania("cash", company, "editar")
-        if any(txn.is_reconciled for txn in transactions):
-            flash(_("Una o mas transacciones ya estan reconciliadas."), "danger")
-            return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
+    if not _validate_bank_reconciliation_transactions_access(transaction_ids, company):
+        return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
+
     matches: list[BankReconciliationMatch] = []
     difference_requests: list[tuple[str, Decimal]] = []
     for transaction_id in transaction_ids:
-        target = request.form.get(f"target_{transaction_id}") or ""
-        amount = _form_decimal(f"amount_{transaction_id}")
-        difference = _form_decimal(f"difference_{transaction_id}")
-        if not target or amount <= 0:
-            if difference > 0:
-                flash(_("Una diferencia bancaria requiere un candidato y un monto conciliado."), "danger")
-                return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
-            continue
-        if difference < 0:
-            flash(_("La diferencia bancaria debe ser mayor o igual a cero."), "danger")
+        match, diff_req, err_msg = _parse_reconciliation_item_from_form(transaction_id)
+        if err_msg:
+            flash(err_msg, "danger")
             return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
-        if difference > 0:
-            transaction = database.session.get(BankTransaction, transaction_id)
-            bank_amount = _bank_reconciliation_allocated_amount(transaction) if transaction else None
-            if bank_amount is None or amount + difference != bank_amount:
-                flash(_("El monto conciliado más la diferencia debe coincidir con el monto bancario."), "danger")
-                return redirect(url_for(BANCOS_CONCILIACION_ENDPOINT, company=company))
-            difference_requests.append((transaction_id, difference))
-        target_type, target_id = target.split(":", 1)
-        matches.append(
-            BankReconciliationMatch(
-                bank_transaction_id=transaction_id,
-                target_type=target_type,
-                target_id=target_id,
-                allocated_amount=amount,
-            )
-        )
+        if match:
+            matches.append(match)
+        if diff_req:
+            difference_requests.append(diff_req)
+
     reconciliation_date = _bank_reconciliation_date(company)
     try:
         reconciliation = reconcile_bank_items(
