@@ -8,6 +8,7 @@ una optimización para consultas del día actual.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Any, Iterable, cast
@@ -514,14 +515,43 @@ def _process_payment_reference(
     return movements
 
 
-def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> list[ARAPLedgerEntry]:
-    """Registra el saldo propio del pago y sus aplicaciones documentales."""
-    references = list(
+@dataclass(frozen=True)
+class _PaymentPostingContext:
+    """Estado consolidado para registrar la apertura documental de un pago.
+
+    Centraliza los datos que el orquestador y los helpers comparten para evitar
+    pasar siete argumentos por posicion y mantener ``post_payment_ar_ap`` como
+    un orquestador delgado.
+    """
+
+    document: PaymentEntry
+    party_entries: list[GLEntry]
+    references: list[PaymentReference]
+    total: Decimal
+    payment_sign: Decimal
+    payment_currency: str
+    payment_date: date
+    payment_account_id: str
+
+    @property
+    def consumed_cash(self) -> Decimal:
+        """Importe total aplicado por las referencias del pago."""
+        return sum(
+            (_decimal(reference.payment_amount or reference.allocated_amount) for reference in self.references),
+            Decimal("0"),
+        )
+
+
+def _load_payment_references(document: PaymentEntry) -> list[PaymentReference]:
+    """Carga las referencias documentales asociadas a un pago."""
+    return list(
         database.session.execute(select(PaymentReference).where(PaymentReference.payment_id == document.id)).scalars().all()
     )
-    if not references and not _party_id(document):
-        return []
-    existing_opening = database.session.execute(
+
+
+def _find_existing_payment_opening(document: PaymentEntry) -> ARAPLedgerEntry | None:
+    """Devuelve la apertura del pago si ya existe y no esta revertida."""
+    return database.session.execute(
         select(ARAPLedgerEntry)
         .where(
             ARAPLedgerEntry.document_type == "payment_entry",
@@ -532,53 +562,126 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
         .order_by(ARAPLedgerEntry.id)
         .limit(1)
     ).scalar_one_or_none()
-    total = _decimal(document.paid_amount or document.received_amount)
-    payment_sign = _payment_party_sign(document)
-    if existing_opening is not None:
-        _populate_existing_payment_opening_books(existing_opening, document, entries, total, payment_sign)
-        return [existing_opening]
-    movements: list[ARAPLedgerEntry] = []
+
+
+def _has_postable_payment_context(document: PaymentEntry, references: list[PaymentReference]) -> bool:
+    """Indica si un pago tiene referencias o un tercero que justifique el posting."""
+    return bool(references) or _party_id(document) is not None
+
+
+def _build_payment_posting_context(
+    document: PaymentEntry, references: list[PaymentReference], entries: Iterable[GLEntry]
+) -> _PaymentPostingContext:
+    """Consolida los datos documentales del pago para el posting."""
     party_entries = _party_gl_entries(entries, _party_id(document))
-    payment_currency = str(_currency(document) or "")
-    payment_date = getattr(document, "posting_date", None) or date.today()
-    if total:
-        payment_opening = _new_movement(
-            document, amount=payment_sign * total, event_type="opening", economic_line_id=str(document.id)
+    payment_account_id = str(getattr(party_entries[0], "account_id", None) or "") if party_entries else ""
+    return _PaymentPostingContext(
+        document=document,
+        party_entries=party_entries,
+        references=references,
+        total=_decimal(document.paid_amount or document.received_amount),
+        payment_sign=_payment_party_sign(document),
+        payment_currency=str(_currency(document) or ""),
+        payment_date=getattr(document, "posting_date", None) or date.today(),
+        payment_account_id=payment_account_id,
+    )
+
+
+def _create_payment_opening_movement(context: _PaymentPostingContext) -> ARAPLedgerEntry:
+    """Crea el movimiento de apertura del pago con el signo correspondiente."""
+    movement = _new_movement(
+        context.document,
+        amount=context.payment_sign * context.total,
+        event_type="opening",
+        economic_line_id=str(context.document.id),
+    )
+    database.session.flush()
+    return movement
+
+
+def _record_payment_open_item_cache(movement: ARAPLedgerEntry, context: _PaymentPostingContext) -> None:
+    """Actualiza el cache ARAPOpenItem del pago con la porcion no consumida."""
+    if not context.payment_account_id:
+        return
+    unallocated = max(context.total - context.consumed_cash, Decimal("0"))
+    _upsert_open_item_cache(
+        movement=movement,
+        amount=context.total,
+        direction="debit" if movement.document_amount > 0 else "credit",
+        account_id=context.payment_account_id,
+        economic_line_id=str(context.document.id),
+        unallocated_amount=unallocated,
+    )
+
+
+def _value_payment_movement_in_books(
+    movement: ARAPLedgerEntry,
+    context: _PaymentPostingContext,
+    *,
+    associate_opening_gl: bool,
+) -> None:
+    """Itera los libros activos, resuelve la tasa snapshot y registra el book entry.
+
+    Cuando ``associate_opening_gl`` es verdadero y el primer candidato GL
+    pertenece al libro actual, ese GL se asocia al book entry de apertura;
+    cuando es falso (hay references) el GL queda ``None``.
+    """
+    document = context.document
+    signed_amount = context.payment_sign * context.total
+    for book in _active_books(str(document.company)):
+        rate = _book_exchange_rate(
+            str(document.company),
+            context.payment_currency,
+            str(book.currency or context.payment_currency),
+            context.payment_date,
+            _decimal(document.exchange_rate),
         )
-        movements.append(payment_opening)
-        payment_account_id = str(getattr(party_entries[0], "account_id", None) or "") if party_entries else ""
-        if payment_account_id:
-            consumed_cash = sum(
-                (_decimal(reference.payment_amount or reference.allocated_amount) for reference in references), Decimal("0")
-            )
-            _upsert_open_item_cache(
-                movement=payment_opening,
-                amount=total,
-                direction="debit" if payment_opening.document_amount > 0 else "credit",
-                account_id=payment_account_id,
-                economic_line_id=str(document.id),
-                unallocated_amount=max(total - consumed_cash, Decimal("0")),
-            )
-        for book in _active_books(str(document.company)):
-            rate = _book_exchange_rate(
-                str(document.company),
-                payment_currency,
-                str(book.currency or payment_currency),
-                payment_date,
-                _decimal(document.exchange_rate),
-            )
-            candidates = _book_entries_for(str(book.id), party_entries)
-            opening_gl = candidates[0] if not references and candidates else None
-            _add_book_entry(
-                payment_opening,
-                book=book,
-                amount=(payment_sign * total * rate).quantize(Decimal("0.0001")),
-                gl_entry=opening_gl,
-            )
-    for reference in references:
-        movements.extend(
-            _process_payment_reference(document, reference, party_entries, payment_currency, payment_date, payment_sign)
+        gl_entry: GLEntry | None = None
+        if associate_opening_gl:
+            candidates = _book_entries_for(str(book.id), context.party_entries)
+            gl_entry = candidates[0] if candidates else None
+        _add_book_entry(
+            movement,
+            book=book,
+            amount=(signed_amount * rate).quantize(Decimal("0.0001")),
+            gl_entry=gl_entry,
         )
+
+
+def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> list[ARAPLedgerEntry]:
+    """Registra el saldo propio del pago y sus aplicaciones documentales."""
+    references = _load_payment_references(document)
+    if not _has_postable_payment_context(document, references):
+        return []
+    existing_opening = _find_existing_payment_opening(document)
+    if existing_opening is not None:
+        _populate_existing_payment_opening_books(
+            existing_opening,
+            document,
+            entries,
+            _decimal(document.paid_amount or document.received_amount),
+            _payment_party_sign(document),
+        )
+        return [existing_opening]
+    context = _build_payment_posting_context(document, references, entries)
+    movements: list[ARAPLedgerEntry] = []
+    if context.total:
+        opening = _create_payment_opening_movement(context)
+        movements.append(opening)
+        _record_payment_open_item_cache(opening, context)
+        _value_payment_movement_in_books(opening, context, associate_opening_gl=not references)
+    movements += [
+        movement
+        for reference in references
+        for movement in _process_payment_reference(
+            document,
+            reference,
+            context.party_entries,
+            context.payment_currency,
+            context.payment_date,
+            context.payment_sign,
+        )
+    ]
     return movements
 
 
