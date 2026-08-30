@@ -88,6 +88,14 @@ def _write_report_pdf(
     """Renderiza la matriz de un reporte como PDF mediante Jinja2 + WeasyPrint."""
     from flask_weasyprint import HTML
 
+    try:
+        from flask_babel import get_locale as _babel_get_locale
+
+        _locale = _babel_get_locale()
+        lang = str(_locale) if _locale else "es"
+    except (ImportError, RuntimeError, KeyError):
+        lang = "es"
+
     html_string = render_template(
         REPORT_PDF_TEMPLATE,
         title=title,
@@ -98,6 +106,7 @@ def _write_report_pdf(
         ledger=ledger,
         period=period,
         generated_on=date.today().isoformat(),
+        lang=lang,
     )
     return bytes(HTML(string=html_string).write_pdf())
 
