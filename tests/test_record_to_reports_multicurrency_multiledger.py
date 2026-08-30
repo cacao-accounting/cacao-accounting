@@ -713,6 +713,196 @@ def test_r2r_multi_currency_journal_entry_all_reports(app_ctx):
         assert summary_rpt.totals["difference"] == 0
 
 
+def test_r2r_purchase_flow_reconciliation_multicurrency(app_ctx):
+    """Post USD purchase invoice & returns into NIO/EUR/USD books.
+
+    Verify reconciliation & operational reports.
+    """
+    from cacao_accounting.contabilidad.posting import post_document_to_gl
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        Book,
+        CompanyDefaultAccount,
+        Currency,
+        ExchangeRate,
+        PartyAccount,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        database,
+    )
+    from cacao_accounting.reportes.services import (
+        OperationalReportFilters,
+        ReconciliationFilters,
+        get_reconciliation_matrix,
+        get_purchases_by_supplier,
+        get_purchases_by_item,
+        get_ar_ap_subledger,
+        SubledgerFilters,
+    )
+
+    currencies = [Currency(code=code, name=code, decimals=2, active=True) for code in ("NIO", "USD", "EUR")]
+    local_book = Book(entity="r2r", code="R2RLOC", name="Local", currency="NIO", status="activo", is_primary=True)
+    ifrs_book = Book(entity="r2r", code="R2REUR", name="IFRS", currency="EUR", status="activo")
+    us_gaap_book = Book(entity="r2r", code="R2RUSD", name="USGAAP", currency="USD", status="activo")
+
+    payable = Accounts(entity="r2r", code="AP-R2R", name="Payable", active=True, enabled=True, classification="liability")
+    expense = Accounts(
+        entity="r2r",
+        code="EXP-R2R",
+        name="Expense",
+        active=True,
+        enabled=True,
+        classification="expense",
+        account_type="expense",
+    )
+    bank_account_gl = Accounts(
+        entity="r2r", code="BANK-R2R-P", name="Bank P", active=True, enabled=True, classification="asset", account_type="bank"
+    )
+    exchange_gain = Accounts(
+        entity="r2r",
+        code="FXG-R2R-P",
+        name="Exchange gain P",
+        active=True,
+        enabled=True,
+        classification="income",
+        account_type="income",
+    )
+    bank = Bank(name="R2R Bank P")
+    database.session.add_all(
+        [*currencies, local_book, ifrs_book, us_gaap_book, payable, expense, bank_account_gl, exchange_gain, bank]
+    )
+    database.session.flush()
+
+    bank_account = BankAccount(
+        bank_id=bank.id,
+        company="r2r",
+        account_name="USD account P",
+        currency="USD",
+        gl_account_id=bank_account_gl.id,
+    )
+    database.session.add_all(
+        [
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 8, 7)),
+            ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.9"), date=date(2026, 8, 7)),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("37"), date=date(2026, 8, 8)),
+            ExchangeRate(origin="USD", destination="EUR", rate=Decimal("0.95"), date=date(2026, 8, 8)),
+            PartyAccount(party_id="SUPP-R2R", company="r2r", payable_account_id=payable.id),
+            CompanyDefaultAccount(
+                company="r2r",
+                default_payable=payable.id,
+                default_bank=bank_account_gl.id,
+                default_expense=expense.id,
+                exchange_gain_account_id=exchange_gain.id,
+            ),
+            bank_account,
+        ]
+    )
+    database.session.flush()
+
+    invoice = PurchaseInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 7),
+        supplier_id="SUPP-R2R",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+        total=Decimal("100"),
+        grand_total=Decimal("100"),
+        base_total=Decimal("3600"),
+        base_grand_total=Decimal("3600"),
+        outstanding_amount=Decimal("100"),
+        base_outstanding_amount=Decimal("3600"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code="ITEM-P",
+            item_name="Purchased Item",
+            qty=Decimal("1"),
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+            base_amount=Decimal("3600"),
+            expense_account_id=expense.id,
+        )
+    )
+
+    return_invoice = PurchaseInvoice(
+        company="r2r",
+        posting_date=date(2026, 8, 7),
+        supplier_id="SUPP-R2R",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+        is_return=True,
+        total=Decimal("20"),
+        grand_total=Decimal("20"),
+        base_total=Decimal("720"),
+        base_grand_total=Decimal("720"),
+        outstanding_amount=Decimal("20"),
+        base_outstanding_amount=Decimal("720"),
+    )
+    database.session.add(return_invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=return_invoice.id,
+            item_code="ITEM-P",
+            item_name="Purchased Item",
+            qty=Decimal("0.2"),
+            rate=Decimal("100"),
+            amount=Decimal("20"),
+            base_amount=Decimal("720"),
+            expense_account_id=expense.id,
+        )
+    )
+    database.session.commit()
+
+    post_document_to_gl(invoice)
+    post_document_to_gl(return_invoice)
+    database.session.commit()
+
+    sub_filters = SubledgerFilters(company="r2r", party_type="supplier", as_of_date=date(2026, 8, 7))
+    subledger = get_ar_ap_subledger(sub_filters)
+    assert subledger.totals["outstanding_amount"] == Decimal("2880")
+
+    op_filters = OperationalReportFilters(company="r2r", date_from=date(2026, 8, 7), date_to=date(2026, 8, 7))
+    by_supp = get_purchases_by_supplier(op_filters)
+    by_item = get_purchases_by_item(op_filters)
+
+    assert by_supp.totals["amount"] == Decimal("2880")
+    assert by_item.totals["qty"] == Decimal("0.8")
+    assert by_item.totals["amount"] == Decimal("2880")
+
+    for ledger_code, currency, expected_sub_amount, expected_gl_amount, expected_diff, expected_status in (
+        ("R2RLOC", "NIO", Decimal("-2880"), Decimal("-2880"), Decimal("0"), "reconciled"),
+        ("R2REUR", "EUR", Decimal("-2880"), Decimal("-72"), Decimal("-2808"), "difference"),
+        ("R2RUSD", "USD", Decimal("-80"), Decimal("-80"), Decimal("0"), "reconciled"),
+    ):
+        recon_filters = ReconciliationFilters(company="r2r", ledger=ledger_code, as_of_date=date(2026, 8, 7))
+        # EUR ledger has no NIO->EUR or EUR->NIO exchange rate: the subledger
+        # in company currency (NIO) cannot be converted to the ledger currency
+        # (EUR), so the matrix must fail in a controlled way instead of
+        # reporting a false difference.
+        if currency == "EUR":
+            with pytest.raises(ValueError, match="tipo de cambio"):
+                get_reconciliation_matrix(recon_filters)
+            continue
+
+        matrix = get_reconciliation_matrix(recon_filters)
+
+        ap_row = next(row for row in matrix.rows if row.values["area"] == "AP")
+        assert ap_row.values["subledger_amount"] == expected_sub_amount
+        assert ap_row.values["gl_control_amount"] == expected_gl_amount
+        assert ap_row.values["difference"] == expected_diff
+        assert ap_row.values["status"] == expected_status
+
+
 def test_semantic_reports_fallback_to_company_currency(app_ctx):
     """Use the entity currency when local invoices omit currency fields."""
     from cacao_accounting.database import PurchaseInvoice, SalesInvoice, database
