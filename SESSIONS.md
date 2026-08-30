@@ -3,25 +3,6 @@
 Cacao Accouting es un software contable que busca dar cobertura completa y robusta a los siguientes
 flujo de negocio:
 
-## 2026-08-27 (refinamiento final de identidad visual)
-
-### Decisiones aplicadas
-
-- El tema claro usa superficies neutras y acento verde hoja; el oscuro conserva superficies grafito y acento naranja.
-  Son identidades de tema distintas, mientras que el verde de exito se mantiene reservado para estados semanticos.
-- Se mantienen todos los badges informativos. El estado normal se representa con un icono de verificacion y los estados
-  de acceso, solo lectura, pendiente y atencion conservan su icono, etiqueta accesible y `data-status`.
-- La marca de la barra superior no lleva una tarjeta de color. Se creo `brand-dark.svg` para el modo oscuro: conserva
-  el isotipo aprobado y usa un wordmark crema de alto contraste. En claro, el logo original cuenta con un margen blanco
-  muy sutil y un borde tenue para separar los detalles claros del isotipo sin cargar la navbar.
-
-### Verificacion
-
-- `tests/test_theme_styles.py` y el caso de badges de `tests/test_03webactions.py`: 6 pruebas aprobadas.
-- `ruff check cacao_accounting tests/test_theme_styles.py tests/test_03webactions.py`: aprobado.
-- `git diff --check`: sin errores. La prueba de rutas completa previamente detecto un error ajeno a este alcance en
-  `inventario/routes.py` (`StockEntry.name`), por lo que no se altero backend.
-
 - Order to Cash (O2C): Flujo completo del ciclo de venta.
 - Source to Pay (S2P): Flujo completo del proceso de abastecimiento.
 - Record to Report (R2R): Generación robusta de reportes a partir de los registros almacenados en
@@ -71,7 +52,11 @@ El sistema es:
   posterior anulación, el saldo de un cliente o proveedor a un momento dado debe ser reconciliable con el
   saldo de todas las transacciones asociadas a ese cliente o proveedor en el ledger financiero.
 - Misma lógica aplica para inventario, inventario no solo lleva valores monetarios, lleva bodegas, ítems,
-  unidades de medida, factores de conversión, etc. 
+  unidades de medida, factores de conversión, etc.
+- **Política append-only:** no se borran filas de evidencia (GL/Stock/AR-AP/subledger) ni se reescriben sus
+  cifras; la corrección va por contra-asientos. Cambiar estado lógico o saldos derivados (`outstanding_amount`,
+  `unallocated_amount`, `status`, `is_cancelled`) NO viola el principio y puede seguir mutándose en los flujos
+  de pago y conciliación.
 
 # Soporte de bases de datos:
 
