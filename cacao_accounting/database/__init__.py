@@ -5764,3 +5764,15 @@ class BalanceConfirmationInvitation(database.Model, BaseTabla):  # type: ignore[
     last_access_at = database.Column(database.DateTime(timezone=True), nullable=True)
     failed_attempts = database.Column(database.Integer(), default=0, nullable=False)
     expires_at = database.Column(database.DateTime(timezone=True), nullable=True)
+
+
+# Issue #759: las tablas de evidencia pura que nunca se mutan en los flujos
+# actuales llevan la misma garantia append-only que GLEntry/StockLedgerEntry.
+event.listens_for(ExchangeRevaluationItem, "before_update")(_reject_ledger_mutation)
+event.listens_for(ExchangeRevaluationItem, "before_delete")(_reject_ledger_delete)
+event.listens_for(PurchaseEconomicEvent, "before_update")(_reject_ledger_mutation)
+event.listens_for(PurchaseEconomicEvent, "before_delete")(_reject_ledger_delete)
+event.listens_for(DocumentTransition, "before_update")(_reject_ledger_mutation)
+event.listens_for(DocumentTransition, "before_delete")(_reject_ledger_delete)
+event.listens_for(AuditLog, "before_update")(_reject_ledger_mutation)
+event.listens_for(AuditLog, "before_delete")(_reject_ledger_delete)
