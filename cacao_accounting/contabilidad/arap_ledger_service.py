@@ -380,15 +380,142 @@ def post_document_ar_ap(document: Any, entries: Iterable[GLEntry]) -> list[ARAPL
     return [movement]
 
 
-def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> list[ARAPLedgerEntry]:
-    """Registra el saldo propio del pago y sus aplicaciones documentales.
+def _populate_existing_payment_opening_books(
+    existing_opening: ARAPLedgerEntry,
+    document: PaymentEntry,
+    entries: Iterable[GLEntry],
+    total: Decimal,
+    payment_sign: Decimal,
+) -> None:
+    """Popula las valoraciones por libro si la apertura ya existe pero no tenia valoraciones."""
+    if not existing_opening.book_entries and total:
+        party_entries = _party_gl_entries(entries, _party_id(document))
+        payment_currency = str(_currency(document) or "")
+        payment_date = getattr(document, "posting_date", None) or date.today()
+        for book in _active_books(str(document.company)):
+            rate = _book_exchange_rate(
+                str(document.company),
+                payment_currency,
+                str(book.currency or payment_currency),
+                payment_date,
+                _decimal(document.exchange_rate),
+            )
+            candidates = _book_entries_for(str(book.id), party_entries)
+            opening_gl = candidates[0] if candidates else None
+            _add_book_entry(
+                existing_opening,
+                book=book,
+                amount=(payment_sign * total * rate).quantize(Decimal("0.0001")),
+                gl_entry=opening_gl,
+            )
 
-    Es idempotente por pago: si la apertura del pago ya fue materializada (por
-    ``submit_document`` o por ``post_payment_application_ar_ap`` durante la
-    conciliación) no se duplican movimientos. Esto permite invocarla desde
-    ``post_document_to_gl`` y desde el flujo de conciliación sin riesgo de
-    registrar dos veces el mismo pago.
-    """
+
+def _process_payment_reference(
+    document: PaymentEntry,
+    reference: PaymentReference,
+    party_entries: list[GLEntry],
+    payment_currency: str,
+    payment_date: date,
+    payment_sign: Decimal,
+) -> list[ARAPLedgerEntry]:
+    """Procesa una referencia individual de un pago."""
+    if not reference.allocated_amount or not reference.reference_id:
+        return []
+    target = database.session.get(
+        SalesInvoice if str(reference.reference_type).startswith("sales_") else PurchaseInvoice, reference.reference_id
+    )
+    if target is None:
+        return []
+    already_applied = database.session.execute(
+        select(ARAPLedgerEntry)
+        .where(
+            ARAPLedgerEntry.document_type == _document_type(target),
+            ARAPLedgerEntry.document_id == str(target.id),
+            ARAPLedgerEntry.event_type == "allocation",
+            ARAPLedgerEntry.reference_type == "payment_entry",
+            ARAPLedgerEntry.reference_id == str(document.id),
+            ARAPLedgerEntry.is_reversal.is_(False),
+        )
+        .order_by(ARAPLedgerEntry.id)
+        .limit(1)
+    ).scalar_one_or_none()
+    if already_applied is not None:
+        return []
+    amount = _decimal(reference.allocated_amount)
+    target_cache = database.session.execute(
+        select(ARAPOpenItem)
+        .where(
+            ARAPOpenItem.document_type == _document_type(target),
+            ARAPOpenItem.document_id == str(target.id),
+            ARAPOpenItem.unallocated_amount > 0,
+        )
+        .order_by(ARAPOpenItem.id)
+        .limit(1)
+    ).scalar_one_or_none()
+    target_economic_line_id = str(target_cache.economic_line_id if target_cache is not None else target.id)
+    if target_cache is not None:
+        target_direction = target_cache.direction
+    elif _is_return_document(target):
+        target_direction = "credit"
+    else:
+        target_direction = "debit"
+    target_delta = -amount if target_direction == "debit" else amount
+    target_movement = _new_movement(
+        target,
+        amount=target_delta,
+        event_type="allocation",
+        reference_type="payment_entry",
+        reference_id=str(document.id),
+        economic_line_id=target_economic_line_id,
+        posting_date=payment_date,
+        voucher_type="payment_entry",
+        voucher_id=str(document.id),
+    )
+    movements = [target_movement]
+    if target_cache is not None:
+        _decrease_open_item_cache(target_cache.id, amount)
+    for book in _active_books(str(document.company)):
+        target_currency = str(_currency(target) or reference.currency or payment_currency)
+        target_rate = _book_exchange_rate(
+            str(document.company),
+            target_currency,
+            str(book.currency or target_currency),
+            payment_date,
+            _decimal(target.exchange_rate),
+        )
+        book_amount = (target_delta * target_rate).quantize(Decimal("0.0001"))
+        candidates = _book_entries_for(str(book.id), party_entries)
+        _add_book_entry(target_movement, book=book, amount=book_amount, gl_entry=candidates[0] if candidates else None)
+    applied = _new_movement(
+        document,
+        amount=-payment_sign * _decimal(reference.payment_amount or reference.allocated_amount),
+        event_type="allocation",
+        reference_type=str(reference.reference_type),
+        reference_id=str(reference.reference_id),
+        economic_line_id=str(document.id),
+    )
+    movements.append(applied)
+    for book in _active_books(str(document.company)):
+        rate = _book_exchange_rate(
+            str(document.company),
+            payment_currency,
+            str(book.currency or payment_currency),
+            payment_date,
+            _decimal(document.exchange_rate),
+        )
+        _add_book_entry(
+            applied,
+            book=book,
+            amount=(-payment_sign * _decimal(reference.payment_amount or reference.allocated_amount) * rate).quantize(
+                Decimal("0.0001")
+            ),
+            gl_entry=None,
+        )
+    return movements
+
+
+def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> list[ARAPLedgerEntry]:
+    """Registra el saldo propio del pago y sus aplicaciones documentales."""
     references = list(
         database.session.execute(select(PaymentReference).where(PaymentReference.payment_id == document.id)).scalars().all()
     )
@@ -408,30 +535,7 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
     total = _decimal(document.paid_amount or document.received_amount)
     payment_sign = _payment_party_sign(document)
     if existing_opening is not None:
-        # La apertura pudo haber sido materializada sin valoración por libro por
-        # ``post_payment_application_ar_ap`` durante la conciliación (cuando el
-        # pago aún no estaba en GL). Al contabilizar el pago se completa la
-        # valoración para que el subledger cuadre contra el GL.
-        if not existing_opening.book_entries and total:
-            party_entries = _party_gl_entries(entries, _party_id(document))
-            payment_currency = str(_currency(document) or "")
-            payment_date = getattr(document, "posting_date", None) or date.today()
-            for book in _active_books(str(document.company)):
-                rate = _book_exchange_rate(
-                    str(document.company),
-                    payment_currency,
-                    str(book.currency or payment_currency),
-                    payment_date,
-                    _decimal(document.exchange_rate),
-                )
-                candidates = _book_entries_for(str(book.id), party_entries)
-                opening_gl = candidates[0] if candidates else None
-                _add_book_entry(
-                    existing_opening,
-                    book=book,
-                    amount=(payment_sign * total * rate).quantize(Decimal("0.0001")),
-                    gl_entry=opening_gl,
-                )
+        _populate_existing_payment_opening_books(existing_opening, document, entries, total, payment_sign)
         return [existing_opening]
     movements: list[ARAPLedgerEntry] = []
     party_entries = _party_gl_entries(entries, _party_id(document))
@@ -464,9 +568,6 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
                 _decimal(document.exchange_rate),
             )
             candidates = _book_entries_for(str(book.id), party_entries)
-            # Unallocated payments post directly against the party account;
-            # retain that GL trace. When references exist, the party line is
-            # linked to the allocation movement below instead.
             opening_gl = candidates[0] if not references and candidates else None
             _add_book_entry(
                 payment_opening,
@@ -475,148 +576,24 @@ def post_payment_ar_ap(document: PaymentEntry, entries: Iterable[GLEntry]) -> li
                 gl_entry=opening_gl,
             )
     for reference in references:
-        if not reference.allocated_amount or not reference.reference_id:
-            continue
-        target = database.session.get(
-            SalesInvoice if str(reference.reference_type).startswith("sales_") else PurchaseInvoice, reference.reference_id
+        movements.extend(
+            _process_payment_reference(document, reference, party_entries, payment_currency, payment_date, payment_sign)
         )
-        if target is None:
-            continue
-        # Si la conciliación ya materializó la aplicación
-        # (``post_payment_application_ar_ap``), no se duplica el movimiento.
-        already_applied = database.session.execute(
-            select(ARAPLedgerEntry)
-            .where(
-                ARAPLedgerEntry.document_type == _document_type(target),
-                ARAPLedgerEntry.document_id == str(target.id),
-                ARAPLedgerEntry.event_type == "allocation",
-                ARAPLedgerEntry.reference_type == "payment_entry",
-                ARAPLedgerEntry.reference_id == str(document.id),
-                ARAPLedgerEntry.is_reversal.is_(False),
-            )
-            .order_by(ARAPLedgerEntry.id)
-            .limit(1)
-        ).scalar_one_or_none()
-        if already_applied is not None:
-            continue
-        amount = _decimal(reference.allocated_amount)
-        target_cache = database.session.execute(
-            select(ARAPOpenItem)
-            .where(
-                ARAPOpenItem.document_type == _document_type(target),
-                ARAPOpenItem.document_id == str(target.id),
-                ARAPOpenItem.unallocated_amount > 0,
-            )
-            .order_by(ARAPOpenItem.id)
-            .limit(1)
-        ).scalar_one_or_none()
-        target_economic_line_id = str(target_cache.economic_line_id if target_cache is not None else target.id)
-        if target_cache is not None:
-            target_direction = target_cache.direction
-        elif _is_return_document(target):
-            target_direction = "credit"
-        else:
-            target_direction = "debit"
-        target_delta = -amount if target_direction == "debit" else amount
-        target_movement = _new_movement(
-            target,
-            amount=target_delta,
-            event_type="allocation",
-            reference_type="payment_entry",
-            reference_id=str(document.id),
-            economic_line_id=target_economic_line_id,
-            posting_date=payment_date,
-            voucher_type="payment_entry",
-            voucher_id=str(document.id),
-        )
-        movements.append(target_movement)
-        if target_cache is not None:
-            _decrease_open_item_cache(target_cache.id, amount)
-        for book in _active_books(str(document.company)):
-            target_currency = str(_currency(target) or reference.currency or payment_currency)
-            target_rate = _book_exchange_rate(
-                str(document.company),
-                target_currency,
-                str(book.currency or target_currency),
-                payment_date,
-                _decimal(target.exchange_rate),
-            )
-            book_amount = (target_delta * target_rate).quantize(Decimal("0.0001"))
-            candidates = _book_entries_for(str(book.id), party_entries)
-            _add_book_entry(target_movement, book=book, amount=book_amount, gl_entry=candidates[0] if candidates else None)
-        applied = _new_movement(
-            document,
-            amount=-payment_sign * _decimal(reference.payment_amount or reference.allocated_amount),
-            event_type="allocation",
-            reference_type=str(reference.reference_type),
-            reference_id=str(reference.reference_id),
-            economic_line_id=str(document.id),
-        )
-        movements.append(applied)
-        for book in _active_books(str(document.company)):
-            rate = _book_exchange_rate(
-                str(document.company),
-                payment_currency,
-                str(book.currency or payment_currency),
-                payment_date,
-                _decimal(document.exchange_rate),
-            )
-            _add_book_entry(
-                applied,
-                book=book,
-                amount=(-payment_sign * _decimal(reference.payment_amount or reference.allocated_amount) * rate).quantize(
-                    Decimal("0.0001")
-                ),
-                gl_entry=None,
-            )
     return movements
 
 
-def post_payment_application_ar_ap(
-    payment: PaymentEntry,
+def _resolve_application_target_item(
+    company: str,
     document: Any,
-    *,
-    document_amount: Decimal,
-    payment_amount: Decimal,
+    document_type: str,
+    document_currency: str,
+    party_type: str,
+    party_id: str,
+    target_ledger_type: str,
+    amount: Decimal,
     allocation_date: date,
-    reference_type: str | None = None,
-) -> list[ARAPLedgerEntry]:
-    """Registra una aplicación posterior de pago en el ledger documental.
-
-    La conciliación puede ocurrir después de contabilizar el pago. En ese
-    caso las referencias y relaciones históricas no bastan para reconstruir
-    el saldo: se agregan dos movimientos append-only, uno que consume el
-    documento y otro que consume el saldo abierto del pago. Si el documento
-    pertenece a datos legacy sin apertura en el subledger, se materializa su
-    apertura una sola vez antes de la aplicación.
-
-    ``document_amount`` está en la moneda del documento y ``payment_amount``
-    en la moneda del pago; la tasa queda implícita en ambos snapshots y no se
-    vuelve a inferir durante una reconstrucción histórica.
-    """
-    amount = _decimal(document_amount)
-    consumed = _decimal(payment_amount)
-    if amount <= 0 or consumed <= 0:
-        raise ValueError("La aplicación AP/AR requiere importes positivos.")
-    company = str(getattr(payment, "company", None) or getattr(document, "company", None) or "")
-    party_type = str(getattr(payment, "party_type", None) or "").lower()
-    party_id = str(getattr(payment, "party_id", None) or "")
-    if not company or party_type not in {"customer", "supplier"} or not party_id:
-        raise ValueError("La aplicación AP/AR requiere compañía y tercero explícitos.")
-
-    payment_type = "payment_entry"
-    payment_id = str(payment.id)
-    payment_currency = str(_currency(payment) or "")
-    document_type = _document_type(document)
-    document_currency = str(_currency(document) or payment_currency)
-    if not payment_currency or not document_currency:
-        raise ValueError("La aplicación AP/AR requiere monedas explícitas.")
-
-    target_ledger_type = "AR" if party_type == "customer" else "AP"
-    target_party_id = str(_party_id(document) or party_id)
-    if target_party_id != party_id:
-        raise ValueError("El documento y el pago deben pertenecer al mismo tercero.")
-
+) -> tuple[ARAPLedgerEntry, ARAPOpenItem | None, list[ARAPLedgerEntry]]:
+    """Resuelve la apertura y el item cacheado del documento destino."""
     target_opening = database.session.execute(
         select(ARAPLedgerEntry)
         .where(
@@ -640,7 +617,7 @@ def post_payment_application_ar_ap(
         .order_by(ARAPOpenItem.id)
         .limit(1)
     ).scalar_one_or_none()
-    movements: list[ARAPLedgerEntry] = []
+    new_movements: list[ARAPLedgerEntry] = []
     if target_opening is None:
         opening_amount = _document_amount(document) or amount
         signed_target = -opening_amount if _is_return_document(document) else opening_amount
@@ -659,7 +636,7 @@ def post_payment_application_ar_ap(
             voucher_type=document_type,
             voucher_id=str(document.id),
         )
-        movements.append(target_opening)
+        new_movements.append(target_opening)
     if target_cache is None:
         target_cache = _cache_for_movement(target_opening)
         if target_cache is None:
@@ -674,7 +651,22 @@ def post_payment_application_ar_ap(
                 )
     if target_cache is not None and amount > _decimal(target_cache.unallocated_amount):
         raise ValueError("La aplicación excede el saldo pendiente del documento.")
+    return target_opening, target_cache, new_movements
 
+
+def _resolve_application_payment_item(
+    company: str,
+    payment: PaymentEntry,
+    payment_type: str,
+    payment_id: str,
+    payment_currency: str,
+    party_type: str,
+    party_id: str,
+    target_ledger_type: str,
+    consumed: Decimal,
+    allocation_date: date,
+) -> tuple[ARAPLedgerEntry, ARAPOpenItem | None, list[ARAPLedgerEntry]]:
+    """Resuelve la apertura y el item cacheado del pago."""
     payment_opening = database.session.execute(
         select(ARAPLedgerEntry)
         .where(
@@ -702,6 +694,7 @@ def post_payment_application_ar_ap(
     payment_sign = _payment_party_sign(payment)
     if consumed > payment_total:
         raise ValueError("La aplicación excede el saldo nominal del pago.")
+    new_movements: list[ARAPLedgerEntry] = []
     if payment_opening is None:
         payment_opening = _new_movement(
             payment,
@@ -718,7 +711,7 @@ def post_payment_application_ar_ap(
             voucher_type=payment_type,
             voucher_id=payment_id,
         )
-        movements.append(payment_opening)
+        new_movements.append(payment_opening)
     if payment_cache is None:
         payment_cache = _cache_for_movement(payment_opening)
         if payment_cache is None:
@@ -734,7 +727,31 @@ def post_payment_application_ar_ap(
                 )
     if payment_cache is not None and consumed > _decimal(payment_cache.unallocated_amount):
         raise ValueError("La aplicación excede el saldo disponible del pago.")
+    return payment_opening, payment_cache, new_movements
 
+
+def _build_application_movements(
+    company: str,
+    payment: PaymentEntry,
+    document: Any,
+    document_type: str,
+    payment_type: str,
+    payment_id: str,
+    document_currency: str,
+    payment_currency: str,
+    party_type: str,
+    party_id: str,
+    target_ledger_type: str,
+    amount: Decimal,
+    consumed: Decimal,
+    allocation_date: date,
+    reference_type: str | None,
+    target_opening: ARAPLedgerEntry,
+    target_cache: ARAPOpenItem | None,
+    payment_cache: ARAPOpenItem | None,
+) -> list[ARAPLedgerEntry]:
+    """Crea los movimientos de asignacion y actualiza las valoraciones por libro."""
+    payment_sign = _payment_party_sign(payment)
     if target_cache is not None:
         target_direction = target_cache.direction
     elif _decimal(target_opening.document_amount) > 0:
@@ -791,7 +808,7 @@ def post_payment_application_ar_ap(
         voucher_type=payment_type,
         voucher_id=payment_id,
     )
-    movements.extend((target_movement, payment_movement))
+    movements = [target_movement, payment_movement]
     for book in _active_books(company):
         target_rate = _book_exchange_rate(
             company,
@@ -813,6 +830,81 @@ def post_payment_application_ar_ap(
         _decrease_open_item_cache(target_cache.id, amount)
     if payment_cache is not None:
         _decrease_open_item_cache(payment_cache.id, consumed)
+    return movements
+
+
+def post_payment_application_ar_ap(
+    payment: PaymentEntry,
+    document: Any,
+    *,
+    document_amount: Decimal,
+    payment_amount: Decimal,
+    allocation_date: date,
+    reference_type: str | None = None,
+) -> list[ARAPLedgerEntry]:
+    """Registra una aplicación posterior de pago en el ledger documental."""
+    amount = _decimal(document_amount)
+    consumed = _decimal(payment_amount)
+    if amount <= 0 or consumed <= 0:
+        raise ValueError("La aplicación AP/AR requiere importes positivos.")
+    company = str(getattr(payment, "company", None) or getattr(document, "company", None) or "")
+    party_type = str(getattr(payment, "party_type", None) or "").lower()
+    party_id = str(getattr(payment, "party_id", None) or "")
+    if not company or party_type not in {"customer", "supplier"} or not party_id:
+        raise ValueError("La aplicación AP/AR requiere compañía y tercero explícitos.")
+
+    payment_type = "payment_entry"
+    payment_id = str(payment.id)
+    payment_currency = str(_currency(payment) or "")
+    document_type = _document_type(document)
+    document_currency = str(_currency(document) or payment_currency)
+    if not payment_currency or not document_currency:
+        raise ValueError("La aplicación AP/AR requiere monedas explícitas.")
+
+    target_ledger_type = "AR" if party_type == "customer" else "AP"
+    target_party_id = str(_party_id(document) or party_id)
+    if target_party_id != party_id:
+        raise ValueError("El documento y el pago deben pertenecer al mismo tercero.")
+
+    movements: list[ARAPLedgerEntry] = []
+    target_opening, target_cache, target_new_movements = _resolve_application_target_item(
+        company, document, document_type, document_currency, party_type, party_id, target_ledger_type, amount, allocation_date
+    )
+    movements.extend(target_new_movements)
+    payment_opening, payment_cache, payment_new_movements = _resolve_application_payment_item(
+        company,
+        payment,
+        payment_type,
+        payment_id,
+        payment_currency,
+        party_type,
+        party_id,
+        target_ledger_type,
+        consumed,
+        allocation_date,
+    )
+    movements.extend(payment_new_movements)
+    alloc_movements = _build_application_movements(
+        company,
+        payment,
+        document,
+        document_type,
+        payment_type,
+        payment_id,
+        document_currency,
+        payment_currency,
+        party_type,
+        party_id,
+        target_ledger_type,
+        amount,
+        consumed,
+        allocation_date,
+        reference_type,
+        target_opening,
+        target_cache,
+        payment_cache,
+    )
+    movements.extend(alloc_movements)
     return movements
 
 
@@ -1027,15 +1119,179 @@ def _apply_journal_open_item(
     return source_allocation
 
 
-def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]) -> list[ARAPLedgerEntry]:
-    """Publica líneas de tercero de un diario en el subledger AP/AR.
+def _process_journal_line_reference(
+    document: ComprobanteContable,
+    line: ComprobanteContableDetalle,
+    party_type: str,
+    party_id: str,
+    account_id: str,
+    currency: str,
+    source: ARAPLedgerEntry,
+    source_cache: ARAPOpenItem,
+    source_signed: Decimal,
+) -> ARAPLedgerEntry | None:
+    """Procesa la referencia de una linea de diario y genera su aplicacion."""
+    reference_type = (
+        _normalize_journal_reference_type(str(getattr(line, "reference_type", None) or ""), party_type)
+        if getattr(line, "reference_type", None)
+        else ""
+    )
+    reference_name = str(
+        getattr(line, "reference_name", None)
+        or getattr(line, "reference_open_item_id", None)
+        or getattr(line, "internal_reference_id", None)
+        or ""
+    ).strip()
+    if not reference_type and not reference_name:
+        return None
+    if not reference_type or not reference_name:
+        raise ValueError("La referencia AP/AR requiere tipo y documento.")
+    target = database.session.get(ARAPOpenItem, reference_name)
+    if target is None:
+        target = _find_target_open_item(
+            company=str(document.entity),
+            party_type=party_type,
+            party_id=party_id,
+            reference_type=reference_type,
+            reference_name=reference_name,
+            account_id=account_id,
+        )
+    if target is None:
+        raise ValueError("El documento de referencia AP/AR no tiene saldo abierto.")
+    if target.party_type != party_type or str(target.party_id) != party_id:
+        raise ValueError("El documento de referencia no pertenece al tercero de la línea.")
+    source_amount = abs(source_signed)
+    if target.currency == currency:
+        rate = Decimal("1")
+    else:
+        rate = _decimal(getattr(line, "reference_exchange_rate", None) or getattr(line, "exchange_rate", None))
+        if rate <= 0:
+            raise ValueError("La referencia AP/AR requiere una tasa positiva entre monedas.")
+    amount = min(_decimal(target.unallocated_amount), source_amount / rate)
+    source_consumed = (amount * rate).quantize(Decimal("0.0001"))
+    if amount <= 0 or source_consumed <= 0:
+        raise ValueError("El documento de referencia AP/AR no tiene saldo disponible.")
+    return _apply_journal_open_item(
+        document=document,
+        line=line,
+        source=source,
+        source_cache=source_cache,
+        target=target,
+        amount=amount,
+        source_signed=source_signed,
+        source_consumed=source_consumed,
+    )
 
-    Cada línea genera un open item independiente, conserva su importe en la
-    moneda documental y, cuando contiene referencia, aplica el importe al
-    documento abierto en la misma transacción. El GL queda enlazado por
-    ``economic_line_id`` y el saldo rápido se actualiza sin reemplazar el
-    ledger append-only.
-    """
+
+def _populate_journal_line_books(
+    document: ComprobanteContable,
+    entry_list: list[GLEntry],
+    economic_line_id: str,
+    ledger_type: str,
+    source: ARAPLedgerEntry,
+    reversal_source: ARAPLedgerEntry | None,
+) -> None:
+    """Agrega valoraciones por libro para una linea de comprobante contable."""
+    for book in _active_books(str(document.entity)):
+        candidates = [
+            entry
+            for entry in entry_list
+            if str(getattr(entry, "ledger_id", None) or "") in {str(book.id), str(book.code)}
+            and str(getattr(entry, "economic_line_id", None) or "") == economic_line_id
+        ]
+        if candidates:
+            book_value = sum((_book_value_from_gl(entry, ledger_type) for entry in candidates), Decimal("0"))
+            source_book = (
+                next(
+                    (row for row in cast(list[ARAPLedgerBookEntry], reversal_source.book_entries) if row.ledger_id == book.id),
+                    None,
+                )
+                if reversal_source is not None
+                else None
+            )
+            _add_book_entry(
+                source,
+                book=book,
+                amount=book_value,
+                gl_entry=candidates[0],
+                is_reversal=reversal_source is not None,
+                reversal_of=source_book,
+            )
+
+
+def _process_journal_party_line(
+    document: ComprobanteContable,
+    line: ComprobanteContableDetalle,
+    entry_list: list[GLEntry],
+) -> list[ARAPLedgerEntry]:
+    """Procesa una linea individual con tercero de un comprobante contable."""
+    account = _journal_account(line, str(document.entity), entry_list)
+    account_type = str(getattr(account, "account_type", None) or "").lower()
+    if account_type not in {"receivable", "payable", "customer_advance", "supplier_advance"}:
+        return []
+    party_type = str(getattr(line, "third_type", None) or "").lower()
+    party_type = {"cliente": "customer", "proveedor": "supplier"}.get(party_type, party_type)
+    party_id = str(getattr(line, "third_code", None) or "")
+    ledger_type = "AR" if account_type in {"receivable", "customer_advance"} else "AP"
+    source_signed = _journal_line_signed_amount(line, ledger_type)
+    if not party_id or not party_type or source_signed == 0:
+        return []
+    currency = str(getattr(line, "currency_id", None) or document.transaction_currency or "")
+    if not currency:
+        raise ValueError("La línea AP/AR requiere moneda documental explícita.")
+    economic_line_id = str(getattr(line, "economic_line_id", None) or line.id)
+    reversal_source = None
+    if getattr(document, "reversal_of", None):
+        reversal_source = database.session.execute(
+            select(ARAPLedgerEntry)
+            .where(
+                ARAPLedgerEntry.document_type == "journal_entry",
+                ARAPLedgerEntry.document_id == str(document.reversal_of),
+                ARAPLedgerEntry.economic_line_id == economic_line_id,
+                ARAPLedgerEntry.is_reversal.is_(False),
+            )
+            .order_by(ARAPLedgerEntry.id)
+            .limit(1)
+        ).scalar_one_or_none()
+    source = _new_movement(
+        document,
+        amount=source_signed,
+        event_type="opening",
+        ledger_type=ledger_type,
+        party_type=party_type,
+        party_id=party_id,
+        currency=currency,
+        document_type="journal_entry",
+        document_id=reversal_source.document_id if reversal_source is not None else str(document.id),
+        economic_line_id=economic_line_id,
+        voucher_type="journal_entry",
+        is_reversal=reversal_source is not None,
+        reversal_of=str(reversal_source.id) if reversal_source is not None else None,
+        voucher_id=str(document.id),
+    )
+    movements = [source]
+    direction = "debit" if source_signed > 0 else "credit"
+    source_cache = _upsert_open_item_cache(
+        movement=source,
+        amount=abs(source_signed),
+        direction=direction,
+        account_id=str(account.id),
+        economic_line_id=economic_line_id,
+        unallocated_amount=Decimal("0") if reversal_source is not None else None,
+    )
+    if reversal_source is not None:
+        _close_open_item_cache_for_movement(reversal_source)
+    _populate_journal_line_books(document, entry_list, economic_line_id, ledger_type, source, reversal_source)
+    allocation_movement = _process_journal_line_reference(
+        document, line, party_type, party_id, str(account.id), currency, source, source_cache, source_signed
+    )
+    if allocation_movement:
+        movements.append(allocation_movement)
+    return movements
+
+
+def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]) -> list[ARAPLedgerEntry]:
+    """Publica líneas de tercero de un diario en el subledger AP/AR."""
     existing = (
         database.session.execute(
             select(ARAPLedgerEntry)
@@ -1054,143 +1310,7 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
     entry_list = list(entries)
     movements: list[ARAPLedgerEntry] = []
     for line in _journal_party_lines(document):
-        account = _journal_account(line, str(document.entity), entry_list)
-        account_type = str(getattr(account, "account_type", None) or "").lower()
-        if account_type not in {"receivable", "payable", "customer_advance", "supplier_advance"}:
-            continue
-        party_type = str(getattr(line, "third_type", None) or "").lower()
-        party_type = {"cliente": "customer", "proveedor": "supplier"}.get(party_type, party_type)
-        party_id = str(getattr(line, "third_code", None) or "")
-        ledger_type = "AR" if account_type in {"receivable", "customer_advance"} else "AP"
-        source_signed = _journal_line_signed_amount(line, ledger_type)
-        if not party_id or not party_type or source_signed == 0:
-            continue
-        currency = str(getattr(line, "currency_id", None) or document.transaction_currency or "")
-        if not currency:
-            raise ValueError("La línea AP/AR requiere moneda documental explícita.")
-        economic_line_id = str(getattr(line, "economic_line_id", None) or line.id)
-        reversal_source = None
-        if getattr(document, "reversal_of", None):
-            reversal_source = database.session.execute(
-                select(ARAPLedgerEntry)
-                .where(
-                    ARAPLedgerEntry.document_type == "journal_entry",
-                    ARAPLedgerEntry.document_id == str(document.reversal_of),
-                    ARAPLedgerEntry.economic_line_id == economic_line_id,
-                    ARAPLedgerEntry.is_reversal.is_(False),
-                )
-                .order_by(ARAPLedgerEntry.id)
-                .limit(1)
-            ).scalar_one_or_none()
-        source = _new_movement(
-            document,
-            amount=source_signed,
-            event_type="opening",
-            ledger_type=ledger_type,
-            party_type=party_type,
-            party_id=party_id,
-            currency=currency,
-            document_type="journal_entry",
-            document_id=reversal_source.document_id if reversal_source is not None else str(document.id),
-            economic_line_id=economic_line_id,
-            voucher_type="journal_entry",
-            is_reversal=reversal_source is not None,
-            reversal_of=str(reversal_source.id) if reversal_source is not None else None,
-            voucher_id=str(document.id),
-        )
-        movements.append(source)
-        direction = "debit" if source_signed > 0 else "credit"
-        source_cache = _upsert_open_item_cache(
-            movement=source,
-            amount=abs(source_signed),
-            direction=direction,
-            account_id=str(account.id),
-            economic_line_id=economic_line_id,
-            unallocated_amount=Decimal("0") if reversal_source is not None else None,
-        )
-        if reversal_source is not None:
-            _close_open_item_cache_for_movement(reversal_source)
-        for book in _active_books(str(document.entity)):
-            candidates = [
-                entry
-                for entry in entry_list
-                if str(getattr(entry, "ledger_id", None) or "") in {str(book.id), str(book.code)}
-                and str(getattr(entry, "economic_line_id", None) or "") == economic_line_id
-            ]
-            if candidates:
-                book_value = sum((_book_value_from_gl(entry, ledger_type) for entry in candidates), Decimal("0"))
-                source_book = (
-                    next(
-                        (
-                            row
-                            for row in cast(list[ARAPLedgerBookEntry], reversal_source.book_entries)
-                            if row.ledger_id == book.id
-                        ),
-                        None,
-                    )
-                    if reversal_source is not None
-                    else None
-                )
-                _add_book_entry(
-                    source,
-                    book=book,
-                    amount=book_value,
-                    gl_entry=candidates[0],
-                    is_reversal=reversal_source is not None,
-                    reversal_of=source_book,
-                )
-        reference_type = (
-            _normalize_journal_reference_type(str(getattr(line, "reference_type", None) or ""), party_type)
-            if getattr(line, "reference_type", None)
-            else ""
-        )
-        reference_name = str(
-            getattr(line, "reference_name", None)
-            or getattr(line, "reference_open_item_id", None)
-            or getattr(line, "internal_reference_id", None)
-            or ""
-        ).strip()
-        if not reference_type and not reference_name:
-            continue
-        if not reference_type or not reference_name:
-            raise ValueError("La referencia AP/AR requiere tipo y documento.")
-        target = database.session.get(ARAPOpenItem, reference_name)
-        if target is None:
-            target = _find_target_open_item(
-                company=str(document.entity),
-                party_type=party_type,
-                party_id=party_id,
-                reference_type=reference_type,
-                reference_name=reference_name,
-                account_id=str(account.id),
-            )
-        if target is None:
-            raise ValueError("El documento de referencia AP/AR no tiene saldo abierto.")
-        if target.party_type != party_type or str(target.party_id) != party_id:
-            raise ValueError("El documento de referencia no pertenece al tercero de la línea.")
-        source_amount = abs(source_signed)
-        if target.currency == currency:
-            rate = Decimal("1")
-        else:
-            rate = _decimal(getattr(line, "reference_exchange_rate", None) or getattr(line, "exchange_rate", None))
-            if rate <= 0:
-                raise ValueError("La referencia AP/AR requiere una tasa positiva entre monedas.")
-        amount = min(_decimal(target.unallocated_amount), source_amount / rate)
-        source_consumed = (amount * rate).quantize(Decimal("0.0001"))
-        if amount <= 0 or source_consumed <= 0:
-            raise ValueError("El documento de referencia AP/AR no tiene saldo disponible.")
-        movements.append(
-            _apply_journal_open_item(
-                document=document,
-                line=line,
-                source=source,
-                source_cache=source_cache,
-                target=target,
-                amount=amount,
-                source_signed=source_signed,
-                source_consumed=source_consumed,
-            )
-        )
+        movements.extend(_process_journal_party_line(document, line, entry_list))
     return movements
 
 
