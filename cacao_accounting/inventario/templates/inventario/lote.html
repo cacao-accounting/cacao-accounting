@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/lote.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventario") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_lote_lista') }}" class="link-dark">{{ _("Lotes") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.batch_no }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-boxes"></i> {{ registro.batch_no }}</h5>
+  </div>
+  <dl class="row p-3">
+    <dt class="col-sm-3">{{ _("Número de lote") }}</dt>
+    <dd class="col-sm-9">{{ registro.batch_no }}</dd>
+    <dt class="col-sm-3">{{ _("Artículo") }}</dt>
+    <dd class="col-sm-9">{{ registro.item_code }}{% if item %} — {{ item.name }}{% endif %}</dd>
+    <dt class="col-sm-3">{{ _("Fecha de vencimiento") }}</dt>
+    <dd class="col-sm-9">{{ registro.expiry_date or "—" }}</dd>
+    <dt class="col-sm-3">{{ _("Fecha de fabricación") }}</dt>
+    <dd class="col-sm-9">{{ registro.manufacturing_date or "—" }}</dd>
+    <dt class="col-sm-3">{{ _("Descripción") }}</dt>
+    <dd class="col-sm-9">{{ registro.description or "—" }}</dd>
+    <dt class="col-sm-3">{{ _("Activo") }}</dt>
+    <dd class="col-sm-9">{{ _("Sí") if registro.is_active else _("No") }}</dd>
+  </dl>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-clipboard-data"></i> {{ _("Saldo por Bodega") }}</h5>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">{{ _("Saldo del lote por bodega.") }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{{ _("Bodega") }}</th>
+        <th scope="col">{{ _("Cantidad") }}</th>
+        <th scope="col">{{ _("Valor") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for saldo in balances -%}
+      <tr>
+        <td>{{ saldo.warehouse }}</td>
+        <td>{{ saldo.balance_qty }}</td>
+        <td>{{ saldo.stock_value }}</td>
+      </tr>
+      {%- else %}
+      <tr><td colspan="3">{{ _("Sin movimientos para este lote.") }}</td></tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-clock-history"></i> {{ _("Movimientos Recientes") }}</h5>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">{{ _("Movimientos recientes del lote.") }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{{ _("Fecha") }}</th>
+        <th scope="col">{{ _("Bodega") }}</th>
+        <th scope="col">{{ _("Comprobante") }}</th>
+        <th scope="col">{{ _("Entrada") }}</th>
+        <th scope="col">{{ _("Salida") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for movimiento in movimientos -%}
+      <tr>
+        <td>{{ movimiento.posting_date }}</td>
+        <td>{{ movimiento.warehouse }}</td>
+        <td>{{ movimiento.voucher_type }} / {{ movimiento.voucher_id }}</td>
+        <td>{% if movimiento.qty_change and movimiento.qty_change > 0 %}{{ movimiento.qty_change }}{% else %}—{% endif %}</td>
+        <td>{% if movimiento.qty_change and movimiento.qty_change < 0 %}{{ -movimiento.qty_change }}{% else %}—{% endif %}</td>
+      </tr>
+      {%- else %}
+      <tr><td colspan="5">{{ _("Sin movimientos para este lote.") }}</td></tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

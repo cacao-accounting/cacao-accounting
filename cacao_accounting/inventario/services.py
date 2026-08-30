@@ -268,6 +268,24 @@ def _uom_choices() -> list[tuple[str, str]]:
     return [(u.code, u.name) for u in database.session.execute(database.select(UOM).order_by(UOM.name)).scalars().all()]
 
 
+def _lote_item_choices() -> list[tuple[str, str]]:
+    """Devuelve items inventariables con control de lote para el formulario de lote."""
+    items = (
+        database.session.execute(
+            database.select(Item)
+            .where(
+                Item.is_active.is_(True),
+                Item.is_stock_item.is_(True),
+                (Item.has_batch.is_(True)) | (Item.has_expiry_date.is_(True)),
+            )
+            .order_by(Item.code)
+        )
+        .scalars()
+        .all()
+    )
+    return [(item.code, f"{item.code} - {item.name}") for item in items]
+
+
 def _item_uom_rows_for_template(form_data: Mapping[str, Any]) -> list[dict[str, str]]:
     """Normaliza filas de UOM para re-renderizar el formulario."""
     parsed_rows = parse_item_uom_rows(form_data)

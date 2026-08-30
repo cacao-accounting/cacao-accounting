@@ -137,6 +137,84 @@ def _decimal_value(value: Any) -> Decimal:
         raise InventoryServiceError("La conversion UOM debe ser un numero valido.") from exc
 
 
+@dataclass(frozen=True)
+class BatchParams:
+    """Parametros para crear un lote de inventario."""
+
+    item_code: str
+    batch_no: str
+    expiry_date: date | None = None
+    manufacturing_date: date | None = None
+    description: str | None = None
+    is_active: bool = True
+
+
+def validate_batch_params(params: BatchParams) -> Item:
+    """Valida que un lote nuevo sea consistente con el maestro de items.
+
+    Reglas alineadas con el motor de posteo (:func:`validate_batch_serial`):
+    solo items inventariables con control de lote admiten lotes, el numero de
+    lote es unico por item y los items con control de vencimiento exigen fecha
+    de vencimiento al crear el lote.
+    """
+    batch_no = (params.batch_no or "").strip()
+    item = database.session.execute(select(Item).filter_by(code=params.item_code)).scalar_one_or_none()
+    if item is None:
+        raise InventoryServiceError(f"El item '{params.item_code}' no existe.")
+    if not item.is_stock_item or not (item.has_batch or item.has_expiry_date):
+        raise InventoryServiceError("Solo los artículos de inventario con control de lote admiten lotes.")
+    if not batch_no:
+        raise InventoryServiceError("El número de lote es obligatorio.")
+    existing = database.session.execute(select(Batch).filter_by(item_code=item.code, batch_no=batch_no)).scalar_one_or_none()
+    if existing is not None:
+        raise InventoryServiceError(f"El lote '{batch_no}' ya existe para el item {item.code}.")
+    if item.has_expiry_date and params.expiry_date is None:
+        raise InventoryServiceError("El item controla vencimiento: el lote requiere fecha de vencimiento.")
+    if params.manufacturing_date and params.expiry_date and params.expiry_date < params.manufacturing_date:
+        raise InventoryServiceError("La fecha de vencimiento no puede ser anterior a la fecha de fabricación.")
+    return item
+
+
+def create_batch(params: BatchParams) -> Batch:
+    """Crea un lote de inventario validado contra el maestro de items."""
+    validate_batch_params(params)
+    batch = Batch(
+        item_code=params.item_code,
+        batch_no=(params.batch_no or "").strip(),
+        expiry_date=params.expiry_date,
+        manufacturing_date=params.manufacturing_date,
+        description=params.description,
+        is_active=params.is_active,
+    )
+    database.session.add(batch)
+    database.session.flush()
+    return batch
+
+
+def batch_balance_rows(batch_id: str) -> list[dict[str, Any]]:
+    """Devuelve el saldo de un lote por bodega desde el ledger físico.
+
+    Usa el predicado compartido que excluye los pares de anulación del mismo
+    período, de modo que el saldo mostrado coincida con el validado por
+    :func:`_validate_batch` al emitir salidas por lote.
+    """
+    from cacao_accounting.ledger_queries import exclude_cancelled_stock_entries
+
+    rows = database.session.execute(
+        exclude_cancelled_stock_entries(
+            select(
+                StockLedgerEntry.warehouse,
+                func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
+                func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
+            ).where(StockLedgerEntry.batch_id == batch_id)
+        ).group_by(StockLedgerEntry.warehouse)
+    ).all()
+    return [
+        {"warehouse": warehouse, "balance_qty": _decimal_value(qty), "stock_value": _decimal_value(value)}
+        for warehouse, qty, value in rows
+    ]
+
+
 def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -> Decimal:
     """Convierte cantidad de un item entre UOM configuradas."""
     if from_uom == to_uom:
