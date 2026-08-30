@@ -941,6 +941,14 @@ def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
     )
 
 
+def _batch_no_map() -> dict[str, str]:
+    """Devuelve un mapa de id de lote a numero de lote legible."""
+    return {
+        str(batch_id): str(batch_no or "")
+        for batch_id, batch_no in database.session.execute(select(Batch.id, Batch.batch_no)).all()
+    }
+
+
 def get_kardex(filters: KardexFilters) -> PaginatedReport:
     """Devuelve Kardex desde StockLedgerEntry."""
     window_start, window_end = _report_window(filters)
@@ -954,6 +962,7 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
     if window_end:
         query = query.where(StockLedgerEntry.posting_date <= window_end)
 
+    batch_names = _batch_no_map()
     rows: list[ReportRow] = []
     total_in = Decimal("0")
     total_out = Decimal("0")
@@ -982,6 +991,8 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
                     "posting_date": entry.posting_date,
                     "item_code": entry.item_code,
                     "warehouse": entry.warehouse,
+                    "batch_no": batch_names.get(str(entry.batch_id), "") if entry.batch_id else "",
+                    "serial_no": entry.serial_no or "",
                     "voucher_type": entry.voucher_type,
                     "voucher_id": entry.voucher_id,
                     "incoming_qty": incoming,
@@ -1000,6 +1011,8 @@ def get_kardex(filters: KardexFilters) -> PaginatedReport:
             "posting_date",
             "item_code",
             "warehouse",
+            "batch_no",
+            "serial_no",
             "voucher_type",
             "voucher_id",
             "incoming_qty",
@@ -3406,22 +3419,73 @@ def get_inventory_valuation(filters: OperationalReportFilters) -> PaginatedRepor
 
 
 def get_batch_report(filters: OperationalReportFilters) -> PaginatedReport:
-    """Report inventory batches."""
+    """Report inventory batches with balance per lot and warehouse.
+
+    El saldo se calcula desde el ledger físico con el predicado compartido de
+    exclusion de anulaciones, de modo que coincide con el saldo validado al
+    emitir salidas por lote. Los lotes sin movimientos se listan con saldo
+    cero para dar visibilidad completa del maestro.
+    """
     query = select(Batch)
     if filters.item_code:
         query = query.filter_by(item_code=filters.item_code)
-    rows = [
-        ReportRow(
-            {
-                "item_code": batch.item_code,
-                "batch_no": batch.batch_no,
-                "expiry_date": batch.expiry_date,
-                "is_active": batch.is_active,
-            }
-        )
-        for batch in database.session.execute(query).scalars()
-    ]
-    return PaginatedReport(rows=rows, totals={"count": Decimal(len(rows))})
+    batches = database.session.execute(query.order_by(Batch.item_code, Batch.batch_no)).scalars().all()
+
+    balances_query = exclude_cancelled_stock_entries(
+        select(
+            StockLedgerEntry.batch_id,
+            StockLedgerEntry.warehouse,
+            func.coalesce(func.sum(StockLedgerEntry.qty_change), 0),
+            func.coalesce(func.sum(StockLedgerEntry.stock_value_difference), 0),
+        ).where(StockLedgerEntry.batch_id.isnot(None))
+    ).group_by(StockLedgerEntry.batch_id, StockLedgerEntry.warehouse)
+    if filters.item_code:
+        balances_query = balances_query.where(StockLedgerEntry.item_code == filters.item_code)
+    balance_map: dict[str, list[tuple[str, Decimal, Decimal]]] = {}
+    for batch_id, warehouse, qty, value in database.session.execute(balances_query).all():
+        balance_map.setdefault(str(batch_id), []).append((str(warehouse), _decimal_value(qty), _decimal_value(value)))
+
+    rows: list[ReportRow] = []
+    total_stock_value = Decimal("0")
+    for batch in batches:
+        entries = balance_map.get(str(batch.id))
+        if entries:
+            for warehouse, balance_qty, stock_value in sorted(entries, key=lambda entry: entry[0]):
+                if filters.warehouse and warehouse != filters.warehouse:
+                    continue
+                rows.append(
+                    ReportRow(
+                        {
+                            "item_code": batch.item_code,
+                            "batch_no": batch.batch_no,
+                            "warehouse": warehouse,
+                            "expiry_date": batch.expiry_date,
+                            "is_active": batch.is_active,
+                            "balance_qty": balance_qty,
+                            "stock_value": stock_value,
+                        }
+                    )
+                )
+                total_stock_value += stock_value
+        elif not filters.warehouse:
+            rows.append(
+                ReportRow(
+                    {
+                        "item_code": batch.item_code,
+                        "batch_no": batch.batch_no,
+                        "warehouse": "",
+                        "expiry_date": batch.expiry_date,
+                        "is_active": batch.is_active,
+                        "balance_qty": Decimal("0"),
+                        "stock_value": Decimal("0"),
+                    }
+                )
+            )
+    return PaginatedReport(
+        rows=rows,
+        totals={"count": Decimal(len(rows)), "stock_value": total_stock_value},
+        columns=["item_code", "batch_no", "warehouse", "expiry_date", "is_active", "balance_qty", "stock_value"],
+    )
 
 
 def get_serial_report(filters: OperationalReportFilters) -> PaginatedReport:
