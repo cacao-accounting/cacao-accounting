@@ -1,3 +1,75 @@
+# Introducción
+
+Cacao Accouting es un software contable que busca dar cobertura completa y robusta a los siguientes
+flujo de negocio:
+
+- Order to Cash (O2C): Flujo completo del ciclo de venta.
+- Source to Pay (S2P): Flujo completo del proceso de abastecimiento.
+- Record to Report (R2R): Generación robusta de reportes a partir de los registros almacenados en
+  el sistema
+- Inventory to Fulfillment (I2F): Gestión integral de inventarios.
+- Cash & Treasury Management (CTM): Gestión del efectivo en caja y bancos.
+
+Cacao Accounting no pretende ser un ERP, manufactura, gestión de nominas, activo fijo y similares
+estan fuera de el alcance.
+
+Cacao Accounting soporta dos modos de uso:
+- Modo Desktop: Limitado a una empresa y un usuario por base de datos.
+- Modo Cloud: Multi empresa y multiusuario con acceso definidos por roles y acceso definido a compañias
+  especificas.
+
+Modo desktop se considera la base operativa del sistema, el sistema debe ser completamente funcional en
+modo desktop, el modo cloud es una capa de funcionalidad adicional que agrega funciones utiles para 
+entornos en la nube como: correo electronico, multi usuario, multi moneda.
+
+El Issue (https://github.com/cacao-accounting/cacao-accounting/issues/757) tiene más análisis sobre el
+alcance de modo desktop.
+
+El hecho de tener que correr como un app de escritorio implica mantener un diseño monolítico modular, sin
+depender excesivamente de patrones que hacen solo sentido en entornos en la nube. En la práctica Cacao
+Accounting Desktop solo requiere una base de datos local SQLite.
+
+Dado que en modo desktop solo esta disponible la base de datos local hay que mantener el scope sencillo.
+
+El sistema es:
+- Multilibro: un registro postea a varios libros sin crear registros adicionales, todos los modulos
+  operativos (O2C, S2P, I2F, CTM) publican a todos los libros activos. Solo desde el modulo de
+  contabilidad es posible seleccionar que un registro afecte libros contables especificos.
+- Multimoneda real (toda transacción registra moneda origen y moneda destino) multimoneda debe
+  considerar la moneda del libro destino si una tasa de cambio no esta disponible para la conversión
+  bloquear el registro.
+- El ledger contable es la fuente unica de verdad, los ledger de Cuentas por Pagar, Cuentas por Cobrar e
+  Inventario existen como extenciones del ledger financiero y deben reconciliables en todo momento.
+- El sistema es append only, una vez registrado un registro no se debe eliminar, solo se permite cambio
+  de status en caso de anulaciones.
+- El sistema diferencia entre anulaciones (mismo périodo) y reversiones (distintos períodos), dado que
+  las anulaciones se efectuan en el mismo período y misma fecha que el registro adicional estas en la
+  practica tienen efecto cero y pueden ser excluidos en reportes.
+- AP/AR deben de llevar saldo por documento, el saldo de un cliente o proveedor debe ser la suma
+  de todos aquellos registros que sin haber sido revertidos o anulados no se han cerrado (es decir
+  no han llegado a saldo cero). Por ejemplo anular un pago debe devolver el saldo de las facturas asociadas
+  antes de aplicar el pago, pero el ledger financiero si debe tener el registro del pago original y su
+  posterior anulación, el saldo de un cliente o proveedor a un momento dado debe ser reconciliable con el
+  saldo de todas las transacciones asociadas a ese cliente o proveedor en el ledger financiero.
+- Misma lógica aplica para inventario, inventario no solo lleva valores monetarios, lleva bodegas, ítems,
+  unidades de medida, factores de conversión, etc.
+- **Política append-only:** no se borran filas de evidencia (GL/Stock/AR-AP/subledger) ni se reescriben sus
+  cifras; la corrección va por contra-asientos. Cambiar estado lógico o saldos derivados (`outstanding_amount`,
+  `unallocated_amount`, `status`, `is_cancelled`) NO viola el principio y puede seguir mutándose en los flujos
+  de pago y conciliación.
+
+# Soporte de bases de datos:
+
+- Tier 1: SQLite (Desktop) y Postresql (Cloud). Full soporte errores son bloquers.
+- Tier 2: MySQL. Se prueba en CI pero no bloquea lanzamiento.
+- Tier 3: MariaDB, MS SQL Server. No sé prueban en CI.
+
+# Uso de cache 
+
+El archivo Docker Compose incluye Redis como cache, el sistema no puede depender del servicio de cache para funcionar,
+en desktop no hay caché, el uso de cache solo debe aplicar a asuntos que hagan sentido y siempre debe ser condicional y
+no fallar por falta de cache.
+
 # Instrucciones
 
 Si la tarea en que se esta trabajando tiene un issue asociado en Github utilizar el issue como bitacora
