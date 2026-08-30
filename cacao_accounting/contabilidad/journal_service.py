@@ -880,16 +880,11 @@ def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
         if len(target) != 1:
             raise JournalValidationError("El documento de referencia AP/AR no tiene un saldo abierto único.")
         target_direction = getattr(target[0], "direction", None)
-        source_direction = (
-            "debit"
-            if (
-                (line.debit - line.credit)
-                if account_type in {"receivable", "customer_advance"}
-                else (line.credit - line.debit)
-            )
-            > 0
-            else "credit"
-        )
+        if account_type in {"receivable", "customer_advance"}:
+            net_amount = line.debit - line.credit
+        else:
+            net_amount = line.credit - line.debit
+        source_direction = "debit" if net_amount > 0 else "credit"
         if target_direction and target_direction == source_direction:
             raise JournalValidationError("La referencia AP/AR debe tener sentido contrario al movimiento.")
 
