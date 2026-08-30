@@ -954,7 +954,6 @@ def _plan_reconciliation_allocation(
     """Valida una línea con el motor AR/AP y devuelve importes en ambas monedas."""
     from cacao_accounting.contabilidad.arap_allocation import (
         ARAPOpenItem,
-        AllocationCurrencyError,
         AllocationError,
         AllocationOverpaymentError,
         AllocationRequest,
@@ -1002,7 +1001,7 @@ def _plan_reconciliation_allocation(
             ],
             resolver=resolver,
         )
-    except (AllocationCurrencyError, AllocationOverpaymentError, AllocationError) as exc:
+    except AllocationError as exc:
         message = str(exc)
         if isinstance(exc, AllocationOverpaymentError) and "efectivo" in message.lower():
             message = "El monto aplicado excede el saldo disponible del pago."

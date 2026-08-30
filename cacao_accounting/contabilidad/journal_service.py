@@ -191,7 +191,7 @@ def _post_and_sync_journal(journal: ComprobanteContable, commit: bool) -> list[A
         _validate_arap_gl_transition(journal)
         sync_journal_document_relations(journal)
         return entries
-    except (PostingError, IdentifierConfigurationError, DocumentFlowError, ValueError) as exc:
+    except ValueError as exc:
         if commit:
             database.session.rollback()
         raise JournalValidationError(str(exc)) from exc
