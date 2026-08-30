@@ -1206,58 +1206,52 @@ def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
         return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id))
 
 
-@compras.route("/request-for-quotation/comparison/<comparison_id>")
-@modulo_activo("purchases")
-@login_required
-def compras_comparativo_ordenes(comparison_id: str):
-    """Display a persisted order comparison, with legacy offer fallback."""
-    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
-    request_comparison = database.session.get(PurchaseRequestComparison, comparison_id)
-    if comparison is None and request_comparison:
-        exige_acceso_compania("purchases", request_comparison.company, "consultar")
-        purchase_request = database.session.get(PurchaseRequest, request_comparison.purchase_request_id)
-        offers = supplier_quotations_for_comparison(request_comparison.id)
-        if not purchase_request or not offers:
-            abort(404)
-        for offer in offers:
-            _require_purchase_document_access(offer)
-        negotiation_rfqs = []
-        rfq_ids = {offer.purchase_quotation_id for offer in offers if offer.purchase_quotation_id}
-        for rfq_id in sorted(rfq_ids):
-            rfq = database.session.get(PurchaseQuotation, rfq_id)
-            if rfq:
-                negotiation_rfqs.append({"rfq": rfq, "round": current_negotiation_round(rfq.id)})
-        comparison_lines = list(
-            database.session.execute(
-                database.select(PurchaseRequestComparisonLine)
-                .where(PurchaseRequestComparisonLine.comparison_id == request_comparison.id)
-                .order_by(PurchaseRequestComparisonLine.id)
-            )
-            .scalars()
-            .all()
-        )
-        try:
-            recommendations = comparison_recommendations(request_comparison)
-        except ValueError:
-            recommendations = []
-        return render_template(
-            "compras/comparativo_solicitud.html",
-            comparison=request_comparison,
-            purchase_request=purchase_request,
-            offers=offers,
-            recommendations=recommendations,
-            comparison_lines=comparison_lines,
-            negotiation_rfqs=negotiation_rfqs,
-            is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
-            titulo=COMPARATIVO_OFERTAS_TITULO + (request_comparison.document_no or request_comparison.id or ""),
-        )
-
-    if not comparison:
+def _render_request_comparison_view(request_comparison: PurchaseRequestComparison):
+    """Render view for request comparison fallback."""
+    exige_acceso_compania("purchases", request_comparison.company, "consultar")
+    purchase_request = database.session.get(PurchaseRequest, request_comparison.purchase_request_id)
+    offers = supplier_quotations_for_comparison(request_comparison.id)
+    if not purchase_request or not offers:
         abort(404)
+    for offer in offers:
+        _require_purchase_document_access(offer)
+    negotiation_rfqs = []
+    rfq_ids = {offer.purchase_quotation_id for offer in offers if offer.purchase_quotation_id}
+    for rfq_id in sorted(rfq_ids):
+        rfq = database.session.get(PurchaseQuotation, rfq_id)
+        if rfq:
+            negotiation_rfqs.append({"rfq": rfq, "round": current_negotiation_round(rfq.id)})
+    comparison_lines = list(
+        database.session.execute(
+            database.select(PurchaseRequestComparisonLine)
+            .where(PurchaseRequestComparisonLine.comparison_id == request_comparison.id)
+            .order_by(PurchaseRequestComparisonLine.id)
+        )
+        .scalars()
+        .all()
+    )
+    try:
+        recommendations = comparison_recommendations(request_comparison)
+    except ValueError:
+        recommendations = []
+    return render_template(
+        "compras/comparativo_solicitud.html",
+        comparison=request_comparison,
+        purchase_request=purchase_request,
+        offers=offers,
+        recommendations=recommendations,
+        comparison_lines=comparison_lines,
+        negotiation_rfqs=negotiation_rfqs,
+        is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
+        titulo=COMPARATIVO_OFERTAS_TITULO + (request_comparison.document_no or request_comparison.id or ""),
+    )
+
+
+def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested_round_id: str | None):
+    """Render view for persisted order comparison."""
     exige_acceso_compania("purchases", comparison.company, "consultar")
     purchase_request = purchase_request_for_comparison(comparison)
     selected_round = None
-    requested_round_id = request.args.get("round_id")
     if requested_round_id:
         selected_round = database.session.get(PurchaseOrderComparisonRound, requested_round_id)
         if not selected_round or selected_round.comparison_id != comparison.id:
@@ -1323,6 +1317,20 @@ def compras_comparativo_ordenes(comparison_id: str):
         selected_round=selected_round,
         titulo=COMPARATIVO_OFERTAS_TITULO + (comparison.id or ""),
     )
+
+
+@compras.route("/request-for-quotation/comparison/<comparison_id>")
+@modulo_activo("purchases")
+@login_required
+def compras_comparativo_ordenes(comparison_id: str):
+    """Display a persisted order comparison, with legacy offer fallback."""
+    comparison = database.session.get(PurchaseOrderComparison, comparison_id)
+    if comparison is None:
+        request_comparison = database.session.get(PurchaseRequestComparison, comparison_id)
+        if request_comparison:
+            return _render_request_comparison_view(request_comparison)
+        abort(404)
+    return _render_order_comparison_view(comparison, request.args.get("round_id"))
 
 
 @compras.route("/request-for-quotation/<rfq_id>/offers")
