@@ -11,6 +11,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from cacao_accounting.database import (
+    Batch,
     CompanyParty,
     DeliveryNote,
     DeliveryNoteItem,
@@ -152,11 +153,33 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 }
             ):
                 errors.append(f"El item de inventario '{item.code}' requiere una bodega.")
+            errors.extend(self._validate_row_batch(row.get("producto"), row.get("lote")))
         try:
             self._currency_and_rate(first_row, source, company_id, posting_date)
         except ValueError as exc:
             errors.append(str(exc))
         return errors
+
+    def _validate_row_batch(self, item_code: Any, batch_no: Any) -> list[str]:
+        """Valida que el lote de la fila exista en el maestro y aplique al item."""
+        if not self.config.include_batch_serial or not item_code:
+            return []
+        item = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
+        if item is None or not item.is_stock_item:
+            return []
+        cleaned = str(batch_no or "").strip()
+        if (item.has_batch or item.has_expiry_date) and not cleaned:
+            return [f"El item de inventario '{item.code}' requiere lote."]
+        if not cleaned:
+            return []
+        batch = database.session.execute(
+            database.select(Batch).filter_by(item_code=item.code, batch_no=cleaned)
+        ).scalar_one_or_none()
+        if batch is None:
+            return [f"El lote '{cleaned}' del item '{item.code}' no existe en el maestro de lotes."]
+        if not batch.is_active:
+            return [f"El lote '{cleaned}' del item '{item.code}' está inactivo."]
+        return []
 
     def build_document(self, document_data: list[dict[str, Any]], context: dict[str, Any]) -> dict[str, Any]:
         """Construye encabezado e ítems desde las filas del archivo."""
@@ -350,9 +373,29 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         if not self.config.include_batch_serial:
             return
         if hasattr(item, "batch_id"):
-            item.batch_id = row.get("lote") or None
+            item.batch_id = self._resolve_batch_id(item.item_code, row.get("lote"))
         if hasattr(item, "serial_no"):
             item.serial_no = row.get("serie") or None
+
+    def _resolve_batch_id(self, item_code: Any, batch_no: Any) -> str | None:
+        """Resuelve el numero de lote del archivo al registro del maestro.
+
+        La columna ``lote`` contiene el numero legible del lote, no su
+        identificador interno: se resuelve contra el maestro por item y numero
+        de lote y se rechaza la fila cuando el lote no existe, en lugar de
+        persistir un texto que el posting nunca podria validar.
+        """
+        if batch_no in (None, ""):
+            return None
+        cleaned = str(batch_no).strip()
+        batch = database.session.execute(
+            database.select(Batch).filter_by(item_code=item_code, batch_no=cleaned)
+        ).scalar_one_or_none()
+        if batch is None:
+            raise ValueError(f"El lote '{cleaned}' del item '{item_code}' no existe en el maestro de lotes.")
+        if not batch.is_active:
+            raise ValueError(f"El lote '{cleaned}' del item '{item_code}' está inactivo.")
+        return batch.id
 
 
 class PurchaseRequestAdapter(TransactionDocumentAdapter):
