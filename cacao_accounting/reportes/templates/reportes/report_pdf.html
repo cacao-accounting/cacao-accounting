@@ -23,6 +23,7 @@
     {{ _("Período") }}: {{ period }} | {{ _("Fecha de generación") }}: {{ generated_on }}
   </p>
   <table>
+    <caption>{{ title }}</caption>
     <thead>
       <tr>
         {% for column in columns %}<th>{{ column }}</th>{% endfor %}
