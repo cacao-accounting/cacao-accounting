@@ -49,7 +49,7 @@ class _FakeReport:
 
 def _make_app(desktop: bool):
     """Aplica de prueba con o sin el modo escritorio."""
-    extra = {"MODO_ESCRITORIO": True} if desktop else {}
+    extra = {"MODO_ESCRITORIO": desktop}
     app = create_app(
         {
             **configuracion,
