@@ -235,7 +235,7 @@
         if (!str) return '0';
         const num = Number(str);
         if (Number.isNaN(num) || !Number.isFinite(num)) return '0';
-        const formatted = num.toFixed(9).replace(/\.?0+$/, '') || '0';
+        const formatted = num.toFixed(9).replace(/0{1,9}$/, '').replace(/\.$/, '') || '0';
         return formatted === '-0' ? '0' : formatted;
       },
 
