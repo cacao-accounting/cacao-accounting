@@ -4,7 +4,7 @@
 """Formularios web del modulo de inventario."""
 
 from flask_wtf import FlaskForm
-from wtforms import BooleanField, DecimalField, SelectField, StringField, TextAreaField
+from wtforms import BooleanField, DateField, DecimalField, SelectField, StringField, TextAreaField
 from wtforms.validators import DataRequired, Optional
 
 CODIGO = "Código"
@@ -52,6 +52,17 @@ class FormularioBodega(FlaskForm):
 
     code = StringField(CODIGO, validators=[DataRequired()])
     name = StringField("Nombre", validators=[DataRequired()])
+
+
+class FormularioLote(FlaskForm):
+    """Formulario para crear un lote de inventario."""
+
+    item_code = SelectField("Artículo", choices=[], validators=[DataRequired()])
+    batch_no = StringField("Número de lote", validators=[DataRequired()])
+    expiry_date = DateField("Fecha de vencimiento", validators=[Optional()])
+    manufacturing_date = DateField("Fecha de fabricación", validators=[Optional()])
+    description = TextAreaField("Descripción")
+    is_active = BooleanField("Activo", default=True)
 
 
 class FormularioEntradaAlmacen(FlaskForm):

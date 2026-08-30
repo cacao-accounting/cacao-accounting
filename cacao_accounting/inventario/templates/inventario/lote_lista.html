@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/inventario/templates/inventario/lote_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventario") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Listado de Lotes") }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between">
+    <h5 class="ca-card-title"><i class="bi bi-boxes"></i> {{ _("Listado de Lotes") }}</h5>
+    <a href="{{ url_for('inventario.inventario_lote_nuevo') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>{{ _("Nuevo") }}
+    </a>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">{{ _("Listado de lotes de inventario.") }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{{ _("Número de lote") }}</th>
+        <th scope="col">{{ _("Artículo") }}</th>
+        <th scope="col">{{ _("Fecha de vencimiento") }}</th>
+        <th scope="col">{{ _("Activo") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in consulta.items -%}
+      <tr>
+        <td><a href="{{ url_for('inventario.inventario_lote', batch_id=item.id) }}" class="link-primary">{{ item.batch_no }}</a></td>
+        <td>{{ item.item_code }}</td>
+        <td>{{ item.expiry_date or "—" }}</td>
+        <td>{{ _("Sí") if item.is_active else _("No") }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+  <div class="mt-2">{{ macros.rendizar_paginacion(consulta=consulta, vista="inventario.inventario_lote_lista") }}</div>
+</div>
+
+{% endblock %}

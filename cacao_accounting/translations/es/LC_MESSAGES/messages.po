@@ -9169,3 +9169,67 @@ msgstr "Pedido de Venta"
 #: cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html:11
 msgid "Nuevo Pedido"
 msgstr "Nuevo Pedido"
+
+#: cacao_accounting/inventario/templates/inventario/lote_lista.html
+#: cacao_accounting/inventario/templates/inventario/lote_nuevo.html
+#: cacao_accounting/inventario/templates/inventario/lote.html
+msgid "Listado de Lotes"
+msgstr "Listado de Lotes"
+
+msgid "Nuevo Lote"
+msgstr "Nuevo Lote"
+
+msgid "Número de lote"
+msgstr "Número de lote"
+
+msgid "Fecha de fabricación"
+msgstr "Fecha de fabricación"
+
+msgid "Lotes"
+msgstr "Lotes"
+
+msgid "Lote creado correctamente."
+msgstr "Lote creado correctamente."
+
+msgid "Revise los datos del formulario de lote."
+msgstr "Revise los datos del formulario de lote."
+
+msgid "Saldo por Bodega"
+msgstr "Saldo por Bodega"
+
+msgid "Entrada"
+msgstr "Entrada"
+
+msgid "Salida"
+msgstr "Salida"
+
+msgid "Sin movimientos para este lote."
+msgstr "Sin movimientos para este lote."
+
+msgid "Movimientos Recientes"
+msgstr "Movimientos Recientes"
+
+#: cacao_accounting/reportes/helpers.py
+msgid "Batch"
+msgstr "Lote"
+
+msgid "Serial"
+msgstr "Serie"
+
+msgid "Expiry Date"
+msgstr "Fecha de Vencimiento"
+
+msgid "Manufacturing Date"
+msgstr "Fecha de Fabricación"
+
+msgid "Active"
+msgstr "Activo"
+
+msgid "Warehouse"
+msgstr "Bodega"
+
+msgid "Stock Value"
+msgstr "Valor de Inventario"
+
+msgid "Count"
+msgstr "Cantidad"

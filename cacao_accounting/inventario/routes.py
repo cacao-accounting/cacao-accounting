@@ -14,10 +14,12 @@ from flask_login import current_user, login_required
 
 from cacao_accounting.database import (
     Accounts,
+    Batch,
     Item,
     ItemCategory,
     StockEntry,
     StockEntryItem,
+    StockLedgerEntry,
     UOM,
     Warehouse,
     WarehouseCompanyAccount,
@@ -43,10 +45,13 @@ from cacao_accounting.list_filters import apply_list_filters
 
 from cacao_accounting.version import APPNAME
 
-from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_submit
+from cacao_accounting.audit_trail_service import format_document_timeline, log_cancel, log_create, log_submit
 
 from cacao_accounting.inventario.service import (
     InventoryServiceError,
+    BatchParams,
+    batch_balance_rows,
+    create_batch,
     create_item_with_uoms,
     list_item_account_rows,
     list_item_uom_conversions,
@@ -57,6 +62,7 @@ from cacao_accounting.inventario.services import (
     _paginate_list,
     _series_choices,
     _item_params_from_form,
+    _lote_item_choices,
     _process_item_edit,
     _uom_choices,
     _item_uom_rows_for_template,
@@ -589,6 +595,93 @@ def inventario_bodega(warehouse_id):
         registro=registro[0],
         company_accounts=company_accounts,
         account_map=account_map,
+        titulo=titulo,
+    )
+
+
+@inventario.route("/batch/list")
+@modulo_activo("inventory")
+@login_required
+def inventario_lote_lista():
+    """Listado de lotes de inventario."""
+    consulta = database.paginate(
+        apply_list_filters(
+            database.select(Batch),
+            Batch,
+            (Batch.batch_no, Batch.item_code),
+            include_status=False,
+        ),
+        page=request.args.get("page", default=1, type=int),
+        max_per_page=10,
+        count=True,
+    )
+    titulo = "Listado de Lotes - " + APPNAME
+    return render_template("inventario/lote_lista.html", consulta=consulta, titulo=titulo)
+
+
+@inventario.route("/batch/new", methods=["GET", "POST"])
+@modulo_activo("inventory")
+@login_required
+@verifica_permiso("inventory", "crear")
+def inventario_lote_nuevo():
+    """Formulario para crear un lote de inventario."""
+    from cacao_accounting.inventario.forms import FormularioLote
+
+    formulario = FormularioLote()
+    formulario.item_code.choices = _lote_item_choices()
+    titulo = "Nuevo Lote - " + APPNAME
+    if request.method == "POST":
+        if formulario.validate():
+            try:
+                lote = create_batch(
+                    BatchParams(
+                        item_code=formulario.item_code.data,
+                        batch_no=formulario.batch_no.data or "",
+                        expiry_date=formulario.expiry_date.data,
+                        manufacturing_date=formulario.manufacturing_date.data,
+                        description=formulario.description.data or None,
+                        is_active=formulario.is_active.data,
+                    )
+                )
+                log_create(lote)
+                database.session.commit()
+                flash(_("Lote creado correctamente."), "success")
+                return redirect(url_for("inventario.inventario_lote", batch_id=lote.id))
+            except InventoryServiceError as exc:
+                database.session.rollback()
+                flash_error(exc)
+        else:
+            flash(_("Revise los datos del formulario de lote."), "danger")
+    return render_template("inventario/lote_nuevo.html", form=formulario, titulo=titulo)
+
+
+@inventario.route("/batch/<batch_id>")
+@modulo_activo("inventory")
+@login_required
+def inventario_lote(batch_id):
+    """Detalle de lote con saldo por bodega y movimientos."""
+    registro = database.session.get(Batch, batch_id)
+    if not registro:
+        abort(404)
+    item = database.session.execute(database.select(Item).filter_by(code=registro.item_code)).scalars().first()
+    balances = batch_balance_rows(registro.id)
+    movimientos = (
+        database.session.execute(
+            database.select(StockLedgerEntry)
+            .filter_by(batch_id=registro.id)
+            .order_by(StockLedgerEntry.posting_date.desc(), StockLedgerEntry.created.desc(), StockLedgerEntry.id.desc())
+            .limit(50)
+        )
+        .scalars()
+        .all()
+    )
+    titulo = (registro.batch_no or "") + " - " + APPNAME
+    return render_template(
+        "inventario/lote.html",
+        registro=registro,
+        item=item,
+        balances=balances,
+        movimientos=movimientos,
         titulo=titulo,
     )
 
