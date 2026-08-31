@@ -1,5 +1,25 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_save_numbering_configs` cx=27)
+
+### Hallazgo SonarCloud
+
+Issue `AaAbv2ElOioNy6Mzk_6o` (`python:S3776`, CRITICAL):
+`cacao_accounting/bancos/services.py`, `_save_numbering_configs`, complejidad cognitiva 27 frente al umbral 15.
+
+### Corrección
+
+Se extrajo la validación de cada serie y chequera a `_validate_numbering_config_entry`, conservando el descarte de
+entradas inválidas, validación de pertenencia de compañía, actualización de configuraciones y commit único.
+
+### Verificación
+
+- `tests/test_bank_account_numbering.py`: 15/15.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_line_discount` cx=32)
 
 ### Hallazgo SonarCloud
