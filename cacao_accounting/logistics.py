@@ -13,6 +13,16 @@ LOGISTICS_FIELDS = ("incoterm_code", "incoterm_version", "delivery_date", "deliv
 TERMS_FIELDS = frozenset(("purchase_terms", "sales_terms"))
 
 
+def _normalize_logistics_value(field: str, value: Any) -> Any:
+    """Normalize a single logistics field, including delivery dates."""
+    if field == "delivery_date" and isinstance(value, str):
+        try:
+            value = date.fromisoformat(value) if value else None
+        except ValueError as exc:
+            raise ValueError("La fecha de entrega no es válida.") from exc
+    return value or None
+
+
 def logistics_values(source: Any = None, form: Any = None, *, terms_field: str) -> dict[str, Any]:
     """Read and normalize logistics values from a document or form."""
     if terms_field not in TERMS_FIELDS:
@@ -22,12 +32,7 @@ def logistics_values(source: Any = None, form: Any = None, *, terms_field: str) 
         value = form.get(field) if form is not None else None
         if value in (None, "") and source is not None:
             value = getattr(source, field, None)
-        if field == "delivery_date" and isinstance(value, str):
-            try:
-                value = date.fromisoformat(value) if value else None
-            except ValueError as exc:
-                raise ValueError("La fecha de entrega no es válida.") from exc
-        values[field] = value or None
+        values[field] = _normalize_logistics_value(field, value)
     if values["incoterm_code"] and not values["incoterm_version"]:
         values["incoterm_version"] = "2020"
     return values
