@@ -928,3 +928,11 @@ def test_purchase_list_helpers_apply_company_and_period_scopes(app_ctx, monkeypa
     with app_ctx.test_request_context("/buying/purchase-order/list"):
         base_query = database.select(PurchaseOrder)
         assert purchase_services._apply_period_scope(base_query, SimpleNamespace(), ("purchases",)) is base_query
+
+
+def test_comparison_draft_line_rejects_unknown_offer(app_ctx):
+    """A draft selection cannot reference an offer absent from the comparison row."""
+    item = SimpleNamespace(id="REQ-LINE", item_code="ITEM-1")
+    row = {"item": item, "candidates": [], "recommended": None}
+    with pytest.raises(ValueError, match="no cubre la línea"):
+        comparison_service._comparison_draft_line(row, {item.id: "UNKNOWN"}, {}, "CMP-1", "USER-1")

@@ -338,6 +338,42 @@ def comparison_recommendations(comparison: PurchaseRequestComparison) -> list[di
     return purchase_request_comparison_recommendations(purchase_request, offers)
 
 
+def _comparison_draft_line(
+    row: dict[str, Any],
+    selections: Mapping[str, str | None],
+    reasons: Mapping[str, str | None],
+    comparison_id: str,
+    user_id: str | None,
+) -> tuple[PurchaseRequestComparisonLine, bool]:
+    """Build one persisted selection line and report whether it overrides the recommendation."""
+    item = row["item"]
+    candidates = {candidate["offer"].id: candidate for candidate in row["candidates"]}
+    selected_id = selections.get(item.id) or None
+    selected = candidates.get(selected_id) if selected_id else None
+    if selected_id and selected is None:
+        raise ValueError(f"La oferta seleccionada no cubre la línea {item.item_code}.")
+    recommended = row["recommended"]
+    manual_override = bool(selected and (not recommended or selected["offer"].id != recommended["offer"].id))
+    selected_line = selected["line"] if selected else None
+    recommended_line = recommended["line"] if recommended else None
+    reason = (reasons.get(item.id) or "").strip() or None
+    saved_line = PurchaseRequestComparisonLine(
+        comparison_id=comparison_id,
+        purchase_request_item_id=item.id,
+        recommended_supplier_quotation_id=recommended["offer"].id if recommended else None,
+        recommended_supplier_quotation_item_id=recommended_line.id if recommended_line else None,
+        selected_supplier_quotation_id=selected["offer"].id if selected else None,
+        selected_supplier_quotation_item_id=selected_line.id if selected_line else None,
+        qty=item.qty if selected else None,
+        rate=selected["rate"] if selected else None,
+        amount=(Decimal(str(item.qty or 0)) * selected["rate"]).quantize(Decimal("0.0001")) if selected else None,
+        manual_override=manual_override,
+        override_reason=reason,
+        created_by=user_id,
+    )
+    return saved_line, manual_override
+
+
 def save_purchase_request_comparison_draft(
     comparison: PurchaseRequestComparison,
     selections: Mapping[str, str | None],
@@ -354,32 +390,8 @@ def save_purchase_request_comparison_draft(
     saved_lines: list[PurchaseRequestComparisonLine] = []
     has_override = False
     for row in rows:
-        item = row["item"]
-        candidates = {candidate["offer"].id: candidate for candidate in row["candidates"]}
-        selected_id = selections.get(item.id) or None
-        selected = candidates.get(selected_id) if selected_id else None
-        if selected_id and selected is None:
-            raise ValueError(f"La oferta seleccionada no cubre la línea {item.item_code}.")
-        recommended = row["recommended"]
-        manual_override = bool(selected and (not recommended or selected["offer"].id != recommended["offer"].id))
+        saved_line, manual_override = _comparison_draft_line(row, selections, reasons, comparison.id, user_id)
         has_override = has_override or manual_override
-        selected_line = selected["line"] if selected else None
-        recommended_line = recommended["line"] if recommended else None
-        reason = (reasons.get(item.id) or "").strip() or None
-        saved_line = PurchaseRequestComparisonLine(
-            comparison_id=comparison.id,
-            purchase_request_item_id=item.id,
-            recommended_supplier_quotation_id=recommended["offer"].id if recommended else None,
-            recommended_supplier_quotation_item_id=recommended_line.id if recommended_line else None,
-            selected_supplier_quotation_id=selected["offer"].id if selected else None,
-            selected_supplier_quotation_item_id=selected_line.id if selected_line else None,
-            qty=item.qty if selected else None,
-            rate=selected["rate"] if selected else None,
-            amount=(Decimal(str(item.qty or 0)) * selected["rate"]).quantize(Decimal("0.0001")) if selected else None,
-            manual_override=manual_override,
-            override_reason=reason,
-            created_by=user_id,
-        )
         database.session.add(saved_line)
         saved_lines.append(saved_line)
     comparison.status = "pending_authorization" if has_override else "draft"
