@@ -1,5 +1,24 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_document_carrying_value_in_ledger` cx=21)
+
+### Hallazgo SonarCloud
+
+Issue `AaAoBX4NHu0gULtos-2H` (`python:S3776`, CRITICAL):
+`cacao_accounting/accounting_engine/document_builders.py`, `_document_carrying_value_in_ledger`, complejidad cognitiva
+21 frente al umbral 15.
+
+### Análisis y corrección
+
+Se extrajeron `_revaluation_document_net` y `_prior_payment_document_net`, dejando en el método principal la validación
+de entrada, el neto documental, la combinación y el retorno sin valor GL. Se preservaron el prorrateo por pago, las
+revaluaciones publicadas y los importes append-only.
+
+### Verificación
+
+- `tests/test_fx_ar_ap_lifecycle.py`: 8/8.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check` sobre `cacao_accounting`: limpios.
+
 ## 2026-08-31 (refactor S3776 — `_estimated_company_open_balance` cx=21)
 
 ### Hallazgo SonarCloud
