@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `get_ar_ap_subledger` cx=24)
+
+### Hallazgo SonarCloud
+
+Issue `AaACtYmYRe3t3lA8459a` (`python:S3776`, CRITICAL):
+`cacao_accounting/reportes/services.py`, `get_ar_ap_subledger`, complejidad cognitiva 24 frente al umbral 15.
+
+### Corrección
+
+Se separaron la construcción de consulta por tipo de tercero, resolución de etiquetas, cálculo ledger/legacy y armado
+de filas. Se conservaron el corte por fecha, exclusión de reversiones/devoluciones, saldos AR/AP, moneda base,
+aplicaciones de pago, identificadores de tercero y totales del reporte.
+
+### Verificación
+
+- Escenarios focales de subledger en `tests/test_08_reconciliation_reports.py`,
+  `tests/test_record_to_reports_multicurrency_multiledger.py`, `tests/test_o2c_matrix_audit.py` y
+  `tests/test_s2p_ap_matrix_audit.py`: 11/11.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_process_reconciliation_line` cx=26)
 
 ### Hallazgo SonarCloud

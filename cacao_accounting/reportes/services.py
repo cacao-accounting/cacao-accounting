@@ -346,14 +346,8 @@ def _document_sign(document: Any) -> Decimal:
     return Decimal("-1") if bool(getattr(document, "is_return", False)) else Decimal("1")
 
 
-def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
-    """Devuelve subledger AR/AP basado en documentos y aplicaciones de pago.
-
-    Todas las columnas comparten el mismo corte: cuando ``as_of_date`` no se
-    indica se usa ``date.today()`` de forma explicita para que documentos,
-    aplicaciones de pago y outstanding sean consistentes entre si.
-    """
-    effective_as_of = filters.as_of_date if filters.as_of_date is not None else date.today()
+def _subledger_document_query(filters: SubledgerFilters, effective_as_of: date) -> tuple[str, Any, Any]:
+    """Build the AR/AP document query for the requested party type and date."""
     if filters.party_type == "customer":
         document_type = "sales_invoice"
         document_model = SalesInvoice
@@ -374,82 +368,129 @@ def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
     query = query.where(document_model.posting_date <= effective_as_of)
     if not filters.include_returns:
         query = query.where(document_model.is_return.is_(False))
+    return document_type, document_model, query
+
+
+def _subledger_party_labels(query: Any) -> dict[str, str]:
+    """Resolve display labels for all parties represented by a subledger query."""
+    party_ids = {
+        getattr(document, "customer_id", None) or getattr(document, "supplier_id", None)
+        for document in database.session.execute(query).scalars()
+    }
+    if not party_ids:
+        return {}
+    return {
+        party.id: party.code or party.name or party.id
+        for party in database.session.execute(select(Party).where(Party.id.in_(party_ids))).scalars()
+    }
+
+
+def _subledger_document_amounts(
+    document: Any,
+    document_type: str,
+    company: str,
+    effective_as_of: date,
+) -> tuple[Decimal, Decimal]:
+    """Resolve paid and outstanding amounts from ledger or legacy allocations."""
+    original_amount = _decimal_value(document.grand_total)
+    ledger_balance = database.session.execute(
+        select(func.sum(ARAPLedgerEntry.document_amount)).where(
+            ARAPLedgerEntry.document_type == document_type,
+            ARAPLedgerEntry.document_id == str(document.id),
+            ARAPLedgerEntry.posting_date <= effective_as_of,
+        )
+    ).scalar_one_or_none()
+    opening_exists = database.session.execute(
+        select(ARAPLedgerEntry.id)
+        .where(
+            ARAPLedgerEntry.document_type == document_type,
+            ARAPLedgerEntry.document_id == str(document.id),
+            ARAPLedgerEntry.event_type == "opening",
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if ledger_balance is not None and opening_exists is not None:
+        from cacao_accounting.document_flow.payment import _compute_allocated_notes_amount
+
+        notes = _compute_allocated_notes_amount(document, as_of_date=effective_as_of)
+        if getattr(document, "is_return", False):
+            # Las devoluciones posteadas al subledger abren con importe
+            # negativo; se presentan como saldo vivo negativo para
+            # compensar el saldo del tercero en el corte del subledger.
+            outstanding = abs(_decimal_value(ledger_balance)) - notes
+        else:
+            outstanding = max(_decimal_value(ledger_balance) - notes, Decimal("0"))
+        paid = max(original_amount - _decimal_value(ledger_balance), Decimal("0"))
+        return paid, outstanding
+    return (
+        _payment_allocations(document_type, document.id, company, effective_as_of),
+        compute_outstanding_amount(document, as_of_date=effective_as_of),
+    )
+
+
+def _subledger_row(
+    document: Any,
+    document_type: str,
+    party_labels: dict[str, str],
+    effective_as_of: date,
+    company: str,
+) -> tuple[ReportRow, Decimal, Decimal, Decimal]:
+    """Build one subledger row and its signed totals."""
+    party_reference_id = getattr(document, "customer_id", None) or getattr(document, "supplier_id", None)
+    sign = _document_sign(document)
+    base_factor = _document_base_factor(document)
+    original = sign * _decimal_value(document.grand_total) * base_factor
+    paid_original, outstanding_original = _subledger_document_amounts(document, document_type, company, effective_as_of)
+    paid = sign * paid_original * base_factor
+    outstanding = sign * outstanding_original * base_factor
+    party_display = (
+        party_reference_id if party_reference_id is None else party_labels.get(str(party_reference_id), party_reference_id)
+    )
+    return (
+        ReportRow(
+            values={
+                "document_type": document_type,
+                "document_id": document.document_no or document.id,
+                "document_no": getattr(document, "document_no", None) or document.id,
+                "posting_date": document.posting_date,
+                "party_id": party_display,
+                "party_reference_id": party_reference_id,
+                "original_amount": original,
+                "paid_amount": paid,
+                "outstanding_amount": outstanding,
+                "transaction_currency": document.transaction_currency,
+                "currency": document.base_currency or document.transaction_currency,
+            }
+        ),
+        original,
+        paid,
+        outstanding,
+    )
+
+
+def get_ar_ap_subledger(filters: SubledgerFilters) -> PaginatedReport:
+    """Devuelve subledger AR/AP basado en documentos y aplicaciones de pago.
+
+    Todas las columnas comparten el mismo corte: cuando ``as_of_date`` no se
+    indica se usa ``date.today()`` de forma explicita para que documentos,
+    aplicaciones de pago y outstanding sean consistentes entre si.
+    """
+    effective_as_of = filters.as_of_date if filters.as_of_date is not None else date.today()
+    document_type, document_model, query = _subledger_document_query(filters, effective_as_of)
 
     rows: list[ReportRow] = []
     total_original = Decimal("0")
     total_paid = Decimal("0")
     total_outstanding = Decimal("0")
-    party_ids = {
-        getattr(document, "customer_id", None) or getattr(document, "supplier_id", None)
-        for document in database.session.execute(query).scalars()
-    }
-    party_labels = {
-        party.id: party.code or party.name or party.id
-        for party in database.session.execute(select(Party).where(Party.id.in_(party_ids))).scalars()
-        if party_ids
-    }
+    party_labels = _subledger_party_labels(query)
     for document in database.session.execute(query.order_by(document_model.posting_date)).scalars():
-        party_reference_id = getattr(document, "customer_id", None) or getattr(document, "supplier_id", None)
-        sign = _document_sign(document)
-        base_factor = _document_base_factor(document)
-        original_original_currency = _decimal_value(document.grand_total)
-        ledger_balance = database.session.execute(
-            select(func.sum(ARAPLedgerEntry.document_amount)).where(
-                ARAPLedgerEntry.document_type == document_type,
-                ARAPLedgerEntry.document_id == str(document.id),
-                ARAPLedgerEntry.posting_date <= effective_as_of,
-            )
-        ).scalar_one_or_none()
-        opening_exists = database.session.execute(
-            select(ARAPLedgerEntry.id)
-            .where(
-                ARAPLedgerEntry.document_type == document_type,
-                ARAPLedgerEntry.document_id == str(document.id),
-                ARAPLedgerEntry.event_type == "opening",
-            )
-            .limit(1)
-        ).scalar_one_or_none()
-        if ledger_balance is not None and opening_exists is not None:
-            from cacao_accounting.document_flow.payment import _compute_allocated_notes_amount
-
-            notes = _compute_allocated_notes_amount(document, as_of_date=effective_as_of)
-            if getattr(document, "is_return", False):
-                # Las devoluciones posteadas al subledger abren con importe
-                # negativo; se presentan como saldo vivo negativo para
-                # compensar el saldo del tercero en el corte del subledger.
-                outstanding_original_currency = abs(_decimal_value(ledger_balance)) - notes
-            else:
-                outstanding_original_currency = max(_decimal_value(ledger_balance) - notes, Decimal("0"))
-            paid_original_currency = max(original_original_currency - _decimal_value(ledger_balance), Decimal("0"))
-        else:
-            paid_original_currency = _payment_allocations(document_type, document.id, filters.company, effective_as_of)
-            outstanding_original_currency = compute_outstanding_amount(document, as_of_date=effective_as_of)
-        original = sign * original_original_currency * base_factor
-        paid = sign * paid_original_currency * base_factor
-        outstanding = sign * outstanding_original_currency * base_factor
+        row, original, paid, outstanding = _subledger_row(
+            document, document_type, party_labels, effective_as_of, filters.company
+        )
         total_original += original
         total_paid += paid
         total_outstanding += outstanding
-        rows.append(
-            ReportRow(
-                values={
-                    "document_type": document_type,
-                    "document_id": document.document_no or document.id,
-                    "document_no": getattr(document, "document_no", None) or document.id,
-                    "posting_date": document.posting_date,
-                    "party_id": party_labels.get(
-                        party_reference_id,
-                        party_reference_id,
-                    ),
-                    "party_reference_id": party_reference_id,
-                    "original_amount": original,
-                    "paid_amount": paid,
-                    "outstanding_amount": outstanding,
-                    "transaction_currency": document.transaction_currency,
-                    "currency": document.base_currency or document.transaction_currency,
-                }
-            )
-        )
+        rows.append(row)
 
     return PaginatedReport(
         rows=rows,
