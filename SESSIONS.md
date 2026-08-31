@@ -1,5 +1,32 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_validate_open_item_reference` cx=43)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMnNkZtwr73q0yaS` (`python:S3776`, CRITICAL):
+`cacao_accounting/api/line_import.py`, `_validate_open_item_reference`, complejidad cognitiva
+43 frente al umbral 15.
+
+### Corrección
+
+Se separaron la resolución del tipo documental, la construcción y aplicación de filtros de la consulta materializada,
+la búsqueda de coincidencias en el ledger financiero, el almacenamiento de la referencia y la generación de errores.
+Se conservaron el fallback al ledger cuando no existe `ARAPOpenItem`, la resolución por documento o número, los filtros
+por compañía/tercero/línea, la conversión de tipos genéricos de factura/notas y las respuestas para referencias
+inexistentes o ambiguas.
+
+### Verificación
+
+- `tests/test_line_import_api.py`: 44/44.
+- Cobertura focalizada del módulo: 79%; todas las líneas nuevas del refactor están cubiertas. Las líneas no cubiertas
+  restantes son código preexistente fuera del flujo refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios. Mypy requirió anteponer el
+  `site-packages` de Python 3.13 del `.venv` al `PYTHONPATH` por un `pathspec` global de Python 3.11.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `find_bank_reconciliation_candidates` cx=49)
 
 ### Hallazgo SonarCloud

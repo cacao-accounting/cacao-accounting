@@ -187,6 +187,122 @@ def test_validate_payment_reconciliation_rejects_non_positive_allocation(logged_
 
 
 @pytest.mark.parametrize(
+    ("reference_type", "party_type", "expected"),
+    [
+        ("invoice", "customer", "sales_invoice"),
+        ("invoice", "supplier", "purchase_invoice"),
+        ("debit_note", "customer", "sales_debit_note"),
+        ("credit_note", "supplier", "purchase_credit_note"),
+        ("journal_entry", "customer", "journal_entry"),
+    ],
+)
+def test_resolve_open_item_reference_type(reference_type, party_type, expected):
+    """Generic references resolve to the correct AP/AR document type."""
+    assert line_import._resolve_open_item_reference_type(reference_type, party_type) == expected
+
+
+def test_validate_open_item_reference_accepts_materialized_match(logged_in_client, monkeypatch):
+    """A materialized open item is copied to the canonical imported row."""
+    match = SimpleNamespace(id="open-1", document_no="INV-001", document_id="invoice-1")
+    query = SimpleNamespace(filter=lambda *args: query, all=lambda: [match])
+    monkeypatch.setattr(line_import.database.session, "query", lambda model: query)
+
+    validated_row = {"party": "customer-1", "party_type": "customer"}
+    errors = []
+    line_import._validate_open_item_reference(
+        {"reference_type": "invoice", "reference_document": "INV-001", "reference_line": "2"},
+        validated_row,
+        3,
+        "cacao",
+        errors,
+    )
+
+    assert errors == []
+    assert validated_row == {
+        "party": "customer-1",
+        "party_type": "customer",
+        "reference_type": "sales_invoice",
+        "reference_open_item_id": "open-1",
+        "reference_document": "INV-001",
+    }
+
+
+def test_validate_open_item_reference_uses_ledger_fallback(logged_in_client, monkeypatch):
+    """A unique ledger item is accepted when its materialized cache is absent."""
+    from cacao_accounting.contabilidad import arap_allocation
+
+    match = SimpleNamespace(document_type="purchase_invoice", document_no="PINV-001", document_id="invoice-1", outstanding=25)
+    query = SimpleNamespace(filter=lambda *args: query, all=lambda: [])
+    monkeypatch.setattr(line_import.database.session, "query", lambda model: query)
+    monkeypatch.setattr(arap_allocation, "list_open_items", lambda **kwargs: [match])
+
+    validated_row = {"party": "supplier-1", "party_type": "supplier"}
+    errors = []
+    line_import._validate_open_item_reference(
+        {"reference_type": "invoice", "reference_document": "invoice-1", "reference_line": "economic-line-1"},
+        validated_row,
+        5,
+        "cacao",
+        errors,
+    )
+
+    assert errors == []
+    assert validated_row["reference_type"] == "purchase_invoice"
+    assert validated_row["reference_document"] == "PINV-001"
+    assert "reference_open_item_id" not in validated_row
+
+
+@pytest.mark.parametrize(
+    ("matches", "ledger_matches", "expected_field"),
+    [
+        ([], [], "reference_document"),
+        (
+            [],
+            [SimpleNamespace(document_type="sales_invoice", document_no="INV-1", document_id="1", outstanding=10)] * 2,
+            "reference_line",
+        ),
+        ([SimpleNamespace(id="1", document_no="INV-1", document_id="1")] * 2, [], "reference_line"),
+    ],
+)
+def test_validate_open_item_reference_reports_unresolved_or_ambiguous(
+    logged_in_client, monkeypatch, matches, ledger_matches, expected_field
+):
+    """Missing and ambiguous references return the appropriate import error field."""
+    from cacao_accounting.contabilidad import arap_allocation
+
+    query = SimpleNamespace(filter=lambda *args: query, all=lambda: matches)
+    monkeypatch.setattr(line_import.database.session, "query", lambda model: query)
+    monkeypatch.setattr(arap_allocation, "list_open_items", lambda **kwargs: ledger_matches)
+
+    errors = []
+    line_import._validate_open_item_reference(
+        {"reference_type": "sales_invoice", "reference_document": "INV-1"},
+        {"party_type": "customer", "party": "customer-1"},
+        7,
+        "cacao",
+        errors,
+    )
+
+    assert len(errors) == 1
+    assert errors[0]["field"] == expected_field
+
+
+def test_validate_open_item_reference_rejects_incomplete_reference(logged_in_client):
+    """Reference type and document must be supplied together."""
+    errors = []
+    line_import._validate_open_item_reference(
+        {"reference_type": "invoice"},
+        {},
+        8,
+        "cacao",
+        errors,
+    )
+
+    assert errors[0]["field"] == "reference_type"
+    assert "juntos" in errors[0]["message"]
+
+
+@pytest.mark.parametrize(
     ("doctype", "column_key", "expected_aliases"),
     [
         ("purchase_request", "item_code", {"producto", "product", "item code"}),
