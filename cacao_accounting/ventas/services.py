@@ -2016,51 +2016,81 @@ def _sales_invoice_source(invoice: SalesInvoice, reversal_of: str | None) -> Sal
     return source
 
 
+def _prepare_sales_invoice_creation() -> dict[str, Any]:
+    """Resuelve origen, tipo documental y permisos para una factura de venta."""
+    document_type = request.form.get("document_type") or "sales_invoice"
+    posting_date = _parse_date(request.form.get("posting_date"))
+    reversal_of = _sales_reversal_source(document_type)
+    source_company = request.form.get("company") or None
+    from_order_id = request.form.get("from_order") or None
+    from_note_id = request.form.get("from_note") or None
+    source_id = from_order_id or from_note_id or reversal_of
+    source_model = SalesOrder if from_order_id else DeliveryNote if from_note_id else SalesInvoice
+    source_document = database.session.get(source_model, source_id) if source_id else None
+    source_company = getattr(source_document, "company", None) or source_company
+    exige_acceso_compania("sales", source_company, "crear")
+    if reversal_of:
+        _validate_reversal_of(reversal_of, request.form.get("customer_id"), request.form.get("company"))
+    return {
+        "document_type": document_type,
+        "posting_date": posting_date,
+        "reversal_of": reversal_of,
+        "from_order_id": from_order_id,
+        "from_note_id": from_note_id,
+    }
+
+
+def _build_sales_invoice_from_context(context: dict[str, Any]) -> SalesInvoice:
+    """Construye el documento de venta con los valores normalizados del formulario."""
+    document_type = context["document_type"]
+    return SalesInvoice(
+        customer_id=request.form.get("customer_id") or None,
+        company=request.form.get("company") or None,
+        posting_date=context["posting_date"],
+        document_type=document_type,
+        sales_order_id=context["from_order_id"],
+        delivery_note_id=context["from_note_id"],
+        transaction_currency=request.form.get("transaction_currency") or request.form.get("currency") or None,
+        update_inventory=bool(request.form.get("update_inventory"))
+        and document_type not in ("sales_credit_note", "sales_return"),
+        is_return=document_type in ("sales_credit_note", "sales_return"),
+        reversal_of=context["reversal_of"],
+        remarks=request.form.get("remarks"),
+        docstatus=0,
+    )
+
+
+def _validate_sales_invoice_reversal_result(
+    reversal_of: str | None,
+    invoice: SalesInvoice,
+    grand_total: Decimal,
+) -> None:
+    """Valida el importe final cuando la factura es una reversión."""
+    if reversal_of:
+        _validate_reversal_of(
+            reversal_of,
+            invoice.customer_id,
+            invoice.company,
+            note_amount=grand_total,
+            document_type=invoice.document_type,
+            posting_date=invoice.posting_date,
+        )
+
+
 def _create_sales_invoice_from_form():
     """Crea una factura de venta desde los datos del formulario."""
     factura = None
     try:
-        document_type = request.form.get("document_type") or "sales_invoice"
-        posting_date = _parse_date(request.form.get("posting_date"))
-        reversal_of = _sales_reversal_source(document_type)
-        source_company = request.form.get("company") or None
-        from_order_id = request.form.get("from_order") or None
-        from_note_id = request.form.get("from_note") or None
-        source_id = from_order_id or from_note_id or reversal_of
-        if from_order_id:
-            source_model = SalesOrder
-        elif from_note_id:
-            source_model = DeliveryNote
-        else:
-            source_model = SalesInvoice
-        source_document = database.session.get(source_model, source_id) if source_id else None
-        source_company = getattr(source_document, "company", None) or source_company
-        exige_acceso_compania("sales", source_company, "crear")
-        if reversal_of:
-            _validate_reversal_of(reversal_of, request.form.get("customer_id"), request.form.get("company"))
-        factura = SalesInvoice(
-            customer_id=request.form.get("customer_id") or None,
-            company=request.form.get("company") or None,
-            posting_date=posting_date,
-            document_type=document_type,
-            sales_order_id=request.form.get("from_order") or None,
-            delivery_note_id=request.form.get("from_note") or None,
-            transaction_currency=request.form.get("transaction_currency") or request.form.get("currency") or None,
-            update_inventory=bool(request.form.get("update_inventory"))
-            and document_type not in ("sales_credit_note", "sales_return"),
-            is_return=document_type in ("sales_credit_note", "sales_return"),
-            reversal_of=reversal_of,
-            remarks=request.form.get("remarks"),
-            docstatus=0,
-        )
-        source = _sales_invoice_source(factura, reversal_of)
+        context = _prepare_sales_invoice_creation()
+        factura = _build_sales_invoice_from_context(context)
+        source = _sales_invoice_source(factura, context["reversal_of"])
         _copy_sales_logistics(factura, source, request.form)
         database.session.add(factura)
         database.session.flush()
         assign_document_identifier(
             document=factura,
             entity_type="sales_invoice",
-            posting_date_raw=posting_date,
+            posting_date_raw=context["posting_date"],
             naming_series_id=request.form.get("naming_series") or None,
         )
         _total_qty, total = _save_sales_invoice_items(factura.id)
@@ -2072,15 +2102,7 @@ def _create_sales_invoice_from_form():
             factura, total, items, request.form.get("tax_summary_payload"), request.form.get("tax_lines_payload")
         )
         _set_sales_invoice_totals(factura, total, grand_total, source)
-        if reversal_of:
-            _validate_reversal_of(
-                reversal_of,
-                factura.customer_id,
-                factura.company,
-                note_amount=grand_total,
-                document_type=document_type,
-                posting_date=factura.posting_date,
-            )
+        _validate_sales_invoice_reversal_result(context["reversal_of"], factura, grand_total)
         _persist_sales_invoice_fiscal_snapshot(factura)
         database.session.commit()
         flash("Factura de venta creada correctamente.", "success")
