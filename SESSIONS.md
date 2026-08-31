@@ -1,5 +1,31 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `ventas_entrega_nuevo` cx=46)
+
+### Hallazgo SonarCloud
+
+Issue `AaAa6suhSsPfV5h49WFn` (`python:S3776`, CRITICAL):
+`cacao_accounting/ventas/routes.py`, `ventas_entrega_nuevo`, complejidad cognitiva
+46 frente al umbral 15.
+
+### Corrección
+
+Se separaron la carga de fuentes, catálogos, configuración Alpine y contexto del formulario, así como la creación POST
+de la nota y la validación de sus relaciones con una orden o nota de entrega origen. Se conservaron la precedencia de
+fuentes del formulario y del POST, los valores iniciales de devoluciones, la herencia inmutable de compañía/moneda,
+la validación de cantidades, la persistencia de batch/serial, la auditoría y el commit transaccional.
+
+### Verificación
+
+- `tests/test_batch_serial_persistence.py::TestDeliveryNoteBatchSerial`, sus tres pruebas nuevas y
+  `tests/test_e2e_modules.py::test_sales_happy_path`: 6/6.
+- Cobertura focalizada: todas las líneas nuevas del refactor están cubiertas; las líneas no cubiertas restantes son
+  código preexistente de `ventas/routes.py` fuera de este flujo.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_validate_open_item_reference` cx=43)
 
 ### Hallazgo SonarCloud
