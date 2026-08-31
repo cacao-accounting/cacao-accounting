@@ -2274,37 +2274,47 @@ def _persist_purchase_reversal_relation(invoice: PurchaseInvoice) -> None:
     )
     amount = Decimal(str(invoice.grand_total or "0"))
     if relation:
-        relation.qty = Decimal("1")
-        relation.amount = amount
-        relation.status = "active"
-        from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
-
-        source = database.session.get(PurchaseInvoice, invoice.reversal_of)
-        if source:
-            refresh_outstanding_amount_cache(source)
+        _update_purchase_reversal_relation(relation, invoice, amount)
         return
-    database.session.add(
-        DocumentRelation(
-            source_type="purchase_invoice",
-            source_id=invoice.reversal_of,
-            source_item_id=None,
-            target_type=target_type,
-            target_id=invoice.id,
-            target_item_id=None,
-            company=invoice.company,
-            qty=Decimal("1"),
-            uom=None,
-            rate=amount,
-            amount=amount,
-            relation_type="invoice_reversal",
-            status="active",
-        )
-    )
+
+    database.session.add(_new_purchase_reversal_relation(invoice, target_type, amount))
+    _refresh_purchase_reversal_source(invoice)
+
+
+def _refresh_purchase_reversal_source(invoice: PurchaseInvoice) -> None:
+    """Actualiza el saldo derivado de la factura origen después de una reversión."""
     from cacao_accounting.document_flow.payment import refresh_outstanding_amount_cache
 
     source = database.session.get(PurchaseInvoice, invoice.reversal_of)
     if source:
         refresh_outstanding_amount_cache(source)
+
+
+def _update_purchase_reversal_relation(relation: DocumentRelation, invoice: PurchaseInvoice, amount: Decimal) -> None:
+    """Actualiza una relación de reversión existente y refresca su factura origen."""
+    relation.qty = Decimal("1")
+    relation.amount = amount
+    relation.status = "active"
+    _refresh_purchase_reversal_source(invoice)
+
+
+def _new_purchase_reversal_relation(invoice: PurchaseInvoice, target_type: str, amount: Decimal) -> DocumentRelation:
+    """Construye la relación persistible entre la factura y su nota."""
+    return DocumentRelation(
+        source_type="purchase_invoice",
+        source_id=invoice.reversal_of,
+        source_item_id=None,
+        target_type=target_type,
+        target_id=invoice.id,
+        target_item_id=None,
+        company=invoice.company,
+        qty=Decimal("1"),
+        uom=None,
+        rate=amount,
+        amount=amount,
+        relation_type="invoice_reversal",
+        status="active",
+    )
 
 
 def _has_active_purchase_reversal_notes(invoice_id: str) -> bool:

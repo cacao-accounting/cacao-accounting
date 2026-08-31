@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_persist_purchase_reversal_relation` cx=21)
+
+### Hallazgo SonarCloud
+
+Issue `AaBV6VBHZAs_M-b0tIoJ` (`python:S3776`, CRITICAL):
+`cacao_accounting/compras/services.py`, `_persist_purchase_reversal_relation`, complejidad cognitiva 21 frente al
+umbral 15.
+
+### Corrección
+
+Se separaron la actualización de una relación existente, la construcción de una relación nueva y el refresco del
+saldo derivado de la factura origen en helpers dedicados. Se conservaron tipo de nota, importe, estado activo y
+reconciliación del saldo AP.
+
+### Verificación
+
+- `tests/test_s2p_purchase_notes.py`: 11/11.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `get_reconciliation_report` cx=20)
 
 ### Hallazgo SonarCloud
