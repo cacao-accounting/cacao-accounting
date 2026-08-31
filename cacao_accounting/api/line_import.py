@@ -62,6 +62,15 @@ DOCTYPES_MODULES = {
     "stock_entry": "inventory",
 }
 
+PAYMENT_RECONCILIATION_MODELS = {
+    "sales_invoice": SalesInvoice,
+    "purchase_invoice": PurchaseInvoice,
+    "sales_credit_note": SalesInvoice,
+    "sales_debit_note": SalesInvoice,
+    "purchase_credit_note": PurchaseInvoice,
+    "purchase_debit_note": PurchaseInvoice,
+}
+
 
 @dataclass(frozen=True)
 class LineValidationPayload:
@@ -831,95 +840,110 @@ def _validate_journal_entry_row(row: dict[str, Any], row_no: int, errors: list[d
         )
 
 
+def _append_payment_reconciliation_error(errors: list[dict[str, Any]], row_no: int, field: str, message: str) -> None:
+    """Append a normalized payment reconciliation validation error."""
+    errors.append({"row": row_no, "field": field, "message": message})
+
+
+def _get_payment_reconciliation_payment(
+    row: dict[str, Any], company_id: str, row_no: int, errors: list[dict[str, Any]]
+) -> Any:
+    """Load the payment and report when it is not valid for the company."""
+    payment_id = str(row.get("payment_id") or "").strip()
+    payment = database.session.get(PaymentEntry, payment_id)
+    if payment is None or payment.company != company_id or payment.docstatus != 1:
+        _append_payment_reconciliation_error(
+            errors, row_no, "payment_id", _("El pago no existe para la compañía seleccionada.")
+        )
+    return payment
+
+
+def _get_payment_reconciliation_reference(
+    row: dict[str, Any], company_id: str, row_no: int, errors: list[dict[str, Any]]
+) -> tuple[Any, str]:
+    """Load the referenced document using its normalized document type."""
+    reference_type = normalize_doctype(str(row.get("reference_type") or ""))
+    model = PAYMENT_RECONCILIATION_MODELS.get(reference_type)
+    if model is None:
+        _append_payment_reconciliation_error(errors, row_no, "reference_type", _("Tipo de documento no conciliable."))
+        return None, reference_type
+    reference_id = str(row.get("reference_id") or "").strip()
+    reference = database.session.get(model, reference_id)
+    if reference is None or reference.docstatus != 1 or reference.company != company_id:
+        _append_payment_reconciliation_error(
+            errors, row_no, "reference_id", _("El documento de referencia no existe o no está aprobado.")
+        )
+        return None, reference_type
+    return reference, reference_type
+
+
+def _validate_payment_reconciliation_party(
+    payment: Any, reference: Any, reference_type: str, row_no: int, errors: list[dict[str, Any]]
+) -> None:
+    """Ensure the payment and referenced document belong to the same party."""
+    expected_party_type = "supplier" if reference_type.startswith("purchase_") else "customer"
+    party_attribute = "supplier_id" if expected_party_type == "supplier" else "customer_id"
+    expected_party_id = getattr(reference, party_attribute, None)
+    if payment.party_type != expected_party_type or str(payment.party_id) != str(expected_party_id):
+        _append_payment_reconciliation_error(
+            errors, row_no, "reference_id", _("El documento de referencia no coincide con el tercero del pago.")
+        )
+
+
+def _payment_reconciliation_rate(
+    row: dict[str, Any], payment: Any, reference: Any, row_no: int, errors: list[dict[str, Any]]
+) -> Decimal:
+    """Resolve the exchange rate required to compare payment and document currencies."""
+    document_currency = getattr(reference, "transaction_currency", None)
+    payment_currency = getattr(payment, "currency", None)
+    if not document_currency or not payment_currency or document_currency == payment_currency:
+        return Decimal("1")
+    raw_rate = row.get("payment_exchange_rate")
+    if not (_is_decimal(raw_rate) and Decimal(str(raw_rate)) > 0):
+        _append_payment_reconciliation_error(
+            errors, row_no, "payment_exchange_rate", _("Se requiere una tasa para monedas distintas.")
+        )
+        return Decimal("1")
+    return Decimal(str(raw_rate))
+
+
+def _validate_payment_reconciliation_amounts(
+    row: dict[str, Any], payment: Any, reference: Any, rate: Decimal, row_no: int, errors: list[dict[str, Any]]
+) -> None:
+    """Validate allocated amount against document and payment outstanding balances."""
+    from cacao_accounting.document_flow.payment import compute_outstanding_amount, compute_payment_unallocated_amount
+
+    allocated = Decimal(str(row["allocated_amount"])) if _is_decimal(row.get("allocated_amount")) else Decimal("0")
+    discount = Decimal(str(row["discount_amount"])) if _is_decimal(row.get("discount_amount")) else Decimal("0")
+    gain_loss = Decimal(str(row["gain_loss_amount"])) if _is_decimal(row.get("gain_loss_amount")) else Decimal("0")
+    if allocated <= 0:
+        return
+    if allocated > compute_outstanding_amount(reference) + Decimal("0.01"):
+        _append_payment_reconciliation_error(
+            errors, row_no, "allocated_amount", _("El monto aplicado excede el saldo pendiente del documento.")
+        )
+    consumed = max(allocated - discount - gain_loss, Decimal("0")) * rate
+    if consumed > compute_payment_unallocated_amount(payment) + Decimal("0.01"):
+        _append_payment_reconciliation_error(
+            errors, row_no, "allocated_amount", _("El monto aplicado excede el saldo disponible del pago.")
+        )
+
+
 def _validate_payment_reconciliation_row(
     row: dict[str, Any], row_no: int, company_id: str, errors: list[dict[str, Any]]
 ) -> None:
     """Validate payment/document identity before reconciliation is applied."""
-    payment_id = str(row.get("payment_id") or "").strip()
-    payment = database.session.get(PaymentEntry, payment_id)
-    if payment is None or payment.company != company_id or payment.docstatus != 1:
-        errors.append({"row": row_no, "field": "payment_id", "message": _("El pago no existe para la compañía seleccionada.")})
-    reference_type = normalize_doctype(str(row.get("reference_type") or ""))
-    reference_id = str(row.get("reference_id") or "").strip()
-    models = {
-        "sales_invoice": SalesInvoice,
-        "purchase_invoice": PurchaseInvoice,
-        "sales_credit_note": SalesInvoice,
-        "sales_debit_note": SalesInvoice,
-        "purchase_credit_note": PurchaseInvoice,
-        "purchase_debit_note": PurchaseInvoice,
-    }
-    model = models.get(reference_type)
-    if model is None:
-        errors.append({"row": row_no, "field": "reference_type", "message": _("Tipo de documento no conciliable.")})
-    else:
-        reference = database.session.get(model, reference_id)
-        if reference is None or reference.docstatus != 1 or reference.company != company_id:
-            errors.append(
-                {
-                    "row": row_no,
-                    "field": "reference_id",
-                    "message": _("El documento de referencia no existe o no está aprobado."),
-                }
-            )
-        elif payment is not None:
-            expected_party_type = "supplier" if reference_type.startswith("purchase_") else "customer"
-            expected_party_id = (
-                getattr(reference, "supplier_id", None)
-                if expected_party_type == "supplier"
-                else getattr(reference, "customer_id", None)
-            )
-            if payment.party_type != expected_party_type or str(payment.party_id) != str(expected_party_id):
-                errors.append(
-                    {
-                        "row": row_no,
-                        "field": "reference_id",
-                        "message": _("El documento de referencia no coincide con el tercero del pago."),
-                    }
-                )
-            document_currency = getattr(reference, "transaction_currency", None)
-            payment_currency = getattr(payment, "currency", None)
-            rate = Decimal("1")
-            if document_currency and payment_currency and document_currency != payment_currency:
-                if not (_is_decimal(row.get("payment_exchange_rate")) and Decimal(str(row["payment_exchange_rate"])) > 0):
-                    errors.append(
-                        {
-                            "row": row_no,
-                            "field": "payment_exchange_rate",
-                            "message": _("Se requiere una tasa para monedas distintas."),
-                        }
-                    )
-                else:
-                    rate = Decimal(str(row["payment_exchange_rate"]))
-            allocated = Decimal(str(row["allocated_amount"])) if _is_decimal(row.get("allocated_amount")) else Decimal("0")
-            discount = Decimal(str(row["discount_amount"])) if _is_decimal(row.get("discount_amount")) else Decimal("0")
-            gain_loss = Decimal(str(row["gain_loss_amount"])) if _is_decimal(row.get("gain_loss_amount")) else Decimal("0")
-            if allocated > 0:
-                from cacao_accounting.document_flow.payment import (
-                    compute_outstanding_amount,
-                    compute_payment_unallocated_amount,
-                )
-
-                outstanding = compute_outstanding_amount(reference)
-                if allocated > outstanding + Decimal("0.01"):
-                    errors.append(
-                        {
-                            "row": row_no,
-                            "field": "allocated_amount",
-                            "message": _("El monto aplicado excede el saldo pendiente del documento."),
-                        }
-                    )
-                consumed = max(allocated - discount - gain_loss, Decimal("0")) * rate
-                if consumed > compute_payment_unallocated_amount(payment) + Decimal("0.01"):
-                    errors.append(
-                        {
-                            "row": row_no,
-                            "field": "allocated_amount",
-                            "message": _("El monto aplicado excede el saldo disponible del pago."),
-                        }
-                    )
-    if _is_decimal(row.get("allocated_amount")) and Decimal(str(row.get("allocated_amount"))) <= 0:
-        errors.append({"row": row_no, "field": "allocated_amount", "message": _("El monto aplicado debe ser mayor que cero.")})
+    payment = _get_payment_reconciliation_payment(row, company_id, row_no, errors)
+    reference, reference_type = _get_payment_reconciliation_reference(row, company_id, row_no, errors)
+    if reference is not None and payment is not None:
+        _validate_payment_reconciliation_party(payment, reference, reference_type, row_no, errors)
+        rate = _payment_reconciliation_rate(row, payment, reference, row_no, errors)
+        _validate_payment_reconciliation_amounts(row, payment, reference, rate, row_no, errors)
+    allocated = row.get("allocated_amount")
+    if _is_decimal(allocated) and Decimal(str(allocated)) <= 0:
+        _append_payment_reconciliation_error(
+            errors, row_no, "allocated_amount", _("El monto aplicado debe ser mayor que cero.")
+        )
 
 
 def _error_response(message: str, status_code: int) -> ResponseReturnValue:
