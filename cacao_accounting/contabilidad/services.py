@@ -150,6 +150,13 @@ _TPL_PERIODO_CREAR = "contabilidad/periodo_crear.html"
 _TPL_TC_CREAR = "contabilidad/tc_crear.html"
 
 
+def _enforce_accounting_resource_access(model: Any, identifier: str, action: str) -> None:
+    """Exige acceso a la compañía del recurso contable si existe."""
+    resource = database.session.get(model, identifier)
+    if resource:
+        exige_acceso_compania("accounting", resource.company, action)
+
+
 @contabilidad.before_request
 def enforce_close_and_recurring_company_access():
     """Enforce company isolation for close runs and recurring templates."""
@@ -161,20 +168,18 @@ def enforce_close_and_recurring_company_access():
     if request.path.startswith("/accounting/period-close/"):
         from cacao_accounting.database import PeriodCloseRun
 
-        close_run = database.session.get(PeriodCloseRun, identifier)
-        if close_run:
-            exige_acceso_compania("accounting", close_run.company, "autorizar" if request.method == "POST" else "consultar")
+        _enforce_accounting_resource_access(
+            PeriodCloseRun, identifier, "autorizar" if request.method == "POST" else "consultar"
+        )
     elif request.path.startswith("/accounting/journal/recurring/"):
-        template = database.session.get(RecurringJournalTemplate, identifier)
-        if template:
-            exige_acceso_compania("accounting", template.company, "autorizar" if request.method == "POST" else "consultar")
+        _enforce_accounting_resource_access(
+            RecurringJournalTemplate, identifier, "autorizar" if request.method == "POST" else "consultar"
+        )
     elif request.path.startswith("/accounting/exchange-revaluation/"):
         from cacao_accounting.database import ExchangeRevaluation
 
-        run = database.session.get(ExchangeRevaluation, identifier)
-        if run:
-            action = "anular" if request.path.endswith("/void") else "consultar"
-            exige_acceso_compania("accounting", run.company, action)
+        action = "anular" if request.path.endswith("/void") else "consultar"
+        _enforce_accounting_resource_access(ExchangeRevaluation, identifier, action)
     return None
 
 
