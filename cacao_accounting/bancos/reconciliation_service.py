@@ -882,6 +882,26 @@ def _add_reconciliation_match(
     target_totals[target_key] = target_totals.get(target_key, Decimal("0")) + match.allocated_amount
 
 
+def _validate_gl_reconciliation_match(match: BankReconciliationMatch, transaction: BankTransaction) -> None:
+    """Validate a GL entry against the reconciled bank account."""
+    entry = database.session.get(GLEntry, match.target_id)
+    bank_gl_account_id = _bank_gl_account_id(transaction)
+    if not entry or not bank_gl_account_id or entry.account_id != bank_gl_account_id:
+        raise BankReconciliationError("La entrada GL no pertenece a la cuenta bancaria conciliada.")
+    if entry.bank_account_id and entry.bank_account_id != transaction.bank_account_id:
+        raise BankReconciliationError("La entrada GL pertenece a otra cuenta bancaria.")
+    _validate_gl_entry_eligibility(entry)
+
+
+def _validate_payment_reconciliation_match(match: BankReconciliationMatch, transaction: BankTransaction) -> None:
+    """Validate a payment entry against the reconciled bank account."""
+    payment = database.session.get(PaymentEntry, match.target_id)
+    if not payment or not _payment_belongs_to_bank(payment, transaction.bank_account_id):
+        raise BankReconciliationError("El pago no pertenece a la cuenta bancaria conciliada.")
+    if _payment_direction(payment, transaction) != _bank_direction(transaction):
+        raise BankReconciliationError("El tipo de pago no coincide con la direccion bancaria.")
+
+
 def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: str) -> BankTransaction:
     """Valida una linea de conciliacion y devuelve la transaccion bancaria."""
     if match.allocated_amount <= 0:
@@ -896,19 +916,9 @@ def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: s
     if _target_company(match.target_type, match.target_id) != company:
         raise BankReconciliationError("El documento destino pertenece a otra compania.")
     if match.target_type == "gl_entry":
-        entry = database.session.get(GLEntry, match.target_id)
-        bank_gl_account_id = _bank_gl_account_id(transaction)
-        if not entry or not bank_gl_account_id or entry.account_id != bank_gl_account_id:
-            raise BankReconciliationError("La entrada GL no pertenece a la cuenta bancaria conciliada.")
-        if entry.bank_account_id and entry.bank_account_id != transaction.bank_account_id:
-            raise BankReconciliationError("La entrada GL pertenece a otra cuenta bancaria.")
-        _validate_gl_entry_eligibility(entry)
+        _validate_gl_reconciliation_match(match, transaction)
     elif match.target_type == "payment_entry":
-        payment = database.session.get(PaymentEntry, match.target_id)
-        if not payment or not _payment_belongs_to_bank(payment, transaction.bank_account_id):
-            raise BankReconciliationError("El pago no pertenece a la cuenta bancaria conciliada.")
-        if _payment_direction(payment, transaction) != _bank_direction(transaction):
-            raise BankReconciliationError("El tipo de pago no coincide con la direccion bancaria.")
+        _validate_payment_reconciliation_match(match, transaction)
     return transaction
 
 

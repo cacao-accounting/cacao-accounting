@@ -162,6 +162,46 @@ def test_cancelled_or_secondary_ledger_gl_entries_are_not_eligible(monkeypatch) 
         service._validate_gl_entry_eligibility(secondary)
 
 
+def test_validate_reconciliation_match_accepts_gl_and_payment_targets(monkeypatch) -> None:
+    """Valida los dos tipos de destino sin mezclar sus reglas específicas."""
+    transaction = SimpleNamespace(
+        id="bank-1", bank_account_id="account-1", company="cacao", deposit=Decimal("100"), withdrawal=Decimal("0")
+    )
+    gl_entry = SimpleNamespace(account_id="bank-gl", bank_account_id="account-1")
+    payment = SimpleNamespace(
+        bank_account_id="account-1",
+        target_bank_account_id=None,
+        payment_type="receive",
+    )
+
+    def fake_get(model, identifier, **kwargs):
+        del kwargs
+        if model is service.BankTransaction:
+            return transaction
+        if model is service.GLEntry:
+            return gl_entry if identifier == "gl-1" else None
+        if model is service.PaymentEntry:
+            return payment if identifier == "payment-1" else None
+        return None
+
+    monkeypatch.setattr(service.database.session, "get", fake_get)
+    monkeypatch.setattr(service, "_bank_company", lambda _transaction: "cacao")
+    monkeypatch.setattr(service, "_target_company", lambda _type, _id: "cacao")
+    monkeypatch.setattr(service, "_lock_reconciliation_target", lambda _type, _id: None)
+    monkeypatch.setattr(service, "_bank_gl_account_id", lambda _transaction: "bank-gl")
+    monkeypatch.setattr(service, "_validate_gl_entry_eligibility", lambda _entry: None)
+
+    gl_match = SimpleNamespace(
+        allocated_amount=Decimal("10"), bank_transaction_id="bank-1", target_type="gl_entry", target_id="gl-1"
+    )
+    payment_match = SimpleNamespace(
+        allocated_amount=Decimal("10"), bank_transaction_id="bank-1", target_type="payment_entry", target_id="payment-1"
+    )
+
+    assert service._validate_reconciliation_match(match=gl_match, company="cacao") is transaction
+    assert service._validate_reconciliation_match(match=payment_match, company="cacao") is transaction
+
+
 def test_payment_link_population_only_sets_empty_bank_transaction() -> None:
     """Relaciona una transacción con pago una sola vez."""
     transaction = SimpleNamespace(payment_entry_id=None)

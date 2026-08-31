@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_validate_reconciliation_match` cx=17)
+
+### Hallazgo SonarCloud
+
+Issue `AaAoBYI9Hu0gULtos-2J` (`python:S3776`, CRITICAL):
+`cacao_accounting/bancos/reconciliation_service.py`, `_validate_reconciliation_match`, complejidad cognitiva 17
+frente al umbral 15.
+
+### Análisis y corrección
+
+No se requirió rediseñar la conciliación: la complejidad estaba concentrada en dos variantes independientes del
+destino. Se extrajeron validadores cohesivos para GL y pagos, manteniendo en el método principal la validación común
+de importe, compañía y bloqueo del destino.
+
+### Verificación
+
+- `tests/test_reconciliation_service_unit.py`: 6/6.
+- Se cubrieron los destinos GL y pago, incluida la validación de cuenta bancaria y dirección económica.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `logistics_values` cx=19)
 
 ### Hallazgo SonarCloud
