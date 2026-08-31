@@ -1,5 +1,29 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — Inventario `_paginate_list` cx=28)
+
+### Hallazgo SonarCloud
+
+Issue `AaBG9c1uWKUcwX8H2P6W` (`python:S3776`, CRITICAL):
+`cacao_accounting/inventario/services.py`, `_paginate_list`, complejidad cognitiva 28 frente al umbral 15.
+
+### Corrección
+
+Se separaron la autorización por compañía y la aplicación de filtros por período contable en helpers dedicados.
+Se conservaron la compañía explícita, el alcance de compañías autorizadas, la excepción administrativa, el bloqueo sin
+compañías consultables, los filtros de período, búsqueda, estado, paginación y el selector de período.
+
+### Verificación
+
+- `tests/test_inventory_valuation_settings.py`: 5/5.
+- `tests/test_03webactions.py -k inventory_stock_entry_routes --slow=True`: 1/1.
+- Cobertura focalizada: las líneas nuevas del refactor están cubiertas; las líneas no cubiertas restantes pertenecen
+  a funciones preexistentes fuera del listado refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `TransactionDocumentAdapter.validate_document` cx=29)
 
 ### Hallazgo SonarCloud
