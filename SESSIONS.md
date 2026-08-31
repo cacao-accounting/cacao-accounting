@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `upload_attachment` cx=16)
+
+### Hallazgo SonarCloud
+
+Issue `AaAvZ2O5Ek95ELe1htg3` (`python:S3776`, CRITICAL):
+`cacao_accounting/attachment_service.py`, `upload_attachment`, complejidad cognitiva 16 frente al umbral 15.
+
+### Análisis y corrección
+
+No se justificó un refactor completo: la complejidad provenía de validaciones independientes del request. Se extrajo
+únicamente `_prepare_upload`, que normaliza referencias, valida el archivo y calcula su tamaño; la escritura física,
+persistencia y rollback permanecen en `upload_attachment` sin cambiar su contrato.
+
+### Verificación
+
+- `tests/test_attachment_service.py`: 16/16.
+- Las ramas nuevas de preparación (referencias, archivo ausente/vacío/excesivo, nombre fallback y metadatos) están
+  cubiertas; la cobertura global del módulo es 85% por funciones preexistentes fuera de este fix.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `JournalEntryAdapter.validate_document` cx=20)
 
 ### Hallazgo SonarCloud
