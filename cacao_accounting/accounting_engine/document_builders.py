@@ -1243,6 +1243,83 @@ def _functional_ledger_id(company: str) -> str | None:
     return str(ledgers[0].id) if ledgers else None
 
 
+def _revaluation_document_net(
+    *,
+    company: str,
+    document_type: str,
+    document_id: str,
+    ledger_id: str,
+    party_account_id: str,
+) -> Decimal:
+    """Obtiene el neto GL de revaluaciones publicadas para un documento."""
+    from sqlalchemy import func
+
+    from cacao_accounting.contabilidad.exchange_revaluation_service import EXCHANGE_REVALUATION_STATUS_POSTED
+
+    active_run_ids = (
+        select(ExchangeRevaluation.id)
+        .join(ExchangeRevaluationItem, ExchangeRevaluationItem.revaluation_id == ExchangeRevaluation.id)
+        .where(
+            ExchangeRevaluation.company == company,
+            ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED,
+            ExchangeRevaluationItem.source_document_type == document_type,
+            ExchangeRevaluationItem.source_document_id == document_id,
+        )
+    )
+    reval_row = database.session.execute(
+        select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
+            GLEntry.company == company,
+            GLEntry.ledger_id == ledger_id,
+            GLEntry.account_id == party_account_id,
+            GLEntry.voucher_type == "exchange_revaluation",
+            GLEntry.voucher_id.in_(active_run_ids),
+            GLEntry.is_cancelled.is_(False),
+        )
+    ).scalar_one()
+    return _decimal_value(reval_row)
+
+
+def _prior_payment_document_net(
+    *,
+    document_type: str,
+    document_id: str,
+    company: str,
+    exclude_payment_id: str,
+    voucher_net: Any,
+) -> Decimal:
+    """Prorratea el neto de pagos previos entre sus documentos aplicados."""
+    from sqlalchemy import func
+
+    prior_references = database.session.execute(
+        select(PaymentReference.payment_id, PaymentReference.allocated_amount).where(
+            PaymentReference.reference_type == document_type,
+            PaymentReference.reference_id == document_id,
+            PaymentReference.company == company,
+            PaymentReference.payment_id != exclude_payment_id,
+        )
+    ).all()
+    if not prior_references:
+        return Decimal("0")
+    allocated_by_payment = {str(payment_id): Decimal("0") for payment_id, _ in prior_references}
+    totals = database.session.execute(
+        select(PaymentReference.payment_id, func.coalesce(func.sum(PaymentReference.allocated_amount), 0))
+        .where(PaymentReference.payment_id.in_(list(allocated_by_payment)))
+        .group_by(PaymentReference.payment_id)
+    ).all()
+    payment_totals = {str(row_payment_id): _decimal_value(total) for row_payment_id, total in totals}
+    document_allocations: dict[str, Decimal] = {}
+    for payment_id, allocated in prior_references:
+        key = str(payment_id)
+        document_allocations[key] = document_allocations.get(key, Decimal("0")) + _decimal_value(allocated)
+    payment_entries_net = voucher_net("payment_entry", list(allocated_by_payment))
+    payments_net = Decimal("0")
+    for payment_id, document_allocated in document_allocations.items():
+        payment_total = payment_totals.get(payment_id, Decimal("0"))
+        if payment_total > 0:
+            payments_net += payment_entries_net * (document_allocated / payment_total)
+    return payments_net
+
+
 def _document_carrying_value_in_ledger(
     *,
     company: str,
@@ -1294,62 +1371,20 @@ def _document_carrying_value_in_ledger(
 
     document_net = _voucher_net(document_type, [document_id])
     if include_revaluation_adjustments:
-        from cacao_accounting.contabilidad.exchange_revaluation_service import EXCHANGE_REVALUATION_STATUS_POSTED
-
-        active_run_ids = (
-            select(ExchangeRevaluation.id)
-            .join(ExchangeRevaluationItem, ExchangeRevaluationItem.revaluation_id == ExchangeRevaluation.id)
-            .where(
-                ExchangeRevaluation.company == company,
-                ExchangeRevaluation.status == EXCHANGE_REVALUATION_STATUS_POSTED,
-                ExchangeRevaluationItem.source_document_type == document_type,
-                ExchangeRevaluationItem.source_document_id == document_id,
-            )
+        document_net += _revaluation_document_net(
+            company=company,
+            document_type=document_type,
+            document_id=document_id,
+            ledger_id=ledger_id,
+            party_account_id=party_account_id,
         )
-        reval_row = database.session.execute(
-            select(func.coalesce(func.sum(GLEntry.debit - GLEntry.credit), 0)).where(
-                GLEntry.company == company,
-                GLEntry.ledger_id == ledger_id,
-                GLEntry.account_id == party_account_id,
-                GLEntry.voucher_type == "exchange_revaluation",
-                GLEntry.voucher_id.in_(active_run_ids),
-                GLEntry.is_cancelled.is_(False),
-            )
-        ).scalar_one()
-        document_net += _decimal_value(reval_row)
-    prior_references = database.session.execute(
-        select(PaymentReference.payment_id, PaymentReference.allocated_amount).where(
-            PaymentReference.reference_type == document_type,
-            PaymentReference.reference_id == document_id,
-            PaymentReference.company == company,
-            PaymentReference.payment_id != exclude_payment_id,
-        )
-    ).all()
-    payments_net = Decimal("0")
-    if prior_references:
-        allocated_by_payment: dict[str, Decimal] = {}
-        for payment_id, _allocated in prior_references:
-            allocated_by_payment.setdefault(str(payment_id), Decimal("0"))
-        totals = database.session.execute(
-            select(PaymentReference.payment_id, func.coalesce(func.sum(PaymentReference.allocated_amount), 0))
-            .where(PaymentReference.payment_id.in_(list(allocated_by_payment)))
-            .group_by(PaymentReference.payment_id)
-        ).all()
-        payment_totals = {str(row_payment_id): _decimal_value(total) for row_payment_id, total in totals}
-        payment_ids = list(allocated_by_payment)
-        document_allocations: dict[str, Decimal] = {}
-        for payment_id, allocated in prior_references:
-            document_allocations[str(payment_id)] = document_allocations.get(str(payment_id), Decimal("0")) + _decimal_value(
-                allocated
-            )
-        payment_entries_net = _voucher_net("payment_entry", payment_ids)
-        # Prorrateo por asignacion cuando el pago toco varios documentos.
-        for payment_id, document_allocated in document_allocations.items():
-            payment_total = payment_totals.get(payment_id, Decimal("0"))
-            if payment_total <= 0:
-                continue
-            share = document_allocated / payment_total
-            payments_net += payment_entries_net * share
+    payments_net = _prior_payment_document_net(
+        document_type=document_type,
+        document_id=document_id,
+        company=company,
+        exclude_payment_id=exclude_payment_id,
+        voucher_net=_voucher_net,
+    )
     has_gl = document_net != 0 or payments_net != 0
     if not has_gl:
         return None
