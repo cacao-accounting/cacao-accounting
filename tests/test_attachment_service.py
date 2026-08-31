@@ -130,6 +130,59 @@ def test_desktop_mode_blocks_attachments(app_cloud):
             assert exc_info2.value.status_code == 403
 
 
+@pytest.mark.parametrize(
+    ("reference_type", "reference_id", "file_storage", "message"),
+    [
+        ("", "REF-1", FileStorage(stream=io.BytesIO(b"file"), filename="file.txt"), "Tipo de referencia requerido"),
+        ("document", "", FileStorage(stream=io.BytesIO(b"file"), filename="file.txt"), "ID de referencia requerido"),
+        ("document", "REF-1", None, "No se proporcionó ningún archivo"),
+    ],
+)
+def test_attachment_upload_rejects_incomplete_request(app_cloud, reference_type, reference_id, file_storage, message):
+    with app_cloud.app_context(), patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+        with pytest.raises(AttachmentError, match=message):
+            upload_attachment(reference_type, reference_id, file_storage)
+
+
+def test_attachment_upload_rejects_empty_file(app_cloud):
+    file_obj = FileStorage(stream=io.BytesIO(), filename="empty.txt")
+
+    with app_cloud.app_context(), patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+        with pytest.raises(AttachmentError, match="archivo está vacío"):
+            upload_attachment("document", "REF-1", file_obj)
+
+
+def test_attachment_upload_rejects_oversized_file(app_cloud, monkeypatch):
+    monkeypatch.setattr("cacao_accounting.attachment_service.MAX_FILE_SIZE", 1)
+    file_obj = FileStorage(stream=io.BytesIO(b"too large"), filename="large.txt")
+
+    with app_cloud.app_context(), patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+        with pytest.raises(AttachmentError, match="tamaño máximo"):
+            upload_attachment("document", "REF-1", file_obj)
+
+
+def test_attachment_upload_uses_safe_fallback_for_empty_filename(app_cloud, tmp_path):
+    app_cloud.config["UPLOAD_FOLDER"] = str(tmp_path)
+    file_obj = FileStorage(stream=io.BytesIO(b"document"), filename="///")
+
+    with app_cloud.app_context(), patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+        result = upload_attachment("document", "REF-1", file_obj)
+
+    assert result["file_name"] == "attachment"
+
+
+def test_attachment_upload_removes_file_when_database_commit_fails(app_cloud, tmp_path):
+    app_cloud.config["UPLOAD_FOLDER"] = str(tmp_path)
+    file_obj = FileStorage(stream=io.BytesIO(b"document"), filename="document.txt")
+
+    with app_cloud.app_context(), patch("cacao_accounting.attachment_service.is_desktop_mode", return_value=False):
+        with patch.object(database.session, "commit", side_effect=RuntimeError("database unavailable")):
+            with pytest.raises(RuntimeError, match="database unavailable"):
+                upload_attachment("document", "REF-1", file_obj)
+
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_item_product_image_flow_cloud(app_cloud, tmp_path):
     """Test inventory item product image upload, retrieval, and deletion in Cloud mode."""
     with app_cloud.app_context():

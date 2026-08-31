@@ -41,6 +41,36 @@ def _get_upload_folder() -> str:
     return folder
 
 
+def _prepare_upload(
+    reference_type: str,
+    reference_id: str,
+    file_storage: Any,
+) -> tuple[str, str, str, int]:
+    """Validate an upload request and return normalized metadata."""
+    normalized_reference_type = str(reference_type).strip() if reference_type else ""
+    if not normalized_reference_type:
+        raise AttachmentError("Tipo de referencia requerido.", 400)
+
+    normalized_reference_id = str(reference_id).strip() if reference_id else ""
+    if not normalized_reference_id:
+        raise AttachmentError("ID de referencia requerido.", 400)
+
+    if not file_storage or not getattr(file_storage, "filename", None):
+        raise AttachmentError("No se proporcionó ningún archivo.", 400)
+
+    original_filename = secure_filename(file_storage.filename) or "attachment"
+    file_storage.seek(0, os.SEEK_END)
+    file_size = file_storage.tell()
+    file_storage.seek(0)
+
+    if file_size <= 0:
+        raise AttachmentError("El archivo está vacío.", 400)
+    if file_size > MAX_FILE_SIZE:
+        raise AttachmentError("El archivo excede el tamaño máximo permitido (16 MB).", 400)
+
+    return normalized_reference_type, normalized_reference_id, original_filename, file_size
+
+
 def upload_attachment(
     reference_type: str,
     reference_id: str,
@@ -50,27 +80,7 @@ def upload_attachment(
 ) -> dict[str, Any]:
     """Upload and attach a file to a document or master record in Cloud mode."""
     _ensure_cloud_mode()
-
-    if not reference_type or not str(reference_type).strip():
-        raise AttachmentError("Tipo de referencia requerido.", 400)
-    if not reference_id or not str(reference_id).strip():
-        raise AttachmentError("ID de referencia requerido.", 400)
-
-    if not file_storage or not getattr(file_storage, "filename", None):
-        raise AttachmentError("No se proporcionó ningún archivo.", 400)
-
-    original_filename = secure_filename(file_storage.filename)
-    if not original_filename:
-        original_filename = "attachment"
-
-    file_storage.seek(0, os.SEEK_END)
-    file_size = file_storage.tell()
-    file_storage.seek(0)
-
-    if file_size <= 0:
-        raise AttachmentError("El archivo está vacío.", 400)
-    if file_size > MAX_FILE_SIZE:
-        raise AttachmentError("El archivo excede el tamaño máximo permitido (16 MB).", 400)
+    reference_type, reference_id, original_filename, file_size = _prepare_upload(reference_type, reference_id, file_storage)
 
     upload_folder = _get_upload_folder()
     unique_prefix = uuid.uuid4().hex[:12]
@@ -95,8 +105,8 @@ def upload_attachment(
 
         attachment_record = FileAttachment(
             file_id=file_record.id,
-            reference_type=str(reference_type).strip(),
-            reference_id=str(reference_id).strip(),
+            reference_type=reference_type,
+            reference_id=reference_id,
         )
         database.session.add(attachment_record)
         database.session.commit()
