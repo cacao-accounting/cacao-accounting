@@ -1,6 +1,6 @@
 """Modulo de Contabilidad."""
 
-from typing import Any
+from typing import Any, cast
 
 from decimal import Decimal
 
@@ -142,6 +142,53 @@ def _accounting_entity_choices(action: str = "consultar") -> list[tuple[str, str
 
     entities = database.session.execute(_accounting_company_scope(database.select(Entity), Entity.code, action)).scalars()
     return [("", "")] + [(entity.code, entity.name) for entity in entities]
+
+
+def _journal_list_scope(
+    query: Any,
+    period_from: str | None,
+    period_to: str | None,
+    selected_company: str | None,
+    companies: list[str],
+) -> tuple[Any, str | None, Any]:
+    """Aplica el filtro de compañía y período al listado de comprobantes."""
+    from cacao_accounting.reportes.periods import resolve_period_range
+
+    period_range = None
+    if period_from or period_to:
+        company = selected_company or (companies[0] if len(companies) == 1 else None)
+        if company is None:
+            abort(400, description=_("Seleccione una compañía para aplicar el filtro por período."))
+        period_range = resolve_period_range(company, period_from, period_to)
+        if period_range is not None:
+            query = query.where(ComprobanteContable.entity == company)
+            query = query.where(ComprobanteContable.date >= period_range.period_start)
+            query = query.where(ComprobanteContable.date <= period_range.period_end)
+    else:
+        company = selected_company or (companies[0] if len(companies) else None)
+    return query, company, period_range
+
+
+def _journal_list_period_values(
+    company: str | None,
+    period_from: str | None,
+    period_to: str | None,
+    period_range: Any,
+) -> tuple[list[dict[str, Any]], str | None, str | None]:
+    """Prepara períodos y valores activos para los filtros del listado."""
+    from cacao_accounting.reportes.periods import list_periods_for_company, resolve_period_range
+
+    periods = [
+        {"id": str(item.id), "name": item.name, "is_closed": bool(item.is_closed)}
+        for item in list_periods_for_company(cast(str, company))
+    ]
+    active_from, active_to = period_from, period_to
+    if period_range is not None:
+        active_from, active_to = period_range.from_id, period_range.to_id
+    elif not (active_from or active_to):
+        current = resolve_period_range(cast(str, company), None, None)
+        active_from = active_to = current.from_id if current is not None else ""
+    return periods, active_from, active_to
 
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
@@ -2358,7 +2405,6 @@ def listar_comprobantes():
     """Lista comprobantes contables manuales."""
     from cacao_accounting.contabilidad.journal_service import journal_display_document_name
     from cacao_accounting.database import Entity
-    from cacao_accounting.reportes.periods import list_periods_for_company, resolve_period_range
 
     query = (
         database.select(ComprobanteContable)
@@ -2372,18 +2418,7 @@ def listar_comprobantes():
     companies = list(
         database.session.execute(_accounting_company_scope(database.select(Entity.code), Entity.code, "consultar")).scalars()
     )
-    period_range = None
-    if period_from or period_to:
-        company = selected_company or (companies[0] if len(companies) == 1 else None)
-        if company is None:
-            abort(400, description=_("Seleccione una compañía para aplicar el filtro por período."))
-        period_range = resolve_period_range(company, period_from, period_to)
-        if period_range is not None:
-            query = query.where(ComprobanteContable.entity == company)
-            query = query.where(ComprobanteContable.date >= period_range.period_start)
-            query = query.where(ComprobanteContable.date <= period_range.period_end)
-    else:
-        company = selected_company or (companies[0] if len(companies) else None)
+    query, company, period_range = _journal_list_scope(query, period_from, period_to, selected_company, companies)
 
     query = apply_list_filters(
         query,
@@ -2405,16 +2440,7 @@ def listar_comprobantes():
     for registro in consulta.items:
         setattr(registro, "display_document_name", journal_display_document_name(registro))
 
-    periods = [
-        {"id": str(item.id), "name": item.name, "is_closed": bool(item.is_closed)}
-        for item in list_periods_for_company(company)
-    ]
-    active_from, active_to = period_from, period_to
-    if period_range is not None:
-        active_from, active_to = period_range.from_id, period_range.to_id
-    elif not (active_from or active_to):
-        current = resolve_period_range(company, None, None)
-        active_from = active_to = current.from_id if current is not None else ""
+    periods, active_from, active_to = _journal_list_period_values(company, period_from, period_to, period_range)
     return render_template(
         "contabilidad/journal_lista.html",
         consulta=consulta,

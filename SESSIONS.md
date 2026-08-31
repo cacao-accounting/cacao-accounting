@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `listar_comprobantes` cx=23)
+
+### Hallazgo SonarCloud
+
+Issue `AaBG9cPtWKUcwX8H2P6Q` (`python:S3776`, CRITICAL):
+`cacao_accounting/contabilidad/routes.py`, `listar_comprobantes`, complejidad cognitiva 23 frente al umbral 15.
+
+### Análisis y corrección
+
+No se requirió modificar la consulta ni el contrato de la ruta: la complejidad estaba en aplicar el alcance opcional de
+compañía/período y en calcular los valores activos del selector. Se extrajeron `_journal_list_scope` y
+`_journal_list_period_values`; se conservaron los filtros, validación de período, paginación y renderizado.
+
+### Verificación
+
+- `tests/test_11_contabilidad_coverage.py -k 'route_listar_comprobantes'`: 3/3.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check` sobre `cacao_accounting`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_build_payment_reference` cx=23)
 
 ### Hallazgo SonarCloud
