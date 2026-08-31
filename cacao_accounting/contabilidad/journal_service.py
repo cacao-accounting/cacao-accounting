@@ -637,6 +637,34 @@ def parse_journal_form(form_data: Any) -> dict[str, Any]:
     }
 
 
+def _normalize_journal_currency_fields(
+    payload: dict[str, Any],
+    lines_payload: list[Any],
+    lines: list[JournalLineInput],
+    company: str,
+) -> tuple[str | None, str | None, Decimal | None, list[JournalLineInput]]:
+    """Normalize header currency, base currency, exchange rate, and line currencies."""
+    transaction_currency, lines = _normalize_transaction_currency(_optional_text(payload.get("transaction_currency")), lines)
+    company_currency = database.session.execute(database.select(Entity.currency).filter_by(code=company)).scalar_one()
+    if transaction_currency is None and company_currency:
+        transaction_currency = str(company_currency)
+        if not any(line.currency for line in lines):
+            lines = _apply_currency_to_lines(lines, transaction_currency)
+
+    explicit_currency = _optional_text(payload.get("transaction_currency")) or any(
+        _optional_text(line.get("currency")) for line in lines_payload if isinstance(line, dict)
+    )
+    if explicit_currency:
+        _validate_active_transaction_currency(transaction_currency)
+    base_currency = _optional_text(payload.get("base_currency")) or str(company_currency or "") or None
+    if _optional_text(payload.get("base_currency")):
+        _validate_active_transaction_currency(base_currency)
+    exchange_rate = _optional_decimal(payload.get("exchange_rate"))
+    if exchange_rate is not None and exchange_rate <= 0:
+        raise JournalValidationError("El tipo de cambio debe ser mayor que cero.")
+    return transaction_currency, base_currency, exchange_rate, lines
+
+
 def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     company = _required_text(payload.get("company"), "La compañia es obligatoria.")
     _validate_active_company(company)
@@ -651,25 +679,9 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     books = _normalize_books(payload.get("books"))
     if books is None and (book := _optional_text(payload.get("book"))):
         books = [book]
-    transaction_currency, lines = _normalize_transaction_currency(_optional_text(payload.get("transaction_currency")), lines)
-    company_currency = database.session.execute(database.select(Entity.currency).filter_by(code=company)).scalar_one()
-    if transaction_currency is None and company_currency:
-        transaction_currency = str(company_currency)
-        if not any(line.currency for line in lines):
-            lines = _apply_currency_to_lines(lines, transaction_currency)
-    # Las empresas antiguas pueden no tener todavía la moneda en el catálogo;
-    # un borrador puede conservar el valor y validarlo estrictamente al enviar.
-    explicit_currency = _optional_text(payload.get("transaction_currency")) or any(
-        _optional_text(line.get("currency")) for line in lines_payload if isinstance(line, dict)
+    transaction_currency, base_currency, exchange_rate, lines = _normalize_journal_currency_fields(
+        payload, lines_payload, lines, company
     )
-    if explicit_currency:
-        _validate_active_transaction_currency(transaction_currency)
-    base_currency = _optional_text(payload.get("base_currency")) or str(company_currency or "") or None
-    if _optional_text(payload.get("base_currency")):
-        _validate_active_transaction_currency(base_currency)
-    exchange_rate = _optional_decimal(payload.get("exchange_rate"))
-    if exchange_rate is not None and exchange_rate <= 0:
-        raise JournalValidationError("El tipo de cambio debe ser mayor que cero.")
     return JournalDraftInput(
         company=company,
         posting_date=posting_date,
