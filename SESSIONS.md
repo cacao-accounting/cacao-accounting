@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_build_payment_reference` cx=23)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMdIkZtwr73q0yaM` (`python:S3776`, CRITICAL):
+`cacao_accounting/bancos/services.py`, `_build_payment_reference`, complejidad cognitiva 23 frente al umbral 15.
+
+### Análisis y corrección
+
+No se requirió rediseñar el flujo de aplicación de pagos: la complejidad estaba concentrada en resolver monedas y
+tasas, y en calcular los importes de efectivo, ajustes y diferencia cambiaria. Se extrajeron
+`_payment_reference_currency_context`, `_payment_reference_rate` y `_payment_reference_amount_context`; la construcción
+del snapshot conserva sus validaciones, redondeos, saldos y trazabilidad de tercero.
+
+### Verificación
+
+- `tests/test_payment_entry_improved.py`: 54/54.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check` sobre `cacao_accounting`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_render_operational_framework` cx=18)
 
 ### Hallazgo SonarCloud

@@ -780,21 +780,26 @@ def _validate_document_payment_exchange_rate(document: Any, document_currency: s
         raise ValueError(_("El documento referenciado no tiene un tipo de cambio válido para su moneda de transacción."))
 
 
-def _build_payment_reference(
-    *,
+def _payment_reference_rate(
+    currency: str,
+    company_currency: str,
+    declared_rate: object,
+    allocation_date: date,
+) -> Decimal:
+    """Obtiene la tasa hacia la moneda de la compañía para una referencia."""
+    rate = Decimal(str(declared_rate or "0"))
+    if currency == company_currency:
+        return Decimal("1")
+    if rate <= 0:
+        return _lookup_exchange_rate(currency, company_currency, allocation_date)
+    return rate
+
+
+def _payment_reference_currency_context(
     payment: PaymentEntry,
-    line: dict,
     document: Any,
-    reference_id: str,
-    reference_type: str,
-    flow_source_type: str,
-    allocated: Decimal,
-    outstanding: Decimal,
-) -> PaymentReference:
-    """Construye la referencia persistible para una línea validada."""
-    discount_amount = Decimal(str(line.get("discount_amount") or "0"))
-    gain_loss_amount = Decimal(str(line.get("gain_loss_amount") or "0"))
-    difference_amount = Decimal(str(line.get("difference_amount") or gain_loss_amount or "0"))
+) -> tuple[str, str, date, Decimal, Decimal]:
+    """Resuelve monedas, fecha de aplicación y tasas base de una referencia."""
     document_currency = str(
         getattr(document, "transaction_currency", None) or getattr(document, "currency", None) or payment.currency or ""
     )
@@ -806,18 +811,31 @@ def _build_payment_reference(
         payment_currency = company_currency
     if not document_currency:
         document_currency = company_currency
-    document_rate = Decimal(str(getattr(document, "exchange_rate", None) or "0"))
-    if document_currency == company_currency:
-        document_rate = Decimal("1")
-    elif document_rate <= 0:
-        document_rate = _lookup_exchange_rate(document_currency, company_currency, allocation_date)
-    payment_rate = Decimal(str(getattr(payment, "exchange_rate", None) or "0"))
-    if payment_currency == company_currency:
-        payment_rate = Decimal("1")
-    elif payment_rate <= 0:
-        payment_rate = _lookup_exchange_rate(payment_currency, company_currency, allocation_date)
-    if document_rate <= 0 or payment_rate <= 0:
-        raise ValueError(_("No existe una tasa de cambio positiva para aplicar el documento."))
+    document_rate = _payment_reference_rate(
+        document_currency,
+        company_currency,
+        getattr(document, "exchange_rate", None),
+        allocation_date,
+    )
+    payment_rate = _payment_reference_rate(
+        payment_currency,
+        company_currency,
+        getattr(payment, "exchange_rate", None),
+        allocation_date,
+    )
+    return document_currency, payment_currency, allocation_date, document_rate, payment_rate
+
+
+def _payment_reference_amount_context(
+    line: dict,
+    allocated: Decimal,
+    document_rate: Decimal,
+    payment_rate: Decimal,
+) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]:
+    """Calcula importes documentales, de pago y diferencias de cambio."""
+    discount_amount = Decimal(str(line.get("discount_amount") or "0"))
+    gain_loss_amount = Decimal(str(line.get("gain_loss_amount") or "0"))
+    difference_amount = Decimal(str(line.get("difference_amount") or gain_loss_amount or "0"))
     cross_rate = Decimal(str(line.get("payment_exchange_rate") or "0"))
     if cross_rate <= 0:
         cross_rate = (document_rate / payment_rate).quantize(Decimal("0.000000001"))
@@ -831,9 +849,49 @@ def _build_payment_reference(
     base_payment_amount = (payment_amount * payment_rate).quantize(Decimal("0.0001"))
     non_cash_base_amount = ((discount_amount + gain_loss_amount) * document_rate).quantize(Decimal("0.0001"))
     fx_difference_amount = base_allocated_amount - non_cash_base_amount - base_payment_amount
+    return (
+        discount_amount,
+        gain_loss_amount,
+        difference_amount,
+        cross_rate,
+        payment_amount,
+        base_allocated_amount,
+        base_payment_amount,
+        fx_difference_amount,
+    )
+
+
+def _build_payment_reference(
+    *,
+    payment: PaymentEntry,
+    line: dict,
+    document: Any,
+    reference_id: str,
+    reference_type: str,
+    flow_source_type: str,
+    allocated: Decimal,
+    outstanding: Decimal,
+) -> PaymentReference:
+    """Construye la referencia persistible para una línea validada."""
+    document_currency, payment_currency, allocation_date, document_rate, payment_rate = _payment_reference_currency_context(
+        payment, document
+    )
+    if document_rate <= 0 or payment_rate <= 0:
+        raise ValueError(_("No existe una tasa de cambio positiva para aplicar el documento."))
+    (
+        discount_amount,
+        gain_loss_amount,
+        difference_amount,
+        cross_rate,
+        payment_amount,
+        base_allocated_amount,
+        base_payment_amount,
+        fx_difference_amount,
+    ) = _payment_reference_amount_context(line, allocated, document_rate, payment_rate)
     reference_date = _payment_reference_date(document)
     outstanding_after = outstanding - allocated
     physical_reference_type = _physical_reference_type(reference_type, flow_source_type)
+    party_type, party_id = _reference_party_info(document)
     return PaymentReference(
         payment_id=payment.id,
         reference_type=physical_reference_type,
@@ -841,8 +899,8 @@ def _build_payment_reference(
         reference_id=reference_id,
         reference_document_no=getattr(document, "document_no", None) or reference_id,
         reference_date=reference_date,
-        party_type=_reference_party_info(document)[0],
-        party_id=_reference_party_info(document)[1],
+        party_type=party_type,
+        party_id=party_id,
         company=getattr(document, "company", None),
         currency=document_currency,
         total_amount=document.grand_total,
