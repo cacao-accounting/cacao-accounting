@@ -1170,6 +1170,36 @@ def _is_order_payment_reference(reference: PaymentReference) -> bool:
     return reference_type in {"purchase_order", "sales_order"} or flow_source_type in {"purchase_order", "sales_order"}
 
 
+def _estimated_reference_open_balance(reference: PaymentReference) -> Decimal | None:
+    """Estima el saldo en libros de una factura antes de aplicar una referencia."""
+    invoice = _payment_reference_document(reference)
+    if invoice is None:
+        return None
+    receivable = not str(reference.reference_type or "").startswith("purchase_")
+    party_account_id = _party_account_id(str(reference.party_id or ""), str(invoice.company), receivable=receivable)
+    carrying = _document_carrying_value_in_ledger(
+        company=str(invoice.company),
+        document_type=str(reference.reference_type or ""),
+        document_id=str(reference.reference_id or ""),
+        exclude_payment_id=str(reference.payment_id or ""),
+        party_account_id=party_account_id,
+        ledger_id=_functional_ledger_id(str(invoice.company)),
+        receivable=receivable,
+        include_revaluation_adjustments=True,
+    )
+    if carrying is not None:
+        return carrying
+    open_transaction = _decimal_value(reference.outstanding_amount)
+    historical_rate = _document_exchange_rate(invoice)
+    if open_transaction > 0 and historical_rate > 0:
+        return open_transaction * historical_rate
+    base_outstanding = _decimal_value(getattr(invoice, "base_outstanding_amount", None))
+    if base_outstanding > 0:
+        return base_outstanding
+    outstanding = _decimal_value(getattr(invoice, "outstanding_amount", None) or getattr(invoice, "grand_total", None))
+    return outstanding * historical_rate
+
+
 def _estimated_company_open_balance(
     references: list[PaymentReference],
     settlement_amount: Decimal,
@@ -1187,37 +1217,10 @@ def _estimated_company_open_balance(
     invoices = [invoice for reference in references if (invoice := _payment_reference_document(reference)) is not None]
     if not invoices:
         return settlement_amount
-    total = Decimal("0")
-    for reference in references:
-        invoice = _payment_reference_document(reference)
-        if invoice is None:
-            continue
-        receivable = not str(reference.reference_type or "").startswith("purchase_")
-        party_account_id = _party_account_id(str(reference.party_id or ""), str(invoice.company), receivable=receivable)
-        carrying = _document_carrying_value_in_ledger(
-            company=str(invoice.company),
-            document_type=str(reference.reference_type or ""),
-            document_id=str(reference.reference_id or ""),
-            exclude_payment_id=str(reference.payment_id or ""),
-            party_account_id=party_account_id,
-            ledger_id=_functional_ledger_id(str(invoice.company)),
-            receivable=receivable,
-            include_revaluation_adjustments=True,
-        )
-        if carrying is not None:
-            total += carrying
-            continue
-        open_transaction = _decimal_value(reference.outstanding_amount)
-        historical_rate = _document_exchange_rate(invoice)
-        if open_transaction > 0 and historical_rate > 0:
-            total += open_transaction * historical_rate
-            continue
-        base_outstanding = _decimal_value(getattr(invoice, "base_outstanding_amount", None))
-        if base_outstanding > 0:
-            total += base_outstanding
-            continue
-        outstanding = _decimal_value(getattr(invoice, "outstanding_amount", None) or getattr(invoice, "grand_total", None))
-        total += outstanding * historical_rate
+    total = sum(
+        (value for reference in references if (value := _estimated_reference_open_balance(reference)) is not None),
+        Decimal("0"),
+    )
     return total if total > 0 else document_total
 
 
