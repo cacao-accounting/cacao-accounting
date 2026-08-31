@@ -278,7 +278,27 @@ def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None
             raise InventoryServiceError("El lote no tiene saldo suficiente en la bodega de salida.")
 
 
+def _validate_outgoing_serial(serial, warehouse) -> None:
+    """Valida disponibilidad y bodega del serial que sale."""
+    if not serial or serial.serial_status != "available":
+        raise InventoryServiceError("El serial no esta disponible para salida.")
+    if warehouse and serial.warehouse != warehouse:
+        raise InventoryServiceError("El serial no se encuentra en la bodega de salida.")
+
+
+def _validate_incoming_serial(serial, allow_transfer: bool, allow_return: bool) -> None:
+    """Valida que un serial existente solo reingrese o se transfiera por la vía permitida."""
+    if not serial:
+        return
+    if allow_return:
+        if serial.serial_status != "delivered":
+            raise InventoryServiceError("Solo se puede reingresar un serial entregado mediante una devolución.")
+    elif not allow_transfer:
+        raise InventoryServiceError("El serial ya existe y solo puede cambiar de bodega mediante una transferencia.")
+
+
 def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False, allow_return=False):
+    """Valida identificador, cantidad y transición permitida de un serial."""
     serial_no = getattr(line, "serial_no", None)
     if not serial_no:
         raise InventoryServiceError("El item requiere numero de serie.")
@@ -294,16 +314,9 @@ def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False,
         select(SerialNumber).filter_by(item_code=item.code, serial_no=serial_no)
     ).scalar_one_or_none()
     if outgoing:
-        if not serial or serial.serial_status != "available":
-            raise InventoryServiceError("El serial no esta disponible para salida.")
-        if warehouse and serial.warehouse != warehouse:
-            raise InventoryServiceError("El serial no se encuentra en la bodega de salida.")
-    elif serial:
-        if allow_return:
-            if serial.serial_status != "delivered":
-                raise InventoryServiceError("Solo se puede reingresar un serial entregado mediante una devolución.")
-        elif not allow_transfer:
-            raise InventoryServiceError("El serial ya existe y solo puede cambiar de bodega mediante una transferencia.")
+        _validate_outgoing_serial(serial, warehouse)
+    else:
+        _validate_incoming_serial(serial, allow_transfer, allow_return)
 
 
 def validate_batch_serial(
