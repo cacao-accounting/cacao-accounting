@@ -212,6 +212,31 @@ def _subledger_totals(
     return totals
 
 
+def _gl_entry_matrix_value(
+    entry: GLEntry,
+    account: Accounts,
+    book: Book,
+    company: str,
+) -> tuple[ARAPGLReconciliationKey, Decimal] | None:
+    """Convert one control-account GL row into a reconciliation key and amount."""
+    account_type = str(account.account_type or "").lower()
+    if account_type not in AR_AP_ACCOUNT_TYPES:
+        return None
+    ledger_type = "AR" if account_type in {"receivable", "customer_advance"} else "AP"
+    debit = _decimal(entry.debit, field="Débito GL")
+    credit = _decimal(entry.credit, field="Crédito GL")
+    amount = debit - credit if ledger_type == "AR" else credit - debit
+    key = ARAPGLReconciliationKey(
+        company=company,
+        ledger_id=str(entry.ledger_id),
+        ledger_type=ledger_type,
+        party_type=str(entry.party_type or ("customer" if ledger_type == "AR" else "supplier")),
+        party_id=str(entry.party_id),
+        currency=str(book.currency or entry.company_currency or ""),
+    )
+    return key, amount
+
+
 def _gl_totals(
     company: str,
     as_of_date: date,
@@ -249,21 +274,10 @@ def _gl_totals(
         query = query.where(Book.currency.in_(currencies))
     totals: dict[ARAPGLReconciliationKey, Decimal] = {}
     for entry, account, book in database.session.execute(query):
-        account_type = str(account.account_type or "").lower()
-        if account_type not in AR_AP_ACCOUNT_TYPES:
+        matrix_value = _gl_entry_matrix_value(entry, account, book, company)
+        if matrix_value is None:
             continue
-        ledger_type = "AR" if account_type in {"receivable", "customer_advance"} else "AP"
-        debit = _decimal(entry.debit, field="Débito GL")
-        credit = _decimal(entry.credit, field="Crédito GL")
-        amount = debit - credit if ledger_type == "AR" else credit - debit
-        key = ARAPGLReconciliationKey(
-            company=company,
-            ledger_id=str(entry.ledger_id),
-            ledger_type=ledger_type,
-            party_type=str(entry.party_type or ("customer" if ledger_type == "AR" else "supplier")),
-            party_id=str(entry.party_id),
-            currency=str(book.currency or entry.company_currency or ""),
-        )
+        key, amount = matrix_value
         totals[key] = totals.get(key, Decimal("0")) + amount
     return totals
 
