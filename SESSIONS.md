@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_validate_serial` cx=20)
+
+### Hallazgo SonarCloud
+
+Issue `AaAoBYPiHu0gULtos-2K` (`python:S3776`, CRITICAL):
+`cacao_accounting/inventario/service.py`, `_validate_serial`, complejidad cognitiva 20 frente al umbral 15.
+
+### Corrección
+
+Se separaron las reglas de seriales en salida y entrada mediante `_validate_outgoing_serial` y
+`_validate_incoming_serial`. Se conservaron obligatoriedad, cantidad base de una unidad, disponibilidad, bodega,
+reingreso por devolución y transferencia entre bodegas.
+
+### Verificación
+
+- `tests/test_batch_serial_submit_and_round_trip.py`: 31/31.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_persist_purchase_reversal_relation` cx=21)
 
 ### Hallazgo SonarCloud
