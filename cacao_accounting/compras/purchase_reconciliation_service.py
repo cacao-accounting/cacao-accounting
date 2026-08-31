@@ -163,6 +163,19 @@ class MatchingConfig:
     allow_price_difference: bool
 
 
+@dataclass(frozen=True)
+class _MatchingTotals:
+    """Totales calculados antes de finalizar una conciliacion."""
+
+    total_qty: Decimal
+    total_amount: Decimal
+    total_price_difference: Decimal
+    total_amount_difference: Decimal
+    total_invoiced_qty: Decimal
+    total_reference_qty: Decimal
+    price_tolerance_failed: bool
+
+
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
@@ -680,6 +693,80 @@ def reconcile_purchase_invoice(
 # ---------------------------------------------------------------------------
 
 
+def _calculate_three_way_totals(
+    receipt_groups: dict[Any, _AggregatedLines],
+    invoice_groups: dict[Any, _AggregatedLines],
+    config: MatchingConfig,
+) -> _MatchingTotals:
+    """Calculate quantity, amount and tolerance totals for a 3-way match."""
+    totals = _MatchingTotals(
+        total_qty=sum((aggregate.qty for aggregate in invoice_groups.values()), Decimal("0")),
+        total_amount=Decimal("0"),
+        total_price_difference=Decimal("0"),
+        total_amount_difference=Decimal("0"),
+        total_invoiced_qty=Decimal("0"),
+        total_reference_qty=Decimal("0"),
+        price_tolerance_failed=False,
+    )
+    for invoice_group in invoice_groups.values():
+        receipt_group = _compatible_group(receipt_groups, invoice_group.lines[0])
+        if receipt_group is None:
+            raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
+        if invoice_group.qty <= 0:
+            raise PurchaseReconciliationError("La cantidad facturada debe ser positiva.")
+        pending_qty = sum(
+            (_line_qty(line) - _matched_qty_for_receipt_item(line.id) for line in receipt_group.lines),
+            Decimal("0"),
+        )
+        reference_qty = min(receipt_group.qty, pending_qty)
+        reference_amount = reference_qty * receipt_group.rate
+        matched_amount = min(invoice_group.qty, reference_qty) * receipt_group.rate
+        price_difference = invoice_group.rate - receipt_group.rate
+        amount_difference = invoice_group.amount - reference_amount
+        line_price_difference = price_difference * min(invoice_group.qty, reference_qty)
+        tolerance_failed = reference_qty > 0 and not _within_tolerance(
+            line_price_difference,
+            reference_amount,
+            config.price_tolerance_type,
+            config.price_tolerance_value,
+        )
+        totals = _MatchingTotals(
+            total_qty=totals.total_qty,
+            total_amount=totals.total_amount + matched_amount,
+            total_price_difference=totals.total_price_difference + line_price_difference,
+            total_amount_difference=totals.total_amount_difference + amount_difference,
+            total_invoiced_qty=totals.total_invoiced_qty + invoice_group.qty,
+            total_reference_qty=totals.total_reference_qty + reference_qty,
+            price_tolerance_failed=totals.price_tolerance_failed or tolerance_failed,
+        )
+    return totals
+
+
+def _persist_three_way_items(
+    reconciliation: PurchaseReconciliation,
+    invoice_items: list[PurchaseInvoiceItem],
+    receipt_groups: dict[Any, _AggregatedLines],
+) -> None:
+    """Persist source-line allocations after a successful or partial 3-way match."""
+    for invoice_item in invoice_items:
+        receipt_group = _compatible_group(receipt_groups, invoice_item)
+        if receipt_group is None:
+            raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
+        slices = _available_line_slices(receipt_group.lines, _line_qty(invoice_item), order_mode=False)
+        if not slices:
+            raise PurchaseReconciliationError("No queda cantidad pendiente en la recepción para la factura.")
+        for receipt_item, matched_qty in slices:
+            database.session.add(
+                _three_way_reconciliation_item(
+                    reconciliation.id,
+                    receipt_item,
+                    invoice_item,
+                    matched_qty=matched_qty,
+                    status=str(reconciliation.status),
+                )
+            )
+
+
 def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
     """Match purchase receipt vs invoice validating received quantities."""
     receipt = _load_purchase_receipt_for_invoice(invoice)
@@ -710,75 +797,22 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     database.session.add(reconciliation)
     database.session.flush()
 
-    total_qty = sum((aggregate.qty for aggregate in invoice_groups.values()), Decimal("0"))
-    total_amount = Decimal("0")
-    total_price_difference = Decimal("0")
-    total_amount_difference = Decimal("0")
-    total_invoiced_qty = Decimal("0")
-    total_received_qty = Decimal("0")
-    price_tolerance_failed = False
-
-    for key, invoice_group in invoice_groups.items():
-        receipt_group = _compatible_group(receipt_groups, invoice_group.lines[0])
-        if receipt_group is None:
-            raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
-        if invoice_group.qty <= 0:
-            raise PurchaseReconciliationError("La cantidad facturada debe ser positiva.")
-        pending_qty = sum(
-            (_line_qty(line) - _matched_qty_for_receipt_item(line.id) for line in receipt_group.lines),
-            Decimal("0"),
-        )
-        reference_qty = min(receipt_group.qty, pending_qty)
-        reference_amount = reference_qty * receipt_group.rate
-        matched_amount = min(invoice_group.qty, reference_qty) * receipt_group.rate
-        price_difference = invoice_group.rate - receipt_group.rate
-        amount_difference = invoice_group.amount - reference_amount
-        line_price_difference = price_difference * min(invoice_group.qty, reference_qty)
-        if reference_qty > 0 and not _within_tolerance(
-            line_price_difference,
-            reference_amount,
-            config.price_tolerance_type,
-            config.price_tolerance_value,
-        ):
-            price_tolerance_failed = True
-
-        total_amount += matched_amount
-        total_price_difference += line_price_difference
-        total_amount_difference += amount_difference
-        total_invoiced_qty += invoice_group.qty
-        total_received_qty += reference_qty
-
+    totals = _calculate_three_way_totals(receipt_groups, invoice_groups, config)
     result = _finalize_reconciliation(
         reconciliation,
         invoice,
         config,
-        total_qty,
-        total_amount,
-        total_price_difference,
-        total_amount_difference,
-        total_invoiced_qty,
-        total_received_qty,
+        totals.total_qty,
+        totals.total_amount,
+        totals.total_price_difference,
+        totals.total_amount_difference,
+        totals.total_invoiced_qty,
+        totals.total_reference_qty,
         receipt_id=receipt.id,
-        price_tolerance_failed=price_tolerance_failed,
+        price_tolerance_failed=totals.price_tolerance_failed,
     )
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
-        for invoice_item in invoice_items:
-            receipt_group = _compatible_group(receipt_groups, invoice_item)
-            if receipt_group is None:
-                raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
-            slices = _available_line_slices(receipt_group.lines, _line_qty(invoice_item), order_mode=False)
-            if not slices:
-                raise PurchaseReconciliationError("No queda cantidad pendiente en la recepción para la factura.")
-            for receipt_item, matched_qty in slices:
-                database.session.add(
-                    _three_way_reconciliation_item(
-                        reconciliation.id,
-                        receipt_item,
-                        invoice_item,
-                        matched_qty=matched_qty,
-                        status=str(reconciliation.status),
-                    )
-                )
+        _persist_three_way_items(reconciliation, invoice_items, receipt_groups)
     return result
 
 
