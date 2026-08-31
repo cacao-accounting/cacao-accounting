@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `enforce_close_and_recurring_company_access` cx=20)
+
+### Hallazgo SonarCloud
+
+Issue `AaAbv1ugOioNy6Mzk_6h` (`python:S3776`, CRITICAL):
+`cacao_accounting/contabilidad/services.py`, `enforce_close_and_recurring_company_access`, complejidad cognitiva 20
+frente al umbral 15.
+
+### Corrección
+
+Se extrajo la carga y autorización común de recursos a `_enforce_accounting_resource_access`, conservando las rutas
+para cierres periódicos, plantillas recurrentes y revaluaciones, así como sus acciones de consulta, autorización y
+anulación.
+
+### Verificación
+
+- `tests/test_12_recurring_journals.py tests/test_exchange_revaluation.py -k 'route or view or recurring or exchange'`:
+  28/28.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_validate_serial` cx=20)
 
 ### Hallazgo SonarCloud
