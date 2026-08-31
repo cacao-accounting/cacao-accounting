@@ -204,6 +204,32 @@ def test_journal_service_requires_cost_center_for_expense_accounts(app_ctx):
         )
 
 
+def test_journal_service_requires_party_for_ar_ap_accounts(app_ctx):
+    """Receivable accounts cannot be posted without their customer party."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, create_journal_draft
+    from cacao_accounting.database import Accounts, database
+
+    receivable_account = Accounts(
+        entity="cacao", code="AR-001", name="Clientes", active=True, enabled=True, group=False, account_type="receivable"
+    )
+    offset_account = Accounts(entity="cacao", code="CASH-AR", name="Caja", active=True, enabled=True, group=False)
+    database.session.add_all([receivable_account, offset_account])
+    database.session.commit()
+
+    with pytest.raises(JournalValidationError, match="requieren tercero"):
+        create_journal_draft(
+            {
+                "company": "cacao",
+                "posting_date": "2026-05-06",
+                "lines": [
+                    {"account": receivable_account.id, "debit": "10.00", "credit": "0"},
+                    {"account": offset_account.id, "debit": "0", "credit": "10.00"},
+                ],
+            },
+            user_id="user-1",
+        )
+
+
 def test_journal_service_allows_non_expense_accounts_without_cost_center(app_ctx):
     from cacao_accounting.contabilidad.journal_service import create_journal_draft
     from cacao_accounting.database import Accounts, database

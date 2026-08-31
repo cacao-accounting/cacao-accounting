@@ -1,5 +1,30 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_validate_ar_ap_lines` cx=52)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMOkkZtwr73q0yZ_` (`python:S3776`, CRITICAL):
+`cacao_accounting/contabilidad/journal_service.py`, `_validate_ar_ap_lines`, complejidad cognitiva 52 frente al
+umbral 15.
+
+### Corrección
+
+Se separaron la validación del tercero AP/AR, la búsqueda de referencias abiertas y la validación del sentido de la
+referencia. Se conservaron la resolución por id o código, el fallback al ledger, la compatibilidad de referencias
+libres en cuentas no auxiliares y todas las reglas de tercero, saldo y dirección.
+
+Se agregó una prueba que bloquea la creación de un comprobante con cuenta por cobrar sin tercero.
+
+### Verificación
+
+- `tests/test_09_journal_entry_form.py`: 30/30.
+- Black, Ruff, Flake8, pydocstyle y `git diff --check`: limpios.
+- Mypy no inicia en el `.venv` actual por `ModuleNotFoundError: No module named 'pathspec.patterns.gitignore'`.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_validate_payment_reconciliation_row` cx=53)
 
 ### Hallazgo SonarCloud
