@@ -1,5 +1,29 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_create_stock_reconciliation_movement` cx=31)
+
+### Hallazgo SonarCloud
+
+Issue `AaAa6soYSsPfV5h49WFi` (`python:S3776`, CRITICAL):
+`cacao_accounting/contabilidad/posting_service.py`, `_create_stock_reconciliation_movement`, complejidad cognitiva
+31 frente al umbral 15.
+
+### Corrección
+
+Se separaron la resolución de bodega, bloqueo y validación del snapshot de inventario, cálculo de costo FIFO y
+persistencia de capas de valuación. Se conservaron la validación batch/serial, prohibiciones de stock/valor negativo,
+reconciliación de cantidades y valores, actualización de `StockBin`, movimientos de ledger y capas append-only.
+
+### Verificación
+
+- Regresiones focales de `tests/test_07posting_engine.py`: 5/5.
+- Cobertura focalizada: 36% del módulo completo; las líneas no cubiertas restantes pertenecen a funciones
+  preexistentes fuera del flujo refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_financial_filters` cx=32)
 
 ### Hallazgo SonarCloud
