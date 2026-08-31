@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `JournalEntryAdapter.validate_document` cx=20)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMVckZtwr73q0yaJ` (`python:S3776`, CRITICAL):
+`cacao_accounting/imports/adapters/journal_entry.py`, `JournalEntryAdapter.validate_document`, complejidad cognitiva 20
+frente al umbral 15.
+
+### Corrección
+
+Se separaron la validación de importes, período contable y líneas contables en helpers cohesivos. La entrada vacía
+ahora devuelve un error estructural sin acceder a una primera fila inexistente; se conservaron el tratamiento de fechas
+inválidas y la distinción entre errores de validación y catálogos temporalmente no disponibles.
+
+### Verificación
+
+- `tests/imports/test_service.py`: 17/17.
+- Cobertura de `cacao_accounting/imports/adapters/journal_entry.py`: 98%.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_apply_payment_target_line` cx=20)
 
 ### Hallazgo SonarCloud

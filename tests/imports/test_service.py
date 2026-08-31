@@ -243,6 +243,93 @@ def test_journal_import_rejects_non_finite_amounts(monkeypatch):
     assert any("Monto inválido" in error for error in errors)
 
 
+def test_journal_import_empty_document_reports_structural_error():
+    errors = JournalEntryAdapter().validate_document([], context={})
+
+    assert errors == ["Un comprobante contable debe tener al menos dos líneas."]
+
+
+def test_journal_import_rejects_closed_period(monkeypatch):
+    monkeypatch.setattr(journal_entry_adapter, "is_period_open", lambda _company, _date: False)
+    errors = JournalEntryAdapter().validate_document(
+        [
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "debito": "100", "credito": "0"},
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "debito": "0", "credito": "100"},
+        ],
+        context={"company_id": "cacao"},
+    )
+
+    assert errors == ["El periodo contable para la fecha 2026-01-10 está cerrado o no existe."]
+
+
+def test_journal_import_defers_invalid_date_error_to_document_validation(monkeypatch):
+    monkeypatch.setattr(journal_entry_adapter, "is_period_open", lambda _company, _date: True)
+    errors = JournalEntryAdapter().validate_document(
+        [
+            {"document_ref": "JE-1", "fecha": "fecha-inválida", "debito": "100", "credito": "0"},
+            {"document_ref": "JE-1", "fecha": "fecha-inválida", "debito": "0", "credito": "100"},
+        ],
+        context={},
+    )
+
+    assert not any("periodo contable" in error for error in errors)
+
+
+def test_journal_import_rejects_unbalanced_document(monkeypatch):
+    monkeypatch.setattr(journal_entry_adapter, "is_period_open", lambda _company, _date: True)
+    errors = JournalEntryAdapter().validate_document(
+        [
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "debito": "100", "credito": "0"},
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "debito": "0", "credito": "0"},
+        ],
+        context={},
+    )
+
+    assert errors == ["El comprobante JE-1 no está balanceado."]
+
+
+def test_journal_import_returns_accounting_line_validation_error(monkeypatch):
+    monkeypatch.setattr(journal_entry_adapter, "is_period_open", lambda _company, _date: True)
+    from cacao_accounting.contabilidad import journal_service
+
+    def reject_lines(*_args, **_kwargs):
+        raise ValueError("línea contable inválida")
+
+    monkeypatch.setattr(journal_service, "_validate_balanced_lines", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(journal_service, "_validate_line_books", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(journal_service, "_validate_ar_ap_lines", reject_lines)
+    errors = JournalEntryAdapter().validate_document(
+        [
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "cuenta": "1105", "debito": "100", "credito": "0"},
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "cuenta": "2105", "debito": "0", "credito": "100"},
+        ],
+        context={},
+    )
+
+    assert errors == ["línea contable inválida"]
+
+
+def test_journal_import_ignores_unavailable_accounting_line_validation(monkeypatch):
+    monkeypatch.setattr(journal_entry_adapter, "is_period_open", lambda _company, _date: True)
+    from cacao_accounting.contabilidad import journal_service
+
+    def unavailable_validation(*_args, **_kwargs):
+        raise RuntimeError("catálogo no disponible")
+
+    monkeypatch.setattr(journal_service, "_validate_balanced_lines", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(journal_service, "_validate_ar_ap_lines", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(journal_service, "_validate_line_books", unavailable_validation)
+    errors = JournalEntryAdapter().validate_document(
+        [
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "cuenta": "1105", "debito": "100", "credito": "0"},
+            {"document_ref": "JE-1", "fecha": "2026-01-10", "cuenta": "2105", "debito": "0", "credito": "100"},
+        ],
+        context={},
+    )
+
+    assert errors == []
+
+
 def test_journal_import_balances_high_precision_amounts_without_float_rounding(monkeypatch):
     monkeypatch.setattr(journal_entry_adapter, "is_period_open", lambda _company, _date: True)
     errors = JournalEntryAdapter().validate_document(
