@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_process_reconciliation_line` cx=26)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMVLkZtwr73q0yaF` (`python:S3776`, CRITICAL):
+`cacao_accounting/document_flow/payment.py`, `_process_reconciliation_line`, complejidad cognitiva 26 frente al
+umbral 15.
+
+### Corrección
+
+Se separaron la normalización y validación de la fila, la construcción de asignaciones con descuento/diferencia y la
+planificación estándar mediante el motor AR/AP. Se conservaron la prevención de duplicados, validación de pago y
+documento, conversión de moneda, límites de efectivo, persistencia de referencias y actualización de saldos derivados.
+
+### Verificación
+
+- Escenarios focales de conciliación en `tests/test_payment_entry_improved.py`, `tests/test_o2c_matrix_audit.py`,
+  `tests/test_s2p_ap_matrix_audit.py` y `tests/test_fx_ar_ap_lifecycle.py`: 5/5.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_delivery_return_cost` cx=26)
 
 ### Hallazgo SonarCloud
