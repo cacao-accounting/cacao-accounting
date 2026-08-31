@@ -216,3 +216,31 @@ def test_resolve_date_bounds_rejects_manual_window(periods_app) -> None:
     ):
         with pytest.raises(BadRequest):
             _resolve_date_bounds("cacao")
+
+
+def test_financial_filters_resolve_default_named_and_ranged_periods(periods_app, monkeypatch) -> None:
+    """Financial filters preserve default, named and ranged period selection."""
+    from cacao_accounting.reportes import helpers
+
+    monkeypatch.setattr(helpers, "_resolve_company", lambda company: "cacao")
+    monkeypatch.setattr(helpers, "_default_ledger_for_company", lambda company: "LOCAL")
+    monkeypatch.setattr(helpers, "_default_period_for_company", lambda company: "DEFAULT")
+    with periods_app.test_request_context("/reports/account-movement?company=cacao"):
+        default_filters = helpers._financial_filters()
+    assert default_filters.accounting_period == "02-2026"
+    assert default_filters.period_from == _period_id("cacao", "02-2026")
+
+    with periods_app.test_request_context("/reports/account-movement?company=cacao&accounting_period=02-2026"):
+        named_filters = helpers._financial_filters()
+    assert named_filters.accounting_period == "02-2026"
+    assert named_filters.period_from is None
+
+    period_from = _period_id("cacao", "01-2026")
+    period_to = _period_id("cacao", "02-2026")
+    with periods_app.test_request_context(
+        f"/reports/account-movement?company=cacao&accounting_period_from={period_from}&accounting_period_to={period_to}"
+    ):
+        ranged_filters = helpers._financial_filters()
+    assert ranged_filters.accounting_period is None
+    assert ranged_filters.period_from == period_from
+    assert ranged_filters.period_to == period_to

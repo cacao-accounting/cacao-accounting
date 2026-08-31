@@ -1,5 +1,29 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_financial_filters` cx=32)
+
+### Hallazgo SonarCloud
+
+Issue `AaBG9c58WKUcwX8H2P6a` (`python:S3776`, CRITICAL):
+`cacao_accounting/reportes/helpers.py`, `_financial_filters`, complejidad cognitiva
+32 frente al umbral 15.
+
+### Corrección
+
+Se extrajo la resolución de períodos por defecto, nombre y rango a `_financial_period_filters`. Se conservaron la
+compañía y libro predeterminados, estado y cancelaciones, alias de período, rechazo de fechas manuales incompatibles,
+límites de página, ordenamiento y todos los filtros financieros.
+
+### Verificación
+
+- `tests/test_period_range_filters.py`: 12/12.
+- Cobertura focalizada: todas las líneas nuevas del refactor están cubiertas; las líneas no cubiertas restantes
+  pertenecen a funciones preexistentes fuera del flujo refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_source_line_rate` cx=32)
 
 ### Hallazgo SonarCloud
