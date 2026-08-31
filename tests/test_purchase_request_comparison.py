@@ -30,6 +30,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.compras import _validate_supplier_quotation_header
 from cacao_accounting.compras import purchase_request_comparison_service as comparison_service
+from cacao_accounting.compras import services as purchase_services
 from cacao_accounting.compras.purchase_request_comparison_service import (
     comparison_recommendations,
     create_purchase_orders_from_comparison,
@@ -870,3 +871,60 @@ def test_comparison_order_helpers_report_missing_lines_and_created_order(app_ctx
             comparison_service._create_purchase_order_for_group(
                 comparison, SimpleNamespace(id="REQ-1", posting_date=date(2026, 8, 31)), quotation, []
             )
+
+
+def test_purchase_list_helpers_apply_company_and_period_scopes(app_ctx, monkeypatch):
+    """Shared purchase list filters handle explicit and authorized company scopes."""
+    from cacao_accounting import list_filters
+
+    user = SimpleNamespace(id="USER-1", classification="operator")
+    monkeypatch.setattr(purchase_services, "current_user", user)
+    monkeypatch.setattr(purchase_services, "exige_acceso_compania_cualquiera", lambda *args: None)
+    permission = SimpleNamespace(consultar=True, obtener_companias_autorizadas=lambda: ["cacao"])
+    monkeypatch.setattr(purchase_services, "obtener_id_modulo_por_nombre", lambda module: module)
+    monkeypatch.setattr(purchase_services, "Permisos", lambda modulo, usuario: permission)
+    assert purchase_services._authorized_companies(("purchases",)) == {"cacao"}
+    monkeypatch.setattr(purchase_services, "_authorized_companies", lambda modules: {"cacao"})
+    with app_ctx.test_request_context("/buying/purchase-order/list?company=cacao"):
+        explicit = purchase_services._apply_company_scope(database.select(PurchaseOrder), PurchaseOrder, ("purchases",))
+        assert "cacao" in explicit.compile().params.values()
+    with app_ctx.test_request_context("/buying/purchase-order/list"):
+        authorized = purchase_services._apply_company_scope(database.select(PurchaseOrder), PurchaseOrder, ("purchases",))
+        assert any("cacao" in value for value in authorized.compile().params.values())
+    monkeypatch.setattr(purchase_services, "_authorized_companies", lambda modules: set())
+    with app_ctx.test_request_context("/buying/purchase-order/list"):
+        restricted = purchase_services._apply_company_scope(database.select(PurchaseOrder), PurchaseOrder, ("purchases",))
+        assert "false" in str(restricted).lower()
+    with app_ctx.test_request_context("/buying/purchase-order/list"):
+        base_query = database.select(PurchaseOrder)
+        assert purchase_services._apply_company_scope(base_query, SimpleNamespace(), ("purchases",)) is base_query
+
+    monkeypatch.setattr(purchase_services, "current_user", SimpleNamespace(id="USER-1", classification="admin"))
+    with app_ctx.test_request_context("/buying/purchase-order/list"):
+        base_query = database.select(PurchaseOrder)
+        assert purchase_services._apply_company_scope(base_query, PurchaseOrder, ("purchases",)) is base_query
+
+    monkeypatch.setattr(purchase_services, "current_user", user)
+    no_consult_permission = SimpleNamespace(consultar=False, obtener_companias_autorizadas=lambda: [])
+    monkeypatch.setattr(purchase_services, "Permisos", lambda modulo, usuario: no_consult_permission)
+    with app_ctx.test_request_context("/buying/purchase-order/list"):
+        assert purchase_services._period_company_for_query(("purchases",)) is None
+
+    monkeypatch.setattr(purchase_services, "_authorized_companies", lambda modules: {"cacao"})
+    monkeypatch.setattr(purchase_services, "Permisos", lambda modulo, usuario: permission)
+    with app_ctx.test_request_context("/buying/purchase-order/list"):
+        assert purchase_services._period_company_for_query(("purchases",)) == "cacao"
+    monkeypatch.setattr(purchase_services, "current_user", SimpleNamespace(id="USER-1", classification="admin"))
+    marker = object()
+    monkeypatch.setattr(list_filters, "require_period_company", lambda *args, **kwargs: marker)
+    monkeypatch.setattr(list_filters, "apply_period_filter", lambda *args, **kwargs: "filtered")
+    with app_ctx.test_request_context("/buying/purchase-order/list?period_from=2026-01-01"):
+        assert (
+            purchase_services._apply_period_scope(database.select(PurchaseOrder), PurchaseOrder, ("purchases",)) == "filtered"
+        )
+    with app_ctx.test_request_context("/buying/purchase-order/list"):
+        base_query = database.select(PurchaseOrder)
+        assert purchase_services._apply_period_scope(base_query, PurchaseOrder, ("purchases",)) is base_query
+    with app_ctx.test_request_context("/buying/purchase-order/list"):
+        base_query = database.select(PurchaseOrder)
+        assert purchase_services._apply_period_scope(base_query, SimpleNamespace(), ("purchases",)) is base_query
