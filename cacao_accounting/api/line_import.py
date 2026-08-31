@@ -199,35 +199,42 @@ def _xlsx_archive_is_safe(path: str) -> tuple[bool, str | None]:
     return True, None
 
 
-def _xlsx_rows(path: str, schema: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Read an XLSX sheet and return canonical rows plus structural errors."""
-    errors: list[dict[str, Any]] = []
-    workbook = load_workbook(path, read_only=True, data_only=False, keep_links=False)
+def _select_xlsx_worksheet(workbook: Any) -> tuple[Any | None, list[dict[str, Any]]]:
+    """Select the named or sole worksheet allowed for line imports."""
     if len(workbook.worksheets) > 10:
-        return [], [{"row": None, "field": "file", "message": _("El archivo contiene demasiadas hojas.")}]
+        return None, [{"row": None, "field": "file", "message": _("El archivo contiene demasiadas hojas.")}]
     named = [sheet for sheet in workbook.worksheets if _normalize_header(sheet.title) in {"lineas", "lines"}]
     if named:
-        worksheet = named[0]
-    elif len(workbook.worksheets) == 1:
-        worksheet = workbook.worksheets[0]
-    else:
-        return [], [{"row": None, "field": "sheet", "message": _("Debe existir una única hoja de líneas importable.")}]
-    rows = list(worksheet.iter_rows())
-    if not rows:
-        return [], [{"row": None, "field": "sheet", "message": _("La hoja no contiene encabezados.")}]
-    header_cells = rows[0]
-    normalized_headers = [_normalize_header(cell.value) for cell in header_cells]
-    if len(normalized_headers) > 100:
-        return [], [{"row": 1, "field": "header", "message": _("El archivo contiene demasiadas columnas.")}]
+        return named[0], []
+    if len(workbook.worksheets) == 1:
+        return workbook.worksheets[0], []
+    return None, [{"row": None, "field": "sheet", "message": _("Debe existir una única hoja de líneas importable.")}]
+
+
+def _xlsx_column_mapping(schema: dict[str, Any]) -> dict[str, str]:
+    """Map canonical column keys and localized aliases to their schema keys."""
     column_by_header: dict[str, str] = {}
     for column in schema.get("columns", []):
         for candidate in [column.get("key"), column.get("label"), *(column.get("aliases") or [])]:
             column_by_header[_normalize_header(candidate)] = str(column["key"])
+    return column_by_header
+
+
+def _xlsx_header_has_data(rows: list[tuple[Any, ...]], index: int) -> bool:
+    """Return whether an unlabeled spreadsheet column contains data."""
+    return any(index < len(row) and row[index].value not in (None, "") for row in rows[1:])
+
+
+def _map_xlsx_headers(
+    normalized_headers: list[str], rows: list[tuple[Any, ...]], column_by_header: dict[str, str]
+) -> tuple[list[str | None], set[str], list[dict[str, Any]]]:
+    """Map spreadsheet headers while collecting unknown and duplicate-column errors."""
     mapped: list[str | None] = []
     seen: set[str] = set()
+    errors: list[dict[str, Any]] = []
     for index, header in enumerate(normalized_headers):
         if not header:
-            if any(cell.value not in (None, "") for cell in (row[index] for row in rows[1:] if index < len(row))):
+            if _xlsx_header_has_data(rows, index):
                 errors.append(
                     {
                         "row": 1,
@@ -245,10 +252,39 @@ def _xlsx_rows(path: str, schema: dict[str, Any]) -> tuple[list[dict[str, Any]],
         else:
             seen.add(key)
         mapped.append(key)
-    required = {str(column["key"]) for column in schema.get("columns", []) if column.get("required")}
-    missing = required - seen
-    for key in sorted(missing):
-        errors.append({"row": 1, "field": key, "message": _("Campo requerido faltante.")})
+    return mapped, seen, errors
+
+
+def _xlsx_cell_value(cell: Any, key: str, row_no: int, errors: list[dict[str, Any]]) -> tuple[bool, Any]:
+    """Read one XLSX cell, rejecting formulas and normalizing date values."""
+    value = cell.value
+    if cell.data_type == "f" or (isinstance(value, str) and value.lstrip().startswith(("=", "+", "@"))):
+        errors.append({"row": row_no, "field": key, "message": _("Las fórmulas no están permitidas.")})
+        return False, None
+    if hasattr(value, "isoformat") and value.__class__.__name__ in {"date", "datetime"}:
+        value = value.isoformat()[:10]
+    return True, value
+
+
+def _canonical_xlsx_row(
+    row: tuple[Any, ...], excel_row: int, mapped: list[str | None], errors: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Convert one non-empty spreadsheet row to canonical import keys."""
+    item: dict[str, Any] = {"_excel_row": excel_row}
+    for index, cell in enumerate(row):
+        key = mapped[index] if index < len(mapped) else None
+        if not key:
+            continue
+        valid, value = _xlsx_cell_value(cell, key, excel_row, errors)
+        if valid:
+            item[key] = value
+    return item
+
+
+def _canonical_xlsx_rows(
+    rows: list[tuple[Any, ...]], mapped: list[str | None], errors: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Convert populated XLSX rows and enforce the import row limit."""
     canonical_rows: list[dict[str, Any]] = []
     for excel_row, row in enumerate(rows[1:], start=2):
         values = [cell.value for cell in row]
@@ -257,20 +293,30 @@ def _xlsx_rows(path: str, schema: dict[str, Any]) -> tuple[list[dict[str, Any]],
         if len(canonical_rows) >= 500:
             errors.append({"row": excel_row, "field": "file", "message": _("Límite máximo de 500 líneas excedido.")})
             break
-        item: dict[str, Any] = {"_excel_row": excel_row}
-        for index, cell in enumerate(row):
-            key = mapped[index] if index < len(mapped) else None
-            if not key:
-                continue
-            value = cell.value
-            if cell.data_type == "f" or (isinstance(value, str) and value.lstrip().startswith(("=", "+", "@"))):
-                errors.append({"row": excel_row, "field": key, "message": _("Las fórmulas no están permitidas.")})
-                continue
-            if hasattr(value, "isoformat") and value.__class__.__name__ in {"date", "datetime"}:
-                value = value.isoformat()[:10]
-            item[key] = value
-        canonical_rows.append(item)
-    return canonical_rows, errors
+        canonical_rows.append(_canonical_xlsx_row(row, excel_row, mapped, errors))
+    return canonical_rows
+
+
+def _xlsx_rows(path: str, schema: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Read an XLSX sheet and return canonical rows plus structural errors."""
+    workbook = load_workbook(path, read_only=True, data_only=False, keep_links=False)
+    worksheet, structure_errors = _select_xlsx_worksheet(workbook)
+    if structure_errors or worksheet is None:
+        return [], structure_errors
+    rows = list(worksheet.iter_rows())
+    if not rows:
+        return [], [{"row": None, "field": "sheet", "message": _("La hoja no contiene encabezados.")}]
+    header_cells = rows[0]
+    normalized_headers = [_normalize_header(cell.value) for cell in header_cells]
+    if len(normalized_headers) > 100:
+        return [], [{"row": 1, "field": "header", "message": _("El archivo contiene demasiadas columnas.")}]
+    column_by_header = _xlsx_column_mapping(schema)
+    mapped, seen, errors = _map_xlsx_headers(normalized_headers, rows, column_by_header)
+    required = {str(column["key"]) for column in schema.get("columns", []) if column.get("required")}
+    missing = required - seen
+    for key in sorted(missing):
+        errors.append({"row": 1, "field": key, "message": _("Campo requerido faltante.")})
+    return _canonical_xlsx_rows(rows, mapped, errors), errors
 
 
 @line_import_bp.route("/api/line-import/parse-xlsx", methods=["POST"])
