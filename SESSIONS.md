@@ -1,5 +1,17 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (limpieza S134 — anidamiento en alta de artículo)
+
+### Hallazgo SonarCloud
+
+Issue `AaAvZ2LaEk95ELe1htg1` (`python:S134`, MINOR):
+`cacao_accounting/inventario/routes.py`, anidamiento excesivo alrededor de la carga opcional de imágenes.
+
+### Corrección y verificación
+
+Se extrajo `_upload_item_image_if_available`, que conserva el comportamiento cloud, la carga opcional y el aviso ante
+fallos. La ruta mantiene intactos la creación, commit y rollback del artículo. `tests/test_uoms_full.py tests/test_payment_entry_improved.py -k 'item or stock_reconciliation_screen'`: 7/7; controles estáticos de `cacao_accounting`: limpios.
+
 ## 2026-08-31 (limpieza S6582 — optional chaining en service worker)
 
 ### Hallazgo SonarCloud

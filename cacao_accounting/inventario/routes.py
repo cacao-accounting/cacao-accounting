@@ -319,6 +319,19 @@ def inventario_salida_inventario_lista():
     )
 
 
+def _upload_item_image_if_available(item: Item) -> None:
+    """Intenta guardar la imagen del artículo cuando el modo cloud lo permite."""
+    image_file = request.files.get("image") or request.files.get("product_image") or request.files.get("file")
+    if not (image_file and image_file.filename and is_cloud_mode()):
+        return
+    try:
+        from cacao_accounting.attachment_service import upload_item_image
+
+        upload_item_image(item.code, image_file, user_id=str(current_user.id))
+    except Exception as exc:
+        flash(f"Imagen no subida: {exc}", "warning")
+
+
 @inventario.route("/item/new", methods=["GET", "POST"])
 @modulo_activo("inventory")
 @login_required
@@ -342,14 +355,7 @@ def inventario_articulo_nuevo():
             try:
                 params = _item_params_from_form(request.form)
                 item = create_item_with_uoms(params)
-                image_file = request.files.get("image") or request.files.get("product_image") or request.files.get("file")
-                if image_file and image_file.filename and is_cloud_mode():
-                    try:
-                        from cacao_accounting.attachment_service import upload_item_image
-
-                        upload_item_image(item.code, image_file, user_id=str(current_user.id))
-                    except Exception as exc:
-                        flash(f"Imagen no subida: {exc}", "warning")
+                _upload_item_image_if_available(item)
                 database.session.commit()
                 return redirect("/inventory/item/list")
             except InventoryServiceError as exc:
