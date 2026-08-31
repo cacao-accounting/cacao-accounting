@@ -1538,46 +1538,32 @@ def _bank_orphan_diagnostics(company: str, as_of_date: date | None) -> list[Repo
     )
 
 
-def get_reconciliation_report(company: str, as_of_date: date | None = None) -> PaginatedReport:
-    """Devuelve reconciliaciones bancarias y conciliaciones de compras pendientes."""
+def _reconciliation_cancel_dates(as_of_date: date | None) -> dict[str, date]:
+    """Carga fechas de cancelación de pagos para aplicar cortes históricos."""
+    if not as_of_date:
+        return {}
     from cacao_accounting.database import AuditTrail
 
-    query = (
-        select(Reconciliation, ReconciliationItem)
-        .join(
-            ReconciliationItem,
-            ReconciliationItem.reconciliation_id == Reconciliation.id,
+    audit_records = database.session.execute(
+        select(AuditTrail.document_id, AuditTrail.timestamp).where(
+            AuditTrail.document_type == "payment_entry",
+            AuditTrail.action == "cancelled",
         )
-        .filter(Reconciliation.company == company)
-    )
-    if as_of_date:
-        query = query.where(Reconciliation.recon_date <= as_of_date)
+    ).all()
+    return {doc_id: timestamp.date() for doc_id, timestamp in audit_records if timestamp}
 
-    cancel_dates = {}
-    if as_of_date:
-        audit_records = database.session.execute(
-            select(AuditTrail.document_id, AuditTrail.timestamp).where(
-                AuditTrail.document_type == "payment_entry",
-                AuditTrail.action == "cancelled",
-            )
-        ).all()
-        for doc_id, timestamp in audit_records:
-            if timestamp:
-                cancel_dates[doc_id] = timestamp.date()
 
-    rows = []
+def _reconciliation_report_rows(query: Any, cancel_dates: dict[str, date], as_of_date: date | None) -> list[ReportRow]:
+    """Convierte reconciliaciones en filas respetando el estado al corte."""
+    rows: list[ReportRow] = []
     for reconciliation, item in database.session.execute(query).all():
         if item.status == "cancelled":
             cancel_date = cancel_dates.get(item.target_id)
-            if as_of_date and cancel_date and cancel_date > as_of_date:
-                # Cancellation happened after the cutoff, so historically it was reconciled
-                status = "reconciled"
-            else:
-                # Cancelled on or before the cutoff (or no cutoff specified), so exclude it
+            if not (as_of_date and cancel_date and cancel_date > as_of_date):
                 continue
+            status = "reconciled"
         else:
             status = item.status
-
         rows.append(
             ReportRow(
                 values={
@@ -1593,6 +1579,23 @@ def get_reconciliation_report(company: str, as_of_date: date | None = None) -> P
                 }
             )
         )
+    return rows
+
+
+def get_reconciliation_report(company: str, as_of_date: date | None = None) -> PaginatedReport:
+    """Devuelve reconciliaciones bancarias y conciliaciones de compras pendientes."""
+    query = (
+        select(Reconciliation, ReconciliationItem)
+        .join(
+            ReconciliationItem,
+            ReconciliationItem.reconciliation_id == Reconciliation.id,
+        )
+        .filter(Reconciliation.company == company)
+    )
+    if as_of_date:
+        query = query.where(Reconciliation.recon_date <= as_of_date)
+
+    rows = _reconciliation_report_rows(query, _reconciliation_cancel_dates(as_of_date), as_of_date)
 
     bank_total = sum((_decimal_value(row.values["amount"]) for row in rows), Decimal("0"))
     purchase_pending = get_purchase_reconciliation_pending(company=company, as_of_date=as_of_date)
