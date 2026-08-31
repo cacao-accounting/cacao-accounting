@@ -1,5 +1,19 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (limpieza S1192 — mensaje de sobreaplicación duplicado)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMdIkZtwr73q0yC` (`python:S1192`, CRITICAL):
+`cacao_accounting/document_flow/payment.py`, literal repetido para indicar que el monto excede el saldo disponible del
+pago.
+
+### Corrección y verificación
+
+Se definió `_MSG_PAGO_EXCEDE_SALDO` y se reutilizó en los tres caminos señalados, preservando las excepciones y mensajes
+observables. `tests/test_line_import_api.py tests/test_cas13_cash_consumed.py`: 52/52; controles estáticos de
+`cacao_accounting` y `git diff --check`: limpios.
+
 ## 2026-08-31 (limpieza S1192 — mensaje de tasa de pago duplicado)
 
 ### Hallazgo SonarCloud
