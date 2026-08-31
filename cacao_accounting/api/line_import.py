@@ -925,18 +925,17 @@ def _validate_open_item_reference(
         party_id=party_id,
         line_hint=line_hint,
     ).all()
-    if not matches:
-        if _resolve_ledger_open_item_fallback(
-            validated_row=validated_row,
-            errors=errors,
-            row_no=row_no,
-            company_id=company_id,
-            party_type=party_type,
-            party_id=party_id,
-            reference_type=reference_type,
-            reference_document=reference_document,
-        ):
-            return
+    if not matches and _resolve_ledger_open_item_fallback(
+        validated_row=validated_row,
+        errors=errors,
+        row_no=row_no,
+        company_id=company_id,
+        party_type=party_type,
+        party_id=party_id,
+        reference_type=reference_type,
+        reference_document=reference_document,
+    ):
+        return
     if not matches:
         _append_open_item_reference_error(
             errors, row_no, "reference_document", _("El documento abierto no existe o no tiene saldo.")
