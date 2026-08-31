@@ -1,5 +1,31 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `create_purchase_orders_from_comparison` cx=38)
+
+### Hallazgo SonarCloud
+
+Issue `AaAGlaIlTV2yRQvm0ila` (`python:S3776`, CRITICAL):
+`cacao_accounting/compras/purchase_request_comparison_service.py`, `create_purchase_orders_from_comparison`,
+complejidad cognitiva 38 frente al umbral 15.
+
+### Corrección
+
+Se separaron las precondiciones del comparativo, la carga de líneas seleccionadas, la validación y agrupación por
+proveedor, la construcción de líneas de flujo y la materialización de cada orden de compra con sus relaciones,
+logística, moneda y totales. Se conservaron las validaciones de estado, compañía, aprobación, moneda homogénea,
+existencia de líneas, prevención de órdenes duplicadas y actualización final del comparativo a `used`.
+
+### Verificación
+
+- `tests/test_purchase_request_comparison.py`: 19/19.
+- `tests/test_e2e_purchase_request_comparison.py`: 1/1.
+- Cobertura focalizada del servicio: 88%; todas las líneas nuevas del refactor están cubiertas. Las líneas no cubiertas
+  restantes pertenecen a funciones preexistentes fuera del flujo refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_xlsx_rows` cx=43)
 
 ### Hallazgo SonarCloud

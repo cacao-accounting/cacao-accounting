@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,6 +29,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.compras import _validate_supplier_quotation_header
+from cacao_accounting.compras import purchase_request_comparison_service as comparison_service
 from cacao_accounting.compras.purchase_request_comparison_service import (
     comparison_recommendations,
     create_purchase_orders_from_comparison,
@@ -802,3 +804,69 @@ def test_comparison_rejects_cancelled_offer_when_placing_orders(app_ctx):
         database.session.flush()
         with pytest.raises(ValueError, match="aprobada"):
             create_purchase_orders_from_comparison(comparison)
+
+
+def test_comparison_order_creation_rejects_invalid_state_existing_orders_and_missing_request(app_ctx, monkeypatch):
+    """Order generation enforces finalized, unique, and linked comparison state."""
+    with app_ctx.app_context():
+        comparison = SimpleNamespace(status="draft", id="CMP-1", purchase_request_id="REQ-1")
+        with pytest.raises(ValueError, match="finalizado"):
+            comparison_service._comparison_purchase_request_or_raise(comparison)
+
+        comparison.status = "finalized"
+        result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [object()]))
+        monkeypatch.setattr(comparison_service.database.session, "execute", lambda statement: result)
+        with pytest.raises(ValueError, match="ya tiene"):
+            comparison_service._comparison_purchase_request_or_raise(comparison)
+
+        empty_result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
+        monkeypatch.setattr(comparison_service.database.session, "execute", lambda statement: empty_result)
+        monkeypatch.setattr(comparison_service.database.session, "get", lambda model, identifier: None)
+        with pytest.raises(ValueError, match="no existe"):
+            comparison_service._comparison_purchase_request_or_raise(comparison)
+
+
+@pytest.mark.parametrize(
+    ("quotation", "message"),
+    [
+        (None, "no existe"),
+        (SimpleNamespace(company="other", docstatus=1), "otra compañía"),
+        (SimpleNamespace(company="cacao", docstatus=0), "aprobada"),
+    ],
+)
+def test_comparison_quotation_validation_rejects_invalid_selected_quotations(quotation, message):
+    """Selected quotations must exist, belong to the company, and be approved."""
+    comparison = SimpleNamespace(company="cacao")
+    with pytest.raises(ValueError, match=message):
+        comparison_service._validated_comparison_quotation(quotation, comparison)
+
+
+def test_comparison_flow_lines_rejects_mixed_currency(app_ctx, monkeypatch):
+    """One supplier cannot produce an order from mixed quotation currencies."""
+    with app_ctx.app_context():
+        comparison = SimpleNamespace(company="cacao")
+        quotation = SimpleNamespace(id="SQ-1", company="cacao", docstatus=1, transaction_currency="USD")
+        selected = SimpleNamespace(selected_supplier_quotation_id="SQ-2", selected_supplier_quotation_item_id="LINE-2", qty=1)
+        other_quotation = SimpleNamespace(company="cacao", docstatus=1, transaction_currency="EUR")
+        monkeypatch.setattr(comparison_service.database.session, "get", lambda model, identifier: other_quotation)
+        with pytest.raises(ValueError, match="monedas distintas"):
+            comparison_service._comparison_flow_lines([selected], quotation, comparison)
+
+
+def test_comparison_order_helpers_report_missing_lines_and_created_order(app_ctx, monkeypatch):
+    """Order helpers reject missing target lines and framework-created orders."""
+    with app_ctx.app_context():
+        order = SimpleNamespace(id="PO-1")
+        selected = SimpleNamespace(purchase_request_item_id="REQ-LINE", qty=1, amount=10, rate=10)
+        result = {"lines": [{"target_item_id": "PO-LINE"}]}
+        monkeypatch.setattr(comparison_service.database.session, "get", lambda model, identifier: None)
+        with pytest.raises(ValueError, match="línea seleccionada"):
+            comparison_service._populate_purchase_order_items(order, result, [selected], SimpleNamespace(id="REQ-1"))
+
+        comparison = SimpleNamespace(company="cacao", id="CMP-1")
+        quotation = SimpleNamespace(supplier_id="SUP-1", supplier_name="Supplier", transaction_currency="NIO")
+        monkeypatch.setattr(comparison_service, "create_target_document", lambda *args, **kwargs: {"target_id": "PO-1"})
+        with pytest.raises(ValueError, match="framework documental"):
+            comparison_service._create_purchase_order_for_group(
+                comparison, SimpleNamespace(id="REQ-1", posting_date=date(2026, 8, 31)), quotation, []
+            )

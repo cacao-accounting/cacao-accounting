@@ -556,8 +556,8 @@ def purchase_request_is_ready_to_close(purchase_request: PurchaseRequest) -> boo
     return request_item_ids.issubset(covered)
 
 
-def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison) -> list[PurchaseOrder]:
-    """Create one draft purchase order per supplier from a finalized comparison."""
+def _comparison_purchase_request_or_raise(comparison: PurchaseRequestComparison) -> PurchaseRequest:
+    """Validate comparison state and return its purchase request."""
     if comparison.status != "finalized":
         raise ValueError("El comparativo debe estar finalizado antes de crear Órdenes de Compra.")
     existing = list(
@@ -572,7 +572,12 @@ def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison
     purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
     if not purchase_request:
         raise ValueError("La Solicitud de Compra del comparativo no existe.")
-    lines = list(
+    return purchase_request
+
+
+def _comparison_selected_lines(comparison: PurchaseRequestComparison) -> list[PurchaseRequestComparisonLine]:
+    """Load selected comparison lines in stable order."""
+    return list(
         database.session.execute(
             database.select(PurchaseRequestComparisonLine)
             .where(
@@ -584,107 +589,154 @@ def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison
         .scalars()
         .all()
     )
+
+
+def _validated_comparison_quotation(
+    quotation: SupplierQuotation | None, comparison: PurchaseRequestComparison
+) -> SupplierQuotation:
+    """Validate a selected supplier quotation before order generation."""
+    if not quotation:
+        raise ValueError("Una cotización seleccionada ya no existe.")
+    if quotation.company != comparison.company:
+        raise ValueError("Una cotización seleccionada pertenece a otra compañía.")
+    if quotation.docstatus != 1:
+        raise ValueError("Una cotización seleccionada ya no está aprobada.")
+    return quotation
+
+
+def _group_comparison_lines(
+    lines: list[PurchaseRequestComparisonLine], comparison: PurchaseRequestComparison
+) -> tuple[dict[str, list[PurchaseRequestComparisonLine]], dict[str, SupplierQuotation]]:
+    """Validate selected quotations and group lines by supplier."""
     grouped: dict[str, list[PurchaseRequestComparisonLine]] = {}
     quotations_by_group: dict[str, SupplierQuotation] = {}
     for line in lines:
-        quotation = database.session.get(SupplierQuotation, line.selected_supplier_quotation_id)
-        if not quotation:
-            raise ValueError("Una cotización seleccionada ya no existe.")
-        if quotation.company != comparison.company:
-            raise ValueError("Una cotización seleccionada pertenece a otra compañía.")
-        if quotation.docstatus != 1:
-            raise ValueError("Una cotización seleccionada ya no está aprobada.")
+        quotation = _validated_comparison_quotation(
+            database.session.get(SupplierQuotation, line.selected_supplier_quotation_id), comparison
+        )
         group_key = quotation.supplier_id or f"quotation:{quotation.id}"
         grouped.setdefault(group_key, []).append(line)
         quotations_by_group.setdefault(group_key, quotation)
-    orders: list[PurchaseOrder] = []
-    for group_key, selected_lines in grouped.items():
-        quotation = quotations_by_group[group_key]
-        flow_lines = []
-        for selected in selected_lines:
-            selected_quotation = database.session.get(SupplierQuotation, selected.selected_supplier_quotation_id)
-            if not selected_quotation:
-                raise ValueError("Una cotización seleccionada ya no existe.")
-            if selected_quotation.company != comparison.company:
-                raise ValueError("Una cotización seleccionada pertenece a otra compañía.")
-            if selected_quotation.docstatus != 1:
-                raise ValueError("Una cotización seleccionada ya no está aprobada.")
-            if selected_quotation.transaction_currency != quotation.transaction_currency:
-                raise ValueError("No se pueden combinar cotizaciones de un mismo proveedor con monedas distintas.")
-            flow_lines.append(
-                {
-                    "source_document_type": "supplier_quotation",
-                    "source_document_id": selected_quotation.id,
-                    "source_row_id": selected.selected_supplier_quotation_item_id,
-                    "qty": selected.qty,
-                }
-            )
-        result = create_target_document(
-            {
-                "target_document_type": "purchase_order",
-                "company": comparison.company,
-                "posting_date": purchase_request.posting_date,
-                "supplier_id": quotation.supplier_id,
-                "supplier_name": quotation.supplier_name,
-                "lines": flow_lines,
-            },
-            commit=False,
+    return grouped, quotations_by_group
+
+
+def _comparison_flow_lines(
+    selected_lines: list[PurchaseRequestComparisonLine], quotation: SupplierQuotation, comparison: PurchaseRequestComparison
+) -> list[dict[str, Any]]:
+    """Build document-flow lines while revalidating each selected quotation."""
+    flow_lines = []
+    for selected in selected_lines:
+        selected_quotation = _validated_comparison_quotation(
+            database.session.get(SupplierQuotation, selected.selected_supplier_quotation_id), comparison
         )
-        order = database.session.get(PurchaseOrder, result["target_id"])
-        if not order:
-            raise ValueError("No se pudo crear la Orden de Compra desde el framework documental.")
-        from cacao_accounting.compras import _copy_logistics, _landed_cost_snapshot
-        from cacao_accounting.logistics import ensure_compatible_logistics
+        if selected_quotation.transaction_currency != quotation.transaction_currency:
+            raise ValueError("No se pueden combinar cotizaciones de un mismo proveedor con monedas distintas.")
+        flow_lines.append(
+            {
+                "source_document_type": "supplier_quotation",
+                "source_document_id": selected_quotation.id,
+                "source_row_id": selected.selected_supplier_quotation_item_id,
+                "qty": selected.qty,
+            }
+        )
+    return flow_lines
 
-        selected_quotations = [
-            database.session.get(SupplierQuotation, selected.selected_supplier_quotation_id) for selected in selected_lines
-        ]
-        selected_quotations = [quotation for quotation in selected_quotations if quotation is not None]
-        ensure_compatible_logistics(selected_quotations, terms_field="purchase_terms")
-        selected_quotation = next((quotation for quotation in selected_quotations if quotation is not None), None)
-        _copy_logistics(order, selected_quotation)
-        order.landed_cost_estimates_json = _landed_cost_snapshot(source=selected_quotation)
-        order.purchase_request_comparison_id = comparison.id
-        order.transaction_currency = quotation.transaction_currency
-        order.base_currency = company_currency(comparison.company)
-        total_qty = Decimal("0")
-        total = Decimal("0")
-        for index, selected in enumerate(selected_lines):
-            request_item = database.session.get(PurchaseRequestItem, selected.purchase_request_item_id)
-            target_item_id = result["lines"][index]["target_item_id"]
-            order_item = database.session.get(PurchaseOrderItem, target_item_id)
-            if not request_item or not order_item:
-                raise ValueError("Una línea seleccionada ya no existe.")
-            order_item.item_name = request_item.item_name or order_item.item_name
-            order_item.description = request_item.description or order_item.description
-            order_item.qty_in_base_uom = request_item.qty_in_base_uom
-            order_item.warehouse = request_item.warehouse
-            order_item.rate = selected.rate
-            order_item.amount = selected.amount
-            create_document_relation(
-                source_type="purchase_request",
-                source_id=purchase_request.id,
-                source_item_id=request_item.id,
-                target_type="purchase_order",
-                target_id=order.id,
-                target_item_id=order_item.id,
-                qty=selected.qty,
-                uom=order_item.uom,
-                rate=selected.rate,
-                amount=selected.amount,
-            )
-            total_qty += Decimal(str(selected.qty or 0))
-            total += Decimal(str(selected.amount or 0))
-        order.total_qty = total_qty
-        order.total = total
-        order.net_total = total
-        order.grand_total = total
-        from cacao_accounting.compras import _purchase_exchange_rate
 
-        exchange_rate = _purchase_exchange_rate(order.company, order.posting_date, order.transaction_currency)
-        order.exchange_rate = exchange_rate
-        order.base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
-        orders.append(order)
+def _populate_purchase_order_items(
+    order: PurchaseOrder,
+    result: dict[str, Any],
+    selected_lines: list[PurchaseRequestComparisonLine],
+    purchase_request: PurchaseRequest,
+) -> tuple[Decimal, Decimal]:
+    """Copy selected request-line data and create purchase-order relations."""
+    total_qty = Decimal("0")
+    total = Decimal("0")
+    for index, selected in enumerate(selected_lines):
+        request_item = database.session.get(PurchaseRequestItem, selected.purchase_request_item_id)
+        target_item_id = result["lines"][index]["target_item_id"]
+        order_item = database.session.get(PurchaseOrderItem, target_item_id)
+        if not request_item or not order_item:
+            raise ValueError("Una línea seleccionada ya no existe.")
+        order_item.item_name = request_item.item_name or order_item.item_name
+        order_item.description = request_item.description or order_item.description
+        order_item.qty_in_base_uom = request_item.qty_in_base_uom
+        order_item.warehouse = request_item.warehouse
+        order_item.rate = selected.rate
+        order_item.amount = selected.amount
+        create_document_relation(
+            source_type="purchase_request",
+            source_id=purchase_request.id,
+            source_item_id=request_item.id,
+            target_type="purchase_order",
+            target_id=order.id,
+            target_item_id=order_item.id,
+            qty=selected.qty,
+            uom=order_item.uom,
+            rate=selected.rate,
+            amount=selected.amount,
+        )
+        total_qty += Decimal(str(selected.qty or 0))
+        total += Decimal(str(selected.amount or 0))
+    return total_qty, total
+
+
+def _create_purchase_order_for_group(
+    comparison: PurchaseRequestComparison,
+    purchase_request: PurchaseRequest,
+    quotation: SupplierQuotation,
+    selected_lines: list[PurchaseRequestComparisonLine],
+) -> PurchaseOrder:
+    """Create and populate one purchase order for a supplier group."""
+    result = create_target_document(
+        {
+            "target_document_type": "purchase_order",
+            "company": comparison.company,
+            "posting_date": purchase_request.posting_date,
+            "supplier_id": quotation.supplier_id,
+            "supplier_name": quotation.supplier_name,
+            "lines": _comparison_flow_lines(selected_lines, quotation, comparison),
+        },
+        commit=False,
+    )
+    order = database.session.get(PurchaseOrder, result["target_id"])
+    if not order:
+        raise ValueError("No se pudo crear la Orden de Compra desde el framework documental.")
+    from cacao_accounting.compras import _copy_logistics, _landed_cost_snapshot
+    from cacao_accounting.logistics import ensure_compatible_logistics
+
+    selected_quotations = [
+        database.session.get(SupplierQuotation, selected.selected_supplier_quotation_id) for selected in selected_lines
+    ]
+    selected_quotations = [quotation for quotation in selected_quotations if quotation is not None]
+    ensure_compatible_logistics(selected_quotations, terms_field="purchase_terms")
+    selected_quotation = next(iter(selected_quotations), None)
+    _copy_logistics(order, selected_quotation)
+    order.landed_cost_estimates_json = _landed_cost_snapshot(source=selected_quotation)
+    order.purchase_request_comparison_id = comparison.id
+    order.transaction_currency = quotation.transaction_currency
+    order.base_currency = company_currency(comparison.company)
+    total_qty, total = _populate_purchase_order_items(order, result, selected_lines, purchase_request)
+    order.total_qty = total_qty
+    order.total = total
+    order.net_total = total
+    order.grand_total = total
+    from cacao_accounting.compras import _purchase_exchange_rate
+
+    exchange_rate = _purchase_exchange_rate(order.company, order.posting_date, order.transaction_currency)
+    order.exchange_rate = exchange_rate
+    order.base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
+    return order
+
+
+def create_purchase_orders_from_comparison(comparison: PurchaseRequestComparison) -> list[PurchaseOrder]:
+    """Create one draft purchase order per supplier from a finalized comparison."""
+    purchase_request = _comparison_purchase_request_or_raise(comparison)
+    lines = _comparison_selected_lines(comparison)
+    grouped, quotations_by_group = _group_comparison_lines(lines, comparison)
+    orders = [
+        _create_purchase_order_for_group(comparison, purchase_request, quotations_by_group[group_key], selected_lines)
+        for group_key, selected_lines in grouped.items()
+    ]
     comparison.status = "used"
     comparison.used_at = datetime.now(timezone.utc)
     comparison.modified_by = comparison.finalized_by
