@@ -741,26 +741,23 @@ def _normalize_reference_type(value: Any) -> str | None:
     }.get(normalized, normalized or None)
 
 
-def _validate_open_item_reference(
-    row: dict[str, Any], validated_row: dict[str, Any], row_no: int, company_id: str, errors: list[dict[str, Any]]
-) -> None:
-    """Resolve an optional AP/AR reference without applying it during import."""
-    reference_type = _normalize_reference_type(row.get("reference_type"))
-    reference_document = str(row.get("reference_document") or row.get("reference_name") or "").strip()
-    if not reference_type and not reference_document:
-        return
-    if not reference_type or not reference_document:
-        errors.append(
-            {"row": row_no, "field": "reference_type", "message": _("Tipo y documento de referencia deben indicarse juntos.")}
-        )
-        return
-    party_type = validated_row.get("party_type") or _normalize_party_type(row.get("party_type"))
-    if reference_type == "invoice":
-        reference_type = "sales_invoice" if party_type == "customer" else "purchase_invoice"
-    elif reference_type == "debit_note":
-        reference_type = "sales_debit_note" if party_type == "customer" else "purchase_debit_note"
-    elif reference_type == "credit_note":
-        reference_type = "sales_credit_note" if party_type == "customer" else "purchase_credit_note"
+def _resolve_open_item_reference_type(reference_type: str, party_type: str | None) -> str:
+    """Resolve generic invoice and note types using the party direction."""
+    party_document_types = {
+        "invoice": ("sales_invoice", "purchase_invoice"),
+        "debit_note": ("sales_debit_note", "purchase_debit_note"),
+        "credit_note": ("sales_credit_note", "purchase_credit_note"),
+    }
+    document_types = party_document_types.get(reference_type)
+    if document_types is None:
+        return reference_type
+    return document_types[0] if party_type == "customer" else document_types[1]
+
+
+def _open_item_reference_query(
+    *, company_id: str, reference_type: str, reference_document: str, party_type: str | None, party_id: Any, line_hint: str
+) -> Any:
+    """Build the query for an available AP/AR open item reference."""
     query = database.session.query(ARAPOpenItem).filter(
         ARAPOpenItem.company == company_id,
         ARAPOpenItem.unallocated_amount > 0,
@@ -771,57 +768,140 @@ def _validate_open_item_reference(
         | (ARAPOpenItem.document_id == reference_document)
         | (ARAPOpenItem.document_no == reference_document)
     )
-    party_id = validated_row.get("party") or row.get("party")
     if party_id:
         query = query.filter(ARAPOpenItem.party_id == party_id)
     if party_type:
         query = query.filter(ARAPOpenItem.party_type == party_type)
-    line_hint = str(row.get("reference_line") or "").strip()
-    if line_hint:
-        query = query.filter(
-            ARAPOpenItem.line_number == int(line_hint) if line_hint.isdigit() else ARAPOpenItem.economic_line_id == line_hint
-        )
-    matches = query.all()
-    if not matches:
-        from cacao_accounting.contabilidad.arap_allocation import list_open_items
+    return _filter_open_item_reference_line(query, line_hint)
 
-        ledger_matches = [
-            item
-            for item in list_open_items(company=company_id, party_type=party_type, party_id=party_id)
-            if item.document_type == reference_type
-            and (item.document_id == reference_document or item.document_no == reference_document)
-            and item.outstanding > 0
-        ]
-        if len(ledger_matches) == 1:
-            item = ledger_matches[0]
-            validated_row["reference_type"] = reference_type
-            validated_row["reference_document"] = str(item.document_no or item.document_id)
-            return
-        if len(ledger_matches) > 1:
-            errors.append(
-                {
-                    "row": row_no,
-                    "field": "reference_line",
-                    "message": _("La referencia es ambigua; indique la línea del documento."),
-                }
-            )
-            return
-    if len(matches) == 0:
-        errors.append(
-            {"row": row_no, "field": "reference_document", "message": _("El documento abierto no existe o no tiene saldo.")}
+
+def _filter_open_item_reference_line(query: Any, line_hint: str) -> Any:
+    """Restrict an open-item query to a numeric or economic line reference."""
+    if not line_hint:
+        return query
+    if line_hint.isdigit():
+        return query.filter(ARAPOpenItem.line_number == int(line_hint))
+    return query.filter(ARAPOpenItem.economic_line_id == line_hint)
+
+
+def _ledger_open_item_matches(
+    *, company_id: str, party_type: str | None, party_id: Any, reference_type: str, reference_document: str
+) -> list[Any]:
+    """Find available AP/AR references exposed by the financial ledger."""
+    from cacao_accounting.contabilidad.arap_allocation import list_open_items
+
+    return [
+        item
+        for item in list_open_items(company=company_id, party_type=party_type, party_id=party_id)
+        if _is_matching_ledger_open_item(item, reference_type, reference_document)
+    ]
+
+
+def _is_matching_ledger_open_item(item: Any, reference_type: str, reference_document: str) -> bool:
+    """Return whether a ledger open item matches the requested document."""
+    return (
+        item.document_type == reference_type
+        and (item.document_id == reference_document or item.document_no == reference_document)
+        and item.outstanding > 0
+    )
+
+
+def _record_open_item_reference(
+    validated_row: dict[str, Any], reference_type: str, item: Any, *, include_open_item_id: bool
+) -> None:
+    """Store the canonical open-item reference in an imported row."""
+    validated_row["reference_type"] = reference_type
+    if include_open_item_id:
+        validated_row["reference_open_item_id"] = str(item.id)
+    validated_row["reference_document"] = str(item.document_no or item.document_id)
+
+
+def _append_open_item_reference_error(errors: list[dict[str, Any]], row_no: int, field: str, message: str) -> None:
+    """Append a structured error produced while resolving an open-item reference."""
+    errors.append({"row": row_no, "field": field, "message": message})
+
+
+def _resolve_ledger_open_item_fallback(
+    *,
+    validated_row: dict[str, Any],
+    errors: list[dict[str, Any]],
+    row_no: int,
+    company_id: str,
+    party_type: str | None,
+    party_id: Any,
+    reference_type: str,
+    reference_document: str,
+) -> bool:
+    """Resolve a reference from the ledger when no materialized open item exists."""
+    ledger_matches = _ledger_open_item_matches(
+        company_id=company_id,
+        party_type=party_type,
+        party_id=party_id,
+        reference_type=reference_type,
+        reference_document=reference_document,
+    )
+    if len(ledger_matches) == 1:
+        _record_open_item_reference(validated_row, reference_type, ledger_matches[0], include_open_item_id=False)
+        return True
+    if len(ledger_matches) > 1:
+        _append_open_item_reference_error(
+            errors,
+            row_no,
+            "reference_line",
+            _("La referencia es ambigua; indique la línea del documento."),
         )
-    elif len(matches) > 1:
-        errors.append(
-            {
-                "row": row_no,
-                "field": "reference_line",
-                "message": _("La referencia es ambigua; indique la línea del documento."),
-            }
+        return True
+    return False
+
+
+def _validate_open_item_reference(
+    row: dict[str, Any], validated_row: dict[str, Any], row_no: int, company_id: str, errors: list[dict[str, Any]]
+) -> None:
+    """Resolve an optional AP/AR reference without applying it during import."""
+    reference_type = _normalize_reference_type(row.get("reference_type"))
+    reference_document = str(row.get("reference_document") or row.get("reference_name") or "").strip()
+    if not reference_type and not reference_document:
+        return
+    if not reference_type or not reference_document:
+        _append_open_item_reference_error(
+            errors, row_no, "reference_type", _("Tipo y documento de referencia deben indicarse juntos.")
         )
-    else:
-        validated_row["reference_type"] = reference_type
-        validated_row["reference_open_item_id"] = str(matches[0].id)
-        validated_row["reference_document"] = str(matches[0].document_no or matches[0].document_id)
+        return
+    party_type = validated_row.get("party_type") or _normalize_party_type(row.get("party_type"))
+    reference_type = _resolve_open_item_reference_type(reference_type, party_type)
+    party_id = validated_row.get("party") or row.get("party")
+    line_hint = str(row.get("reference_line") or "").strip()
+    matches = _open_item_reference_query(
+        company_id=company_id,
+        reference_type=reference_type,
+        reference_document=reference_document,
+        party_type=party_type,
+        party_id=party_id,
+        line_hint=line_hint,
+    ).all()
+    if not matches:
+        if _resolve_ledger_open_item_fallback(
+            validated_row=validated_row,
+            errors=errors,
+            row_no=row_no,
+            company_id=company_id,
+            party_type=party_type,
+            party_id=party_id,
+            reference_type=reference_type,
+            reference_document=reference_document,
+        ):
+            return
+    if not matches:
+        _append_open_item_reference_error(
+            errors, row_no, "reference_document", _("El documento abierto no existe o no tiene saldo.")
+        )
+        return
+    if len(matches) > 1:
+        _append_open_item_reference_error(
+            errors, row_no, "reference_line", _("La referencia es ambigua; indique la línea del documento.")
+        )
+        return
+    _record_open_item_reference(validated_row, reference_type, matches[0], include_open_item_id=True)
 
 
 def _validate_journal_entry_row(row: dict[str, Any], row_no: int, errors: list[dict[str, Any]]) -> None:
