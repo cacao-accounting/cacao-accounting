@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `reconciliation_matrix` cx=23)
+
+### Hallazgo SonarCloud
+
+Issue `AaBG9c4eWKUcwX8H2P6X` (`python:S3776`, CRITICAL):
+`cacao_accounting/reportes/routes.py`, `reconciliation_matrix`, complejidad cognitiva 23 frente al umbral 15.
+
+### Corrección
+
+Se extrajeron la selección del período a `_reconciliation_matrix_period` y la carga/manejo de errores del reporte a
+`_load_reconciliation_matrix_report`. Se conservaron el filtro dimensional, el libro, la moneda, la compañía y el
+tratamiento HTTP 400 para conversiones no disponibles.
+
+### Verificación
+
+- `tests/test_08_reconciliation_reports.py -k reconciliation_matrix`: 3/3.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `lista_dimensiones` cx=23)
 
 ### Hallazgo SonarCloud
@@ -18,27 +39,6 @@ redirecciones; el listado permanece separado del flujo de mutación.
 - `tests/test_dimensions_admin.py`: 4/4.
 - Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios. Flake8 de tests se ejecutó excluyendo E402,
   existente en imports condicionales del archivo.
-
-El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
-del umbral.
-
-## 2026-08-31 (refactor S3776 — `reconciliation_matrix` cx=23)
-
-### Hallazgo SonarCloud
-
-Issue `AaBG9c4eWKUcwX8H2P6X` (`python:S3776`, CRITICAL):
-`cacao_accounting/reportes/routes.py`, `reconciliation_matrix`, complejidad cognitiva 23 frente al umbral 15.
-
-### Corrección
-
-Se extrajeron la selección del período a `_reconciliation_matrix_period` y la carga/manejo de errores del reporte a
-`_load_reconciliation_matrix_report`. Se conservaron el filtro dimensional, el libro, la moneda, la compañía y el
-tratamiento HTTP 400 para conversiones no disponibles.
-
-### Verificación
-
-- `tests/test_08_reconciliation_reports.py -k reconciliation_matrix`: 3/3.
-- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
 
 El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
 del umbral.
