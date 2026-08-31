@@ -60,6 +60,8 @@ JOURNAL_STATUS_REJECTED = "rejected"
 JOURNAL_STATUS_SUBMITTED = "submitted"
 JOURNAL_STATUS_CANCELLED = "cancelled"
 JOURNAL_DUPLICABLE_STATUSES = {JOURNAL_STATUS_DRAFT, JOURNAL_STATUS_REJECTED, JOURNAL_STATUS_SUBMITTED}
+AR_AP_ACCOUNT_TYPES = {"receivable", "payable", "customer_advance", "supplier_advance"}
+CUSTOMER_AR_AP_ACCOUNT_TYPES = {"receivable", "customer_advance"}
 
 EL_COMPROBANTE_INDICADO_NO_EXISTE = "El comprobante indicado no existe."
 
@@ -811,82 +813,95 @@ def _reference_document_type(reference_type: str, party_type: str) -> str:
     return value
 
 
+def _validate_ar_ap_party(company: str, line: JournalLineInput, account_type: str, party_type: str | None) -> None:
+    """Valida el tercero requerido por una cuenta auxiliar AP/AR."""
+    expected_party = "customer" if account_type in CUSTOMER_AR_AP_ACCOUNT_TYPES else "supplier"
+    if party_type != expected_party or not line.party:
+        raise JournalValidationError("Las cuentas AP/AR requieren tercero del tipo correspondiente.")
+    from cacao_accounting.database import CompanyParty
+
+    party = database.session.get(Party, line.party)
+    if party is None:
+        party = database.session.execute(select(Party).where(Party.code == line.party)).scalar_one_or_none()
+    if party is None or not bool(getattr(party, "is_active", True)):
+        raise JournalValidationError("El tercero AP/AR no existe o está inactivo.")
+    company_party = database.session.execute(
+        select(CompanyParty).where(CompanyParty.company == company, CompanyParty.party_id == party.id)
+    ).scalar_one_or_none()
+    if company_party is None or not bool(getattr(company_party, "is_active", True)):
+        raise JournalValidationError("El tercero AP/AR no está activo en la compañía.")
+    if expected_party == "customer" and not bool(getattr(party, "is_customer", False)):
+        raise JournalValidationError("El tercero seleccionado no está habilitado como cliente.")
+    if expected_party == "supplier" and not bool(getattr(party, "is_supplier", False)):
+        raise JournalValidationError("El tercero seleccionado no está habilitado como proveedor.")
+
+
+def _find_ar_ap_reference_targets(
+    company: str, line: JournalLineInput, party_type: str | None, document_type: str, reference_name: str
+) -> Sequence[Any]:
+    """Busca el open item de una referencia AP/AR usando caché y ledger."""
+    from cacao_accounting.contabilidad.arap_allocation import list_open_items
+    from cacao_accounting.database import ARAPOpenItem
+
+    party_id = _party_id_for_line(company, line.party)
+    target: Sequence[Any] = (
+        database.session.execute(
+            select(ARAPOpenItem)
+            .where(
+                ARAPOpenItem.company == company,
+                ARAPOpenItem.party_type == party_type,
+                ARAPOpenItem.party_id == party_id,
+                ARAPOpenItem.document_type == document_type,
+                ARAPOpenItem.unallocated_amount > 0,
+            )
+            .where(
+                (ARAPOpenItem.id == reference_name)
+                | (ARAPOpenItem.document_id == reference_name)
+                | (ARAPOpenItem.document_no == reference_name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if target:
+        return target
+    return [
+        item
+        for item in list_open_items(company=company, party_type=party_type, party_id=party_id)
+        if item.document_type == document_type and item.document_id == reference_name and item.outstanding > 0
+    ]
+
+
+def _validate_ar_ap_reference(
+    company: str, line: JournalLineInput, account_type: str, ar_ap_type: bool, party_type: str | None
+) -> None:
+    """Valida la referencia y el sentido del movimiento AP/AR."""
+    if bool(line.reference_type) != bool(line.reference_name or line.reference_open_item_id):
+        raise JournalValidationError("La referencia AP/AR requiere tipo y documento.")
+    if not line.reference_type or not ar_ap_type:
+        return
+    reference_name = line.reference_open_item_id or line.reference_name or ""
+    document_type = _reference_document_type(line.reference_type, party_type or "")
+    target = _find_ar_ap_reference_targets(company, line, party_type, document_type, reference_name)
+    if len(target) != 1:
+        raise JournalValidationError("El documento de referencia AP/AR no tiene un saldo abierto único.")
+    target_direction = getattr(target[0], "direction", None)
+    net_amount = line.debit - line.credit if account_type in CUSTOMER_AR_AP_ACCOUNT_TYPES else line.credit - line.debit
+    source_direction = "debit" if net_amount > 0 else "credit"
+    if target_direction and target_direction == source_direction:
+        raise JournalValidationError("La referencia AP/AR debe tener sentido contrario al movimiento.")
+
+
 def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
     """Valida terceros y referencias AP/AR antes de guardar el borrador."""
-    from cacao_accounting.contabilidad.arap_allocation import list_open_items
-    from cacao_accounting.database import ARAPOpenItem, CompanyParty
-
     for line in lines:
         account = _account_record(company, line.account)
         account_type = str(getattr(account, "account_type", None) or "").lower()
-        ar_ap_type = account_type in {"receivable", "payable", "customer_advance", "supplier_advance"}
+        ar_ap_type = account_type in AR_AP_ACCOUNT_TYPES
         party_type = _normalize_party_type(line.party_type)
         if ar_ap_type:
-            expected_party = "customer" if account_type in {"receivable", "customer_advance"} else "supplier"
-            if party_type != expected_party or not line.party:
-                raise JournalValidationError("Las cuentas AP/AR requieren tercero del tipo correspondiente.")
-            party = database.session.get(Party, line.party)
-            if party is None:
-                party = database.session.execute(select(Party).where(Party.code == line.party)).scalar_one_or_none()
-            if party is None or not bool(getattr(party, "is_active", True)):
-                raise JournalValidationError("El tercero AP/AR no existe o está inactivo.")
-            company_party = database.session.execute(
-                select(CompanyParty).where(CompanyParty.company == company, CompanyParty.party_id == party.id)
-            ).scalar_one_or_none()
-            if company_party is None or not bool(getattr(company_party, "is_active", True)):
-                raise JournalValidationError("El tercero AP/AR no está activo en la compañía.")
-            if expected_party == "customer" and not bool(getattr(party, "is_customer", False)):
-                raise JournalValidationError("El tercero seleccionado no está habilitado como cliente.")
-            if expected_party == "supplier" and not bool(getattr(party, "is_supplier", False)):
-                raise JournalValidationError("El tercero seleccionado no está habilitado como proveedor.")
-
-        if bool(line.reference_type) != bool(line.reference_name or line.reference_open_item_id):
-            raise JournalValidationError("La referencia AP/AR requiere tipo y documento.")
-        if not line.reference_type:
-            continue
-        if not ar_ap_type:
-            # Compatibilidad con comprobantes históricos que usaban la
-            # referencia libre en cuentas no auxiliares; no abren un open item.
-            continue
-        reference_name = line.reference_open_item_id or line.reference_name or ""
-        document_type = _reference_document_type(line.reference_type, party_type or "")
-        target: Sequence[Any] = (
-            database.session.execute(
-                select(ARAPOpenItem)
-                .where(
-                    ARAPOpenItem.company == company,
-                    ARAPOpenItem.party_type == party_type,
-                    ARAPOpenItem.party_id == _party_id_for_line(company, line.party),
-                    ARAPOpenItem.document_type == document_type,
-                    ARAPOpenItem.unallocated_amount > 0,
-                )
-                .where(
-                    (ARAPOpenItem.id == reference_name)
-                    | (ARAPOpenItem.document_id == reference_name)
-                    | (ARAPOpenItem.document_no == reference_name)
-                )
-            )
-            .scalars()
-            .all()
-        )
-        if not target:
-            target = [
-                item
-                for item in list_open_items(
-                    company=company, party_type=party_type, party_id=_party_id_for_line(company, line.party)
-                )
-                if item.document_type == document_type and item.document_id == reference_name and item.outstanding > 0
-            ]
-        if len(target) != 1:
-            raise JournalValidationError("El documento de referencia AP/AR no tiene un saldo abierto único.")
-        target_direction = getattr(target[0], "direction", None)
-        if account_type in {"receivable", "customer_advance"}:
-            net_amount = line.debit - line.credit
-        else:
-            net_amount = line.credit - line.debit
-        source_direction = "debit" if net_amount > 0 else "credit"
-        if target_direction and target_direction == source_direction:
-            raise JournalValidationError("La referencia AP/AR debe tener sentido contrario al movimiento.")
+            _validate_ar_ap_party(company, line, account_type, party_type)
+        _validate_ar_ap_reference(company, line, account_type, ar_ap_type, party_type)
 
 
 def _validate_line_books(company: str, books: list[str] | None, lines: list[JournalLineInput]) -> None:
