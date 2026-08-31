@@ -392,6 +392,36 @@ def test_delivery_note_new_context_marks_delivery_source_as_return(app_ctx, monk
     assert context.transaction_config["initialHeader"]["company"] == "cacao"
 
 
+def test_delivery_note_new_context_initial_source_type(app_ctx, monkeypatch):
+    """initial_source_type resolves to sales_order, delivery_note, or empty."""
+    from cacao_accounting.ventas import routes
+
+    monkeypatch.setattr(routes, "_series_choices", lambda entity_type, company: [])
+    monkeypatch.setattr(routes, "_load_delivery_note_sources", lambda from_order, from_note: (None, None))
+    monkeypatch.setattr(routes, "_delivery_note_catalogs", lambda selected_company: ([], [], []))
+    captured = {}
+
+    def fake_config(items, uoms, warehouses, initial_source_type):
+        captured["initial_source_type"] = initial_source_type
+        return {}
+
+    monkeypatch.setattr(routes, "_build_delivery_note_transaction_config", fake_config)
+
+    with app_ctx.test_request_context("/sales/delivery-note/new?from_order=SO-1"):
+        routes._build_delivery_note_new_context()
+    assert captured["initial_source_type"] == "sales_order"
+
+    captured.clear()
+    with app_ctx.test_request_context("/sales/delivery-note/new?from_note=DN-1"):
+        routes._build_delivery_note_new_context()
+    assert captured["initial_source_type"] == "delivery_note"
+
+    captured.clear()
+    with app_ctx.test_request_context("/sales/delivery-note/new"):
+        routes._build_delivery_note_new_context()
+    assert captured["initial_source_type"] == ""
+
+
 def test_validate_new_delivery_note_source_uses_delivery_note_relation(app_ctx, monkeypatch):
     """A return delivery note validates its lines against the delivery source."""
     from cacao_accounting.ventas import routes

@@ -271,7 +271,12 @@ def _build_delivery_note_new_context() -> _DeliveryNoteNewContext:
     if from_note_id:
         formulario.is_return.data = True
     items, uoms, warehouses = _delivery_note_catalogs(selected_company)
-    initial_source_type = "sales_order" if from_order_id else "delivery_note" if from_note_id else ""
+    if from_order_id:
+        initial_source_type = "sales_order"
+    elif from_note_id:
+        initial_source_type = "delivery_note"
+    else:
+        initial_source_type = ""
     transaction_config = _build_delivery_note_transaction_config(items, uoms, warehouses, initial_source_type)
     if source_document:
         transaction_config["initialHeader"] = {
