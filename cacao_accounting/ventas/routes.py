@@ -1251,6 +1251,57 @@ def ventas_cotizacion_lista():
     return render_template("ventas/cotizacion_lista.html", consulta=consulta, titulo=titulo)
 
 
+def _create_sales_quotation_from_request(from_request_id: str | None, source: Any) -> Any | None:
+    """Create a quotation from the submitted form and return its redirect."""
+    try:
+        customer_id = request.form.get("customer_id") or None
+        customer = database.session.get(Party, customer_id) if customer_id else None
+        posting_date = _parse_date(request.form.get("posting_date"))
+        company, transaction_currency = validate_immutable_header(
+            source,
+            request.form.get("company") or None,
+            request.form.get("currency") or request.form.get("transaction_currency") or None,
+        )
+        exige_acceso_compania("sales", company, "crear")
+        quotation = SalesQuotation(
+            customer_id=customer_id,
+            customer_name=customer.name if customer else None,
+            sales_request_id=from_request_id or None,
+            company=company,
+            transaction_currency=transaction_currency,
+            base_currency=company_currency(company),
+            posting_date=posting_date,
+            valid_until=_parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None,
+            remarks=request.form.get("remarks"),
+            docstatus=0,
+        )
+        _copy_sales_logistics(quotation, source, request.form)
+        database.session.add(quotation)
+        database.session.flush()
+        assign_document_identifier(
+            document=quotation,
+            entity_type="sales_quotation",
+            posting_date_raw=posting_date,
+            naming_series_id=request.form.get("naming_series") or None,
+        )
+        _total_qty, total = _save_sales_quotation_items(quotation.id)
+        quotation_items = (
+            database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=quotation.id))
+            .scalars()
+            .all()
+        )
+        if from_request_id:
+            _validate_sales_source_link(quotation, "sales_request", from_request_id, quotation_items)
+        _set_sales_document_totals(quotation, total)
+        database.session.commit()
+        flash("Cotización creada correctamente.", "success")
+        return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation.id))
+    except ValueError as exc:
+        database.session.rollback()
+        flash_error(exc)
+        return None
+
+
 @ventas.route("/quotation/new", methods=["GET", "POST"])
 @ventas.route("/request-for-quotation/new", methods=["GET", "POST"])
 @modulo_activo("sales")
@@ -1298,53 +1349,9 @@ def ventas_cotizacion_nueva():
             **_sales_logistics_values(solicitud_origen),
         }
     if request.method == "POST":
-        try:
-            customer_id = request.form.get("customer_id") or None
-            customer = database.session.get(Party, customer_id) if customer_id else None
-            posting_date = _parse_date(request.form.get("posting_date"))
-            source = solicitud_origen
-            company, transaction_currency = validate_immutable_header(
-                source,
-                request.form.get("company") or None,
-                request.form.get("currency") or request.form.get("transaction_currency") or None,
-            )
-            exige_acceso_compania("sales", company, "crear")
-            cotizacion = SalesQuotation(
-                customer_id=customer_id,
-                customer_name=customer.name if customer else None,
-                sales_request_id=from_request_id or None,
-                company=company,
-                transaction_currency=transaction_currency,
-                base_currency=company_currency(company),
-                posting_date=posting_date,
-                valid_until=_parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None,
-                remarks=request.form.get("remarks"),
-                docstatus=0,
-            )
-            _copy_sales_logistics(cotizacion, source, request.form)
-            database.session.add(cotizacion)
-            database.session.flush()
-            assign_document_identifier(
-                document=cotizacion,
-                entity_type="sales_quotation",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            _total_qty, total = _save_sales_quotation_items(cotizacion.id)
-            quotation_items = (
-                database.session.execute(database.select(SalesQuotationItem).filter_by(sales_quotation_id=cotizacion.id))
-                .scalars()
-                .all()
-            )
-            if from_request_id:
-                _validate_sales_source_link(cotizacion, "sales_request", from_request_id, quotation_items)
-            _set_sales_document_totals(cotizacion, total)
-            database.session.commit()
-            flash("Cotización creada correctamente.", "success")
-            return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=cotizacion.id))
-        except ValueError as exc:
-            database.session.rollback()
-            flash_error(exc)
+        response = _create_sales_quotation_from_request(from_request_id, solicitud_origen)
+        if response is not None:
+            return response
     return render_template(
         "ventas/cotizacion_nuevo.html",
         form=formulario,
