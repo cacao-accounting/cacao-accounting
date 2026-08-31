@@ -1,5 +1,17 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (limpieza S6582 — optional chaining en service worker)
+
+### Hallazgo SonarCloud
+
+Issue `AaA0_KLirK1ZkuF_wyGq` (`javascript:S6582`, MINOR):
+`cacao_accounting/static/js/sw.js`, comprobación explícita de existencia antes de leer `networkResponse.status`.
+
+### Corrección y verificación
+
+Se reemplazó la comprobación equivalente por `networkResponse?.status`, conservando el comportamiento cuando la respuesta
+es nula. `node --check cacao_accounting/static/js/sw.js` y `git diff --check`: limpios. CSS no forma parte de este fix.
+
 ## 2026-08-31 (limpieza S1192 — mensaje de sobreaplicación duplicado)
 
 ### Hallazgo SonarCloud
