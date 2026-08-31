@@ -1,5 +1,29 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — Bancos `_paginate_list` cx=28)
+
+### Hallazgo SonarCloud
+
+Issue `AaBG9cs4WKUcwX8H2P6V` (`python:S3776`, CRITICAL):
+`cacao_accounting/bancos/services.py`, `_paginate_list`, complejidad cognitiva 28 frente al umbral 15.
+
+### Corrección
+
+Se separaron la resolución y aplicación del alcance de compañías y el filtro de período contable en helpers dedicados.
+Se conservaron el acceso explícito a compañía, la restricción por permisos, la excepción administrativa, el bloqueo sin
+compañías autorizadas, búsqueda, estado, paginación y selector de período.
+
+### Verificación
+
+- `tests/test_08_reconciliation_reports.py`: 2/2 escenarios de alcance de listados bancarios.
+- `tests/test_03webactions.py -k buying_sales_and_cash_lists_support_search_filters --slow=True`: 1/1.
+- Cobertura focalizada: las líneas nuevas del refactor están cubiertas; las líneas no cubiertas restantes pertenecen
+  a funciones preexistentes fuera del listado refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_sum_invoice_amount` cx=28)
 
 ### Hallazgo SonarCloud

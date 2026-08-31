@@ -3900,6 +3900,60 @@ def test_bank_company_lists_use_assigned_company_scope(app_ctx, monkeypatch):
     assert [account.id for account in page.items] == [allowed.id]
 
 
+def test_cash_list_helpers_preserve_company_and_period_scope(app_ctx, monkeypatch):
+    """Los helpers de listados bancarios conservan autorización y período."""
+    import importlib
+    from types import SimpleNamespace
+
+    from cacao_accounting import list_filters
+    from cacao_accounting.database import BankAccount, PaymentEntry, database
+
+    bancos_module = importlib.import_module("cacao_accounting.bancos.services")
+    user = SimpleNamespace(id="user-1", classification="user")
+    monkeypatch.setattr(bancos_module, "current_user", user)
+    monkeypatch.setattr(bancos_module, "exige_acceso_compania", lambda *args: None)
+    monkeypatch.setattr(bancos_module, "_cash_authorized_companies", lambda: ["cacao"])
+
+    with app_ctx.test_request_context("/bank-account/list?company=cacao"):
+        explicit = bancos_module._apply_cash_company_scope(database.select(BankAccount), BankAccount)
+        assert "cacao" in explicit.compile().params.values()
+    with app_ctx.test_request_context("/bank-account/list"):
+        authorized = bancos_module._apply_cash_company_scope(database.select(BankAccount), BankAccount)
+        assert any("cacao" in value for value in authorized.compile().params.values())
+    monkeypatch.setattr(bancos_module, "_cash_authorized_companies", lambda: [])
+    with app_ctx.test_request_context("/bank-account/list"):
+        restricted = bancos_module._apply_cash_company_scope(database.select(BankAccount), BankAccount)
+        assert "false" in str(restricted).lower()
+    with app_ctx.test_request_context("/bank-account/list"):
+        base_query = database.select(BankAccount)
+        assert bancos_module._apply_cash_company_scope(base_query, SimpleNamespace()) is base_query
+
+    monkeypatch.setattr(bancos_module, "current_user", SimpleNamespace(id="admin", classification="admin"))
+    with app_ctx.test_request_context("/bank-account/list"):
+        base_query = database.select(BankAccount)
+        assert bancos_module._apply_cash_company_scope(base_query, BankAccount) is base_query
+        assert bancos_module._cash_period_company() is None
+
+    monkeypatch.setattr(bancos_module, "current_user", user)
+    monkeypatch.setattr(bancos_module, "_cash_authorized_companies", lambda: ["cacao"])
+    with app_ctx.test_request_context("/bank-account/list"):
+        assert bancos_module._cash_period_company() == "cacao"
+    monkeypatch.setattr(bancos_module, "_cash_authorized_companies", lambda: ["cacao", "other"])
+    with app_ctx.test_request_context("/bank-account/list"):
+        assert bancos_module._cash_period_company() is None
+
+    monkeypatch.setattr(list_filters, "apply_period_filter", lambda *args, **kwargs: "filtered")
+    monkeypatch.setattr(list_filters, "require_period_company", lambda *args, **kwargs: object())
+    monkeypatch.setattr(bancos_module, "apply_period_filter", list_filters.apply_period_filter)
+    monkeypatch.setattr(bancos_module, "require_period_company", list_filters.require_period_company)
+    monkeypatch.setattr(bancos_module, "current_user", SimpleNamespace(id="admin", classification="admin"))
+    with app_ctx.test_request_context("/payment/list?period_from=2026-01-01"):
+        assert bancos_module._apply_cash_period_scope(database.select(PaymentEntry), PaymentEntry) == "filtered"
+    with app_ctx.test_request_context("/bank-account/list"):
+        base_query = database.select(BankAccount)
+        assert bancos_module._apply_cash_period_scope(base_query, SimpleNamespace()) is base_query
+
+
 def test_bank_reconciliation_panel_ignores_invalid_historical_transaction(app_ctx, monkeypatch):
     import importlib
 
