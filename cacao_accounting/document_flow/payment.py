@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
 _MSG_MONTO_MAYOR_CERO = "El monto aplicado debe ser mayor que cero."
 _MSG_TASA_PAGO_POSITIVA = "Se requiere una tasa positiva entre la moneda del documento y la del pago."
+_MSG_PAGO_EXCEDE_SALDO = "El monto aplicado excede el saldo disponible del pago."
 
 MAX_RECONCILIATION_LINES = 100
 
@@ -859,7 +860,7 @@ def _discount_allocation_line(
             raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
     consumed = _cash_consumed(values.allocated, values.discount, values.gain_loss) * effective_rate
     if consumed > available + Decimal("0.01"):
-        raise _document_flow_error("El monto aplicado excede el saldo disponible del pago.", 409)
+        raise _document_flow_error(_MSG_PAGO_EXCEDE_SALDO, 409)
     return AllocationLine(
         document_id=values.document_id,
         document_type=values.flow_source_type,
@@ -1072,11 +1073,11 @@ def _plan_reconciliation_allocation(
     except AllocationError as exc:
         message = str(exc)
         if isinstance(exc, AllocationOverpaymentError) and "efectivo" in message.lower():
-            message = "El monto aplicado excede el saldo disponible del pago."
+            message = _MSG_PAGO_EXCEDE_SALDO
         raise _document_flow_error(message, 409) from exc
     line = plan.lines[0]
     if line.source_amount > available + Decimal("0.01"):
-        raise _document_flow_error("El monto aplicado excede el saldo disponible del pago.", 409)
+        raise _document_flow_error(_MSG_PAGO_EXCEDE_SALDO, 409)
     return line
 
 
