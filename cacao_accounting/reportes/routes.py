@@ -22,6 +22,7 @@ from cacao_accounting.reportes.services import (
     BankingFilters,
     FinancialReportFilters,
     KardexFilters,
+    PaginatedReport,
     ReconciliationFilters,
     SubledgerFilters,
     get_account_movement_detail,
@@ -525,32 +526,33 @@ def reconciliations():
     return _render_operational_report(_("Reconciliaciones"), report)
 
 
-@reportes.route("/reports/reconciliation-matrix")
-@login_required
-@modulo_activo("accounting")
-@verifica_acceso("accounting")
-def reconciliation_matrix():
-    """Reconcilia AR, AP, inventario, bancos e impuestos contra GL."""
-    company = _resolve_company(request.args.get("company", "cacao"))
-    period_from, period_to = _period_params()
-    raw_period = request.args.get("accounting_period")
-    if period_from or period_to or raw_period:
-        from cacao_accounting.reportes.periods import resolve_period_range
+def _reconciliation_matrix_period(
+    company: str, period_from: str | None, period_to: str | None, raw_period: str | None
+) -> str | None:
+    """Resuelve el período dimensional seleccionado para la matriz."""
+    if not (period_from or period_to or raw_period):
+        return _default_period_for_company(company)
 
-        period_id_from, period_id_to = period_from, period_to
-        if not (period_id_from or period_id_to):
-            period_range = resolve_period_range(company, None, None)
-            if period_range is not None:
-                period_id_from = period_id_to = period_range.from_id
-        else:
-            period_range = resolve_period_range(company, period_id_from, period_id_to)
-            if period_range is not None:
-                period_id_from, period_id_to = period_range.from_id, period_range.to_id
-        period = period_id_to or period_id_from
+    from cacao_accounting.reportes.periods import resolve_period_range
+
+    period_id_from, period_id_to = period_from, period_to
+    if not (period_id_from or period_id_to):
+        period_range = resolve_period_range(company, None, None)
+        if period_range is not None:
+            period_id_from = period_id_to = period_range.from_id
     else:
-        period = _default_period_for_company(company)
+        period_range = resolve_period_range(company, period_id_from, period_id_to)
+        if period_range is not None:
+            period_id_from, period_id_to = period_range.from_id, period_range.to_id
+    return period_id_to or period_id_from
+
+
+def _load_reconciliation_matrix_report(
+    company: str, period: str | None, period_from: str | None, period_to: str | None
+) -> PaginatedReport:
+    """Carga la matriz y convierte errores de moneda en una respuesta HTTP 400."""
     try:
-        report = get_reconciliation_matrix(
+        return get_reconciliation_matrix(
             ReconciliationFilters(
                 company=company,
                 ledger=request.args.get("ledger") or _default_ledger_for_company(company),
@@ -565,6 +567,18 @@ def reconciliation_matrix():
         # Currency/ledger comparisons without a historical conversion are an
         # invalid accounting request, not a server error hidden from auditors.
         abort(400, description=str(exc))
+
+
+@reportes.route("/reports/reconciliation-matrix")
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def reconciliation_matrix():
+    """Reconcilia AR, AP, inventario, bancos e impuestos contra GL."""
+    company = _resolve_company(request.args.get("company", "cacao"))
+    period_from, period_to = _period_params()
+    period = _reconciliation_matrix_period(company, period_from, period_to, request.args.get("accounting_period"))
+    report = _load_reconciliation_matrix_report(company, period, period_from, period_to)
     return _render_operational_framework(
         "reconciliation-matrix",
         _("Matriz de Reconciliación Subledger ↔ GL"),
