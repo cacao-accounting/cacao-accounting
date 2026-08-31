@@ -1266,12 +1266,8 @@ def _purchase_order_transaction_config(
     }
 
 
-def _purchase_order_context(form: dict):
-    """Validate sourcing data and resolve the context for a purchase order."""
-    award_id = form.get("purchase_award_id") or None
-    exception_reason = form.get("comparison_exception_reason") or None
-    sourcing_config = get_purchase_sourcing_config()
-    source = None
+def _purchase_order_source(form: dict) -> Any:
+    """Resolve the first purchase-flow source document supplied by the form."""
     for model, key in (
         (PurchaseRequest, "from_request"),
         (PurchaseQuotation, "from_rfq"),
@@ -1279,8 +1275,14 @@ def _purchase_order_context(form: dict):
     ):
         source_id = form.get(key)
         if source_id:
-            source = database.session.get(model, source_id)
-            break
+            return database.session.get(model, source_id)
+    return None
+
+
+def _validate_purchase_order_sourcing(
+    sourcing_config: Any, source: Any, award_id: str | None, exception_reason: str | None
+) -> bool:
+    """Validate comparison or authorized exception requirements for an order."""
     direct_supplier_quotation = isinstance(source, SupplierQuotation) and bool(source.purchase_quotation_id)
     if sourcing_config.require_comparison and not award_id:
         if not direct_supplier_quotation and not (is_purchase_manager(current_user.id) and exception_reason):
@@ -1289,27 +1291,51 @@ def _purchase_order_context(form: dict):
                     "La Orden de Compra debe originarse en un comparativo o incluir una excepción autorizada."
                 )
             )
-            return None
+            return False
+    return True
+
+
+def _validate_purchase_order_award(award_id: str | None, company: str | None) -> Any:
+    """Load a finalized award and verify it belongs to the selected company."""
     award = database.session.get(PurchaseQuotationAward, award_id) if award_id else None
     if award_id and (not award or award.status != "finalized"):
         flash_error(PurchaseSourcingError("La adjudicación seleccionada no es válida."))
+        return None, False
+    if award and award.company != company:
+        flash_error(PurchaseSourcingError("La adjudicación no pertenece a la compañía seleccionada."))
+        return None, False
+    return award, True
+
+
+def _purchase_order_comparison_open(source: Any) -> bool:
+    """Return whether the source supplier quotation still lacks a finalized award."""
+    if not isinstance(source, SupplierQuotation) or not source.purchase_quotation_id:
+        return False
+    return (
+        database.session.execute(
+            database.select(PurchaseQuotationAward.id)
+            .where(PurchaseQuotationAward.purchase_quotation_id == source.purchase_quotation_id)
+            .where(PurchaseQuotationAward.status.in_(("finalized", "used", "closed")))
+        ).scalar_one_or_none()
+        is None
+    )
+
+
+def _purchase_order_context(form: dict):
+    """Validate sourcing data and resolve the context for a purchase order."""
+    award_id = form.get("purchase_award_id") or None
+    exception_reason = form.get("comparison_exception_reason") or None
+    sourcing_config = get_purchase_sourcing_config()
+    source = _purchase_order_source(form)
+    if not _validate_purchase_order_sourcing(sourcing_config, source, award_id, exception_reason):
+        return None
+    award, valid_award = _validate_purchase_order_award(award_id, form.get("company") or None)
+    if not valid_award:
         return None
     supplier_id = form.get("supplier_id") or None
-    if award and award.company != (form.get("company") or None):
-        flash_error(PurchaseSourcingError("La adjudicación no pertenece a la compañía seleccionada."))
-        return None
     supplier = database.session.get(Party, supplier_id) if supplier_id else None
     posting_date = _parse_date(form.get("posting_date"))
-    comparison_open = False
-    if isinstance(source, SupplierQuotation) and source.purchase_quotation_id:
-        comparison_open = (
-            database.session.execute(
-                database.select(PurchaseQuotationAward.id)
-                .where(PurchaseQuotationAward.purchase_quotation_id == source.purchase_quotation_id)
-                .where(PurchaseQuotationAward.status.in_(("finalized", "used", "closed")))
-            ).scalar_one_or_none()
-            is None
-        )
+    comparison_open = _purchase_order_comparison_open(source)
     company, transaction_currency = _validate_purchase_flow_header(source, form)
     transaction_currency = transaction_currency or form.get("transaction_currency") or form.get("currency") or None
     return award_id, supplier_id, supplier, posting_date, company, transaction_currency, comparison_open

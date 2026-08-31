@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_purchase_order_context` cx=24)
+
+### Hallazgo SonarCloud
+
+Issue `AaAa6s0eSsPfV5h49WFs` (`python:S3776`, CRITICAL):
+`cacao_accounting/compras/services.py`, `_purchase_order_context`, complejidad cognitiva 24 frente al umbral 15.
+
+### Corrección
+
+Se separaron la resolución del documento origen, la validación de requisitos de comparación/excepción, la validación
+de adjudicación y la detección de comparativo abierto. Se conservaron los bloqueos de abastecimiento, pertenencia de
+compañía, estado de adjudicación, proveedor, moneda y contexto devuelto al flujo de creación.
+
+### Verificación
+
+- `tests/test_purchase_sourcing.py`: 10/10.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `get_ar_ap_subledger` cx=24)
 
 ### Hallazgo SonarCloud
