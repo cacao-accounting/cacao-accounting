@@ -1,5 +1,29 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `save_purchase_request_comparison_draft` cx=33)
+
+### Hallazgo SonarCloud
+
+Issue `AaAGlaIlTV2yRQvm0ilZ` (`python:S3776`, CRITICAL):
+`cacao_accounting/compras/purchase_request_comparison_service.py`, `save_purchase_request_comparison_draft`,
+complejidad cognitiva 33 frente al umbral 15.
+
+### Corrección
+
+Se extrajo la construcción y validación de cada línea seleccionada a `_comparison_draft_line`; la función pública
+conserva la eliminación de líneas anteriores, la detección de overrides, los motivos, las cantidades/importes, el
+estado de autorización y el `flush` transaccional.
+
+### Verificación
+
+- `tests/test_purchase_request_comparison.py`: 20/20.
+- `tests/test_e2e_purchase_request_comparison.py`: 1/1.
+- Cobertura focalizada del servicio: 93%; la línea de error de selección inválida quedó cubierta por prueba dedicada.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_create_purchase_invoice_from_request` cx=36)
 
 ### Hallazgo SonarCloud
