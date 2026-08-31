@@ -424,47 +424,32 @@ def api_document_email_info(document_type: str, document_id: str):
     )
 
 
-@api.route("/api/documents/<document_type>/<document_id>/email", methods=["POST"])
-@login_required
-def api_document_send_email(document_type: str, document_id: str):
-    """Envía una notificación por correo electrónico para un documento operativo."""
+def _document_email_recipients(payload: dict[str, Any]) -> list[str]:
+    """Normaliza destinatarios enviados como lista o como texto separado por coma/punto y coma."""
     import re
-    from datetime import datetime, timezone
-    from cacao_accounting.database import EmailQueue
-    from cacao_accounting.messaging.email import can_send_transaction_emails, EmailError, send_email
-    from cacao_accounting.audit_trail_service import log_email_sent
 
-    if not can_send_transaction_emails():
-        return jsonify({"error": _("El envío de correos electrónicos no está habilitado o no está configurado.")}), 403
-
-    doc = _require_document_send_access(document_type, document_id)
-
-    payload = request.get_json(silent=True) or request.form.to_dict()
     raw_recipients = payload.get("recipients") or payload.get("recipient") or ""
-    subject = str(payload.get("subject") or "").strip()
-    body = str(payload.get("body") or payload.get("message") or "").strip()
-
     if isinstance(raw_recipients, list):
-        recipient_list = [str(r).strip() for r in raw_recipients if str(r).strip()]
-    else:
-        recipient_list = [r.strip() for r in re.split(r"[,;]", str(raw_recipients)) if r.strip()]
+        return [str(recipient).strip() for recipient in raw_recipients if str(recipient).strip()]
+    return [recipient.strip() for recipient in re.split(r"[,;]", str(raw_recipients)) if recipient.strip()]
 
-    if not recipient_list:
-        return jsonify({"error": _("Debe especificar al menos un destinatario válido.")}), 400
 
-    doc_no = getattr(doc, "document_no", None) or document_id
-    company = getattr(doc, "company", None) or ""
+def _send_document_emails(
+    document_type: str,
+    document_id: str,
+    recipients: list[str],
+    subject: str,
+    body: str,
+) -> tuple[list[str], list[str]]:
+    """Envía cada destinatario y persiste su resultado independiente en la cola."""
+    from datetime import datetime, timezone
 
-    if not subject:
-        subject = f"Notificación de documento #{doc_no}"
+    from cacao_accounting.database import EmailQueue
+    from cacao_accounting.messaging.email import send_email
 
-    if not body:
-        body = f"Estimado(a),\n\nSe le notifica la emisión del documento #{doc_no}.\n\nAtentamente,\n{company}"
-
-    sent_recipients = []
-    errors = []
-
-    for to_email in recipient_list:
+    sent_recipients: list[str] = []
+    errors: list[str] = []
+    for to_email in recipients:
         queue_item = EmailQueue(
             document_type=document_type,
             document_id=document_id,
@@ -476,20 +461,44 @@ def api_document_send_email(document_type: str, document_id: str):
         )
         database.session.add(queue_item)
         database.session.flush()
-
         try:
             send_email(to_email=to_email, subject=subject, body=body, is_html=False)
             queue_item.status = "sent"
             queue_item.sent_at = datetime.now(timezone.utc)
             sent_recipients.append(to_email)
-        except EmailError as exc:
-            queue_item.status = "failed"
-            queue_item.error_message = str(exc)
-            errors.append(f"{to_email}: {exc}")
         except Exception as exc:
             queue_item.status = "failed"
             queue_item.error_message = str(exc)
             errors.append(f"{to_email}: {exc}")
+    return sent_recipients, errors
+
+
+@api.route("/api/documents/<document_type>/<document_id>/email", methods=["POST"])
+@login_required
+def api_document_send_email(document_type: str, document_id: str):
+    """Envía una notificación por correo electrónico para un documento operativo."""
+    from cacao_accounting.messaging.email import can_send_transaction_emails
+    from cacao_accounting.audit_trail_service import log_email_sent
+
+    if not can_send_transaction_emails():
+        return jsonify({"error": _("El envío de correos electrónicos no está habilitado o no está configurado.")}), 403
+
+    doc = _require_document_send_access(document_type, document_id)
+
+    payload = request.get_json(silent=True) or request.form.to_dict()
+    recipient_list = _document_email_recipients(payload)
+
+    if not recipient_list:
+        return jsonify({"error": _("Debe especificar al menos un destinatario válido.")}), 400
+
+    doc_no = getattr(doc, "document_no", None) or document_id
+    company = getattr(doc, "company", None) or ""
+    subject = str(payload.get("subject") or "").strip() or f"Notificación de documento #{doc_no}"
+    body = (
+        str(payload.get("body") or payload.get("message") or "").strip()
+        or f"Estimado(a),\n\nSe le notifica la emisión del documento #{doc_no}.\n\nAtentamente,\n{company}"
+    )
+    sent_recipients, errors = _send_document_emails(document_type, document_id, recipient_list, subject, body)
 
     if sent_recipients:
         recipients_str = ", ".join(sent_recipients)

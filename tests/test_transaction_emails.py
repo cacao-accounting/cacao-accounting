@@ -284,7 +284,7 @@ def test_api_document_email_send_reports_partial_delivery(mock_send_email, app_c
         client.post("/login", data={"usuario": "admin_email_user", "acceso": "secretpassword"})
         response = client.post(
             "/api/documents/purchase_order/PO-EMAIL-001/email",
-            json={"recipients": "ok@test.com, failed@test.com", "subject": "Asunto", "body": "Cuerpo"},
+            json={"recipients": ["ok@test.com", "failed@test.com"], "subject": "Asunto", "body": "Cuerpo"},
         )
 
     assert response.status_code == 207
