@@ -1349,6 +1349,22 @@ def _render_financial_report(
     )
 
 
+def _operational_page_window(report: Any) -> tuple[list[Any], list[Any], int, int, int, list[Any]]:
+    """Resolve columns and the visible page for an operational report."""
+    rows = list(getattr(report, "rows", []))
+    columns = getattr(report, "columns", None) or (list(rows[0].values.keys()) if rows else [])
+    requested_page = max(request.args.get("page", 1, type=int) or 1, 1)
+    requested_page_size = min(max(request.args.get("page_size", 100, type=int) or 100, 1), 500)
+    report_total_rows = getattr(report, "total_rows", 0) or 0
+    report_page_size = getattr(report, "page_size", 0) or 0
+    is_service_paginated = report_total_rows > len(rows) and report_page_size > 0
+    page = getattr(report, "page", requested_page) if is_service_paginated else requested_page
+    page_size = report_page_size if is_service_paginated else requested_page_size
+    total_rows = report_total_rows or len(rows)
+    page_rows = rows if is_service_paginated else rows[(page - 1) * page_size : page * page_size]
+    return rows, columns, page, page_size, total_rows, page_rows
+
+
 def _render_operational_framework(
     report_code: str,
     report_title: str,
@@ -1363,19 +1379,9 @@ def _render_operational_framework(
     export_response = _export_operational_report(report, report_code, report_title, filter_state)
     if export_response is not None:
         return export_response
-    rows = list(getattr(report, "rows", []))
     totals_raw = getattr(report, "totals", {})
     ledger_currency = getattr(report, "ledger_currency", None)
-    columns = getattr(report, "columns", None) or (list(rows[0].values.keys()) if rows else [])
-    requested_page = max(request.args.get("page", 1, type=int) or 1, 1)
-    requested_page_size = min(max(request.args.get("page_size", 100, type=int) or 100, 1), 500)
-    report_total_rows = getattr(report, "total_rows", 0) or 0
-    report_page_size = getattr(report, "page_size", 0) or 0
-    is_service_paginated = report_total_rows > len(rows) and report_page_size > 0
-    page = getattr(report, "page", requested_page) if is_service_paginated else requested_page
-    page_size = report_page_size if is_service_paginated else requested_page_size
-    total_rows = report_total_rows or len(rows)
-    page_rows = rows if is_service_paginated else rows[(page - 1) * page_size : page * page_size]
+    rows, columns, page, page_size, total_rows, page_rows = _operational_page_window(report)
     display_headers = {column: _column_label(column, ledger_currency) for column in columns}
     display_rows = [
         {column: _format_cell(column, row.values.get(column), ledger_currency) for column in columns} for row in page_rows

@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_render_operational_framework` cx=18)
+
+### Hallazgo SonarCloud
+
+Issue `AaBG9c58WKUcwX8H2P6b` (`python:S3776`, CRITICAL):
+`cacao_accounting/reportes/helpers.py`, `_render_operational_framework`, complejidad cognitiva 18 frente al umbral 15.
+
+### Análisis y corrección
+
+No se requirió modificar el framework de reportes: la complejidad estaba en resolver la ventana de paginación local o
+servida por el servicio. Se extrajo `_operational_page_window`; el renderizado, exportación, etiquetas y navegación
+mantienen el mismo contrato.
+
+### Verificación
+
+- `tests/test_operational_report_framework.py`: 7/7.
+- Se cubrieron paginación local y paginación ya resuelta por el servicio.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_normalize_journal_payload` cx=17)
 
 ### Hallazgo SonarCloud

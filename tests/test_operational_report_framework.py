@@ -126,6 +126,20 @@ def test_get_bank_movement_detail_supports_bank_filter(app_ctx):
     assert report.totals["running_balance"] == Decimal("45.00")
 
 
+def test_operational_page_window_handles_local_and_service_pagination(app_ctx):
+    from types import SimpleNamespace
+
+    from cacao_accounting.reportes import helpers
+
+    rows = [SimpleNamespace(values={"amount": Decimal("1")}), SimpleNamespace(values={"amount": Decimal("2")})]
+    with app_ctx.test_request_context("/reports?page=2&page_size=1"):
+        local = helpers._operational_page_window(SimpleNamespace(rows=rows, totals={}))
+        remote = helpers._operational_page_window(SimpleNamespace(rows=rows, total_rows=4, page_size=2, page=2, totals={}))
+
+    assert local[2:] == (2, 1, 2, [rows[1]])
+    assert remote[2:] == (2, 2, 4, rows)
+
+
 def test_get_inventory_existence_uses_as_of_date(app_ctx):
     from cacao_accounting.database import Item, StockLedgerEntry, UOM, Warehouse, database
     from cacao_accounting.reportes.services import KardexFilters, get_inventory_existence
