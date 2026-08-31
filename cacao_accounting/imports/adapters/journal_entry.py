@@ -49,12 +49,11 @@ class JournalEntryAdapter(BaseImportAdapter):
                 return value
         return default
 
-    def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
-        """Valida que el comprobante tenga al menos dos líneas y esté balanceado."""
-        errors = []
+    def _validate_amounts(self, document_data: List[Dict[str, Any]]) -> List[str]:
+        """Valida importes y balance global de las líneas importadas."""
+        errors: List[str] = []
         if len(document_data) < 2:
             errors.append("Un comprobante contable debe tener al menos dos líneas.")
-
         total_debit = Decimal("0")
         total_credit = Decimal("0")
         for row in document_data:
@@ -63,42 +62,51 @@ class JournalEntryAdapter(BaseImportAdapter):
                 total_credit += self._amount(self._value(row, "credito", "credit"))
             except (InvalidOperation, ValueError, TypeError):
                 errors.append(f"Monto inválido en referencia {self._value(row, 'document_ref', 'reference')}")
-
-        if abs(total_debit - total_credit) > self._BALANCE_TOLERANCE:
+        if document_data and abs(total_debit - total_credit) > self._BALANCE_TOLERANCE:
             errors.append(f"El comprobante {self._value(document_data[0], 'document_ref', 'reference')} no está balanceado.")
+        return errors
 
-        # Período contable
+    def _validate_period(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None) -> List[str]:
+        """Valida que la fecha del asiento pertenezca a un período abierto."""
+        if not document_data:
+            return []
         try:
             posting_date = date.fromisoformat(str(self._value(document_data[0], "fecha", "posting_date")))
             company_id = (context or {}).get("company_id") or ""
             if not is_period_open(company_id, posting_date):
-                errors.append(f"El periodo contable para la fecha {posting_date} está cerrado o no existe.")
+                return [f"El periodo contable para la fecha {posting_date} está cerrado o no existe."]
         except (ValueError, TypeError):
-            # Formato de fecha inválido se manejará en otro lugar o ya fue reportado
             pass
+        return []
 
-        # Reuse the same line and AP/AR validation used by the interactive
-        # journal form.  This keeps the batch importer from accepting a file
-        # that would fail when the voucher is later posted.
+    def _validate_accounting_lines(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None) -> List[str]:
+        """Aplica las mismas validaciones de líneas que el formulario de asientos."""
+        try:
+            from cacao_accounting.contabilidad.journal_service import (
+                _normalize_line,
+                _validate_ar_ap_lines,
+                _validate_balanced_lines,
+                _validate_line_books,
+            )
+
+            canonical_rows = self.build_document(document_data, context or {}).get("lines", [])
+            lines = [_normalize_line(row, index + 1) for index, row in enumerate(canonical_rows)]
+            company = str((context or {}).get("company_id") or "")
+            _validate_balanced_lines(company, lines, (context or {}).get("transaction_currency"))
+            _validate_line_books(company, (context or {}).get("books"), lines)
+            _validate_ar_ap_lines(company, lines)
+        except RuntimeError:
+            return []
+        except (ValueError, InvalidOperation) as exc:
+            return [str(exc)]
+        return []
+
+    def validate_document(self, document_data: List[Dict[str, Any]], context: Dict[str, Any] | None = None) -> List[str]:
+        """Valida que el comprobante tenga al menos dos líneas y esté balanceado."""
+        errors = self._validate_amounts(document_data)
+        errors.extend(self._validate_period(document_data, context))
         if not errors:
-            try:
-                from cacao_accounting.contabilidad.journal_service import (
-                    _normalize_line,
-                    _validate_ar_ap_lines,
-                    _validate_balanced_lines,
-                    _validate_line_books,
-                )
-
-                canonical_rows = self.build_document(document_data, context or {}).get("lines", [])
-                lines = [_normalize_line(row, index + 1) for index, row in enumerate(canonical_rows)]
-                company = str((context or {}).get("company_id") or "")
-                _validate_balanced_lines(company, lines, (context or {}).get("transaction_currency"))
-                _validate_line_books(company, (context or {}).get("books"), lines)
-                _validate_ar_ap_lines(company, lines)
-            except (RuntimeError, ValueError, InvalidOperation) as exc:
-                if isinstance(exc, RuntimeError):
-                    return errors
-                errors.append(str(exc))
+            errors.extend(self._validate_accounting_lines(document_data, context))
 
         return errors
 
