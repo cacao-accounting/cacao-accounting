@@ -3,10 +3,14 @@
 
 import json
 from io import BytesIO
+from decimal import Decimal
 import pytest
+from types import SimpleNamespace
 from openpyxl import Workbook
 from cacao_accounting import create_app
+from cacao_accounting.api import line_import
 from cacao_accounting.database import Accounts, database, Entity, Item, UOM, User, Roles, Modules, RolesUser, RolesAccess
+from cacao_accounting.document_flow import payment as payment_flow
 from flask_login import login_user
 
 
@@ -114,6 +118,72 @@ def test_validate_payment_reconciliation_rejects_unknown_documents(logged_in_cli
     data = response.get_json()
     assert data["valid"] is False
     assert {error["field"] for error in data["errors"]} >= {"payment_id", "reference_id"}
+
+
+def test_validate_payment_reconciliation_accepts_matching_payment_and_document(logged_in_client, monkeypatch):
+    """A valid payment allocation passes identity and outstanding-balance checks."""
+    payment = SimpleNamespace(company="cacao", docstatus=1, party_type="customer", party_id="customer-1", currency="USD")
+    reference = SimpleNamespace(company="cacao", docstatus=1, customer_id="customer-1", transaction_currency="USD")
+
+    def fake_get(model, identifier):
+        if model is line_import.PaymentEntry:
+            return payment
+        if model is line_import.SalesInvoice:
+            return reference
+        raise AssertionError(f"Unexpected model: {model}")
+
+    monkeypatch.setattr(line_import.database.session, "get", fake_get)
+    monkeypatch.setattr(payment_flow, "compute_outstanding_amount", lambda document: Decimal("100"))
+    monkeypatch.setattr(payment_flow, "compute_payment_unallocated_amount", lambda document: Decimal("100"))
+
+    errors = []
+    line_import._validate_payment_reconciliation_row(
+        {"payment_id": "payment-1", "reference_type": "sales_invoice", "reference_id": "invoice-1", "allocated_amount": "25"},
+        1,
+        "cacao",
+        errors,
+    )
+
+    assert errors == []
+
+
+def test_validate_payment_reconciliation_reports_party_currency_and_balance_errors(logged_in_client, monkeypatch):
+    """Mismatched party, missing FX rate, and excessive amounts are reported together."""
+    payment = SimpleNamespace(company="cacao", docstatus=1, party_type="customer", party_id="customer-1", currency="USD")
+    reference = SimpleNamespace(company="cacao", docstatus=1, customer_id="customer-2", transaction_currency="EUR")
+
+    def fake_get(model, identifier):
+        return payment if model is line_import.PaymentEntry else reference
+
+    monkeypatch.setattr(line_import.database.session, "get", fake_get)
+    monkeypatch.setattr(payment_flow, "compute_outstanding_amount", lambda document: Decimal("10"))
+    monkeypatch.setattr(payment_flow, "compute_payment_unallocated_amount", lambda document: Decimal("5"))
+
+    errors = []
+    line_import._validate_payment_reconciliation_row(
+        {"payment_id": "payment-1", "reference_type": "sales_invoice", "reference_id": "invoice-1", "allocated_amount": "20"},
+        4,
+        "cacao",
+        errors,
+    )
+
+    assert {error["field"] for error in errors} == {"reference_id", "payment_exchange_rate", "allocated_amount"}
+    assert sum(error["field"] == "allocated_amount" for error in errors) == 2
+
+
+def test_validate_payment_reconciliation_rejects_non_positive_allocation(logged_in_client, monkeypatch):
+    """A zero allocation is invalid even when payment and reference lookup fails."""
+    monkeypatch.setattr(line_import.database.session, "get", lambda model, identifier: None)
+
+    errors = []
+    line_import._validate_payment_reconciliation_row(
+        {"payment_id": "missing", "reference_type": "unsupported", "reference_id": "missing", "allocated_amount": "0"},
+        2,
+        "cacao",
+        errors,
+    )
+
+    assert [error["field"] for error in errors] == ["payment_id", "reference_type", "allocated_amount"]
 
 
 @pytest.mark.parametrize(

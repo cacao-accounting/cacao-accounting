@@ -1,5 +1,33 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_validate_payment_reconciliation_row` cx=53)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMnNkZtwr73q0yaV` (`python:S3776`, CRITICAL):
+`cacao_accounting/api/line_import.py`, `_validate_payment_reconciliation_row`, complejidad cognitiva 53 frente al
+umbral 15.
+
+### Corrección
+
+Se mantuvo el contrato de validación y se extrajeron helpers para cargar el pago, resolver el documento referenciado,
+validar el tercero, resolver la tasa de cambio y verificar los saldos de documento/pago. El orquestador conserva el
+mismo orden de validación y las mismas reglas de error. Se centralizó también el mapa de modelos conciliables.
+
+Se agregaron pruebas para el caso válido, tercero incorrecto, moneda distinta sin tasa, exceso de saldo documental,
+exceso de saldo del pago y monto no positivo.
+
+### Verificación
+
+- `tests/test_line_import_api.py`: 33/33.
+- Cobertura focalizada del archivo: las líneas nuevas del refactor quedan cubiertas; las líneas no cubiertas restantes
+  son preexistentes.
+- Black, Ruff, Flake8, pydocstyle y `git diff --check`: limpios.
+- Mypy no inicia en el `.venv` actual por `ModuleNotFoundError: No module named 'pathspec.patterns.gitignore'`.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-30 (refactor S3776 — `post_payment_ar_ap` cx=68)
 
 ### Petición del usuario
