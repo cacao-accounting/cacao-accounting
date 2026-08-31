@@ -1,5 +1,32 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_create_purchase_invoice_from_request` cx=36)
+
+### Hallazgo SonarCloud
+
+Issue `AaAa6s0eSsPfV5h49WFu` (`python:S3776`, CRITICAL):
+`cacao_accounting/compras/services.py`, `_create_purchase_invoice_from_request`, complejidad cognitiva
+36 frente al umbral 15.
+
+### Corrección
+
+Se separaron la resolución de fuentes y tipo documental, la validación del contexto de proveedor/compañía y
+reversión, la materialización de la factura, la validación de la relación upstream y el cálculo/fiscalización de
+totales. Se conservaron la herencia de compañía y moneda, flags del proveedor, duplicidad de factura, relaciones de
+orden/recepción, límites de notas de crédito/débito, snapshots fiscales, rollback y auditoría.
+
+### Verificación
+
+- `tests/test_s2p_purchase_notes.py`: 11/11.
+- `tests/test_e2e_modules.py::test_purchase_happy_path` y
+  `tests/test_e2e_modules.py::test_purchase_invoice_from_order_hydrates_immutable_header`: 2/2.
+- Cobertura focalizada: todas las líneas nuevas del refactor están cubiertas; las líneas no cubiertas restantes
+  pertenecen a funciones preexistentes fuera del flujo refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — Ventas `_paginate_list` cx=37)
 
 ### Hallazgo SonarCloud

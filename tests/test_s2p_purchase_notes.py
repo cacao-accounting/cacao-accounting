@@ -5,6 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 import pytest
 
@@ -550,3 +551,56 @@ def test_approval_engine_execute_submit_and_cancel_purchase_credit_note(app_ctx)
         # Verify relation reverted and outstanding restored
         assert compute_outstanding_amount(source_invoice) == Decimal("600.00")
         assert source_invoice.outstanding_amount == Decimal("600.00")
+
+
+def test_purchase_invoice_source_helpers_cover_receipt_return_and_relations(app_ctx, monkeypatch):
+    """Source resolution preserves receipt returns and upstream relation selection."""
+    from cacao_accounting.compras import services as compras_module
+    from flask import current_app
+
+    receipt = SimpleNamespace(id="REC-HELPER", purchase_order_id=None)
+    source_invoice = SimpleNamespace(id="PINV-HELPER", purchase_order_id="PO-HELPER", purchase_receipt_id="REC-HELPER")
+    monkeypatch.setattr(compras_module.database.session, "get", lambda model, identifier: receipt)
+    monkeypatch.setattr(compras_module, "_purchase_invoice_sources", lambda source_ids: (None, receipt, None))
+    monkeypatch.setattr(compras_module, "_resolve_purchase_return_invoice", lambda source, invoice: source_invoice)
+    with current_app.test_request_context("/buying/purchase-invoice/new", method="POST", data={"from_receipt": receipt.id}):
+        return_context = compras_module._purchase_invoice_source_context()
+    assert return_context["document_type"] == "purchase_return"
+    assert return_context["from_invoice"] == source_invoice.id
+
+    monkeypatch.setattr(compras_module, "_purchase_invoice_sources", lambda source_ids: (None, None, source_invoice))
+    with current_app.test_request_context(
+        "/buying/purchase-invoice/new", method="POST", data={"from_invoice": source_invoice.id}
+    ):
+        credit_context = compras_module._purchase_invoice_source_context()
+    assert credit_context["document_type"] == "purchase_credit_note"
+    assert credit_context["from_order"] == source_invoice.purchase_order_id
+    assert credit_context["from_receipt"] == source_invoice.purchase_receipt_id
+
+    calls = []
+    monkeypatch.setattr(compras_module, "_validate_purchase_source_link", lambda *args: calls.append(args))
+    invoice = SimpleNamespace(document_type="purchase_invoice", purchase_receipt_id="REC-1", purchase_order_id="PO-1")
+    compras_module._validate_purchase_invoice_source(invoice, [])
+    assert calls[-1][1:3] == ("purchase_receipt", "REC-1")
+    invoice.purchase_receipt_id = None
+    compras_module._validate_purchase_invoice_source(invoice, [])
+    assert calls[-1][1:3] == ("purchase_order", "PO-1")
+    invoice.document_type = "purchase_credit_note"
+    compras_module._validate_purchase_invoice_source(invoice, [])
+    assert len(calls) == 2
+
+
+def test_purchase_invoice_creation_reports_validation_error(app_ctx, monkeypatch):
+    """Invoice creation rolls back and reports expected validation failures."""
+    from cacao_accounting.compras import services as compras_module
+    from flask import current_app
+
+    errors = []
+    monkeypatch.setattr(
+        compras_module, "_purchase_invoice_creation_context", lambda: (_ for _ in ()).throw(ValueError("invalid"))
+    )
+    monkeypatch.setattr(compras_module.database.session, "rollback", lambda: None)
+    monkeypatch.setattr(compras_module, "flash_error", lambda error: errors.append(error))
+    with current_app.test_request_context("/buying/purchase-invoice/new", method="POST"):
+        assert compras_module._create_purchase_invoice_from_request() is None
+    assert str(errors[0]) == "invalid"

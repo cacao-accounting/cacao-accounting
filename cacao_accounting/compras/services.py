@@ -8,7 +8,7 @@ from decimal import Decimal
 
 from logging import getLogger
 
-from typing import Any, Sequence
+from typing import Any, Sequence, cast
 
 from sqlalchemy import update
 
@@ -2297,122 +2297,170 @@ def _has_active_purchase_reversal_notes(invoice_id: str) -> bool:
     return database.session.execute(active_note).scalar_one_or_none() is not None
 
 
+def _purchase_invoice_source_context() -> dict[str, Any]:
+    """Resolve source documents and document type for a purchase invoice."""
+    posting_date = _parse_date(request.form.get("posting_date"))
+    supplier_id = request.form.get("supplier_id") or None
+    from_order = request.form.get("from_order") or None
+    from_receipt = request.form.get("from_receipt") or None
+    if from_receipt and not from_order:
+        receipt = database.session.get(PurchaseReceipt, from_receipt)
+        if receipt:
+            from_order = receipt.purchase_order_id
+    from_invoice = request.form.get("from_invoice") or request.form.get("from_return") or None
+    requested_type = request.form.get("document_type") or request.args.get("document_type")
+    if from_receipt and not (request.form.get("from_order") or request.args.get("from_order")):
+        # Una factura creada desde recepcion sin OC es una devolucion,
+        # salvo que se solicite un tipo explicito.
+        requested_type = requested_type or PURCHASE_RETURN
+    elif from_invoice and not requested_type:
+        requested_type = PURCHASE_CREDIT_NOTE
+    source_ids = {"from_order_id": from_order, "from_receipt_id": from_receipt, "from_invoice_id": from_invoice}
+    document_type = _purchase_invoice_document_type(source_ids, requested_type)
+    source_order, source_receipt, source_invoice = _purchase_invoice_sources(source_ids)
+    if document_type == PURCHASE_RETURN:
+        source_invoice = _resolve_purchase_return_invoice(source_receipt, source_invoice)
+        from_invoice = source_invoice.id
+    if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) and source_invoice is not None:
+        from_order = from_order or source_invoice.purchase_order_id
+        from_receipt = from_receipt or source_invoice.purchase_receipt_id
+    return {
+        "posting_date": posting_date,
+        "supplier_id": supplier_id,
+        "from_order": from_order,
+        "from_receipt": from_receipt,
+        "from_invoice": from_invoice,
+        "document_type": document_type,
+        "source": source_order or source_receipt or source_invoice,
+    }
+
+
+def _purchase_invoice_creation_context() -> dict[str, Any]:
+    """Validate source, supplier and reversal data for a purchase invoice."""
+    context = _purchase_invoice_source_context()
+    source = context["source"]
+    company, transaction_currency = _validate_purchase_flow_header(source)
+    company = cast(str, company)
+    exige_acceso_compania("purchases", company, "crear")
+    tax_template_id = request.form.get("tax_template_id") or getattr(source, "tax_template_id", None)
+    _validate_purchase_tax_template(company, tax_template_id, transaction_currency)
+    supplier_id = context["supplier_id"] or getattr(source, "supplier_id", None)
+    supplier = database.session.get(Party, supplier_id) if supplier_id else None
+    transaction_currency = transaction_currency or request.form.get("transaction_currency") or None
+    _validate_supplier_company_membership(supplier_id, company)
+    _validate_supplier_invoice_flags(
+        supplier_id,
+        company,
+        context["from_order"],
+        context["from_receipt"],
+        context["document_type"],
+    )
+    _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
+    reversal_of = (
+        context["from_invoice"]
+        if context["document_type"] in (PURCHASE_RETURN, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE)
+        else None
+    )
+    if reversal_of:
+        _validate_purchase_reversal_of(reversal_of, supplier_id, company)
+    context.update(
+        company=company,
+        supplier_id=supplier_id,
+        supplier=supplier,
+        tax_template_id=tax_template_id,
+        transaction_currency=transaction_currency,
+        reversal_of=reversal_of,
+    )
+    return context
+
+
+def _build_purchase_invoice(context: dict[str, Any]) -> PurchaseInvoice:
+    """Materialize a draft purchase invoice from its validated context."""
+    factura = PurchaseInvoice(
+        supplier_id=context["supplier_id"],
+        supplier_name=(context["supplier"].name if context["supplier"] else getattr(context["source"], "supplier_name", None)),
+        company=context["company"],
+        posting_date=context["posting_date"],
+        supplier_invoice_no=request.form.get("supplier_invoice_no"),
+        document_type=context["document_type"],
+        purchase_order_id=context["from_order"],
+        purchase_receipt_id=context["from_receipt"],
+        tax_template_id=context["tax_template_id"],
+        is_return=context["document_type"] in (PURCHASE_RETURN, PURCHASE_CREDIT_NOTE),
+        reversal_of=context["reversal_of"],
+        remarks=request.form.get("remarks"),
+        transaction_currency=context["transaction_currency"],
+        base_currency=company_currency(context["company"]),
+        docstatus=0,
+    )
+    _copy_logistics(factura, context["source"], request.form)
+    factura.landed_cost_estimates_json = _landed_cost_snapshot(source=context["source"], form=request.form)
+    database.session.add(factura)
+    database.session.flush()
+    assign_document_identifier(
+        document=factura,
+        entity_type="purchase_invoice",
+        posting_date_raw=context["posting_date"],
+        naming_series_id=request.form.get("naming_series") or None,
+    )
+    return factura
+
+
+def _validate_purchase_invoice_source(factura: PurchaseInvoice, items: Sequence[Any]) -> None:
+    """Validate the active upstream relation for a non-reversal invoice."""
+    if factura.document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE):
+        return
+    if factura.purchase_receipt_id:
+        _validate_purchase_source_link(factura, "purchase_receipt", factura.purchase_receipt_id, items)
+    elif factura.purchase_order_id:
+        _validate_purchase_source_link(factura, "purchase_order", factura.purchase_order_id, items)
+
+
+def _finalize_purchase_invoice(factura: PurchaseInvoice, total: Decimal, context: dict[str, Any]) -> None:
+    """Calculate totals, validate reversal limits and persist invoice evidence."""
+    factura.total = total
+    # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
+    fx_rate = _purchase_exchange_rate(factura.company, factura.posting_date, factura.transaction_currency)
+    factura.exchange_rate = fx_rate
+    base_total, _base = _compute_base_amounts(total, fx_rate)
+    items = list(
+        database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id))
+        .scalars()
+        .all()
+    )
+    grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
+    base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
+    factura.base_total = base_total
+    factura.grand_total = grand_total
+    factura.base_grand_total = base_grand_total
+    factura.outstanding_amount = grand_total
+    factura.base_outstanding_amount = base_grand_total
+    if context["reversal_of"]:
+        _validate_purchase_reversal_of(
+            context["reversal_of"],
+            factura.supplier_id,
+            factura.company,
+            note_amount=grand_total,
+            document_type=context["document_type"],
+            posting_date=factura.posting_date,
+        )
+    _persist_purchase_invoice_fiscal_snapshot(factura)
+    log_create(factura)
+
+
 def _create_purchase_invoice_from_request():
     """Create a purchase invoice from the submitted form."""
     try:
-        posting_date = _parse_date(request.form.get("posting_date"))
-        supplier_id = request.form.get("supplier_id") or None
-        company = request.form.get("company") or None
-        from_order = request.form.get("from_order") or None
-        from_receipt = request.form.get("from_receipt") or None
-        if from_receipt and not from_order:
-            receipt = database.session.get(PurchaseReceipt, from_receipt)
-            if receipt:
-                from_order = receipt.purchase_order_id
-        from_invoice = request.form.get("from_invoice") or request.form.get("from_return") or None
-        requested_type = request.form.get("document_type") or request.args.get("document_type")
-        if from_receipt and not (request.form.get("from_order") or request.args.get("from_order")):
-            # Una factura creada desde recepcion sin OC es una devolucion,
-            # salvo que se solicite un tipo explicito.
-            requested_type = requested_type or PURCHASE_RETURN
-        elif from_invoice and not requested_type:
-            requested_type = PURCHASE_CREDIT_NOTE
-        document_type = _purchase_invoice_document_type(
-            {"from_order_id": from_order, "from_receipt_id": from_receipt, "from_invoice_id": from_invoice}, requested_type
-        )
-        source_order, source_receipt, source_invoice = _purchase_invoice_sources(
-            {
-                "from_order_id": from_order,
-                "from_receipt_id": from_receipt,
-                "from_invoice_id": from_invoice,
-            }
-        )
-        if document_type == PURCHASE_RETURN:
-            source_invoice = _resolve_purchase_return_invoice(source_receipt, source_invoice)
-            from_invoice = source_invoice.id
-        source = source_order or source_receipt or source_invoice
-        if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) and source_invoice is not None:
-            from_order = from_order or source_invoice.purchase_order_id
-            from_receipt = from_receipt or source_invoice.purchase_receipt_id
-        company, transaction_currency = _validate_purchase_flow_header(source)
-        exige_acceso_compania("purchases", company, "crear")
-        tax_template_id = request.form.get("tax_template_id") or getattr(source, "tax_template_id", None)
-        _validate_purchase_tax_template(company, tax_template_id, transaction_currency)
-        supplier_id = supplier_id or getattr(source, "supplier_id", None)
-        supplier = database.session.get(Party, supplier_id) if supplier_id else None
-        transaction_currency = transaction_currency or request.form.get("transaction_currency") or None
-        _validate_supplier_company_membership(supplier_id, company)
-        _validate_supplier_invoice_flags(supplier_id, company, from_order, from_receipt, document_type)
-        _validate_duplicate_supplier_invoice(supplier_id, request.form.get("supplier_invoice_no"))
-        reversal_of = from_invoice if document_type in (PURCHASE_RETURN, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) else None
-        if reversal_of:
-            _validate_purchase_reversal_of(reversal_of, supplier_id, company)
-        factura = PurchaseInvoice(
-            supplier_id=supplier_id,
-            supplier_name=supplier.name if supplier else getattr(source, "supplier_name", None),
-            company=company,
-            posting_date=posting_date,
-            supplier_invoice_no=request.form.get("supplier_invoice_no"),
-            document_type=document_type,
-            purchase_order_id=from_order,
-            purchase_receipt_id=from_receipt,
-            tax_template_id=tax_template_id,
-            is_return=document_type in (PURCHASE_RETURN, PURCHASE_CREDIT_NOTE),
-            reversal_of=reversal_of,
-            remarks=request.form.get("remarks"),
-            transaction_currency=transaction_currency,
-            base_currency=company_currency(company),
-            docstatus=0,
-        )
-        _copy_logistics(factura, source, request.form)
-        factura.landed_cost_estimates_json = _landed_cost_snapshot(source=source, form=request.form)
-        database.session.add(factura)
-        database.session.flush()
-        assign_document_identifier(
-            document=factura,
-            entity_type="purchase_invoice",
-            posting_date_raw=posting_date,
-            naming_series_id=request.form.get("naming_series") or None,
-        )
+        context = _purchase_invoice_creation_context()
+        factura = _build_purchase_invoice(context)
         _total_qty, total = _save_purchase_invoice_items(factura.id)
         invoice_items = (
             database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id))
             .scalars()
             .all()
         )
-        is_invoice_reversal = document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE)
-        if factura.purchase_receipt_id and not is_invoice_reversal:
-            _validate_purchase_source_link(factura, "purchase_receipt", factura.purchase_receipt_id, invoice_items)
-        elif factura.purchase_order_id and not is_invoice_reversal:
-            _validate_purchase_source_link(factura, "purchase_order", factura.purchase_order_id, invoice_items)
-        factura.total = total
-        # S2P-09: Aplicar tipo de cambio si transaction_currency está definida
-        fx_rate = _purchase_exchange_rate(company, posting_date, transaction_currency)
-        factura.exchange_rate = fx_rate
-        base_total, _base = _compute_base_amounts(total, fx_rate)
-        items = (
-            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id))
-            .scalars()
-            .all()
-        )
-        grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
-        base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
-        factura.base_total = base_total
-        factura.grand_total = grand_total
-        factura.base_grand_total = base_grand_total
-        factura.outstanding_amount = grand_total
-        factura.base_outstanding_amount = base_grand_total
-        if reversal_of:
-            _validate_purchase_reversal_of(
-                reversal_of,
-                factura.supplier_id,
-                factura.company,
-                note_amount=grand_total,
-                document_type=document_type,
-                posting_date=factura.posting_date,
-            )
-        _persist_purchase_invoice_fiscal_snapshot(factura)
-        log_create(factura)
+        _validate_purchase_invoice_source(factura, invoice_items)
+        _finalize_purchase_invoice(factura, total, context)
         database.session.commit()
         flash("Factura de compra creada correctamente.", "success")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
