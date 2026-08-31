@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_create_stock_ledger_for_document` cx=26)
+
+### Hallazgo SonarCloud
+
+Issue `AaAa6soYSsPfV5h49WFj` (`python:S3776`, CRITICAL):
+`cacao_accounting/contabilidad/posting_service.py`, `_create_stock_ledger_for_document`, complejidad cognitiva 26
+frente al umbral 15.
+
+### Corrección
+
+Se separaron la validación de bodega, la resolución de valores de salidas y la resolución de valores de entradas en
+`_required_stock_warehouse`, `_outgoing_stock_values` y `_incoming_stock_values`. Se conservaron el consumo FIFO,
+stock negativo permitido, devoluciones a costo histórico, validaciones batch/serial, actualización de stock y capas.
+
+### Verificación
+
+- `tests/test_update_inventory.py` y `tests/test_batch_serial_submit_and_round_trip.py`: 38/38.
+- Los escenarios de stock negativo del motor cubren rechazo y autorización; Black, Ruff, Flake8, pydocstyle, Mypy y
+  `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `api_document_send_email` cx=23)
 
 ### Hallazgo SonarCloud
