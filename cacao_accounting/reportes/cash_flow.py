@@ -141,6 +141,17 @@ class CashFlowConfigurationStatus:
         return not self.pending_accounts and self.has_cash_accounts
 
 
+@dataclass
+class CashFlowMovementTotals:
+    """Acumuladores de movimientos usados para construir el estado de flujo."""
+
+    section_totals: dict[str, Decimal]
+    section_details: dict[str, dict[str, dict[str, Any]]]
+    net_profit: Decimal = Decimal("0")
+    cash_window_delta: Decimal = Decimal("0")
+    cash_opening: Decimal = Decimal("0")
+
+
 def normalize_classification(classification: str | None) -> str:
     """Normaliza la clasificación de una cuenta para el motor del EFE."""
     raw = (classification or "").strip().lower()
@@ -286,6 +297,88 @@ def get_cash_flow_configuration_status(
     return CashFlowConfigurationStatus(pending_accounts=pending, has_cash_accounts=has_cash)
 
 
+def _cash_flow_movement_totals(
+    filters: Any,
+    period_start: Any,
+    period_end: Any,
+    mappings: dict[str, str],
+) -> CashFlowMovementTotals:
+    """Acumula utilidad, efectivo y movimientos clasificados por sección."""
+    from cacao_accounting.reportes.services import _decimal_value, _resolve_ledger
+
+    ledger = _resolve_ledger(filters.company, filters.ledger)
+    totals = CashFlowMovementTotals(
+        section_totals={
+            SECTION_OPERATING: Decimal("0"),
+            SECTION_INVESTING: Decimal("0"),
+            SECTION_FINANCING: Decimal("0"),
+        },
+        section_details={section: {} for section in (SECTION_OPERATING, SECTION_INVESTING, SECTION_FINANCING)},
+    )
+    if ledger is None:  # pragma: no cover - la validación previa ya resuelve el libro
+        return totals
+
+    query = (
+        select(GLEntry, Accounts)
+        .join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
+        .where(*_movement_scope_filters(filters.company, ledger, None, period_end))
+    )
+    for entry, account in database.session.execute(query).all():
+        if account is None:
+            continue
+        delta = _decimal_value(entry.debit) - _decimal_value(entry.credit)
+        before_start = bool(period_start) and entry.posting_date < period_start
+        if before_start:
+            if mappings.get(account.id) == SECTION_CASH:
+                totals.cash_opening += delta
+            continue
+        if mappings.get(account.id) == SECTION_CASH:
+            totals.cash_window_delta += delta
+            continue
+        classification = normalize_classification(account.classification)
+        if classification in {"ingreso", "income"}:
+            totals.net_profit += _decimal_value(entry.credit) - _decimal_value(entry.debit)
+            continue
+        if classification in {"costo", "cost", "gasto", "expense"}:
+            totals.net_profit -= delta
+            continue
+        section = mappings.get(account.id)
+        if section not in totals.section_totals:
+            continue
+        contribution = -delta
+        totals.section_totals[section] += contribution
+        detail = totals.section_details[section].setdefault(
+            account.id,
+            {
+                "account_code": account.code or "",
+                "account_name": account.name or "",
+                "amount": Decimal("0"),
+                "level": (account.code or "").count(".") + 1,
+            },
+        )
+        detail["amount"] += contribution
+    return totals
+
+
+def _cash_flow_detail_rows(section: str, details: dict[str, dict[str, Any]]) -> list[Any]:
+    """Convierte los detalles no nulos de una sección en filas del reporte."""
+    from cacao_accounting.reportes.services import ReportRow
+
+    return [
+        ReportRow(
+            {
+                "section": section,
+                "account_code": values["account_code"],
+                "account_name": values["account_name"],
+                "amount": values["amount"],
+                "level": values["level"],
+            }
+        )
+        for values in sorted(details.values(), key=lambda item: str(item["account_code"]))
+        if values["amount"] != Decimal("0")
+    ]
+
+
 def get_cash_flow_statement(filters: Any) -> Any:
     """Estado de Flujo de Efectivo por método indirecto (NIC 7).
 
@@ -303,7 +396,6 @@ def get_cash_flow_statement(filters: Any) -> Any:
         FinancialReportFilters,
         PaginatedReport,
         ReportRow,
-        _decimal_value,
         _report_period_bounds,
         _resolve_ledger,
     )
@@ -326,72 +418,12 @@ def get_cash_flow_statement(filters: Any) -> Any:
         return PaginatedReport(rows=[], totals={}, columns=[])
 
     mappings = load_cash_flow_mappings(filters.company)
-    section_totals: dict[str, Decimal] = {
-        SECTION_OPERATING: Decimal("0"),
-        SECTION_INVESTING: Decimal("0"),
-        SECTION_FINANCING: Decimal("0"),
-    }
-    section_details: dict[str, dict[str, dict[str, Any]]] = {section: {} for section in section_totals}
-    net_profit = Decimal("0")
-    cash_window_delta = Decimal("0")
-    cash_opening = Decimal("0")
-
-    query = (
-        select(GLEntry, Accounts)
-        .join(Accounts, Accounts.id == GLEntry.account_id, isouter=True)
-        .where(*_movement_scope_filters(filters.company, ledger, None, period_end))
-    )
-    for entry, account in database.session.execute(query).all():
-        if account is None:
-            continue
-        delta = _decimal_value(entry.debit) - _decimal_value(entry.credit)
-        before_start = bool(period_start) and entry.posting_date < period_start
-        if before_start:
-            if mappings.get(account.id) == SECTION_CASH:
-                cash_opening += delta
-            continue
-        if mappings.get(account.id) == SECTION_CASH:
-            cash_window_delta += delta
-            continue
-        classification = normalize_classification(account.classification)
-        if classification in {"ingreso", "income"}:
-            net_profit += _decimal_value(entry.credit) - _decimal_value(entry.debit)
-            continue
-        if classification in {"costo", "cost", "gasto", "expense"}:
-            net_profit -= delta
-            continue
-        section = mappings.get(account.id)
-        if section not in section_totals:
-            continue
-        # Aporte a caja: aumento de activo consume efectivo; aumento de pasivo
-        # o patrimonio lo provee. En ambos casos el aporte es -(debe-haber).
-        contribution = -delta
-        section_totals[section] += contribution
-        detail = section_details[section].setdefault(
-            account.id,
-            {
-                "account_code": account.code or "",
-                "account_name": account.name or "",
-                "amount": Decimal("0"),
-                "level": (account.code or "").count(".") + 1,
-            },
-        )
-        detail["amount"] += contribution
-
-    def _detail_rows(section: str) -> list[Any]:
-        return [
-            ReportRow(
-                {
-                    "section": section,
-                    "account_code": values["account_code"],
-                    "account_name": values["account_name"],
-                    "amount": values["amount"],
-                    "level": values["level"],
-                }
-            )
-            for values in sorted(section_details[section].values(), key=lambda item: str(item["account_code"]))
-            if values["amount"] != Decimal("0")
-        ]
+    movement_totals = _cash_flow_movement_totals(filters, period_start, period_end, mappings)
+    section_totals = movement_totals.section_totals
+    section_details = movement_totals.section_details
+    net_profit = movement_totals.net_profit
+    cash_window_delta = movement_totals.cash_window_delta
+    cash_opening = movement_totals.cash_opening
 
     operating_total = section_totals[SECTION_OPERATING]
     rows: list[Any] = [
@@ -405,7 +437,7 @@ def get_cash_flow_statement(filters: Any) -> Any:
                 "level": 0,
             }
         ),
-        *_detail_rows(SECTION_OPERATING),
+        *_cash_flow_detail_rows(SECTION_OPERATING, section_details[SECTION_OPERATING]),
         ReportRow(
             {
                 "section": "total_operating",
@@ -424,7 +456,7 @@ def get_cash_flow_statement(filters: Any) -> Any:
                 "level": 0,
             }
         ),
-        *_detail_rows(SECTION_INVESTING),
+        *_cash_flow_detail_rows(SECTION_INVESTING, section_details[SECTION_INVESTING]),
         ReportRow(
             {
                 "section": "total_investing",
@@ -443,7 +475,7 @@ def get_cash_flow_statement(filters: Any) -> Any:
                 "level": 0,
             }
         ),
-        *_detail_rows(SECTION_FINANCING),
+        *_cash_flow_detail_rows(SECTION_FINANCING, section_details[SECTION_FINANCING]),
         ReportRow(
             {
                 "section": "total_financing",
