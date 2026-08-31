@@ -1822,6 +1822,41 @@ def _apply_payment_target_lines(payment: PaymentEntry, company: str | None, payl
     return total
 
 
+def _load_payment_target_invoice(payment: PaymentEntry, company: str | None, reference_type: str, reference_id: str) -> Any:
+    """Carga y valida la factura origen de una línea de conciliación."""
+    model = _payment_reference_model(reference_type)
+    invoice = database.session.get(model, reference_id, with_for_update=True)
+    if not invoice:
+        raise _document_flow_error("Factura origen no encontrada.", 404)
+    if company and getattr(invoice, "company", None) and getattr(invoice, "company") != company:
+        raise _document_flow_error("No se pueden mezclar companias incompatibles.", 409)
+    if getattr(invoice, "docstatus", 0) != 1:
+        raise _document_flow_error("La factura origen debe estar aprobada.", 409)
+    expected_party_type, expected_party_id = _payment_reference_party(invoice, reference_type)
+    if payment.party_type != expected_party_type or payment.party_id != expected_party_id:
+        raise _document_flow_error("La factura origen no coincide con el tercero del pago.", 409)
+    if not _payment_type_matches_source(payment.payment_type, reference_type):
+        raise _document_flow_error("El tipo de pago no corresponde con la factura origen.", 409)
+    return invoice
+
+
+def _payment_target_exchange_rate(payment: PaymentEntry, invoice: Any, selected: dict[str, Any]) -> Decimal:
+    """Resuelve la tasa efectiva de una línea y completa la moneda del pago si falta."""
+    allocated_currency = str(getattr(payment, "currency", None) or "")
+    document_currency = _document_transaction_currency(invoice) or allocated_currency
+    if not allocated_currency and document_currency:
+        payment.currency = document_currency
+        payment.transaction_currency = document_currency
+        allocated_currency = document_currency
+    if allocated_currency == document_currency:
+        return Decimal("1")
+    requested_rate = selected.get("payment_exchange_rate") or selected.get("exchange_rate")
+    effective_rate = decimal_or_zero(requested_rate)
+    if effective_rate <= 0:
+        raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+    return effective_rate
+
+
 def _apply_payment_target_line(
     payment: PaymentEntry,
     company: str | None,
@@ -1836,34 +1871,10 @@ def _apply_payment_target_line(
         raise _document_flow_error("No se puede repetir la misma factura en un solo pago.", 409)
     processed_reference_keys.add(reference_key)
 
-    model = _payment_reference_model(reference_type)
-    invoice = database.session.get(model, reference_id, with_for_update=True)
-    if not invoice:
-        raise _document_flow_error("Factura origen no encontrada.", 404)
-    if company and getattr(invoice, "company", None) and getattr(invoice, "company") != company:
-        raise _document_flow_error("No se pueden mezclar companias incompatibles.", 409)
-    if getattr(invoice, "docstatus", 0) != 1:
-        raise _document_flow_error("La factura origen debe estar aprobada.", 409)
-    expected_party_type, expected_party_id = _payment_reference_party(invoice, reference_type)
-    if payment.party_type != expected_party_type or payment.party_id != expected_party_id:
-        raise _document_flow_error("La factura origen no coincide con el tercero del pago.", 409)
-    if not _payment_type_matches_source(payment.payment_type, reference_type):
-        raise _document_flow_error("El tipo de pago no corresponde con la factura origen.", 409)
+    invoice = _load_payment_target_invoice(payment, company, reference_type, reference_id)
 
     allocated = decimal_or_zero(selected.get("qty") or selected.get("allocated_amount"))
-    payment_currency = str(getattr(payment, "currency", None) or "")
-    document_currency = _document_transaction_currency(invoice) or payment_currency
-    if not payment_currency and document_currency:
-        payment.currency = document_currency
-        payment.transaction_currency = document_currency
-        payment_currency = document_currency
-    requested_rate = selected.get("payment_exchange_rate") or selected.get("exchange_rate")
-    if payment_currency == document_currency:
-        effective_rate = Decimal("1")
-    else:
-        effective_rate = decimal_or_zero(requested_rate)
-        if effective_rate <= 0:
-            raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+    effective_rate = _payment_target_exchange_rate(payment, invoice, selected)
     outstanding = compute_outstanding_amount(invoice)
     _validate_payment_target_allocation(allocated, outstanding)
     _persist_payment_target_allocation(payment, reference_type, reference_id, invoice, allocated, outstanding, effective_rate)

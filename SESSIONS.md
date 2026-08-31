@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_apply_payment_target_line` cx=20)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMVLkZtwr73q0yaI` (`python:S3776`, CRITICAL):
+`cacao_accounting/document_flow/payment.py`, `_apply_payment_target_line`, complejidad cognitiva 20 frente al umbral
+15.
+
+### Corrección
+
+Se extrajeron la carga/validación de la factura a `_load_payment_target_invoice` y la resolución de moneda/tasa a
+`_payment_target_exchange_rate`. Se conservaron duplicados, compañía, tercero, tipo de pago, saldo pendiente y
+persistencia de la aplicación.
+
+### Verificación
+
+- `tests/test_payment_entry_improved.py -k mass_payment_reconciliation`: 3/3.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `enforce_close_and_recurring_company_access` cx=20)
 
 ### Hallazgo SonarCloud
