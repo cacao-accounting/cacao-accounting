@@ -396,6 +396,32 @@ def cash_forecast_entry_import(forecast_id):
     return redirect(url_for("imports.new"))
 
 
+def _cash_forecast_company_selection() -> tuple[str | None, list[tuple[str, str]]]:
+    """Resuelve la compañía seleccionada y conserva el catálogo para la vista."""
+    companies = obtener_lista_entidades_por_id_razonsocial()
+    company = request.args.get("company")
+    if company in (None, "") and companies:
+        company = next((code for code, _name in companies if code), None)
+    return company, companies
+
+
+def _cash_forecast_comparison(
+    company: str | None, base_id: str | None, compare_id: str | None
+) -> tuple[CashForecast | None, CashForecast | None, list]:
+    """Carga los pronósticos elegidos y calcula su comparación cuando procede."""
+    base_forecast = database.session.get(CashForecast, base_id) if base_id else None
+    compare_forecast = database.session.get(CashForecast, compare_id) if compare_id else None
+    if (base_forecast and base_forecast.company != company) or (compare_forecast and compare_forecast.company != company):
+        abort(404)
+    comparison = []
+    if base_forecast and compare_forecast:
+        try:
+            comparison = get_forecast_comparison(company, base_id, compare_id)
+        except CashForecastConversionError as exc:
+            flash(str(exc), "danger")
+    return base_forecast, compare_forecast, comparison
+
+
 @bancos.route("/cash-forecast/compare", methods=["GET"])
 @modulo_activo("cash")
 @login_required
@@ -404,13 +430,7 @@ def cash_forecast_compare():
     if _check_desktop_mode():
         return redirect(url_for(BANCOS_PREFIX))
 
-    company = request.args.get("company")
-    companies = obtener_lista_entidades_por_id_razonsocial()
-    if company in (None, "") and companies:
-        for code, name in companies:
-            if code:
-                company = code
-                break
+    company, companies = _cash_forecast_company_selection()
     exige_acceso_compania("cash", company, "consultar")
 
     # Obtener todos los forecast de esta compañía
@@ -419,20 +439,7 @@ def cash_forecast_compare():
     base_id = request.args.get("base_id")
     compare_id = request.args.get("compare_id")
 
-    comparison = []
-    base_forecast = None
-    compare_forecast = None
-
-    if base_id and compare_id:
-        base_forecast = database.session.get(CashForecast, base_id)
-        compare_forecast = database.session.get(CashForecast, compare_id)
-        if (base_forecast and base_forecast.company != company) or (compare_forecast and compare_forecast.company != company):
-            abort(404)
-        if base_forecast and compare_forecast:
-            try:
-                comparison = get_forecast_comparison(company, base_id, compare_id)
-            except CashForecastConversionError as exc:
-                flash(str(exc), "danger")
+    base_forecast, compare_forecast, comparison = _cash_forecast_comparison(company, base_id, compare_id)
 
     return render_template(
         "bancos/cash_forecast_comparar.html",

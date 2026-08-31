@@ -720,10 +720,7 @@ def test_cash_forecast_creation_status_and_entry_validation_routes():
 
         assert client.post(f"/cash_management/cash-forecast/{draft_id}/delete").status_code == 302
         assert (
-            client.get(
-                f"/cash_management/cash-forecast/compare?company=cacao&base_id={base_id}&compare_id={compare_id}"
-            ).status_code
-            == 200
+            client.get(f"/cash_management/cash-forecast/compare?base_id={base_id}&compare_id={compare_id}").status_code == 200
         )
         assert client.get("/cash_management/cash-forecast/manual-entries?company=cacao").status_code == 200
         assert client.post(f"/cash_management/cash-forecast/{base_id}/entry/import").status_code == 302
