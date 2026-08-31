@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `lista_dimensiones` cx=23)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMQ1kZtwr73q0yaB` (`python:S3776`, CRITICAL):
+`cacao_accounting/admin/routes.py`, `lista_dimensiones`, complejidad cognitiva 23 frente al umbral 15.
+
+### Corrección
+
+Se extrajeron las acciones POST de creación de tipo y agregado de valor a `_create_dimension_type_from_request` y
+`_add_dimension_value_from_request`. Se conservaron validaciones, rollback por duplicado, commits, mensajes y
+redirecciones; el listado permanece separado del flujo de mutación.
+
+### Verificación
+
+- `tests/test_dimensions_admin.py`: 4/4.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios. Flake8 de tests se ejecutó excluyendo E402,
+  existente en imports condicionales del archivo.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `reconciliation_matrix` cx=23)
 
 ### Hallazgo SonarCloud
