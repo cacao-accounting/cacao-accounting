@@ -1417,103 +1417,90 @@ def post_journal_ar_ap(document: ComprobanteContable, entries: Iterable[GLEntry]
     return movements
 
 
+def _cancellation_originals(document: Any, source_types: set[str], source_ids: set[str]) -> list[ARAPLedgerEntry]:
+    """Obtiene movimientos originales que deben tener una contrapartida."""
+    if isinstance(document, PaymentEntry):
+        source_filter = (ARAPLedgerEntry.document_type == "payment_entry") & (
+            ARAPLedgerEntry.document_id == str(document.id)
+        ) | (ARAPLedgerEntry.reference_type == "payment_entry") & (ARAPLedgerEntry.reference_id == str(document.id))
+    else:
+        source_filter = (ARAPLedgerEntry.document_type.in_(source_types)) & (ARAPLedgerEntry.document_id.in_(source_ids)) | (
+            ARAPLedgerEntry.reference_type == "journal_entry"
+        ) & (ARAPLedgerEntry.reference_id == str(document.id))
+    return list(
+        database.session.execute(select(ARAPLedgerEntry).where(ARAPLedgerEntry.is_reversal.is_(False), source_filter))
+        .scalars()
+        .all()
+    )
+
+
+def _reverse_arap_movement(
+    original: ARAPLedgerEntry,
+    document: Any,
+    cancellation_date: date | None,
+) -> ARAPLedgerEntry:
+    """Crea una contrapartida y restaura el caché derivado de un movimiento."""
+    reversal = ARAPLedgerEntry(
+        company=original.company,
+        ledger_type=original.ledger_type,
+        party_type=original.party_type,
+        party_id=original.party_id,
+        document_type=original.document_type,
+        document_id=original.document_id,
+        document_no=original.document_no,
+        posting_date=cancellation_date or getattr(document, "posting_date", None) or date.today(),
+        document_date=original.document_date,
+        event_type="cancellation",
+        currency=original.currency,
+        document_amount=-_decimal(original.document_amount),
+        economic_line_id=original.economic_line_id,
+        reference_type=original.reference_type,
+        reference_id=original.reference_id,
+        voucher_type=_document_type(document),
+        voucher_id=str(document.id),
+        is_reversal=True,
+        reversal_of=original.id,
+    )
+    database.session.add(reversal)
+    database.session.flush()
+    for book_row in cast(list[ARAPLedgerBookEntry], original.book_entries):
+        book = database.session.get(Book, book_row.ledger_id)
+        if book:
+            _add_book_entry(
+                reversal,
+                book=book,
+                amount=-_decimal(book_row.book_amount),
+                gl_entry=None,
+                is_reversal=True,
+                reversal_of=book_row,
+            )
+    cache = database.session.execute(
+        select(ARAPOpenItem).where(
+            ARAPOpenItem.document_type == original.document_type,
+            ARAPOpenItem.document_id == original.document_id,
+            ARAPOpenItem.economic_line_id == (original.economic_line_id or original.document_id),
+        )
+    ).scalar_one_or_none()
+    if cache is not None:
+        if original.event_type == "opening":
+            cache.unallocated_amount = Decimal("0")
+        elif original.event_type == "allocation":
+            cache.unallocated_amount = min(
+                _decimal(cache.original_amount),
+                _decimal(cache.unallocated_amount) + abs(_decimal(original.document_amount)),
+            )
+        cache.status = "open" if _decimal(cache.unallocated_amount) else "closed"
+        cache.version = int(cache.version or 1) + 1
+        database.session.add(cache)
+    return reversal
+
+
 def cancel_document_ar_ap(document: Any, *, cancellation_date: date | None = None) -> list[ARAPLedgerEntry]:
     """Agrega contrapartidas documentales para una anulación del mismo período."""
     source_types = {_document_type(document)}
     source_ids = {str(document.id)}
     if isinstance(document, ComprobanteContable):
         source_types.add("journal_entry")
-    if isinstance(document, PaymentEntry):
-        originals = (
-            database.session.execute(
-                select(ARAPLedgerEntry).where(
-                    ARAPLedgerEntry.is_reversal.is_(False),
-                    (
-                        (
-                            (ARAPLedgerEntry.document_type == "payment_entry")
-                            & (ARAPLedgerEntry.document_id == str(document.id))
-                        )
-                        | (
-                            (ARAPLedgerEntry.reference_type == "payment_entry")
-                            & (ARAPLedgerEntry.reference_id == str(document.id))
-                        )
-                    ),
-                )
-            )
-            .scalars()
-            .all()
-        )
-    else:
-        originals = (
-            database.session.execute(
-                select(ARAPLedgerEntry).where(
-                    ARAPLedgerEntry.is_reversal.is_(False),
-                    (
-                        (ARAPLedgerEntry.document_type.in_(source_types) & ARAPLedgerEntry.document_id.in_(source_ids))
-                        | (
-                            (ARAPLedgerEntry.reference_type == "journal_entry")
-                            & (ARAPLedgerEntry.reference_id == str(document.id))
-                        )
-                    ),
-                )
-            )
-            .scalars()
-            .all()
-        )
+    originals = _cancellation_originals(document, source_types, source_ids)
     originals = sorted(originals, key=lambda row: 0 if row.event_type == "opening" else 1)
-    reversals: list[ARAPLedgerEntry] = []
-    for original in originals:
-        reversal = ARAPLedgerEntry(
-            company=original.company,
-            ledger_type=original.ledger_type,
-            party_type=original.party_type,
-            party_id=original.party_id,
-            document_type=original.document_type,
-            document_id=original.document_id,
-            document_no=original.document_no,
-            posting_date=cancellation_date or getattr(document, "posting_date", None) or date.today(),
-            document_date=original.document_date,
-            event_type="cancellation",
-            currency=original.currency,
-            document_amount=-_decimal(original.document_amount),
-            economic_line_id=original.economic_line_id,
-            reference_type=original.reference_type,
-            reference_id=original.reference_id,
-            voucher_type=_document_type(document),
-            voucher_id=str(document.id),
-            is_reversal=True,
-            reversal_of=original.id,
-        )
-        database.session.add(reversal)
-        database.session.flush()
-        for book_row in cast(list[ARAPLedgerBookEntry], original.book_entries):
-            book = database.session.get(Book, book_row.ledger_id)
-            if book:
-                _add_book_entry(
-                    reversal,
-                    book=book,
-                    amount=-_decimal(book_row.book_amount),
-                    gl_entry=None,
-                    is_reversal=True,
-                    reversal_of=book_row,
-                )
-        cache = database.session.execute(
-            select(ARAPOpenItem).where(
-                ARAPOpenItem.document_type == original.document_type,
-                ARAPOpenItem.document_id == original.document_id,
-                ARAPOpenItem.economic_line_id == (original.economic_line_id or original.document_id),
-            )
-        ).scalar_one_or_none()
-        if cache is not None:
-            if original.event_type == "opening":
-                cache.unallocated_amount = Decimal("0")
-            elif original.event_type == "allocation":
-                cache.unallocated_amount = min(
-                    _decimal(cache.original_amount),
-                    _decimal(cache.unallocated_amount) + abs(_decimal(original.document_amount)),
-                )
-            cache.status = "open" if _decimal(cache.unallocated_amount) else "closed"
-            cache.version = int(cache.version or 1) + 1
-            database.session.add(cache)
-        reversals.append(reversal)
-    return reversals
+    return [_reverse_arap_movement(original, document, cancellation_date) for original in originals]

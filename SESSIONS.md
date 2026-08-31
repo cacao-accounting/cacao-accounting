@@ -1,5 +1,24 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `cancel_document_ar_ap` cx=22)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMNkkm2BcQkZ8` (`python:S3776`, CRITICAL):
+`cacao_accounting/contabilidad/arap_ledger_service.py`, `cancel_document_ar_ap`, complejidad cognitiva 22 frente al
+umbral 15.
+
+### Análisis y corrección
+
+No se modificó la política append-only: se extrajeron la consulta de movimientos originales y la creación de cada
+contrapartida a `_cancellation_originals` y `_reverse_arap_movement`. Se conservaron las reversas por libro, la
+restauración de saldos derivados y el orden de apertura antes de asignaciones.
+
+### Verificación
+
+- `tests/test_ar_ap_ledger_model.py`: 18/18.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check` sobre `cacao_accounting`: limpios.
+
 ## 2026-08-31 (limpieza S134 — anidamiento en alta de artículo)
 
 ### Hallazgo SonarCloud
