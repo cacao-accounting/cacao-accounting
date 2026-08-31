@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `cash_forecast_compare` cx=21)
+
+### Hallazgo SonarCloud
+
+Issue `AaAbv2GHOioNy6Mzk_6s` (`python:S3776`, CRITICAL):
+`cacao_accounting/bancos/cash_forecast.py`, `cash_forecast_compare`, complejidad cognitiva 21 frente al umbral 15.
+
+### Corrección
+
+Se extrajeron la selección de compañía a `_cash_forecast_company_selection` y la carga/validación/cálculo de la
+comparación a `_cash_forecast_comparison`. Se conservaron el control de acceso, aislamiento por compañía, manejo de
+tasas faltantes y renderizado de escenarios.
+
+### Verificación
+
+- `tests/test_cash_forecast.py -k creation_status_and_entry_validation_routes`: 1/1; se cubrió la selección por
+  defecto de compañía y la comparación entre pronósticos.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios. Flake8 de tests se ejecutó excluyendo E402,
+  existente en imports condicionales del archivo.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_movement_detail_row_values` cx=24)
 
 ### Hallazgo SonarCloud
