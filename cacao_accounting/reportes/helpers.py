@@ -874,12 +874,8 @@ def _bool_arg(name: str) -> bool:
     return request.args.get(name, "").lower() in {"1", "true", "yes", "on"}
 
 
-def _financial_filters() -> FinancialReportFilters:
-    company_code = _resolve_company(request.args.get("company", "cacao"))
-    show_cancellations = _bool_arg("show_cancellations")
-    requested_status = request.args.get("status") or "submitted"
-    status = None if show_cancellations else requested_status
-    ledger = request.args.get("ledger") or _default_ledger_for_company(company_code)
+def _financial_period_filters(company_code: str) -> tuple[str | None, str | None, str | None]:
+    """Resolve the selected accounting period and its report date bounds."""
     period_from, period_to = _period_params()
     requested_period = request.args.get("accounting_period")
     accounting_period = requested_period or _default_period_for_company(company_code)
@@ -898,12 +894,22 @@ def _financial_filters() -> FinancialReportFilters:
             reject_manual_date_overrides(request.args, period_range)
             if requested_period is None:
                 accounting_period = None if not period_range.single_period else period_range.to_name
+    return accounting_period, period_from, period_to or period_from
+
+
+def _financial_filters() -> FinancialReportFilters:
+    company_code = _resolve_company(request.args.get("company", "cacao"))
+    show_cancellations = _bool_arg("show_cancellations")
+    requested_status = request.args.get("status") or "submitted"
+    status = None if show_cancellations else requested_status
+    ledger = request.args.get("ledger") or _default_ledger_for_company(company_code)
+    accounting_period, period_from, period_to = _financial_period_filters(company_code)
     return FinancialReportFilters(
         company=company_code,
         ledger=ledger,
         accounting_period=accounting_period,
         period_from=period_from,
-        period_to=period_to or period_from,
+        period_to=period_to,
         voucher_number=request.args.get("voucher_number") or None,
         account_code=request.args.get("account_code") or None,
         account_from=request.args.get("account_from") or None,
