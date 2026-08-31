@@ -101,63 +101,81 @@ def _parse_date(value: str | None) -> date | None:
 
 def _inventory_company_scoped_select(model: type[Any]):
     """Build an inventory query restricted to assigned companies."""
-    permissions = Permisos(
-        modulo=obtener_id_modulo_por_nombre("inventory"),
-        usuario=current_user.id,
-    )
-    companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
+    companies = _inventory_authorized_companies()
     query = database.select(model)
     if not companies:
         return query.where(database.false())
     return query.where(model.company.in_(companies))
 
 
-def _paginate_list(model: type[Any], search_fields: tuple[Any, ...], query: Any = None, *, include_status: bool = True) -> Any:
-    """Pagina un listado de inventario aplicando filtro por período contable."""
-    from cacao_accounting.list_filters import (
-        apply_list_filters,
-        apply_period_filter,
-        attach_period_picker,
-        require_period_company,
+def _inventory_authorized_companies() -> list[str]:
+    """Return companies the current user may consult in inventory."""
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("inventory"),
+        usuario=current_user.id,
     )
+    return list(permissions.obtener_companias_autorizadas()) if permissions.consultar else []
 
-    base_query = query if query is not None else database.select(model)
+
+def _apply_inventory_company_scope(base_query: Any, model: type[Any]) -> Any:
+    """Apply explicit or authorized company scope to an inventory list query."""
     if hasattr(model, "company"):
         company = request.args.get("company")
         if company:
-            base_query = base_query.filter(model.company == company)
-        elif not getattr(current_user, "classification", None) == "admin":
-            permissions = Permisos(
-                modulo=obtener_id_modulo_por_nombre("inventory"),
-                usuario=current_user.id,
-            )
-            companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
-            if not companies:
-                base_query = base_query.where(database.false())
-            else:
-                base_query = base_query.where(model.company.in_(companies))
+            return base_query.filter(model.company == company)
+        if getattr(current_user, "classification", None) == "admin":
+            return base_query
+        companies = _inventory_authorized_companies()
+        if not companies:
+            return base_query.where(database.false())
+        return base_query.where(model.company.in_(companies))
+    return base_query
+
+
+def _inventory_period_company() -> str | None:
+    """Resolve the sole authorized company used by inventory period filters."""
+    period_company: str | None = request.args.get("company")
+    if period_company or getattr(current_user, "classification", None) == "admin":
+        return period_company
+    permissions = Permisos(
+        modulo=obtener_id_modulo_por_nombre("inventory"),
+        usuario=current_user.id,
+    )
+    if permissions.consultar:
+        companies = list(permissions.obtener_companias_autorizadas())
+        if len(companies) == 1:
+            return companies[0]
+    return period_company
+
+
+def _apply_inventory_period_scope(base_query: Any, model: type[Any]) -> Any:
+    """Apply accounting period filters when the inventory model supports posting dates."""
+    from cacao_accounting.list_filters import apply_period_filter, require_period_company
+
+    if not hasattr(model, "posting_date"):
+        return base_query
     period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
     period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
-    if hasattr(model, "posting_date"):
-        period_company: str | None = request.args.get("company")
-        if not period_company and getattr(current_user, "classification", None) != "admin":
-            permissions = Permisos(
-                modulo=obtener_id_modulo_por_nombre("inventory"),
-                usuario=current_user.id,
-            )
-            if permissions.consultar:
-                authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
-                if len(authorized_companies) == 1:
-                    period_company = authorized_companies[0]
-        if period_from or period_to or period_company:
-            base_query = apply_period_filter(
-                base_query,
-                model,
-                require_period_company(("inventory",), current_user=current_user, default_company=period_company),
-                period_from,
-                period_to,
-                default_when_missing=True,
-            )
+    period_company = _inventory_period_company()
+    if not (period_from or period_to or period_company):
+        return base_query
+    return apply_period_filter(
+        base_query,
+        model,
+        require_period_company(("inventory",), current_user=current_user, default_company=period_company),
+        period_from,
+        period_to,
+        default_when_missing=True,
+    )
+
+
+def _paginate_list(model: type[Any], search_fields: tuple[Any, ...], query: Any = None, *, include_status: bool = True) -> Any:
+    """Pagina un listado de inventario aplicando filtro por período contable."""
+    from cacao_accounting.list_filters import apply_list_filters, attach_period_picker
+
+    base_query = query if query is not None else database.select(model)
+    base_query = _apply_inventory_company_scope(base_query, model)
+    base_query = _apply_inventory_period_scope(base_query, model)
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     paginated = database.paginate(
         filtered_query,

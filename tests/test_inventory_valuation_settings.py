@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -148,3 +149,60 @@ def test_inventory_valuation_settings_helper_defaults_to_moving_average(app_ctx)
     from cacao_accounting.inventario.valuation_settings import get_company_valuation_method
 
     assert get_company_valuation_method("cacao") == "moving_average"
+
+
+def test_inventory_list_helpers_apply_company_and_period_scopes(app_ctx, monkeypatch):
+    """Inventory list helpers preserve authorized, admin and period scopes."""
+    from cacao_accounting import list_filters
+    from cacao_accounting.database import StockEntry, database
+    from cacao_accounting.inventario import services as inventory_services
+
+    user = SimpleNamespace(id="USER-1", classification="operator")
+    permission = SimpleNamespace(consultar=True, obtener_companias_autorizadas=lambda: ["cacao"])
+    monkeypatch.setattr(inventory_services, "current_user", user)
+    monkeypatch.setattr(inventory_services, "obtener_id_modulo_por_nombre", lambda module: module)
+    monkeypatch.setattr(inventory_services, "Permisos", lambda modulo, usuario: permission)
+    assert inventory_services._inventory_authorized_companies() == ["cacao"]
+    with app_ctx.test_request_context("/inventory/stock-entry/list?company=cacao"):
+        explicit = inventory_services._apply_inventory_company_scope(database.select(StockEntry), StockEntry)
+        assert "cacao" in explicit.compile().params.values()
+    with app_ctx.test_request_context("/inventory/stock-entry/list"):
+        authorized = inventory_services._apply_inventory_company_scope(database.select(StockEntry), StockEntry)
+        assert any("cacao" in value for value in authorized.compile().params.values())
+    monkeypatch.setattr(inventory_services, "_inventory_authorized_companies", lambda: [])
+    with app_ctx.test_request_context("/inventory/stock-entry/list"):
+        restricted = inventory_services._apply_inventory_company_scope(database.select(StockEntry), StockEntry)
+        assert "false" in str(restricted).lower()
+    with app_ctx.test_request_context("/inventory/stock-entry/list"):
+        base_query = database.select(StockEntry)
+        assert inventory_services._apply_inventory_company_scope(base_query, SimpleNamespace()) is base_query
+
+    monkeypatch.setattr(inventory_services, "current_user", SimpleNamespace(id="USER-1", classification="admin"))
+    with app_ctx.test_request_context("/inventory/stock-entry/list"):
+        base_query = database.select(StockEntry)
+        assert inventory_services._apply_inventory_company_scope(base_query, StockEntry) is base_query
+        assert inventory_services._inventory_period_company() is None
+
+    monkeypatch.setattr(inventory_services, "current_user", user)
+    monkeypatch.setattr(inventory_services, "_inventory_authorized_companies", lambda: ["cacao"])
+    with app_ctx.test_request_context("/inventory/stock-entry/list"):
+        assert inventory_services._inventory_period_company() == "cacao"
+    monkeypatch.setattr(inventory_services, "Permisos", lambda modulo, usuario: SimpleNamespace(consultar=False))
+    with app_ctx.test_request_context("/inventory/stock-entry/list"):
+        assert inventory_services._inventory_period_company() is None
+
+    monkeypatch.setattr(inventory_services, "current_user", SimpleNamespace(id="USER-1", classification="admin"))
+    monkeypatch.setattr(list_filters, "require_period_company", lambda *args, **kwargs: object())
+    monkeypatch.setattr(list_filters, "apply_period_filter", lambda *args, **kwargs: "filtered")
+    with app_ctx.test_request_context("/inventory/stock-entry/list?period_from=2026-01-01"):
+        assert inventory_services._apply_inventory_period_scope(database.select(StockEntry), StockEntry) == "filtered"
+    with app_ctx.test_request_context("/inventory/stock-entry/list"):
+        base_query = database.select(StockEntry)
+        assert inventory_services._apply_inventory_period_scope(base_query, StockEntry) is base_query
+        assert inventory_services._apply_inventory_period_scope(base_query, SimpleNamespace()) is base_query
+
+    monkeypatch.setattr(list_filters, "apply_list_filters", lambda *args, **kwargs: "filtered")
+    monkeypatch.setattr(inventory_services.database, "paginate", lambda *args, **kwargs: "page")
+    monkeypatch.setattr(list_filters, "attach_period_picker", lambda *args, **kwargs: None)
+    with app_ctx.test_request_context("/inventory/stock-entry/list?page=2"):
+        assert inventory_services._paginate_list(SimpleNamespace(), (), query=object()) == "page"
