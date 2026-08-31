@@ -269,49 +269,74 @@ def _party_or_404(party_id: str) -> Party:
     return party
 
 
-def _paginate_list(model, search_fields, query=None, *, include_status: bool = True, access_modules=("purchases",)):
-    """Pagina un listado aplicando los filtros GET comunes."""
-    from cacao_accounting.list_filters import apply_period_filter, attach_period_picker, require_period_company
+def _authorized_companies(access_modules: tuple[str, ...]) -> set[str]:
+    """Return companies the current user may consult in the given modules."""
+    companies: set[str] = set()
+    for module in access_modules:
+        module_id = obtener_id_modulo_por_nombre(module)
+        permissions = Permisos(modulo=module_id, usuario=current_user.id)
+        if permissions.consultar:
+            companies.update(permissions.obtener_companias_autorizadas())
+    return companies
 
-    base_query = query if query is not None else database.select(model)
-    if hasattr(model, "company"):
-        company = request.args.get("company")
-        if company:
-            exige_acceso_compania_cualquiera(access_modules, company, "consultar")
-            base_query = base_query.filter(model.company == company)
-        elif not getattr(current_user, "classification", None) == "admin":
-            companies = set()
-            for module in access_modules:
-                module_id = obtener_id_modulo_por_nombre(module)
-                permissions = Permisos(modulo=module_id, usuario=current_user.id)
-                if permissions.consultar:
-                    companies.update(permissions.obtener_companias_autorizadas())
-            if not companies:
-                base_query = base_query.where(database.false())
-            else:
-                base_query = base_query.where(model.company.in_(companies))
+
+def _apply_company_scope(base_query: Any, model: Any, access_modules: tuple[str, ...]) -> Any:
+    """Apply the requested or authorized company scope to a list query."""
+    if not hasattr(model, "company"):
+        return base_query
+    company = request.args.get("company")
+    if company:
+        exige_acceso_compania_cualquiera(access_modules, company, "consultar")
+        return base_query.filter(model.company == company)
+    if getattr(current_user, "classification", None) == "admin":
+        return base_query
+    companies = _authorized_companies(access_modules)
+    return base_query.where(model.company.in_(companies)) if companies else base_query.where(database.false())
+
+
+def _period_company_for_query(access_modules: tuple[str, ...]) -> str | None:
+    """Resolve the sole authorized company used by period filters."""
+    period_company = request.args.get("company")
+    if period_company or getattr(current_user, "classification", None) == "admin":
+        return period_company
+    for module in access_modules:
+        module_id = obtener_id_modulo_por_nombre(module)
+        permissions = Permisos(modulo=module_id, usuario=current_user.id)
+        if permissions.consultar:
+            authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
+            if len(authorized_companies) == 1:
+                return authorized_companies[0]
+    return period_company
+
+
+def _apply_period_scope(base_query: Any, model: Any, access_modules: tuple[str, ...]) -> Any:
+    """Apply accounting period filters when the model supports posting dates."""
+    from cacao_accounting.list_filters import apply_period_filter, require_period_company
+
+    if not hasattr(model, "posting_date"):
+        return base_query
     period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
     period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
-    if hasattr(model, "posting_date"):
-        period_company: str | None = request.args.get("company")
-        if not period_company and getattr(current_user, "classification", None) != "admin":
-            for module in access_modules:
-                module_id = obtener_id_modulo_por_nombre(module)
-                permissions = Permisos(modulo=module_id, usuario=current_user.id)
-                if permissions.consultar:
-                    authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
-                    if len(authorized_companies) == 1:
-                        period_company = authorized_companies[0]
-                        break
-        if period_from or period_to or period_company:
-            base_query = apply_period_filter(
-                base_query,
-                model,
-                require_period_company(access_modules, current_user=current_user, default_company=period_company),
-                period_from,
-                period_to,
-                default_when_missing=True,
-            )
+    period_company = _period_company_for_query(access_modules)
+    if not (period_from or period_to or period_company):
+        return base_query
+    return apply_period_filter(
+        base_query,
+        model,
+        require_period_company(access_modules, current_user=current_user, default_company=period_company),
+        period_from,
+        period_to,
+        default_when_missing=True,
+    )
+
+
+def _paginate_list(model, search_fields, query=None, *, include_status: bool = True, access_modules=("purchases",)):
+    """Pagina un listado aplicando los filtros GET comunes."""
+    from cacao_accounting.list_filters import attach_period_picker
+
+    base_query = query if query is not None else database.select(model)
+    base_query = _apply_company_scope(base_query, model, access_modules)
+    base_query = _apply_period_scope(base_query, model, access_modules)
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     paginated = database.paginate(
         filtered_query,
