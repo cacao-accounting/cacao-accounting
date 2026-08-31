@@ -3131,6 +3131,77 @@ def _prior_year_retained_earnings_contribution(
     return amount if section == "income" else -amount
 
 
+def _skip_balance_sheet_row(
+    row: Any,
+    classification: str,
+    include_closing: bool,
+    fiscal_year_start: date | None,
+    closed_fiscal_years: set[int],
+) -> bool:
+    """Indica si una fila de GL debe excluirse del balance general."""
+    if row.is_fiscal_year_closing and classification in _PL_CLASSIFICATIONS:
+        return True
+    if not include_closing and row.is_fiscal_year_closing:
+        row_year = date(int(row.posting_year), 1, 1)
+        return fiscal_year_start is None or classification in _PL_CLASSIFICATIONS or row_year >= fiscal_year_start
+    if classification in _PL_CLASSIFICATIONS and fiscal_year_start:
+        row_year = date(int(row.posting_year), 1, 1)
+        return row_year < fiscal_year_start and int(row.posting_year) in closed_fiscal_years
+    return False
+
+
+def _process_balance_sheet_entries(
+    entries: Sequence[Any], filters: FinancialReportFilters, fiscal_year_start: date | None
+) -> tuple[dict[str, dict[str, Any]], dict[str, Decimal], Decimal, dict[str, dict[str, Any]]]:
+    """Clasifica las filas del balance y acumula patrimonio retenido y cuentas no clasificadas."""
+    by_account: dict[str, dict[str, Any]] = {}
+    totals: dict[str, Decimal] = {
+        "assets": Decimal("0"),
+        "liabilities": Decimal("0"),
+        "equity": Decimal("0"),
+        "income": Decimal("0"),
+        "cost": Decimal("0"),
+        "expense": Decimal("0"),
+    }
+    retained_earnings = Decimal("0")
+    unclassified: dict[str, dict[str, Any]] = {}
+    closed_fiscal_years = {int(row.posting_year) for row in entries if row.is_fiscal_year_closing}
+    for row in entries:
+        classification = _CLASSIFICATION_ALIASES.get(
+            (row.classification or "").strip().lower(), (row.classification or "").strip().lower()
+        )
+        if _skip_balance_sheet_row(row, classification, filters.include_closing, fiscal_year_start, closed_fiscal_years):
+            continue
+        if (
+            classification in _PL_CLASSIFICATIONS
+            and fiscal_year_start
+            and date(int(row.posting_year), 1, 1) < fiscal_year_start
+        ):
+            retained_earnings += _prior_year_retained_earnings_contribution(
+                classification,
+                _decimal_value(row.debit),
+                _decimal_value(row.credit),
+                row.account_code or "",
+                row.account_name,
+            )
+            continue
+        debit = _decimal_value(row.debit)
+        credit = _decimal_value(row.credit)
+        account_code = row.account_code or ""
+        processed = _accumulate_balance_sheet_entry(
+            classification,
+            debit,
+            credit,
+            account_code,
+            row.account_name,
+            by_account,
+            totals,
+        )
+        if not processed:
+            _track_unclassified_account(unclassified, account_code, row.account_name, classification, debit, credit)
+    return by_account, totals, retained_earnings, unclassified
+
+
 def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport:
     """Balance general por clasificación Activo/Pasivo/Patrimonio."""
     _, period_end, period_obj = _report_period_bounds(filters)
@@ -3159,71 +3230,8 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
         posting_year,
     )
 
-    by_account: dict[str, dict[str, Any]] = {}
-    totals: dict[str, Decimal] = {
-        "assets": Decimal("0"),
-        "liabilities": Decimal("0"),
-        "equity": Decimal("0"),
-        "income": Decimal("0"),
-        "cost": Decimal("0"),
-        "expense": Decimal("0"),
-    }
-    retained_earnings = Decimal("0")
-    unclassified: dict[str, dict[str, Any]] = {}
     entries = database.session.execute(base_query).all()
-    closed_fiscal_years = {int(row.posting_year) for row in entries if row.is_fiscal_year_closing}
-    for row in entries:
-        classification = _CLASSIFICATION_ALIASES.get(
-            (row.classification or "").strip().lower(), (row.classification or "").strip().lower()
-        )
-        # El cierre ya transfiere el resultado al patrimonio; no vuelvas a
-        # sumar sus líneas P&L como utilidades retenidas del ejercicio anterior.
-        if row.is_fiscal_year_closing and classification in _PL_CLASSIFICATIONS:
-            continue
-        # Skip closing entries if include_closing is False and they are P&L or current FY
-        if (
-            not filters.include_closing
-            and row.is_fiscal_year_closing
-            and (
-                fiscal_year_start is None
-                or classification in _PL_CLASSIFICATIONS
-                or date(int(row.posting_year), 1, 1) >= fiscal_year_start
-            )
-        ):
-            continue
-        # Los saldos P&L de ejercicios previos que no se cerraron siguen siendo
-        # parte del patrimonio: se muestran como utilidades retenidas, no como
-        # resultado del período actual.
-        if (
-            classification in _PL_CLASSIFICATIONS
-            and fiscal_year_start
-            and date(int(row.posting_year), 1, 1) < fiscal_year_start
-        ):
-            if int(row.posting_year) in closed_fiscal_years:
-                continue
-            retained_earnings += _prior_year_retained_earnings_contribution(
-                classification,
-                _decimal_value(row.debit),
-                _decimal_value(row.credit),
-                row.account_code or "",
-                row.account_name,
-            )
-            continue
-        debit = _decimal_value(row.debit)
-        credit = _decimal_value(row.credit)
-        account_code = row.account_code or ""
-        account_name = row.account_name
-        processed = _accumulate_balance_sheet_entry(
-            classification,
-            debit,
-            credit,
-            account_code,
-            account_name,
-            by_account,
-            totals,
-        )
-        if not processed:
-            _track_unclassified_account(unclassified, account_code, account_name, classification, debit, credit)
+    by_account, totals, retained_earnings, unclassified = _process_balance_sheet_entries(entries, filters, fiscal_year_start)
 
     period_profit = totals["income"] - totals["cost"] - totals["expense"]
     totals["equity"] += retained_earnings + period_profit

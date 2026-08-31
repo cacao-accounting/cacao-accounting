@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `get_balance_sheet_report` cx=22)
+
+### Hallazgo SonarCloud
+
+Issue `AZ_uqPyhYdlOTNJdgxP8` (`python:S3776`, CRITICAL):
+`cacao_accounting/reportes/services.py`, `get_balance_sheet_report`, complejidad cognitiva 22 frente al umbral 15.
+
+### Corrección
+
+Se extrajeron la regla de exclusión de cierres a `_skip_balance_sheet_row` y el procesamiento/clasificación de filas a
+`_process_balance_sheet_entries`. Se conservaron utilidades retenidas, cierres fiscales, cuentas no clasificadas,
+patrimonio, diferencia y moneda del libro.
+
+### Verificación
+
+- `tests/test_08_reconciliation_reports.py`: 121/121.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `reconciliation_matrix` cx=23)
 
 ### Hallazgo SonarCloud
