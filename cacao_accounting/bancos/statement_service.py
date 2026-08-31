@@ -432,23 +432,30 @@ def _persist_bank_transaction(*, bank_account_id: str, row: BankImportRow) -> Ba
     return transaction
 
 
-def create_bank_difference_journal(
-    reconciliation_id: str,
-    amount: Decimal,
-    account_id: str | None = None,
-    transaction_id: str | None = None,
-    user_id: str | None = None,
-) -> ComprobanteContable:
-    """Crea un comprobante de ajuste por diferencia bancaria."""
+def _load_bank_reconciliation(reconciliation_id: str) -> Reconciliation:
+    """Load the reconciliation required by a bank difference journal."""
     reconciliation = database.session.get(Reconciliation, reconciliation_id)
     if not reconciliation:
         raise BankStatementError("La conciliacion no existe.")
+    return reconciliation
+
+
+def _resolve_difference_account(reconciliation: Reconciliation, account_id: str | None) -> Accounts:
+    """Resolve the configured or explicitly supplied difference account."""
     defaults = database.session.execute(
         select(CompanyDefaultAccount).filter_by(company=reconciliation.company)
     ).scalar_one_or_none()
     difference_account_id = account_id or (defaults.bank_difference_account_id if defaults else None)
     if not difference_account_id:
         raise BankStatementError("Falta cuenta de diferencia bancaria configurada.")
+    difference_account = database.session.get(Accounts, difference_account_id)
+    if not difference_account or difference_account.entity != reconciliation.company:
+        raise BankStatementError("La cuenta de diferencia bancaria no pertenece a la compañía.")
+    return difference_account
+
+
+def _find_reconciliation_bank_item(reconciliation: Reconciliation, transaction_id: str | None) -> ReconciliationItem:
+    """Find the single bank transaction item represented by a reconciliation."""
     item_query = select(ReconciliationItem).filter_by(
         reconciliation_id=reconciliation.id,
         source_type="bank_transaction",
@@ -458,29 +465,61 @@ def create_bank_difference_journal(
     reconciliation_items = database.session.execute(item_query.limit(2)).scalars().all()
     if len(reconciliation_items) != 1:
         raise BankStatementError("La conciliacion no identifica una transaccion bancaria unica.")
-    reconciliation_item = reconciliation_items[0]
-    bank_account = None
-    if reconciliation_item:
-        transaction = database.session.get(BankTransaction, reconciliation_item.source_id)
-        bank_account = database.session.get(BankAccount, transaction.bank_account_id) if transaction else None
-    bank_account_gl_id = bank_account.gl_account_id if bank_account else None
-    if not bank_account or not bank_account_gl_id:
+    return reconciliation_items[0]
+
+
+def _resolve_reconciliation_bank_account(reconciliation_item: ReconciliationItem) -> BankAccount:
+    """Resolve the bank account and ensure it has a GL account."""
+    transaction = database.session.get(BankTransaction, reconciliation_item.source_id)
+    bank_account = database.session.get(BankAccount, transaction.bank_account_id) if transaction else None
+    if not bank_account or not bank_account.gl_account_id:
         raise BankStatementError("No se encontro cuenta bancaria GL para balancear el ajuste.")
-    difference_account = database.session.get(Accounts, difference_account_id)
-    bank_gl_account = database.session.get(Accounts, bank_account_gl_id)
-    if not difference_account or difference_account.entity != reconciliation.company:
-        raise BankStatementError("La cuenta de diferencia bancaria no pertenece a la compañía.")
+    return bank_account
+
+
+def _validate_difference_accounts(
+    reconciliation: Reconciliation, difference_account: Accounts, bank_account: BankAccount
+) -> Accounts:
+    """Load and validate the bank GL account against the reconciliation company."""
+    bank_gl_account = database.session.get(Accounts, bank_account.gl_account_id)
     if not bank_gl_account or bank_gl_account.entity != reconciliation.company:
         raise BankStatementError("La cuenta bancaria GL no pertenece a la compañía.")
+    return bank_gl_account
+
+
+def _resolve_bank_difference_currency(reconciliation: Reconciliation, bank_account: BankAccount) -> tuple[Entity | None, str]:
+    """Resolve the transaction currency and company entity for the adjustment."""
     entity = database.session.execute(select(Entity).where(Entity.code == reconciliation.company)).scalars().first()
-    transaction_currency = (bank_account.currency if bank_account else None) or (entity.currency if entity else None)
+    transaction_currency = bank_account.currency or (entity.currency if entity else None)
     if not transaction_currency:
         raise BankStatementError("No se pudo determinar la moneda de la cuenta bancaria.")
-    books = list(
+    return entity, transaction_currency
+
+
+def _active_company_books(company: str) -> list[Book]:
+    """Load active books that receive the bank adjustment."""
+    return list(
         database.session.execute(
-            select(Book).where(Book.entity == reconciliation.company, Book.status == "activo").order_by(Book.code)
+            select(Book).where(Book.entity == company, Book.status == "activo").order_by(Book.code)
         ).scalars()
     )
+
+
+def create_bank_difference_journal(
+    reconciliation_id: str,
+    amount: Decimal,
+    account_id: str | None = None,
+    transaction_id: str | None = None,
+    user_id: str | None = None,
+) -> ComprobanteContable:
+    """Crea un comprobante de ajuste por diferencia bancaria."""
+    reconciliation = _load_bank_reconciliation(reconciliation_id)
+    difference_account = _resolve_difference_account(reconciliation, account_id)
+    reconciliation_item = _find_reconciliation_bank_item(reconciliation, transaction_id)
+    bank_account = _resolve_reconciliation_bank_account(reconciliation_item)
+    bank_gl_account = _validate_difference_accounts(reconciliation, difference_account, bank_account)
+    entity, transaction_currency = _resolve_bank_difference_currency(reconciliation, bank_account)
+    books = _active_company_books(reconciliation.company)
     journal = ComprobanteContable(
         entity=reconciliation.company,
         date=reconciliation.recon_date,

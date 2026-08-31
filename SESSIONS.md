@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `create_bank_difference_journal` cx=27)
+
+### Hallazgo SonarCloud
+
+Issue `AZ_iGnqzaa4LEs-MjUlm` (`python:S3776`, CRITICAL):
+`cacao_accounting/bancos/statement_service.py`, `create_bank_difference_journal`, complejidad cognitiva 27 frente
+al umbral 15.
+
+### Corrección
+
+Se separaron la carga de conciliación, resolución y validación de cuentas, identificación de la cuenta bancaria,
+resolución de moneda y carga de libros activos. Se conservaron las validaciones de unicidad, pertenencia de compañía,
+cuenta GL bancaria, moneda, selección de libro y la generación del ajuste balanceado.
+
+### Verificación
+
+- Escenarios focales de `tests/test_08_reconciliation_reports.py` y `tests/test_payment_unit.py`: 1/1 ejecutado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — Bancos `_paginate_list` cx=28)
 
 ### Hallazgo SonarCloud
