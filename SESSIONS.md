@@ -1,5 +1,18 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (limpieza S1192 — mensaje de tasa de pago duplicado)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMdIkZtwr73q0yaC` (`python:S1192`, CRITICAL):
+`cacao_accounting/document_flow/payment.py`, literal repetido para exigir una tasa positiva de conversión.
+
+### Corrección y verificación
+
+Se definió `_MSG_TASA_PAGO_POSITIVA` y se reutilizó en los cuatro caminos de validación, sin cambiar excepciones ni
+códigos HTTP. `tests/test_line_import_api.py tests/test_cas13_cash_consumed.py`: 52/52; Black, Ruff, Flake8,
+pydocstyle, Mypy y `git diff --check` sobre `cacao_accounting`: limpios.
+
 ## 2026-08-31 (limpieza S1481 — variable local sin uso en compras)
 
 ### Hallazgo SonarCloud
