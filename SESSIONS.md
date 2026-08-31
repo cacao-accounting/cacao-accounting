@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_create_sales_invoice_from_form` cx=23)
+
+### Hallazgo SonarCloud
+
+Issue `AaAb4cSx0SpjD9SaGpBF` (`python:S3776`, CRITICAL):
+`cacao_accounting/ventas/services.py`, `_create_sales_invoice_from_form`, complejidad cognitiva 23 frente al umbral 15.
+
+### Análisis y corrección
+
+No se requirió reestructurar el flujo de facturación: la complejidad estaba en preparar origen/permisos, construir el
+documento y validar el resultado de una reversión. Se extrajeron `_prepare_sales_invoice_creation`,
+`_build_sales_invoice_from_context` y `_validate_sales_invoice_reversal_result`; se conservaron los vínculos de origen,
+inventario, impuestos, snapshots fiscales, rollback y trazabilidad.
+
+### Verificación
+
+- `tests/test_batch_serial_persistence.py tests/test_e2e_modules.py -k 'sales_invoice'`: 2/2.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check` sobre `cacao_accounting`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `listar_comprobantes` cx=23)
 
 ### Hallazgo SonarCloud
