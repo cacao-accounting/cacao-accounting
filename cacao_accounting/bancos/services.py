@@ -564,6 +564,28 @@ def _post_bank_difference_adjustment(
     transaction.is_reconciled = True
 
 
+def _validate_numbering_config_entry(
+    bank_account: BankAccount, entry: Any
+) -> tuple[dict[str, Any], str | None, str | None] | None:
+    """Validate one bank numbering configuration entry."""
+    if not isinstance(entry, dict):
+        return None
+    payment_type = entry.get("payment_type")
+    if payment_type not in PAYMENT_TYPES:
+        return None
+    naming_series_id = entry.get("naming_series_id") or None
+    external_counter_id = entry.get("external_counter_id") or None
+    if naming_series_id:
+        series = database.session.get(NamingSeries, naming_series_id)
+        if not series or series.company not in (None, bank_account.company):
+            raise IdentifierConfigurationError("La serie de numeración no pertenece a la compañía de la cuenta bancaria.")
+    if entry.get("use_external_counter") and external_counter_id:
+        counter = database.session.get(ExternalCounter, external_counter_id)
+        if not counter or counter.company != bank_account.company:
+            raise IdentifierConfigurationError("La chequera no pertenece a la compañía de la cuenta bancaria.")
+    return entry, naming_series_id, external_counter_id
+
+
 def _save_numbering_configs(bank_account: BankAccount) -> dict[str, str]:
     """Guarda las configuraciones de numeracion enviadas en el request JSON."""
     data = request.get_json(force=True) or {}
@@ -573,22 +595,9 @@ def _save_numbering_configs(bank_account: BankAccount) -> dict[str, str]:
 
     validated: list[tuple[dict[str, Any], str | None, str | None]] = []
     for entry in configs:
-        if not isinstance(entry, dict):
-            continue
-        payment_type = entry.get("payment_type")
-        if payment_type not in PAYMENT_TYPES:
-            continue
-        naming_series_id = entry.get("naming_series_id") or None
-        external_counter_id = entry.get("external_counter_id") or None
-        if naming_series_id:
-            series = database.session.get(NamingSeries, naming_series_id)
-            if not series or series.company not in (None, bank_account.company):
-                raise IdentifierConfigurationError("La serie de numeración no pertenece a la compañía de la cuenta bancaria.")
-        if entry.get("use_external_counter") and external_counter_id:
-            counter = database.session.get(ExternalCounter, external_counter_id)
-            if not counter or counter.company != bank_account.company:
-                raise IdentifierConfigurationError("La chequera no pertenece a la compañía de la cuenta bancaria.")
-        validated.append((entry, naming_series_id, external_counter_id))
+        result = _validate_numbering_config_entry(bank_account, entry)
+        if result is not None:
+            validated.append(result)
 
     for entry, naming_series_id, external_counter_id in validated:
         payment_type = entry["payment_type"]
