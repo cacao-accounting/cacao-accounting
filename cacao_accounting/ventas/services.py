@@ -855,16 +855,22 @@ def _line_amount(index: int) -> Decimal:
     return _form_decimal(f"qty_{index}", "1") * _form_decimal(f"rate_{index}", "0")
 
 
-def _source_line_rate(index: int, submitted_rate: Decimal) -> Decimal:
-    """Return the immutable source-line rate instead of trusting form data."""
-    source_type = request.form.get(f"source_type_{index}")
-    source_id = request.form.get(f"source_id_{index}")
-    source_item_id = request.form.get(f"source_item_id_{index}")
-    source_values = (source_type, source_id, source_item_id)
+def _sales_source_line_reference(index: int) -> tuple[str, str, str] | None:
+    """Read and validate the optional source-line reference from the form."""
+    source_values = (
+        request.form.get(f"source_type_{index}"),
+        request.form.get(f"source_id_{index}"),
+        request.form.get(f"source_item_id_{index}"),
+    )
     if not any(source_values):
-        return submitted_rate
+        return None
     if not all(source_values):
         raise DocumentFlowError("La referencia de documento fuente está incompleta.", 400)
+    return cast(tuple[str, str, str], source_values)
+
+
+def _sales_source_line_model(source_type: str) -> tuple[type[Any], str]:
+    """Return the item model and foreign-key field for a sales source type."""
     models = {
         "sales_request": (SalesRequestItem, "sales_request_id"),
         "sales_quotation": (SalesQuotationItem, "sales_quotation_id"),
@@ -872,10 +878,19 @@ def _source_line_rate(index: int, submitted_rate: Decimal) -> Decimal:
         "delivery_note": (DeliveryNoteItem, "delivery_note_id"),
         "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
     }
-    model_data = models.get(str(source_type))
+    model_data = models.get(source_type)
     if model_data is None:
         raise DocumentFlowError("El tipo de documento fuente no es válido para ventas.", 400)
-    model, document_id_field = model_data
+    return model_data
+
+
+def _source_line_rate(index: int, submitted_rate: Decimal) -> Decimal:
+    """Return the immutable source-line rate instead of trusting form data."""
+    source_reference = _sales_source_line_reference(index)
+    if source_reference is None:
+        return submitted_rate
+    source_type, source_id, source_item_id = source_reference
+    model, document_id_field = _sales_source_line_model(source_type)
     source_item: Any = database.session.get(model, source_item_id)
     if source_item is None or getattr(source_item, document_id_field) != source_id:
         raise DocumentFlowError("La línea de documento fuente no existe o no corresponde al documento indicado.", 400)

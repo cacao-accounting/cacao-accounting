@@ -24,6 +24,7 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
+from cacao_accounting.document_flow import DocumentFlowError
 from cacao_accounting.setup.repository import create_default_price_lists
 from cacao_accounting.ventas.services import (
     _save_sales_order_items,
@@ -187,6 +188,31 @@ def test_source_line_rate_is_derived_on_the_server(app_ctx):
             },
         ):
             assert _source_line_rate(0, Decimal("1")) == Decimal("100")
+
+
+def test_source_line_rate_rejects_invalid_references(app_ctx):
+    """Incomplete, unknown and mismatched source references are rejected."""
+    with app_ctx.test_request_context(
+        "/sales-order/new", method="POST", data={"source_type_0": "sales_order", "source_id_0": "SO-1"}
+    ):
+        with pytest.raises(DocumentFlowError, match="incompleta"):
+            _source_line_rate(0, Decimal("1"))
+
+    with app_ctx.test_request_context(
+        "/sales-order/new",
+        method="POST",
+        data={"source_type_0": "invalid", "source_id_0": "DOC-1", "source_item_id_0": "LINE-1"},
+    ):
+        with pytest.raises(DocumentFlowError, match="no es válido"):
+            _source_line_rate(0, Decimal("1"))
+
+    with app_ctx.test_request_context(
+        "/sales-order/new",
+        method="POST",
+        data={"source_type_0": "sales_order", "source_id_0": "SO-1", "source_item_id_0": "LINE-1"},
+    ):
+        with pytest.raises(DocumentFlowError, match="no existe"):
+            _source_line_rate(0, Decimal("1"))
 
 
 def test_sales_order_persists_source_rate_not_forged_form_rate(app_ctx):
