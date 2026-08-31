@@ -44,6 +44,16 @@ class TaxCalculationResult:
     payable_delta: Decimal
 
 
+@dataclass
+class _TaxTotals:
+    """Acumuladores internos para el cálculo de impuestos."""
+
+    running_total: Decimal
+    additive_total: Decimal = Decimal("0")
+    deductive_total: Decimal = Decimal("0")
+    inclusive_total: Decimal = Decimal("0")
+
+
 @dataclass(frozen=True)
 class PriceSuggestion:
     """Precio sugerido para un item."""
@@ -125,29 +135,8 @@ def _calculate_template_item_tax(
     )
 
 
-def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
-    """Calcula impuestos/cargos de un documento usando una plantilla."""
-    template = database.session.get(TaxTemplate, template_id)
-    if not template or not template.is_active:
-        raise TaxPricingError("La plantilla de impuestos no existe o esta inactiva.")
-    company = getattr(document, "company", None)
-    if template.company and company and template.company != company:
-        raise TaxPricingError("La plantilla de impuestos pertenece a otra compania.")
-
-    base_amount = _document_items_total(document)
-    running_total = base_amount
-    lines: list[TaxLineResult] = []
-    additive_total = Decimal("0")
-    deductive_total = Decimal("0")
-    inclusive_total = Decimal("0")
-
-    items = (
-        database.session.execute(
-            select(TaxTemplateItem).filter_by(tax_template_id=template_id).order_by(TaxTemplateItem.sequence)
-        )
-        .scalars()
-        .all()
-    )
+def _inclusive_tax_bases(items: list[TaxTemplateItem]) -> tuple[dict[str, Decimal], dict[str, Decimal]]:
+    """Group inclusive percentage and fixed taxes by calculation base."""
     inclusive_rates_by_base: dict[str, Decimal] = {}
     inclusive_fixed_by_base: dict[str, Decimal] = {}
     for template_item in items:
@@ -165,33 +154,61 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
             inclusive_fixed_by_base[calculation_base] = inclusive_fixed_by_base.get(
                 calculation_base, Decimal("0")
             ) + _decimal_value(tax.rate)
+    return inclusive_rates_by_base, inclusive_fixed_by_base
+
+
+def _apply_tax_result(result: TaxLineResult, totals: _TaxTotals) -> None:
+    """Accumulate a calculated tax and update the running document total."""
+    if result.is_inclusive:
+        totals.inclusive_total += result.amount
+    elif result.behavior == "deductive":
+        totals.deductive_total += result.amount
+        totals.running_total -= result.amount
+    else:
+        totals.additive_total += result.amount
+        totals.running_total += result.amount
+
+
+def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
+    """Calcula impuestos/cargos de un documento usando una plantilla."""
+    template = database.session.get(TaxTemplate, template_id)
+    if not template or not template.is_active:
+        raise TaxPricingError("La plantilla de impuestos no existe o esta inactiva.")
+    company = getattr(document, "company", None)
+    if template.company and company and template.company != company:
+        raise TaxPricingError("La plantilla de impuestos pertenece a otra compania.")
+
+    base_amount = _document_items_total(document)
+    totals = _TaxTotals(running_total=base_amount)
+    lines: list[TaxLineResult] = []
+    items = list(
+        database.session.execute(
+            select(TaxTemplateItem).filter_by(tax_template_id=template_id).order_by(TaxTemplateItem.sequence)
+        )
+        .scalars()
+        .all()
+    )
+    inclusive_rates_by_base, inclusive_fixed_by_base = _inclusive_tax_bases(items)
     for template_item in items:
         calculation_base = template_item.calculation_base or "net_document"
         result = _calculate_template_item_tax(
             template_item,
             base_amount,
-            running_total,
+            totals.running_total,
             inclusive_rates_by_base.get(calculation_base, Decimal("0")),
             inclusive_fixed_by_base.get(calculation_base, Decimal("0")),
         )
         if not result:
             continue
-        if result.is_inclusive:
-            inclusive_total += result.amount
-        elif result.behavior == "deductive":
-            deductive_total += result.amount
-            running_total -= result.amount
-        else:
-            additive_total += result.amount
-            running_total += result.amount
+        _apply_tax_result(result, totals)
         lines.append(result)
 
     return TaxCalculationResult(
         lines=lines,
-        additive_total=additive_total,
-        deductive_total=deductive_total,
-        inclusive_total=inclusive_total,
-        payable_delta=additive_total - deductive_total,
+        additive_total=totals.additive_total,
+        deductive_total=totals.deductive_total,
+        inclusive_total=totals.inclusive_total,
+        payable_delta=totals.additive_total - totals.deductive_total,
     )
 
 

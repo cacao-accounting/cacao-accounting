@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `calculate_taxes` cx=22)
+
+### Hallazgo SonarCloud
+
+Issue `AaA59ZkIaEygsU7z1-VS` (`python:S3776`, CRITICAL):
+`cacao_accounting/tax_pricing_service.py`, `calculate_taxes`, complejidad cognitiva 22 frente al umbral 15.
+
+### Corrección
+
+Se separaron la agrupación de bases de impuestos inclusivos y la acumulación de resultados en `_TaxTotals`.
+Se conservaron validación de plantilla/compañía, orden de aplicación, bases anteriores, impuestos inclusivos,
+aditivos, deductivos, totales y `payable_delta`.
+
+### Verificación
+
+- `tests/test_tax_rules.py` y `tests/test_tax_engine_audit_cases.py`: 41/41.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `ventas_cotizacion_nueva` cx=26)
 
 ### Hallazgo SonarCloud
