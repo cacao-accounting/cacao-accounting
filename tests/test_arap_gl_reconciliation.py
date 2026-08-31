@@ -2,6 +2,7 @@
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,6 +13,7 @@ from cacao_accounting.contabilidad.arap_gl_reconciliation import (
     enforce_arap_gl_policy,
     resolve_arap_gl_policy,
 )
+from cacao_accounting.contabilidad import arap_gl_reconciliation as reconciliation
 
 
 def _key(*, ledger: str = "BOOK-NIO", party: str = "PARTY-1", currency: str = "NIO", kind: str = "AR"):
@@ -89,6 +91,34 @@ def test_matrix_retains_company_book_party_currency_and_zero_sided_rows():
     assert result.differences[0].gl_amount == Decimal("0")
     assert "libro=BOOK-USD" in result.message
     assert "moneda=USD" in result.message
+
+
+def test_gl_entry_matrix_value_maps_ar_and_ap_and_skips_other_accounts():
+    ar_entry = SimpleNamespace(
+        ledger_id="BOOK-NIO",
+        party_type=None,
+        party_id="CUS-1",
+        company_currency="NIO",
+        debit=Decimal("125"),
+        credit=Decimal("25"),
+    )
+    ap_entry = SimpleNamespace(
+        ledger_id="BOOK-NIO",
+        party_type="supplier",
+        party_id="SUP-1",
+        company_currency="NIO",
+        debit=Decimal("25"),
+        credit=Decimal("125"),
+    )
+    book = SimpleNamespace(currency="NIO")
+
+    ar_value = reconciliation._gl_entry_matrix_value(ar_entry, SimpleNamespace(account_type="receivable"), book, "cacao")
+    ap_value = reconciliation._gl_entry_matrix_value(ap_entry, SimpleNamespace(account_type="payable"), book, "cacao")
+    other_value = reconciliation._gl_entry_matrix_value(ar_entry, SimpleNamespace(account_type="expense"), book, "cacao")
+
+    assert ar_value is not None and ar_value[0].ledger_type == "AR" and ar_value[1] == Decimal("100")
+    assert ap_value is not None and ap_value[0].ledger_type == "AP" and ap_value[1] == Decimal("100")
+    assert other_value is None
 
 
 def test_warn_and_log_modes_report_without_blocking(caplog):

@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_gl_totals` cx=16)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMMgkZtwr73q0yZ1` (`python:S3776`, CRITICAL):
+`cacao_accounting/contabilidad/arap_gl_reconciliation.py`, `_gl_totals`, complejidad cognitiva 16 frente al umbral 15.
+
+### Análisis y corrección
+
+No se requirió separar el acceso a datos: la complejidad extra estaba en convertir una fila GL a sus dimensiones y
+signo AR/AP. Se extrajo `_gl_entry_matrix_value`, dejando `_gl_totals` como consulta, acumulación y descarte de
+cuentas no controlables; se conservaron las convenciones de signo y moneda.
+
+### Verificación
+
+- `tests/test_arap_gl_reconciliation.py`: 12/12.
+- Se cubrieron cuentas AR, AP y cuentas fuera del subledger; la lógica nueva de conversión quedó cubierta por encima
+  del 90%.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_validate_reconciliation_match` cx=17)
 
 ### Hallazgo SonarCloud
