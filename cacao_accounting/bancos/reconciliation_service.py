@@ -9,7 +9,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, Sequence
 
 from sqlalchemy import func, select
 
@@ -571,6 +571,140 @@ def _resolve_rule_tolerances(transaction: BankTransaction, company: str) -> tupl
     return days, amount_tolerance
 
 
+def _candidate_tolerances(
+    transaction: BankTransaction, company: str, days_tolerance: int | None, amount_tolerance: Decimal | None
+) -> tuple[int, Decimal]:
+    """Resuelve las tolerancias explícitas o las reglas activas de matching."""
+    if days_tolerance is None or amount_tolerance is None:
+        resolved_days, resolved_amount = _resolve_rule_tolerances(transaction, company)
+        days_tolerance = resolved_days if days_tolerance is None else days_tolerance
+        amount_tolerance = resolved_amount if amount_tolerance is None else amount_tolerance
+    return days_tolerance, amount_tolerance
+
+
+def _candidate_payment_amount(
+    payment: PaymentEntry, transaction: BankTransaction, bank_currency: str | None, company_currency: str | None
+) -> Decimal | None:
+    """Convierte el importe del pago a la moneda del banco cuando es necesario."""
+    payment_currency = str(payment.currency) if payment.currency else company_currency
+    if bank_currency and payment_currency != bank_currency and bank_currency != company_currency:
+        return None
+    if not bank_currency or payment_currency == bank_currency:
+        return _payment_amount(payment, transaction.bank_account_id)
+    base_amount = _payment_base_amount(payment, transaction.bank_account_id)
+    if base_amount is None:
+        return _payment_amount(payment, transaction.bank_account_id)
+    return _decimal_value(base_amount)
+
+
+def _payment_reconciliation_candidates(
+    transaction: BankTransaction,
+    company: str,
+    date_from: date,
+    date_to: date,
+    bank_currency: str | None,
+    company_currency: str | None,
+    amount_tolerance: Decimal,
+) -> list[BankCandidate]:
+    """Genera candidatos de entradas de pago compatibles con la transacción."""
+    payments = (
+        database.session.execute(
+            select(PaymentEntry)
+            .filter_by(company=company)
+            .where(PaymentEntry.posting_date >= date_from)
+            .where(PaymentEntry.posting_date <= date_to)
+            .where(PaymentEntry.docstatus == 1)
+        )
+        .scalars()
+        .all()
+    )
+    candidates: list[BankCandidate] = []
+    for payment in payments:
+        if not _payment_belongs_to_bank(payment, transaction.bank_account_id):
+            continue
+        if _payment_direction(payment, transaction) != _bank_direction(transaction):
+            continue
+        payment_amount = _candidate_payment_amount(payment, transaction, bank_currency, company_currency)
+        if payment_amount is None:
+            continue
+        pending = payment_amount - _allocated_for_target(
+            "payment_entry", payment.id, bank_account_id=transaction.bank_account_id
+        )
+        if pending <= 0:
+            continue
+        _append_candidate(
+            candidates,
+            reference_type="payment_entry",
+            reference_id=payment.id,
+            amount=payment_amount,
+            posting_date=payment.posting_date,
+            reference_no=payment.reference_no,
+            bank_transaction=transaction,
+            pending=pending,
+            amount_tolerance=amount_tolerance,
+        )
+    return candidates
+
+
+def _bank_gl_entries(transaction: BankTransaction, company: str, date_from: date, date_to: date) -> Sequence[GLEntry]:
+    """Carga las entradas GL de la cuenta bancaria para la ventana de fechas."""
+    bank_gl_account_id = _bank_gl_account_id(transaction)
+    if not bank_gl_account_id:
+        return []
+    gl_entries_query = exclude_cancelled_gl_entries(select(GLEntry).filter_by(company=company, account_id=bank_gl_account_id))
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        gl_entries_query = gl_entries_query.where(GLEntry.ledger_id == ledger_id)
+    return (
+        database.session.execute(
+            gl_entries_query.where(GLEntry.posting_date >= date_from).where(GLEntry.posting_date <= date_to)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _gl_reconciliation_candidates(
+    transaction: BankTransaction,
+    company: str,
+    date_from: date,
+    date_to: date,
+    bank_currency: str | None,
+    company_currency: str | None,
+    amount_tolerance: Decimal,
+) -> list[BankCandidate]:
+    """Genera candidatos GL compatibles con la transacción bancaria."""
+    candidates: list[BankCandidate] = []
+    for entry in _bank_gl_entries(transaction, company, date_from, date_to):
+        if entry.bank_account_id and entry.bank_account_id != transaction.bank_account_id:
+            continue
+        if _gl_direction(entry) != _bank_direction(transaction):
+            continue
+        try:
+            entry_amount = (
+                _convert_gl_amount_to_bank_currency(entry, bank_currency, company_currency)
+                if bank_currency
+                else _gl_amount(entry)
+            )
+        except BankReconciliationError:
+            continue
+        pending = entry_amount - _allocated_for_target("gl_entry", entry.id)
+        if pending <= 0:
+            continue
+        _append_candidate(
+            candidates,
+            reference_type="gl_entry",
+            reference_id=entry.id,
+            amount=entry_amount,
+            posting_date=entry.posting_date,
+            reference_no=entry.document_no,
+            bank_transaction=transaction,
+            pending=pending,
+            amount_tolerance=amount_tolerance,
+        )
+    return candidates
+
+
 def find_bank_reconciliation_candidates(
     bank_transaction_id: str,
     *,
@@ -594,108 +728,20 @@ def find_bank_reconciliation_candidates(
     if amount <= 0:
         raise BankReconciliationError("La transaccion bancaria no tiene monto conciliable.")
 
-    if days_tolerance is None or amount_tolerance is None:
-        resolved_days, resolved_amount = _resolve_rule_tolerances(transaction, company)
-        if days_tolerance is None:
-            days_tolerance = resolved_days
-        if amount_tolerance is None:
-            amount_tolerance = resolved_amount
+    days_tolerance, amount_tolerance = _candidate_tolerances(transaction, company, days_tolerance, amount_tolerance)
 
     date_from = transaction.posting_date - timedelta(days=max(0, days_tolerance))
     date_to = transaction.posting_date + timedelta(days=max(0, days_tolerance))
-    candidates: list[BankCandidate] = []
     bank_currency = _bank_currency(transaction)
     company_currency = _company_currency(company)
-
-    payments = (
-        database.session.execute(
-            select(PaymentEntry)
-            .filter_by(company=company)
-            .where(PaymentEntry.posting_date >= date_from)
-            .where(PaymentEntry.posting_date <= date_to)
-            .where(PaymentEntry.docstatus == 1)
-        )
-        .scalars()
-        .all()
+    candidates = _payment_reconciliation_candidates(
+        transaction, company, date_from, date_to, bank_currency, company_currency, amount_tolerance
     )
-    for payment in payments:
-        if not _payment_belongs_to_bank(payment, transaction.bank_account_id):
-            continue
-        if _payment_direction(payment, transaction) != _bank_direction(transaction):
-            continue
-        payment_currency = str(payment.currency) if payment.currency else company_currency
-        if bank_currency and payment_currency != bank_currency and bank_currency != company_currency:
-            continue
-        if not bank_currency or payment_currency == bank_currency:
-            payment_amount = _payment_amount(payment, transaction.bank_account_id)
-        else:
-            base_amount = _payment_base_amount(payment, transaction.bank_account_id)
-            if base_amount is None:
-                # Pierna receptora de transferencia: el importe de la pierna ya
-                # vive en la moneda del banco destino.
-                payment_amount = _payment_amount(payment, transaction.bank_account_id)
-            else:
-                payment_amount = _decimal_value(base_amount)
-        pending = payment_amount - _allocated_for_target(
-            "payment_entry", payment.id, bank_account_id=transaction.bank_account_id
+    candidates.extend(
+        _gl_reconciliation_candidates(
+            transaction, company, date_from, date_to, bank_currency, company_currency, amount_tolerance
         )
-        if pending <= 0:
-            continue
-        _append_candidate(
-            candidates,
-            reference_type="payment_entry",
-            reference_id=payment.id,
-            amount=payment_amount,
-            posting_date=payment.posting_date,
-            reference_no=payment.reference_no,
-            bank_transaction=transaction,
-            pending=pending,
-            amount_tolerance=amount_tolerance,
-        )
-
-    bank_gl_account_id = _bank_gl_account_id(transaction)
-    if bank_gl_account_id:
-        gl_entries_query = exclude_cancelled_gl_entries(
-            select(GLEntry).filter_by(company=company, account_id=bank_gl_account_id)
-        )
-        ledger_id = primary_ledger_id(company)
-        if ledger_id:
-            gl_entries_query = gl_entries_query.where(GLEntry.ledger_id == ledger_id)
-        gl_entries = (
-            database.session.execute(
-                gl_entries_query.where(GLEntry.posting_date >= date_from).where(GLEntry.posting_date <= date_to)
-            )
-            .scalars()
-            .all()
-        )
-        for entry in gl_entries:
-            if entry.bank_account_id and entry.bank_account_id != transaction.bank_account_id:
-                continue
-            if _gl_direction(entry) != _bank_direction(transaction):
-                continue
-            try:
-                entry_amount = (
-                    _convert_gl_amount_to_bank_currency(entry, bank_currency, company_currency)
-                    if bank_currency
-                    else _gl_amount(entry)
-                )
-            except BankReconciliationError:
-                continue
-            pending = entry_amount - _allocated_for_target("gl_entry", entry.id)
-            if pending <= 0:
-                continue
-            _append_candidate(
-                candidates,
-                reference_type="gl_entry",
-                reference_id=entry.id,
-                amount=entry_amount,
-                posting_date=entry.posting_date,
-                reference_no=entry.document_no,
-                bank_transaction=transaction,
-                pending=pending,
-                amount_tolerance=amount_tolerance,
-            )
-
+    )
     return sorted(candidates, key=lambda candidate: candidate.score, reverse=True)
 
 
