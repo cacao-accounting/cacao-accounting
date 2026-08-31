@@ -2890,16 +2890,22 @@ def _document_items(document: Any) -> list[Any]:
     raise PostingError("El documento no contiene lineas de inventario compatibles.")
 
 
-def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, quantity: Decimal) -> Decimal:
-    """Return the historical inventory cost for a sales delivery return line."""
+def _delivery_return_source(document: DeliveryNote) -> DeliveryNote:
+    """Load and validate the original delivery for a sales return."""
     source_id = getattr(document, "reversal_of", None)
     if not source_id:
         raise PostingError("La devolución de venta requiere la nota de entrega origen.")
     source = database.session.get(DeliveryNote, source_id)
     if not source or source.company != document.company or source.docstatus != 1 or source.is_return:
         raise PostingError("La nota de entrega origen de la devolución no es válida.")
+    return source
 
-    outgoing_qty, outgoing_value = database.session.execute(
+
+def _delivery_outgoing_totals(
+    document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, source: DeliveryNote
+) -> tuple[Any, Any]:
+    """Return quantity and value originally issued for a return line."""
+    totals = database.session.execute(
         select(
             func.coalesce(func.sum(-StockLedgerEntry.qty_change), 0),
             func.coalesce(func.sum(-StockLedgerEntry.stock_value_difference), 0),
@@ -2912,7 +2918,14 @@ def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, wareho
             StockLedgerEntry.qty_change < 0,
         )
     ).one()
-    already_returned = database.session.execute(
+    return totals[0], totals[1]
+
+
+def _delivery_already_returned_qty(
+    document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, source: DeliveryNote
+) -> Any:
+    """Return quantity already restored by approved returns of the source."""
+    return database.session.execute(
         select(func.coalesce(func.sum(StockLedgerEntry.qty_change), 0))
         .join(DeliveryNote, DeliveryNote.id == StockLedgerEntry.voucher_id)
         .where(
@@ -2927,10 +2940,18 @@ def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, wareho
             StockLedgerEntry.qty_change > 0,
         )
     ).scalar_one()
-    available_qty = _decimal_value(outgoing_qty) - _decimal_value(already_returned)
-    if quantity > available_qty or _decimal_value(outgoing_qty) <= 0:
+
+
+def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, quantity: Decimal) -> Decimal:
+    """Return the historical inventory cost for a sales delivery return line."""
+    source = _delivery_return_source(document)
+    outgoing_qty, outgoing_value = _delivery_outgoing_totals(document, line, warehouse, source)
+    already_returned = _delivery_already_returned_qty(document, line, warehouse, source)
+    outgoing_qty_decimal = _decimal_value(outgoing_qty)
+    available_qty = outgoing_qty_decimal - _decimal_value(already_returned)
+    if quantity > available_qty or outgoing_qty_decimal <= 0:
         raise PostingError("La devolución excede la cantidad entregada pendiente de devolver.")
-    return (_decimal_value(outgoing_value) * quantity / _decimal_value(outgoing_qty)).quantize(Decimal("0.0001"))
+    return (_decimal_value(outgoing_value) * quantity / outgoing_qty_decimal).quantize(Decimal("0.0001"))
 
 
 def _comprobante_lines(document: ComprobanteContable) -> list[ComprobanteContableDetalle]:

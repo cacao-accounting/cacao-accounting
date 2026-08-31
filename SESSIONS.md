@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_delivery_return_cost` cx=26)
+
+### Hallazgo SonarCloud
+
+Issue `AaAa6soYSsPfV5h49WFj` (`python:S3776`, CRITICAL):
+`cacao_accounting/contabilidad/posting_service.py`, `_delivery_return_cost`, complejidad cognitiva 26 frente al
+umbral 15.
+
+### Corrección
+
+Se separaron la validación de la entrega origen y las consultas de cantidad/valor entregado y ya devuelto. Se
+conservaron la validación de compañía, estado y tipo de documento, el cálculo de cantidad disponible, el bloqueo de
+devoluciones excesivas y el costo histórico proporcional.
+
+### Verificación
+
+- Escenario focal de devolución en `tests/test_update_inventory.py`: 1/1.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_post_bank_difference_adjustment` cx=27)
 
 ### Hallazgo SonarCloud
