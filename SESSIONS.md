@@ -1,5 +1,17 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (limpieza S1481 — variable local sin uso en compras)
+
+### Hallazgo SonarCloud
+
+Issue `AaBV9aBYCIrucGR8mEAg` (`python:S1481`, MINOR):
+`cacao_accounting/compras/services.py`, variable local `award` sin uso.
+
+### Corrección y verificación
+
+Se reemplazó la asignación por `_`, conservando la validación del resultado y eliminando únicamente el nombre muerto.
+Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check` sobre `cacao_accounting` quedan como controles de este fix.
+
 ## 2026-08-31 (refactor S3776 — `_create_sales_invoice_from_form` cx=23)
 
 ### Hallazgo SonarCloud
