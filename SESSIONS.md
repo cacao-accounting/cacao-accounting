@@ -1,5 +1,24 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_estimated_company_open_balance` cx=21)
+
+### Hallazgo SonarCloud
+
+Issue `AaBV6VBHZAs_M-b0tIoJ` (`python:S3776`, CRITICAL):
+`cacao_accounting/accounting_engine/document_builders.py`, `_estimated_company_open_balance`, complejidad cognitiva 21
+frente al umbral 15.
+
+### Análisis y corrección
+
+Se extrajo `_estimated_reference_open_balance` para encapsular el carrying value y sus tres respaldos documentales. El
+método principal conserva el fallback al importe de liquidación y al total documental, sin cambiar los valores usados en
+revaluación o liquidaciones parciales.
+
+### Verificación
+
+- `tests/test_fx_ar_ap_lifecycle.py`: 8/8.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check` sobre `cacao_accounting`: limpios.
+
 ## 2026-08-31 (refactor S3776 — `cancel_document_ar_ap` cx=22)
 
 ### Hallazgo SonarCloud
