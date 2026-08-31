@@ -200,6 +200,37 @@ def test_price_matching_default_rejects_any_difference(app_ctx):
         _validate_invoice_prices_against_source(invoice)
 
 
+def test_line_discount_uses_source_discount_and_validates_manual_values(app_ctx):
+    """Los descuentos heredados y manuales conservan sus reglas de cálculo."""
+    from cacao_accounting.ventas.services import _line_discount
+
+    order, order_item = _create_so_with_item()
+    order_item.discount_percentage = Decimal("10")
+    database.session.flush()
+
+    with app_ctx.test_request_context(
+        "/sales/sales-order/new",
+        method="POST",
+        data={
+            "source_type_0": "sales_order",
+            "source_id_0": order.id,
+            "source_item_id_0": order_item.id,
+        },
+    ):
+        assert _line_discount(0, Decimal("1000")) == (Decimal("10"), Decimal("100.0000"), Decimal("900.0000"))
+
+    with app_ctx.test_request_context(
+        "/sales/sales-order/new", method="POST", data={"discount_percentage_0": "5", "discount_amount_0": ""}
+    ):
+        assert _line_discount(0, Decimal("1000")) == (Decimal("5"), Decimal("50.0000"), Decimal("950.0000"))
+
+    with app_ctx.test_request_context(
+        "/sales/sales-order/new", method="POST", data={"discount_percentage_0": "5", "discount_amount_0": "10"}
+    ):
+        with pytest.raises(ValueError, match="porcentaje o por importe"):
+            _line_discount(0, Decimal("1000"))
+
+
 def test_price_matching_manual_invoice_uses_customer_price_list(app_ctx):
     """Una factura sin origen compara contra el precio vigente de venta."""
     from cacao_accounting.ventas import _validate_invoice_prices_against_source

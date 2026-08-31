@@ -897,32 +897,36 @@ def _source_line_rate(index: int, submitted_rate: Decimal) -> Decimal:
     return Decimal(str(source_item.rate or "0"))
 
 
-def _line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, Decimal | None, Decimal]:
-    """Resolve a valid line discount and return percentage, amount and net amount."""
+def _source_line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, Decimal | None, Decimal] | None:
+    """Resolve a discount inherited from a sales source line, when available."""
     source_type = request.form.get(f"source_type_{index}")
     source_id = request.form.get(f"source_id_{index}")
     source_item_id = request.form.get(f"source_item_id_{index}")
-    if source_type and source_id and source_item_id:
-        models = {
-            "sales_quotation": (SalesQuotationItem, "sales_quotation_id"),
-            "sales_order": (SalesOrderItem, "sales_order_id"),
-            "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
-        }
-        model_data = models.get(source_type)
-        if model_data:
-            source_item: Any = database.session.get(model_data[0], source_item_id)
-            if source_item is not None and getattr(source_item, model_data[1]) == source_id:
-                percentage = Decimal(str(source_item.discount_percentage or "0"))
-                if percentage:
-                    amount = (gross_amount * percentage / Decimal("100")).quantize(Decimal("0.0001"))
-                else:
-                    source_gross = Decimal(str(source_item.qty or "0")) * Decimal(str(source_item.rate or "0"))
-                    amount = (
-                        (gross_amount * Decimal(str(source_item.discount_amount or "0")) / source_gross)
-                        if source_gross
-                        else Decimal("0")
-                    )
-                return percentage or None, amount or None, gross_amount - amount
+    if not source_type or not source_id or not source_item_id:
+        return None
+    model_data = {
+        "sales_quotation": (SalesQuotationItem, "sales_quotation_id"),
+        "sales_order": (SalesOrderItem, "sales_order_id"),
+        "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
+    }.get(source_type)
+    if not model_data:
+        return None
+    source_item: Any = database.session.get(model_data[0], source_item_id)
+    if source_item is None or getattr(source_item, model_data[1]) != source_id:
+        return None
+    percentage = Decimal(str(source_item.discount_percentage or "0"))
+    if percentage:
+        amount = (gross_amount * percentage / Decimal("100")).quantize(Decimal("0.0001"))
+    else:
+        source_gross = Decimal(str(source_item.qty or "0")) * Decimal(str(source_item.rate or "0"))
+        amount = (
+            (gross_amount * Decimal(str(source_item.discount_amount or "0")) / source_gross) if source_gross else Decimal("0")
+        )
+    return percentage or None, amount or None, gross_amount - amount
+
+
+def _form_line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, Decimal | None, Decimal]:
+    """Validate and calculate a discount entered directly in the form."""
     percentage = _form_decimal(f"discount_percentage_{index}", "0")
     amount = _form_decimal(f"discount_amount_{index}", "0")
     if percentage < 0 or percentage > 100 or amount < 0:
@@ -934,6 +938,11 @@ def _line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, D
     if amount > gross_amount:
         raise ValueError("El descuento de línea no puede exceder el importe bruto.")
     return percentage or None, amount or None, gross_amount - amount
+
+
+def _line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, Decimal | None, Decimal]:
+    """Resolve a valid line discount and return percentage, amount and net amount."""
+    return _source_line_discount(index, gross_amount) or _form_line_discount(index, gross_amount)
 
 
 def validate_sales_quotation_expiry(quotation: SalesQuotation, conversion_date: date) -> None:
