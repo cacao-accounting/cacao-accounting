@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_normalize_journal_payload` cx=17)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMOkkZtwr73q0yZ-` (`python:S3776`, CRITICAL):
+`cacao_accounting/contabilidad/journal_service.py`, `_normalize_journal_payload`, complejidad cognitiva 17 frente al
+umbral 15.
+
+### Análisis y corrección
+
+No se requirió reestructurar el servicio de asientos: los caminos adicionales pertenecían exclusivamente a la
+normalización de moneda. Se extrajo `_normalize_journal_currency_fields`, conservando validación de compañía, líneas,
+libros, moneda base, tasa y compatibilidad con empresas antiguas.
+
+### Verificación
+
+- `tests/test_11_contabilidad_coverage.py -k 'transaction_currency or exchange_rate or mixed_currencies'`: 9/9.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_gl_totals` cx=16)
 
 ### Hallazgo SonarCloud
