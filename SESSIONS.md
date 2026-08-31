@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_line_discount` cx=32)
+
+### Hallazgo SonarCloud
+
+Issue `AaBBbpXsopylcTR1Qqlh` (`python:S3776`, CRITICAL):
+`cacao_accounting/ventas/services.py`, `_line_discount`, complejidad cognitiva 32 frente al umbral 15.
+
+### Corrección
+
+Se separaron la resolución del descuento heredado desde cotización/orden/factura y la validación del descuento manual.
+Se conservaron la precedencia del descuento de origen, cálculo proporcional, exclusión de descuentos incompatibles,
+límites de porcentaje/importe y cálculo del importe neto.
+
+### Verificación
+
+- `tests/test_sales_price_validation.py`: 7/7.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_purchase_order_context` cx=24)
 
 ### Hallazgo SonarCloud
