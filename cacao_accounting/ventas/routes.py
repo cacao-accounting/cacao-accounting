@@ -1,6 +1,8 @@
 """Modulo de Ventas."""
 
+from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 from decimal import Decimal
 
@@ -8,6 +10,7 @@ from decimal import Decimal
 from cacao_accounting.exceptions import flash_error
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask.typing import ResponseReturnValue
 
 from flask_login import current_user, login_required
 
@@ -170,6 +173,196 @@ _LABEL_NOTA_ENTREGA = "Nota de Entrega"
 DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
 
 SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
+
+
+@dataclass(frozen=True)
+class _DeliveryNoteNewContext:
+    """Datos preparados para renderizar el formulario de una nota de entrega nueva."""
+
+    form: Any
+    title: str
+    order_source: Any
+    delivery_source: Any
+    from_order_id: str | None
+    from_note_id: str | None
+    items: list[dict[str, Any]]
+    uoms: list[dict[str, Any]]
+    warehouses: list[dict[str, Any]]
+    transaction_config: dict[str, Any]
+
+
+def _load_delivery_note_sources(from_order_id: str | None, from_note_id: str | None) -> tuple[Any, Any]:
+    """Load optional sales-order and delivery-note sources for the new form."""
+    order_source = database.session.get(SalesOrder, from_order_id) if from_order_id else None
+    delivery_source = database.session.get(DeliveryNote, from_note_id) if from_note_id else None
+    return order_source, delivery_source
+
+
+def _delivery_note_catalogs(
+    selected_company: str | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load item, unit, and warehouse selectors for a delivery note."""
+    from cacao_accounting.database import Warehouse
+
+    items = [
+        {
+            "code": item.code,
+            "name": item.name,
+            "uom": item.default_uom,
+            "has_batch": item.has_batch,
+            "has_serial_no": item.has_serial_no,
+            "has_expiry_date": item.has_expiry_date,
+        }
+        for (item,) in database.session.execute(database.select(Item)).all()
+    ]
+    uoms = [{"code": uom.code, "name": uom.name} for (uom,) in database.session.execute(database.select(UOM)).all()]
+    warehouses = [
+        {"code": warehouse.code, "name": warehouse.name}
+        for (warehouse,) in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
+    ]
+    return items, uoms, warehouses
+
+
+def _build_delivery_note_transaction_config(
+    items: list[dict[str, Any]],
+    uoms: list[dict[str, Any]],
+    warehouses: list[dict[str, Any]],
+    initial_source_type: str,
+) -> dict[str, Any]:
+    """Build the Alpine configuration used by the delivery-note form."""
+    return {
+        "formKey": _FORMKEY_DELIVERY_NOTE,
+        "canEditPrices": is_sales_price_editor(str(current_user.id)),
+        "viewKey": "draft",
+        "enableBatchSerial": True,
+        "items": items,
+        "uoms": uoms,
+        "warehouses": warehouses,
+        "initialSourceType": initial_source_type,
+        "availableSourceTypes": [
+            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
+            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
+        ],
+    }
+
+
+def _build_delivery_note_new_context() -> _DeliveryNoteNewContext:
+    """Prepare form data, catalogs, and source defaults for a new delivery note."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.ventas.forms import FormularioEntregaVenta
+
+    formulario = FormularioEntregaVenta()
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or (
+        formulario.company.choices[0][0] if formulario.company.choices else None
+    )
+    formulario.naming_series.choices = _series_choices("delivery_note", selected_company)
+    formulario.customer_id.choices = [("", "")] + [
+        (str(party.id), party.name)
+        for (party,) in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
+    ]
+    from_order_id = request.args.get("from_order") or request.form.get("from_order")
+    from_note_id = request.args.get("from_note") or request.form.get("from_note")
+    order_source, delivery_source = _load_delivery_note_sources(from_order_id, from_note_id)
+    source_document = order_source or delivery_source
+    if source_document:
+        selected_company = source_document.company
+        formulario.naming_series.choices = _series_choices("delivery_note", selected_company)
+    if from_note_id:
+        formulario.is_return.data = True
+    items, uoms, warehouses = _delivery_note_catalogs(selected_company)
+    initial_source_type = "sales_order" if from_order_id else "delivery_note" if from_note_id else ""
+    transaction_config = _build_delivery_note_transaction_config(items, uoms, warehouses, initial_source_type)
+    if source_document:
+        transaction_config["initialHeader"] = {
+            "company": source_document.company or "",
+            "currency": effective_currency(source_document) or "",
+            "party": source_document.customer_id or "",
+            "party_label": source_document.customer_name or "",
+            "posting_date": str(date.today()),
+            **_sales_logistics_values(source_document),
+        }
+    return _DeliveryNoteNewContext(
+        form=formulario,
+        title="Nueva Nota de Entrega - " + APPNAME,
+        order_source=order_source,
+        delivery_source=delivery_source,
+        from_order_id=from_order_id,
+        from_note_id=from_note_id,
+        items=items,
+        uoms=uoms,
+        warehouses=warehouses,
+        transaction_config=transaction_config,
+    )
+
+
+def _load_delivery_note_post_source(from_order: str | None, from_note: str | None) -> Any:
+    """Load the source selected when a new delivery note is submitted."""
+    source = database.session.get(SalesOrder, from_order) if from_order else None
+    return database.session.get(DeliveryNote, from_note) if from_note else source
+
+
+def _validate_new_delivery_note_source(entrega: DeliveryNote, from_note: str | None) -> None:
+    """Validate source-line quantities for a newly created delivery note."""
+    if not (from_note or entrega.sales_order_id):
+        return
+    delivery_items = (
+        database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=entrega.id)).scalars().all()
+    )
+    if from_note:
+        _validate_sales_source_link(entrega, "delivery_note", from_note, delivery_items)
+    elif entrega.sales_order_id:
+        _validate_sales_source_link(entrega, "sales_order", entrega.sales_order_id, delivery_items)
+
+
+def _handle_delivery_note_new_post() -> ResponseReturnValue:
+    """Create a delivery note from submitted form data."""
+    posting_date = _parse_date(request.form.get("posting_date"))
+    customer_id = request.form.get("customer_id") or None
+    from_order = request.form.get("from_order") or None
+    from_note = request.form.get("from_note") or None
+    source = _load_delivery_note_post_source(from_order, from_note)
+    is_return = bool(request.form.get("is_return")) or bool(from_note)
+    if from_note and (not source or source.docstatus != 1 or source.is_return or not is_return):
+        raise ValueError("La devolución debe referenciar una nota de entrega aprobada que no sea devolución.")
+    from_order = from_order or getattr(source, "sales_order_id", None)
+    company, source_currency = validate_immutable_header(
+        source,
+        request.form.get("company") or None,
+        request.form.get("currency") or request.form.get("transaction_currency") or None,
+    )
+    exige_acceso_compania("sales", company, "crear")
+    customer_id = customer_id or getattr(source, "customer_id", None)
+    customer = database.session.get(Party, customer_id) if customer_id else None
+    entrega = DeliveryNote(
+        customer_id=customer_id,
+        customer_name=customer.name if customer else None,
+        company=company,
+        transaction_currency=source_currency,
+        base_currency=company_currency(company),
+        posting_date=posting_date,
+        sales_order_id=from_order,
+        is_return=is_return,
+        reversal_of=from_note,
+        remarks=request.form.get("remarks"),
+        docstatus=0,
+    )
+    _copy_sales_logistics(entrega, source, request.form)
+    database.session.add(entrega)
+    database.session.flush()
+    assign_document_identifier(
+        document=entrega,
+        entity_type="delivery_note",
+        posting_date_raw=posting_date,
+        naming_series_id=request.form.get("naming_series") or None,
+    )
+    _total_qty, total = _save_delivery_note_items(entrega.id)
+    _validate_new_delivery_note_source(entrega, from_note)
+    _set_sales_document_totals(entrega, total)
+    log_create(entrega)
+    database.session.commit()
+    flash("Nota de entrega creada correctamente.", "success")
+    return redirect(url_for(_ENDPOINT_ENTREGA, note_id=entrega.id))
 
 
 @ventas.route("/")
@@ -1522,149 +1715,25 @@ def ventas_orden_venta_close(order_id: str):
 @verifica_permiso("inventory", "crear")
 def ventas_entrega_nuevo():
     """Formulario para crear una nota de entrega."""
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.database import Warehouse
-    from cacao_accounting.ventas.forms import FormularioEntregaVenta
-
-    formulario = FormularioEntregaVenta()
-    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-    selected_company = request.values.get("company") or (
-        formulario.company.choices[0][0] if formulario.company.choices else None
-    )
-    formulario.naming_series.choices = _series_choices("delivery_note", selected_company)
-    formulario.customer_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
-    ]
-    from_order_id = request.args.get("from_order") or request.form.get("from_order")
-    from_note_id = request.args.get("from_note") or request.form.get("from_note")
-    orden_origen = database.session.get(SalesOrder, from_order_id) if from_order_id else None
-    entrega_origen = database.session.get(DeliveryNote, from_note_id) if from_note_id else None
-    source_document = orden_origen or entrega_origen
-    if source_document:
-        selected_company = source_document.company
-        formulario.naming_series.choices = _series_choices("delivery_note", selected_company)
-    if from_note_id:
-        formulario.is_return.data = True
-    items_disponibles = [
-        {
-            "code": item.code,
-            "name": item.name,
-            "uom": item.default_uom,
-            "has_batch": item.has_batch,
-            "has_serial_no": item.has_serial_no,
-            "has_expiry_date": item.has_expiry_date,
-        }
-        for (item,) in database.session.execute(database.select(Item)).all()
-    ]
-    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
-    # INV-03: Filtrar almacenes por compañía usando WarehouseCompanyAccount
-    bodegas_disponibles = [
-        {"code": w[0].code, "name": w[0].name}
-        for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
-    ]
-    titulo = "Nueva Nota de Entrega - " + APPNAME
-    initial_source_type = ""
-    if from_order_id:
-        initial_source_type = "sales_order"
-    elif from_note_id:
-        initial_source_type = "delivery_note"
-    transaction_config = {
-        "formKey": _FORMKEY_DELIVERY_NOTE,
-        "canEditPrices": is_sales_price_editor(str(current_user.id)),
-        "viewKey": "draft",
-        "enableBatchSerial": True,
-        "items": items_disponibles,
-        "uoms": uoms_disponibles,
-        "warehouses": bodegas_disponibles,
-        "initialSourceType": initial_source_type,
-        "availableSourceTypes": [
-            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
-        ],
-    }
-    if source_document:
-        transaction_config["initialHeader"] = {
-            "company": source_document.company or "",
-            "currency": effective_currency(source_document) or "",
-            "party": source_document.customer_id or "",
-            "party_label": source_document.customer_name or "",
-            "posting_date": str(date.today()),
-            **_sales_logistics_values(source_document),
-        }
+    context = _build_delivery_note_new_context()
     if request.method == "POST":
         try:
-            posting_date = _parse_date(request.form.get("posting_date"))
-            customer_id = request.form.get("customer_id") or None
-            from_order = request.form.get("from_order") or None
-            from_note = request.form.get("from_note") or None
-            source = database.session.get(SalesOrder, from_order) if from_order else None
-            source = database.session.get(DeliveryNote, from_note) if from_note else source
-            is_return = bool(request.form.get("is_return")) or bool(from_note)
-            if from_note and (not source or source.docstatus != 1 or source.is_return or not is_return):
-                raise ValueError("La devolución debe referenciar una nota de entrega aprobada que no sea devolución.")
-            from_order = from_order or getattr(source, "sales_order_id", None)
-            company, _source_currency = validate_immutable_header(
-                source,
-                request.form.get("company") or None,
-                request.form.get("currency") or request.form.get("transaction_currency") or None,
-            )
-            exige_acceso_compania("sales", company, "crear")
-            customer_id = customer_id or getattr(source, "customer_id", None)
-            customer = database.session.get(Party, customer_id) if customer_id else None
-            entrega = DeliveryNote(
-                customer_id=customer_id,
-                customer_name=customer.name if customer else None,
-                company=company,
-                transaction_currency=_source_currency,
-                base_currency=company_currency(company),
-                posting_date=posting_date,
-                sales_order_id=from_order,
-                is_return=is_return,
-                reversal_of=from_note,
-                remarks=request.form.get("remarks"),
-                docstatus=0,
-            )
-            _copy_sales_logistics(entrega, source, request.form)
-            database.session.add(entrega)
-            database.session.flush()
-            assign_document_identifier(
-                document=entrega,
-                entity_type="delivery_note",
-                posting_date_raw=posting_date,
-                naming_series_id=request.form.get("naming_series") or None,
-            )
-            _total_qty, total = _save_delivery_note_items(entrega.id)
-            if from_note or entrega.sales_order_id:
-                delivery_items = (
-                    database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=entrega.id))
-                    .scalars()
-                    .all()
-                )
-            if from_note:
-                _validate_sales_source_link(entrega, "delivery_note", from_note, delivery_items)
-            elif entrega.sales_order_id:
-                _validate_sales_source_link(entrega, "sales_order", entrega.sales_order_id, delivery_items)
-            _set_sales_document_totals(entrega, total)
-            log_create(entrega)
-            database.session.commit()
-            flash("Nota de entrega creada correctamente.", "success")
-            return redirect(url_for(_ENDPOINT_ENTREGA, note_id=entrega.id))
+            return _handle_delivery_note_new_post()
         except ValueError as exc:
             database.session.rollback()
             flash_error(exc)
     return render_template(
         "ventas/entrega_nuevo.html",
-        form=formulario,
-        titulo=titulo,
-        orden_origen=orden_origen,
-        entrega_origen=entrega_origen,
-        from_order_id=from_order_id,
-        from_note_id=from_note_id,
-        items_disponibles=items_disponibles,
-        uoms_disponibles=uoms_disponibles,
-        bodegas_disponibles=bodegas_disponibles,
-        transaction_config=transaction_config,
+        form=context.form,
+        titulo=context.title,
+        orden_origen=context.order_source,
+        entrega_origen=context.delivery_source,
+        from_order_id=context.from_order_id,
+        from_note_id=context.from_note_id,
+        items_disponibles=context.items,
+        uoms_disponibles=context.uoms,
+        bodegas_disponibles=context.warehouses,
+        transaction_config=context.transaction_config,
     )
 
 

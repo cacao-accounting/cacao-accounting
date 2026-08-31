@@ -10,6 +10,7 @@ DeliveryNoteItem y SalesInvoiceItem.
 from __future__ import annotations
 
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
@@ -368,6 +369,54 @@ class TestDeliveryNoteBatchSerial:
         )
         assert item is not None
         assert item.serial_no == "SN-003"
+
+
+def test_delivery_note_new_context_marks_delivery_source_as_return(app_ctx, monkeypatch):
+    """The new-form context preserves delivery-note return defaults."""
+    from cacao_accounting.contabilidad import auxiliares
+    from cacao_accounting.ventas import routes
+
+    source = SimpleNamespace(company="cacao", transaction_currency="NIO", customer_id="CUSTOMER-1", customer_name="Customer")
+    monkeypatch.setattr(auxiliares, "obtener_lista_entidades_por_id_razonsocial", lambda: [("cacao", "Cacao")])
+    monkeypatch.setattr(routes, "_series_choices", lambda entity_type, company: [])
+    monkeypatch.setattr(routes, "_load_delivery_note_sources", lambda from_order, from_note: (None, source))
+    monkeypatch.setattr(routes, "_delivery_note_catalogs", lambda selected_company: ([], [], []))
+    monkeypatch.setattr(routes, "_build_delivery_note_transaction_config", lambda *args: {})
+    monkeypatch.setattr(routes, "_sales_logistics_values", lambda document: {})
+
+    with app_ctx.test_request_context("/sales/delivery-note/new?from_note=DN-1"):
+        context = routes._build_delivery_note_new_context()
+
+    assert context.from_note_id == "DN-1"
+    assert context.form.is_return.data is True
+    assert context.transaction_config["initialHeader"]["company"] == "cacao"
+
+
+def test_validate_new_delivery_note_source_uses_delivery_note_relation(app_ctx, monkeypatch):
+    """A return delivery note validates its lines against the delivery source."""
+    from cacao_accounting.ventas import routes
+
+    result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: ["line-1"]))
+    monkeypatch.setattr(routes.database.session, "execute", lambda statement: result)
+    calls = []
+    monkeypatch.setattr(routes, "_validate_sales_source_link", lambda *args: calls.append(args))
+
+    entrega = SimpleNamespace(id="DN-NEW", sales_order_id=None)
+    routes._validate_new_delivery_note_source(entrega, "DN-SOURCE")
+
+    assert calls == [(entrega, "delivery_note", "DN-SOURCE", ["line-1"])]
+
+
+def test_handle_delivery_note_new_post_rejects_invalid_return_source(app_ctx, monkeypatch):
+    """A return cannot be created from a missing or unapproved delivery source."""
+    from cacao_accounting.ventas import routes
+
+    monkeypatch.setattr(routes, "_load_delivery_note_post_source", lambda from_order, from_note: None)
+    with app_ctx.test_request_context(
+        "/sales/delivery-note/new", method="POST", data={"from_note": "DN-MISSING", "posting_date": date.today().isoformat()}
+    ):
+        with pytest.raises(ValueError, match="devolución"):
+            routes._handle_delivery_note_new_post()
 
 
 class TestSalesInvoiceBatchSerial:
