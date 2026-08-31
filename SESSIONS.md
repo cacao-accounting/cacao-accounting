@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `api_document_send_email` cx=23)
+
+### Hallazgo SonarCloud
+
+Issue `AaAL3S7aoex1GfKCASRs` (`python:S3776`, CRITICAL):
+`cacao_accounting/api/__init__.py`, `api_document_send_email`, complejidad cognitiva 23 frente al umbral 15.
+
+### Corrección
+
+Se extrajeron la normalización de destinatarios a `_document_email_recipients` y el despacho con persistencia
+individual en `_send_document_emails`. Se conservaron los estados de cola, auditoría, respuestas de éxito total,
+entrega parcial y fallo total.
+
+### Verificación
+
+- `tests/test_transaction_emails.py`: 9/9; se cubren destinatarios como texto y como lista.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `get_cash_flow_statement` cx=23)
 
 ### Hallazgo SonarCloud
