@@ -1,5 +1,7 @@
 """Modulo administrativo."""
 
+from typing import Any
+
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
 from flask_login import current_user, login_required
@@ -613,6 +615,45 @@ def alternar_grupo_tercero(group_id: str):
 ADMIN_LISTA_DIMENSIONES = "admin.lista_dimensiones"
 
 
+def _create_dimension_type_from_request() -> Any:
+    """Crea un tipo de dimensión y devuelve la redirección de resultado."""
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash(_("El nombre del tipo de dimensión es obligatorio."), "danger")
+        return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+    dimension_type = DimensionType(name=name, is_active=bool(request.form.get("is_active", "1")))
+    database.session.add(dimension_type)
+    try:
+        database.session.commit()
+    except IntegrityError:
+        database.session.rollback()
+        flash(_("Ya existe un tipo de dimensión con ese nombre."), "danger")
+    else:
+        flash(_("Tipo de dimensión creado correctamente."), "success")
+    return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+
+
+def _add_dimension_value_from_request() -> Any:
+    """Agrega un valor de dimensión y devuelve la redirección de resultado."""
+    dimension_type_id = request.form.get("dimension_type_id") or ""
+    value = (request.form.get("value") or "").strip()
+    company = (request.form.get("company") or "").strip() or None
+    if not dimension_type_id or not value:
+        flash(_("Seleccione un tipo de dimensión y proporcione un valor."), "danger")
+        return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+    database.session.add(
+        DimensionValue(
+            dimension_type_id=dimension_type_id,
+            value=value,
+            company=company,
+            is_active=True,
+        )
+    )
+    database.session.commit()
+    flash(_("Valor de dimensión agregado correctamente."), "success")
+    return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+
+
 @admin.route("/settings/dimensions", methods=["GET", "POST"])
 @login_required
 @modulo_activo("admin")
@@ -622,38 +663,9 @@ def lista_dimensiones():
     if request.method == "POST":
         action = request.form.get("action") or ""
         if action == "create_type":
-            name = (request.form.get("name") or "").strip()
-            if not name:
-                flash(_("El nombre del tipo de dimensión es obligatorio."), "danger")
-                return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
-            dimension_type = DimensionType(name=name, is_active=bool(request.form.get("is_active", "1")))
-            database.session.add(dimension_type)
-            try:
-                database.session.commit()
-            except IntegrityError:
-                database.session.rollback()
-                flash(_("Ya existe un tipo de dimensión con ese nombre."), "danger")
-            else:
-                flash(_("Tipo de dimensión creado correctamente."), "success")
-            return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+            return _create_dimension_type_from_request()
         if action == "add_value":
-            dimension_type_id = request.form.get("dimension_type_id") or ""
-            value = (request.form.get("value") or "").strip()
-            company = (request.form.get("company") or "").strip() or None
-            if not dimension_type_id or not value:
-                flash(_("Seleccione un tipo de dimensión y proporcione un valor."), "danger")
-                return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
-            database.session.add(
-                DimensionValue(
-                    dimension_type_id=dimension_type_id,
-                    value=value,
-                    company=company,
-                    is_active=True,
-                )
-            )
-            database.session.commit()
-            flash(_("Valor de dimensión agregado correctamente."), "success")
-            return redirect(url_for(ADMIN_LISTA_DIMENSIONES))
+            return _add_dimension_value_from_request()
 
     dimension_types = database.session.execute(database.select(DimensionType).order_by(DimensionType.name)).scalars().all()
     dimension_values = (
