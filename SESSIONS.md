@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `get_reconciliation_report` cx=20)
+
+### Hallazgo SonarCloud
+
+Issue `AZ_uqPyhYdlOTNJdgxP7` (`python:S3776`, CRITICAL):
+`cacao_accounting/reportes/services.py`, `get_reconciliation_report`, complejidad cognitiva 20 frente al umbral 15.
+
+### Corrección
+
+Se extrajeron la carga de fechas de cancelación a `_reconciliation_cancel_dates` y la conversión de reconciliaciones
+a filas a `_reconciliation_report_rows`. Se conservaron los cortes históricos, exclusión de cancelaciones, totales
+bancarios, pendientes de compras y diagnósticos de vínculos huérfanos.
+
+### Verificación
+
+- `tests/test_08_reconciliation_reports.py`: 121/121.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `get_balance_sheet_report` cx=22)
 
 ### Hallazgo SonarCloud
