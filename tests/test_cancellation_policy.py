@@ -178,6 +178,23 @@ def test_cancellation_uses_effective_date_and_preserves_historical_amounts(app_c
     assert audit_row["cancellation_reason"] == "Corrección aprobada"
 
 
+def test_movement_detail_metadata_handles_unrelated_and_reversal_entries(app_ctx):
+    """El detalle conserva estados y metadatos vacíos cuando no hay transición asociada."""
+    from cacao_accounting.database import Book, GLEntry, database
+    from cacao_accounting.reportes.services import _movement_detail_row_values, _movement_voucher_status
+
+    invoice, _actor = _seed_invoice()
+    entry = database.session.execute(database.select(GLEntry).where(GLEntry.voucher_id == invoice.id)).scalars().first()
+    book = database.session.get(Book, entry.ledger_id)
+
+    row = _movement_detail_row_values(entry, None, None, None, book, None, False, True)
+
+    assert row["voucher_status"] == "submitted"
+    assert row["cancellation_date"] is None
+    assert row["cancellation_actor"] is None
+    assert _movement_voucher_status(GLEntry(is_reversal=True)) == "reversal"
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [

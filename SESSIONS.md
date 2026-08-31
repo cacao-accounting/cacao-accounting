@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_movement_detail_row_values` cx=24)
+
+### Hallazgo SonarCloud
+
+Issue `AaBG9c5NWKUcwX8H2P6Z` (`python:S3776`, CRITICAL):
+`cacao_accounting/reportes/services.py`, `_movement_detail_row_values`, complejidad cognitiva 24 frente al umbral 15.
+
+### Corrección
+
+Se extrajeron la resolución del estado del comprobante a `_movement_voucher_status` y la consulta/serialización de
+metadatos de cancelación a `_movement_cancellation_metadata`. Se conservaron los datos de cuenta, tercero, moneda,
+saldos acumulados y metadatos de reversión/cancelación.
+
+### Verificación
+
+- `tests/test_cancellation_policy.py`: 10/10; se cubren entradas normales, canceladas, reversadas y sin transición.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_create_stock_ledger_for_document` cx=26)
 
 ### Hallazgo SonarCloud
