@@ -2477,13 +2477,20 @@ def _create_stock_movement(
     )
 
 
-def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntryItem) -> StockLedgerEntry | None:
-    """Crea movimiento de inventario para una conciliacion de cantidad/valor objetivo."""
-    from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
-
+def _reconciliation_warehouse(document: StockEntry, line: StockEntryItem) -> str:
+    """Resolve the warehouse used by a stock reconciliation line."""
     warehouse = line.target_warehouse or line.source_warehouse or document.to_warehouse or document.from_warehouse
     if not warehouse:
         raise PostingError("La conciliación requiere bodega.")
+    return warehouse
+
+
+def _reconciliation_snapshot(
+    document: StockEntry, line: StockEntryItem, warehouse: str
+) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal] | None:
+    """Lock current inventory and validate the requested reconciliation delta."""
+    from cacao_accounting.inventario.service import InventoryServiceError, validate_batch_serial
+
     current_bin = (
         database.session.query(StockBin)
         .with_for_update()
@@ -2524,7 +2531,19 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
         raise PostingError(
             "La conciliación no puede aumentar cantidad mientras reduce el valor; registre el ajuste de valor por separado."
         )
+    return current_qty, counted_qty, current_value, target_value, qty_change, value_change
 
+
+def _reconciliation_valuation(
+    document: StockEntry,
+    line: StockEntryItem,
+    warehouse: str,
+    qty_change: Decimal,
+    target_value: Decimal,
+    counted_qty: Decimal,
+    value_change: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """Resolve FIFO cost and valuation rate for a reconciliation movement."""
     fifo_value_change = value_change
     if qty_change < 0:
         valuation_rate, fifo_value_change = _consume_reconciliation_stock(
@@ -2533,28 +2552,22 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
         line._inventory_cost_amount = abs(fifo_value_change)
     else:
         valuation_rate = value_change / qty_change if qty_change != 0 else Decimal("0")
-    line.current_qty = current_qty
-    line.counted_qty = counted_qty
-    line.qty_difference = qty_change
-    line.current_stock_value = current_value
-    line.target_stock_value = target_value
-    line.stock_value_difference = value_change
-    line.target_valuation_rate = valuation_rate
-    line.valuation_rate = valuation_rate
-    line.qty = abs(qty_change)
-    line.qty_in_base_uom = abs(qty_change)
-    line.amount = abs(value_change)
-    qty_after, stock_value_after = _upsert_stock_bin(
-        company=document.company,
-        item_code=line.item_code,
-        warehouse=warehouse,
-        qty_change=qty_change,
-        valuation_rate=valuation_rate,
-        value_change=value_change,
-    )
-    if qty_change != 0:
-        update_serial_state(line, outgoing=qty_change < 0, warehouse=warehouse)
-    valuation_rate_after = stock_value_after / qty_after if qty_after > 0 else Decimal("0")
+    return valuation_rate, fifo_value_change
+
+
+def _add_reconciliation_valuation_layers(
+    document: StockEntry,
+    line: StockEntryItem,
+    warehouse: str,
+    qty_change: Decimal,
+    valuation_rate: Decimal,
+    fifo_value_change: Decimal,
+    value_change: Decimal,
+    qty_after: Decimal,
+    stock_value_after: Decimal,
+    current_value: Decimal,
+) -> None:
+    """Persist valuation layers for a reconciliation, including FIFO adjustments."""
     layer_kwargs = {
         "item_code": line.item_code,
         "warehouse": warehouse,
@@ -2587,17 +2600,65 @@ def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntry
                     remaining_stock_value=max(stock_value_after, Decimal("0")),
                 )
             )
-    else:
-        database.session.add(
-            StockValuationLayer(
-                **layer_kwargs,
-                qty=qty_change,
-                rate=valuation_rate,
-                stock_value_difference=value_change,
-                remaining_qty=max(qty_after, Decimal("0")),
-                remaining_stock_value=max(stock_value_after, Decimal("0")),
-            )
+        return
+    database.session.add(
+        StockValuationLayer(
+            **layer_kwargs,
+            qty=qty_change,
+            rate=valuation_rate,
+            stock_value_difference=value_change,
+            remaining_qty=max(qty_after, Decimal("0")),
+            remaining_stock_value=max(stock_value_after, Decimal("0")),
         )
+    )
+
+
+def _create_stock_reconciliation_movement(document: StockEntry, line: StockEntryItem) -> StockLedgerEntry | None:
+    """Crea movimiento de inventario para una conciliacion de cantidad/valor objetivo."""
+    from cacao_accounting.inventario.service import update_serial_state
+
+    warehouse = _reconciliation_warehouse(document, line)
+    snapshot = _reconciliation_snapshot(document, line, warehouse)
+    if snapshot is None:
+        return None
+    current_qty, counted_qty, current_value, target_value, qty_change, value_change = snapshot
+    valuation_rate, fifo_value_change = _reconciliation_valuation(
+        document, line, warehouse, qty_change, target_value, counted_qty, value_change
+    )
+    line.current_qty = current_qty
+    line.counted_qty = counted_qty
+    line.qty_difference = qty_change
+    line.current_stock_value = current_value
+    line.target_stock_value = target_value
+    line.stock_value_difference = value_change
+    line.target_valuation_rate = valuation_rate
+    line.valuation_rate = valuation_rate
+    line.qty = abs(qty_change)
+    line.qty_in_base_uom = abs(qty_change)
+    line.amount = abs(value_change)
+    qty_after, stock_value_after = _upsert_stock_bin(
+        company=document.company,
+        item_code=line.item_code,
+        warehouse=warehouse,
+        qty_change=qty_change,
+        valuation_rate=valuation_rate,
+        value_change=value_change,
+    )
+    if qty_change != 0:
+        update_serial_state(line, outgoing=qty_change < 0, warehouse=warehouse)
+    valuation_rate_after = stock_value_after / qty_after if qty_after > 0 else Decimal("0")
+    _add_reconciliation_valuation_layers(
+        document,
+        line,
+        warehouse,
+        qty_change,
+        valuation_rate,
+        fifo_value_change,
+        value_change,
+        qty_after,
+        stock_value_after,
+        current_value,
+    )
     return StockLedgerEntry(
         posting_date=document.posting_date,
         item_code=line.item_code,
