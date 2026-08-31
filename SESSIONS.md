@@ -1,5 +1,25 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `ventas_cotizacion_nueva` cx=26)
+
+### Hallazgo SonarCloud
+
+Issue `AaAa6suhSsPfV5h49WFm` (`python:S3776`, CRITICAL):
+`cacao_accounting/ventas/routes.py`, `ventas_cotizacion_nueva`, complejidad cognitiva 26 frente al umbral 15.
+
+### Corrección
+
+Se extrajo el flujo POST de creación a `_create_sales_quotation_from_request`, conservando validación de encabezado,
+acceso por compañía, moneda, origen documental, líneas, relaciones, totales, rollback, mensajes y redirección.
+
+### Verificación
+
+- `tests/test_03webactions.py -k sales_quotation_routes --slow=True` y `tests/test_o2c_full_cycle.py -k quotation`: 5/5.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_save_numbering_configs` cx=27)
 
 ### Hallazgo SonarCloud
