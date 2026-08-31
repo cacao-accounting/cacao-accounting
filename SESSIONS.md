@@ -1,5 +1,29 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_reconcile_three_way` cx=28)
+
+### Hallazgo SonarCloud
+
+Issue `AaAIQvUHKije7nS9oKot` (`python:S3776`, CRITICAL):
+`cacao_accounting/compras/purchase_reconciliation_service.py`, `_reconcile_three_way`, complejidad cognitiva 28
+frente al umbral 15.
+
+### Corrección
+
+Se separaron el cálculo de totales y tolerancias (`_calculate_three_way_totals`) y la persistencia de asignaciones de
+líneas (`_persist_three_way_items`). Se conservaron las validaciones de orden, compañía, proveedor, moneda y estado,
+el cálculo de cantidades pendientes, diferencias de precio/importe, tolerancias y el detalle de matching 3-way.
+
+### Verificación
+
+- Escenarios focales de `tests/test_08_reconciliation_reports.py`: 4/4.
+- Cobertura focalizada: las líneas nuevas del refactor están cubiertas; las líneas no cubiertas restantes pertenecen
+  a funciones preexistentes o a escenarios fuera de este flujo.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — Inventario `_paginate_list` cx=28)
 
 ### Hallazgo SonarCloud
