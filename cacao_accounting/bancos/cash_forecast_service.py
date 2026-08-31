@@ -178,6 +178,26 @@ def _compute_real_movements(
     return real_inflow, real_outflow, real_other
 
 
+def _invoice_forecast_amount(invoice, company_currency: str, flow_date: date) -> tuple[Decimal, Decimal] | None:
+    """Resolve an invoice balance, tolerating only the documented legacy fallbacks."""
+    try:
+        if getattr(invoice, "__table__", None) is None:
+            return _legacy_forecast_amount(invoice, company_currency, flow_date)
+        outstanding = compute_outstanding_amount(invoice)
+        return outstanding, _forecast_base_amount(outstanding, invoice, company_currency, flow_date)
+    except OperationalError as exc:
+        if not _is_missing_document_relation_table(exc):
+            raise
+        try:
+            return _legacy_forecast_amount(invoice, company_currency, flow_date)
+        except CashForecastConversionError:
+            return None
+    except CashForecastConversionError:
+        # An incomplete document must not make every other cash-flow projection
+        # unavailable. It remains excluded until its FX data is completed.
+        return None
+
+
 def _sum_invoice_amount(
     invoices: list,
     start_date: date,
@@ -186,32 +206,19 @@ def _sum_invoice_amount(
 ) -> Decimal:
     """Suma saldos pendientes usando la fecha de vencimiento del documento."""
     total = Decimal("0")
-    for inv in invoices:
-        flow_date = getattr(inv, "due_date", None) or inv.posting_date
-        if start_date <= flow_date <= end_date:
-            try:
-                if getattr(inv, "__table__", None) is None:
-                    outstanding, amount = _legacy_forecast_amount(inv, company_currency, flow_date)
-                else:
-                    outstanding = compute_outstanding_amount(inv)
-                    amount = _forecast_base_amount(outstanding, inv, company_currency, flow_date)
-            except OperationalError as exc:
-                if not _is_missing_document_relation_table(exc):
-                    raise
-                try:
-                    outstanding, amount = _legacy_forecast_amount(inv, company_currency, flow_date)
-                except CashForecastConversionError:
-                    continue
-            except CashForecastConversionError:
-                # An incomplete document must not make every other cash-flow
-                # projection unavailable. It remains excluded until its FX
-                # data is completed.
-                continue
-            if outstanding <= 0:
-                continue
-            if getattr(inv, "is_return", False):
-                amount = -Decimal(str(amount))
-            total += Decimal(str(amount))
+    for invoice in invoices:
+        flow_date = getattr(invoice, "due_date", None) or invoice.posting_date
+        if not start_date <= flow_date <= end_date:
+            continue
+        forecast = _invoice_forecast_amount(invoice, company_currency, flow_date)
+        if forecast is None:
+            continue
+        outstanding, amount = forecast
+        if outstanding <= 0:
+            continue
+        if getattr(invoice, "is_return", False):
+            amount = -Decimal(str(amount))
+        total += Decimal(str(amount))
     return total
 
 
