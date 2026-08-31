@@ -1,5 +1,30 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_xlsx_rows` cx=43)
+
+### Hallazgo SonarCloud
+
+Issue `AaBPsMnNkZtwr73q0yaS` (`python:S3776`, CRITICAL):
+`cacao_accounting/api/line_import.py`, `_xlsx_rows`, complejidad cognitiva
+43 frente al umbral 15.
+
+### Corrección
+
+Se separaron la selección segura de hojas, la construcción del mapa de encabezados, la detección de columnas sin
+encabezado, la lectura de celdas, la conversión de filas y la aplicación del límite de 500 líneas. Se conservaron los
+alias localizados, encabezados desconocidos o duplicados, campos requeridos, rechazo de fórmulas, normalización de
+fechas, filas vacías y errores estructurales del archivo.
+
+### Verificación
+
+- `tests/test_line_import_api.py`: 48/48.
+- Cobertura focalizada del módulo: 83%; todas las líneas nuevas del refactor están cubiertas. Las líneas no cubiertas
+  restantes son código preexistente fuera del parser XLSX refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `ventas_entrega_nuevo` cx=46)
 
 ### Hallazgo SonarCloud

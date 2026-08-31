@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2025 - 2026 William José MORENO Reyes
 
 import json
+from datetime import date
 from io import BytesIO
 from decimal import Decimal
 import pytest
@@ -459,6 +460,95 @@ def test_parse_xlsx_journal_uses_server_schema_and_rejects_formulas(logged_in_cl
     data = response.get_json()
     assert data["valid"] is False
     assert any(error["field"] == "credit" and "fórmulas" in error["message"] for error in data["errors"])
+
+
+def test_select_xlsx_worksheet_enforces_named_or_single_sheet_rules():
+    """Worksheet selection rejects excessive and ambiguous workbook structures."""
+    named = SimpleNamespace(title="Líneas")
+    selected, errors = line_import._select_xlsx_worksheet(SimpleNamespace(worksheets=[named, SimpleNamespace(title="Other")]))
+    assert selected is named
+    assert errors == []
+
+    selected, errors = line_import._select_xlsx_worksheet(SimpleNamespace(worksheets=[SimpleNamespace(title="Sheet")]))
+    assert selected.title == "Sheet"
+    assert errors == []
+
+    selected, errors = line_import._select_xlsx_worksheet(
+        SimpleNamespace(worksheets=[SimpleNamespace(title="One"), SimpleNamespace(title="Two")])
+    )
+    assert selected is None
+    assert errors[0]["field"] == "sheet"
+
+    selected, errors = line_import._select_xlsx_worksheet(SimpleNamespace(worksheets=[SimpleNamespace()] * 11))
+    assert selected is None
+    assert errors[0]["field"] == "file"
+
+
+def test_xlsx_header_mapping_reports_blank_unknown_and_duplicate_columns():
+    """Header mapping preserves columns while reporting structural errors."""
+    rows = [
+        tuple(SimpleNamespace(value=value) for value in ("", "unknown", "Code", "code")),
+        tuple(SimpleNamespace(value=value) for value in ("orphan", "value", "one", "two")),
+    ]
+    mapped, seen, errors = line_import._map_xlsx_headers(["", "unknown", "code", "code"], rows, {"code": "code"})
+
+    assert mapped == [None, None, "code", "code"]
+    assert seen == {"code"}
+    assert {error["field"] for error in errors} == {"column_1", "unknown", "code"}
+
+
+def test_xlsx_rows_reports_empty_wide_and_missing_required_structures(monkeypatch):
+    """XLSX parsing reports empty sheets, oversized headers, and missing keys."""
+    schema = {"columns": [{"key": "code", "required": True}]}
+    empty_sheet = SimpleNamespace(title="Sheet", iter_rows=lambda: [])
+    monkeypatch.setattr(line_import, "load_workbook", lambda *args, **kwargs: SimpleNamespace(worksheets=[empty_sheet]))
+    rows, errors = line_import._xlsx_rows("unused", schema)
+    assert rows == []
+    assert errors[0]["field"] == "sheet"
+
+    wide_header = tuple(SimpleNamespace(value=str(index)) for index in range(101))
+    wide_sheet = SimpleNamespace(title="Sheet", iter_rows=lambda: [wide_header])
+    monkeypatch.setattr(line_import, "load_workbook", lambda *args, **kwargs: SimpleNamespace(worksheets=[wide_sheet]))
+    rows, errors = line_import._xlsx_rows("unused", schema)
+    assert rows == []
+    assert errors[0]["field"] == "header"
+
+    unknown_header = tuple(SimpleNamespace(value="unknown") for _ in range(1))
+    unknown_sheet = SimpleNamespace(title="Sheet", iter_rows=lambda: [unknown_header])
+    monkeypatch.setattr(line_import, "load_workbook", lambda *args, **kwargs: SimpleNamespace(worksheets=[unknown_sheet]))
+    rows, errors = line_import._xlsx_rows("unused", schema)
+    assert rows == []
+    assert {error["field"] for error in errors} == {"unknown", "code"}
+
+    ambiguous_sheet = SimpleNamespace(title="Other", iter_rows=lambda: [unknown_header])
+    monkeypatch.setattr(
+        line_import,
+        "load_workbook",
+        lambda *args, **kwargs: SimpleNamespace(worksheets=[unknown_sheet, ambiguous_sheet]),
+    )
+    rows, errors = line_import._xlsx_rows("unused", schema)
+    assert rows == []
+    assert errors[0]["field"] == "sheet"
+
+
+def test_canonical_xlsx_rows_normalizes_dates_and_limits_rows():
+    """Canonical conversion normalizes dates and stops after 500 populated rows."""
+    errors = []
+    date_cell = SimpleNamespace(value=date(2026, 8, 31), data_type="d")
+    formula_cell = SimpleNamespace(value="=SUM(1,2)", data_type="f")
+    item = line_import._canonical_xlsx_row(
+        (SimpleNamespace(value=None, data_type="n"), date_cell, formula_cell), 2, [None, "date", "formula"], errors
+    )
+    assert item == {"_excel_row": 2, "date": "2026-08-31"}
+    assert errors[0]["field"] == "formula"
+
+    row = (SimpleNamespace(value="value", data_type="s"),)
+    blank_row = (SimpleNamespace(value=None, data_type="n"),)
+    rows = [row, blank_row] + [row] * 501
+    errors = []
+    canonical_rows = line_import._canonical_xlsx_rows(rows, ["code"], errors)
+    assert len(canonical_rows) == 500
+    assert errors[-1]["field"] == "file"
 
 
 def test_validate_journal_import_includes_existing_lines(logged_in_client):
