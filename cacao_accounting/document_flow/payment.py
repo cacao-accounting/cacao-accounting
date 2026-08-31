@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from cacao_accounting.contabilidad.arap_allocation import AllocationLine
 
 _MSG_MONTO_MAYOR_CERO = "El monto aplicado debe ser mayor que cero."
+_MSG_TASA_PAGO_POSITIVA = "Se requiere una tasa positiva entre la moneda del documento y la del pago."
 
 MAX_RECONCILIATION_LINES = 100
 
@@ -855,7 +856,7 @@ def _discount_allocation_line(
     else:
         effective_rate = decimal_or_zero(requested_rate)
         if effective_rate <= 0:
-            raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
     consumed = _cash_consumed(values.allocated, values.discount, values.gain_loss) * effective_rate
     if consumed > available + Decimal("0.01"):
         raise _document_flow_error("El monto aplicado excede el saldo disponible del pago.", 409)
@@ -1042,7 +1043,7 @@ def _plan_reconciliation_allocation(
         effective_rate = Decimal("1")
     else:
         if requested_rate is None:
-            raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
         effective_rate = decimal_or_zero(requested_rate)
     resolver = OpenItemResolver(
         [
@@ -1334,7 +1335,7 @@ def _validate_advance_allocation(
     if payment_currency and document_currency and payment_currency != document_currency:
         rate = decimal_or_zero(exchange_rate)
         if rate <= 0:
-            raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
     else:
         rate = Decimal("1")
     payment_consumed = amount * rate
@@ -1853,7 +1854,7 @@ def _payment_target_exchange_rate(payment: PaymentEntry, invoice: Any, selected:
     requested_rate = selected.get("payment_exchange_rate") or selected.get("exchange_rate")
     effective_rate = decimal_or_zero(requested_rate)
     if effective_rate <= 0:
-        raise _document_flow_error("Se requiere una tasa positiva entre la moneda del documento y la del pago.", 409)
+        raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
     return effective_rate
 
 
