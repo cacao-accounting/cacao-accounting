@@ -12,7 +12,7 @@ APPAUTHOR = "William Moreno Reyes"
 MAYOR = "0"
 MENOR = "0"
 PATCH = "1"
-DATE = "20260825"
+DATE = "20260831"
 PRERELEASE = "dev" + DATE
 POSTRELESE = None
 
