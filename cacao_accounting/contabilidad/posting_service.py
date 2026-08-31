@@ -2964,6 +2964,80 @@ def _comprobante_lines(document: ComprobanteContable) -> list[ComprobanteContabl
     )
 
 
+def _required_stock_warehouse(document: Any, line: Any, warehouse: str | None) -> str:
+    """Valida la bodega de una línea y devuelve su valor no nulo."""
+    _validate_stock_entry_warehouses(document, line)
+    if not warehouse:
+        raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
+    return warehouse
+
+
+def _outgoing_stock_values(
+    document: Any, line: Any, warehouse: str, qty_change: Decimal, item: Any
+) -> tuple[Decimal, Decimal, str | None]:
+    """Valida una salida y obtiene su costo desde las capas de valoración."""
+    from cacao_accounting.inventario.service import InventoryServiceError, validate_batch_serial
+
+    try:
+        validate_batch_serial(
+            line,
+            outgoing=True,
+            warehouse=warehouse,
+            posting_date=getattr(document, "posting_date", None),
+        )
+    except InventoryServiceError as exc:
+        raise PostingError(str(exc)) from exc
+    try:
+        cost_amount, cost_rate, source_layer_id = _consume_stock_valuation_layers(
+            company=document.company,
+            item_code=line.item_code,
+            warehouse=warehouse,
+            quantity=abs(qty_change),
+        )
+    except PostingError:
+        if not item.allow_negative_stock:
+            raise
+        cost_rate = _consume_available_layers_for_negative_stock(
+            company=document.company,
+            item_code=line.item_code,
+            warehouse=warehouse,
+            total_qty=abs(qty_change),
+            fallback_rate=_line_rate_generic(line),
+        )
+        cost_amount = cost_rate * abs(qty_change)
+        source_layer_id = None
+    line._inventory_cost_amount = cost_amount
+    return cost_amount, cost_rate, source_layer_id
+
+
+def _incoming_stock_values(
+    document: Any, line: Any, warehouse: str, qty_change: Decimal, value_change: Decimal
+) -> tuple[Decimal, Decimal]:
+    """Valida una entrada y resuelve su valor y tasa de inventario."""
+    from cacao_accounting.inventario.service import InventoryServiceError, validate_batch_serial
+
+    try:
+        validate_batch_serial(
+            line,
+            outgoing=False,
+            warehouse=warehouse,
+            allow_transfer=getattr(document, "purpose", None) == "material_transfer",
+            allow_return=isinstance(document, DeliveryNote) and bool(document.is_return),
+            posting_date=getattr(document, "posting_date", None),
+        )
+    except InventoryServiceError as exc:
+        raise PostingError(str(exc)) from exc
+    if isinstance(document, DeliveryNote) and bool(document.is_return):
+        value_change = _delivery_return_cost(document, line, warehouse, qty_change)
+        line._inventory_cost_amount = value_change
+    valuation_rate = (
+        value_change / qty_change
+        if qty_change != 0
+        else _decimal_value(line.valuation_rate or getattr(line, "rate", None) or 0)
+    )
+    return value_change, valuation_rate
+
+
 def _create_stock_ledger_for_document(
     document: Any,
     qty_change: Decimal,
@@ -2971,66 +3045,16 @@ def _create_stock_ledger_for_document(
     warehouse: str | None,
     line: Any,
 ) -> StockLedgerEntry:
-    from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
+    from cacao_accounting.inventario.service import update_serial_state
 
-    _validate_stock_entry_warehouses(document, line)
+    warehouse = _required_stock_warehouse(document, line, warehouse)
     item = _stock_item_for(line)
     if qty_change < 0:
-        if not warehouse:
-            raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
-        try:
-            validate_batch_serial(
-                line,
-                outgoing=True,
-                warehouse=warehouse,
-                posting_date=getattr(document, "posting_date", None),
-            )
-        except InventoryServiceError as exc:
-            raise PostingError(str(exc)) from exc
-        try:
-            cost_amount, cost_rate, source_layer_id = _consume_stock_valuation_layers(
-                company=document.company,
-                item_code=line.item_code,
-                warehouse=warehouse,
-                quantity=abs(qty_change),
-            )
-        except PostingError:
-            if not item.allow_negative_stock:
-                raise
-            cost_rate = _consume_available_layers_for_negative_stock(
-                company=document.company,
-                item_code=line.item_code,
-                warehouse=warehouse,
-                total_qty=abs(qty_change),
-                fallback_rate=_line_rate_generic(line),
-            )
-            cost_amount = cost_rate * abs(qty_change)
-            source_layer_id = None
+        cost_amount, cost_rate, source_layer_id = _outgoing_stock_values(document, line, warehouse, qty_change, item)
         valuation_rate = cost_rate
         value_change = -cost_amount
-        line._inventory_cost_amount = cost_amount
     else:
-        if not warehouse:
-            raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
-        try:
-            validate_batch_serial(
-                line,
-                outgoing=False,
-                warehouse=warehouse,
-                allow_transfer=getattr(document, "purpose", None) == "material_transfer",
-                allow_return=isinstance(document, DeliveryNote) and bool(document.is_return),
-                posting_date=getattr(document, "posting_date", None),
-            )
-        except InventoryServiceError as exc:
-            raise PostingError(str(exc)) from exc
-        if isinstance(document, DeliveryNote) and bool(document.is_return):
-            value_change = _delivery_return_cost(document, line, warehouse, qty_change)
-            line._inventory_cost_amount = value_change
-        valuation_rate = (
-            value_change / qty_change
-            if qty_change != 0
-            else _decimal_value(line.valuation_rate or getattr(line, "rate", None) or 0)
-        )
+        value_change, valuation_rate = _incoming_stock_values(document, line, warehouse, qty_change, value_change)
 
     update_serial_state(line, outgoing=qty_change < 0, warehouse=warehouse)
     qty_after, stock_value_after = _upsert_stock_bin(
