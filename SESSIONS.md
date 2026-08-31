@@ -1,5 +1,30 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_sum_invoice_amount` cx=28)
+
+### Hallazgo SonarCloud
+
+Issue `AaAbv2FUOioNy6Mzk_6q` (`python:S3776`, CRITICAL):
+`cacao_accounting/bancos/cash_forecast_service.py`, `_sum_invoice_amount`, complejidad cognitiva 28 frente al
+umbral 15.
+
+### Corrección
+
+Se extrajo la resolución de saldo y conversión de cada factura a `_invoice_forecast_amount`, manteniendo el fallback
+para esquemas legacy, la propagación de errores operacionales no relacionados, la exclusión segura de documentos con
+moneda/tasa incompleta, saldos no positivos y el signo de devoluciones.
+
+### Verificación
+
+- Escenarios focales de `tests/test_record_to_reports_multicurrency_multiledger.py` y `tests/test_cash_forecast.py`:
+  3/3.
+- Cobertura focalizada: las líneas nuevas del refactor están cubiertas; las líneas no cubiertas restantes pertenecen
+  a funciones preexistentes o a escenarios fuera de este flujo.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_reconcile_three_way` cx=28)
 
 ### Hallazgo SonarCloud
