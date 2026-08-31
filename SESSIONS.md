@@ -806,3 +806,63 @@ Los indicadores verdes para acceso normal se eliminan, preservando estados excep
 - El workspace se limita a 1280 px y responde de tres a dos y una columna según el ancho disponible.
 - El login conserva una superficie clara aunque la preferencia de aplicación sea oscura.
 - QA independiente verificó la cascada, el contraste de estados, la responsividad y las pruebas focalizadas.
+
+## 2026-08-31 (verificación de invariantes del kardex, issue #773)
+
+### Petición del usuario
+
+Confirmar que el módulo de inventarios lleva un kardex robusto, inmutable, multimoneda y multilibro, con control de
+múltiples unidades de medida, lotes y números de serie; anulación solo dentro del mismo período habilitado mediante
+transacciones recíprocas (sin concepto de reversión en inventario); valoración por compañía y no por bodega; UOM
+predeterminada inmutable tras el primer movimiento; y separación de roles donde compras/ventas no afectan inventario
+(solo consultan recepciones/entregas) y solo el usuario de almacén recibe o despacha producto.
+
+### Verificación (auditoría de solo lectura, con evidencia en el código)
+
+- Inmutabilidad del kardex: `StockLedgerEntry` tiene eventos `before_update`/`before_delete` que rechazan toda mutación
+  de cifras o metadatos y el borrado físico; solo `is_cancelled` puede mutar (database/__init__.py:1570-1586).
+- Anulación recíproca: `cancel_document` resuelve la política central (`resolve_cancellation`) que exige el mismo
+  período contable y que esté habilitado y abierto (cancellation_service.py:144-151); `_cancel_stock_movements_if_needed`
+  crea contrapartidas append-only (`is_reversal=True`, `reversal_of`) y fija la capa FIFO de la contrapartida a la capa
+  original (posting_service.py:3167-3220). No existe ruta de reversión de inventario en otro período: la validación del
+  período se ejecuta antes de crear cualquier contrapartida, sin escrituras parciales.
+- Multilibro y multimoneda: los documentos operativos fuerzan `ledger_code=None` y `_document_contexts` publica al GL
+  en todos los libros activos, acumulando las tasas faltantes y bloqueando el registro completo si falta al menos una
+  (posting_service.py:253-328); el mayor físico registra valores en moneda funcional y el kardex multinivel está
+  cubierto por tests/test_record_to_reports_multicurrency_multiledger.py.
+- UOM múltiple: `_line_qty`/`_line_qty_generic` convierten a la unidad base vía `convert_item_qty` y persisten
+  `qty_in_base_uom`; `default_uom_change_allowed` bloquea el cambio de UOM base con movimientos, saldo migrado o líneas
+  de documentos activos (inventario/service.py:936-999); los flags de control (lote/serial/vencimiento) también quedan
+  bloqueados tras el uso.
+- Lotes y seriales: validación de obligatoriedad y disponibilidad con bloqueo pesimista del bin en salidas por lote,
+  seriales unitarios con ciclo available/delivered, vencimiento vigente a la fecha de posteo; maestro de lotes con
+  unicidad por item+numero (commits previos Refs: #773).
+- Valoración por compañía: `Entity.valuation_method` (moving_average/fifo) sin dimensión de bodega; el cambio de método
+  queda bloqueado si la compañía ya tiene operación de inventario (inventario/valuation_settings.py:58-74).
+- Roles S2P/O2C: la recepción de compra se crea/edita/aprueba/anula solo con permisos inventory
+  (compras/routes.py:2422-2790) y la nota de entrega igual (ventas/routes.py:1519-1914); compras conserva vista de
+  recepciones y ventas de entregas vía `exige_acceso_compania_cualquiera`; el usuario de almacén puede operar ambos
+  formularios.
+
+### Pruebas añadidas
+
+tests/test_kardex_invariants.py (13 pruebas) bloquea por regresión los invariantes verificados: mutación de cifras y
+de metadatos rechazadas, borrado físico rechazado, flag de anulación permitido, contrapartida recíproca con par
+original/contrapartida completo (SLE, capa FIFO fijada y GL balanceado), rechazo de anulación en período distinto,
+cerrado y deshabilitado sin escrituras parciales, y la matriz de roles (buyer/seller 403 en new/submit/edit/cancel con
+vista 200; stock 200 en los formularios).
+
+### Nota de entorno
+
+mypy en el venv solo funciona con `env -u PYTHONPATH`: el PYTHONPATH de Replit/Nix inyecta un pathspec 0.12.1 de
+python3.11 que sombrea los paquetes del venv y rompe el arranque de mypy 2.3.0. No se instalaron dependencias nuevas.
+
+### Verificación de calidad
+
+- tests/test_kardex_invariants.py: 13/13 en verde.
+- Regresión focalizada en verde: guards 7/7, cancellation policy 6/6, cancellation period 5/5, batch master 30/30,
+  batch/serial persistencia 10/10, submit+round-trip 31/31, exhaustive 10/10, valuation settings 4/4, uoms 9/9,
+  AUDIT-004 28/28, posting engine (stock/receipt/delivery/cancel) 37/37.
+- Linters limpios sobre el archivo nuevo: black, ruff, flake8, mypy y pydocstyle.
+- QA independiente (segundo agente) revisó el archivo de pruebas, la matriz de roles contra las rutas y la matriz del
+  issue contra el código, con veredicto de apto; sus observaciones menores de cobertura quedaron incorporadas.
