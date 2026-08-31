@@ -1,5 +1,26 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `get_cash_flow_statement` cx=23)
+
+### Hallazgo SonarCloud
+
+Issue `AaBALCD2mykm2BcQkHUG` (`python:S3776`, CRITICAL):
+`cacao_accounting/reportes/cash_flow.py`, `get_cash_flow_statement`, complejidad cognitiva 23 frente al umbral 15.
+
+### Corrección
+
+Se extrajeron la acumulación de utilidad, efectivo y movimientos clasificados a `CashFlowMovementTotals` y
+`_cash_flow_movement_totals`, y la conversión de detalles a filas a `_cash_flow_detail_rows`. Se conservaron el
+bloqueo por configuración incompleta, el saldo inicial, el cuadre de variación de efectivo y el detalle por cuenta.
+
+### Verificación
+
+- `tests/test_cash_flow_statement.py`: 6/6; cobertura del módulo: 90%.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `calculate_taxes` cx=22)
 
 ### Hallazgo SonarCloud
