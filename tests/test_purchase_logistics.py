@@ -49,6 +49,24 @@ def test_logistics_values_can_be_inherited_from_source():
     }
 
 
+def test_logistics_values_rejects_invalid_delivery_date():
+    with pytest.raises(ValueError, match="fecha de entrega"):
+        logistics_values(form={"delivery_date": "30/09/2026"}, terms_field="purchase_terms")
+
+
+def test_logistics_values_prefers_form_values_over_source_values():
+    source = SimpleNamespace(delivery_place="Bodega origen", purchase_terms="Condiciones origen")
+
+    values = logistics_values(
+        source=source,
+        form={"delivery_place": "Bodega destino", "purchase_terms": "Condiciones destino"},
+        terms_field="purchase_terms",
+    )
+
+    assert values["delivery_place"] == "Bodega destino"
+    assert values["purchase_terms"] == "Condiciones destino"
+
+
 def test_landed_cost_snapshot_validates_and_compacts_estimates():
     """Los landed costs estimados se conservan como snapshot JSON."""
     result = _landed_cost_snapshot(

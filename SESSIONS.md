@@ -1,5 +1,28 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `logistics_values` cx=19)
+
+### Hallazgo SonarCloud
+
+Issue `AaAInKzhRXPx87p8DK71` (`python:S3776`, CRITICAL):
+`cacao_accounting/logistics.py`, `logistics_values`, complejidad cognitiva 19 frente al umbral 15.
+
+### Análisis y corrección
+
+No se requirió rediseñar el flujo logístico: la única responsabilidad adicional era convertir fechas y traducir su
+error. Se extrajo `_normalize_logistics_value`; el método principal conserva la precedencia formulario/origen, los
+valores vacíos y la versión Incoterm por defecto.
+
+### Verificación
+
+- `tests/test_purchase_logistics.py`: 12/12.
+- Las ramas nuevas de normalización (fecha válida, fecha inválida y valores vacíos) están cubiertas; la cobertura
+  global del módulo es 87% por funciones preexistentes no relacionadas.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `upload_attachment` cx=16)
 
 ### Hallazgo SonarCloud
