@@ -5,6 +5,7 @@
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -752,3 +753,66 @@ def test_over_billing_validation(app_ctx):
     with pytest.raises(ValueError) as excinfo:
         _validate_sales_invoice_quantities(credit_note.id)
     assert "Sobre-facturación" in str(excinfo.value)
+
+
+def test_sales_list_helpers_apply_company_and_period_scopes(app_ctx, monkeypatch):
+    """Shared sales list filters handle explicit and authorized company scopes."""
+    from cacao_accounting import list_filters
+    from cacao_accounting.ventas import services as sales_services
+
+    user = SimpleNamespace(id="USER-1", classification="operator")
+    monkeypatch.setattr(sales_services, "current_user", user)
+    monkeypatch.setattr(sales_services, "exige_acceso_compania_cualquiera", lambda *args: None)
+    permission = SimpleNamespace(consultar=True, obtener_companias_autorizadas=lambda: ["cacao"])
+    monkeypatch.setattr(sales_services, "obtener_id_modulo_por_nombre", lambda module: module)
+    monkeypatch.setattr(sales_services, "Permisos", lambda modulo, usuario: permission)
+    assert sales_services._authorized_companies(("sales",)) == {"cacao"}
+    monkeypatch.setattr(sales_services, "_authorized_companies", lambda modules: {"cacao"})
+    with app_ctx.test_request_context("/sales/sales-order/list?company=cacao"):
+        explicit = sales_services._apply_company_scope(database.select(SalesOrder), SalesOrder, ("sales",))
+        assert "cacao" in explicit.compile().params.values()
+    with app_ctx.test_request_context("/sales/sales-order/list"):
+        authorized = sales_services._apply_company_scope(database.select(SalesOrder), SalesOrder, ("sales",))
+        assert any("cacao" in value for value in authorized.compile().params.values())
+    monkeypatch.setattr(sales_services, "_authorized_companies", lambda modules: set())
+    with app_ctx.test_request_context("/sales/sales-order/list"):
+        restricted = sales_services._apply_company_scope(database.select(SalesOrder), SalesOrder, ("sales",))
+        assert "false" in str(restricted).lower()
+    with app_ctx.test_request_context("/sales/sales-order/list"):
+        base_query = database.select(SalesOrder)
+        assert sales_services._apply_company_scope(base_query, SimpleNamespace(), ("sales",)) is base_query
+
+    monkeypatch.setattr(sales_services, "current_user", SimpleNamespace(id="USER-1", classification="admin"))
+    with app_ctx.test_request_context("/sales/sales-order/list"):
+        base_query = database.select(SalesOrder)
+        assert sales_services._apply_company_scope(base_query, SalesOrder, ("sales",)) is base_query
+
+    monkeypatch.setattr(sales_services, "current_user", user)
+    no_consult_permission = SimpleNamespace(consultar=False, obtener_companias_autorizadas=lambda: [])
+    monkeypatch.setattr(sales_services, "Permisos", lambda modulo, usuario: no_consult_permission)
+    with app_ctx.test_request_context("/sales/sales-order/list"):
+        assert sales_services._period_company_for_query(("sales",)) is None
+
+    monkeypatch.setattr(sales_services, "_authorized_companies", lambda modules: {"cacao"})
+    monkeypatch.setattr(sales_services, "Permisos", lambda modulo, usuario: permission)
+    with app_ctx.test_request_context("/sales/sales-order/list"):
+        assert sales_services._period_company_for_query(("sales",)) == "cacao"
+    monkeypatch.setattr(sales_services, "current_user", SimpleNamespace(id="USER-1", classification="admin"))
+    marker = object()
+    monkeypatch.setattr(list_filters, "require_period_company", lambda *args, **kwargs: marker)
+    monkeypatch.setattr(list_filters, "apply_period_filter", lambda *args, **kwargs: "filtered")
+    with app_ctx.test_request_context("/sales/sales-order/list?period_from=2026-01-01"):
+        assert sales_services._apply_period_scope(database.select(SalesOrder), SalesOrder, ("sales",)) == "filtered"
+    with app_ctx.test_request_context("/sales/sales-order/list"):
+        base_query = database.select(SalesOrder)
+        assert sales_services._apply_period_scope(base_query, SalesOrder, ("sales",)) is base_query
+    with app_ctx.test_request_context("/sales/sales-order/list"):
+        base_query = database.select(SalesOrder)
+        assert sales_services._apply_period_scope(base_query, SimpleNamespace(), ("sales",)) is base_query
+
+    monkeypatch.setattr(sales_services, "apply_list_filters", lambda query, *args, **kwargs: "filtered")
+    monkeypatch.setattr(sales_services.database, "paginate", lambda query, **kwargs: "page")
+    monkeypatch.setattr(list_filters, "attach_period_picker", lambda *args, **kwargs: None)
+    monkeypatch.setattr(sales_services, "current_user", SimpleNamespace(id="USER-1", classification="admin"))
+    with app_ctx.test_request_context("/sales/sales-order/list?page=2"):
+        assert sales_services._paginate_list(SimpleNamespace(), (), query=object()) == "page"

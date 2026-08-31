@@ -1,5 +1,30 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — Ventas `_paginate_list` cx=37)
+
+### Hallazgo SonarCloud
+
+Issue `AaBALBhWmykm2BcQkHT8` (`python:S3776`, CRITICAL):
+`cacao_accounting/ventas/services.py`, `_paginate_list`, complejidad cognitiva
+37 frente al umbral 15.
+
+### Corrección
+
+Se separaron la obtención de compañías autorizadas, la aplicación del alcance de compañía, la resolución de la
+compañía única para períodos y la aplicación del filtro temporal. Se conservaron los permisos explícitos, el filtro
+por compañía solicitada, el comportamiento para administradores y usuarios sin compañías, los alias de parámetros de
+período, el selector de período, los filtros de listado y la paginación.
+
+### Verificación
+
+- `tests/test_o2c_sales_fixes.py`: 30/30, incluyendo los alcances de compañía/período y la orquestación de paginación.
+- Cobertura focalizada: todas las líneas nuevas del refactor están cubiertas; las líneas no cubiertas restantes
+  pertenecen a funciones preexistentes fuera del flujo refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_paginate_list` cx=37)
 
 ### Hallazgo SonarCloud
