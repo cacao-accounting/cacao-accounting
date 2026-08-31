@@ -1329,7 +1329,7 @@ def _purchase_order_context(form: dict):
     source = _purchase_order_source(form)
     if not _validate_purchase_order_sourcing(sourcing_config, source, award_id, exception_reason):
         return None
-    award, valid_award = _validate_purchase_order_award(award_id, form.get("company") or None)
+    _, valid_award = _validate_purchase_order_award(award_id, form.get("company") or None)
     if not valid_award:
         return None
     supplier_id = form.get("supplier_id") or None
