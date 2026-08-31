@@ -2391,6 +2391,56 @@ def _sorted_gl_query(query: Any, sort_by: str, sort_dir: str) -> Any:
     return query.order_by(direction, GLEntry.id.asc())
 
 
+def _movement_voucher_status(entry: GLEntry) -> str:
+    """Devuelve el estado visible de una línea del mayor."""
+    if entry.is_cancelled:
+        return "cancelled"
+    if entry.is_reversal:
+        return "reversal"
+    return "submitted"
+
+
+def _movement_cancellation_metadata(entry: GLEntry) -> dict[str, Any]:
+    """Obtiene la transición y los metadatos de cancelación de una línea."""
+    transition = (
+        database.session.execute(
+            select(DocumentTransition)
+            .where(
+                DocumentTransition.transition_type.in_(("cancellation", "reversal")),
+                DocumentTransition.source_type == entry.voucher_type,
+                or_(
+                    DocumentTransition.source_id == entry.voucher_id,
+                    DocumentTransition.target_id == entry.voucher_id,
+                ),
+            )
+            .order_by(DocumentTransition.executed_at.desc(), DocumentTransition.id.desc())
+        )
+        .scalars()
+        .first()
+    )
+    if transition is None:
+        return {
+            "is_cancelled": bool(entry.is_cancelled),
+            "is_reversal": bool(entry.is_reversal),
+            "reversal_of": entry.reversal_of,
+            "cancellation_date": None,
+            "cancellation_requested_at": None,
+            "cancellation_executed_at": None,
+            "cancellation_actor": None,
+            "cancellation_reason": None,
+        }
+    return {
+        "is_cancelled": bool(entry.is_cancelled),
+        "is_reversal": bool(entry.is_reversal),
+        "reversal_of": entry.reversal_of,
+        "cancellation_date": transition.posting_date,
+        "cancellation_requested_at": transition.requested_at,
+        "cancellation_executed_at": transition.executed_at,
+        "cancellation_actor": transition.actor_user_id,
+        "cancellation_reason": transition.reason,
+    }
+
+
 def _movement_detail_row_values(
     entry: GLEntry,
     account: Accounts | None,
@@ -2403,12 +2453,6 @@ def _movement_detail_row_values(
 ) -> dict[str, Any]:
     """Construye el diccionario de salida para una fila de movimiento contable."""
     account_code = entry.account_code or (account.code if account else "") or ""
-    if entry.is_cancelled:
-        voucher_status = "cancelled"
-    elif entry.is_reversal:
-        voucher_status = "reversal"
-    else:
-        voucher_status = "submitted"
     row_values: dict[str, Any] = {
         "posting_date": entry.posting_date,
         "accounting_period": period.name if period else None,
@@ -2429,41 +2473,10 @@ def _movement_detail_row_values(
         "line_comment": entry.remarks,
         "created_by": entry.created_by,
         "created_at": entry.created,
-        "voucher_status": voucher_status,
+        "voucher_status": _movement_voucher_status(entry),
     }
     if include_cancellation_metadata:
-        row_values.update(
-            {
-                "is_cancelled": bool(entry.is_cancelled),
-                "is_reversal": bool(entry.is_reversal),
-                "reversal_of": entry.reversal_of,
-            }
-        )
-        transition = (
-            database.session.execute(
-                select(DocumentTransition)
-                .where(
-                    DocumentTransition.transition_type.in_(("cancellation", "reversal")),
-                    DocumentTransition.source_type == entry.voucher_type,
-                    or_(
-                        DocumentTransition.source_id == entry.voucher_id,
-                        DocumentTransition.target_id == entry.voucher_id,
-                    ),
-                )
-                .order_by(DocumentTransition.executed_at.desc(), DocumentTransition.id.desc())
-            )
-            .scalars()
-            .first()
-        )
-        row_values.update(
-            {
-                "cancellation_date": transition.posting_date if transition else None,
-                "cancellation_requested_at": transition.requested_at if transition else None,
-                "cancellation_executed_at": transition.executed_at if transition else None,
-                "cancellation_actor": transition.actor_user_id if transition else None,
-                "cancellation_reason": transition.reason if transition else None,
-            }
-        )
+        row_values.update(_movement_cancellation_metadata(entry))
     if include_running_balance and running_balance is not None:
         row_values["running_balance"] = running_balance
     return row_values
