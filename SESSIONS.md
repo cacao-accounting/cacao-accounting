@@ -1,5 +1,29 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `TransactionDocumentAdapter.validate_document` cx=29)
+
+### Hallazgo SonarCloud
+
+Issue `AaAb4cY70SpjD9SaGpBH` (`python:S3776`, CRITICAL):
+`cacao_accounting/imports/adapters/transaction_documents.py`, `TransactionDocumentAdapter.validate_document`,
+complejidad cognitiva 29 frente al umbral 15.
+
+### Corrección
+
+Se separaron la validación del documento origen y la validación de bodega, artículo y lote por fila. Se conservaron
+los requisitos de tercero, fecha y período abierto, pertenencia de compañía, estado del origen, membership del
+tercero, controles de stock/bodega, lotes, moneda y tipo de cambio.
+
+### Verificación
+
+- `tests/test_batch_master_data.py`: 31/31.
+- Cobertura focalizada del adaptador: 57%; las líneas no cubiertas restantes pertenecen a métodos preexistentes o a
+  escenarios fuera de la validación refactorizada.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_create_stock_reconciliation_movement` cx=31)
 
 ### Hallazgo SonarCloud

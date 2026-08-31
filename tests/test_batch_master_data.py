@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -559,6 +560,37 @@ def test_import_adapter_validate_document_accepts_known_active_batch(app_ctx):
 
     assert not any("lote" in message for message in errors_valid)
     assert any("no existe en el maestro de lotes" in message for message in errors_unknown)
+
+
+def test_import_adapter_document_helpers_validate_sources_and_rows(app_ctx, monkeypatch):
+    """Document helpers reject invalid sources, warehouses and missing stock warehouses."""
+    adapter = _purchase_receipt_adapter()
+    first_row = {"documento_origen": "PO-1", "tercero": "SUP-1"}
+    source_cases = [
+        (None, "no existe"),
+        (SimpleNamespace(docstatus=0), "debe estar aprobado"),
+        (SimpleNamespace(docstatus=1, company="otra"), "pertenecer a la compañía"),
+        (SimpleNamespace(docstatus=1, company="cacao", supplier_id="SUP-2"), "no coincide"),
+    ]
+    for source, expected in source_cases:
+        errors = []
+        adapter._validate_source_document(first_row, source, "cacao", errors)  # noqa: SLF001
+        assert any(expected in message for message in errors)
+
+    row_errors = []
+    adapter._validate_document_row(
+        {"producto": "ITEM-LOT", "bodega": "WH-UNKNOWN", "lote": ""}, "cacao", row_errors
+    )  # noqa: SLF001
+    assert any("no pertenece" in message for message in row_errors)
+    assert any("requiere lote" in message for message in row_errors)
+    row_errors = []
+    item = database.session.execute(database.select(Item).filter_by(code="ITEM-LOT")).scalar_one()
+    monkeypatch.setattr(database.session, "get", lambda model, identifier: item if model is Item else None)
+    adapter._validate_document_row({"producto": "ITEM-LOT", "bodega": "", "lote": ""}, "cacao", row_errors)  # noqa: SLF001
+    assert any("requiere una bodega" in message for message in row_errors)
+
+    errors = adapter.validate_document([{"fecha": "not-a-date", "producto": "ITEM-NB"}], {"company_id": "cacao"})
+    assert "La fecha debe usar formato ISO YYYY-MM-DD." in errors
 
 
 def test_import_adapter_skips_batch_validation_when_not_enabled(app_ctx):
