@@ -457,35 +457,34 @@ def _bank_reconciliation_allocated_amount(transaction: BankTransaction) -> Decim
     return transaction.withdrawal
 
 
-def _post_bank_difference_adjustment(
-    reconciliation_id: str,
-    transaction: BankTransaction,
-    difference_amount: Decimal,
-    user_id: str,
-) -> None:
-    """Post and attach a bank-difference journal to its reconciliation."""
-    from cacao_accounting.contabilidad.journal_service import JournalValidationError, submit_journal
-
-    reconciliation = database.session.get(Reconciliation, reconciliation_id)
-    reconciliation_date = reconciliation.recon_date if reconciliation is not None else date.today()
-
-    signed_difference_amount = difference_amount
+def _signed_bank_difference(transaction: BankTransaction, difference_amount: Decimal) -> Decimal:
+    """Return the adjustment sign required by the bank transaction direction."""
     if transaction.deposit is not None and transaction.deposit > 0:
-        signed_difference_amount = -abs(difference_amount)
-    else:
-        signed_difference_amount = abs(difference_amount)
+        return -abs(difference_amount)
+    return abs(difference_amount)
+
+
+def _submit_bank_difference_journal(
+    reconciliation_id: str, transaction: BankTransaction, amount: Decimal, user_id: str
+) -> Any:
+    """Create and submit a bank difference journal without committing it."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, submit_journal
 
     try:
         journal = create_bank_difference_journal(
             reconciliation_id,
-            signed_difference_amount,
+            amount,
             transaction_id=transaction.id,
             user_id=user_id,
         )
         submit_journal(journal.id, commit=False, user_id=user_id)
     except (BankStatementError, JournalValidationError) as exc:
         raise BankReconciliationError(str(exc)) from exc
+    return journal
 
+
+def _bank_difference_gl_entry(transaction: BankTransaction, journal: Any) -> tuple[BankAccount, GLEntry]:
+    """Resolve the bank account and posted GL line used by the adjustment."""
     bank_account = database.session.get(BankAccount, transaction.bank_account_id)
     if not bank_account or not bank_account.gl_account_id:
         raise BankReconciliationError("La transaccion no tiene cuenta bancaria GL para registrar el ajuste.")
@@ -505,9 +504,21 @@ def _post_bank_difference_adjustment(
     ).scalar_one_or_none()
     if bank_entry is None:
         raise BankReconciliationError("No se encontró la línea bancaria del ajuste contabilizado.")
+    return bank_account, bank_entry
+
+
+def _append_bank_difference_item(
+    reconciliation_id: str,
+    transaction: BankTransaction,
+    difference_amount: Decimal,
+    reconciliation_date: date,
+    bank_entry: GLEntry,
+    company: str,
+) -> None:
+    """Attach the posted bank adjustment to its reconciliation."""
     from cacao_accounting.bancos.reconciliation_service import _allocation_context
 
-    context = _allocation_context(transaction, str(bank_account.company), reconciliation_date)
+    context = _allocation_context(transaction, company, reconciliation_date)
     database.session.add(
         ReconciliationItem(
             reconciliation_id=reconciliation_id,
@@ -523,6 +534,32 @@ def _post_bank_difference_adjustment(
             target_id=bank_entry.id,
             **context,
         )
+    )
+
+
+def _post_bank_difference_adjustment(
+    reconciliation_id: str,
+    transaction: BankTransaction,
+    difference_amount: Decimal,
+    user_id: str,
+) -> None:
+    """Post and attach a bank-difference journal to its reconciliation."""
+    reconciliation = database.session.get(Reconciliation, reconciliation_id)
+    reconciliation_date = reconciliation.recon_date if reconciliation is not None else date.today()
+    journal = _submit_bank_difference_journal(
+        reconciliation_id,
+        transaction,
+        _signed_bank_difference(transaction, difference_amount),
+        user_id,
+    )
+    bank_account, bank_entry = _bank_difference_gl_entry(transaction, journal)
+    _append_bank_difference_item(
+        reconciliation_id,
+        transaction,
+        difference_amount,
+        reconciliation_date,
+        bank_entry,
+        str(bank_account.company),
     )
     transaction.is_reconciled = True
 

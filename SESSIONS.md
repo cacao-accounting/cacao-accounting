@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_post_bank_difference_adjustment` cx=27)
+
+### Hallazgo SonarCloud
+
+Issue `AaAbv2ElOioNy6Mzk_6o` (`python:S3776`, CRITICAL):
+`cacao_accounting/bancos/services.py`, `_post_bank_difference_adjustment`, complejidad cognitiva 27 frente al umbral
+15.
+
+### Corrección
+
+Se separaron el cálculo del signo, la creación/envío del comprobante, la resolución de la cuenta GL bancaria y la
+creación del detalle de conciliación. Se conservaron el manejo transaccional sin commit, la búsqueda de la línea GL,
+el contexto de asignación y la actualización del estado reconciliado.
+
+### Verificación
+
+- Escenario focal de `tests/test_08_reconciliation_reports.py`: 1/1.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `create_bank_difference_journal` cx=27)
 
 ### Hallazgo SonarCloud
