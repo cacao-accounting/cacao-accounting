@@ -370,42 +370,62 @@ def _warn_duplicate_payment(payment):
         )
 
 
-def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
-    """Pagina un listado aplicando los filtros GET comunes."""
-    base_query = query if query is not None else database.select(model)
+def _cash_authorized_companies() -> list[str]:
+    """Return companies the current user may consult in cash management."""
+    module_id = obtener_id_modulo_por_nombre("cash")
+    permissions = Permisos(modulo=module_id, usuario=current_user.id)
+    return list(permissions.obtener_companias_autorizadas()) if permissions.consultar else []
+
+
+def _apply_cash_company_scope(base_query: Any, model: Any) -> Any:
+    """Apply explicit or authorized company scope to a cash list query."""
     if hasattr(model, "company"):
         company = request.args.get("company")
         if company:
             exige_acceso_compania("cash", company, "consultar")
-            base_query = base_query.filter(model.company == company)
-        elif not getattr(current_user, "classification", None) == "admin":
-            module_id = obtener_id_modulo_por_nombre("cash")
-            permissions = Permisos(modulo=module_id, usuario=current_user.id)
-            companies = permissions.obtener_companias_autorizadas() if permissions.consultar else []
-            if not companies:
-                base_query = base_query.where(database.false())
-            else:
-                base_query = base_query.where(model.company.in_(companies))
+            return base_query.filter(model.company == company)
+        if getattr(current_user, "classification", None) == "admin":
+            return base_query
+        companies = _cash_authorized_companies()
+        if not companies:
+            return base_query.where(database.false())
+        return base_query.where(model.company.in_(companies))
+    return base_query
+
+
+def _cash_period_company() -> str | None:
+    """Resolve the sole authorized company used by cash period filters."""
+    period_company: str | None = request.args.get("company")
+    if period_company or getattr(current_user, "classification", None) == "admin":
+        return period_company
+    companies = _cash_authorized_companies()
+    return companies[0] if len(companies) == 1 else period_company
+
+
+def _apply_cash_period_scope(base_query: Any, model: Any) -> Any:
+    """Apply accounting period filters when the cash model supports posting dates."""
+    if not hasattr(model, "posting_date"):
+        return base_query
     period_from = request.args.get("accounting_period_from") or request.args.get("period_from")
     period_to = request.args.get("accounting_period_to") or request.args.get("period_to")
-    if hasattr(model, "posting_date"):
-        period_company: str | None = request.args.get("company")
-        if not period_company and getattr(current_user, "classification", None) != "admin":
-            module_id = obtener_id_modulo_por_nombre("cash")
-            permissions = Permisos(modulo=module_id, usuario=current_user.id)
-            if permissions.consultar:
-                authorized_companies: list[str] = list(permissions.obtener_companias_autorizadas())
-                if len(authorized_companies) == 1:
-                    period_company = authorized_companies[0]
-        if period_from or period_to or period_company:
-            base_query = apply_period_filter(
-                base_query,
-                model,
-                require_period_company(("cash",), current_user=current_user, default_company=period_company),
-                period_from,
-                period_to,
-                default_when_missing=True,
-            )
+    period_company = _cash_period_company()
+    if not (period_from or period_to or period_company):
+        return base_query
+    return apply_period_filter(
+        base_query,
+        model,
+        require_period_company(("cash",), current_user=current_user, default_company=period_company),
+        period_from,
+        period_to,
+        default_when_missing=True,
+    )
+
+
+def _paginate_list(model, search_fields, query=None, *, include_status: bool = True):
+    """Pagina un listado aplicando los filtros GET comunes."""
+    base_query = query if query is not None else database.select(model)
+    base_query = _apply_cash_company_scope(base_query, model)
+    base_query = _apply_cash_period_scope(base_query, model)
     filtered_query = apply_list_filters(base_query, model, search_fields, include_status=include_status)
     paginated = database.paginate(
         filtered_query,
