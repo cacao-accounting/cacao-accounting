@@ -1,5 +1,29 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `_source_line_rate` cx=32)
+
+### Hallazgo SonarCloud
+
+Issue `AaBBbpXsopylcTR1Qqlh` (`python:S3776`, CRITICAL):
+`cacao_accounting/ventas/services.py`, `_source_line_rate`, complejidad cognitiva
+32 frente al umbral 15.
+
+### Corrección
+
+Se separaron la lectura/validación de referencias de línea y la resolución del modelo y clave foránea por tipo de
+documento. Se conservaron el retorno de la tarifa enviada cuando no hay origen, el rechazo de referencias parciales,
+los cinco tipos documentales soportados, la validación de correspondencia de línea y la tarifa inmutable del origen.
+
+### Verificación
+
+- `tests/test_sales_catalog_pricing.py`: 11/11.
+- Cobertura focalizada: todas las líneas nuevas del refactor están cubiertas; las líneas no cubiertas restantes
+  pertenecen a funciones preexistentes fuera del flujo refactorizado.
+- Black, Ruff, Flake8, pydocstyle, Mypy y `git diff --check`: limpios.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `save_purchase_request_comparison_draft` cx=33)
 
 ### Hallazgo SonarCloud
