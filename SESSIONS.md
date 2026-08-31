@@ -1,5 +1,29 @@
 # Bitácora de desarrollo
 
+## 2026-08-31 (refactor S3776 — `find_bank_reconciliation_candidates` cx=49)
+
+### Hallazgo SonarCloud
+
+Issue `AaBALB35mykm2BcQkHUB` (`python:S3776`, CRITICAL):
+`cacao_accounting/bancos/reconciliation_service.py`, `find_bank_reconciliation_candidates`, complejidad cognitiva
+49 frente al umbral 15.
+
+### Corrección
+
+Se extrajeron la resolución de tolerancias, conversión del importe de pagos, carga de GL y generación de candidatos
+por pagos/GL. Se conservaron las ventanas de fechas, reglas activas, filtros por cuenta y dirección, conversiones de
+moneda, exclusión de cancelados, saldos pendientes y scoring.
+
+### Verificación
+
+- `tests/test_reconciliation_service_unit.py`, `tests/test_bank_matching_auto_reconcile.py` y
+  `tests/test_bank_cash_matrix_audit.py`: 33/33.
+- Black, Ruff, Flake8, pydocstyle y `git diff --check`: limpios.
+- Mypy no inicia en el `.venv` actual por `ModuleNotFoundError: No module named 'pathspec.patterns.gitignore'`.
+
+El issue se conservará como referencia hasta que el siguiente análisis de SonarCloud detecte la reducción por debajo
+del umbral.
+
 ## 2026-08-31 (refactor S3776 — `_validate_ar_ap_lines` cx=52)
 
 ### Hallazgo SonarCloud
