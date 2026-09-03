@@ -265,6 +265,24 @@ class TestSchemaTableCreation(unittest.TestCase):
         self.assertIn("default_naming_series_id", cols)
         self.assertIn("default_external_counter_id", cols)
 
+    def test_petty_cash_account_table_exists(self):
+        self.assertIn("petty_cash_account", self.tables)
+
+    def test_petty_cash_account_core_fields(self):
+        cols = {c["name"] for c in self.inspector.get_columns("petty_cash_account")}
+        expected = {
+            "company",
+            "account_id",
+            "name",
+            "currency",
+            "custodian_id",
+            "float_amount",
+            "is_default",
+            "is_active",
+            "notes",
+        }
+        self.assertTrue(expected.issubset(cols))
+
     def test_payment_entry_table_exists(self):
         self.assertIn("payment_entry", self.tables)
 

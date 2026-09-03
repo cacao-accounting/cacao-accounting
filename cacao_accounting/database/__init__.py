@@ -2974,6 +2974,43 @@ class BankAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
 
 
+class PettyCashAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Caja Chica.
+
+    Registro maestro (patron de ``BankAccount``): el usuario crea un fondo de
+    caja chica, le asigna una cuenta contable de tipo ``petty_cash``, una moneda
+    y un responsable (usuario del sistema con acceso al modulo bancos, tipicamente
+    una cajera).
+
+    El saldo contable no se almacena aqui; se deriva del GL via ``account_id``
+    consultando ``SUM(debit - credit)`` en ``GLEntry``. El campo ``float_amount``
+    es el fondo autorizado/imprest, conceptualmente distinto del saldo contable.
+    """
+
+    __tablename__ = "petty_cash_account"
+    __table_args__ = (database.UniqueConstraint("company", "name", name="uq_petty_cash_account"),)
+    company = database.Column(
+        database.String(10),
+        database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=False
+    )
+    name = database.Column(database.String(150), nullable=False)
+    currency = database.Column(
+        database.String(10), database.ForeignKey(CURRENCY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    custodian_id = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True, index=True
+    )
+    float_amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    is_default = database.Column(database.Boolean(), default=False, nullable=False)
+    is_active = database.Column(database.Boolean(), default=True, nullable=False)
+    notes = database.Column(database.Text(), nullable=True)
+
+
 class BankAccountNumberingConfig(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Configuracion de numeracion por tipo de transaccion para una cuenta bancaria.
 

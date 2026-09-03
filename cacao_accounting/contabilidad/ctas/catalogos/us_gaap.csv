@@ -5,7 +5,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 111100,Cash on Hand,111000,0,Asset,,cash
 111200,Operating Bank Accounts,111000,0,Asset,,bank
 111300,Payroll Bank Accounts,111000,0,Asset,,bank
-111400,Petty Cash,111000,0,Asset,,cash
+111400,Petty Cash,111000,0,Asset,,petty_cash
 111500,Undeposited Funds,111000,0,Asset,,
 112000,Accounts and Other Receivables,110000,1,Asset,,
 112100,Trade Accounts Receivable,112000,0,Asset,,receivable

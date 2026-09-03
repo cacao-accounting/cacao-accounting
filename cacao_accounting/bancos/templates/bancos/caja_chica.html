@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica.html"></div>
+{%- endif -%}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.caja_chica_lista') }}" class="link-dark">{{ _('Cajas Chicas') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title">
+      <i class="bi bi-cash-coin"></i>{{ registro.name }}
+      {% if registro.is_default %}<span class="badge text-bg-secondary ms-2">{{ _('Predeterminada') }}</span>{% endif %}
+      {% if registro.is_active %}<span class="badge bg-success ms-2">{{ _('Activa') }}</span>{% else %}<span class="badge bg-secondary ms-2">{{ _('Inactiva') }}</span>{% endif %}
+    </h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <form method="post" action="{{ url_for('bancos.caja_chica_alternar', pc_id=registro.id) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">
+          {% if registro.is_active %}<i class="bi bi-pause-circle me-1"></i>{{ _('Desactivar') }}{% else %}<i class="bi bi-play-circle me-1"></i>{{ _('Activar') }}{% endif %}
+        </button>
+      </form>
+      {% if not registro.is_default %}
+      <form method="post" action="{{ url_for('bancos.caja_chica_predeterminada', pc_id=registro.id) }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-primary btn-sm" type="submit"><i class="bi bi-star me-1"></i>{{ _('Marcar predeterminada') }}</button>
+      </form>
+      {% endif %}
+      <a href="{{ url_for('bancos.caja_chica_editar', pc_id=registro.id) }}" class="btn btn-primary btn-sm"><i class="bi bi-pencil me-1"></i>{{ _('Editar') }}</a>
+      <a href="{{ url_for('bancos.caja_chica_lista') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list-ul me-1"></i>{{ _('Listado') }}</a>
+    </div>
+  </div>
+  <div class="p-3">
+    <div class="ca-kv-list">
+      <div class="ca-kv-item"><label>{{ _('Compañía') }}</label><p>{{ registro.company or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Cuenta contable') }}</label><p>{{ cuenta.code ~ ' - ' ~ cuenta.name if cuenta else '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Moneda') }}</label><p>{{ registro.currency or '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Responsable') }}</label><p>{{ responsable.name if responsable else '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Fondo autorizado') }}</label><p>{{ registro.float_amount }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Saldo contable') }}</label><p>{{ saldo }}</p></div>
+      {% if registro.notes %}
+      <div class="ca-kv-item"><label>{{ _('Notas') }}</label><p>{{ registro.notes }}</p></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

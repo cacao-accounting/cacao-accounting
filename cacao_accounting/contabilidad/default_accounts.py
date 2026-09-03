@@ -103,6 +103,7 @@ SPECIAL_ACCOUNT_TYPES: frozenset[str] = frozenset(
     {
         "bank",
         "cash",
+        "petty_cash",
         "receivable",
         "payable",
         "inventory",
@@ -134,6 +135,7 @@ SPECIAL_ACCOUNT_TYPES: frozenset[str] = frozenset(
 ACCOUNT_TYPE_ALLOWED_VOUCHERS: dict[str, frozenset[str]] = {
     "bank": frozenset({"payment_entry", "bank_transaction", "exchange_revaluation"}),
     "cash": frozenset({"payment_entry", "bank_transaction", "exchange_revaluation"}),
+    "petty_cash": frozenset({"payment_entry", "bank_transaction", "exchange_revaluation", "journal_entry"}),
     "receivable": frozenset({"sales_invoice", "payment_entry", "exchange_revaluation"}),
     "payable": frozenset({"purchase_invoice", "payment_entry", "exchange_revaluation"}),
     "inventory": frozenset({"purchase_receipt", "delivery_note", "stock_entry"}),

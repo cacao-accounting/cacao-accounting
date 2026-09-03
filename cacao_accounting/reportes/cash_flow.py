@@ -101,6 +101,7 @@ _PL_CLASSIFICATIONS = frozenset({"ingreso", "income", "costo", "cost", "gasto", 
 _SUGGESTION_BY_ACCOUNT_TYPE: dict[str, str] = {
     "cash": SECTION_CASH,
     "bank": SECTION_CASH,
+    "petty_cash": SECTION_CASH,
     "receivable": SECTION_OPERATING,
     "inventory": SECTION_OPERATING,
     "payable": SECTION_OPERATING,
