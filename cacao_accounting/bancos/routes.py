@@ -41,6 +41,8 @@ from cacao_accounting.database import (
     PaymentEntry,
     PaymentReference,
     PettyCashAccount,
+    PettyCashExpense,
+    PettyCashVoucher,
     ReconciliationItem,
     User,
     database,
@@ -93,9 +95,14 @@ from cacao_accounting.bancos.services import (
     _create_payment_from_request,
     _payment_source_rows_from_request,
     create_petty_cash_account,
+    create_petty_cash_expense,
+    create_petty_cash_voucher,
     petty_cash_accounts,
+    petty_cash_expenses,
     petty_cash_ledger_balance,
+    petty_cash_vouchers,
     set_petty_cash_default,
+    set_petty_cash_voucher_status,
     toggle_petty_cash_active,
     update_petty_cash_account,
 )
@@ -1069,6 +1076,187 @@ def caja_chica_alternar(pc_id):
     toggle_petty_cash_active(registro)
     flash(_("Estado de la caja chica actualizado."), "success")
     return redirect(url_for("bancos.caja_chica", pc_id=registro.id))
+
+
+# --------------------------------------------------------------------------------------------- #
+# Vale de Caja Chica
+# --------------------------------------------------------------------------------------------- #
+def _obtener_fondos_compania():
+    """Devuelve los fondos de caja chica de la compania del usuario."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    companies = [code for code, _ in obtener_lista_entidades_por_id_razonsocial()]
+    registros = []
+    for company in companies:
+        registros.extend(petty_cash_accounts(company))
+    return registros
+
+
+@bancos.route("/petty-cash-voucher/list")
+@modulo_activo("cash")
+@login_required
+def caja_chica_vale_lista():
+    """Listado de vales de caja chica."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    companies = [code for code, _ in obtener_lista_entidades_por_id_razonsocial()]
+    registros = []
+    for company in companies:
+        registros.extend(petty_cash_vouchers(company))
+    titulo = "Listado de Vales de Caja Chica - " + APPNAME
+    return render_template("bancos/caja_chica_vale_lista.html", registros=registros, titulo=titulo)
+
+
+@bancos.route("/petty-cash-voucher/new", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "crear")
+def caja_chica_vale_nuevo():
+    """Formulario para crear un vale de caja chica."""
+    from cacao_accounting.bancos.forms import FormularioPettyCashVoucher
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    formulario = FormularioPettyCashVoucher()
+    companies = obtener_lista_entidades_por_id_razonsocial()
+    formulario.company.choices = companies
+    fondos = _obtener_fondos_compania()
+    formulario.petty_cash_id.choices = [(f.id, f"{f.company} - {f.name}") for f in fondos]
+    titulo = "Nuevo Vale de Caja Chica - " + APPNAME
+
+    if formulario.validate_on_submit() or request.method == "POST":
+        company = request.form.get("company")
+        petty_cash_id = request.form.get("petty_cash_id")
+        if not company or not petty_cash_id:
+            flash(_("Seleccione la compania y la caja chica."), "danger")
+            return render_template("bancos/caja_chica_vale_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+        exige_acceso_compania("cash", company, "crear")
+        try:
+            create_petty_cash_voucher(
+                company=company,
+                petty_cash_id=petty_cash_id,
+                posted_date=date.fromisoformat(request.form.get("posting_date") or date.today().isoformat()),
+                delivered_to=request.form.get("delivered_to") or None,
+                concept=request.form.get("concept") or "",
+                amount=_form_decimal("amount", "0"),
+                cost_center_code=request.form.get("cost_center_code") or None,
+                unit_code=request.form.get("unit_code") or None,
+                project_code=request.form.get("project_code") or None,
+                comments=request.form.get("comments") or None,
+            )
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+            return render_template("bancos/caja_chica_vale_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+        flash(_("Vale de caja chica creado."), "success")
+        return redirect(url_for("bancos.caja_chica_vale_lista"))
+
+    # Prellenar dimensiones segun la compania seleccionada (requiere JS/alpine del cliente)
+    return render_template("bancos/caja_chica_vale_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+
+
+@bancos.route("/petty-cash-voucher/<v_id>/status", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def caja_chica_vale_estado(v_id):
+    """Cambia el estado de un vale de caja chica."""
+    voucher = database.session.get(PettyCashVoucher, v_id)
+    if not voucher:
+        abort(404)
+    exige_acceso_compania("cash", voucher.company or "", "editar")
+    new_status = request.form.get("status") or ""
+    try:
+        set_petty_cash_voucher_status(voucher, new_status)
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+    else:
+        flash(_("Estado del vale actualizado."), "success")
+    return redirect(url_for("bancos.caja_chica_vale_lista"))
+
+
+# --------------------------------------------------------------------------------------------- #
+# Gasto de Caja Chica
+# --------------------------------------------------------------------------------------------- #
+@bancos.route("/petty-cash-expense/list")
+@modulo_activo("cash")
+@login_required
+def caja_chica_gasto_lista():
+    """Listado de gastos de caja chica."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    companies = [code for code, _ in obtener_lista_entidades_por_id_razonsocial()]
+    registros = []
+    for company in companies:
+        registros.extend(petty_cash_expenses(company))
+    titulo = "Listado de Gastos de Caja Chica - " + APPNAME
+    return render_template("bancos/caja_chica_gasto_lista.html", registros=registros, titulo=titulo)
+
+
+@bancos.route("/petty-cash-expense/new", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "crear")
+def caja_chica_gasto_nuevo():
+    """Formulario para crear un gasto de caja chica (postea al GL)."""
+    from cacao_accounting.bancos.forms import FormularioPettyCashExpense
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    formulario = FormularioPettyCashExpense()
+    companies = obtener_lista_entidades_por_id_razonsocial()
+    formulario.company.choices = companies
+    fondos = _obtener_fondos_compania()
+    formulario.petty_cash_id.choices = [(f.id, f"{f.company} - {f.name}") for f in fondos]
+    titulo = "Nuevo Gasto de Caja Chica - " + APPNAME
+
+    if formulario.validate_on_submit() or request.method == "POST":
+        company = request.form.get("company")
+        petty_cash_id = request.form.get("petty_cash_id")
+        if not company or not petty_cash_id:
+            flash(_("Seleccione la compania y la caja chica."), "danger")
+            return render_template("bancos/caja_chica_gasto_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+        exige_acceso_compania("cash", company, "crear")
+        try:
+            create_petty_cash_expense(
+                company=company,
+                petty_cash_id=petty_cash_id,
+                expense_account_code=request.form.get("expense_account_code") or "",
+                concept=request.form.get("concept") or "",
+                amount=_form_decimal("amount", "0"),
+                cost_center_code=request.form.get("cost_center_code") or "",
+                beneficiary=request.form.get("beneficiary") or None,
+                unit_code=request.form.get("unit_code") or None,
+                project_code=request.form.get("project_code") or None,
+                posted_date=date.fromisoformat(request.form.get("posting_date") or date.today().isoformat()),
+                voucher_id=request.form.get("voucher_id") or None,
+                remarks=request.form.get("remarks") or None,
+                actor_id=str(current_user.id),
+            )
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+            return render_template("bancos/caja_chica_gasto_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+        flash(_("Gasto de caja chica registrado y contabilizado."), "success")
+        return redirect(url_for("bancos.caja_chica_gasto_lista"))
+
+    return render_template("bancos/caja_chica_gasto_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+
+
+@bancos.route("/petty-cash-expense/<e_id>/cancel", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "anular")
+def caja_chica_gasto_anular(e_id):
+    """Anula un gasto de caja chica, revirtiendo su asiento contable."""
+    expense = database.session.get(PettyCashExpense, e_id)
+    if not expense:
+        abort(404)
+    exige_acceso_compania("cash", expense.company or "", "editar")
+    try:
+        from cacao_accounting.bancos.services import cancel_petty_cash_expense
+
+        cancel_petty_cash_expense(expense, reason=request.form.get("reason") or None, actor_id=str(current_user.id))
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+    else:
+        flash(_("Gasto de caja chica anulado."), "success")
+    return redirect(url_for("bancos.caja_chica_gasto_lista"))
 
 
 @bancos.route("/payment/new", methods=["GET", "POST"])

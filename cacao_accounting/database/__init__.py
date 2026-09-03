@@ -70,6 +70,9 @@ PURCHASE_REQUEST_ID = "purchase_request.id"
 PURCHASE_REQUEST_COMPARISON_ID = "purchase_request_comparison.id"
 SUPPLIER_QUOTATION_ID = "supplier_quotation.id"
 SUPPLIER_QUOTATION_ITEM_ID = "supplier_quotation_item.id"
+PETTY_CASH_ID = "petty_cash_account.id"
+PETTY_CASH_VOUCHER_ID = "petty_cash_voucher.id"
+PETTY_CASH_EXPENSE_ID = "petty_cash_expense.id"
 
 ROLES_ID_COLUMN = "roles.id"
 AMOUNT_NON_NEGATIVE_CHECK = "amount >= 0"
@@ -3009,6 +3012,100 @@ class PettyCashAccount(database.Model, BaseTabla):  # type: ignore[name-defined]
     is_default = database.Column(database.Boolean(), default=False, nullable=False)
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
     notes = database.Column(database.Text(), nullable=True)
+
+
+class PettyCashVoucher(database.Model, DocBase):  # type: ignore[name-defined]
+    """Vale de Caja Chica.
+
+    Documento de control de efectivo. Representa efectivo entregado a una
+    persona antes de conocer o liquidar el gasto. NO genera asiento contable;
+    el saldo de la caja solo se reduce cuando el vale se convierte en gasto.
+
+    Ciclo de vida: ``borrador -> entregado -> liquidado | cancelado``.
+    """
+
+    __tablename__ = "petty_cash_voucher"
+    __table_args__ = (database.UniqueConstraint("company", "voucher_no", name="uq_petty_cash_voucher"),)
+    petty_cash_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PETTY_CASH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    voucher_no = database.Column(database.String(100), nullable=True, index=True)
+    # Estado del dominio: borrador, entregado, liquidado, cancelado
+    voucher_status = database.Column(database.String(20), nullable=False, default="borrador", index=True)
+    delivered_to = database.Column(database.String(150), nullable=True)
+    concept = database.Column(database.String(255), nullable=False)
+    amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    cost_center_code = database.Column(database.String(10), nullable=True)
+    unit_code = database.Column(
+        database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    project_code = database.Column(
+        database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    comments = database.Column(database.Text(), nullable=True)
+    # Cuando el vale se convierte en gasto, se guarda la referencia.
+    expense_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PETTY_CASH_EXPENSE_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+
+
+class PettyCashExpense(database.Model, DocBase):  # type: ignore[name-defined]
+    """Gasto de Caja Chica.
+
+    Documento que SI genera asiento contable. Puede originarse de forma directa
+    o convirtiendo un vale liquidado en gasto.
+
+    Posteo (via comprobante contable):
+
+    .. code-block:: text
+
+        Dr Gasto / Activo / Impuesto   importe
+            Cr Caja Chica (petty_cash)          importe
+
+    El saldo contable de la caja chica disminuye. Al reponer el fondo (flujo
+    distinto) se restaura con una Nota de Debito Bancaria sobre la cuenta del
+    banco, dejando el saldo inmediatamente antes de la reposicion.
+    """
+
+    __tablename__ = "petty_cash_expense"
+    __table_args__ = (database.UniqueConstraint("company", "document_no", name="uq_petty_cash_expense"),)
+    petty_cash_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PETTY_CASH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    voucher_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PETTY_CASH_VOUCHER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+    beneficiary = database.Column(database.String(150), nullable=True)
+    concept = database.Column(database.String(255), nullable=False)
+    expense_account_code = database.Column(database.String(50), nullable=False)
+    amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    cost_center_code = database.Column(database.String(10), nullable=True)
+    unit_code = database.Column(
+        database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    project_code = database.Column(
+        database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    remarks = database.Column(database.Text(), nullable=True)
+    # Comprobante contable generado por el Posting Engine.
+    journal_id = database.Column(
+        database.String(26),
+        database.ForeignKey(VOUCHER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
 
 
 class BankAccountNumberingConfig(database.Model, BaseTabla):  # type: ignore[name-defined]

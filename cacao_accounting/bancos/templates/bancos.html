@@ -50,6 +50,14 @@
         <a href="{{ url_for('bancos.caja_chica_lista') }}">Cajas Chicas</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
+      <li>
+        <a href="{{ url_for('bancos.caja_chica_vale_lista') }}">{{ _('Vales de Caja Chica') }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('bancos.caja_chica_gasto_lista') }}">{{ _('Gastos de Caja Chica') }}</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
       {% else %}
       <li class="ca-no-access">
         <span>Bancos</span>

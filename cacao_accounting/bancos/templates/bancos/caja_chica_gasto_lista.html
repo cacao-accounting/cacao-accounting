@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_gasto_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.caja_chica_lista') }}" class="link-dark">{{ _('Cajas Chicas') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Gastos de Caja Chica') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h5 class="ca-card-title"><i class="bi bi-receipt-cutoff"></i> {{ _('Gastos de Caja Chica') }}</h5>
+    <a href="{{ url_for('bancos.caja_chica_gasto_nuevo') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
+    </a>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">{{ _('Listado de gastos de caja chica.') }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{{ _('Documento') }}</th>
+        <th scope="col">{{ _('Fecha') }}</th>
+        <th scope="col">{{ _('Beneficiario') }}</th>
+        <th scope="col">{{ _('Concepto') }}</th>
+        <th scope="col">{{ _('Cuenta') }}</th>
+        <th scope="col">{{ _('Importe') }}</th>
+        <th scope="col">{{ _('Estado') }}</th>
+        <th scope="col">{{ _('Acciones') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in registros -%}
+      <tr>
+        <td>{{ item.document_no or item.id }}</td>
+        <td>{{ item.posting_date or '-' }}</td>
+        <td>{{ item.beneficiary or '-' }}</td>
+        <td>{{ item.concept }}</td>
+        <td>{{ item.expense_account_code or '-' }}</td>
+        <td>{{ item.amount }}</td>
+        <td>
+          {% if item.docstatus == 1 %}
+          <span class="badge text-bg-success">{{ _('Posteado') }}</span>
+          {% elif item.docstatus == 2 %}
+          <span class="badge text-bg-secondary">{{ _('Anulado') }}</span>
+          {% else %}
+          <span class="badge text-bg-warning">{{ _('Borrador') }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if item.docstatus == 1 %}
+          <form method="post" action="{{ url_for('bancos.caja_chica_gasto_anular', e_id=item.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="reason" value="{{ _('Anulacion por el usuario') }}">
+            <button class="btn btn-outline-danger btn-sm" type="submit">{{ _('Anular') }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {%- else %}
+      <tr>
+        <td colspan="8" class="text-center text-muted">{{ _('No hay gastos de caja chica registrados.') }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

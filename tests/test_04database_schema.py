@@ -283,6 +283,48 @@ class TestSchemaTableCreation(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(cols))
 
+    def test_petty_cash_voucher_table_exists(self):
+        self.assertIn("petty_cash_voucher", self.tables)
+
+    def test_petty_cash_voucher_core_fields(self):
+        cols = {c["name"] for c in self.inspector.get_columns("petty_cash_voucher")}
+        expected = {
+            "company",
+            "petty_cash_id",
+            "voucher_no",
+            "voucher_status",
+            "delivered_to",
+            "concept",
+            "amount",
+            "cost_center_code",
+            "unit_code",
+            "project_code",
+            "comments",
+            "expense_id",
+        }
+        self.assertTrue(expected.issubset(cols))
+
+    def test_petty_cash_expense_table_exists(self):
+        self.assertIn("petty_cash_expense", self.tables)
+
+    def test_petty_cash_expense_core_fields(self):
+        cols = {c["name"] for c in self.inspector.get_columns("petty_cash_expense")}
+        expected = {
+            "company",
+            "petty_cash_id",
+            "voucher_id",
+            "beneficiary",
+            "concept",
+            "expense_account_code",
+            "amount",
+            "cost_center_code",
+            "unit_code",
+            "project_code",
+            "remarks",
+            "journal_id",
+        }
+        self.assertTrue(expected.issubset(cols))
+
     def test_payment_entry_table_exists(self):
         self.assertIn("payment_entry", self.tables)
 
