@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_vale_nuevo.html"></div>
+{%- endif -%}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.caja_chica_vale_lista') }}" class="link-dark">{{ _('Vales de Caja Chica') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Nuevo vale') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> {{ _('Nuevo vale de caja chica') }}</h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{{ url_for('bancos.caja_chica_vale_lista') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>{{ _('Guardar') }}</button>
+    </div>
+  </div>
+  <div class="p-3">
+    <div class="alert alert-info py-2 small">
+      <i class="bi bi-info-circle me-1"></i>{{ _('El vale es un documento de control de efectivo y no genera asiento contable. El saldo de la caja solo se reduce al liquidarlo como gasto.') }}
+    </div>
+  </div>
+  <form method="post" id="form-main" class="row g-3 p-3">
+    {{ form.csrf_token }}
+    <div class="col-md-6">
+      <label class="form-label" for="company">{{ _('Compañía') }} <span class="text-danger">*</span></label>
+      <select class="form-select form-select-sm" name="company" id="company" required>
+        <option value="">— {{ _('Seleccione') }} —</option>
+        {% for value, label in form.company.choices %}
+        <option value="{{ value }}" {% if form.company.data == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="petty_cash_id">{{ _('Caja Chica') }} <span class="text-danger">*</span></label>
+      <select class="form-select form-select-sm" name="petty_cash_id" id="petty_cash_id" required>
+        <option value="">— {{ _('Seleccione') }} —</option>
+        {% for fund in fondos %}
+        <option value="{{ fund.id }}" {% if form.petty_cash_id.data == fund.id %}selected{% endif %}>{{ fund.company }} - {{ fund.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="posting_date">{{ _('Fecha') }}</label>
+      <input class="form-control form-control-sm" type="date" name="posting_date" id="posting_date" value="{{ form.posting_date.data or '' }}">
+    </div>
+    <div class="col-md-8">
+      <label class="form-label" for="delivered_to">{{ _('Entregado a') }}</label>
+      {{ form.delivered_to(class="form-control form-control-sm", id="delivered_to") }}
+    </div>
+    <div class="col-md-8">
+      <label class="form-label" for="concept">{{ _('Concepto') }} <span class="text-danger">*</span></label>
+      {{ form.concept(class="form-control form-control-sm", id="concept", required=True) }}
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="amount">{{ _('Importe') }} <span class="text-danger">*</span></label>
+      <input class="form-control form-control-sm" type="number" step="0.01" min="0" name="amount" id="amount" value="{{ form.amount.data or '' }}" required>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="cost_center_code">{{ _('Centro de costo') }}</label>
+      <input class="form-control form-control-sm" type="text" name="cost_center_code" id="cost_center_code" value="{{ form.cost_center_code.data or '' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="unit_code">{{ _('Unidad de negocio') }}</label>
+      <input class="form-control form-control-sm" type="text" name="unit_code" id="unit_code" value="{{ form.unit_code.data or '' }}">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="project_code">{{ _('Proyecto') }}</label>
+      <input class="form-control form-control-sm" type="text" name="project_code" id="project_code" value="{{ form.project_code.data or '' }}">
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="comments">{{ _('Comentario') }}</label>
+      {{ form.comments(class="form-control form-control-sm", id="comments", rows=3) }}
+    </div>
+  </form>
+</div>
+
+{% endblock %}

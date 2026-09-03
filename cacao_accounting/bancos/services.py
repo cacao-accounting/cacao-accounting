@@ -30,6 +30,7 @@ from cacao_accounting.database import (
     Accounts,
     BankAccountNumberingConfig,
     BankTransaction,
+    ComprobanteContable,
     DocumentRelation,
     Entity,
     ExternalCounter,
@@ -38,6 +39,8 @@ from cacao_accounting.database import (
     PaymentEntry,
     PaymentReference,
     PettyCashAccount,
+    PettyCashExpense,
+    PettyCashVoucher,
     PurchaseInvoice,
     PurchaseOrder,
     Reconciliation,
@@ -527,6 +530,335 @@ def _resolve_default_petty_cash_custodian() -> str | None:
         .first()
     )
     return str(administrador.id) if administrador else None
+
+
+# --------------------------------------------------------------------------------------------- #
+# Vale de Caja Chica (Petty Cash Voucher)
+# --------------------------------------------------------------------------------------------- #
+def petty_cash_vouchers(company: str) -> list[PettyCashVoucher]:
+    """Lista los vales de caja chica de una compania."""
+    return list(
+        database.session.execute(
+            database.select(PettyCashVoucher).filter_by(company=company).order_by(PettyCashVoucher.posting_date.desc())
+        ).scalars()
+    )
+
+
+def petty_cash_vouchers_for_fund(petty_cash_id: str) -> list[PettyCashVoucher]:
+    """Lista los vales abiertos (entregados, no liquidados) de un fondo."""
+    return list(
+        database.session.execute(
+            database.select(PettyCashVoucher)
+            .filter_by(petty_cash_id=petty_cash_id, voucher_status="entregado")
+            .order_by(PettyCashVoucher.posting_date)
+        ).scalars()
+    )
+
+
+def _validate_petty_cash_fund(petty_cash_id: str) -> PettyCashAccount:
+    """Valida que el fondo de caja chica exista y este activo."""
+    fund = database.session.get(PettyCashAccount, petty_cash_id)
+    if not fund:
+        raise ValueError("La caja chica seleccionada no existe.")
+    if not fund.is_active:
+        raise ValueError("La caja chica seleccionada no esta activa.")
+    return fund
+
+
+def create_petty_cash_voucher(
+    *,
+    company: str,
+    petty_cash_id: str,
+    posted_date,
+    delivered_to: str | None,
+    concept: str,
+    amount: Decimal,
+    cost_center_code: str | None = None,
+    unit_code: str | None = None,
+    project_code: str | None = None,
+    comments: str | None = None,
+) -> PettyCashVoucher:
+    """Crea un vale de caja chica en estado borrador (no postea al GL)."""
+    fund = _validate_petty_cash_fund(petty_cash_id)
+    if not concept.strip():
+        raise ValueError("El concepto del vale es obligatorio.")
+    if amount is None or amount <= 0:
+        raise ValueError("El importe del vale debe ser mayor a cero.")
+
+    voucher = PettyCashVoucher(
+        company=company,
+        petty_cash_id=petty_cash_id,
+        posting_date=posted_date,
+        delivered_to=delivered_to or None,
+        concept=concept.strip(),
+        amount=amount,
+        cost_center_code=cost_center_code or None,
+        unit_code=unit_code or None,
+        project_code=project_code or None,
+        comments=comments or None,
+        voucher_status="borrador",
+        docstatus=0,
+        transaction_currency=fund.currency or company,
+    )
+    database.session.add(voucher)
+    database.session.flush()
+    try:
+        assign_document_identifier(
+            document=voucher,
+            entity_type="petty_cash_voucher",
+            posting_date_raw=posted_date,
+            naming_series_id=None,
+        )
+    except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
+        pass
+    voucher.voucher_no = voucher.document_no or ""
+    database.session.commit()
+    return voucher
+
+
+_PETTY_CASH_VOUCHER_STATUS_FLOW = {
+    "borrador": {"entregado", "cancelado"},
+    "entregado": {"liquidado", "cancelado"},
+    "liquidado": set(),
+    "cancelado": set(),
+}
+
+
+def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str) -> PettyCashVoucher:
+    """Transiciona el estado de un vale (borrador -> entregado -> liquidado | cancelado)."""
+    new_status = (new_status or "").strip().lower()
+    current = voucher.voucher_status or "borrador"
+    allowed = _PETTY_CASH_VOUCHER_STATUS_FLOW.get(current, set())
+    if new_status not in allowed:
+        raise ValueError(f"Transicion de estado no valida: {current} -> {new_status}")
+    voucher.voucher_status = new_status
+    if new_status == "cancelado":
+        voucher.docstatus = 2
+    elif new_status == "entregado":
+        voucher.docstatus = 1
+    database.session.commit()
+    return voucher
+
+
+# --------------------------------------------------------------------------------------------- #
+# Gasto de Caja Chica (Petty Cash Expense)
+# --------------------------------------------------------------------------------------------- #
+def petty_cash_expenses(company: str) -> list[PettyCashExpense]:
+    """Lista los gastos de caja chica de una compania."""
+    return list(
+        database.session.execute(
+            database.select(PettyCashExpense).filter_by(company=company).order_by(PettyCashExpense.posting_date.desc())
+        ).scalars()
+    )
+
+
+def _petty_cash_gl_account_code(petty_cash: PettyCashAccount) -> str:
+    """Devuelve el codigo de la cuenta contable asociada al fondo de caja chica."""
+    if not petty_cash.account_id:
+        raise ValueError("La caja chica no tiene una cuenta contable asignada.")
+    account = database.session.get(Accounts, petty_cash.account_id)
+    if not account:
+        raise ValueError("La cuenta contable de la caja chica no existe.")
+    return account.code
+
+
+def _active_book(company: str):
+    """Devuelve el libro contable primario/activo de la compania."""
+    from cacao_accounting.database import Book
+
+    book = (
+        database.session.execute(
+            database.select(Book).filter_by(entity=company, status="activo").order_by(Book.is_primary.desc(), Book.code)
+        )
+        .scalars()
+        .first()
+    )
+    return book
+
+
+def post_petty_cash_expense_journal(
+    *,
+    company: str,
+    petty_cash: PettyCashAccount,
+    expense_account_code: str,
+    concept: str,
+    amount: Decimal,
+    cost_center_code: str,
+    posted_date,
+    actor_id: str | None = None,
+    reference: str | None = None,
+) -> "ComprobanteContable":
+    """Genera y postea el asiento contable del gasto (Dr Gasto / Cr Caja Chica)."""
+    from cacao_accounting.contabilidad.journal_service import JournalValidationError, create_journal_draft, submit_journal
+
+    if not _active_book(company):
+        raise ValueError("La compania no tiene un libro contable activo para postear el gasto.")
+
+    expense_account = database.session.execute(
+        database.select(Accounts).filter_by(entity=company, code=expense_account_code)
+    ).scalar_one_or_none()
+    if not expense_account or expense_account.group:
+        raise ValueError("La cuenta de gasto seleccionada no es valida.")
+
+    petty_cash_account_code = _petty_cash_gl_account_code(petty_cash)
+    transaction_currency = petty_cash.currency or company
+
+    payload = {
+        "company": company,
+        "posting_date": posted_date.isoformat() if hasattr(posted_date, "isoformat") else str(posted_date),
+        "reference": reference or "",
+        "memo": f"{concept} (Caja Chica)",
+        "transaction_currency": transaction_currency,
+        "lines": [
+            {
+                "order": 1,
+                "account": expense_account_code,
+                "cost_center": cost_center_code,
+                "debit": str(amount),
+                "credit": "",
+                "remarks": concept,
+            },
+            {
+                "order": 2,
+                "account": petty_cash_account_code,
+                "debit": "",
+                "credit": str(amount),
+                "remarks": "Caja chica",
+            },
+        ],
+    }
+    try:
+        journal = create_journal_draft(payload, user_id=actor_id or "")
+        submit_journal(journal.id, user_id=actor_id or "")
+    except JournalValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    return journal
+
+
+def create_petty_cash_expense(
+    *,
+    company: str,
+    petty_cash_id: str,
+    expense_account_code: str,
+    concept: str,
+    amount: Decimal,
+    cost_center_code: str,
+    beneficiary: str | None = None,
+    unit_code: str | None = None,
+    project_code: str | None = None,
+    posted_date=None,
+    voucher_id: str | None = None,
+    remarks: str | None = None,
+    actor_id: str | None = None,
+) -> PettyCashExpense:
+    """Crea y postea un gasto de caja chica (Dr Gasto / Cr Caja Chica)."""
+    if posted_date is None:
+        from datetime import date as _date
+
+        posted_date = _date.today()
+    fund = _validate_petty_cash_fund(petty_cash_id)
+    if not concept.strip():
+        raise ValueError("El concepto del gasto es obligatorio.")
+    if amount is None or amount <= 0:
+        raise ValueError("El importe del gasto debe ser mayor a cero.")
+    if not cost_center_code:
+        raise ValueError("El gasto de caja chica requiere un centro de costo.")
+
+    journal = post_petty_cash_expense_journal(
+        company=company,
+        petty_cash=fund,
+        expense_account_code=expense_account_code,
+        concept=concept,
+        amount=amount,
+        cost_center_code=cost_center_code,
+        posted_date=posted_date,
+        actor_id=actor_id,
+        reference="",
+    )
+
+    expense = PettyCashExpense(
+        company=company,
+        petty_cash_id=petty_cash_id,
+        voucher_id=voucher_id or None,
+        beneficiary=beneficiary or None,
+        concept=concept.strip(),
+        expense_account_code=expense_account_code,
+        amount=amount,
+        cost_center_code=cost_center_code or None,
+        unit_code=unit_code or None,
+        project_code=project_code or None,
+        remarks=remarks or None,
+        posting_date=posted_date,
+        transaction_currency=fund.currency or company,
+        journal_id=str(journal.id),
+        docstatus=1,
+    )
+    database.session.add(expense)
+    database.session.flush()
+    try:
+        assign_document_identifier(
+            document=expense,
+            entity_type="petty_cash_expense",
+            posting_date_raw=posted_date,
+            naming_series_id=None,
+        )
+    except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
+        pass
+    database.session.commit()
+    return expense
+
+
+def create_petty_cash_expense_from_voucher(
+    voucher: PettyCashVoucher,
+    *,
+    expense_account_code: str,
+    cost_center_code: str,
+    posted_date=None,
+    remarks: str | None = None,
+    actor_id: str | None = None,
+) -> PettyCashExpense:
+    """Liquida un vale entregado convirtiendolo en gasto y posteando al GL."""
+    if (voucher.voucher_status or "borrador") != "entregado":
+        raise ValueError("Solo se puede liquidar un vale en estado entregado.")
+    expense = create_petty_cash_expense(
+        company=voucher.company or "",
+        petty_cash_id=voucher.petty_cash_id,
+        expense_account_code=expense_account_code,
+        concept=voucher.concept or "",
+        amount=voucher.amount,
+        cost_center_code=cost_center_code,
+        beneficiary=voucher.delivered_to or None,
+        unit_code=voucher.unit_code,
+        project_code=voucher.project_code,
+        posted_date=posted_date,
+        voucher_id=voucher.id,
+        remarks=remarks or voucher.comments or None,
+        actor_id=actor_id,
+    )
+    voucher.voucher_status = "liquidado"
+    voucher.expense_id = expense.id
+    database.session.commit()
+    return expense
+
+
+def cancel_petty_cash_expense(expense, *, reason: str | None = None, actor_id: str | None = None):
+    """Anula un gasto de caja chica, revirtiendo su asiento contable (append-only)."""
+    from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
+
+    if expense.docstatus != 1:
+        raise ValueError("Solo se puede anular un gasto ya posteado.")
+    if expense.journal_id:
+        journal = database.session.get(ComprobanteContable, expense.journal_id)
+        if journal is not None:
+            cancel_submitted_journal(
+                str(journal.id),
+                user_id=actor_id,
+                reason=reason or "Anulacion de gasto de caja chica",
+            )
+    expense.docstatus = 2
+    expense.cancel_reason = reason or None
+    database.session.commit()
+    return expense
 
 
 def _resolve_bank_account_numbering_config(

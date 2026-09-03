@@ -14,10 +14,18 @@ from cacao_accounting.bancos.routes import (  # noqa: F401
 from cacao_accounting.bancos.services import (  # noqa: F401
     _apply_payment_cancellation_hooks as _apply_payment_cancellation_hooks,
     _validate_payment_header as _validate_payment_header,
+    cancel_petty_cash_expense as cancel_petty_cash_expense,
     create_default_petty_cash as create_default_petty_cash,
     create_petty_cash_account as create_petty_cash_account,
+    create_petty_cash_expense as create_petty_cash_expense,
+    create_petty_cash_expense_from_voucher as create_petty_cash_expense_from_voucher,
+    create_petty_cash_voucher as create_petty_cash_voucher,
     petty_cash_accounts as petty_cash_accounts,
+    petty_cash_expenses as petty_cash_expenses,
     petty_cash_ledger_balance as petty_cash_ledger_balance,
+    petty_cash_vouchers as petty_cash_vouchers,
+    petty_cash_vouchers_for_fund as petty_cash_vouchers_for_fund,
+    set_petty_cash_voucher_status as set_petty_cash_voucher_status,
 )
 
 _MODULES = (_services, _routes)

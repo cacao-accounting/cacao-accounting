@@ -43,6 +43,38 @@ class FormularioCajaChica(FlaskForm):
     notes = TextAreaField("Notas", validators=[Optional()])
 
 
+class FormularioPettyCashVoucher(FlaskForm):
+    """Formulario para crear un vale de caja chica (control de efectivo, no postea al GL)."""
+
+    company = SelectField("Compañía", choices=[], validators=[DataRequired()])
+    petty_cash_id = SelectField("Caja Chica", choices=[], validators=[DataRequired()])
+    posting_date = StringField("Fecha")
+    delivered_to = StringField("Entregado a")
+    concept = StringField("Concepto", validators=[DataRequired()])
+    amount = StringField("Importe", validators=[DataRequired()])
+    cost_center_code = SelectField("Centro de costo", choices=[], validators=[Optional()])
+    unit_code = SelectField("Unidad de negocio", choices=[], validators=[Optional()])
+    project_code = SelectField("Proyecto", choices=[], validators=[Optional()])
+    comments = TextAreaField("Comentario", validators=[Optional()])
+
+
+class FormularioPettyCashExpense(FlaskForm):
+    """Formulario para crear un gasto de caja chica (si genera asiento contable)."""
+
+    company = SelectField("Compañía", choices=[], validators=[DataRequired()])
+    petty_cash_id = SelectField("Caja Chica", choices=[], validators=[DataRequired()])
+    voucher_id = SelectField("Vale origen", choices=[], validators=[Optional()])
+    posting_date = StringField("Fecha")
+    beneficiary = StringField("Beneficiario / Proveedor")
+    concept = StringField("Concepto", validators=[DataRequired()])
+    expense_account_code = SelectField("Cuenta de gasto", choices=[], validators=[DataRequired()])
+    amount = StringField("Importe", validators=[DataRequired()])
+    cost_center_code = SelectField("Centro de costo", choices=[], validators=[DataRequired()])
+    unit_code = SelectField("Unidad de negocio", choices=[], validators=[Optional()])
+    project_code = SelectField("Proyecto", choices=[], validators=[Optional()])
+    remarks = TextAreaField("Observaciones", validators=[Optional()])
+
+
 class FormularioPago(FlaskForm):
     """Formulario para crear una entrada de pago."""
 

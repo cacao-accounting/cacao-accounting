@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_vale_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.caja_chica_lista') }}" class="link-dark">{{ _('Cajas Chicas') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Vales de Caja Chica') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> {{ _('Vales de Caja Chica') }}</h5>
+    <a href="{{ url_for('bancos.caja_chica_vale_nuevo') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
+    </a>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">{{ _('Listado de vales de caja chica.') }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{{ _('Vale') }}</th>
+        <th scope="col">{{ _('Fecha') }}</th>
+        <th scope="col">{{ _('Entregado a') }}</th>
+        <th scope="col">{{ _('Concepto') }}</th>
+        <th scope="col">{{ _('Importe') }}</th>
+        <th scope="col">{{ _('Estado') }}</th>
+        <th scope="col">{{ _('Acciones') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in registros -%}
+      <tr>
+        <td>{{ item.voucher_no or item.document_no or item.id }}</td>
+        <td>{{ item.posting_date or '-' }}</td>
+        <td>{{ item.delivered_to or '-' }}</td>
+        <td>{{ item.concept }}</td>
+        <td>{{ item.amount }}</td>
+        <td>
+          {% if item.voucher_status == 'entregado' %}
+          <span class="badge text-bg-primary">{{ _('Entregado') }}</span>
+          {% elif item.voucher_status == 'liquidado' %}
+          <span class="badge text-bg-success">{{ _('Liquidado') }}</span>
+          {% elif item.voucher_status == 'cancelado' %}
+          <span class="badge text-bg-secondary">{{ _('Cancelado') }}</span>
+          {% else %}
+          <span class="badge text-bg-warning">{{ _('Borrador') }}</span>
+          {% endif %}
+        </td>
+        <td class="d-flex gap-1 flex-wrap">
+          {% if item.voucher_status == 'borrador' %}
+          <form method="post" action="{{ url_for('bancos.caja_chica_vale_estado', v_id=item.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="entregado">
+            <button class="btn btn-outline-primary btn-sm" type="submit">{{ _('Entregar') }}</button>
+          </form>
+          {% elif item.voucher_status == 'entregado' %}
+          <form method="post" action="{{ url_for('bancos.caja_chica_vale_estado', v_id=item.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="liquidado">
+            <button class="btn btn-outline-success btn-sm" type="submit">{{ _('Liquidar') }}</button>
+          </form>
+          {% endif %}
+          {% if item.voucher_status in ('borrador', 'entregado') %}
+          <form method="post" action="{{ url_for('bancos.caja_chica_vale_estado', v_id=item.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="cancelado">
+            <button class="btn btn-outline-danger btn-sm" type="submit">{{ _('Cancelar') }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {%- else %}
+      <tr>
+        <td colspan="7" class="text-center text-muted">{{ _('No hay vales de caja chica registrados.') }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
