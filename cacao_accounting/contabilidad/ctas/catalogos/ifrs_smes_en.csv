@@ -3,7 +3,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 11,Current Assets,1,1,Asset,,
 11.01,Cash and Cash Equivalents,11,1,Asset,,
 11.01.01,Cash on Hand,11.01,0,Asset,,cash
-11.01.02,Petty Cash,11.01,0,Asset,,cash
+11.01.02,Petty Cash,11.01,0,Asset,,petty_cash
 11.01.03,Bank Accounts,11.01,0,Asset,,bank
 11.01.04,Cash Equivalents,11.01,0,Asset,,
 11.01.05,Undeposited Funds,11.01,0,Asset,,

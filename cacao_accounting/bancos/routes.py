@@ -40,6 +40,7 @@ from cacao_accounting.database import (
     GLEntry,
     PaymentEntry,
     PaymentReference,
+    PettyCashAccount,
     ReconciliationItem,
     User,
     database,
@@ -91,6 +92,12 @@ from cacao_accounting.bancos.services import (
     _reference_outstanding,
     _create_payment_from_request,
     _payment_source_rows_from_request,
+    create_petty_cash_account,
+    petty_cash_accounts,
+    petty_cash_ledger_balance,
+    set_petty_cash_default,
+    toggle_petty_cash_active,
+    update_petty_cash_account,
 )
 
 bancos = Blueprint("bancos", __name__, template_folder="templates")
@@ -899,6 +906,169 @@ def bancos_cuenta_bancaria_numbering_config(account_id: str) -> ResponseReturnVa
 
     exige_acceso_compania("cash", bank_account.company, "consultar")
     return _build_numbering_config_response(bank_account)
+
+
+@bancos.route("/petty-cash/list")
+@modulo_activo("cash")
+@login_required
+def caja_chica_lista():
+    """Listado de cajas chicas."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    companies = [code for code, _name in obtener_lista_entidades_por_id_razonsocial()]
+    registros: list[PettyCashAccount] = []
+    for company in companies:
+        registros.extend(petty_cash_accounts(company))
+    saldos = {pc.id: petty_cash_ledger_balance(pc) for pc in registros}
+    responsables = {
+        pc.custodian_id: (database.session.get(User, pc.custodian_id).name if pc.custodian_id else None) for pc in registros
+    }
+    titulo = "Listado de Cajas Chicas - " + APPNAME
+    return render_template(
+        "bancos/caja_chica_lista.html",
+        registros=registros,
+        saldos=saldos,
+        responsables=responsables,
+        titulo=titulo,
+    )
+
+
+@bancos.route("/petty-cash/new", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "crear")
+def caja_chica_nuevo():
+    """Formulario para crear una nueva caja chica."""
+    from cacao_accounting.bancos.forms import FormularioCajaChica
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial, obtener_lista_monedas
+
+    formulario = FormularioCajaChica()
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.currency.choices = [("", "")] + obtener_lista_monedas()
+    usuarios = [
+        (str(u.id), u.name or u.user) for u in database.session.execute(database.select(User).filter_by(active=True)).scalars()
+    ]
+    titulo = "Nueva Caja Chica - " + APPNAME
+
+    if formulario.validate_on_submit() or request.method == "POST":
+        company = request.form.get("company")
+        if not company:
+            flash(_("Seleccione una compañía."), "danger")
+            return render_template("bancos/caja_chica_nuevo.html", form=formulario, usuarios=usuarios, titulo=titulo)
+        exige_acceso_compania("cash", company, "crear")
+        try:
+            create_petty_cash_account(
+                company=company,
+                account_id=request.form.get("account_id") or "",
+                name=request.form.get("name") or "",
+                currency=request.form.get("currency") or None,
+                custodian_id=request.form.get("custodian_id") or None,
+                float_amount=_form_decimal("float_amount", "0"),
+                is_default=request.form.get("is_default") == "1",
+                is_active=request.form.get("is_active", "1") != "0",
+                notes=request.form.get("notes") or None,
+            )
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+            return render_template("bancos/caja_chica_nuevo.html", form=formulario, usuarios=usuarios, titulo=titulo)
+        return redirect(url_for("bancos.caja_chica_lista"))
+
+    return render_template("bancos/caja_chica_nuevo.html", form=formulario, usuarios=usuarios, titulo=titulo)
+
+
+@bancos.route("/petty-cash/<pc_id>")
+@modulo_activo("cash")
+@login_required
+def caja_chica(pc_id):
+    """Detalle de una caja chica."""
+    registro = database.session.get(PettyCashAccount, pc_id)
+    if not registro:
+        abort(404)
+    exige_acceso_compania("cash", registro.company, "consultar")
+    titulo = registro.name + " - " + APPNAME
+    cuenta = database.session.get(Accounts, registro.account_id) if registro.account_id else None
+    responsable = database.session.get(User, registro.custodian_id) if registro.custodian_id else None
+    saldo = petty_cash_ledger_balance(registro)
+    return render_template(
+        "bancos/caja_chica.html",
+        registro=registro,
+        cuenta=cuenta,
+        responsable=responsable,
+        saldo=saldo,
+        titulo=titulo,
+    )
+
+
+@bancos.route("/petty-cash/<pc_id>/edit", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+def caja_chica_editar(pc_id):
+    """Edita una caja chica."""
+    registro = database.session.get(PettyCashAccount, pc_id)
+    if not registro:
+        abort(404)
+    exige_acceso_compania("cash", registro.company, "editar")
+    from cacao_accounting.bancos.forms import FormularioCajaChica
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_monedas
+
+    if request.method == "POST":
+        try:
+            update_petty_cash_account(
+                registro,
+                account_id=request.form.get("account_id") or None,
+                currency=request.form.get("currency") or None,
+                custodian_id=request.form.get("custodian_id") or None,
+                float_amount=_form_decimal("float_amount", "0") if request.form.get("float_amount") else None,
+                notes=request.form.get("notes") or None,
+            )
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+        return redirect(url_for("bancos.caja_chica", pc_id=registro.id))
+
+    formulario = FormularioCajaChica(
+        name=registro.name,
+        company=registro.company,
+        currency=registro.currency,
+    )
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.currency.choices = [("", "")] + obtener_lista_monedas()
+    usuarios = [
+        (str(u.id), u.name or u.user) for u in database.session.execute(database.select(User).filter_by(active=True)).scalars()
+    ]
+    titulo = "Editar Caja Chica - " + APPNAME
+    return render_template(
+        "bancos/caja_chica_nuevo.html", form=formulario, registro=registro, usuarios=usuarios, titulo=titulo
+    )
+
+
+@bancos.route("/petty-cash/<pc_id>/default", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def caja_chica_predeterminada(pc_id):
+    """Marca una caja chica como predeterminada de su compania."""
+    registro = database.session.get(PettyCashAccount, pc_id)
+    if not registro:
+        abort(404)
+    exige_acceso_compania("cash", registro.company, "editar")
+    set_petty_cash_default(registro)
+    flash(_("Caja chica marcada como predeterminada."), "success")
+    return redirect(url_for("bancos.caja_chica", pc_id=registro.id))
+
+
+@bancos.route("/petty-cash/<pc_id>/toggle", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def caja_chica_alternar(pc_id):
+    """Alterna el estado activo/inactivo de una caja chica."""
+    registro = database.session.get(PettyCashAccount, pc_id)
+    if not registro:
+        abort(404)
+    exige_acceso_compania("cash", registro.company, "editar")
+    toggle_petty_cash_active(registro)
+    flash(_("Estado de la caja chica actualizado."), "success")
+    return redirect(url_for("bancos.caja_chica", pc_id=registro.id))
 
 
 @bancos.route("/payment/new", methods=["GET", "POST"])

@@ -37,6 +37,7 @@ from cacao_accounting.database import (
     NamingSeries,
     PaymentEntry,
     PaymentReference,
+    PettyCashAccount,
     PurchaseInvoice,
     PurchaseOrder,
     Reconciliation,
@@ -44,6 +45,7 @@ from cacao_accounting.database import (
     SalesOrder,
     SalesInvoice,
     SeriesExternalCounterMap,
+    User,
     database,
 )
 
@@ -314,6 +316,217 @@ def _ensure_bank_account_numbering_config(bank_account: BankAccount) -> None:
             external_counter_id=bank_account.default_external_counter_id if use_external else None,
         )
         database.session.add(config)
+
+
+def petty_cash_accounts(company: str) -> list[PettyCashAccount]:
+    """Lista las cajas chicas de una compania, la predeterminada primero."""
+    return list(
+        database.session.execute(
+            database.select(PettyCashAccount)
+            .filter_by(company=company)
+            .order_by(PettyCashAccount.is_default.desc(), PettyCashAccount.name)
+        ).scalars()
+    )
+
+
+def petty_cash_ledger_balance(petty_cash: PettyCashAccount) -> Decimal:
+    """Devuelve el saldo contable de una caja chica derivado del GL.
+
+    El saldo no se almacena; se calcula como ``SUM(debit - credit)`` sobre la
+    cuenta contable asociada (patron de partida doble).
+    """
+    if not petty_cash.account_id:
+        return Decimal("0")
+    result = database.session.execute(
+        database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).filter_by(
+            account_id=petty_cash.account_id, company=petty_cash.company
+        )
+    ).scalar()
+    return Decimal(str(result or 0))
+
+
+def petty_cash_account_choices(company: str) -> list[tuple[str, str]]:
+    """Cuentas contables de tipo ``petty_cash`` disponibles para asignar a una caja."""
+    rows = database.session.execute(
+        database.select(Accounts).filter_by(entity=company, account_type="petty_cash", group=False).order_by(Accounts.code)
+    ).scalars()
+    return [(str(account.id), f"{account.code} - {account.name}") for account in rows]
+
+
+def _validate_petty_cash_account(company: str, account_id: str | None) -> Accounts | None:
+    """Valida que la cuenta contable exista, pertenezca a la compania y sea de tipo petty_cash."""
+    if not account_id:
+        return None
+    account = database.session.get(Accounts, account_id)
+    if not account or account.entity != company:
+        raise ValueError("La cuenta contable seleccionada no existe para la compania.")
+    if (account.account_type or "").strip() != "petty_cash":
+        raise ValueError("La cuenta contable debe ser de tipo Caja Chica (petty_cash).")
+    return account
+
+
+def _validate_petty_cash_custodian(custodian_id: str | None) -> None:
+    """Valida que el responsable exista y tenga acceso al modulo de bancos."""
+    if not custodian_id:
+        return
+    custodian = database.session.get(User, custodian_id)
+    if not custodian:
+        raise ValueError("El responsable seleccionado no existe.")
+    permisos_usuario = Permisos(usuario=custodian.id, modulo=obtener_id_modulo_por_nombre("cash"))
+    if not (permisos_usuario.autorizado or permisos_usuario.administrador):
+        raise ValueError("El responsable debe tener acceso al modulo de Caja y Bancos.")
+
+
+def create_petty_cash_account(
+    *,
+    company: str,
+    account_id: str,
+    name: str,
+    currency: str | None,
+    custodian_id: str | None,
+    float_amount: Decimal = Decimal("0"),
+    is_default: bool = False,
+    is_active: bool = True,
+    notes: str | None = None,
+) -> PettyCashAccount:
+    """Crea una caja chica validando cuenta contable y responsable."""
+    if not name.strip():
+        raise ValueError("El nombre de la caja chica es obligatorio.")
+    if float_amount is None or float_amount < 0:
+        raise ValueError("El fondo autorizado debe ser un importe no negativo.")
+    _validate_petty_cash_account(company, account_id)
+    _validate_petty_cash_custodian(custodian_id)
+
+    existing = database.session.execute(
+        database.select(PettyCashAccount).filter_by(company=company, name=name.strip())
+    ).scalar_one_or_none()
+    if existing:
+        raise ValueError("Ya existe una caja chica con ese nombre en la compania.")
+
+    if is_default:
+        _clear_default_petty_cash(company)
+
+    registro = PettyCashAccount(
+        company=company,
+        account_id=account_id,
+        name=name.strip(),
+        currency=currency,
+        custodian_id=custodian_id,
+        float_amount=float_amount,
+        is_default=is_default,
+        is_active=is_active,
+        notes=notes,
+    )
+    database.session.add(registro)
+    database.session.commit()
+    return registro
+
+
+def update_petty_cash_account(
+    petty_cash: PettyCashAccount,
+    *,
+    account_id: str | None = None,
+    currency: str | None = None,
+    custodian_id: str | None = None,
+    float_amount: Decimal | None = None,
+    notes: str | None = None,
+) -> PettyCashAccount:
+    """Actualiza los campos editables de una caja chica."""
+    if account_id:
+        _validate_petty_cash_account(petty_cash.company, account_id)
+        petty_cash.account_id = account_id
+    if float_amount is not None:
+        if float_amount < 0:
+            raise ValueError("El fondo autorizado debe ser un importe no negativo.")
+        petty_cash.float_amount = float_amount
+    if currency is not None:
+        petty_cash.currency = currency
+    if custodian_id is not None:
+        _validate_petty_cash_custodian(custodian_id)
+        petty_cash.custodian_id = custodian_id or None
+    if notes is not None:
+        petty_cash.notes = notes
+    database.session.commit()
+    return petty_cash
+
+
+def set_petty_cash_default(petty_cash: PettyCashAccount) -> None:
+    """Marca una caja chica como predeterminada (unica por compania)."""
+    _clear_default_petty_cash(petty_cash.company)
+    petty_cash.is_default = True
+    database.session.commit()
+
+
+def _clear_default_petty_cash(company: str) -> None:
+    """Quita la marca de predeterminada a las demas cajas de la compania."""
+    defaults = database.session.execute(
+        database.select(PettyCashAccount).filter_by(company=company, is_default=True)
+    ).scalars()
+    for registro in defaults:
+        registro.is_default = False
+
+
+def toggle_petty_cash_active(petty_cash: PettyCashAccount) -> None:
+    """Alterna el estado activo/inactivo de una caja chica (append-only, sin borrado)."""
+    petty_cash.is_active = not petty_cash.is_active
+    database.session.commit()
+
+
+def create_default_petty_cash(company: str, custodian_id: str | None = None) -> PettyCashAccount | None:
+    """Crea la caja chica predeterminada durante el setup inicial.
+
+    La asocia a la primera cuenta contable de tipo ``petty_cash`` del catalogo
+    de la compania y la asigna a un responsable (por defecto el usuario
+    administrador). Es idempotente: si la compania ya tiene una caja chica
+    predeterminada, no crea otra.
+    """
+    existing = database.session.execute(
+        database.select(PettyCashAccount).filter_by(company=company, is_default=True)
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+
+    primera_cuenta = (
+        database.session.execute(
+            database.select(Accounts).filter_by(entity=company, account_type="petty_cash", group=False).order_by(Accounts.code)
+        )
+        .scalars()
+        .first()
+    )
+    if not primera_cuenta:
+        return None
+
+    if custodian_id is None:
+        custodian_id = _resolve_default_petty_cash_custodian()
+
+    registro = PettyCashAccount(
+        company=company,
+        account_id=str(primera_cuenta.id),
+        name=primera_cuenta.name,
+        currency=None,
+        custodian_id=custodian_id,
+        float_amount=Decimal("0"),
+        is_default=True,
+        is_active=True,
+    )
+    database.session.add(registro)
+    database.session.commit()
+    return registro
+
+
+def _resolve_default_petty_cash_custodian() -> str | None:
+    """Resuelve el responsable por defecto: el usuario en sesion, o el primer admin."""
+    try:
+        if current_user and current_user.is_authenticated:
+            return str(current_user.id)
+    except Exception:  # pragma: no cover - fuera de contexto de request
+        pass
+    administrador = (
+        database.session.execute(database.select(User).filter_by(classification="admin", active=True).order_by(User.created))
+        .scalars()
+        .first()
+    )
+    return str(administrador.id) if administrador else None
 
 
 def _resolve_bank_account_numbering_config(

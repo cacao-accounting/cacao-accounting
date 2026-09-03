@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block contenido %}
+{% import "macros.html" as macros %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_lista.html"></div>
+{%- endif -%}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Cajas Chicas') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h5 class="ca-card-title"><i class="bi bi-cash-coin"></i> {{ _('Cajas Chicas') }}</h5>
+    <a href="{{ url_for('bancos.caja_chica_nuevo') }}" class="btn btn-sm btn-primary">
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
+    </a>
+  </div>
+  <table class="ca-table">
+    <caption style="display: none;">{{ _('Listado de cajas chicas.') }}</caption>
+    <thead>
+      <tr>
+        <th scope="col">{{ _('Caja') }}</th>
+        <th scope="col">{{ _('Responsable') }}</th>
+        <th scope="col">{{ _('Fondo') }}</th>
+        <th scope="col">{{ _('Saldo contable') }}</th>
+        <th scope="col">{{ _('Estado') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in registros -%}
+      <tr>
+        <td>
+          <a class="fw-bold" href="{{ url_for('bancos.caja_chica', pc_id=item.id) }}">{{ item.name }}</a>
+          {% if item.is_default %}<span class="badge text-bg-secondary">{{ _('Predeterminada') }}</span>{% endif %}
+        </td>
+        <td>{{ responsables.get(item.custodian_id) or item.custodian_id or '-' }}</td>
+        <td>{{ item.float_amount }}</td>
+        <td>{{ saldos.get(item.id, 0) }}</td>
+        <td>
+          {% if item.is_active %}
+          <span class="badge text-bg-success">{{ _('Activa') }}</span>
+          {% else %}
+          <span class="badge text-bg-secondary">{{ _('Inactiva') }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {%- else %}
+      <tr>
+        <td colspan="5" class="text-center text-muted">{{ _('No hay cajas chicas registradas.') }}</td>
+      </tr>
+      {%- endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

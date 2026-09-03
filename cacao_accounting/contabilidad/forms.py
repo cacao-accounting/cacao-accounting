@@ -36,6 +36,7 @@ ACCOUNT_TYPE_CHOICES = [
     ("income", "Ingreso"),
     ("expense", "Gasto"),
     ("cash", "Efectivo"),
+    ("petty_cash", "Caja Chica"),
     ("bank", "Banco"),
     ("receivable", "Cuentas por Cobrar"),
     ("payable", "Cuentas por Pagar"),

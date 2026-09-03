@@ -3,7 +3,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 11,Activos Corrientes,1,1,Asset,,
 11.01,Efectivo y Equivalentes de Efectivo,11,1,Asset,,
 11.01.01,Efectivo en Caja,11.01,0,Asset,,cash
-11.01.02,Caja Chica,11.01,0,Asset,,cash
+11.01.02,Caja Chica,11.01,0,Asset,,petty_cash
 11.01.03,Cuentas Bancarias,11.01,0,Asset,,bank
 11.01.04,Equivalentes de Efectivo,11.01,0,Asset,,
 11.01.05,Fondos Pendientes de Depositar,11.01,0,Asset,,

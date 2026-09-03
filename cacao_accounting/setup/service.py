@@ -14,6 +14,7 @@ from cacao_accounting.contabilidad.default_accounts import (
     apply_catalog_default_mapping,
     catalog_has_default_mapping,
 )
+from cacao_accounting.bancos.services import create_default_petty_cash
 from cacao_accounting.contabilidad.ctas import (
     CatalogoCtas,
     DIRECTORIO_CTAS,
@@ -120,6 +121,7 @@ def create_company(
             apply_catalog_default_mapping(entity.code, catalogo.file)
         except DefaultAccountError as exc:
             raise ValueError(str(exc)) from exc
+        create_default_petty_cash(entity.code)
 
     return entity
 

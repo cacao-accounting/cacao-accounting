@@ -4,7 +4,7 @@
 """Formularios web del modulo de bancos."""
 
 from flask_wtf import FlaskForm
-from wtforms import SelectField, StringField, TextAreaField
+from wtforms import BooleanField, SelectField, StringField, TextAreaField
 from wtforms.validators import DataRequired, Optional
 
 
@@ -27,6 +27,20 @@ class FormularioCuentaBancaria(FlaskForm):
     gl_account_id = SelectField("Cuenta contable bancaria", choices=[], validators=[Optional()])
     default_naming_series_id = SelectField("Serie interna para pagos", choices=[], validators=[Optional()])
     default_external_counter_id = SelectField("Chequera", choices=[], validators=[Optional()])
+
+
+class FormularioCajaChica(FlaskForm):
+    """Formulario para crear o editar una caja chica."""
+
+    company = SelectField("Compañía", choices=[], validators=[DataRequired()])
+    name = StringField("Nombre", validators=[DataRequired()])
+    account_id = SelectField("Cuenta contable de Caja Chica", choices=[], validators=[Optional()])
+    currency = SelectField("Moneda", choices=[])
+    custodian_id = SelectField("Responsable", choices=[], validators=[Optional()])
+    float_amount = StringField("Fondo autorizado")
+    is_default = BooleanField("Predeterminada", default=False)
+    is_active = BooleanField("Activa", default=True)
+    notes = TextAreaField("Notas", validators=[Optional()])
 
 
 class FormularioPago(FlaskForm):

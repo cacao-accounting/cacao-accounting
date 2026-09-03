@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block contenido %}
+
+{%- if TESTING -%}
+<div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_nuevo.html"></div>
+{%- endif -%}
+
+<nav aria-label="{{ _('breadcrumb') }}">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.caja_chica_lista') }}" class="link-dark">{{ _('Cajas Chicas') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">
+      {% if registro %}{{ _('Editar caja chica') }}{% else %}{{ _('Nueva caja chica') }}{% endif %}
+    </li>
+  </ol>
+</nav>
+
+<div class="ca-card">
+  <div class="ca-card-header">
+    <h5 class="ca-card-title"><i class="bi bi-cash-coin"></i>{% if registro %}{{ _('Editar caja chica') }}{% else %}{{ _('Nueva caja chica') }}{% endif %}</h5>
+    <div class="d-flex gap-2 flex-wrap">
+      <a href="{% if registro %}{{ url_for('bancos.caja_chica', pc_id=registro.id) }}{% else %}{{ url_for('bancos.caja_chica_lista') }}{% endif %}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
+      <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>{{ _('Guardar') }}</button>
+    </div>
+  </div>
+  <form method="post" id="form-main" class="row g-3 p-3">
+    {{ form.csrf_token }}
+    <div class="col-md-6">
+      <label class="form-label" for="company">{{ _('Compañía') }} <span class="text-danger">*</span></label>
+      <div class="ca-smart-select" x-data='smartSelect({
+        doctype: "company",
+        name: "company",
+        minChars: 1,
+        preload: true,
+        messages: {
+          placeholder: {{ _('Buscar compañía')|tojson }},
+          loading: {{ _('Cargando...')|tojson }},
+          noResults: {{ _('Sin resultados')|tojson }},
+          minChars: {{ _('Escriba para buscar')|tojson }},
+          clear: {{ _('Limpiar')|tojson }},
+          invalid: {{ _('Seleccione una opción válida')|tojson }},
+          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+        }
+      })'>
+        <input type="hidden" id="company" name="company" x-model="selectedValue" value="{{ form.company.data or '' }}">
+        <input class="form-control form-control-sm ca-smart-select-input" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder" required>
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <template x-for="option in options" :key="option.value">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+          </template>
+          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="name">{{ _('Nombre') }} <span class="text-danger">*</span></label>
+      {{ form.name(class="form-control form-control-sm", id="name", required=True) }}
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="account_id">{{ _('Cuenta contable de Caja Chica') }} <span class="text-danger">*</span></label>
+      <div class="ca-smart-select" x-data='smartSelect({
+        doctype: "account",
+        name: "account_id",
+        minChars: 1,
+        filters: { company: { selector: "#company" }, account_type: "petty_cash", is_active: true },
+        filterSources: ["#company"],
+        messages: {
+          placeholder: {{ _('Buscar cuenta contable de tipo Caja Chica')|tojson }},
+          loading: {{ _('Cargando...')|tojson }},
+          noResults: {{ _('Sin resultados')|tojson }},
+          minChars: {{ _('Escriba para buscar')|tojson }},
+          clear: {{ _('Limpiar')|tojson }},
+          invalid: {{ _('Seleccione una opción válida')|tojson }},
+          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+        }
+      })'>
+        <input type="hidden" name="account_id" x-model="selectedValue">
+        <input class="form-control form-control-sm ca-smart-select-input" id="account_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <template x-for="option in options" :key="option.value">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+          </template>
+          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="currency">{{ _('Moneda') }}</label>
+      <div class="ca-smart-select" x-data='smartSelect({
+        doctype: "currency",
+        name: "currency",
+        minChars: 1,
+        preload: true,
+        messages: {
+          placeholder: {{ _('Buscar moneda')|tojson }},
+          loading: {{ _('Cargando...')|tojson }},
+          noResults: {{ _('Sin resultados')|tojson }},
+          minChars: {{ _('Escriba para buscar')|tojson }},
+          clear: {{ _('Limpiar')|tojson }},
+          invalid: {{ _('Seleccione una opción válida')|tojson }},
+          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+        }
+      })'>
+        <input type="hidden" name="currency" x-model="selectedValue" value="{{ form.currency.data or '' }}">
+        <input class="form-control form-control-sm ca-smart-select-input" id="currency" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <template x-for="option in options" :key="option.value">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+          </template>
+          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="custodian_id">{{ _('Responsable') }}</label>
+      <select class="form-select form-select-sm" name="custodian_id" id="custodian_id">
+        <option value="">— {{ _('Seleccione') }} —</option>
+        {% for value, label in usuarios %}
+        <option value="{{ value }}" {% if registro and registro.custodian_id == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label" for="float_amount">{{ _('Fondo autorizado') }}</label>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text"><i class="bi bi-cash"></i></span>
+        <input class="form-control" type="number" step="0.01" min="0" name="float_amount" id="float_amount" value="{{ registro.float_amount if registro else form.float_amount.data or '0' }}">
+      </div>
+    </div>
+    <div class="col-md-6 d-flex align-items-end gap-4 mb-2">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="is_default" name="is_default" value="1" {% if registro and registro.is_default %}checked{% endif %}>
+        <label class="form-check-label" for="is_default">{{ _('Predeterminada') }}</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" value="1" {% if not registro or registro.is_active %}checked{% endif %}>
+        <label class="form-check-label" for="is_active">{{ _('Activa') }}</label>
+      </div>
+    </div>
+    <div class="col-12">
+      <label class="form-label" for="notes">{{ _('Notas') }}</label>
+      {{ form.notes(class="form-control form-control-sm", id="notes", rows=3) }}
+    </div>
+  </form>
+</div>
+
+{% endblock %}

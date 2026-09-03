@@ -46,6 +46,10 @@
         <a href="{{ url_for('bancos.bancos_reglas_matching') }}">{{ _("Reglas de Matching") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
+      <li>
+        <a href="{{ url_for('bancos.caja_chica_lista') }}">Cajas Chicas</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
+      </li>
       {% else %}
       <li class="ca-no-access">
         <span>Bancos</span>

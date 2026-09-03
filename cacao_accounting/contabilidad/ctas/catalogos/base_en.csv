@@ -9,7 +9,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 11.01.001,Caja,11.01,1,Asset,,
 11.01.001.001,Efectivo,11.01.001,0,Asset,,cash
 11.01.001.002,Fondos por Depositar,11.01.001,0,Asset,,cash
-11.01.001.003,Caja Chica,11.01.001,0,Asset,,cash
+11.01.001.003,Caja Chica,11.01.001,0,Asset,,petty_cash
 11.01.002,Bank Accounts,11.01,1,Asset,,
 11.01.002.001,Banco Moneda Local,11.01.002,0,Asset,,bank
 11.01.002.002,Banco Moneda Extranjera,11.01.002,0,Asset,,bank

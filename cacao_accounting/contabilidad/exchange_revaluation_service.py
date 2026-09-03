@@ -39,7 +39,7 @@ EXCHANGE_REVALUATION_ENTITY_TYPE = "exchange_revaluation"
 EXCHANGE_REVALUATION_STATUS_POSTED = "posted"
 EXCHANGE_REVALUATION_STATUS_VOIDED = "voided"
 EXCHANGE_REVALUATION_STATUS_NO_CHANGES = "completed_no_changes"
-MONETARY_ACCOUNT_TYPES = {"receivable", "payable", "bank", "cash", "asset", "liability"}
+MONETARY_ACCOUNT_TYPES = {"receivable", "payable", "bank", "cash", "petty_cash", "asset", "liability"}
 
 
 class ExchangeRevaluationError(ValueError):
