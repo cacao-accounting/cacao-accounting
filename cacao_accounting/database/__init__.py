@@ -1676,6 +1676,18 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
     posting_date = database.Column(database.Date(), nullable=False, index=True)
     source_layer_id = database.Column(database.String(26), nullable=True, index=True)
     created = database.Column(database.DateTime(timezone=True), default=database.func.now(), nullable=False)
+    # El lote es una dimension de primer nivel del almacen: al valorar una
+    # salida que selecciona un lote especifico se consumen solo las capas de
+    # entrada creadas para ese lote, no la cola FIFO global del articulo.
+    # En esquemas pre-existentes la columna se suple idempotentemente en el
+    # arranque (helpers._ensure_stock_valuation_layer_batch_column) y las capas
+    # historicas obtienen su batch por derivacion desde el StockLedgerEntry.
+    batch_id = database.Column(
+        database.String(26),
+        database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
 
 
 class LandedCostAllocation(database.Model, BaseTabla):  # type: ignore[name-defined]

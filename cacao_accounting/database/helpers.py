@@ -135,6 +135,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
         try:
             database.create_all()
             log.info("Esquema de base de datos creado correctamente.")
+            _ensure_stock_valuation_layer_batch_column()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -626,3 +627,34 @@ def _validate_and_fix_stock_bin_reserved_qty() -> None:
         pass
     except Exception as exc:
         log.warning("Could not validate StockBin.reserved_qty during initialization: {}", exc)
+
+
+def _ensure_stock_valuation_layer_batch_column() -> None:
+    """Suple idempotentemente la columna ``batch_id`` de ``stock_valuation_layer``.
+
+    El lote es una dimension de primer nivel del almacen: al valorar una salida
+    que selecciona un lote especifico solo deben consumirse las capas de entrada
+    creadas para ese lote. ``create_all`` solo crea la tabla para esquemas
+    nuevos; para bases existentes esta rutina agrega la columna sin migracion
+    formal y de forma idempotente.
+    """
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        from cacao_accounting.database import StockValuationLayer
+
+        if not sa_inspect(database.engine).has_table(StockValuationLayer.__tablename__):
+            return
+        current = {column["name"] for column in sa_inspect(database.engine).get_columns(StockValuationLayer.__tablename__)}
+        if "batch_id" in current:
+            return
+        database.session.execute(
+            database.text("ALTER TABLE stock_valuation_layer ADD COLUMN batch_id VARCHAR(26)")
+        )
+        database.session.commit()
+        log.info("Columna batch_id agregada a stock_valuation_layer.")
+    except (OperationalError, ProgrammingError, InterfaceError):
+        database.session.rollback()
+        pass
+    except Exception as exc:
+        log.warning("Could not ensure StockValuationLayer.batch_id during initialization: {}", exc)
