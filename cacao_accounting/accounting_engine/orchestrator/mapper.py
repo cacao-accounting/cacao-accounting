@@ -238,7 +238,6 @@ class AccountingMapper:
                     fiscal_line.amount,
                     side=side,
                     description=f"{fiscal_line.concept} - {context.document_type}",
-                    party_id=context.party_id if fiscal_line.type == "withholding" else None,
                     exchange_rate=self._document_exchange_rate(context),
                 )
             )

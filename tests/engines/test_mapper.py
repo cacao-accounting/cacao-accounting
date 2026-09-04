@@ -476,3 +476,51 @@ def test_sales_credit_note_reverses_vat_side():
     assert proforma.is_balanced
     assert party_line.credit == Decimal("115.0000")
     assert party_line.debit == Decimal("0")
+
+
+def test_purchase_invoice_withholding_not_party_tagged():
+    """La retencion de la factura es pasivo ante el Estado, no deuda con el tercero.
+
+    Refs: #792. El engine etiquetaba la retencion con ``party_id``, lo que
+    inflaba el total GL de terceros y rompia el guard estricto AR/AP contra GL
+    al contabilizar una factura de compra con retencion.
+    """
+    ctx = _invoice_like_context(
+        direction="purchase",
+        event_type="purchase_invoice_confirmed",
+        document_type="purchase_invoice",
+        is_credit_note=False,
+    )
+    withholding = FiscalResult(
+        tax_lines=[
+            FiscalLine(
+                line_id="T1",
+                concept="IR",
+                type="withholding",
+                rate=Decimal("1"),
+                calculation_method="percentage",
+                base_amount=Decimal("100"),
+                amount=Decimal("1"),
+                recognition_event="invoice",
+                accounting_treatment="separate",
+                affects_inventory=False,
+                affects_document_total=True,
+                included_in_price=False,
+                source_rule_id="R1",
+                account_id="2401",
+                applies_to_items=["L1"],
+                depends_on=[],
+                participates_in_next_base=False,
+            )
+        ]
+    )
+
+    mapper = AccountingMapper()
+    proforma = mapper.map_to_proforma(ctx, fiscal=withholding)
+
+    withholding_line = next(line for line in proforma.lines if line.account_id == "2401")
+    party_line = next(line for line in proforma.lines if line.account_id == "2101")
+
+    assert withholding_line.party_id is None
+    assert party_line.party_id == "P1"
+    assert proforma.is_balanced
