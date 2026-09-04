@@ -122,6 +122,18 @@ Se agrega `"sales_return"` en tres code paths:
 - tests/test_arap_gl_reconciliation.py: 12/12
 - tests/test_payment_reconciliation_arap_adapter.py: 3/3
 
+### Cierre de la revisión (fix-confirmed)
+
+- QA independiente detectó que la vía UI seguía excluyendo `sales_return`: `_sales_reversal_source()` no resolvía
+  la factura origen para devoluciones, por lo que el flujo `request.form from_invoice/from_return` no poblaba `reversal_of`.
+- Se agrega `"sales_return"` a `_sales_reversal_source()` y una prueba de regresión dedicada
+  (`tests/test_sales_return_outstanding.py`) que reproduce el issue: factura C$1000 + `sales_return` C$200 vía `reversal_of`
+  deja `outstanding_amount == 800`, verifica la `DocumentRelation` activa, combina devolución + nota de crédito sin doble
+  conteo y valida que la vía UI resuelve `reversal_of` para `sales_return`.
+- La regresión falla sin el fix (validado por reverting) y pasa con él. Verificación: 15 passed
+  (test_sales_return_outstanding + test_ar_ap_allocation + test_o2c_full_cycle); black, ruff, flake8 y mypy en verde.
+- Veredicto: fix-confirmed.
+
 ## 2026-09-04 (QA de alpha — alcance del destinatario de tareas, issue #782)
 
 ### Hallazgo verificable
