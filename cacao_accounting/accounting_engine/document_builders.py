@@ -146,6 +146,8 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
     late_two_way_amounts = _late_two_way_invoice_amounts(document)
     account_lines: list[AccountLineSpec] = []
     item_contexts: list[ItemContext] = []
+    inventory_side = "credit" if getattr(document, "is_return", False) else "debit"
+    bridge_side = "debit" if getattr(document, "is_return", False) else "credit"
     for item in items:
         item_record = database.session.get(Item, item.item_code)
         if item_record is not None and (item_record.item_type == "service" or not item_record.is_stock_item):
@@ -160,7 +162,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
             AccountLineSpec(
                 account_id=inventory_account_id,
                 amount=amount,
-                side="debit",
+                side=inventory_side,
                 description=f"{description} - {_event_label('purchase_receipt_confirmed')}",
             )
         )
@@ -186,7 +188,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
                 AccountLineSpec(
                     account_id=bridge_account_id,
                     amount=bridge_amount,
-                    side="credit",
+                    side=bridge_side,
                     description=f"{description} - {_('Cuenta puente compras')}",
                     party_id=document.supplier_id,
                 )
