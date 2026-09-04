@@ -2271,3 +2271,58 @@ def test_internal_transfer_cross_currency_uses_system_rate(app_ctx):
     # Origen USD -> Destino NIO: 100 * 36.50 = 3650 en la moneda destino.
     assert payment.received_amount == Decimal("3650.0000")
     assert payment.base_received_amount is None
+
+
+def test_internal_transfer_same_currency_ignores_ui_rate(app_ctx):
+    """Una transferencia interna entre cuentas de la misma moneda es uno a uno.
+
+    Refs: #790. Una transferencia USD -> USD no debe revalorizarse con la tasa
+    no validada de la UI (default 1): la pata destino se recibe por el mismo
+    monto nominal del origen.
+    """
+    from cacao_accounting.bancos.services import _apply_internal_transfer_amounts
+    from cacao_accounting.database import Bank, BankAccount
+
+    source_usd = (
+        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+    )
+    bank_entity = database.session.execute(database.select(Bank)).scalars().first()
+    target_usd = BankAccount(
+        bank_id=bank_entity.id,
+        company="cacao",
+        account_name="Cuenta USD Secundaria",
+        account_no="USD-8888",
+        currency="USD",
+        gl_account_id=source_usd.gl_account_id,
+    )
+    database.session.add(target_usd)
+    database.session.commit()
+    assert source_usd is not None and target_usd is not None
+
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date.today(),
+        payment_type="internal_transfer",
+        bank_account_id=source_usd.id,
+        target_bank_account_id=target_usd.id,
+        currency="USD",
+        transaction_currency="USD",
+        base_currency="NIO",
+        paid_amount=Decimal("100"),
+        received_amount=Decimal("100"),
+        docstatus=0,
+    )
+    database.session.add(payment)
+    database.session.commit()
+
+    # La UI envia una tasa erronea (0.5) que no debe aplicarse en misma moneda.
+    _apply_internal_transfer_amounts(
+        payment,
+        SimpleNamespace(exchange_rate="0.5", posting_date=date.today().isoformat()),
+        "internal_transfer",
+        Decimal("100"),
+        target_usd,
+    )
+
+    assert payment.received_amount == Decimal("100.0000")
+    assert payment.base_received_amount is None
