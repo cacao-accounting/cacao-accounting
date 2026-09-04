@@ -1937,12 +1937,22 @@ def _schedule_valuation_layers(layers: Sequence[Any]) -> list[tuple[tuple, Any]]
     return scheduled
 
 
-def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[list]:
+def _valuation_queue(
+    company: str,
+    item_code: str,
+    warehouse: str,
+    batch_id: str | None = None,
+) -> list[list]:
     """Reconstruye la cola de capas disponibles ``[layer_id, qty, rate]``.
 
     La reconstruccion fija cada consumo a su capa origen (``source_layer_id``)
     e inserta las reversas junto a su capa de origen, preservando la
     composicion FIFO historica frente a receipts retroactivos y cancelaciones.
+
+    Cuando ``batch_id`` se indica, la cola se limita a las capas de entrada del
+    lote (dimensión de primer nivel del almacen) y sus consumos/reversas
+    vinculados: una salida que selecciona un lote especifico se valora con el
+    costo de ese lote, no con la cola FIFO global del articulo.
     """
     layers = (
         database.session.execute(
@@ -1953,6 +1963,24 @@ def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[list]
         .scalars()
         .all()
     )
+    if batch_id:
+        incoming = [
+            layer
+            for layer in layers
+            if _layer_batch_id(layer, company=company, item_code=item_code, warehouse=warehouse) == str(batch_id)
+            and _decimal_value(layer.qty) > 0
+        ]
+        incoming_ids = {str(layer.id) for layer in incoming}
+        linked_ids = {
+            str(layer.id)
+            for layer in layers
+            if layer.source_layer_id
+            and (
+                str(layer.source_layer_id) in incoming_ids
+                or _layer_batch_id(layer, company=company, item_code=item_code, warehouse=warehouse) == str(batch_id)
+            )
+        }
+        layers = [layer for layer in layers if str(layer.id) in (incoming_ids | linked_ids)]
     scheduled = _schedule_valuation_layers(layers)
     queue: list[list] = []
     negative_balance = Decimal("0")
@@ -1972,6 +2000,44 @@ def _valuation_queue(company: str, item_code: str, warehouse: str) -> list[list]
             source_layer_id=layer.source_layer_id,
         )
     return [entry for entry in queue if entry[1] > 0]
+
+
+def _layer_batch_id(
+    layer: Any,
+    *,
+    company: str,
+    item_code: str,
+    warehouse: str,
+) -> str | None:
+    """Resuelve el lote de una capa de valuación.
+
+    Cuando la capa se creó sin ``batch_id`` explicito (esquemas pre-existentes,
+    semillas de prueba) el lote se deriva del ``StockLedgerEntry`` de entrada
+    del mismo comprobante, que registra el lote como dimensión de primer nivel
+    del almacén.
+    """
+    explicit = getattr(layer, "batch_id", None)
+    if explicit:
+        return str(explicit)
+    voucher_type = str(getattr(layer, "voucher_type", "") or "")
+    voucher_id = str(getattr(layer, "voucher_id", "") or "")
+    if not voucher_type or not voucher_id:
+        return None
+    sle_batch = database.session.execute(
+        select(StockLedgerEntry.batch_id)
+        .where(
+            StockLedgerEntry.company == company,
+            StockLedgerEntry.item_code == item_code,
+            StockLedgerEntry.warehouse == warehouse,
+            StockLedgerEntry.voucher_type == voucher_type,
+            StockLedgerEntry.voucher_id == voucher_id,
+            StockLedgerEntry.qty_change > 0,
+            StockLedgerEntry.is_cancelled.is_(False),
+            StockLedgerEntry.batch_id.is_not(None),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    return str(sle_batch) if sle_batch is not None else None
 
 
 def _moving_average_valuation(available: list, total_available: Decimal, quantity: Decimal) -> tuple[Decimal, Decimal]:
@@ -2009,7 +2075,11 @@ def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decima
 
 
 def _consume_stock_valuation_layers(
-    company: str, item_code: str, warehouse: str, quantity: Decimal
+    company: str,
+    item_code: str,
+    warehouse: str,
+    quantity: Decimal,
+    batch_id: str | None = None,
 ) -> tuple[Decimal, Decimal, str | None]:
     """Consume capas y retorna ``(costo, tasa, capa_origen_predominante)``."""
     if quantity <= 0:
@@ -2020,7 +2090,7 @@ def _consume_stock_valuation_layers(
     # through the later `_upsert_stock_bin` in the same transaction, so two
     # outgoing postings cannot price the same moving-average/FIFO snapshot.
     locked_bin = _stock_bin_for(company, item_code, warehouse, lock=True)
-    available = _valuation_queue(company, item_code, warehouse)
+    available = _valuation_queue(company, item_code, warehouse, batch_id=batch_id)
     total_available: Decimal = sum((entry[1] for entry in available), Decimal("0"))
     if total_available < quantity:
         raise PostingError(
@@ -2031,6 +2101,12 @@ def _consume_stock_valuation_layers(
     if valuation_method == "moving_average":
         bin_qty = _decimal_value(locked_bin.actual_qty) if locked_bin else Decimal("0")
         bin_value = _decimal_value(locked_bin.stock_value) if locked_bin else Decimal("0")
+        if batch_id:
+            # Una salida que selecciona un lote concreto se valora con las capas
+            # de entrada de ese lote (dimension de primer nivel del almacen), no
+            # con el promedio global del articulo entre todos los lotes.
+            cost_amount, average_rate = _moving_average_valuation(available, total_available, quantity)
+            return cost_amount, average_rate, None
         if bin_qty >= quantity and bin_qty > 0:
             average_rate = bin_value / bin_qty
             return quantity * average_rate, average_rate, None
@@ -2041,10 +2117,15 @@ def _consume_stock_valuation_layers(
 
 
 def _consume_available_layers_for_negative_stock(
-    company: str, item_code: str, warehouse: str, total_qty: Decimal, fallback_rate: Decimal
+    company: str,
+    item_code: str,
+    warehouse: str,
+    total_qty: Decimal,
+    fallback_rate: Decimal,
+    batch_id: str | None = None,
 ) -> Decimal:
     """Consume las capas disponibles para stock negativo, retorna la tasa promedio."""
-    available = _valuation_queue(company, item_code, warehouse)
+    available = _valuation_queue(company, item_code, warehouse, batch_id=batch_id)
     total_available = sum((entry[1] for entry in available), Decimal("0"))
     if total_available > 0:
         _, avg_rate, _source_layer = _consume_stock_valuation_layers(
@@ -2052,6 +2133,7 @@ def _consume_available_layers_for_negative_stock(
             item_code=item_code,
             warehouse=warehouse,
             quantity=total_available,
+            batch_id=batch_id,
         )
         return avg_rate
     return fallback_rate
@@ -2412,6 +2494,7 @@ def _create_stock_movement(
                 item_code=line.item_code,
                 warehouse=warehouse,
                 quantity=abs(qty_change),
+                batch_id=getattr(line, "batch_id", None),
             )
             source_layer_id = consumed_source_layer
             valuation_rate = cost_rate
@@ -2426,6 +2509,7 @@ def _create_stock_movement(
                 warehouse=warehouse,
                 total_qty=abs(qty_change),
                 fallback_rate=_line_rate(line),
+                batch_id=getattr(line, "batch_id", None),
             )
             cost_amount = cost_rate * abs(qty_change)
             line._inventory_cost_amount = cost_amount
@@ -2458,6 +2542,7 @@ def _create_stock_movement(
             voucher_id=_get_voucher_id(document),
             posting_date=document.posting_date,
             source_layer_id=source_layer_id if qty_change < 0 else None,
+            batch_id=getattr(line, "batch_id", None),
         )
     )
     return StockLedgerEntry(
@@ -2681,7 +2766,11 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
     item = _stock_item_for(line)
     try:
         cost_amount, rate, source_layer_id = _consume_stock_valuation_layers(
-            company=document.company, item_code=line.item_code, warehouse=warehouse, quantity=abs(qty_change)
+            company=document.company,
+            item_code=line.item_code,
+            warehouse=warehouse,
+            quantity=abs(qty_change),
+            batch_id=getattr(line, "batch_id", None),
         )
         line._inventory_source_layer_id = source_layer_id
     except PostingError:
@@ -2693,6 +2782,7 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
             warehouse=warehouse,
             total_qty=abs(qty_change),
             fallback_rate=target_value / counted_qty if counted_qty > 0 else Decimal("0"),
+            batch_id=getattr(line, "batch_id", None),
         )
         cost_amount = rate * abs(qty_change)
         line._inventory_source_layer_id = None
@@ -2778,6 +2868,7 @@ def _consume_outflow_stock_valuation(
             item_code=line.item_code,
             warehouse=source_warehouse,
             quantity=qty,
+            batch_id=getattr(line, "batch_id", None),
         )
     except PostingError:
         if not item.allow_negative_stock:
@@ -2788,6 +2879,7 @@ def _consume_outflow_stock_valuation(
             warehouse=source_warehouse,
             total_qty=qty,
             fallback_rate=fallback_rate,
+            batch_id=getattr(line, "batch_id", None),
         )
         cost_amount = cost_rate * qty
         source_layer_id = None
@@ -2993,6 +3085,7 @@ def _outgoing_stock_values(
             item_code=line.item_code,
             warehouse=warehouse,
             quantity=abs(qty_change),
+            batch_id=getattr(line, "batch_id", None),
         )
     except PostingError:
         if not item.allow_negative_stock:
@@ -3003,6 +3096,7 @@ def _outgoing_stock_values(
             warehouse=warehouse,
             total_qty=abs(qty_change),
             fallback_rate=_line_rate_generic(line),
+            batch_id=getattr(line, "batch_id", None),
         )
         cost_amount = cost_rate * abs(qty_change)
         source_layer_id = None
@@ -3081,6 +3175,7 @@ def _create_stock_ledger_for_document(
         voucher_id=_get_voucher_id(document),
         posting_date=document.posting_date,
         source_layer_id=source_layer_id if qty_change < 0 else None,
+        batch_id=getattr(line, "batch_id", None),
     )
     database.session.add(stock_layer)
     database.session.flush()

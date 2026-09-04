@@ -2453,7 +2453,7 @@ def test_moving_average_consumption_locks_the_stock_bin_before_valuing(app_ctx, 
     from cacao_accounting.contabilidad import posting_service
 
     locked: list[bool] = []
-    monkeypatch.setattr(posting_service, "_valuation_queue", lambda *_args: [(Decimal("10"), Decimal("10"))])
+    monkeypatch.setattr(posting_service, "_valuation_queue", lambda *_args, **_kwargs: [(Decimal("10"), Decimal("10"))])
     monkeypatch.setattr(posting_service, "_valuation_method_for_company", lambda _company: "moving_average")
 
     def stock_bin(*_args, lock: bool = False):
