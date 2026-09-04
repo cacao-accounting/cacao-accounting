@@ -206,6 +206,8 @@ def ensure_default_naming_series_for_company(company: str, entity_types: list[st
             "bank_credit_note",
             "petty_cash_voucher",
             "petty_cash_expense",
+            "petty_cash_reconciliation",
+            "petty_cash_replenishment",
         ]
     for entity_type in entity_types:
         _pick_naming_series(entity_type=entity_type, company=company, naming_series_id=None)
@@ -322,6 +324,8 @@ def _default_entity_code(entity_type: str) -> str:
         "bank_credit_note": "BCRN",
         "petty_cash_voucher": "PCV",
         "petty_cash_expense": "PCEXP",
+        "petty_cash_reconciliation": "PCREC",
+        "petty_cash_replenishment": "PCREP",
     }
     return map_codes.get(entity_type, entity_type[:3].upper())
 

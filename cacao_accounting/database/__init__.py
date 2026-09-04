@@ -73,6 +73,8 @@ SUPPLIER_QUOTATION_ITEM_ID = "supplier_quotation_item.id"
 PETTY_CASH_ID = "petty_cash_account.id"
 PETTY_CASH_VOUCHER_ID = "petty_cash_voucher.id"
 PETTY_CASH_EXPENSE_ID = "petty_cash_expense.id"
+PETTY_CASH_RECONCILIATION_ID = "petty_cash_reconciliation.id"
+PETTY_CASH_REPLENISHMENT_ID = "petty_cash_replenishment.id"
 
 ROLES_ID_COLUMN = "roles.id"
 AMOUNT_NON_NEGATIVE_CHECK = "amount >= 0"
@@ -3106,6 +3108,76 @@ class PettyCashExpense(database.Model, DocBase):  # type: ignore[name-defined]
         database.ForeignKey(VOUCHER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
+    )
+    replenishment_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PETTY_CASH_REPLENISHMENT_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE),
+        nullable=True,
+        index=True,
+    )
+
+
+class PettyCashReconciliation(database.Model, DocBase):  # type: ignore[name-defined]
+    """Conciliacion de efectivo fisico contra el fondo de caja chica."""
+
+    __tablename__ = "petty_cash_reconciliation"
+    __table_args__ = (
+        database.UniqueConstraint("company", "petty_cash_id", "reconciliation_date", name="uq_petty_cash_reconciliation"),
+    )
+    petty_cash_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PETTY_CASH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    reconciliation_date = database.Column(database.Date(), nullable=False, index=True)
+    ledger_balance = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    open_vouchers = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    expected_cash = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    counted_cash = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    explained_amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    difference = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    explanation = database.Column(database.Text(), nullable=True)
+    adjustment_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
+    adjustment_journal_id = database.Column(
+        database.String(26), database.ForeignKey(VOUCHER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    reconciled_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
+
+
+class PettyCashReplenishment(database.Model, DocBase):  # type: ignore[name-defined]
+    """Solicitud para reponer gastos de caja chica desde una cuenta bancaria."""
+
+    __tablename__ = "petty_cash_replenishment"
+    __table_args__ = (database.UniqueConstraint("company", "document_no", name="uq_petty_cash_replenishment"),)
+    petty_cash_id = database.Column(
+        database.String(26),
+        database.ForeignKey(PETTY_CASH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
+        nullable=False,
+        index=True,
+    )
+    request_date = database.Column(database.Date(), nullable=False, index=True)
+    amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
+    bank_account_id = database.Column(
+        database.String(26), database.ForeignKey(BANK_ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    bank_debit_note_id = database.Column(
+        database.String(26), database.ForeignKey(PAYMENT_ENTRY_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    status = database.Column(database.String(20), nullable=False, default="borrador", index=True)
+    notes = database.Column(database.Text(), nullable=True)
+    requested_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
+    approved_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
+    replenished_by = database.Column(
+        database.String(26), database.ForeignKey(USER_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
     )
 
 

@@ -61,11 +61,7 @@
             <button class="btn btn-outline-primary btn-sm" type="submit">{{ _('Entregar') }}</button>
           </form>
           {% elif item.voucher_status == 'entregado' %}
-          <form method="post" action="{{ url_for('bancos.caja_chica_vale_estado', v_id=item.id) }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="status" value="liquidado">
-            <button class="btn btn-outline-success btn-sm" type="submit">{{ _('Liquidar') }}</button>
-          </form>
+          <a class="btn btn-outline-success btn-sm" href="{{ url_for('bancos.caja_chica_vale_liquidar', v_id=item.id) }}">{{ _('Liquidar') }}</a>
           {% endif %}
           {% if item.voucher_status in ('borrador', 'entregado') %}
           <form method="post" action="{{ url_for('bancos.caja_chica_vale_estado', v_id=item.id) }}" class="d-inline">

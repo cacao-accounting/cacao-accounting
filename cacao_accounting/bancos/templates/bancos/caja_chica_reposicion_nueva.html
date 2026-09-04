@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-card">
+  <div class="ca-card-header"><h5 class="ca-card-title">{{ _('Nueva reposición de Caja Chica') }}</h5></div>
+  <form method="post" class="row g-3 p-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="col-md-4"><label class="form-label">{{ _('Compañía') }}</label><input class="form-control" name="company" required></div>
+    <div class="col-md-5"><label class="form-label">{{ _('Caja Chica') }}</label><select class="form-select" name="petty_cash_id" required onchange="window.location='{{ url_for('bancos.caja_chica_reposicion_nueva') }}?petty_cash_id='+encodeURIComponent(this.value)"><option value="">—</option>{% for fund in fondos %}<option value="{{ fund.id }}" {% if selected_fund == fund.id %}selected{% endif %}>{{ fund.company }} - {{ fund.name }}</option>{% endfor %}</select></div>
+    <div class="col-md-3"><label class="form-label">{{ _('Fecha') }}</label><input class="form-control" type="date" name="request_date" required></div>
+    <div class="col-12"><label class="form-label">{{ _('Gastos pendientes') }}</label>{% for expense in gastos %}<div class="form-check"><input class="form-check-input" type="checkbox" name="expense_ids" value="{{ expense.id }}" id="expense-{{ expense.id }}"><label class="form-check-label" for="expense-{{ expense.id }}">{{ expense.document_no or expense.id }} — {{ expense.concept }} — {{ expense.amount }}</label></div>{% else %}<p class="text-muted">{{ _('No hay gastos pendientes para esta caja.') }}</p>{% endfor %}</div>
+    <div class="col-12"><label class="form-label">{{ _('Notas') }}</label><textarea class="form-control" name="notes" rows="3"></textarea></div>
+    <div class="col-12"><button class="btn btn-primary" type="submit">{{ _('Crear solicitud') }}</button> <a class="btn btn-outline-secondary" href="{{ url_for('bancos.caja_chica_reposicion_lista') }}">{{ _('Cancelar') }}</a></div>
+  </form>
+</div>
+{% endblock %}
