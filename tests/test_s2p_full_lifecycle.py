@@ -749,6 +749,22 @@ def test_s2p_credit_and_debit_notes_and_returns(app_ctx):
     assert ret_receipt.docstatus == 1
     # StockBin debe reflejar 5 - 2 = 3 unidades
     assert bin_entry.actual_qty == Decimal("3.00")
+    # El GL de inventario debe decrecer con la devolución (reverso del cargo original)
+    from cacao_accounting.database import GLEntry
+
+    wca_gl_account = database.session.execute(
+        database.select(WarehouseCompanyAccount.inventory_account_id).filter_by(
+            warehouse_code="ALM-MAIN", company="cacao"
+        )
+    ).scalar_one()
+    inventory_gl = database.session.execute(
+        database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).filter_by(
+            voucher_type="purchase_receipt",
+            voucher_id=ret_receipt.id,
+            account_id=wca_gl_account,
+        )
+    ).scalar_one()
+    assert inventory_gl == Decimal("-1000.00")
 
 
 def test_s2p_payment_application_and_advance_against_invoice(app_ctx):
