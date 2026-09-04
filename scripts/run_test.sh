@@ -12,6 +12,10 @@ echo Ejecutando pydocstyle
 echo
 python -m pydocstyle cacao_accounting/
 echo
+echo Chequeando tipos
+python -m mypy cacao_accounting/
+echo
+echo
 echo Testing code with pytest
 echo
 echo
