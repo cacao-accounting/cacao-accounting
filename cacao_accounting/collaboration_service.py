@@ -86,6 +86,7 @@ def create_document_task(
 ) -> DocumentTask:
     """Validate document access and create a task from an API payload."""
     document = _document_for_collaboration(document_type, document_id, user_id)
+    _require_assignee_document_access(document, str(payload.get("assigned_to") or ""))
     return create_task(
         document=document,
         title=str(payload.get("title") or ""),
@@ -233,6 +234,19 @@ def _active_user_or_error(user_id: str) -> User:
     if not user.active:
         raise CollaborationError("No se puede asignar tareas a usuarios inactivos.", 400)
     return user
+
+
+def _require_assignee_document_access(document: Any, user_id: str) -> None:
+    """Ensure a task recipient can read the company-scoped source document."""
+    _active_user_or_error(user_id)
+    document_type = _document_type(document)
+    spec = DOCUMENT_TYPES.get(document_type)
+    module_name = (spec.permission_module or spec.module) if spec else None
+    company = _document_company(document)
+    module_id = obtener_id_modulo_por_nombre(module_name) if module_name else None
+    permissions = Permisos(modulo=module_id, usuario=user_id) if module_id else None
+    if permissions is None or not permissions.consultar or not permissions.tiene_acceso_compania(company):
+        raise CollaborationError("El usuario asignado no tiene acceso al documento.", 403)
 
 
 def _document_for_collaboration(document_type: str, document_id: str, user_id: str) -> Any:
