@@ -885,6 +885,7 @@ def create_petty_cash_expense(
     except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
         pass
     if voucher_id:
+        assert voucher is not None  # narrowed by the checks above; mypy can not see the raise
         voucher.voucher_status = "liquidado"
         voucher.expense_id = expense.id
     database.session.commit()
