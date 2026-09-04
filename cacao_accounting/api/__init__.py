@@ -387,7 +387,14 @@ def api_search_select():
         )
         if not all_known or any(not user_can_access_company(current_user, company) for company in companies):
             abort(403)
-    company_scope: set[str] | None = None
+    scope_entities = database.select(Entity)
+    if getattr(current_user, "classification", None) != "admin":
+        scope_entities = scope_entities.where(Entity.enabled.is_(True))
+    company_scope: set[str] = {
+        str(company.code)
+        for company in database.session.execute(scope_entities).scalars()
+        if getattr(current_user, "classification", None) == "admin" or user_can_access_company(current_user, company)
+    }
     if doctype == "company":
         include_inactive = any(
             value.strip().lower() in {"1", "true", "yes", "on"} for value in filters.get("include_inactive", [])
@@ -396,11 +403,7 @@ def api_search_select():
         if not include_inactive or getattr(current_user, "classification", None) != "admin":
             entity_query = entity_query.where(Entity.enabled.is_(True))
         companies = database.session.execute(entity_query).scalars().all()
-        company_scope = {
-            str(company.code)
-            for company in companies
-            if getattr(current_user, "classification", None) == "admin" or user_can_access_company(current_user, company)
-        }
+        company_scope &= {str(company.code) for company in companies}
     try:
         limit = int(raw_limit) if raw_limit else None
         payload = search_select(
