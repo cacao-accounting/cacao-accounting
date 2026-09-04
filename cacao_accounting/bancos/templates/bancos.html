@@ -46,6 +46,26 @@
         <a href="{{ url_for('bancos.bancos_reglas_matching') }}">{{ _("Reglas de Matching") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
+      {% else %}
+      <li class="ca-no-access">
+        <span>Bancos</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      <li class="ca-no-access">
+        <span>Cuentas Bancarias</span>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
+      </li>
+      {% endif %}
+
+    </ul>
+  </div>
+
+  {# ── Columna 2: Caja Chica ─────────────────────────── #}
+  <div class="ca-module-card ca-module-card--secondary">
+    <h5><i class="bi bi-cash-coin"></i> {{ _("Caja Chica") }}</h5>
+    <ul class="ca-module-links">
+
+      {% if acceso.configurar %}
       <li>
         <a href="{{ url_for('bancos.caja_chica_lista') }}">Cajas Chicas</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
@@ -68,11 +88,7 @@
       </li>
       {% else %}
       <li class="ca-no-access">
-        <span>Bancos</span>
-        {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
-      </li>
-      <li class="ca-no-access">
-        <span>Cuentas Bancarias</span>
+        <span>Caja Chica</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       {% endif %}
@@ -80,7 +96,7 @@
     </ul>
   </div>
 
-  {# ── Columna 2: Registros ─────────────────────────── #}
+  {# ── Columna 3: Registros ─────────────────────────── #}
   <div class="ca-module-card ca-module-card--primary">
     <h5><i class="bi bi-card-list"></i> {{ _("Operaciones") }}</h5>
     <ul class="ca-module-links">
