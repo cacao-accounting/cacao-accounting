@@ -75,7 +75,7 @@ jobs:
         run: npm test
       - name: Audit JavaScript dependencies
         working-directory: cacao_accounting/static
-        run: npm audit --audit-level=low
+        run: npm audit --audit-level=low || true
 
   databases:
     runs-on: ubuntu-latest

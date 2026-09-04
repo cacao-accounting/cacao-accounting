@@ -916,3 +916,170 @@ def test_ruta_nuevo_gasto(app_ctx_full):
     _login(client)
     resp = client.get("/cash_management/petty-cash-expense/new")
     assert resp.status_code == 200
+
+
+# -------------------------------------------------------------------------------------
+# Conciliacion de Caja Chica
+# -------------------------------------------------------------------------------------
+def test_crear_y_conciliar_caja_chica(app_ctx_book):
+    from cacao_accounting.bancos.services import (
+        create_petty_cash_expense,
+        create_petty_cash_reconciliation,
+        post_petty_cash_reconciliation_adjustment,
+        reconcile_petty_cash,
+    )
+    from cacao_accounting.database import GLEntry, database
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 2, 1),
+            company="cacao",
+            account_id=fondo.account_id,
+            debit=Decimal("1000.0000"),
+            credit=Decimal("0"),
+            voucher_type="journal_entry",
+            voucher_id="SEED-2",
+        )
+    )
+    database.session.commit()
+
+    create_petty_cash_expense(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_account_code="EXP-001",
+        concept="Gasto para conciliacion",
+        amount=Decimal("200.0000"),
+        cost_center_code="MAIN",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+
+    recon = create_petty_cash_reconciliation(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        reconciliation_date=date(2026, 2, 3),
+        counted_cash=Decimal("780.0000"),
+        explanation="Faltante de 20 cordobas",
+    )
+    assert recon.ledger_balance == Decimal("800.0000")
+    assert recon.expected_cash == Decimal("800.0000")
+    assert recon.difference == Decimal("-20.0000")
+    assert recon.status == "borrador"
+
+    reconcile_petty_cash(recon, actor_id="user-1")
+    assert recon.status == "conciliado"
+
+    journal = post_petty_cash_reconciliation_adjustment(
+        recon,
+        adjustment_account_code="EXP-001",
+        cost_center_code="MAIN",
+        actor_id="user-1",
+    )
+    assert journal is not None
+    assert recon.adjustment_journal_id == str(journal.id)
+
+
+def test_conciliacion_diferencia_sin_explicacion_falla(app_ctx_book):
+    from cacao_accounting.bancos.services import create_petty_cash_reconciliation, reconcile_petty_cash
+
+    fondo = _crear_fondo_caja()
+    recon = create_petty_cash_reconciliation(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        reconciliation_date=date(2026, 2, 3),
+        counted_cash=Decimal("50.0000"),
+        explanation=None,
+    )
+    with pytest.raises(ValueError):
+        reconcile_petty_cash(recon)
+
+
+# -------------------------------------------------------------------------------------
+# Reposicion de Caja Chica
+# -------------------------------------------------------------------------------------
+def test_crear_aprobar_y_reponer_caja_chica(app_ctx_book):
+    from cacao_accounting.bancos.services import (
+        create_petty_cash_expense,
+        create_petty_cash_replenishment,
+        replenish_petty_cash,
+        set_petty_cash_replenishment_status,
+    )
+    from cacao_accounting.database import Accounts, Bank, BankAccount, database
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+
+    cuenta_banco = Accounts(entity="cacao", code="1102", name="Banco BAC", active=True, enabled=True, group=False, account_type="bank")
+    database.session.add(cuenta_banco)
+    banco = Bank(name="BAC")
+    database.session.add(banco)
+    database.session.commit()
+
+    banco_acc = BankAccount(
+        bank_id=banco.id,
+        company="cacao",
+        account_name="BAC Cordobas",
+        account_no="12345",
+        currency="NIO",
+        gl_account_id=str(cuenta_banco.id),
+        is_active=True,
+    )
+    database.session.add(banco_acc)
+    database.session.commit()
+
+    gasto = create_petty_cash_expense(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_account_code="EXP-001",
+        concept="Gasto reposicion",
+        amount=Decimal("150.0000"),
+        cost_center_code="MAIN",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+
+    repo = create_petty_cash_replenishment(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_ids=[gasto.id],
+        request_date=date(2026, 2, 4),
+        notes="Reposicion quincenal",
+        actor_id="user-1",
+    )
+    assert repo.amount == Decimal("150.0000")
+    assert repo.status == "borrador"
+
+    set_petty_cash_replenishment_status(repo, "solicitado")
+    assert repo.status == "solicitado"
+
+    set_petty_cash_replenishment_status(repo, "aprobado", actor_id="user-1")
+    assert repo.status == "aprobado"
+
+    replenish_petty_cash(repo, bank_account_id=banco_acc.id, actor_id="user-1")
+    assert repo.status == "reembolsado"
+    assert repo.bank_debit_note_id is not None
+
+
+# -------------------------------------------------------------------------------------
+# Rutas de conciliacion y reposicion
+# -------------------------------------------------------------------------------------
+def test_rutas_conciliacion_web(app_ctx_full):
+    client = app_ctx_full.test_client()
+    _login(client)
+    resp = client.get("/cash_management/petty-cash-reconciliation/list")
+    assert resp.status_code == 200
+
+    resp = client.get("/cash_management/petty-cash-reconciliation/new")
+    assert resp.status_code == 200
+
+
+def test_rutas_reposicion_web(app_ctx_full):
+    client = app_ctx_full.test_client()
+    _login(client)
+    resp = client.get("/cash_management/petty-cash-replenishment/list")
+    assert resp.status_code == 200
+
+    resp = client.get("/cash_management/petty-cash-replenishment/new")
+    assert resp.status_code == 200
