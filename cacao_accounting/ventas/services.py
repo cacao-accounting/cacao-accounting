@@ -2114,8 +2114,8 @@ def _create_sales_invoice_from_form():
 
 
 def _sales_reversal_source(document_type: str) -> str | None:
-    """Obtiene la factura origen para una nota de crédito o débito."""
-    if document_type not in ("sales_credit_note", "sales_debit_note"):
+    """Obtiene la factura origen para una nota de crédito, débito o devolución."""
+    if document_type not in ("sales_credit_note", "sales_debit_note", "sales_return"):
         return None
     return request.form.get("from_invoice") or request.form.get("from_return") or None
 
