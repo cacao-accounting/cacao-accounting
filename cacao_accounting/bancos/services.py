@@ -2516,9 +2516,15 @@ def _apply_internal_transfer_amounts(
             payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
             payment.base_received_amount = None
         else:
-            transfer_rate = Decimal(str(payload.get("exchange_rate") or "1"))
-            if transfer_rate <= 0:
-                raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
+            if source_currency and source_currency == target_currency:
+                # Misma moneda de origen y destino: la pata destino se recibe
+                # uno a uno sin aplicar la tasa de la UI (default 1), evitando
+                # revalorizar una transferencia entre cuentas propias.
+                transfer_rate = Decimal("1")
+            else:
+                transfer_rate = Decimal(str(payload.get("exchange_rate") or "1"))
+                if transfer_rate <= 0:
+                    raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
             payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
             payment.base_received_amount = None
 
