@@ -44,6 +44,7 @@ class PurchaseInvoiceDraftError(ValueError):
     """A domain validation failure suitable for a caller-specific exception UI."""
 
     def __init__(self, code: str, message: str) -> None:
+        """Inicializa el error de borrador de factura de compra."""
         self.code = code
         super().__init__(message)
 
