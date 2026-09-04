@@ -955,6 +955,18 @@ def test_crear_y_conciliar_caja_chica(app_ctx_book):
         posted_date=date(2026, 2, 2),
         actor_id="user-1",
     )
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 2, 4),
+            company="cacao",
+            account_id=fondo.account_id,
+            debit=Decimal("100.0000"),
+            credit=Decimal("0"),
+            voucher_type="journal_entry",
+            voucher_id="FUTURE-1",
+        )
+    )
+    database.session.commit()
 
     recon = create_petty_cash_reconciliation(
         company="cacao",
