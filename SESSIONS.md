@@ -1,5 +1,27 @@
 # Bitácora de desarrollo
 
+## 2026-09-04 (QA de alpha — aislamiento implícito de search-select, issue #783)
+
+### Hallazgo verificable
+
+`/api/search-select` verificaba la ACL cuando la solicitud declaraba un filtro `company`, pero al omitirlo no entregaba
+ningún alcance a `search_select`. Los catálogos asociados a compañías podían entonces enumerar registros de entidades
+para las que el usuario no tenía acceso.
+
+### Corrección y cobertura
+
+- El endpoint calcula el conjunto de compañías activas autorizadas del usuario y lo entrega siempre al servicio.
+- Los doctypes que declaran filtro de compañía se restringen a ese conjunto; los artículos permanecen globales.
+- Terceros se restringen mediante `CompanyParty` activo y la consulta usa `DISTINCT` para no duplicar un tercero
+  asociado a varias compañías autorizadas.
+- Las regresiones cubren cuenta sin filtro, endpoint de terceros sin compañía y tercero compartido entre dos compañías.
+
+### Verificación
+
+- `tests/test_master_data_issues.py -k search_select`: 9 passed.
+- Ruff, Mypy y `git diff --check`: limpios. Black fue verificado también por revisión independiente.
+- QA independiente aprobó la corrección después de revisar explícitamente la ACL extremo a extremo y el caso multiempresa.
+
 ## 2026-09-04 (QA de alpha — sales_return no reduce outstanding de factura original, issue #781)
 
 ### Hallazgo verificable
