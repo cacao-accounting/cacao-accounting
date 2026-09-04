@@ -475,13 +475,19 @@ def _process_payment_reference(
     movements = [target_movement]
     if target_cache is not None:
         _decrease_open_item_cache(target_cache.id, amount)
+    # El GL libera la cuenta de control por el valor en libros del documento
+    # (tasa de registro), no por la tasa del dia del pago. La asignacion
+    # documental del subledger debe reembolsar ese mismo valor en libros para
+    # que la matriz AR/AP contra GL permanezca reconciliada cuando el pago se
+    # hace a una tasa distinta de la factura.
+    document_rate_date = getattr(target, "posting_date", None) or payment_date
     for book in _active_books(str(document.company)):
         target_currency = str(_currency(target) or reference.currency or payment_currency)
         target_rate = _book_exchange_rate(
             str(document.company),
             target_currency,
             str(book.currency or target_currency),
-            payment_date,
+            document_rate_date,
             _decimal(target.exchange_rate),
         )
         book_amount = (target_delta * target_rate).quantize(Decimal("0.0001"))
