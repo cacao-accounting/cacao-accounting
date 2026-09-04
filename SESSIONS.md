@@ -1,5 +1,47 @@
 # Bitácora de desarrollo
 
+## 2026-09-04 (QA final de alpha — verificación de flujos de negocio, issues #784-#792)
+
+### Hallazgos verificados y reproducidos
+
+Como QA final antes del primer alpha se auditaron los flujos O2C, S2P, I2F y CTM con escenarios de negocio reales
+(empresa comercial nicaragüense, NIO funcional con documentos en USD). Todos los hallazgos se reprodujeron
+empíricamente con scripts de verificación aislados y documentación en los issues:
+
+- **#785 / #786 (CRITICAL)**: el engine de cálculo no invertía el lado de las líneas fiscales en notas de crédito y
+  devoluciones. Factura + IVA y NC completa dejaba AR 30 / IVA −30 (venta) y AP −30 / IVA 30 (compra) en lugar de 0/0.
+  Fix: `_map_fiscal_lines` invierte `is_debit` para `*_credit_note_confirmed` y `*_return_confirmed`. Commit `4437769d`.
+- **#792 (HIGH)**: la factura de compra con retención (IR 1%) fallaba el guard estricto AR/AP-GL porque el engine
+  etiquetaba la retención con `party_id`. Fix: la retención de factura ya no lleva `party_id` (pasivo ante el Estado,
+  réplica del camino legacy). Commit `9c983d65`.
+- **#787 (HIGH)**: la recepción de compra de devolución posteaba el GL de inventario con el mismo signo que una recepción
+  normal (inventario GL 3,500 vs kardex 1,500). Fix: `_build_purchase_receipt_context` usa el lado inverso cuando
+  `document.is_return`. Commit `f929a16b`.
+- **#788 (HIGH)**: la ruta UI `caja_chica_gasto_nuevo` liquidaba el vale vía `create_petty_cash_expense`, que nunca
+  marcaba `voucher_status="liquidado"` ni `expense_id`. La conciliación doblaba el vale (superávit ficticio) y el vale
+  podía liquidarse dos veces. Fix: `create_petty_cash_expense` liquida el vale al recibir `voucher_id`. Commit `512e186c`.
+- **#784 (CRITICAL, fix pendiente)**: cobro en la misma moneda del documento (USD) a una tasa distinta a la de la factura
+  queda bloqueado por el guard estricto: el subledger valora la asignación a la tasa de mercado del día del pago mientras
+  el GL libera el AR por el valor en libros. Rompe el flujo más común de una exportadora. Requiere alinear el subledger
+  con el movimiento de la cuenta de control o reflejar el offset no realizado del engine en el subledger.
+- **#789 / #790 (MEDIUM, fix pendiente)**: reposición de caja chica con `exchange_rate=1` hardcodeado y transferencias
+  internas cross-currency con tasa de usuario sin validación de direccionalidad corrompen libros funcionales multimoneda.
+- **#791 (MEDIUM, fix pendiente)**: los artículos con lote se valoran con la cola FIFO a nivel ítem, no con el costo del
+  lote seleccionado; `StockValuationLayer` carece de `batch_id`.
+
+### Pruebas añadidas
+
+- `tests/engines/test_mapper.py`: `test_sales_credit_note_reverses_vat_side`, `test_purchase_credit_note_reverses_vat_side`,
+  `test_purchase_invoice_withholding_not_party_tagged`.
+- `tests/test_s2p_full_lifecycle.py`: validación del GL de inventario (−1,000) tras recepción de devolución.
+- `tests/test_petty_cash.py`: `test_gasto_con_vale_liquida_el_vale` (liquidación, conciliación sin doblez y rechazo de
+  doble liquidación).
+
+### Validación
+
+Verificación focalizada en verde (mapper 9/9, caja chica 45/45, S2P lifecycle, FX lifecycle 16/16 con mapper). Black,
+Ruff, Flake8, Mypy y pydocstyle limpios sobre los archivos modificados.
+
 ## 2026-09-04 (QA de alpha — ACL en APIs de jerarquías, issue #793)
 
 ### Hallazgo y corrección
