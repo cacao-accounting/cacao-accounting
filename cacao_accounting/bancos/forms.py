@@ -7,6 +7,8 @@ from flask_wtf import FlaskForm
 from wtforms import BooleanField, SelectField, StringField, TextAreaField
 from wtforms.validators import DataRequired, Optional
 
+_LABEL_COMPANY = "Compañía"
+
 
 class FormularioBanco(FlaskForm):
     """Formulario para crear o editar un banco."""
@@ -19,7 +21,7 @@ class FormularioCuentaBancaria(FlaskForm):
     """Formulario para crear o editar una cuenta bancaria."""
 
     bank_id = SelectField("Banco", choices=[])
-    company = SelectField("Compañía", choices=[])
+    company = SelectField(_LABEL_COMPANY, choices=[])
     account_name = StringField("Nombre de Cuenta", validators=[DataRequired()])
     account_no = StringField("Número de Cuenta")
     iban = StringField("IBAN")
@@ -32,7 +34,7 @@ class FormularioCuentaBancaria(FlaskForm):
 class FormularioCajaChica(FlaskForm):
     """Formulario para crear o editar una caja chica."""
 
-    company = SelectField("Compañía", choices=[], validators=[DataRequired()])
+    company = SelectField(_LABEL_COMPANY, choices=[], validators=[DataRequired()])
     name = StringField("Nombre", validators=[DataRequired()])
     account_id = SelectField("Cuenta contable de Caja Chica", choices=[], validators=[Optional()])
     currency = SelectField("Moneda", choices=[])
@@ -46,7 +48,7 @@ class FormularioCajaChica(FlaskForm):
 class FormularioPettyCashVoucher(FlaskForm):
     """Formulario para crear un vale de caja chica (control de efectivo, no postea al GL)."""
 
-    company = SelectField("Compañía", choices=[], validators=[DataRequired()])
+    company = SelectField(_LABEL_COMPANY, choices=[], validators=[DataRequired()])
     petty_cash_id = SelectField("Caja Chica", choices=[], validators=[DataRequired()])
     posting_date = StringField("Fecha")
     delivered_to = StringField("Entregado a")
@@ -61,7 +63,7 @@ class FormularioPettyCashVoucher(FlaskForm):
 class FormularioPettyCashExpense(FlaskForm):
     """Formulario para crear un gasto de caja chica (si genera asiento contable)."""
 
-    company = SelectField("Compañía", choices=[], validators=[DataRequired()])
+    company = SelectField(_LABEL_COMPANY, choices=[], validators=[DataRequired()])
     petty_cash_id = SelectField("Caja Chica", choices=[], validators=[DataRequired()])
     voucher_id = SelectField("Vale origen", choices=[], validators=[Optional()])
     posting_date = StringField("Fecha")
@@ -82,7 +84,7 @@ class FormularioPago(FlaskForm):
         "Tipo de Pago",
         choices=[("receive", "Cobro"), ("pay", "Pago"), ("internal_transfer", "Transferencia Interna")],
     )
-    company = SelectField("Compañía", choices=[])
+    company = SelectField(_LABEL_COMPANY, choices=[])
     naming_series = SelectField("Serie", choices=[])
     posting_date = StringField("Fecha")
     bank_account_id = SelectField("Cuenta Bancaria", choices=[])
