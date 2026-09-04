@@ -193,6 +193,89 @@ def test_search_select_party_scope_deduplicates_multi_company_party(app_ctx):
     assert [row["value"] for row in result["results"]] == ["PARTY-SHARED"]
 
 
+def test_hierarchy_api_requires_company_access(app_ctx, monkeypatch):
+    """Las jerarquías analíticas no revelan nodos de una entidad fuera del alcance."""
+    import sys
+
+    from werkzeug.exceptions import Forbidden
+
+    from cacao_accounting.database import BusinessUnit, Entity, Project, Unit, User, database
+
+    limited_user = User(
+        id="USER-HIERARCHY-SCOPE",
+        user="hierarchy-scope",
+        name="Hierarchy Scope",
+        password=b"x",
+        classification="user",
+        active=True,
+    )
+    database.session.add_all(
+        [
+            Entity(
+                code="hierarchy-other",
+                name="Hierarchy Other",
+                company_name="Hierarchy Other SA",
+                tax_id="J2096",
+                currency="NIO",
+            ),
+            limited_user,
+            BusinessUnit(id="BU-OTHER", code="BU-OTHER", name="Unidad Ajena", entity="hierarchy-other", active=True),
+            Unit(id="UNIT-OTHER", code="UNIT-OTHER", name="Unidad Operativa Ajena", entity="hierarchy-other", enabled=True),
+            Project(id="PROJECT-OTHER", code="PROJECT-OTHER", name="Proyecto Ajeno", entity="hierarchy-other", enabled=True),
+            BusinessUnit(id="BU-LOCAL", code="BU-LOCAL", name="Unidad Local", entity="cacao", active=True),
+            Unit(id="UNIT-LOCAL", code="UNIT-LOCAL", name="Unidad Operativa Local", entity="cacao", enabled=True),
+            Project(id="PROJECT-LOCAL", code="PROJECT-LOCAL", name="Proyecto Local", entity="cacao", enabled=True),
+            BusinessUnit(
+                id="BU-CROSS", code="BU-CROSS", name="Unidad Cruzada", entity="cacao", active=True, parent_id="BU-OTHER"
+            ),
+            Unit(
+                id="UNIT-CROSS",
+                code="UNIT-CROSS",
+                name="Unidad Operativa Cruzada",
+                entity="cacao",
+                enabled=True,
+                parent_id="UNIT-OTHER",
+            ),
+            Project(
+                id="PROJECT-CROSS",
+                code="PROJECT-CROSS",
+                name="Proyecto Cruzado",
+                entity="cacao",
+                enabled=True,
+                parent_id="PROJECT-OTHER",
+            ),
+        ]
+    )
+    database.session.commit()
+
+    def deny_other_company(module: str, company: str, action: str) -> None:
+        if module == "accounting" and company == "hierarchy-other" and action == "consultar":
+            raise Forbidden()
+
+    monkeypatch.setattr(sys.modules["cacao_accounting.api"], "exige_acceso_compania", deny_other_company)
+    client = app_ctx.test_client()
+    _login(client, limited_user.id)
+
+    for path in (
+        "/api/business-unit/BU-OTHER/hierarchy",
+        "/api/unit/UNIT-OTHER/hierarchy",
+        "/api/project/PROJECT-OTHER/hierarchy",
+    ):
+        assert client.get(path).status_code == 403
+    for path in (
+        "/api/business-unit/BU-LOCAL/hierarchy",
+        "/api/unit/UNIT-LOCAL/hierarchy",
+        "/api/project/PROJECT-LOCAL/hierarchy",
+    ):
+        assert client.get(path).status_code == 200
+    for path in (
+        "/api/business-unit/BU-CROSS/hierarchy",
+        "/api/unit/UNIT-CROSS/hierarchy",
+        "/api/project/PROJECT-CROSS/hierarchy",
+    ):
+        assert client.get(path).status_code == 404
+
+
 def test_desktop_mode_requires_single_active_entity(app_ctx):
     from cacao_accounting.database import Entity, User
 
