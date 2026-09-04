@@ -27,9 +27,13 @@ def build_version(
     """Build the package version string from its release components."""
     version = mayor + "." + menor + "." + patch
     if prerelease:
-        return version + "." + prerelease
+        if prerelease.startswith(("dev", "post", ".")):
+            return version + "." + prerelease
+        return version + prerelease
     if postrelease:
-        return version + "." + postrelease
+        if postrelease.startswith((".", "post")):
+            return version + "." + postrelease
+        return version + ".post" + postrelease
     return version
 
 
