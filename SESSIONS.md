@@ -1,5 +1,19 @@
 # Bitácora de desarrollo
 
+## 2026-09-04 (QA de alpha — aislamiento de idempotencia en facturas de compra, issue #779)
+
+### Hallazgo verificable
+
+El replay de `idempotency_key` de `create_purchase_invoice_draft` buscaba una factura globalmente única y la devolvía
+sin comprobar que perteneciera a la compañía y proveedor del nuevo comando. Una colisión de clave entre tenants podía
+exponer una factura ajena desde la capa de dominio.
+
+### Corrección propuesta
+
+Se valida el tenant y proveedor del documento recuperado antes de tratarlo como replay. Una coincidencia ajena produce
+`IDEMPOTENCY_KEY_CONFLICT` sin revelar el documento. La prueba de regresión cubre explícitamente dos compañías y
+proveedores distintos.
+
 ## 2026-09-04 (QA de alpha — conciliación histórica de Caja Chica, issue #778)
 
 ### Hallazgo verificable

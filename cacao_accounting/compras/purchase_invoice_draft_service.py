@@ -181,6 +181,23 @@ def _validate_duplicate(command: PurchaseInvoiceDraftCommand) -> None:
         )
 
 
+def _validate_idempotency_replay(
+    existing: PurchaseInvoice, command: PurchaseInvoiceDraftCommand
+) -> PurchaseInvoice:
+    """Return a replay only when it belongs to the same tenant and supplier.
+
+    Idempotency keys are globally unique in the database.  They are not an
+    authorization capability, so a coincidental key from another company or
+    supplier must never return that document to the caller.
+    """
+    if existing.company != command.company_id or existing.supplier_id != command.supplier_id:
+        raise PurchaseInvoiceDraftError(
+            "IDEMPOTENCY_KEY_CONFLICT",
+            "La clave de idempotencia ya pertenece a otra factura.",
+        )
+    return existing
+
+
 def _validate_sources(
     command: PurchaseInvoiceDraftCommand, settings: CompanyParty
 ) -> None:
@@ -349,7 +366,7 @@ def create_purchase_invoice_draft(
                 )
             ).scalar_one_or_none()
             if existing is not None:
-                return existing
+                return _validate_idempotency_replay(existing, command)
         _validate_duplicate(command)
         _validate_sources(command, settings)
         if not command.lines:
