@@ -342,3 +342,137 @@ def test_supplier_refund_mapping_reverses_exchange():
     assert payable_line.credit == Decimal("3600.0")
     assert bank_line.debit == Decimal("3700.0")
     assert gain_line.credit == Decimal("100.0")
+
+
+def _invoice_like_context(
+    *,
+    direction: str,
+    event_type: str,
+    document_type: str,
+    is_credit_note: bool,
+) -> CalculationContext:
+    """Construye un contexto invoice-like con una linea de bienes y cuenta de impuesto."""
+    goods_account = "1101" if direction == "purchase" else "4101"
+    goods_side = "debit" if direction == "purchase" else "credit"
+    if is_credit_note:
+        goods_side = "credit" if direction == "purchase" else "debit"
+    return CalculationContext(
+        company_id="C1",
+        document_type=document_type,
+        event_type=event_type,
+        transaction_direction=direction,
+        transaction_date=date(2025, 6, 1),
+        posting_date=date(2025, 6, 1),
+        party_type="supplier" if direction == "purchase" else "customer",
+        party_id="P1",
+        currency="NIO",
+        company_currency="NIO",
+        items=[
+            ItemContext(
+                line_id="L1",
+                item_id="I1",
+                description="Item 1",
+                quantity=Decimal("1"),
+                unit_price=Decimal("100"),
+                gross_amount=Decimal("100"),
+                net_amount=Decimal("100"),
+            )
+        ],
+        references=AccountingReferences(
+            goods_account=goods_account,
+            party_account="2101" if direction == "purchase" else "1105",
+            default_tax_accounts={"IVA": "1102"},
+            custom_references={
+                "account_lines": [
+                    {
+                        "account_id": goods_account,
+                        "amount": "100.00",
+                        "side": goods_side,
+                        "description": document_type,
+                    }
+                ]
+            },
+        ),
+    )
+
+
+def _fiscal_tax_line(base: Decimal, rate: Decimal) -> FiscalResult:
+    """Construye un resultado fiscal tipo IVA puro para pruebas del mapper."""
+    return FiscalResult(
+        tax_lines=[
+            FiscalLine(
+                line_id="T1",
+                concept="IVA",
+                type="tax",
+                rate=rate,
+                calculation_method="percentage",
+                base_amount=base,
+                amount=base * rate / Decimal("100"),
+                recognition_event="invoice",
+                accounting_treatment="separate",
+                affects_inventory=False,
+                affects_document_total=True,
+                included_in_price=False,
+                source_rule_id="R1",
+                applies_to_items=["L1"],
+                depends_on=[],
+                participates_in_next_base=False,
+            )
+        ]
+    )
+
+
+def test_purchase_credit_note_reverses_vat_side():
+    """Una nota de credito de compra debe acreditar el IVA (no debitarlo).
+
+    Refs: #786. La linea fiscal del engine no invertia el lado en notas de
+    credito: acreditaba el gasto pero mantenia el IVA debitado, dejando AP e
+    IVA desbalanceados en el GL.
+    """
+    ctx = _invoice_like_context(
+        direction="purchase",
+        event_type="purchase_credit_note_confirmed",
+        document_type="purchase_credit_note",
+        is_credit_note=True,
+    )
+    fiscal = _fiscal_tax_line(Decimal("100"), Decimal("15"))
+
+    mapper = AccountingMapper()
+    proforma = mapper.map_to_proforma(ctx, fiscal=fiscal)
+
+    vat_line = next(line for line in proforma.lines if line.account_id == "1102")
+    party_line = next(line for line in proforma.lines if line.account_id == "2101")
+
+    assert vat_line.credit == Decimal("15.0000")
+    assert vat_line.debit == Decimal("0")
+    assert proforma.is_balanced
+    assert party_line.debit == Decimal("115.0000")
+    assert party_line.credit == Decimal("0")
+
+
+def test_sales_credit_note_reverses_vat_side():
+    """Una nota de credito de venta debe debitar el IVA (no acreditarlo).
+
+    Refs: #785. La linea fiscal del engine no invertia el lado en notas de
+    credito: debitaba el ingreso pero acreditaba el IVA, dejando AR reducido
+    de menos y un IVA por pagar inexistente.
+    """
+    ctx = _invoice_like_context(
+        direction="sales",
+        event_type="sales_credit_note_confirmed",
+        document_type="sales_credit_note",
+        is_credit_note=True,
+    )
+    fiscal = _fiscal_tax_line(Decimal("100"), Decimal("15"))
+
+    mapper = AccountingMapper()
+    proforma = mapper.map_to_proforma(ctx, fiscal=fiscal)
+
+    vat_line = next(line for line in proforma.lines if line.account_id == "1102")
+    party_line = next(line for line in proforma.lines if line.account_id == "1105")
+
+    assert vat_line.debit == Decimal("15.0000")
+    assert vat_line.credit == Decimal("0")
+    assert proforma.is_balanced
+    assert party_line.credit == Decimal("115.0000")
+    assert party_line.debit == Decimal("0")

@@ -223,6 +223,13 @@ class AccountingMapper:
             is_debit = (context.transaction_direction == "purchase" and fiscal_line.type != "withholding") or (
                 context.transaction_direction == "sales" and fiscal_line.type == "withholding"
             )
+            if context.event_type in {
+                "sales_credit_note_confirmed",
+                "purchase_credit_note_confirmed",
+                "sales_return_confirmed",
+                "purchase_return_confirmed",
+            }:
+                is_debit = not is_debit
             side = "debit" if is_debit else "credit"
             lines.append(
                 self._build_line(
