@@ -1,5 +1,18 @@
 # Bitácora de desarrollo
 
+## 2026-09-04 (QA de alpha — ACL del preview fiscal, issue #780)
+
+### Hallazgo verificable
+
+`POST /api/fiscal/preview` solo exigía autenticación: aceptaba cualquier compañía del payload y cargaba sus reglas
+fiscales persistidas, incluyendo cuentas y tratamientos contables. Un usuario de otra compañía podía consultarlas.
+
+### Corrección propuesta
+
+Antes del cálculo se exige acceso de consulta a la compañía solicitada, usando el módulo operacional del tipo documental
+(Ventas, Compras, Inventario o Caja). La matriz de regresión cubre un tipo de cada módulo para impedir que una nueva
+ruta fiscal vuelva a omitir el control multiempresa.
+
 ## 2026-09-04 (QA de alpha — aislamiento de idempotencia en facturas de compra, issue #779)
 
 ### Hallazgo verificable

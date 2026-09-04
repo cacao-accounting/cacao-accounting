@@ -123,6 +123,40 @@ def _module_for_document_type(document_type: str) -> str | None:
     }.get(document_type)
 
 
+_FISCAL_PREVIEW_MODULES = {
+    "sales_request": "sales",
+    "sales_order": "sales",
+    "delivery_note": "inventory",
+    "sales_invoice": "sales",
+    "purchase_request": "purchases",
+    "purchase_order": "purchases",
+    "purchase_receipt": "inventory",
+    "purchase_invoice": "purchases",
+    "import_landed_cost": "purchases",
+    "stock_entry": "inventory",
+    "payment_entry": "cash",
+}
+
+_FISCAL_PREVIEW_SHARED_MODULES = {
+    "delivery_note": ("sales", "inventory"),
+    "purchase_order": ("purchases", "inventory"),
+    "purchase_receipt": ("purchases", "inventory"),
+}
+
+
+def _require_fiscal_preview_company_access(payload: dict[str, Any]) -> None:
+    """Require access to the company whose persisted fiscal rules are previewed."""
+    company = str(payload.get("company") or "").strip()
+    document_type = str(payload.get("document_type") or "").strip().lower()
+    shared_modules = _FISCAL_PREVIEW_SHARED_MODULES.get(document_type)
+    if company and shared_modules:
+        exige_acceso_compania_cualquiera(shared_modules, company, "consultar")
+        return
+    module = _FISCAL_PREVIEW_MODULES.get(document_type)
+    if company and module:
+        exige_acceso_compania(module, company, "consultar")
+
+
 @api.route("/api/sales/catalog-price")
 @login_required
 def api_sales_catalog_price():
@@ -388,6 +422,7 @@ def api_search_select():
 def api_fiscal_preview():
     """Devuelve preview fiscal unificado para formularios del MVP."""
     payload = request.get_json(silent=True) or {}
+    _require_fiscal_preview_company_access(payload)
     try:
         result = fiscal_preview(payload)
     except ValueError as exc:

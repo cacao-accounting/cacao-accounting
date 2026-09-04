@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import importlib
 from decimal import Decimal
 
 import pytest
@@ -14,6 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__)))
 from z_func import init_test_db
 
 from cacao_accounting import create_app
+from cacao_accounting.api import _require_fiscal_preview_company_access
 from cacao_accounting.fiscal_persistence_service import calculate_document_total_with_taxes
 
 app = create_app(
@@ -60,6 +62,45 @@ def test_document_total_uses_canonical_manual_tax_lines_without_template():
         ],
     )
     assert total == Decimal("116")
+
+
+@pytest.mark.parametrize(
+    ("document_type", "expected_module", "expected_modules"),
+    [
+        ("purchase_invoice", "purchases", None),
+        ("sales_invoice", "sales", None),
+        ("purchase_receipt", None, ("purchases", "inventory")),
+        ("purchase_order", None, ("purchases", "inventory")),
+        ("delivery_note", None, ("sales", "inventory")),
+        ("payment_entry", "cash", None),
+    ],
+)
+def test_fiscal_preview_requires_company_access_for_its_operational_module(
+    monkeypatch, document_type, expected_module, expected_modules
+):
+    """El preview no puede cargar reglas fiscales de una compañía ajena."""
+    captured = []
+    captured_shared = []
+    api_module = importlib.import_module("cacao_accounting.api")
+    monkeypatch.setattr(
+        api_module,
+        "exige_acceso_compania",
+        lambda module, company, action: captured.append((module, company, action)),
+    )
+    monkeypatch.setattr(
+        api_module,
+        "exige_acceso_compania_cualquiera",
+        lambda modules, company, action: captured_shared.append((modules, company, action)),
+    )
+
+    _require_fiscal_preview_company_access({"document_type": document_type, "company": "other-company"})
+
+    if expected_modules:
+        assert captured == []
+        assert captured_shared == [(expected_modules, "other-company", "consultar")]
+    else:
+        assert captured == [(expected_module, "other-company", "consultar")]
+        assert captured_shared == []
 
 
 @pytest.fixture(scope="module", autouse=True)
