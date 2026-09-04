@@ -658,9 +658,14 @@ def _build_base_query(spec: SearchSelectSpec, normalized_filters: dict[str, Any]
     statement = select(spec.model)
     if spec.model is Entity and company_scope is not None:
         statement = statement.where(Entity.code.in_(sorted(company_scope)))
-    if spec.model is Party and normalized_filters.get("company"):
+    if spec.model is Party and (normalized_filters.get("company") or company_scope is not None):
         statement = statement.join(CompanyParty, CompanyParty.party_id == Party.id)
         statement = statement.where(CompanyParty.is_active.is_(True))
+        if company_scope is not None:
+            statement = statement.where(CompanyParty.company.in_(sorted(company_scope)))
+        statement = statement.distinct()
+    elif company_scope is not None and spec.model is not Item and "company" in spec.allowed_filters:
+        statement = statement.where(_column_for(spec.model, spec.allowed_filters["company"]).in_(sorted(company_scope)))
     return statement
 
 

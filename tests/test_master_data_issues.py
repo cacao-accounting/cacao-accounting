@@ -115,6 +115,84 @@ def test_existing_entities_default_to_active(app_ctx):
     assert company.is_active is True
 
 
+def test_search_select_implicitly_scopes_company_catalogs(app_ctx):
+    """Omitir company no puede enumerar cuentas de otra compañía autorizada."""
+    from cacao_accounting.database import Accounts, Entity, database
+    from cacao_accounting.search_select import search_select
+
+    database.session.add_all(
+        [
+            Entity(code="other", name="Other", company_name="Other SA", tax_id="J2099", currency="NIO", enabled=True),
+            Accounts(entity="cacao", code="1000", name="Cuenta Cacao", active=True, enabled=True, group=False),
+            Accounts(entity="other", code="2000", name="Cuenta Ajena", active=True, enabled=True, group=False),
+        ]
+    )
+    database.session.commit()
+
+    result = search_select("account", "", {}, company_scope={"cacao"})
+
+    assert {row["label"] for row in result["results"]} == {"1000 - Cuenta Cacao"}
+
+
+def test_search_select_api_implicitly_scopes_parties(app_ctx, monkeypatch):
+    """El endpoint no enumera terceros de compañías fuera del alcance implícito."""
+    import sys
+
+    from cacao_accounting.database import CompanyParty, Entity, Party, User, database
+
+    limited_user = User(
+        id="USER-PARTY-SCOPE",
+        user="party-scope",
+        name="Party Scope",
+        password=b"x",
+        classification="user",
+        active=True,
+    )
+    database.session.add_all(
+        [
+            Entity(code="party-other", name="Party Other", company_name="Party Other SA", tax_id="J2098", currency="NIO"),
+            limited_user,
+            Party(id="PARTY-CACAO", code="PARTY-CACAO", name="Tercero Cacao", is_active=True),
+            Party(id="PARTY-OTHER", code="PARTY-OTHER", name="Tercero Ajeno", is_active=True),
+            CompanyParty(company="cacao", party_id="PARTY-CACAO", is_active=True),
+            CompanyParty(company="party-other", party_id="PARTY-OTHER", is_active=True),
+        ]
+    )
+    database.session.commit()
+    monkeypatch.setattr(
+        sys.modules["cacao_accounting.api"],
+        "user_can_access_company",
+        lambda user, company: company.code == "cacao",
+    )
+    client = app_ctx.test_client()
+    _login(client, limited_user.id)
+
+    response = client.get("/api/search-select?doctype=party&q=Tercero")
+
+    assert response.status_code == 200
+    assert [item["value"] for item in response.get_json()["results"]] == ["PARTY-CACAO"]
+
+
+def test_search_select_party_scope_deduplicates_multi_company_party(app_ctx):
+    """Un tercero activo en dos compañías autorizadas aparece una sola vez."""
+    from cacao_accounting.database import CompanyParty, Entity, Party, database
+    from cacao_accounting.search_select import search_select
+
+    database.session.add_all(
+        [
+            Entity(code="party-two", name="Party Two", company_name="Party Two SA", tax_id="J2097", currency="NIO"),
+            Party(id="PARTY-SHARED", code="PARTY-SHARED", name="Tercero Compartido", is_active=True),
+            CompanyParty(company="cacao", party_id="PARTY-SHARED", is_active=True),
+            CompanyParty(company="party-two", party_id="PARTY-SHARED", is_active=True),
+        ]
+    )
+    database.session.commit()
+
+    result = search_select("party", "Compartido", {}, company_scope={"cacao", "party-two"})
+
+    assert [row["value"] for row in result["results"]] == ["PARTY-SHARED"]
+
+
 def test_desktop_mode_requires_single_active_entity(app_ctx):
     from cacao_accounting.database import Entity, User
 
