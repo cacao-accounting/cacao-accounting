@@ -2343,6 +2343,7 @@ class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     )
     supplier_name = database.Column(database.String(200), nullable=True)
     supplier_invoice_no = database.Column(database.String(50), nullable=True)  # Validado contra duplicados
+    idempotency_key = database.Column(database.String(80), nullable=True, unique=True, index=True)
     supplier_invoice_key = database.Column(database.String(50), nullable=True, index=True)
     incoterm_code = database.Column(database.String(20), nullable=True, index=True)
     incoterm_version = database.Column(database.String(10), nullable=True)
