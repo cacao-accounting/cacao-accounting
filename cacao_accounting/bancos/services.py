@@ -1194,16 +1194,22 @@ def replenish_petty_cash(
     bank_account = database.session.get(Accounts, bank.gl_account_id) if bank.gl_account_id else None
     if not bank_account:
         raise ValueError("La cuenta bancaria no tiene cuenta contable asociada.")
+    base_currency = _payment_base_currency(replenishment.company)
+    exchange_rate = Decimal("1")
+    if base_currency and bank.currency != base_currency:
+        from cacao_accounting.contabilidad.posting_service import _lookup_exchange_rate
+
+        exchange_rate = _lookup_exchange_rate(bank.currency, base_currency, replenishment.request_date)
     payment = PaymentEntry(
         payment_type="debit_note",
         company=replenishment.company,
         bank_account_id=bank.id,
         currency=bank.currency,
         transaction_currency=bank.currency,
-        base_currency=_payment_base_currency(replenishment.company),
-        exchange_rate=Decimal("1"),
+        base_currency=base_currency,
+        exchange_rate=exchange_rate,
         paid_amount=replenishment.amount,
-        base_paid_amount=replenishment.amount,
+        base_paid_amount=(replenishment.amount * exchange_rate).quantize(Decimal("0.0001")),
         unallocated_amount=replenishment.amount,
         paid_to_account_id=fund.account_id,
         posting_date=replenishment.request_date,

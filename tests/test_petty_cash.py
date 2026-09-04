@@ -1177,3 +1177,96 @@ def test_rutas_reposicion_web(app_ctx_full):
 
     resp = client.get("/cash_management/petty-cash-replenishment/new")
     assert resp.status_code == 200
+
+
+def test_reposicion_caja_chica_multimoneda_convierte_al_tipo_de_cambio(app_ctx_book):
+    """La reposicion en moneda extranjera convierte al tipo de cambio vigente.
+
+    Refs: #789. La nota de debito bancaria de reposicion se creaba con
+    ``exchange_rate=1`` y ``base_paid_amount=amount``, registrando el libro
+    funcional NIO por el nominal en USD. Con caja/banco en USD y compania
+    funcional NIO, el monto funcional debe ser monto * 36.50.
+    """
+    from cacao_accounting.bancos.services import (
+        create_petty_cash_account,
+        create_petty_cash_expense,
+        create_petty_cash_replenishment,
+        replenish_petty_cash,
+        set_petty_cash_replenishment_status,
+    )
+    from cacao_accounting.database import (
+        Accounts,
+        Bank,
+        BankAccount,
+        Currency,
+        ExchangeRate,
+        PaymentEntry,
+        database,
+    )
+
+    database.session.add_all(
+        [
+            Currency(code="USD", name="Dolares", decimals=2, active=True),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.50"), date=date(2026, 2, 1)),
+        ]
+    )
+    database.session.commit()
+
+    fund = create_petty_cash_account(
+        company="cacao",
+        account_id=str(_crear_cuenta_petty_cash().id),
+        name="Caja Chica USD",
+        currency="USD",
+        custodian_id=None,
+        float_amount=Decimal("200.0000"),
+    )
+    _crear_cuenta_gasto()
+
+    cuenta_banco = Accounts(
+        entity="cacao", code="1102", name="Banco USD", active=True, enabled=True, group=False, account_type="bank"
+    )
+    database.session.add(cuenta_banco)
+    banco = Bank(name="BAC USD")
+    database.session.add(banco)
+    database.session.commit()
+    banco_acc = BankAccount(
+        bank_id=banco.id,
+        company="cacao",
+        account_name="BAC USD",
+        account_no="12345",
+        currency="USD",
+        gl_account_id=str(cuenta_banco.id),
+        is_active=True,
+    )
+    database.session.add(banco_acc)
+    database.session.commit()
+
+    gasto = create_petty_cash_expense(
+        company="cacao",
+        petty_cash_id=fund.id,
+        expense_account_code="EXP-001",
+        concept="Gasto USD",
+        amount=Decimal("100.0000"),
+        cost_center_code="MAIN",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+
+    repo = create_petty_cash_replenishment(
+        company="cacao",
+        petty_cash_id=fund.id,
+        expense_ids=[gasto.id],
+        request_date=date(2026, 2, 4),
+        notes="Reposicion USD",
+        actor_id="user-1",
+    )
+    set_petty_cash_replenishment_status(repo, "solicitado")
+    set_petty_cash_replenishment_status(repo, "aprobado", actor_id="user-1")
+
+    replenish_petty_cash(repo, bank_account_id=banco_acc.id, actor_id="user-1")
+
+    nota_debito = database.session.get(PaymentEntry, repo.bank_debit_note_id)
+    assert nota_debito is not None
+    assert nota_debito.exchange_rate == Decimal("36.500000000")
+    assert nota_debito.paid_amount == Decimal("100.0000")
+    assert nota_debito.base_paid_amount == Decimal("3650.0000")
