@@ -1381,7 +1381,7 @@ def _render_operational_framework(
         return export_response
     totals_raw = getattr(report, "totals", {})
     ledger_currency = getattr(report, "ledger_currency", None)
-    rows, columns, page, page_size, total_rows, page_rows = _operational_page_window(report)
+    _, columns, page, page_size, total_rows, page_rows = _operational_page_window(report)
     display_headers = {column: _column_label(column, ledger_currency) for column in columns}
     display_rows = [
         {column: _format_cell(column, row.values.get(column), ledger_currency) for column in columns} for row in page_rows

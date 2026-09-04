@@ -126,7 +126,19 @@ BANCOS_BANCO_CUENTA_NUEVO_HTML = "bancos/banco_cuenta_nuevo.html"
 
 BANCOS_PAGO_LISTA_HTML = "bancos/pago_lista.html"
 
+BANCOS_CAJA_CHICA_NUEVO_HTML = "bancos/caja_chica_nuevo.html"
+
+BANCOS_CAJA_CHICA_VALE_NUEVO_HTML = "bancos/caja_chica_vale_nuevo.html"
+
+BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML = "bancos/caja_chica_gasto_nuevo.html"
+
 BANCOS_BANCOS_PAGO = "bancos.bancos_pago"
+
+BANCOS_CAJA_CHICA_ENDPOINT = "bancos.caja_chica"
+
+BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT = "bancos.caja_chica_conciliacion_lista"
+
+BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT = "bancos.caja_chica_reposicion_lista"
 
 BANCOS_CONCILIACION_ENDPOINT = "bancos.bancos_conciliacion_bancaria"
 
@@ -974,7 +986,7 @@ def caja_chica_nuevo():
         company = request.form.get("company")
         if not company:
             flash(_("Seleccione una compañía."), "danger")
-            return render_template("bancos/caja_chica_nuevo.html", form=formulario, usuarios=usuarios, titulo=titulo)
+            return render_template(BANCOS_CAJA_CHICA_NUEVO_HTML, form=formulario, usuarios=usuarios, titulo=titulo)
         exige_acceso_compania("cash", company, "crear")
         try:
             create_petty_cash_account(
@@ -990,10 +1002,10 @@ def caja_chica_nuevo():
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
-            return render_template("bancos/caja_chica_nuevo.html", form=formulario, usuarios=usuarios, titulo=titulo)
+            return render_template(BANCOS_CAJA_CHICA_NUEVO_HTML, form=formulario, usuarios=usuarios, titulo=titulo)
         return redirect(url_for("bancos.caja_chica_lista"))
 
-    return render_template("bancos/caja_chica_nuevo.html", form=formulario, usuarios=usuarios, titulo=titulo)
+    return render_template(BANCOS_CAJA_CHICA_NUEVO_HTML, form=formulario, usuarios=usuarios, titulo=titulo)
 
 
 @bancos.route("/petty-cash/<pc_id>")
@@ -1047,7 +1059,7 @@ def caja_chica_editar(pc_id):
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
-        return redirect(url_for("bancos.caja_chica", pc_id=registro.id))
+        return redirect(url_for(BANCOS_CAJA_CHICA_ENDPOINT, pc_id=registro.id))
 
     formulario = FormularioCajaChica(
         name=registro.name,
@@ -1061,7 +1073,7 @@ def caja_chica_editar(pc_id):
     ]
     titulo = "Editar Caja Chica - " + APPNAME
     return render_template(
-        "bancos/caja_chica_nuevo.html", form=formulario, registro=registro, usuarios=usuarios, titulo=titulo
+        BANCOS_CAJA_CHICA_NUEVO_HTML, form=formulario, registro=registro, usuarios=usuarios, titulo=titulo
     )
 
 
@@ -1076,7 +1088,7 @@ def caja_chica_predeterminada(pc_id):
     exige_acceso_compania("cash", registro.company, "editar")
     set_petty_cash_default(registro)
     flash(_("Caja chica marcada como predeterminada."), "success")
-    return redirect(url_for("bancos.caja_chica", pc_id=registro.id))
+    return redirect(url_for(BANCOS_CAJA_CHICA_ENDPOINT, pc_id=registro.id))
 
 
 @bancos.route("/petty-cash/<pc_id>/toggle", methods=["POST"])
@@ -1090,7 +1102,7 @@ def caja_chica_alternar(pc_id):
     exige_acceso_compania("cash", registro.company, "editar")
     toggle_petty_cash_active(registro)
     flash(_("Estado de la caja chica actualizado."), "success")
-    return redirect(url_for("bancos.caja_chica", pc_id=registro.id))
+    return redirect(url_for(BANCOS_CAJA_CHICA_ENDPOINT, pc_id=registro.id))
 
 
 # --------------------------------------------------------------------------------------------- #
@@ -1147,7 +1159,7 @@ def caja_chica_vale_nuevo():
         petty_cash_id = request.form.get("petty_cash_id")
         if not company or not petty_cash_id:
             flash(_("Seleccione la compania y la caja chica."), "danger")
-            return render_template("bancos/caja_chica_vale_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+            return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
         exige_acceso_compania("cash", company, "crear")
         try:
             create_petty_cash_voucher(
@@ -1164,12 +1176,12 @@ def caja_chica_vale_nuevo():
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
-            return render_template("bancos/caja_chica_vale_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+            return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
         flash(_("Vale de caja chica creado."), "success")
         return redirect(url_for("bancos.caja_chica_vale_lista"))
 
     # Prellenar dimensiones segun la compania seleccionada (requiere JS/alpine del cliente)
-    return render_template("bancos/caja_chica_vale_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+    return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
 
 
 @bancos.route("/petty-cash-voucher/<v_id>/status", methods=["POST"])
@@ -1250,7 +1262,7 @@ def caja_chica_gasto_nuevo():
         petty_cash_id = request.form.get("petty_cash_id")
         if not company or not petty_cash_id:
             flash(_("Seleccione la compania y la caja chica."), "danger")
-            return render_template("bancos/caja_chica_gasto_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+            return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
         exige_acceso_compania("cash", company, "crear")
         try:
             create_petty_cash_expense(
@@ -1270,11 +1282,11 @@ def caja_chica_gasto_nuevo():
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
-            return render_template("bancos/caja_chica_gasto_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+            return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
         flash(_("Gasto de caja chica registrado y contabilizado."), "success")
         return redirect(url_for("bancos.caja_chica_gasto_lista"))
 
-    return render_template("bancos/caja_chica_gasto_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+    return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
 
 
 @bancos.route("/petty-cash-reconciliation/list")
@@ -1316,7 +1328,7 @@ def caja_chica_conciliacion_nueva():
             flash(_(str(exc)), "danger")
         else:
             flash(_("Conciliacion de caja chica creada."), "success")
-            return redirect(url_for("bancos.caja_chica_conciliacion_lista"))
+            return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
     return render_template(
         "bancos/caja_chica_conciliacion_nueva.html",
         fondos=fondos,
@@ -1340,7 +1352,7 @@ def caja_chica_conciliacion_confirmar(r_id):
         flash(_(str(exc)), "danger")
     else:
         flash(_("Conciliacion de caja chica confirmada."), "success")
-    return redirect(url_for("bancos.caja_chica_conciliacion_lista"))
+    return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
 
 
 @bancos.route("/petty-cash-reconciliation/<r_id>/adjust", methods=["POST"])
@@ -1364,7 +1376,7 @@ def caja_chica_conciliacion_ajustar(r_id):
         flash(_(str(exc)), "danger")
     else:
         flash(_("Ajuste de diferencia registrado."), "success")
-    return redirect(url_for("bancos.caja_chica_conciliacion_lista"))
+    return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
 
 
 @bancos.route("/petty-cash-replenishment/list")
@@ -1409,7 +1421,7 @@ def caja_chica_reposicion_nueva():
             flash(_(str(exc)), "danger")
         else:
             flash(_("Solicitud de reposicion creada."), "success")
-            return redirect(url_for("bancos.caja_chica_reposicion_lista"))
+            return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
     return render_template(
         "bancos/caja_chica_reposicion_nueva.html",
         fondos=fondos,
@@ -1434,7 +1446,7 @@ def caja_chica_reposicion_estado(r_id):
         flash(_(str(exc)), "danger")
     else:
         flash(_("Estado de la reposicion actualizado."), "success")
-    return redirect(url_for("bancos.caja_chica_reposicion_lista"))
+    return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
 
 
 @bancos.route("/petty-cash-replenishment/<r_id>/replenish", methods=["POST"])
@@ -1457,7 +1469,7 @@ def caja_chica_reponer(r_id):
         flash(_(str(exc)), "danger")
     else:
         flash(_("Caja chica repuesta mediante Nota de Debito bancaria."), "success")
-    return redirect(url_for("bancos.caja_chica_reposicion_lista"))
+    return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
 
 
 @bancos.route("/petty-cash-expense/<e_id>/cancel", methods=["POST"])

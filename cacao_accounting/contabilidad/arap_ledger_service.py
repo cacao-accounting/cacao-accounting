@@ -974,7 +974,7 @@ def post_payment_application_ar_ap(
         company, document, document_type, document_currency, party_type, party_id, target_ledger_type, amount, allocation_date
     )
     movements.extend(target_new_movements)
-    payment_opening, payment_cache, payment_new_movements = _resolve_application_payment_item(
+    _, payment_cache, payment_new_movements = _resolve_application_payment_item(
         company,
         payment,
         payment_type,

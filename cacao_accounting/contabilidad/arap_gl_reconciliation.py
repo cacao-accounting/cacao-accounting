@@ -27,6 +27,7 @@ from cacao_accounting.database import (
 ReconciliationMode = Literal["strict", "warn", "log"]
 AR_AP_ACCOUNT_TYPES = frozenset({"receivable", "payable", "customer_advance", "supplier_advance"})
 EXCHANGE_REVALUATION_VOUCHER_TYPE = "exchange_revaluation"
+_SALDO_AR_AP_LABEL = "Saldo AR/AP"
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -163,10 +164,11 @@ def compare_arap_gl_totals(
     lines = tuple(
         ARAPGLReconciliationLine(
             key=key,
-            subledger_amount=_decimal(subledger_totals.get(key, 0), field="Saldo AR/AP"),
+            subledger_amount=_decimal(subledger_totals.get(key, 0), field=_SALDO_AR_AP_LABEL),
             gl_amount=_decimal(gl_totals.get(key, 0), field="Saldo GL"),
             difference=(
-                _decimal(subledger_totals.get(key, 0), field="Saldo AR/AP") - _decimal(gl_totals.get(key, 0), field="Saldo GL")
+                _decimal(subledger_totals.get(key, 0), field=_SALDO_AR_AP_LABEL)
+                - _decimal(gl_totals.get(key, 0), field="Saldo GL")
             ),
             tolerance=tolerance,
         )
@@ -208,7 +210,7 @@ def _subledger_totals(
             party_id=str(movement.party_id),
             currency=str(book_row.book_currency),
         )
-        totals[key] = totals.get(key, Decimal("0")) + _decimal(book_row.book_amount, field="Saldo AR/AP")
+        totals[key] = totals.get(key, Decimal("0")) + _decimal(book_row.book_amount, field=_SALDO_AR_AP_LABEL)
     return totals
 
 
