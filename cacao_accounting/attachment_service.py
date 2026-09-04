@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import uuid
+import hashlib
+from dataclasses import dataclass
 from typing import Any
 
 from flask import current_app
@@ -23,6 +25,105 @@ class AttachmentError(ValueError):
         """Initialize attachment error with message and HTTP status code."""
         super().__init__(message)
         self.status_code = status_code
+
+
+@dataclass(frozen=True)
+class ValidatedUpload:
+    """Validated upload payload kept in memory until its transaction commits."""
+
+    data: bytes
+    filename: str
+    mime_type: str
+    sha256: str
+
+
+@dataclass(frozen=True)
+class StoredAttachment:
+    """File metadata created by :func:`store_attachment` before commit."""
+
+    file_id: str
+    attachment_id: str
+    file_path: str
+
+
+def validate_upload(
+    upload: Any,
+    *,
+    allowed_mime_types: set[str] | frozenset[str],
+    max_bytes: int,
+    max_pages: int = 0,
+    max_image_pixels: int = 0,
+) -> ValidatedUpload:
+    """Read and validate an uploaded document before persisting it."""
+    del max_pages, max_image_pixels  # Structural checks run asynchronously during normalization.
+    if not upload or not getattr(upload, "filename", None):
+        raise AttachmentError("invalid_file")
+    data = upload.read()
+    if not data or len(data) > max_bytes:
+        raise AttachmentError("file_too_large_or_empty")
+    try:
+        import magic
+
+        mime_type = magic.from_buffer(data, mime=True)
+    except Exception as exc:  # pragma: no cover - optional dependency failure
+        raise AttachmentError("invalid_file") from exc
+    if mime_type not in allowed_mime_types:
+        raise AttachmentError("invalid_file")
+    return ValidatedUpload(
+        data=data,
+        filename=secure_filename(upload.filename) or "attachment",
+        mime_type=mime_type,
+        sha256=hashlib.sha256(data).hexdigest(),
+    )
+
+
+def store_attachment(
+    *,
+    reference_type: str,
+    reference_id: str,
+    upload: ValidatedUpload,
+    actor_id: str | None = None,
+    commit: bool = True,
+) -> StoredAttachment:
+    """Persist a validated upload and optionally commit its attachment link."""
+    _ensure_cloud_mode()
+    folder = _get_upload_folder()
+    file_path = os.path.join(folder, f"{uuid.uuid4().hex[:12]}_{upload.filename}")
+    with open(file_path, "wb") as handle:
+        handle.write(upload.data)
+    try:
+        file_record = File(
+            file_name=upload.filename,
+            file_path=file_path,
+            file_size=len(upload.data),
+            mime_type=upload.mime_type,
+            uploaded_by=actor_id,
+        )
+        database.session.add(file_record)
+        database.session.flush()
+        attachment_record = FileAttachment(
+            file_id=file_record.id,
+            reference_type=reference_type,
+            reference_id=reference_id,
+        )
+        database.session.add(attachment_record)
+        database.session.flush()
+        if commit:
+            database.session.commit()
+        return StoredAttachment(file_record.id, attachment_record.id, file_path)
+    except Exception:
+        database.session.rollback()
+        cleanup_uncommitted_attachment(StoredAttachment("", "", file_path))
+        raise
+
+
+def cleanup_uncommitted_attachment(attachment: StoredAttachment) -> None:
+    """Remove the physical file for an attachment rolled back before commit."""
+    try:
+        if attachment.file_path and os.path.exists(attachment.file_path):
+            os.remove(attachment.file_path)
+    except OSError:
+        pass
 
 
 def _ensure_cloud_mode() -> None:

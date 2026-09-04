@@ -102,7 +102,7 @@ def _require_actor_can_create(actor_id: str, company_id: str) -> None:
         or not actor.active
         or permissions is None
         or not (permissions.administrador or permissions.crear)
-        or not permissions.tiene_acceso_compania(company_id, "can_write")
+        or not permissions.tiene_acceso_compania(company_id)
     ):
         raise PurchaseInvoiceDraftError(
             "AUTHORIZATION_REVOKED",
