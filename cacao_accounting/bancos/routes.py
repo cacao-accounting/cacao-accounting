@@ -42,6 +42,8 @@ from cacao_accounting.database import (
     PaymentReference,
     PettyCashAccount,
     PettyCashExpense,
+    PettyCashReconciliation,
+    PettyCashReplenishment,
     PettyCashVoucher,
     ReconciliationItem,
     User,
@@ -96,11 +98,20 @@ from cacao_accounting.bancos.services import (
     _payment_source_rows_from_request,
     create_petty_cash_account,
     create_petty_cash_expense,
+    create_petty_cash_reconciliation,
+    create_petty_cash_replenishment,
+    petty_cash_expenses_available_for_replenishment,
+    petty_cash_open_vouchers_total,
+    petty_cash_pending_replenishment_total,
     create_petty_cash_voucher,
     petty_cash_accounts,
     petty_cash_expenses,
     petty_cash_ledger_balance,
     petty_cash_vouchers,
+    reconcile_petty_cash,
+    replenish_petty_cash,
+    set_petty_cash_replenishment_status,
+    post_petty_cash_reconciliation_adjustment,
     set_petty_cash_default,
     set_petty_cash_voucher_status,
     toggle_petty_cash_active,
@@ -920,13 +931,13 @@ def bancos_cuenta_bancaria_numbering_config(account_id: str) -> ResponseReturnVa
 @login_required
 def caja_chica_lista():
     """Listado de cajas chicas."""
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-
-    companies = [code for code, _name in obtener_lista_entidades_por_id_razonsocial()]
+    companies = _cash_company_codes()
     registros: list[PettyCashAccount] = []
     for company in companies:
         registros.extend(petty_cash_accounts(company))
     saldos = {pc.id: petty_cash_ledger_balance(pc) for pc in registros}
+    vales_abiertos = {pc.id: petty_cash_open_vouchers_total(pc) for pc in registros}
+    pendientes = {pc.id: petty_cash_pending_replenishment_total(pc) for pc in registros}
     responsables = {
         pc.custodian_id: (database.session.get(User, pc.custodian_id).name if pc.custodian_id else None) for pc in registros
     }
@@ -935,6 +946,8 @@ def caja_chica_lista():
         "bancos/caja_chica_lista.html",
         registros=registros,
         saldos=saldos,
+        vales_abiertos=vales_abiertos,
+        pendientes=pendientes,
         responsables=responsables,
         titulo=titulo,
     )
@@ -947,10 +960,10 @@ def caja_chica_lista():
 def caja_chica_nuevo():
     """Formulario para crear una nueva caja chica."""
     from cacao_accounting.bancos.forms import FormularioCajaChica
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial, obtener_lista_monedas
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_monedas
 
     formulario = FormularioCajaChica()
-    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.company.choices = [(code, code) for code in _cash_company_codes()]
     formulario.currency.choices = [("", "")] + obtener_lista_monedas()
     usuarios = [
         (str(u.id), u.name or u.user) for u in database.session.execute(database.select(User).filter_by(active=True)).scalars()
@@ -996,12 +1009,16 @@ def caja_chica(pc_id):
     cuenta = database.session.get(Accounts, registro.account_id) if registro.account_id else None
     responsable = database.session.get(User, registro.custodian_id) if registro.custodian_id else None
     saldo = petty_cash_ledger_balance(registro)
+    vales_abiertos = petty_cash_open_vouchers_total(registro)
+    pendiente_reposicion = petty_cash_pending_replenishment_total(registro)
     return render_template(
         "bancos/caja_chica.html",
         registro=registro,
         cuenta=cuenta,
         responsable=responsable,
         saldo=saldo,
+        vales_abiertos=vales_abiertos,
+        pendiente_reposicion=pendiente_reposicion,
         titulo=titulo,
     )
 
@@ -1037,9 +1054,7 @@ def caja_chica_editar(pc_id):
         company=registro.company,
         currency=registro.currency,
     )
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-
-    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    formulario.company.choices = [(code, code) for code in _cash_company_codes()]
     formulario.currency.choices = [("", "")] + obtener_lista_monedas()
     usuarios = [
         (str(u.id), u.name or u.user) for u in database.session.execute(database.select(User).filter_by(active=True)).scalars()
@@ -1083,13 +1098,20 @@ def caja_chica_alternar(pc_id):
 # --------------------------------------------------------------------------------------------- #
 def _obtener_fondos_compania():
     """Devuelve los fondos de caja chica de la compania del usuario."""
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-
-    companies = [code for code, _ in obtener_lista_entidades_por_id_razonsocial()]
+    companies = _cash_company_codes()
     registros = []
     for company in companies:
         registros.extend(petty_cash_accounts(company))
     return registros
+
+
+def _cash_company_codes() -> list[str]:
+    """Devuelve las companias visibles segun permisos del modulo de Caja y Bancos."""
+    scope = _cash_accessible_companies()
+    query = database.select(Book.entity).distinct()
+    if scope is not None:
+        query = query.where(Book.entity.in_(scope))
+    return [str(code) for code in database.session.execute(query).scalars() if code]
 
 
 @bancos.route("/petty-cash-voucher/list")
@@ -1097,9 +1119,7 @@ def _obtener_fondos_compania():
 @login_required
 def caja_chica_vale_lista():
     """Listado de vales de caja chica."""
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-
-    companies = [code for code, _ in obtener_lista_entidades_por_id_razonsocial()]
+    companies = _cash_company_codes()
     registros = []
     for company in companies:
         registros.extend(petty_cash_vouchers(company))
@@ -1114,10 +1134,9 @@ def caja_chica_vale_lista():
 def caja_chica_vale_nuevo():
     """Formulario para crear un vale de caja chica."""
     from cacao_accounting.bancos.forms import FormularioPettyCashVoucher
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     formulario = FormularioPettyCashVoucher()
-    companies = obtener_lista_entidades_por_id_razonsocial()
+    companies = [(code, code) for code in _cash_company_codes()]
     formulario.company.choices = companies
     fondos = _obtener_fondos_compania()
     formulario.petty_cash_id.choices = [(f.id, f"{f.company} - {f.name}") for f in fondos]
@@ -1172,6 +1191,19 @@ def caja_chica_vale_estado(v_id):
     return redirect(url_for("bancos.caja_chica_vale_lista"))
 
 
+@bancos.route("/petty-cash-voucher/<v_id>/liquidate")
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "crear")
+def caja_chica_vale_liquidar(v_id):
+    """Abre el formulario para convertir un vale entregado en gasto."""
+    voucher = database.session.get(PettyCashVoucher, v_id)
+    if not voucher:
+        abort(404)
+    exige_acceso_compania("cash", voucher.company or "", "crear")
+    return redirect(url_for("bancos.caja_chica_gasto_nuevo", voucher_id=voucher.id))
+
+
 # --------------------------------------------------------------------------------------------- #
 # Gasto de Caja Chica
 # --------------------------------------------------------------------------------------------- #
@@ -1180,9 +1212,7 @@ def caja_chica_vale_estado(v_id):
 @login_required
 def caja_chica_gasto_lista():
     """Listado de gastos de caja chica."""
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-
-    companies = [code for code, _ in obtener_lista_entidades_por_id_razonsocial()]
+    companies = _cash_company_codes()
     registros = []
     for company in companies:
         registros.extend(petty_cash_expenses(company))
@@ -1197,13 +1227,22 @@ def caja_chica_gasto_lista():
 def caja_chica_gasto_nuevo():
     """Formulario para crear un gasto de caja chica (postea al GL)."""
     from cacao_accounting.bancos.forms import FormularioPettyCashExpense
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     formulario = FormularioPettyCashExpense()
-    companies = obtener_lista_entidades_por_id_razonsocial()
+    companies = [(code, code) for code in _cash_company_codes()]
     formulario.company.choices = companies
     fondos = _obtener_fondos_compania()
     formulario.petty_cash_id.choices = [(f.id, f"{f.company} - {f.name}") for f in fondos]
+    voucher_id = request.args.get("voucher_id") or request.form.get("voucher_id") or ""
+    voucher = database.session.get(PettyCashVoucher, voucher_id) if voucher_id else None
+    if voucher and request.method == "GET":
+        formulario.company.data = voucher.company
+        formulario.petty_cash_id.data = voucher.petty_cash_id
+        formulario.voucher_id.data = voucher.id
+        formulario.beneficiary.data = voucher.delivered_to
+        formulario.concept.data = voucher.concept
+        formulario.amount.data = str(voucher.amount)
+        formulario.cost_center_code.data = voucher.cost_center_code
     titulo = "Nuevo Gasto de Caja Chica - " + APPNAME
 
     if formulario.validate_on_submit() or request.method == "POST":
@@ -1236,6 +1275,189 @@ def caja_chica_gasto_nuevo():
         return redirect(url_for("bancos.caja_chica_gasto_lista"))
 
     return render_template("bancos/caja_chica_gasto_nuevo.html", form=formulario, fondos=fondos, titulo=titulo)
+
+
+@bancos.route("/petty-cash-reconciliation/list")
+@modulo_activo("cash")
+@login_required
+def caja_chica_conciliacion_lista():
+    """Lista las conciliaciones de caja chica visibles para el usuario."""
+    query = database.select(PettyCashReconciliation).order_by(PettyCashReconciliation.reconciliation_date.desc())
+    scope = _cash_accessible_companies()
+    if scope is not None:
+        query = query.where(PettyCashReconciliation.company.in_(scope))
+    registros = list(database.session.execute(query).scalars())
+    return render_template(
+        "bancos/caja_chica_conciliacion_lista.html",
+        registros=registros,
+        titulo="Conciliaciones de Caja Chica - " + APPNAME,
+    )
+
+
+@bancos.route("/petty-cash-reconciliation/new", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "crear")
+def caja_chica_conciliacion_nueva():
+    """Crea una conciliacion de caja chica en borrador."""
+    fondos = _obtener_fondos_compania()
+    if request.method == "POST":
+        company = request.form.get("company") or ""
+        exige_acceso_compania("cash", company, "crear")
+        try:
+            create_petty_cash_reconciliation(
+                company=company,
+                petty_cash_id=request.form.get("petty_cash_id") or "",
+                reconciliation_date=date.fromisoformat(request.form.get("reconciliation_date") or date.today().isoformat()),
+                counted_cash=_form_decimal("counted_cash", "0"),
+                explanation=request.form.get("explanation") or None,
+            )
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+        else:
+            flash(_("Conciliacion de caja chica creada."), "success")
+            return redirect(url_for("bancos.caja_chica_conciliacion_lista"))
+    return render_template(
+        "bancos/caja_chica_conciliacion_nueva.html",
+        fondos=fondos,
+        titulo="Nueva Conciliacion de Caja Chica - " + APPNAME,
+    )
+
+
+@bancos.route("/petty-cash-reconciliation/<r_id>/reconcile", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "editar")
+def caja_chica_conciliacion_confirmar(r_id):
+    """Confirma una conciliacion de caja chica."""
+    conciliacion = database.session.get(PettyCashReconciliation, r_id)
+    if not conciliacion:
+        abort(404)
+    exige_acceso_compania("cash", conciliacion.company or "", "editar")
+    try:
+        reconcile_petty_cash(conciliacion, actor_id=str(current_user.id))
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+    else:
+        flash(_("Conciliacion de caja chica confirmada."), "success")
+    return redirect(url_for("bancos.caja_chica_conciliacion_lista"))
+
+
+@bancos.route("/petty-cash-reconciliation/<r_id>/adjust", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "editar")
+def caja_chica_conciliacion_ajustar(r_id):
+    """Registra el ajuste contable solicitado para una diferencia conciliada."""
+    conciliacion = database.session.get(PettyCashReconciliation, r_id)
+    if not conciliacion:
+        abort(404)
+    exige_acceso_compania("cash", conciliacion.company or "", "editar")
+    try:
+        post_petty_cash_reconciliation_adjustment(
+            conciliacion,
+            adjustment_account_code=request.form.get("adjustment_account_code") or "",
+            cost_center_code=request.form.get("cost_center_code") or None,
+            actor_id=str(current_user.id),
+        )
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+    else:
+        flash(_("Ajuste de diferencia registrado."), "success")
+    return redirect(url_for("bancos.caja_chica_conciliacion_lista"))
+
+
+@bancos.route("/petty-cash-replenishment/list")
+@modulo_activo("cash")
+@login_required
+def caja_chica_reposicion_lista():
+    """Lista solicitudes de reposicion de caja chica."""
+    query = database.select(PettyCashReplenishment).order_by(PettyCashReplenishment.request_date.desc())
+    scope = _cash_accessible_companies()
+    if scope is not None:
+        query = query.where(PettyCashReplenishment.company.in_(scope))
+    registros = list(database.session.execute(query).scalars())
+    return render_template(
+        "bancos/caja_chica_reposicion_lista.html",
+        registros=registros,
+        titulo="Reposiciones de Caja Chica - " + APPNAME,
+    )
+
+
+@bancos.route("/petty-cash-replenishment/new", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "crear")
+def caja_chica_reposicion_nueva():
+    """Crea una solicitud de reposicion con gastos aun no repuestos."""
+    fondos = _obtener_fondos_compania()
+    selected_fund = request.form.get("petty_cash_id") or request.args.get("petty_cash_id")
+    gastos = petty_cash_expenses_available_for_replenishment(selected_fund) if selected_fund else []
+    if request.method == "POST":
+        company = request.form.get("company") or ""
+        exige_acceso_compania("cash", company, "crear")
+        try:
+            create_petty_cash_replenishment(
+                company=company,
+                petty_cash_id=request.form.get("petty_cash_id") or "",
+                expense_ids=request.form.getlist("expense_ids"),
+                request_date=date.fromisoformat(request.form.get("request_date") or date.today().isoformat()),
+                notes=request.form.get("notes") or None,
+                actor_id=str(current_user.id),
+            )
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+        else:
+            flash(_("Solicitud de reposicion creada."), "success")
+            return redirect(url_for("bancos.caja_chica_reposicion_lista"))
+    return render_template(
+        "bancos/caja_chica_reposicion_nueva.html",
+        fondos=fondos,
+        gastos=gastos,
+        selected_fund=selected_fund,
+        titulo="Nueva Reposicion de Caja Chica - " + APPNAME,
+    )
+
+
+@bancos.route("/petty-cash-replenishment/<r_id>/status", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+def caja_chica_reposicion_estado(r_id):
+    """Solicita o aprueba una reposicion de caja chica."""
+    reposicion = database.session.get(PettyCashReplenishment, r_id)
+    if not reposicion:
+        abort(404)
+    exige_acceso_compania("cash", reposicion.company or "", "editar")
+    try:
+        set_petty_cash_replenishment_status(reposicion, request.form.get("status") or "", actor_id=str(current_user.id))
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+    else:
+        flash(_("Estado de la reposicion actualizado."), "success")
+    return redirect(url_for("bancos.caja_chica_reposicion_lista"))
+
+
+@bancos.route("/petty-cash-replenishment/<r_id>/replenish", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "editar")
+def caja_chica_reponer(r_id):
+    """Genera la Nota de Debito bancaria de una reposicion aprobada."""
+    reposicion = database.session.get(PettyCashReplenishment, r_id)
+    if not reposicion:
+        abort(404)
+    exige_acceso_compania("cash", reposicion.company or "", "editar")
+    try:
+        replenish_petty_cash(
+            reposicion,
+            bank_account_id=request.form.get("bank_account_id") or "",
+            actor_id=str(current_user.id),
+        )
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+    else:
+        flash(_("Caja chica repuesta mediante Nota de Debito bancaria."), "success")
+    return redirect(url_for("bancos.caja_chica_reposicion_lista"))
 
 
 @bancos.route("/petty-cash-expense/<e_id>/cancel", methods=["POST"])

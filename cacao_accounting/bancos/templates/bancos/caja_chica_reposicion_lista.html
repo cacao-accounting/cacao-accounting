@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block contenido %}
+<div class="ca-card">
+  <div class="ca-card-header d-flex justify-content-between"><h5 class="ca-card-title">{{ _('Reposiciones de Caja Chica') }}</h5><a class="btn btn-primary btn-sm" href="{{ url_for('bancos.caja_chica_reposicion_nueva') }}">{{ _('Nueva') }}</a></div>
+  <table class="ca-table"><thead><tr><th>{{ _('Documento') }}</th><th>{{ _('Caja') }}</th><th>{{ _('Importe') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Acciones') }}</th></tr></thead><tbody>
+  {% for item in registros %}<tr><td>{{ item.document_no or item.id }}</td><td>{{ item.petty_cash_id }}</td><td>{{ item.amount }}</td><td>{{ item.status }}</td><td class="d-flex gap-1">{% if item.status == 'borrador' %}<form method="post" action="{{ url_for('bancos.caja_chica_reposicion_estado', r_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="solicitado"><button class="btn btn-outline-primary btn-sm">{{ _('Solicitar') }}</button></form>{% elif item.status == 'solicitado' %}<form method="post" action="{{ url_for('bancos.caja_chica_reposicion_estado', r_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="status" value="aprobado"><button class="btn btn-outline-success btn-sm">{{ _('Aprobar') }}</button></form>{% elif item.status == 'aprobado' %}<form method="post" action="{{ url_for('bancos.caja_chica_reponer', r_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input class="form-control form-control-sm" name="bank_account_id" placeholder="{{ _('ID cuenta bancaria') }}" required><button class="btn btn-outline-success btn-sm">{{ _('Reponer') }}</button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="5" class="text-center text-muted">{{ _('No hay reposiciones registradas.') }}</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endblock %}

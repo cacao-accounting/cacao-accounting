@@ -46,6 +46,9 @@
       <div class="ca-kv-item"><label>{{ _('Responsable') }}</label><p>{{ responsable.name if responsable else '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Fondo autorizado') }}</label><p>{{ registro.float_amount }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Saldo contable') }}</label><p>{{ saldo }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Efectivo esperado') }}</label><p>{{ saldo - vales_abiertos }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Vales abiertos') }}</label><p>{{ vales_abiertos }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Pendiente de reposición') }}</label><p>{{ pendiente_reposicion }}</p></div>
       {% if registro.notes %}
       <div class="ca-kv-item"><label>{{ _('Notas') }}</label><p>{{ registro.notes }}</p></div>
       {% endif %}

@@ -2182,3 +2182,23 @@ python3.11 que sombrea los paquetes del venv y rompe el arranque de mypy 2.3.0. 
 - Linters limpios sobre el archivo nuevo: black, ruff, flake8, mypy y pydocstyle.
 - QA independiente (segundo agente) revisó el archivo de pruebas, la matriz de roles contra las rutas y la matriz del
   issue contra el código, con veredicto de apto; sus observaciones menores de cobertura quedaron incorporadas.
+
+## 2026-09-04 (implementación de Caja Chica, issue #757)
+
+### Implementación
+
+- Se agregaron conciliaciones y reposiciones de Caja Chica como documentos append-only, conservando saldos derivados
+  del GL y vinculando los gastos pendientes a una solicitud de reposición.
+- La conciliación calcula saldo contable, vales abiertos, efectivo esperado, efectivo contado y diferencia; el ajuste
+  contable requiere una acción explícita y una cuenta de diferencia.
+- La reposición sigue borrador → solicitado → aprobado → reembolsado y crea una Nota de Débito bancaria con débito a
+  Caja Chica y crédito a Banco. Se bloquea si las monedas del fondo y del banco no coinciden.
+- Se conectaron menú, listados, formularios, liquidación de vales hacia gastos y métricas de efectivo esperado.
+- Se reforzaron validaciones de compañía, cuenta contable, moneda, fondo activo y disponibilidad de gastos; no se
+  modificaron workflows.
+
+### Verificación
+
+- `tests/test_petty_cash.py`: 39/39 en verde.
+- Black y Ruff pasaron sobre los archivos modificados.
+- Mypy no pudo iniciar en el entorno por el paquete `pathspec.patterns.gitignore` ausente; no se agregaron dependencias.
