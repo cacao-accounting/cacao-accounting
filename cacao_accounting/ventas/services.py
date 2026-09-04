@@ -2122,7 +2122,7 @@ def _sales_reversal_source(document_type: str) -> str | None:
 
 def _persist_sales_reversal_relation(invoice: SalesInvoice) -> None:
     """Persist the invoice-to-credit-note relation used by AR outstanding."""
-    if invoice.document_type not in {"sales_credit_note", "sales_debit_note"} or not invoice.reversal_of:
+    if invoice.document_type not in {"sales_credit_note", "sales_debit_note", "sales_return"} or not invoice.reversal_of:
         return
     target_type = invoice.document_type
     relation = (
