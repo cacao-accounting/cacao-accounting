@@ -1,5 +1,19 @@
 # Bitácora de desarrollo
 
+## 2026-09-04 (QA de alpha — ACL en APIs de jerarquías, issue #793)
+
+### Hallazgo y corrección
+
+Las APIs de jerarquía de unidades de negocio, unidades y proyectos requerían autenticación, pero no verificaban la
+compañía del nodo. Ahora exigen permiso `accounting/consultar` sobre la entidad y rechazan árboles con relaciones
+padre/hijo entre compañías antes de serializar sus metadatos.
+
+### Verificación
+
+- Regresión focalizada: 403 para entidad ajena, 200 para nodo local y 404 para vínculos cruzados en las tres APIs.
+- `pytest tests/test_master_data_issues.py -k hierarchy_api_requires_company_access`: 1 passed.
+- Ruff y `git diff --check`: limpios; QA independiente aprobado.
+
 ## 2026-09-04 (QA de alpha — aislamiento implícito de search-select, issue #783)
 
 ### Hallazgo verificable

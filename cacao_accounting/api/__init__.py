@@ -1296,6 +1296,15 @@ def _filter_authorized_documents(documents: list[Any], doctype_key: str) -> list
     return authorized
 
 
+def _require_hierarchy_company_access(node: Any) -> None:
+    """Authorize accounting hierarchy data and reject cross-company tree links."""
+    company = getattr(node, "entity", None)
+    exige_acceso_compania("accounting", company, "consultar")
+    related_nodes = [node.parent, *node.children, *node.ancestors, *node.descendants]
+    if any(getattr(related, "entity", None) != company for related in related_nodes if related is not None):
+        abort(404)
+
+
 @api.route("/document-flow/list/<doctype>")
 @login_required
 def document_flow_related_list(doctype: str):
@@ -1344,6 +1353,7 @@ def api_business_unit_hierarchy(id_or_code: str):
         node = database.session.execute(database.select(BusinessUnit).filter_by(code=id_or_code)).scalar_one_or_none()
     if not node:
         abort(404)
+    _require_hierarchy_company_access(node)
 
     return jsonify(
         {
@@ -1366,6 +1376,7 @@ def api_unit_hierarchy(id_or_code: str):
         node = database.session.execute(database.select(Unit).filter_by(code=id_or_code)).scalar_one_or_none()
     if not node:
         abort(404)
+    _require_hierarchy_company_access(node)
 
     return jsonify(
         {
@@ -1388,6 +1399,7 @@ def api_project_hierarchy(id_or_code: str):
         node = database.session.execute(database.select(Project).filter_by(code=id_or_code)).scalar_one_or_none()
     if not node:
         abort(404)
+    _require_hierarchy_company_access(node)
 
     return jsonify(
         {
