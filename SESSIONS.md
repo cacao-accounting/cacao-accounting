@@ -1,5 +1,18 @@
 # Bitácora de desarrollo
 
+## 2026-09-04 (QA de alpha — alcance del destinatario de tareas, issue #782)
+
+### Hallazgo verificable
+
+La creación de una tarea validaba al creador y que el destinatario existiera y estuviera activo, pero no que pudiera
+consultar el módulo y compañía del documento. La tarea aparecía en la bandeja de un usuario sin acceso y exponía sus
+metadatos.
+
+### Corrección propuesta
+
+La asignación valida ahora el permiso de módulo y el alcance de compañía del destinatario contra el documento antes de
+persistir. Una asignación fuera de alcance responde 403 y no deja una tarea parcial.
+
 ## 2026-09-04 (QA de alpha — ACL del preview fiscal, issue #780)
 
 ### Hallazgo verificable

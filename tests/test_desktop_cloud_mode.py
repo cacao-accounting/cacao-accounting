@@ -15,7 +15,11 @@ from cacao_accounting.database import (
     DocumentTask,
     Entity,
     Modules,
+    Roles,
+    RolesAccess,
+    RolesUser,
     User,
+    UserCompanyAccess,
     database,
 )
 
@@ -213,6 +217,58 @@ def test_collaboration_service_enforces_document_company_acl(app_ctx, monkeypatc
 
     with pytest.raises(Forbidden):
         collaboration_service._document_for_collaboration("journal_entry", "journal-id", "admin-id")
+
+
+def test_cloud_task_rejects_assignee_without_document_access(app_ctx) -> None:
+    """Una tarea no puede revelar un documento a un usuario fuera de su alcance."""
+    client = app_ctx.test_client()
+    _login(client)
+
+    response = client.post(
+        "/api/documents/journal_entry/journal-id/tasks",
+        json={"title": "No divulgar", "assigned_to": "assignee-id"},
+    )
+
+    assert response.status_code == 403
+    task = database.session.execute(
+        database.select(DocumentTask).where(DocumentTask.assigned_to == "assignee-id")
+    ).scalar_one_or_none()
+    assert task is None
+
+
+def test_cloud_task_requires_assignee_read_permission_and_company_scope(app_ctx) -> None:
+    """El destinatario necesita consultar, no solo acceder, al documento asignado."""
+    blocked_role = Roles(id="blocked-role", name="blocked-task-role", note="Access without view")
+    allowed_role = Roles(id="allowed-role", name="allowed-task-role", note="Read access")
+    allowed_user = User(id="reader-id", user="reader", name="Reader", password=b"x", classification="user", active=True)
+    database.session.add_all(
+        [
+            blocked_role,
+            allowed_role,
+            allowed_user,
+            RolesUser(user_id="assignee-id", role_id=blocked_role.id, active=True),
+            RolesUser(user_id=allowed_user.id, role_id=allowed_role.id, active=True),
+            RolesAccess(rol_id=blocked_role.id, module_id="module-accounting", access=True, view=False),
+            RolesAccess(rol_id=allowed_role.id, module_id="module-accounting", access=True, view=True),
+            UserCompanyAccess(user_id="assignee-id", company_code="cacao"),
+            UserCompanyAccess(user_id=allowed_user.id, company_code="cacao"),
+        ]
+    )
+    database.session.commit()
+    client = app_ctx.test_client()
+    _login(client)
+
+    blocked = client.post(
+        "/api/documents/journal_entry/journal-id/tasks",
+        json={"title": "No divulgar", "assigned_to": "assignee-id"},
+    )
+    allowed = client.post(
+        "/api/documents/journal_entry/journal-id/tasks",
+        json={"title": "Leer", "assigned_to": "reader-id"},
+    )
+
+    assert blocked.status_code == 403
+    assert allowed.status_code == 201
 
 
 def test_cloud_collaboration_open_redirect_protection(app_ctx) -> None:
