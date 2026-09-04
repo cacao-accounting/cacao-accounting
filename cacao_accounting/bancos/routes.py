@@ -1072,9 +1072,7 @@ def caja_chica_editar(pc_id):
         (str(u.id), u.name or u.user) for u in database.session.execute(database.select(User).filter_by(active=True)).scalars()
     ]
     titulo = "Editar Caja Chica - " + APPNAME
-    return render_template(
-        BANCOS_CAJA_CHICA_NUEVO_HTML, form=formulario, registro=registro, usuarios=usuarios, titulo=titulo
-    )
+    return render_template(BANCOS_CAJA_CHICA_NUEVO_HTML, form=formulario, registro=registro, usuarios=usuarios, titulo=titulo)
 
 
 @bancos.route("/petty-cash/<pc_id>/default", methods=["POST"])
