@@ -2499,12 +2499,27 @@ def _apply_internal_transfer_amounts(
     """Apply multi-currency adjustments for internal transfers."""
     if payment_type != "internal_transfer":
         return
-    transfer_rate = Decimal(str(payload.get("exchange_rate") or "1"))
-    if transfer_rate <= 0:
-        raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
     if target_bank and target_bank.currency:
-        payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
-        payment.base_received_amount = None
+        source_currency = str(payment.currency or "")
+        target_currency = str(target_bank.currency)
+        posting_date = payment.posting_date or _parse_payment_date(payload)
+        if source_currency and target_currency and source_currency != target_currency:
+            # La pata destino se convierte con la tasa del sistema en la
+            # direccion origen->destino, replicando el criterio del posteo
+            # (_create_payment_transfer_entries). Confiar en la tasa no validada
+            # de la UI (default 1) fabricaba una ganancia/perdida cambiaria
+            # ficticia entre cuentas propias de la compania.
+            transfer_rate = _lookup_exchange_rate(source_currency, target_currency, posting_date)
+            if transfer_rate <= 0:
+                raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
+            payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
+            payment.base_received_amount = None
+        else:
+            transfer_rate = Decimal(str(payload.get("exchange_rate") or "1"))
+            if transfer_rate <= 0:
+                raise ValueError(_("La transferencia multimoneda requiere un tipo de cambio positivo."))
+            payment.received_amount = (amount * transfer_rate).quantize(Decimal("0.0001"))
+            payment.base_received_amount = None
 
 
 def _build_payment_from_payload(payload: PaymentPayload) -> tuple[PaymentEntry, Decimal, str]:
@@ -2623,6 +2638,17 @@ def _parse_reference_date(reference_date_raw: str | None) -> date | None:
     if reference_date_raw:
         return date.fromisoformat(reference_date_raw)
     return None
+
+
+def _parse_payment_date(payload: PaymentPayload) -> date:
+    """Resuelve la fecha de contabilización del pago desde el payload o la fecha actual."""
+    raw = str(payload.get("posting_date") or "")
+    if raw:
+        try:
+            return date.fromisoformat(raw)
+        except ValueError:
+            pass
+    return date.today()
 
 
 def _get_payment_currency(bank_account_id: str | None) -> str:

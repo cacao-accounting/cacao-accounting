@@ -2211,3 +2211,63 @@ class TestBankManagementExhaustive:
         journal = create_bank_difference_journal(reconciliation.id, Decimal("10"), transaction_id=bt.id)
         assert journal is not None
         assert journal.entity == "cacao"
+
+
+def test_internal_transfer_cross_currency_uses_system_rate(app_ctx):
+    """La transferencia entre cuentas de distinta moneda convierte con la tasa del sistema.
+
+    Refs: #790. La pata destino de una transferencia interna multimoneda se
+    calculaba con la tasa no validada de la UI (default 1), fabricando una
+    ganancia/perdida cambiaria ficticia entre cuentas propias de la compania.
+    Ahora ``_apply_internal_transfer_amounts`` convierte origen -> destino con
+    ``_lookup_exchange_rate`` cuando las monedas difieren.
+    """
+    from cacao_accounting.bancos.services import _apply_internal_transfer_amounts
+    from cacao_accounting.database import BankAccount, ExchangeRate
+
+    source_usd = (
+        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+    )
+    target_nio = (
+        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
+    )
+    assert source_usd is not None and target_nio is not None
+
+    existing = (
+        database.session.execute(database.select(ExchangeRate).filter_by(origin="USD", destination="NIO", date=date.today()))
+        .scalars()
+        .all()
+    )
+    for rate in existing:
+        rate.rate = Decimal("36.50")
+    if not existing:
+        database.session.add(ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.50"), date=date.today()))
+    database.session.commit()
+
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date.today(),
+        payment_type="internal_transfer",
+        bank_account_id=source_usd.id,
+        target_bank_account_id=target_nio.id,
+        currency="USD",
+        transaction_currency="USD",
+        base_currency="NIO",
+        paid_amount=Decimal("100"),
+        received_amount=Decimal("100"),
+        docstatus=0,
+    )
+    database.session.add(payment)
+    database.session.commit()
+
+    _apply_internal_transfer_amounts(
+        payment,
+        SimpleNamespace(exchange_rate="1", posting_date=date.today().isoformat()),
+        "internal_transfer",
+        Decimal("100"),
+        target_nio,
+    )
+
+    # Origen USD -> Destino NIO: 100 * 36.50 = 3650 en la moneda destino.
+    assert payment.received_amount == Decimal("3650.0000")
+    assert payment.base_received_amount is None
