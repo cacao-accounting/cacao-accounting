@@ -1,5 +1,36 @@
 # Bitácora de desarrollo
 
+## 2026-09-04 (QA de alpha — sales_return no reduce outstanding de factura original, issue #781)
+
+### Hallazgo verificable
+
+Asimetría entre ventas y compras en el manejo de devoluciones. `_persist_sales_reversal_relation()` solo manejaba
+`sales_credit_note` y `sales_debit_note`, excluyendo `sales_return`. El lado de compras (`_persist_purchase_reversal_relation()`)
+sí incluía `purchase_return`. Adicionalmente, `_compute_allocated_notes_amount()` en el join con `DocumentRelation.target_type`
+no incluía `"sales_return"` para ventas, mientras que `"purchase_return"` sí estaba incluido para compras.
+
+### Impacto
+
+Cuando se crea una `sales_return` contra una factura de venta, el `outstanding_amount` de la factura original no se reduce.
+El cliente aparece con un saldo mayor al real, el límite de crédito se evalúa incorrectamente, y los reportes de antigüedad
+de saldos muestran montos incorrectos.
+
+### Corrección propuesta
+
+Se agrega `"sales_return"` en tres code paths:
+1. `_persist_sales_reversal_relation()`: set de tipos válidos para crear `DocumentRelation`
+2. `_compute_allocated_notes_amount()`: join `DocumentRelation.target_type.in_(...)`
+3. `_sum_notes()`: tuple de tipos de crédito que reducen el outstanding
+
+### Verificación
+
+- Linters (ruff, flake8): limpios
+- tests/test_ar_ap_ledger_model.py: 18/18
+- tests/test_ar_ap_allocation.py: 7/7
+- tests/test_o2c_full_cycle.py: 5/5 (incluye test_debit_note_credit_note_and_returns)
+- tests/test_arap_gl_reconciliation.py: 12/12
+- tests/test_payment_reconciliation_arap_adapter.py: 3/3
+
 ## 2026-09-04 (QA de alpha — alcance del destinatario de tareas, issue #782)
 
 ### Hallazgo verificable
