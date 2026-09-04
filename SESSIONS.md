@@ -20,14 +20,20 @@ empíricamente con scripts de verificación aislados y documentación en los iss
 - **#788 (HIGH)**: la ruta UI `caja_chica_gasto_nuevo` liquidaba el vale vía `create_petty_cash_expense`, que nunca
   marcaba `voucher_status="liquidado"` ni `expense_id`. La conciliación doblaba el vale (superávit ficticio) y el vale
   podía liquidarse dos veces. Fix: `create_petty_cash_expense` liquida el vale al recibir `voucher_id`. Commit `512e186c`.
-- **#784 (CRITICAL, fix pendiente)**: cobro en la misma moneda del documento (USD) a una tasa distinta a la de la factura
-  queda bloqueado por el guard estricto: el subledger valora la asignación a la tasa de mercado del día del pago mientras
-  el GL libera el AR por el valor en libros. Rompe el flujo más común de una exportadora. Requiere alinear el subledger
-  con el movimiento de la cuenta de control o reflejar el offset no realizado del engine en el subledger.
-- **#789 / #790 (MEDIUM, fix pendiente)**: reposición de caja chica con `exchange_rate=1` hardcodeado y transferencias
-  internas cross-currency con tasa de usuario sin validación de direccionalidad corrompen libros funcionales multimoneda.
-- **#791 (MEDIUM, fix pendiente)**: los artículos con lote se valoran con la cola FIFO a nivel ítem, no con el costo del
-  lote seleccionado; `StockValuationLayer` carece de `batch_id`.
+- **#784 (CRITICAL)**: cobro en la misma moneda del documento (USD) a una tasa distinta a la de la factura bloqueado por
+  el guard estricto: el subledger valoraba la asignación a la tasa de mercado del día del pago mientras el GL libera el
+  AR por el valor en libros. Fix: valorar la asignación documental del subledger con la tasa vigente a la fecha de
+  registro del documento (`arap_ledger_service._process_payment_reference`). Commit `a740907d`.
+- **#789 (MEDIUM)**: la reposición de caja chica creaba la nota de débito con `exchange_rate=1` hardcodeado. Fix:
+  resolver la tasa vigente `_lookup_exchange_rate` entre banco/caja y la moneda funcional cuando difieren, convirtiendo
+  `base_paid_amount`. Commit `ed2df422`.
+- **#790 (MEDIUM)**: las transferencias internas cross-currency convertían la pata destino con la tasa no validada de la
+  UI (default 1), fabricando ganancia/pérdida cambiaria ficticia entre cuentas propias. Fix:
+  `_apply_internal_transfer_amounts` convierte origen→destino con la tasa del sistema. Commit `714b18b0`.
+- **#791 (MEDIUM)**: los artículos con lote se valoraban con la cola FIFO a nivel ítem o el promedio global, no con el
+  costo del lote seleccionado. Fix: columna `batch_id` en `StockValuationLayer` (suplida idempotentemente en el arranque
+  sin migración formal), persistida en los builders y filtro de la cola por lote con derivación desde el
+  `StockLedgerEntry` para capas históricas/seed. Commit `ce3c6a03`.
 
 ### Pruebas añadidas
 
@@ -35,12 +41,19 @@ empíricamente con scripts de verificación aislados y documentación en los iss
   `test_purchase_invoice_withholding_not_party_tagged`.
 - `tests/test_s2p_full_lifecycle.py`: validación del GL de inventario (−1,000) tras recepción de devolución.
 - `tests/test_petty_cash.py`: `test_gasto_con_vale_liquida_el_vale` (liquidación, conciliación sin doblez y rechazo de
-  doble liquidación).
+  doble liquidación) y `test_reposicion_caja_chica_multimoneda_convierte_al_tipo_de_cambio`.
+- `tests/test_fx_ar_ap_lifecycle.py`: `test_collection_at_different_rate_posts_and_reconciles` (cobro a tasa distinta
+  vía `submit_document`, conciliación estricta).
+- `tests/test_payment_unit.py`: `test_internal_transfer_cross_currency_uses_system_rate`.
+- `tests/test_inventory_batch_valuation.py`: `test_batch_outflow_valued_with_own_batch_cost` (FIFO y promedio móvil).
 
 ### Validación
 
-Verificación focalizada en verde (mapper 9/9, caja chica 45/45, S2P lifecycle, FX lifecycle 16/16 con mapper). Black,
-Ruff, Flake8, Mypy y pydocstyle limpios sobre los archivos modificados.
+Regresión focalizada en verde sobre todos los módulos tocados: engines 20/20, mapper 9/9, FX lifecycle 9/9 (cobro a
+tasa distinta via submit_document), caja chica 46/45+1 (liquidación de vale y reposición multimoneda), S2P lifecycle,
+posting engine 80/80, audit004 28/28, batch/serial 127/127, payment unit (transferencias multicurrency) y cas22 21/21.
+Black, Ruff, Flake8, Mypy y pydocstyle limpios sobre los archivos modificados (los reformateos black y E501
+pre-existentes de algunos archivos de tests no son introducidos por estos cambios).
 
 ## 2026-09-04 (QA de alpha — ACL en APIs de jerarquías, issue #793)
 
