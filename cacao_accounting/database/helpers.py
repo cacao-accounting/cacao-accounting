@@ -637,6 +637,11 @@ def _ensure_stock_valuation_layer_batch_column() -> None:
     creadas para ese lote. ``create_all`` solo crea la tabla para esquemas
     nuevos; para bases existentes esta rutina agrega la columna sin migracion
     formal y de forma idempotente.
+
+    La restriccion de llave foranea sobre ``batch.id`` solo se materializa en
+    esquemas nuevos (via ``create_all``); en bases existentes SQLite no permite
+    agregar una FK con ``ALTER TABLE`` y se suple la columna junto con su indice
+    para mantener la paridad operativa con la reconstruccion de la cola.
     """
     try:
         from sqlalchemy import inspect as sa_inspect
@@ -648,11 +653,12 @@ def _ensure_stock_valuation_layer_batch_column() -> None:
         current = {column["name"] for column in sa_inspect(database.engine).get_columns(StockValuationLayer.__tablename__)}
         if "batch_id" in current:
             return
+        database.session.execute(database.text("ALTER TABLE stock_valuation_layer ADD COLUMN batch_id VARCHAR(26)"))
         database.session.execute(
-            database.text("ALTER TABLE stock_valuation_layer ADD COLUMN batch_id VARCHAR(26)")
+            database.text("CREATE INDEX IF NOT EXISTS ix_stock_valuation_layer_batch_id ON stock_valuation_layer (batch_id)")
         )
         database.session.commit()
-        log.info("Columna batch_id agregada a stock_valuation_layer.")
+        log.info("Columna batch_id e indice agregados a stock_valuation_layer.")
     except (OperationalError, ProgrammingError, InterfaceError):
         database.session.rollback()
         pass
