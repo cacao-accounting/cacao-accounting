@@ -335,19 +335,22 @@ def petty_cash_accounts(company: str) -> list[PettyCashAccount]:
     )
 
 
-def petty_cash_ledger_balance(petty_cash: PettyCashAccount) -> Decimal:
-    """Devuelve el saldo contable de una caja chica derivado del GL.
+def petty_cash_ledger_balance(petty_cash: PettyCashAccount, as_of_date: date | None = None) -> Decimal:
+    """Devuelve el saldo contable de una caja chica derivado del GL a una fecha.
 
     El saldo no se almacena; se calcula como ``SUM(debit - credit)`` sobre la
-    cuenta contable asociada (patron de partida doble).
+    cuenta contable asociada (patron de partida doble). Cuando se indica una
+    fecha de corte, excluye movimientos posteriores para conservar la
+    consistencia histórica de conciliaciones y reportes.
     """
     if not petty_cash.account_id:
         return Decimal("0")
-    result = database.session.execute(
-        database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).filter_by(
-            account_id=petty_cash.account_id, company=petty_cash.company
-        )
-    ).scalar()
+    query = database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).filter_by(
+        account_id=petty_cash.account_id, company=petty_cash.company
+    )
+    if as_of_date is not None:
+        query = query.filter(GLEntry.posting_date <= as_of_date)
+    result = database.session.execute(query).scalar()
     return Decimal(str(result or 0))
 
 
@@ -966,7 +969,7 @@ def create_petty_cash_reconciliation(
     ).scalar_one_or_none()
     if duplicate:
         raise ValueError("Ya existe una conciliacion para esa caja y fecha.")
-    ledger_balance = petty_cash_ledger_balance(fund)
+    ledger_balance = petty_cash_ledger_balance(fund, as_of_date=reconciliation_date)
     open_vouchers = petty_cash_open_vouchers_total(fund, reconciliation_date)
     pending_expenses = petty_cash_pending_replenishment_total(fund, reconciliation_date)
     expected_cash = ledger_balance - open_vouchers

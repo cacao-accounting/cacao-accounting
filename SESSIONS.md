@@ -1,5 +1,23 @@
 # Bitácora de desarrollo
 
+## 2026-09-04 (QA de alpha — conciliación histórica de Caja Chica, issue #778)
+
+### Hallazgo verificable
+
+La conciliación de Caja Chica calculaba el saldo GL de la cuenta sin un corte de fecha. Por tanto, al conciliar un día
+histórico, incluía asientos con fecha posterior y podía mostrar un efectivo esperado y una diferencia incorrectos.
+
+### Corrección propuesta
+
+`petty_cash_ledger_balance` acepta ahora un corte opcional `as_of_date`; `create_petty_cash_reconciliation` le entrega
+su `reconciliation_date`. Las consultas de saldo operativo actuales continúan sin corte y conservan su comportamiento.
+
+### Prueba de regresión
+
+Se extendió la prueba de conciliación con una entrada GL posterior a la fecha de conciliación: el saldo histórico debe
+ser C$800, no C$900. La prueba focalizada pasa. El issue #778 fue creado y etiquetado `fix-proposed`; el comentario
+con el commit se añadirá después de crearlo.
+
 ## 2026-08-31 (refactor S3776 — `_document_carrying_value_in_ledger` cx=21)
 
 ### Hallazgo SonarCloud
