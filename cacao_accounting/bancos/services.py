@@ -884,6 +884,9 @@ def create_petty_cash_expense(
         )
     except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
         pass
+    if voucher_id:
+        voucher.voucher_status = "liquidado"
+        voucher.expense_id = expense.id
     database.session.commit()
     return expense
 

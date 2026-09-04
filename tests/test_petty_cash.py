@@ -846,6 +846,88 @@ def test_liquidar_vale_en_gasto(app_ctx_book):
     assert vale.expense_id == gasto.id
 
 
+def test_gasto_con_vale_liquida_el_vale(app_ctx_book):
+    """Un gasto creado con voucher_id (flujo UI) debe liquidar el vale.
+
+    Refs: #788. La ruta ``caja_chica_gasto_nuevo`` crea el gasto con
+    ``create_petty_cash_expense`` pasando ``voucher_id``; sin la liquidacion,
+    el vale seguia contado como abierto (doblez en la conciliacion) y podia
+    liquidarse dos veces.
+    """
+    from cacao_accounting.bancos.services import (
+        create_petty_cash_expense,
+        create_petty_cash_reconciliation,
+        create_petty_cash_voucher,
+        petty_cash_open_vouchers_total,
+        set_petty_cash_voucher_status,
+    )
+    from cacao_accounting.database import GLEntry, database
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 2, 1),
+            company="cacao",
+            account_id=fondo.account_id,
+            debit=Decimal("1000.0000"),
+            credit=Decimal("0"),
+            voucher_type="journal_entry",
+            voucher_id="SEED-GLV",
+        )
+    )
+    database.session.commit()
+
+    vale = create_petty_cash_voucher(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        posted_date=date(2026, 2, 1),
+        delivered_to="Ana",
+        concept="Suministros",
+        amount=Decimal("100.0000"),
+    )
+    set_petty_cash_voucher_status(vale, "entregado")
+
+    create_petty_cash_expense(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_account_code="EXP-001",
+        concept="Suministros",
+        amount=Decimal("100.0000"),
+        cost_center_code="MAIN",
+        posted_date=date(2026, 2, 2),
+        voucher_id=vale.id,
+        actor_id="user-1",
+    )
+
+    dangling_vale = database.session.get(type(vale), vale.id)
+    assert dangling_vale.voucher_status == "liquidado"
+    assert dangling_vale.expense_id is not None
+    assert petty_cash_open_vouchers_total(fondo) == Decimal("0.0000")
+
+    reconciliacion = create_petty_cash_reconciliation(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        reconciliation_date=date(2026, 2, 10),
+        counted_cash=Decimal("900.0000"),
+    )
+    assert reconciliacion.expected_cash == Decimal("900.0000")
+    assert reconciliacion.difference == Decimal("0.0000")
+
+    with pytest.raises(ValueError):
+        create_petty_cash_expense(
+            company="cacao",
+            petty_cash_id=fondo.id,
+            expense_account_code="EXP-001",
+            concept="Duplicado",
+            amount=Decimal("100.0000"),
+            cost_center_code="MAIN",
+            posted_date=date(2026, 2, 3),
+            voucher_id=vale.id,
+            actor_id="user-1",
+        )
+
+
 # -------------------------------------------------------------------------------------
 # Rutas de vales y gastos
 # -------------------------------------------------------------------------------------
