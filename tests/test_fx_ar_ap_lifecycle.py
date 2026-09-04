@@ -639,3 +639,105 @@ def test_partial_settlement_after_closing_keeps_matrix_balanced(app_ctx, chart):
     database.session.refresh(invoice)
     assert invoice.base_outstanding_amount == Decimal("2190.00")
     assert _net(chart["ar"], "NIO") == invoice.base_outstanding_amount + Decimal("18.0000")
+
+
+def test_collection_at_different_rate_posts_and_reconciles(app_ctx, chart):
+    """Un cobro a una tasa distinta de la factura no debe ser bloqueado.
+
+    Refs: #784. El engine libera la cuenta de control por el valor en libros
+    del documento (tasa de registro), pero el subledger valoraba la asignacion
+    a la tasa de mercado del dia del pago. En un cobro total a tasa distinta
+    (100 USD @37.00 contra factura 100 USD @36.50) el subledger quedaba en
+    -50.00 frente a un GL en 0.00, y el guard estricto bloqueaba el cobro.
+    """
+    from cacao_accounting.contabilidad.posting_service import submit_document
+    from cacao_accounting.database import PaymentEntry, PaymentReference, SalesInvoice, SalesInvoiceItem, database
+
+    invoice = SalesInvoice(
+        company=COMPANY,
+        posting_date=date(2026, 5, 1),
+        customer_id=CUSTOMER,
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=RATE_INVOICE_NIO,
+        docstatus=0,
+        total=Decimal("100"),
+        grand_total=Decimal("100"),
+        base_total=Decimal("3650"),
+        base_grand_total=Decimal("3650"),
+        outstanding_amount=Decimal("100"),
+        base_outstanding_amount=Decimal("3650"),
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    database.session.add(
+        SalesInvoiceItem(
+            sales_invoice_id=invoice.id,
+            item_code="SVC-FX",
+            qty=Decimal("1"),
+            rate=Decimal("100"),
+            amount=Decimal("100"),
+            base_amount=Decimal("3650"),
+        )
+    )
+    database.session.commit()
+    submit_document(invoice)
+    database.session.commit()
+
+    payment = PaymentEntry(
+        company=COMPANY,
+        posting_date=date(2026, 5, 15),
+        payment_type="receive",
+        party_type="customer",
+        party_id=CUSTOMER,
+        transaction_currency="USD",
+        base_currency="NIO",
+        currency="USD",
+        exchange_rate=RATE_PAY2_NIO,
+        received_amount=Decimal("100"),
+        base_received_amount=Decimal("3800"),
+        paid_amount=Decimal("0"),
+        base_paid_amount=Decimal("0"),
+        docstatus=0,
+    )
+    database.session.add(payment)
+    database.session.flush()
+    database.session.add(
+        PaymentReference(
+            payment_id=payment.id,
+            reference_type="sales_invoice",
+            flow_source_type="sales_invoice",
+            reference_id=invoice.id,
+            reference_document_no=str(invoice.id),
+            party_type="customer",
+            party_id=CUSTOMER,
+            company=COMPANY,
+            currency="USD",
+            total_amount=Decimal("100"),
+            outstanding_amount=Decimal("0"),
+            allocated_amount=Decimal("100"),
+            payment_amount=Decimal("100"),
+            payment_currency="USD",
+            payment_exchange_rate=Decimal("1"),
+            allocation_date=date(2026, 5, 15),
+            base_allocated_amount=Decimal("3650"),
+            base_payment_amount=Decimal("3800"),
+            fx_difference_amount=Decimal("150"),
+        )
+    )
+    database.session.commit()
+
+    submit_document(payment)
+    database.session.commit()
+
+    assert payment.docstatus == 1
+    assert _net(chart["ar"], "NIO") == Decimal("0.0000")
+    assert _net(chart["ar"], "EUR") == Decimal("0.0000")
+
+    # La diferencia de tasa se reconoce como diferencia cambiaria realizada,
+    # no corrompe la cuenta de control del tercero.
+    from cacao_accounting.contabilidad.arap_gl_reconciliation import reconcile_arap_to_gl
+
+    result = reconcile_arap_to_gl(company=COMPANY, as_of_date=date(2026, 5, 16), party_type="customer", party_id=CUSTOMER)
+    assert all(abs(line.difference) < Decimal("0.01") for line in result.lines)
+    assert _credit_balance(chart["gain"], "NIO") > Decimal("0")
