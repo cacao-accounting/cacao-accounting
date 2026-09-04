@@ -323,7 +323,7 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
             .join(
                 SalesInvoice,
                 (DocumentRelation.target_id == SalesInvoice.id)
-                & DocumentRelation.target_type.in_(("sales_invoice", "sales_credit_note", "sales_debit_note")),
+                & DocumentRelation.target_type.in_(("sales_invoice", "sales_credit_note", "sales_debit_note", "sales_return")),
             )
             .where(
                 DocumentRelation.source_type == document_type,
@@ -358,7 +358,7 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
 
         return decimal_or_zero(res) + decimal_or_zero(res_p)
 
-    res_credit = _sum_notes(("sales_credit_note", "purchase_credit_note", "purchase_return"))
+    res_credit = _sum_notes(("sales_credit_note", "sales_return", "purchase_credit_note", "purchase_return"))
     res_debit = _sum_notes(("sales_debit_note", "purchase_debit_note"))
 
     return res_credit - res_debit
