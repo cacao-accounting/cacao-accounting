@@ -695,6 +695,22 @@ def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str) ->
     allowed = _PETTY_CASH_VOUCHER_STATUS_FLOW.get(current, set())
     if new_status not in allowed:
         raise ValueError(f"Transicion de estado no valida: {current} -> {new_status}")
+    if new_status == "liquidado":
+        expense = database.session.get(PettyCashExpense, voucher.expense_id) if voucher.expense_id else None
+        if expense is None or expense.voucher_id != voucher.id or expense.docstatus != 1 or not expense.journal_id:
+            raise ValueError("Un vale solo puede liquidarse mediante un gasto contabilizado.")
+        journal = database.session.get(ComprobanteContable, expense.journal_id)
+        has_active_gl = database.session.execute(
+            database.select(GLEntry.id)
+            .where(
+                GLEntry.voucher_type == "journal_entry",
+                GLEntry.voucher_id == expense.journal_id,
+                GLEntry.is_cancelled.is_(False),
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if journal is None or journal.status != "submitted" or not has_active_gl:
+            raise ValueError("Un vale solo puede liquidarse mediante un gasto con asiento GL activo.")
     voucher.voucher_status = new_status
     if new_status == "cancelado":
         voucher.docstatus = 2
