@@ -1426,6 +1426,91 @@ def test_rutas_conciliacion_web(app_ctx_full):
     assert resp.status_code == 200
 
 
+def test_editar_conciliacion_web_recalcula_campos_derivados(app_ctx_full):
+    """La ruta web de edición debe invocar el servicio de recomputación."""
+    from cacao_accounting.bancos.services import create_petty_cash_reconciliation
+    from cacao_accounting.database import database
+
+    fondo = _crear_fondo_caja()
+    recon = create_petty_cash_reconciliation(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        reconciliation_date=date(2026, 2, 3),
+        counted_cash=Decimal("780.0000"),
+    )
+    client = app_ctx_full.test_client()
+    _login(client)
+    response = client.get(f"/cash_management/petty-cash-reconciliation/{recon.id}/edit")
+    assert response.status_code == 200
+    response = client.post(
+        f"/cash_management/petty-cash-reconciliation/{recon.id}/edit",
+        data={
+            "reconciliation_date": "2026-02-10",
+            "counted_cash": "760.0000",
+            "explanation": "Recontado desde web",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    database.session.expire_all()
+    updated = database.session.get(type(recon), recon.id)
+    assert updated.reconciliation_date == date(2026, 2, 10)
+    assert updated.posting_date == date(2026, 2, 10)
+    assert updated.counted_cash == Decimal("760.0000")
+    assert updated.explanation == "Recontado desde web"
+    assert updated.ledger_balance == Decimal("0.0000")
+    assert updated.open_vouchers == Decimal("0.0000")
+    assert updated.expected_cash == Decimal("0.0000")
+    assert updated.explained_amount == Decimal("760.0000")
+    assert updated.difference == Decimal("760.0000")
+
+
+def test_editar_conciliacion_web_rechaza_entradas_invalidas_y_estado_cerrado(app_ctx_full):
+    """La ruta de edición valida importes, fechas, duplicados y estado."""
+    from cacao_accounting.bancos.services import create_petty_cash_reconciliation, reconcile_petty_cash
+    from cacao_accounting.database import database
+
+    fondo = _crear_fondo_caja()
+    recon = create_petty_cash_reconciliation(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        reconciliation_date=date(2026, 2, 3),
+        counted_cash=Decimal("100.0000"),
+    )
+    duplicate_date = create_petty_cash_reconciliation(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        reconciliation_date=date(2026, 2, 10),
+        counted_cash=Decimal("50.0000"),
+    )
+    client = app_ctx_full.test_client()
+    _login(client)
+
+    for data in (
+        {"reconciliation_date": "2026-02-03", "counted_cash": "no-es-numero"},
+        {"reconciliation_date": "2026-02-03", "counted_cash": "-1"},
+        {"reconciliation_date": "fecha-invalida", "counted_cash": "20"},
+        {"reconciliation_date": duplicate_date.reconciliation_date.isoformat(), "counted_cash": "20"},
+    ):
+        response = client.post(
+            f"/cash_management/petty-cash-reconciliation/{recon.id}/edit",
+            data=data,
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+    database.session.expire_all()
+    unchanged = database.session.get(type(recon), recon.id)
+    assert unchanged.reconciliation_date == date(2026, 2, 3)
+    assert unchanged.counted_cash == Decimal("100.0000")
+
+    unchanged.explanation = "Validada"
+    database.session.commit()
+    reconcile_petty_cash(unchanged, actor_id="user-1")
+    response = client.get(f"/cash_management/petty-cash-reconciliation/{recon.id}/edit")
+    assert response.status_code == 400
+
+
 def test_rutas_reposicion_web(app_ctx_full):
     client = app_ctx_full.test_client()
     _login(client)
