@@ -30,6 +30,7 @@
         <th scope="col">{{ _('Entregado a') }}</th>
         <th scope="col">{{ _('Concepto') }}</th>
         <th scope="col">{{ _('Importe') }}</th>
+        <th scope="col">{{ _('Moneda') }}</th>
         <th scope="col">{{ _('Estado') }}</th>
         <th scope="col">{{ _('Acciones') }}</th>
       </tr>
@@ -42,6 +43,7 @@
         <td>{{ item.delivered_to or '-' }}</td>
         <td>{{ item.concept }}</td>
         <td>{{ item.amount }}</td>
+        <td>{{ item.transaction_currency or '-' }}</td>
         <td>
           {% if item.voucher_status == 'entregado' %}
           <span class="badge text-bg-primary">{{ _('Entregado') }}</span>
@@ -55,6 +57,7 @@
         </td>
         <td class="d-flex gap-1 flex-wrap">
           {% if item.voucher_status == 'borrador' %}
+          <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('bancos.caja_chica_vale_editar', v_id=item.id) }}">{{ _('Editar') }}</a>
           <form method="post" action="{{ url_for('bancos.caja_chica_vale_estado', v_id=item.id) }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="status" value="entregado">
@@ -74,7 +77,7 @@
       </tr>
       {%- else %}
       <tr>
-        <td colspan="7" class="text-center text-muted">{{ _('No hay vales de caja chica registrados.') }}</td>
+        <td colspan="8" class="text-center text-muted">{{ _('No hay vales de caja chica registrados.') }}</td>
       </tr>
       {%- endfor %}
     </tbody>

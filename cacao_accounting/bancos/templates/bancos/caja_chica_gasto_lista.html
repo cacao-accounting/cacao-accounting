@@ -31,6 +31,7 @@
         <th scope="col">{{ _('Concepto') }}</th>
         <th scope="col">{{ _('Cuenta') }}</th>
         <th scope="col">{{ _('Importe') }}</th>
+        <th scope="col">{{ _('Moneda') }}</th>
         <th scope="col">{{ _('Estado') }}</th>
         <th scope="col">{{ _('Acciones') }}</th>
       </tr>
@@ -44,6 +45,7 @@
         <td>{{ item.concept }}</td>
         <td>{{ item.expense_account_code or '-' }}</td>
         <td>{{ item.amount }}</td>
+        <td>{{ item.transaction_currency or '-' }}</td>
         <td>
           {% if item.docstatus == 1 %}
           <span class="badge text-bg-success">{{ _('Posteado') }}</span>
@@ -65,7 +67,7 @@
       </tr>
       {%- else %}
       <tr>
-        <td colspan="8" class="text-center text-muted">{{ _('No hay gastos de caja chica registrados.') }}</td>
+        <td colspan="9" class="text-center text-muted">{{ _('No hay gastos de caja chica registrados.') }}</td>
       </tr>
       {%- endfor %}
     </tbody>

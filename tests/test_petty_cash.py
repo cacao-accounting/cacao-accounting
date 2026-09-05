@@ -1270,3 +1270,187 @@ def test_reposicion_caja_chica_multimoneda_convierte_al_tipo_de_cambio(app_ctx_b
     assert nota_debito.exchange_rate == Decimal("36.500000000")
     assert nota_debito.paid_amount == Decimal("100.0000")
     assert nota_debito.base_paid_amount == Decimal("3650.0000")
+
+
+# --------------------------------------------------------------------------------------------- #
+# Naming series, moneda del fondo y CRUD (editar borrador / anular mismo periodo)
+# --------------------------------------------------------------------------------------------- #
+def test_vale_asigna_naming_series_y_moneda(app_ctx):
+    """El vale obtiene document_no (naming series) y la moneda del fondo."""
+    from cacao_accounting.bancos.services import create_petty_cash_voucher
+
+    fondo = _crear_fondo_caja()
+    vale = create_petty_cash_voucher(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        posted_date=date(2026, 2, 1),
+        delivered_to="Juan",
+        concept="Anticipo de viaticos",
+        amount=Decimal("50.0000"),
+    )
+    assert vale.document_no
+    assert vale.naming_series_id
+    assert vale.transaction_currency == "NIO"
+
+
+def test_vale_respeta_serie_explicita(app_ctx):
+    """Se respeta la naming series explicitamente seleccionada."""
+    from cacao_accounting.bancos.services import create_petty_cash_voucher
+    from cacao_accounting.document_identifiers import _create_default_series
+
+    fondo = _crear_fondo_caja()
+    serie = _create_default_series("petty_cash_voucher", "cacao")
+    vale = create_petty_cash_voucher(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        posted_date=date(2026, 2, 1),
+        delivered_to="Juan",
+        concept="Anticipo",
+        amount=Decimal("50.0000"),
+        naming_series_id=serie.id,
+    )
+    assert vale.naming_series_id == serie.id
+    assert vale.document_no.startswith(serie.prefix_template.replace("*COMP*-", "cacao-").replace("*YYYY*-", "2026-").replace("*MM*-", "02-"))
+
+
+def test_gasto_asigna_naming_series_y_moneda(app_ctx_book):
+    """El gasto obtiene document_no y la moneda del fondo."""
+    from cacao_accounting.bancos.services import create_petty_cash_expense
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+    gasto = create_petty_cash_expense(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_account_code="EXP-001",
+        concept="Compra de suministros",
+        amount=Decimal("40.0000"),
+        cost_center_code="MAIN",
+        beneficiary="Proveedor X",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+    assert gasto.document_no
+    assert gasto.naming_series_id
+    assert gasto.transaction_currency == "NIO"
+
+
+def test_conciliacion_y_reposicion_asignan_naming_series_y_moneda(app_ctx_book):
+    """Conciliacion y reposicion obtienen document_no y la moneda del fondo."""
+    from cacao_accounting.bancos.services import (
+        create_petty_cash_expense,
+        create_petty_cash_reconciliation,
+        create_petty_cash_replenishment,
+    )
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+    gasto = create_petty_cash_expense(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_account_code="EXP-001",
+        concept="Compra de suministros",
+        amount=Decimal("40.0000"),
+        cost_center_code="MAIN",
+        beneficiary="Proveedor X",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+    recon = create_petty_cash_reconciliation(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        reconciliation_date=date(2026, 2, 28),
+        counted_cash=Decimal("460.0000"),
+    )
+    assert recon.document_no
+    assert recon.naming_series_id
+    assert recon.transaction_currency == "NIO"
+
+    repo = create_petty_cash_replenishment(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_ids=[gasto.id],
+        request_date=date(2026, 2, 28),
+        actor_id="user-1",
+    )
+    assert repo.document_no
+    assert repo.naming_series_id
+    assert repo.transaction_currency == "NIO"
+
+
+def test_editar_vale_borrador(app_ctx):
+    """Se puede editar un vale en borrador (CRUD: editar borrador)."""
+    from cacao_accounting.bancos.services import create_petty_cash_voucher, update_petty_cash_voucher
+
+    fondo = _crear_fondo_caja()
+    vale = create_petty_cash_voucher(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        posted_date=date(2026, 2, 1),
+        delivered_to="Juan",
+        concept="Anticipo",
+        amount=Decimal("50.0000"),
+    )
+    actualizado = update_petty_cash_voucher(
+        vale,
+        concept="Anticipo corregido",
+        amount=Decimal("60.0000"),
+        delivered_to="Maria",
+    )
+    assert actualizado.concept == "Anticipo corregido"
+    assert actualizado.amount == Decimal("60.0000")
+    assert actualizado.delivered_to == "Maria"
+
+
+def test_no_se_puede_editar_vale_no_borrador(app_ctx):
+    """Un vale entregado o liquidado no se puede editar."""
+    from cacao_accounting.bancos.services import create_petty_cash_voucher, set_petty_cash_voucher_status, update_petty_cash_voucher
+
+    fondo = _crear_fondo_caja()
+    vale = create_petty_cash_voucher(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        posted_date=date(2026, 2, 1),
+        delivered_to="Juan",
+        concept="Anticipo",
+        amount=Decimal("50.0000"),
+    )
+    set_petty_cash_voucher_status(vale, "entregado")
+    with pytest.raises(ValueError):
+        update_petty_cash_voucher(vale, concept="X", amount=Decimal("60.0000"))
+
+
+def test_anular_gasto_distinto_periodo_falla(app_ctx_book):
+    """La anulacion de un gasto solo se permite en el mismo periodo contable."""
+    from cacao_accounting.bancos.services import cancel_petty_cash_expense, create_petty_cash_expense
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+    gasto = create_petty_cash_expense(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_account_code="EXP-001",
+        concept="Compra de suministros",
+        amount=Decimal("40.0000"),
+        cost_center_code="MAIN",
+        beneficiary="Proveedor X",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+    # El periodo contable de la fixture es Ene-Dic 2026; anular en 2027 es otro periodo.
+    with pytest.raises(ValueError):
+        cancel_petty_cash_expense(gasto, cancellation_date=date(2027, 1, 15))
+
+
+def test_search_select_registra_petty_cash_y_user(app_ctx):
+    """Los doctypes petty_cash y user estan registrados en search_select."""
+    from cacao_accounting.search_select import SEARCH_SELECT_REGISTRY
+
+    assert "petty_cash" in SEARCH_SELECT_REGISTRY
+    assert "user" in SEARCH_SELECT_REGISTRY
+    from cacao_accounting.search_select import search_select
+
+    fondo = _crear_fondo_caja()
+    resultado = search_select(doctype="petty_cash", query="Caja", filters={"company": ["cacao"]})
+    assert resultado["results"]
+    assert any(str(r["value"]) == str(fondo.id) for r in resultado["results"])

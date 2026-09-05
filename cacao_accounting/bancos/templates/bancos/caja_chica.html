@@ -43,7 +43,7 @@
       <div class="ca-kv-item"><label>{{ _('Compañía') }}</label><p>{{ registro.company or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Cuenta contable') }}</label><p>{{ cuenta.code ~ ' - ' ~ cuenta.name if cuenta else '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Moneda') }}</label><p>{{ registro.currency or '-' }}</p></div>
-      <div class="ca-kv-item"><label>{{ _('Responsable') }}</label><p>{{ responsable.name if responsable else '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Responsable') }}</label><p>{{ (responsable.name or responsable.user) if responsable else '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Fondo autorizado') }}</label><p>{{ registro.float_amount }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Saldo contable') }}</label><p>{{ saldo }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Efectivo esperado') }}</label><p>{{ saldo - vales_abiertos }}</p></div>

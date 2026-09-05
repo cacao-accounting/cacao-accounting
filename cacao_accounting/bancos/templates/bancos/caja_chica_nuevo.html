@@ -117,12 +117,33 @@
     </div>
     <div class="col-md-6">
       <label class="form-label" for="custodian_id">{{ _('Responsable') }}</label>
-      <select class="form-select form-select-sm" name="custodian_id" id="custodian_id">
-        <option value="">— {{ _('Seleccione') }} —</option>
-        {% for value, label in usuarios %}
-        <option value="{{ value }}" {% if registro and registro.custodian_id == value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
+      <div class="ca-smart-select" x-data='smartSelect({
+        doctype: "user",
+        name: "custodian_id",
+        minChars: 1,
+        preload: true,
+        initialValue: "{{ registro.custodian_id if registro else form.custodian_id.data or '' }}",
+        initialLabel: "",
+        messages: {
+          placeholder: {{ _('Buscar responsable')|tojson }},
+          loading: {{ _('Cargando...')|tojson }},
+          noResults: {{ _('Sin resultados')|tojson }},
+          minChars: {{ _('Escriba para buscar')|tojson }},
+          clear: {{ _('Limpiar')|tojson }},
+          invalid: {{ _('Seleccione una opción válida')|tojson }},
+          error: {{ _('No se pudieron cargar las opciones')|tojson }}
+        }
+      })'>
+        <input type="hidden" name="custodian_id" x-model="selectedValue" value="{{ registro.custodian_id if registro else form.custodian_id.data or '' }}">
+        <input class="form-control form-control-sm ca-smart-select-input" id="custodian_id" type="text" x-model="search" @input="onInput" @focus="onFocus" @blur="closeSoon" :placeholder="messages.placeholder">
+        <div class="ca-smart-select-menu" x-show="open" x-cloak>
+          <template x-for="option in options" :key="option.value">
+            <button class="ca-smart-select-option" type="button" @mousedown.prevent="selectOption(option)"><span x-text="option.display_name"></span></button>
+          </template>
+          <div class="ca-smart-select-state" x-show="!loading && !error && search.trim().length >= minChars && options.length === 0" x-text="messages.noResults"></div>
+          <div class="ca-smart-select-state text-danger" x-show="error" x-text="error"></div>
+        </div>
+      </div>
     </div>
     <div class="col-md-6">
       <label class="form-label" for="float_amount">{{ _('Fondo autorizado') }}</label>
