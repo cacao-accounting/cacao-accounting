@@ -5,7 +5,7 @@
 
 import csv
 import io
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List
 
@@ -19,7 +19,19 @@ class ExchangeRateImportError(Exception):
 
 
 _EXPECTED_HEADERS = {"Moneda Base", "Moneda Destino", "Fecha", "Tipo de Cambio"}
-_DATE_FORMATS = ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d")
+_DATE_FORMATS = (
+    "%Y-%m-%d",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%d-%m-%Y",
+    "%d-%m-%Y %H:%M:%S",
+    "%d-%m-%Y %H:%M",
+    "%d/%m/%Y",
+    "%d/%m/%Y %H:%M:%S",
+    "%d/%m/%Y %H:%M",
+    "%m/%d/%Y",
+    "%m/%d/%Y %H:%M:%S",
+)
 
 
 class ExchangeRateImportService:
@@ -142,7 +154,15 @@ class ExchangeRateImportService:
 
     @staticmethod
     def _parse_date(raw: str) -> Any:
-        """Intenta parsear una fecha con varios formatos conocidos."""
+        """Intenta parsear una fecha con varios formatos conocidos.
+
+        Maneja strings y objetos date/datetime (openpyxl puede devolver
+        celdas de fecha como objetos datetime directamente).
+        """
+        if isinstance(raw, datetime):
+            return raw.date()
+        if isinstance(raw, date):
+            return raw
         for fmt in _DATE_FORMATS:
             try:
                 return datetime.strptime(raw, fmt).date()
@@ -199,8 +219,12 @@ class ExchangeRateImportService:
             rows.append(row_values)
         return self._matrix_to_dicts(rows)
 
-    def _matrix_to_dicts(self, values_iter) -> List[Dict[str, str]]:
-        """Convierte una matriz (primera fila = encabezados) a lista de diccionarios."""
+    def _matrix_to_dicts(self, values_iter) -> List[Dict[str, Any]]:
+        """Convierte una matriz (primera fila = encabezados) a lista de diccionarios.
+
+        Preserva objetos date/datetime para que el parser de fechas los maneje
+        directamente en lugar de convertirlos a string.
+        """
         rows = list(values_iter)
         if not rows:
             return []
@@ -209,10 +233,13 @@ class ExchangeRateImportService:
         for row in rows[1:]:
             if not self._row_has_content_raw(row):
                 continue
-            row_dict: Dict[str, str] = {}
+            row_dict: Dict[str, Any] = {}
             for i, header in enumerate(headers):
                 val = row[i] if i < len(row) and row[i] is not None else ""
-                row_dict[header] = str(val).strip()
+                if isinstance(val, (date, datetime)):
+                    row_dict[header] = val
+                else:
+                    row_dict[header] = str(val).strip()
             result.append(row_dict)
         return result
 
