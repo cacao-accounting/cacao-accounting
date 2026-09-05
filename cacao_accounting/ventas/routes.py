@@ -2331,7 +2331,7 @@ def ventas_factura_venta_submit(invoice_id: str):
             registro,
             items=items,
             require_party=True,
-            require_warehouse=bool(registro.update_inventory),
+            require_warehouse=bool(registro.update_inventory) and registro.document_type != "sales_debit_note",
             require_rate_positive=True,
             require_amount_nonzero=True,
         )
@@ -2368,7 +2368,12 @@ def ventas_factura_venta_submit(invoice_id: str):
 
         submit_document(registro)  # type: ignore[misc]
         _persist_sales_reversal_relation(registro)
-        if registro.update_inventory and not registro.is_return and not registro.delivery_note_id:
+        if (
+            registro.update_inventory
+            and registro.document_type != "sales_debit_note"
+            and not registro.is_return
+            and not registro.delivery_note_id
+        ):
             dn = _create_delivery_note_from_invoice(registro)
             flash(
                 _("Se ha creado y aprobado la Nota de Entrega %s asociada a esta factura.") % (dn.document_no or dn.id),

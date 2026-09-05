@@ -355,6 +355,58 @@ def test_submit_without_update_inventory_does_not_create_dn(app_ctx):
     assert invoice.delivery_note_id is None
 
 
+def test_sales_debit_note_never_creates_delivery_note_from_update_inventory_flag(app_ctx):
+    """A financial debit note must not create stock evidence even if the flag is tampered on."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+
+    warehouse, item, _cogs_account, _inventory_account = _setup_inventory_context()
+    _ensure_default_warehouse(item, warehouse)
+    _seed_valuation_layer(item, warehouse)
+    customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+
+    invoice = SalesInvoice(
+        id="SI-DEBIT-NO-STOCK",
+        customer_id=customer.id,
+        customer_name=customer.name,
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        document_type="sales_debit_note",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        update_inventory=True,
+        docstatus=0,
+        grand_total=Decimal("500"),
+    )
+    invoice_item = SalesInvoiceItem(
+        sales_invoice_id=invoice.id,
+        item_code=item.code,
+        item_name=item.name,
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("50"),
+        amount=Decimal("500"),
+        warehouse=warehouse.code,
+    )
+    database.session.add_all([invoice, invoice_item])
+    database.session.commit()
+
+    response = client.post(f"/sales/sales-invoice/{invoice.id}/submit", follow_redirects=True)
+    assert response.status_code == 200
+
+    database.session.refresh(invoice)
+    assert invoice.docstatus == 1
+    assert invoice.delivery_note_id is None
+    assert (
+        database.session.execute(
+            database.select(StockLedgerEntry).filter_by(voucher_type="delivery_note", voucher_id=invoice.id)
+        )
+        .scalars()
+        .all()
+        == []
+    )
+
+
 def test_cancel_with_update_inventory_cancels_linked_dn(app_ctx):
     """Cancelar factura con update_inventory=True cancela la DN vinculada."""
     client = app_ctx.test_client()
