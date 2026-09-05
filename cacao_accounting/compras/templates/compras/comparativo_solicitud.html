@@ -5,17 +5,17 @@ macros %}
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"
-        ><i class="bi bi-house"></i> Inicio</a
+        ><i class="bi bi-house"></i> {{ _("Inicio") }}</a
       >
     </li>
     <li class="breadcrumb-item">
-      <a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a>
+      <a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a>
     </li>
     <li class="breadcrumb-item">
       <a
         href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}"
         class="link-dark"
-        >Comparativo de Ofertas</a
+        >{{ _("Comparativo de Ofertas") }}</a
       >
     </li>
     <li class="breadcrumb-item active" aria-current="page">
@@ -30,10 +30,10 @@ macros %}
   >
     <div>
       <h5 class="ca-card-title">
-        <i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas
+        <i class="bi bi-bar-chart-line"></i> {{ _("Comparativo de Ofertas") }}
       </h5>
       <p class="mb-0 text-muted">
-        Solicitud de Compra:
+        {{ _("Solicitud de Compra:") }}
         <a
           href="{{ url_for('compras.compras_solicitud_compra', request_id=purchase_request.id) }}"
         >
@@ -41,15 +41,15 @@ macros %}
             >{{ purchase_request.document_no or purchase_request.id }}</strong
           >
         </a>
-        · Cotizaciones participantes: {{ offers|length }}
+        · {{ _("Cotizaciones participantes: %(count)s", count=offers|length) }}
       </p>
     </div>
     <span
       class="badge text-bg-{% if comparison.status == 'used' %}dark{% elif comparison.status == 'finalized' %}success{% elif comparison.status == 'pending_authorization' %}warning{% else %}secondary{% endif %}"
     >
-      {% if comparison.status == 'used' %}Utilizado{% elif comparison.status ==
-      'finalized' %}Finalizado{% elif comparison.status ==
-      'pending_authorization' %}Pendiente de autorización{% else %}Borrador{%
+      {% if comparison.status == 'used' %}{{ _("Utilizado") }}{% elif comparison.status ==
+      'finalized' %}{{ _("Finalizado") }}{% elif comparison.status ==
+      'pending_authorization' %}{{ _("Pendiente de autorización") }}{% else %}{{ _("Borrador") }}{%
       endif %}
     </span>
   </div>
@@ -57,14 +57,12 @@ macros %}
   {% if comparison.status == 'draft' or comparison.status ==
   'pending_authorization' %}
   <div class="alert alert-info m-3 mb-0">
-    La recomendación del sistema se basa en el menor precio por línea. Puede
-    guardar el comparativo como borrador; los cambios de recomendación requieren
-    justificación y autorización de un Gerente de Compras o Administrador.
+    {{ _("La recomendación del sistema se basa en el menor precio por línea. Puede guardar el comparativo como borrador; los cambios de recomendación requieren justificación y autorización de un Gerente de Compras o Administrador.") }}
   </div>
   {% endif %} {% if negotiation_rfqs %}
   <div class="alert alert-secondary m-3 mb-0">
     <div class="fw-semibold mb-2">
-      Rondas de negociación por Solicitud de Cotización
+      {{ _("Rondas de negociación por Solicitud de Cotización") }}
     </div>
     {% for context in negotiation_rfqs %}
     <div
@@ -76,20 +74,20 @@ macros %}
         >
           {{ context.rfq.document_no or context.rfq.id }}
         </a>
-        {% if context.round %} · Ronda {{ context.round.round_number }} ·
+        {% if context.round %} · {{ _("Ronda %(number)s", number=context.round.round_number) }} ·
         <span
           class="badge text-bg-{% if context.round.status == 'open' %}success{% else %}secondary{% endif %}"
         >
-          {{ 'Abierta' if context.round.status == 'open' else 'Cerrada' }}
+          {{ _('Abierta') if context.round.status == 'open' else _('Cerrada') }}
         </span>
-        {% else %} · Sin ronda abierta {% endif %}
+        {% else %} · {{ _("Sin ronda abierta") }} {% endif %}
       </span>
       {% if context.round and context.round.status == 'open' %}
       <a
         class="btn btn-sm btn-outline-primary"
         href="{{ url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=context.rfq.id) }}"
       >
-        <i class="bi bi-plus-circle me-1"></i>Agregar oferta a esta ronda
+        <i class="bi bi-plus-circle me-1"></i>{{ _("Agregar oferta a esta ronda") }}
       </a>
       {% else %}
       <form
@@ -99,7 +97,7 @@ macros %}
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <input type="hidden" name="rfq_id" value="{{ context.rfq.id }}" />
         <button type="submit" class="btn btn-sm btn-outline-primary">
-          <i class="bi bi-arrow-repeat me-1"></i>Abrir ronda de negociación
+          <i class="bi bi-arrow-repeat me-1"></i>{{ _("Abrir ronda de negociación") }}
         </button>
       </form>
       {% endif %}
@@ -117,12 +115,12 @@ macros %}
     <div class="table-responsive">
       <table class="ca-table">
         <caption style="display: none">
-          Selección de ofertas por línea de la Solicitud de Compra.
+          {{ _("Selección de ofertas por línea de la Solicitud de Compra.") }}
         </caption>
         <thead>
           <tr>
-            <th scope="col">Artículo</th>
-            <th scope="col">Cantidad solicitada</th>
+            <th scope="col">{{ _("Artículo") }}</th>
+            <th scope="col">{{ _("Cantidad solicitada") }}</th>
             {% for offer in offers %}
             <th scope="col">
               {{ offer.supplier_name or offer.supplier_id or offer.id }}<small
@@ -131,7 +129,7 @@ macros %}
               >
             </th>
             {% endfor %}
-            <th scope="col">Criterio de selección</th>
+            <th scope="col">{{ _("Criterio de selección") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -188,11 +186,11 @@ macros %}
                     }}</small
                   >
                   {% if row.recommended and row.recommended.offer.id == offer.id
-                  %}<span class="badge text-bg-success">Recomendado</span>{%
+                  %}<span class="badge text-bg-success">{{ _("Recomendado") }}</span>{%
                   endif %}
                 </span>
               </label>
-              {% else %}<span class="text-muted">Sin cobertura</span>{% endif %}
+              {% else %}<span class="text-muted">{{ _("Sin cobertura") }}</span>{% endif %}
             </td>
             {% endfor %}
             <td>
@@ -201,7 +199,7 @@ macros %}
                 class="form-control form-control-sm"
                 name="override_reason_{{ row.item.id }}"
                 rows="2"
-                placeholder="Justificación si cambia la recomendación"
+                placeholder="{{ _('Justificación si cambia la recomendación') }}"
                 disabled
               >
 {{ saved.override_reason if saved else '' }}</textarea>
@@ -210,12 +208,12 @@ macros %}
                 class="form-control form-control-sm"
                 name="override_reason_{{ row.item.id }}"
                 rows="2"
-                placeholder="Justificación si cambia la recomendación"
+                placeholder="{{ _('Justificación si cambia la recomendación') }}"
               >
 {{ saved.override_reason if saved else '' }}</textarea>
               {% endif %} {% if saved and saved.manual_override %}<small
                 class="text-warning"
-                >Override pendiente de autorización</small
+                >{{ _("Override pendiente de autorización") }}</small
               >{% endif %}
             </td>
           </tr>
@@ -225,7 +223,7 @@ macros %}
               colspan="{{ offers|length + 3 }}"
               class="text-center text-muted"
             >
-              La Solicitud de Compra no tiene líneas.
+              {{ _("La Solicitud de Compra no tiene líneas.") }}
             </td>
           </tr>
           {% endfor %}
@@ -236,7 +234,7 @@ macros %}
     {% if comparison.status not in ['finalized', 'used'] %}
     <div class="d-flex gap-2 mt-3 flex-wrap">
       <button type="submit" class="btn btn-outline-primary">
-        <i class="bi bi-save me-1"></i>Guardar borrador
+        <i class="bi bi-save me-1"></i>{{ _("Guardar borrador") }}
       </button>
       {% if is_purchase_sourcing_authorizer %}
       <button
@@ -244,7 +242,7 @@ macros %}
         formaction="{{ url_for('compras.compras_comparativo_finalizar', comparison_id=comparison.id) }}"
         class="btn btn-primary"
       >
-        <i class="bi bi-check2-circle me-1"></i>Autorizar y finalizar
+        <i class="bi bi-check2-circle me-1"></i>{{ _("Autorizar y finalizar") }}
       </button>
       {% endif %}
     </div>
@@ -259,14 +257,13 @@ macros %}
     >
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <button type="submit" class="btn btn-success">
-        <i class="bi bi-cart-check me-1"></i>Crear Órdenes de Compra por
-        proveedor
+        <i class="bi bi-cart-check me-1"></i>{{ _("Crear Órdenes de Compra por proveedor") }}
       </button>
     </form>
   </div>
   {% elif comparison.status == 'used' %}
   <div class="alert alert-success m-3">
-    Las Órdenes de Compra de este comparativo ya fueron generadas.
+    {{ _("Las Órdenes de Compra de este comparativo ya fueron generadas.") }}
   </div>
   {% endif %}
 </div>

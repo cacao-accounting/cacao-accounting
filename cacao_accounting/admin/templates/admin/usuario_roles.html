@@ -5,21 +5,21 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
-        <i class="bi bi-house"></i> Inicio
+        <i class="bi bi-house"></i> {{ _("Inicio") }}
       </a>
     </li>
     <li class="breadcrumb-item">
-      <a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a>
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a>
     </li>
     <li class="breadcrumb-item">
-      <a href="{{ url_for('admin.lista_usuarios') }}" class="link-dark">Usuarios</a>
+      <a href="{{ url_for('admin.lista_usuarios') }}" class="link-dark">{{ _("Usuarios") }}</a>
     </li>
-    <li class="breadcrumb-item active" aria-current="page">Asignar Roles</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Asignar Roles") }}</li>
   </ol>
 </nav>
 
 <div class="ca-page-header">
-  <h4><i class="bi bi-award me-2" style="color:#BB6A40"></i>Roles para {{ usuario.user }}</h4>
+  <h4><i class="bi bi-award me-2" style="color:#BB6A40"></i>{{ _("Roles para %(user)s", user=usuario.user) }}</h4>
 </div>
 
 <div class="ca-card p-4">
@@ -38,8 +38,8 @@
       <div class="d-flex align-items-center justify-content-between mb-2">
         <label class="form-label mb-0">{{ form.roles.label.text }}</label>
         <div>
-          <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="setAllRoles(true)">Seleccionar todo</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setAllRoles(false)">Deseleccionar todo</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="setAllRoles(true)">{{ _("Seleccionar todo") }}</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setAllRoles(false)">{{ _("Deseleccionar todo") }}</button>
         </div>
       </div>
 
@@ -60,8 +60,8 @@
     </div>
 
     <div class="mt-4">
-      <button type="submit" class="btn btn-primary">Guardar roles</button>
-      <a href="{{ url_for('admin.lista_usuarios') }}" class="btn btn-outline-secondary ms-2">Cancelar</a>
+      <button type="submit" class="btn btn-primary">{{ _("Guardar roles") }}</button>
+      <a href="{{ url_for('admin.lista_usuarios') }}" class="btn btn-outline-secondary ms-2">{{ _("Cancelar") }}</a>
     </div>
   </form>
 

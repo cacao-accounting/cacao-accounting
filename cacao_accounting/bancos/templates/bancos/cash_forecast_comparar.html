@@ -7,23 +7,23 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Caja y Bancos</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.cash_forecast_list') }}" class="link-dark">Pronósticos</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Comparar Escenarios</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Caja y Bancos") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.cash_forecast_list') }}" class="link-dark">{{ _("Pronósticos") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Comparar Escenarios") }}</li>
   </ol>
 </nav>
 
 <div class="ca-card mb-4 shadow-sm border-0">
   <div class="ca-card-header bg-white py-3">
-    <h5 class="ca-card-title mb-0"><i class="bi bi-arrow-left-right"></i> Comparación de Escenarios de Flujo de Caja</h5>
+    <h5 class="ca-card-title mb-0"><i class="bi bi-arrow-left-right"></i> {{ _("Comparación de Escenarios de Flujo de Caja") }}</h5>
   </div>
 
   <div class="p-4 bg-light border-bottom">
     <form method="GET" action="{{ url_for('bancos.cash_forecast_compare') }}" class="row g-3 align-items-end">
 
       <div class="col-md-3">
-        <label for="company" class="form-label small fw-bold">Compañía</label>
+        <label for="company" class="form-label small fw-bold">{{ _("Compañía") }}</label>
         <select name="company" id="company" class="form-select form-select-sm" onchange="this.form.submit()">
           {% for code, name in companies %}
           <option value="{{ code }}" {% if code == selected_company %}selected{% endif %}>{{ name }}</option>
@@ -32,9 +32,9 @@
       </div>
 
       <div class="col-md-3">
-        <label for="base_id" class="form-label small fw-bold">Escenario Base (A)</label>
+        <label for="base_id" class="form-label small fw-bold">{{ _("Escenario Base (A)") }}</label>
         <select name="base_id" id="base_id" class="form-select form-select-sm" required>
-          <option value="" disabled selected>Seleccione escenario base</option>
+          <option value="" disabled selected>{{ _("Seleccione escenario base") }}</option>
           {% for f in forecasts %}
           <option value="{{ f.id }}" {% if f.id == base_id %}selected{% endif %}>{{ f.version }} ({{ f.status }})</option>
           {% endfor %}
@@ -42,9 +42,9 @@
       </div>
 
       <div class="col-md-3">
-        <label for="compare_id" class="form-label small fw-bold">Escenario Comparar (B)</label>
+        <label for="compare_id" class="form-label small fw-bold">{{ _("Escenario Comparar (B)") }}</label>
         <select name="compare_id" id="compare_id" class="form-select form-select-sm" required>
-          <option value="" disabled selected>Seleccione escenario a comparar</option>
+          <option value="" disabled selected>{{ _("Seleccione escenario a comparar") }}</option>
           {% for f in forecasts %}
           <option value="{{ f.id }}" {% if f.id == compare_id %}selected{% endif %}>{{ f.version }} ({{ f.status }})</option>
           {% endfor %}
@@ -53,7 +53,7 @@
 
       <div class="col-md-3">
         <button type="submit" class="btn btn-sm btn-primary w-100">
-          <i class="bi bi-arrow-left-right me-1"></i>Comparar
+          <i class="bi bi-arrow-left-right me-1"></i>{{ _("Comparar") }}
         </button>
       </div>
     </form>
@@ -63,12 +63,12 @@
   <div class="p-4 bg-white border-bottom">
     <div class="row g-3 text-center">
       <div class="col-md-6 border-end">
-        <span class="text-muted d-block small">Escenario Base (A)</span>
+        <span class="text-muted d-block small">{{ _("Escenario Base (A)") }}</span>
         <strong class="fs-5 text-primary">{{ base_forecast.version }}</strong>
         <span class="badge bg-secondary d-inline-block">{{ base_forecast.status }}</span>
       </div>
       <div class="col-md-6">
-        <span class="text-muted d-block small">Escenario a Comparar (B)</span>
+        <span class="text-muted d-block small">{{ _("Escenario a Comparar (B)") }}</span>
         <strong class="fs-5 text-success">{{ compare_forecast.version }}</strong>
         <span class="badge bg-secondary d-inline-block">{{ compare_forecast.status }}</span>
       </div>
@@ -77,15 +77,15 @@
 
   <div class="table-responsive">
     <table class="ca-table text-nowrap align-middle">
-      <caption style="display: none;">Comparación de pronósticos.</caption>
+      <caption style="display: none;">{{ _("Comparación de pronósticos.") }}</caption>
       <thead class="table-light">
         <tr>
-          <th scope="col">Período / Zona</th>
-          <th scope="col" class="text-end">Base Projected (A)</th>
-          <th scope="col" class="text-end">Compare Projected (B)</th>
-          <th scope="col" class="text-end">Varianza</th>
-          <th scope="col" class="text-end">Manual Inflow Var</th>
-          <th scope="col" class="text-end">Manual Outflow Var</th>
+          <th scope="col">{{ _("Período / Zona") }}</th>
+          <th scope="col" class="text-end">{{ _("Base Projected (A)") }}</th>
+          <th scope="col" class="text-end">{{ _("Compare Projected (B)") }}</th>
+          <th scope="col" class="text-end">{{ _("Varianza") }}</th>
+          <th scope="col" class="text-end">{{ _("Manual Inflow Var") }}</th>
+          <th scope="col" class="text-end">{{ _("Manual Outflow Var") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -118,7 +118,7 @@
   {% else %}
   <div class="p-5 text-center text-muted">
     <i class="bi bi-arrow-left-right fs-1 d-block mb-3 text-secondary"></i>
-    Seleccione dos escenarios y haga clic en "Comparar" para analizar la variaciones del flujo proyectado.
+    {{ _("Seleccione dos escenarios y haga clic en \"Comparar\" para analizar la variaciones del flujo proyectado.") }}
   </div>
   {% endif %}
 </div>
