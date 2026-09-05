@@ -395,8 +395,14 @@
                 </template>
                 <template x-if="column.field === 'amount'">
                   <div class="text-end px-2">
-                    <span x-text="formatMoney(line.amount)"></span>
-                    <input type="hidden" :name="'amount_' + index" :value="line.amount">
+                    <template x-if="allowManualAmount && Number(line.qty || 0) === 0">
+                      <input class="form-control form-control-sm text-end" type="number" step="0.0001" min="0.0001"
+                        :name="'amount_' + index" x-model.number="line.amount">
+                    </template>
+                    <template x-if="!(allowManualAmount && Number(line.qty || 0) === 0)">
+                      <span x-text="formatMoney(line.amount)"></span>
+                      <input type="hidden" :name="'amount_' + index" :value="line.amount">
+                    </template>
                   </div>
                 </template>
                 <template x-if="column.field === 'warehouse'">

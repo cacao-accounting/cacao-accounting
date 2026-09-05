@@ -502,6 +502,8 @@ def _save_stock_entry_item(entry: StockEntry, index: int, item_code: str) -> Dec
     qty = _form_decimal(f"qty_{index}", "1")
     rate = _form_decimal(f"rate_{index}", "0")
     amount = _line_amount(index)
+    if qty == 0 and entry.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"}:
+        amount = _form_decimal(f"amount_{index}", "0")
     default_uom = _item_default_uom(item_code)
     uom = request.form.get(f"uom_{index}") or default_uom
     if not uom:
@@ -888,6 +890,7 @@ def _render_stock_entry_edit_form(
         "formKey": _INVENTORY_STOCK_ENTRY,
         "viewKey": "draft",
         "enableBatchSerial": True,
+        "allowManualAmount": registro.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"},
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "availableSourceTypes": [

@@ -146,6 +146,25 @@ describe('transaction-form', function () {
     assert.strictEqual(component.submitError, '');
   });
 
+  it('preserves a manually entered amount for value-only inventory adjustments', function () {
+    const create = loadTransactionForm();
+    const component = create({
+      allowManualAmount: true,
+      items: [],
+      uoms: [],
+      defaultRows: 1,
+    });
+    component.init();
+    const line = component.lines[0];
+    line.qty = 0;
+    line.rate = 100;
+    line.amount = 25;
+
+    component.calcAmount(line);
+
+    assert.strictEqual(line.amount, 25);
+  });
+
   it('always returns all default columns regardless of config', function () {
     const create = loadTransactionForm();
     const component = create({
