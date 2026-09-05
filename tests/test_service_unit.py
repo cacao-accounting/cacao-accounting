@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from unittest import mock
 
 import pytest
 from cacao_accounting import create_app
@@ -581,3 +582,23 @@ class TestRefreshSourceCachesForTarget:
 
         refreshed_item = get_document_item("purchase_order", item.id)
         assert Decimal(str(refreshed_item.received_qty)) == Decimal("13")
+
+
+class TestGetDocumentItemNullGuard:
+    def test_returns_none_without_querying_for_null_item_id(self, app_ctx):
+        with (
+            mock.patch("cacao_accounting.document_flow.repository.get_document_type") as get_type,
+            mock.patch("cacao_accounting.document_flow.repository.database.session.get") as session_get,
+        ):
+            result = get_document_item("purchase_order", None)
+
+        assert result is None
+        get_type.assert_not_called()
+        session_get.assert_not_called()
+
+    def test_queries_for_non_null_item_id(self, app_ctx):
+        supplier = _get_supplier()
+        po, item = _create_purchase_order(supplier)
+        result = get_document_item("purchase_order", item.id)
+        assert result is not None
+        assert result.id == item.id

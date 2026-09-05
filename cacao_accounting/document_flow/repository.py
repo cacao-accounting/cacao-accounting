@@ -44,6 +44,8 @@ def get_document_items(doctype: str, document_id: str) -> list[Any]:
 
 def get_document_item(doctype: str, item_id: str | None) -> Any | None:
     """Obtiene una linea por tipo documental."""
+    if item_id is None:
+        return None
     spec = get_document_type(doctype)
     return database.session.get(spec.item_model, item_id)
 
