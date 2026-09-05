@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
+{% import "transaction_form_macros.html" as tf_macros %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_gasto_nuevo.html"></div>
@@ -29,23 +30,49 @@
   </div>
   <form method="post" id="form-main" class="row g-3 p-3">
     {{ form.csrf_token }}
-    <div class="col-md-6">
+    <div class="col-md-4">
       <label class="form-label" for="company">{{ _('Compañía') }} <span class="text-danger">*</span></label>
-      <select class="form-select form-select-sm" name="company" id="company" required>
-        <option value="">— {{ _('Seleccione') }} —</option>
-        {% for value, label in form.company.choices %}
-        <option value="{{ value }}" {% if form.company.data == value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
+      {{ tf_macros.smart_select(
+          doctype="company",
+          name="company",
+          label=_("Compañía"),
+          preload=True,
+          required=True,
+          initial_value_expr="''",
+          initial_label_expr="''",
+          on_select="function(opt){ document.dispatchEvent(new CustomEvent('company-selected', {detail: opt})); }"
+      ) }}
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
+      <label class="form-label" for="naming_series">{{ _('Secuencia') }}</label>
+      {{ tf_macros.smart_select(
+          doctype="naming_series",
+          name="naming_series",
+          label=_("Secuencia"),
+          filters={"company": {"selector": "#company"}, "entity_type": "petty_cash_expense"},
+          filter_sources=["#company"],
+          required_filters=["company", "entity_type"],
+          auto_select_default=True,
+          load_on_filter_change=True,
+          default_after_ms=1500
+      ) }}
+    </div>
+    <div class="col-md-4">
       <label class="form-label" for="petty_cash_id">{{ _('Caja Chica') }} <span class="text-danger">*</span></label>
-      <select class="form-select form-select-sm" name="petty_cash_id" id="petty_cash_id" required>
-        <option value="">— {{ _('Seleccione') }} —</option>
-        {% for fund in fondos %}
-        <option value="{{ fund.id }}" {% if form.petty_cash_id.data == fund.id %}selected{% endif %}>{{ fund.company }} - {{ fund.name }}</option>
-        {% endfor %}
-      </select>
+      {{ tf_macros.smart_select(
+          doctype="petty_cash",
+          name="petty_cash_id",
+          label=_("Caja Chica"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"],
+          required=True,
+          on_select="function(opt){ var el = document.getElementById('pc_currency'); if (el) el.value = opt.currency || ''; }"
+      ) }}
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="pc_currency">{{ _('Moneda') }}</label>
+      <input class="form-control form-control-sm" type="text" id="pc_currency" readonly>
     </div>
     <div class="col-md-4">
       <label class="form-label" for="posting_date">{{ _('Fecha') }}</label>
@@ -57,7 +84,15 @@
     </div>
     <div class="col-md-4">
       <label class="form-label" for="expense_account_code">{{ _('Cuenta de gasto') }} <span class="text-danger">*</span></label>
-      <input class="form-control form-control-sm" type="text" name="expense_account_code" id="expense_account_code" value="{{ form.expense_account_code.data or '' }}" required>
+      {{ tf_macros.smart_select(
+          doctype="account_code",
+          name="expense_account_code",
+          label=_("Cuenta de gasto"),
+          filters={"company": {"selector": "#company"}, "account_type": "expense"},
+          filter_sources=["#company"],
+          required_filters=["company"],
+          required=True
+      ) }}
     </div>
     <div class="col-md-8">
       <label class="form-label" for="concept">{{ _('Concepto') }} <span class="text-danger">*</span></label>
@@ -69,15 +104,36 @@
     </div>
     <div class="col-md-4">
       <label class="form-label" for="cost_center_code">{{ _('Centro de costo') }} <span class="text-danger">*</span></label>
-      <input class="form-control form-control-sm" type="text" name="cost_center_code" id="cost_center_code" value="{{ form.cost_center_code.data or '' }}" required>
+      {{ tf_macros.smart_select(
+          doctype="cost_center",
+          name="cost_center_code",
+          label=_("Centro de costo"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"]
+      ) }}
     </div>
     <div class="col-md-4">
       <label class="form-label" for="unit_code">{{ _('Unidad de negocio') }}</label>
-      <input class="form-control form-control-sm" type="text" name="unit_code" id="unit_code" value="{{ form.unit_code.data or '' }}">
+      {{ tf_macros.smart_select(
+          doctype="unit",
+          name="unit_code",
+          label=_("Unidad de negocio"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"]
+      ) }}
     </div>
     <div class="col-md-4">
       <label class="form-label" for="project_code">{{ _('Proyecto') }}</label>
-      <input class="form-control form-control-sm" type="text" name="project_code" id="project_code" value="{{ form.project_code.data or '' }}">
+      {{ tf_macros.smart_select(
+          doctype="project",
+          name="project_code",
+          label=_("Proyecto"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"]
+      ) }}
     </div>
     <div class="col-12">
       <label class="form-label" for="remarks">{{ _('Observaciones') }}</label>

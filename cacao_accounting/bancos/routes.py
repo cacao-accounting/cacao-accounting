@@ -116,6 +116,11 @@ from cacao_accounting.bancos.services import (
     set_petty_cash_voucher_status,
     toggle_petty_cash_active,
     update_petty_cash_account,
+    update_petty_cash_voucher,
+    update_petty_cash_reconciliation,
+    cancel_petty_cash_reconciliation,
+    update_petty_cash_replenishment,
+    cancel_petty_cash_replenishment,
 )
 
 bancos = Blueprint("bancos", __name__, template_folder="templates")
@@ -950,9 +955,13 @@ def caja_chica_lista():
     saldos = {pc.id: petty_cash_ledger_balance(pc) for pc in registros}
     vales_abiertos = {pc.id: petty_cash_open_vouchers_total(pc) for pc in registros}
     pendientes = {pc.id: petty_cash_pending_replenishment_total(pc) for pc in registros}
-    responsables = {
-        pc.custodian_id: (database.session.get(User, pc.custodian_id).name if pc.custodian_id else None) for pc in registros
-    }
+    responsables: dict[str, str] = {}
+    for pc in registros:
+        if not pc.custodian_id:
+            continue
+        user = database.session.get(User, pc.custodian_id)
+        if user is not None:
+            responsables[pc.custodian_id] = user.name or user.user or str(user.id)
     titulo = "Listado de Cajas Chicas - " + APPNAME
     return render_template(
         "bancos/caja_chica_lista.html",
@@ -1171,6 +1180,7 @@ def caja_chica_vale_nuevo():
                 unit_code=request.form.get("unit_code") or None,
                 project_code=request.form.get("project_code") or None,
                 comments=request.form.get("comments") or None,
+                naming_series_id=request.form.get("naming_series") or None,
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
@@ -1212,6 +1222,52 @@ def caja_chica_vale_liquidar(v_id):
         abort(404)
     exige_acceso_compania("cash", voucher.company or "", "crear")
     return redirect(url_for("bancos.caja_chica_gasto_nuevo", voucher_id=voucher.id))
+
+
+@bancos.route("/petty-cash-voucher/<v_id>/edit", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "editar")
+def caja_chica_vale_editar(v_id):
+    """Edita un vale de caja chica en estado borrador."""
+    from cacao_accounting.bancos.forms import FormularioPettyCashVoucher
+
+    voucher = database.session.get(PettyCashVoucher, v_id)
+    if not voucher:
+        abort(404)
+    exige_acceso_compania("cash", voucher.company or "", "editar")
+    if (voucher.voucher_status or "borrador") != "borrador":
+        flash(_("Solo se puede editar un vale en estado borrador."), "danger")
+        return redirect(url_for("bancos.caja_chica_vale_lista"))
+    formulario = FormularioPettyCashVoucher(obj=voucher)
+    companies = [(code, code) for code in _cash_company_codes()]
+    formulario.company.choices = companies
+    fondos = _obtener_fondos_compania()
+    formulario.petty_cash_id.choices = [(f.id, f"{f.company} - {f.name}") for f in fondos]
+    titulo = "Editar Vale de Caja Chica - " + APPNAME
+
+    if formulario.validate_on_submit() or request.method == "POST":
+        try:
+            update_petty_cash_voucher(
+                voucher,
+                concept=request.form.get("concept") or "",
+                amount=_form_decimal("amount", "0"),
+                delivered_to=request.form.get("delivered_to") or None,
+                posting_date=date.fromisoformat(request.form.get("posting_date") or date.today().isoformat()),
+                cost_center_code=request.form.get("cost_center_code") or None,
+                unit_code=request.form.get("unit_code") or None,
+                project_code=request.form.get("project_code") or None,
+                comments=request.form.get("comments") or None,
+            )
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+            return render_template(
+                BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo, vale=voucher
+            )
+        flash(_("Vale de caja chica actualizado."), "success")
+        return redirect(url_for("bancos.caja_chica_vale_lista"))
+
+    return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo, vale=voucher)
 
 
 # --------------------------------------------------------------------------------------------- #
@@ -1277,6 +1333,7 @@ def caja_chica_gasto_nuevo():
                 voucher_id=request.form.get("voucher_id") or None,
                 remarks=request.form.get("remarks") or None,
                 actor_id=str(current_user.id),
+                naming_series_id=request.form.get("naming_series") or None,
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
@@ -1321,6 +1378,7 @@ def caja_chica_conciliacion_nueva():
                 reconciliation_date=date.fromisoformat(request.form.get("reconciliation_date") or date.today().isoformat()),
                 counted_cash=_form_decimal("counted_cash", "0"),
                 explanation=request.form.get("explanation") or None,
+                naming_series_id=request.form.get("naming_series") or None,
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
@@ -1377,6 +1435,67 @@ def caja_chica_conciliacion_ajustar(r_id):
     return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
 
 
+@bancos.route("/petty-cash-reconciliation/<r_id>/edit", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "editar")
+def caja_chica_conciliacion_editar(r_id):
+    """Edita una conciliacion de caja chica en estado borrador."""
+    conciliacion = database.session.get(PettyCashReconciliation, r_id)
+    if not conciliacion:
+        abort(404)
+    exige_acceso_compania("cash", conciliacion.company or "", "editar")
+    if conciliacion.status != "borrador":
+        flash(_("Solo se puede editar una conciliacion en borrador."), "danger")
+        return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
+    fondos = _obtener_fondos_compania()
+    if request.method == "POST":
+        try:
+            update_petty_cash_reconciliation(
+                conciliacion,
+                counted_cash=_form_decimal("counted_cash", "0"),
+                explanation=request.form.get("explanation") or None,
+                reconciliation_date=date.fromisoformat(
+                    request.form.get("reconciliation_date") or conciliacion.reconciliation_date.isoformat()
+                ),
+            )
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+        else:
+            flash(_("Conciliacion actualizada."), "success")
+            return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
+    return render_template(
+        "bancos/caja_chica_conciliacion_nueva.html",
+        fondos=fondos,
+        conciliacion=conciliacion,
+        today=conciliacion.reconciliation_date,
+        titulo="Editar Conciliacion de Caja Chica - " + APPNAME,
+    )
+
+
+@bancos.route("/petty-cash-reconciliation/<r_id>/cancel", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "anular")
+def caja_chica_conciliacion_anular(r_id):
+    """Anula una conciliacion de caja chica (solo mismo periodo)."""
+    conciliacion = database.session.get(PettyCashReconciliation, r_id)
+    if not conciliacion:
+        abort(404)
+    exige_acceso_compania("cash", conciliacion.company or "", "anular")
+    try:
+        cancel_petty_cash_reconciliation(
+            conciliacion,
+            reason=request.form.get("reason") or None,
+            actor_id=str(current_user.id),
+        )
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+    else:
+        flash(_("Conciliacion anulada."), "warning")
+    return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
+
+
 @bancos.route("/petty-cash-replenishment/list")
 @modulo_activo("cash")
 @login_required
@@ -1414,6 +1533,7 @@ def caja_chica_reposicion_nueva():
                 request_date=date.fromisoformat(request.form.get("request_date") or date.today().isoformat()),
                 notes=request.form.get("notes") or None,
                 actor_id=str(current_user.id),
+                naming_series_id=request.form.get("naming_series") or None,
             )
         except ValueError as exc:
             flash(_(str(exc)), "danger")
@@ -1467,6 +1587,83 @@ def caja_chica_reponer(r_id):
         flash(_(str(exc)), "danger")
     else:
         flash(_("Caja chica repuesta mediante Nota de Debito bancaria."), "success")
+    return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
+
+
+@bancos.route("/petty-cash-replenishment/<r_id>/edit", methods=["GET", "POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "editar")
+def caja_chica_reposicion_editar(r_id):
+    """Edita una solicitud de reposicion en estado borrador."""
+    reposicion = database.session.get(PettyCashReplenishment, r_id)
+    if not reposicion:
+        abort(404)
+    exige_acceso_compania("cash", reposicion.company or "", "editar")
+    if (reposicion.status or "borrador") != "borrador":
+        flash(_("Solo se puede editar una reposicion en borrador."), "danger")
+        return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
+    fondos = _obtener_fondos_compania()
+    from cacao_accounting.database import PettyCashExpense
+
+    gastos = list(
+        database.session.execute(
+            database.select(PettyCashExpense)
+            .filter_by(petty_cash_id=reposicion.petty_cash_id, docstatus=1)
+            .filter(PettyCashExpense.replenishment_id.is_(None) | (PettyCashExpense.replenishment_id == reposicion.id))
+            .order_by(PettyCashExpense.posting_date, PettyCashExpense.document_no)
+        ).scalars()
+    )
+    attached_ids = {
+        str(e.id)
+        for e in database.session.execute(
+            database.select(PettyCashExpense).filter_by(replenishment_id=reposicion.id)
+        ).scalars()
+    }
+    if request.method == "POST":
+        try:
+            update_petty_cash_replenishment(
+                reposicion,
+                expense_ids=request.form.getlist("expense_ids"),
+                notes=request.form.get("notes") or None,
+                request_date=date.fromisoformat(request.form.get("request_date") or reposicion.request_date.isoformat()),
+            )
+        except ValueError as exc:
+            flash(_(str(exc)), "danger")
+        else:
+            flash(_("Reposicion actualizada."), "success")
+            return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
+    return render_template(
+        "bancos/caja_chica_reposicion_nueva.html",
+        fondos=fondos,
+        gastos=gastos,
+        selected_fund=reposicion.petty_cash_id,
+        reposicion=reposicion,
+        attached_ids=attached_ids,
+        titulo="Editar Reposicion de Caja Chica - " + APPNAME,
+    )
+
+
+@bancos.route("/petty-cash-replenishment/<r_id>/cancel", methods=["POST"])
+@modulo_activo("cash")
+@login_required
+@verifica_permiso("cash", "anular")
+def caja_chica_reposicion_anular(r_id):
+    """Anula una solicitud de reposicion (solo mismo periodo)."""
+    reposicion = database.session.get(PettyCashReplenishment, r_id)
+    if not reposicion:
+        abort(404)
+    exige_acceso_compania("cash", reposicion.company or "", "anular")
+    try:
+        cancel_petty_cash_replenishment(
+            reposicion,
+            reason=request.form.get("reason") or None,
+            actor_id=str(current_user.id),
+        )
+    except ValueError as exc:
+        flash(_(str(exc)), "danger")
+    else:
+        flash(_("Reposicion anulada."), "warning")
     return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
 
 

@@ -50,6 +50,7 @@ class FormularioPettyCashVoucher(FlaskForm):
 
     company = SelectField(_LABEL_COMPANY, choices=[], validators=[DataRequired()])
     petty_cash_id = SelectField("Caja Chica", choices=[], validators=[DataRequired()])
+    naming_series = SelectField("Serie", choices=[], validators=[Optional()])
     posting_date = StringField("Fecha")
     delivered_to = StringField("Entregado a")
     concept = StringField("Concepto", validators=[DataRequired()])
@@ -65,6 +66,7 @@ class FormularioPettyCashExpense(FlaskForm):
 
     company = SelectField(_LABEL_COMPANY, choices=[], validators=[DataRequired()])
     petty_cash_id = SelectField("Caja Chica", choices=[], validators=[DataRequired()])
+    naming_series = SelectField("Serie", choices=[], validators=[Optional()])
     voucher_id = SelectField("Vale origen", choices=[], validators=[Optional()])
     posting_date = StringField("Fecha")
     beneficiary = StringField("Beneficiario / Proveedor")

@@ -1,14 +1,63 @@
 {% extends "base.html" %}
 {% block contenido %}
+{% import "transaction_form_macros.html" as tf_macros %}
 <div class="ca-card">
-  <div class="ca-card-header"><h5 class="ca-card-title">{{ _('Nueva conciliación de Caja Chica') }}</h5></div>
+  <div class="ca-card-header"><h5 class="ca-card-title">{{ _('Editar conciliación de Caja Chica') if conciliacion else _('Nueva conciliación de Caja Chica') }}</h5></div>
   <form method="post" class="row g-3 p-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="col-md-4"><label class="form-label">{{ _('Compañía') }}</label><input class="form-control" name="company" required></div>
-    <div class="col-md-4"><label class="form-label">{{ _('Caja Chica') }}</label><select class="form-select" name="petty_cash_id" required><option value="">—</option>{% for fund in fondos %}<option value="{{ fund.id }}">{{ fund.company }} - {{ fund.name }}</option>{% endfor %}</select></div>
-    <div class="col-md-4"><label class="form-label">{{ _('Fecha') }}</label><input class="form-control" type="date" name="reconciliation_date" value="{{ today or '' }}" required></div>
-    <div class="col-md-4"><label class="form-label">{{ _('Efectivo contado') }}</label><input class="form-control" type="number" min="0" step="0.0001" name="counted_cash" required></div>
-    <div class="col-12"><label class="form-label">{{ _('Explicación') }}</label><textarea class="form-control" name="explanation" rows="3"></textarea></div>
+    <div class="col-md-4">
+      <label class="form-label">{{ _('Compañía') }} <span class="text-danger">*</span></label>
+      {{ tf_macros.smart_select(
+          doctype="company",
+          name="company",
+          label=_("Compañía"),
+          preload=True,
+          required=True,
+          initial_value=conciliacion.company if conciliacion else '',
+          initial_label=conciliacion.company if conciliacion else '',
+          locked_expr="true" if conciliacion else "false",
+          on_select="function(opt){ document.dispatchEvent(new CustomEvent('company-selected', {detail: opt})); }"
+      ) }}
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">{{ _('Secuencia') }}</label>
+      {{ tf_macros.smart_select(
+          doctype="naming_series",
+          name="naming_series",
+          label=_("Secuencia"),
+          filters={"company": {"selector": "#company"}, "entity_type": "petty_cash_reconciliation"},
+          filter_sources=["#company"],
+          required_filters=["company", "entity_type"],
+          auto_select_default=True,
+          load_on_filter_change=True,
+          default_after_ms=1500,
+          initial_value=conciliacion.naming_series_id if conciliacion else '',
+          initial_label=conciliacion.naming_series_id if conciliacion else ''
+      ) }}
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">{{ _('Caja Chica') }} <span class="text-danger">*</span></label>
+      {{ tf_macros.smart_select(
+          doctype="petty_cash",
+          name="petty_cash_id",
+          label=_("Caja Chica"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"],
+          required=True,
+          initial_value=conciliacion.petty_cash_id if conciliacion else '',
+          initial_label=conciliacion.petty_cash_id if conciliacion else '',
+          locked_expr="true" if conciliacion else "false",
+          on_select="function(opt){ var el = document.getElementById('pc_currency'); if (el) el.value = opt.currency || ''; }"
+      ) }}
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">{{ _('Moneda') }}</label>
+      <input class="form-control" type="text" id="pc_currency" readonly value="{{ conciliacion.transaction_currency if conciliacion else '' }}">
+    </div>
+    <div class="col-md-4"><label class="form-label">{{ _('Fecha') }}</label><input class="form-control" type="date" name="reconciliation_date" value="{{ (conciliacion.reconciliation_date.isoformat() if conciliacion and conciliacion.reconciliation_date else '') or today or '' }}" required></div>
+    <div class="col-md-4"><label class="form-label">{{ _('Efectivo contado') }}</label><input class="form-control" type="number" min="0" step="0.0001" name="counted_cash" value="{{ conciliacion.counted_cash if conciliacion else '' }}" required></div>
+    <div class="col-12"><label class="form-label">{{ _('Explicación') }}</label><textarea class="form-control" name="explanation" rows="3">{{ conciliacion.explanation if conciliacion else '' }}</textarea></div>
     <div class="col-12"><button class="btn btn-primary" type="submit">{{ _('Guardar borrador') }}</button> <a class="btn btn-outline-secondary" href="{{ url_for('bancos.caja_chica_conciliacion_lista') }}">{{ _('Cancelar') }}</a></div>
   </form>
 </div>

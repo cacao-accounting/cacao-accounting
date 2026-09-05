@@ -28,6 +28,7 @@
         <th scope="col">{{ _('Caja') }}</th>
         <th scope="col">{{ _('Responsable') }}</th>
         <th scope="col">{{ _('Fondo') }}</th>
+        <th scope="col">{{ _('Moneda') }}</th>
         <th scope="col">{{ _('Saldo contable') }}</th>
         <th scope="col">{{ _('Efectivo esperado') }}</th>
         <th scope="col">{{ _('Vales abiertos') }}</th>
@@ -44,6 +45,7 @@
         </td>
         <td>{{ responsables.get(item.custodian_id) or item.custodian_id or '-' }}</td>
         <td>{{ item.float_amount }}</td>
+        <td>{{ item.currency or '-' }}</td>
         <td>{{ saldos.get(item.id, 0) }}</td>
         <td>{{ saldos.get(item.id, 0) - vales_abiertos.get(item.id, 0) }}</td>
         <td>{{ vales_abiertos.get(item.id, 0) }}</td>

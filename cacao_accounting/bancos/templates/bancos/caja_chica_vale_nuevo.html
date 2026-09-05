@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block contenido %}
+{% import "transaction_form_macros.html" as tf_macros %}
 
 {%- if TESTING -%}
 <div data-test_info="La Plantilla fue renderizada correctamente: cacao_accounting/bancos/templates/bancos/caja_chica_vale_nuevo.html"></div>
@@ -10,13 +11,13 @@
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _('Bancos') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.caja_chica_vale_lista') }}" class="link-dark">{{ _('Vales de Caja Chica') }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{ _('Nuevo vale') }}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Editar vale') if vale else _('Nuevo vale') }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> {{ _('Nuevo vale de caja chica') }}</h5>
+    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> {{ _('Editar vale de caja chica') if vale else _('Nuevo vale de caja chica') }}</h5>
     <div class="d-flex gap-2 flex-wrap">
       <a href="{{ url_for('bancos.caja_chica_vale_lista') }}" class="btn btn-outline-danger btn-sm">{{ _('Cancelar') }}</a>
       <button class="btn btn-primary btn-sm" form="form-main" type="submit"><i class="bi bi-floppy me-1"></i>{{ _('Guardar') }}</button>
@@ -29,29 +30,61 @@
   </div>
   <form method="post" id="form-main" class="row g-3 p-3">
     {{ form.csrf_token }}
-    <div class="col-md-6">
+    <div class="col-md-4">
       <label class="form-label" for="company">{{ _('Compañía') }} <span class="text-danger">*</span></label>
-      <select class="form-select form-select-sm" name="company" id="company" required>
-        <option value="">— {{ _('Seleccione') }} —</option>
-        {% for value, label in form.company.choices %}
-        <option value="{{ value }}" {% if form.company.data == value %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
+      {{ tf_macros.smart_select(
+          doctype="company",
+          name="company",
+          label=_("Compañía"),
+          preload=True,
+          required=True,
+          initial_value=vale.company if vale else '',
+          initial_label=vale.company if vale else '',
+          locked_expr="true" if vale else "false",
+          on_select="function(opt){ document.dispatchEvent(new CustomEvent('company-selected', {detail: opt})); }"
+      ) }}
     </div>
-    <div class="col-md-6">
+    <div class="col-md-4">
+      <label class="form-label" for="naming_series">{{ _('Secuencia') }}</label>
+      {{ tf_macros.smart_select(
+          doctype="naming_series",
+          name="naming_series",
+          label=_("Secuencia"),
+          filters={"company": {"selector": "#company"}, "entity_type": "petty_cash_voucher"},
+          filter_sources=["#company"],
+          required_filters=["company", "entity_type"],
+          auto_select_default=True,
+          load_on_filter_change=True,
+          default_after_ms=1500,
+          initial_value=vale.naming_series_id if vale else '',
+          initial_label=vale.naming_series_id if vale else ''
+      ) }}
+    </div>
+    <div class="col-md-4">
       <label class="form-label" for="petty_cash_id">{{ _('Caja Chica') }} <span class="text-danger">*</span></label>
-      <select class="form-select form-select-sm" name="petty_cash_id" id="petty_cash_id" required>
-        <option value="">— {{ _('Seleccione') }} —</option>
-        {% for fund in fondos %}
-        <option value="{{ fund.id }}" {% if form.petty_cash_id.data == fund.id %}selected{% endif %}>{{ fund.company }} - {{ fund.name }}</option>
-        {% endfor %}
-      </select>
+      {{ tf_macros.smart_select(
+          doctype="petty_cash",
+          name="petty_cash_id",
+          label=_("Caja Chica"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"],
+          required=True,
+          initial_value=vale.petty_cash_id if vale else '',
+          initial_label=vale.petty_cash_id if vale else '',
+          locked_expr="true" if vale else "false",
+          on_select="function(opt){ var el = document.getElementById('pc_currency'); if (el) el.value = opt.currency || ''; }"
+      ) }}
+    </div>
+    <div class="col-md-4">
+      <label class="form-label" for="pc_currency">{{ _('Moneda') }}</label>
+      <input class="form-control form-control-sm" type="text" id="pc_currency" readonly value="{{ vale.transaction_currency if vale else '' }}">
     </div>
     <div class="col-md-4">
       <label class="form-label" for="posting_date">{{ _('Fecha') }}</label>
-      <input class="form-control form-control-sm" type="date" name="posting_date" id="posting_date" value="{{ form.posting_date.data or '' }}">
+      <input class="form-control form-control-sm" type="date" name="posting_date" id="posting_date" value="{{ (vale.posting_date.isoformat() if vale and vale.posting_date else '') or form.posting_date.data or '' }}">
     </div>
-    <div class="col-md-8">
+    <div class="col-md-4">
       <label class="form-label" for="delivered_to">{{ _('Entregado a') }}</label>
       {{ form.delivered_to(class="form-control form-control-sm", id="delivered_to") }}
     </div>
@@ -61,19 +94,46 @@
     </div>
     <div class="col-md-4">
       <label class="form-label" for="amount">{{ _('Importe') }} <span class="text-danger">*</span></label>
-      <input class="form-control form-control-sm" type="number" step="0.01" min="0" name="amount" id="amount" value="{{ form.amount.data or '' }}" required>
+      <input class="form-control form-control-sm" type="number" step="0.01" min="0" name="amount" id="amount" value="{{ form.amount.data or (vale.amount if vale else '') }}" required>
     </div>
     <div class="col-md-4">
       <label class="form-label" for="cost_center_code">{{ _('Centro de costo') }}</label>
-      <input class="form-control form-control-sm" type="text" name="cost_center_code" id="cost_center_code" value="{{ form.cost_center_code.data or '' }}">
+      {{ tf_macros.smart_select(
+          doctype="cost_center",
+          name="cost_center_code",
+          label=_("Centro de costo"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"],
+          initial_value=vale.cost_center_code if vale else '',
+          initial_label=vale.cost_center_code if vale else ''
+      ) }}
     </div>
     <div class="col-md-4">
       <label class="form-label" for="unit_code">{{ _('Unidad de negocio') }}</label>
-      <input class="form-control form-control-sm" type="text" name="unit_code" id="unit_code" value="{{ form.unit_code.data or '' }}">
+      {{ tf_macros.smart_select(
+          doctype="unit",
+          name="unit_code",
+          label=_("Unidad de negocio"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"],
+          initial_value=vale.unit_code if vale else '',
+          initial_label=vale.unit_code if vale else ''
+      ) }}
     </div>
     <div class="col-md-4">
       <label class="form-label" for="project_code">{{ _('Proyecto') }}</label>
-      <input class="form-control form-control-sm" type="text" name="project_code" id="project_code" value="{{ form.project_code.data or '' }}">
+      {{ tf_macros.smart_select(
+          doctype="project",
+          name="project_code",
+          label=_("Proyecto"),
+          filters={"company": {"selector": "#company"}},
+          filter_sources=["#company"],
+          required_filters=["company"],
+          initial_value=vale.project_code if vale else '',
+          initial_label=vale.project_code if vale else ''
+      ) }}
     </div>
     <div class="col-12">
       <label class="form-label" for="comments">{{ _('Comentario') }}</label>

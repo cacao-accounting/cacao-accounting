@@ -33,12 +33,14 @@ from cacao_accounting.database import (
     NamingSeries,
     Party,
     PartyGroup,
+    PettyCashAccount,
     PriceList,
     Project,
     TaxRule,
     TaxTemplate,
     Unit,
     UOM,
+    User,
     Warehouse,
     GLEntry,
     database,
@@ -157,6 +159,15 @@ def _bank_account_label(bank_account: BankAccount) -> str:
 def _bank_label(bank: Bank) -> str:
     swift_suffix = f" ({bank.swift_code})" if bank.swift_code else ""
     return f"{bank.name}{swift_suffix}"
+
+
+def _petty_cash_label(petty_cash: PettyCashAccount) -> str:
+    return f"{petty_cash.company} - {petty_cash.name}"
+
+
+def _user_label(user: User) -> str:
+    name = user.name or user.user or ""
+    return name if name else str(user.id)
 
 
 def _naming_series_label(naming_series: NamingSeries) -> str:
@@ -604,6 +615,24 @@ _SEARCH_SELECT_REGISTRY: dict[str, SearchSelectSpec] = {
         label_builder=_naming_series_label,
         allowed_filters={"company": "company", "entity_type": "entity_type", "is_active": "is_active"},
         default_filters={"is_active": True},
+    ),
+    "petty_cash": SearchSelectSpec(
+        doctype="petty_cash",
+        model=PettyCashAccount,
+        search_fields=("name",),
+        value_field="id",
+        label_builder=_petty_cash_label,
+        allowed_filters={"company": "company", "is_active": "is_active"},
+        default_filters={"is_active": True},
+    ),
+    "user": SearchSelectSpec(
+        doctype="user",
+        model=User,
+        search_fields=("user", "name", "last_name"),
+        value_field="id",
+        label_builder=_user_label,
+        allowed_filters={"active": "active"},
+        default_filters={"active": True},
     ),
     "external_counter": SearchSelectSpec(
         doctype="external_counter",

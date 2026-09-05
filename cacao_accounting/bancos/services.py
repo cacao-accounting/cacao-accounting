@@ -26,6 +26,7 @@ from cacao_accounting.bancos.statement_service import (
 )
 
 from cacao_accounting.database import (
+    AccountingPeriod,
     BankAccount,
     Accounts,
     BankAccountNumberingConfig,
@@ -422,6 +423,37 @@ def _validate_petty_cash_currency(company: str, currency: str | None, account: A
     return str(selected)
 
 
+def _accounting_period_for_date(company: str, posting_date) -> AccountingPeriod | None:
+    """Devuelve el periodo contable que contiene la fecha indicada para una compania."""
+    if not posting_date:
+        return None
+    return (
+        database.session.execute(
+            database.select(AccountingPeriod)
+            .filter_by(entity=company)
+            .where(AccountingPeriod.start <= posting_date)
+            .where(AccountingPeriod.end >= posting_date)
+            .order_by(AccountingPeriod.start.desc())
+        )
+        .scalars()
+        .first()
+    )
+
+
+def _validate_same_period_cancellation(company: str, posting_date, cancellation_date) -> None:
+    """Valida que la anulacion se efectue en el mismo periodo contable del documento.
+
+    Las anulaciones (mismo periodo) tienen efecto contable neto cero; las reversiones
+    se usan para periodos distintos y se gestionan por otro flujo.
+    """
+    if not cancellation_date:
+        return
+    source_period = _accounting_period_for_date(company, posting_date)
+    cancel_period = _accounting_period_for_date(company, cancellation_date)
+    if source_period is not None and cancel_period is not None and source_period.id != cancel_period.id:
+        raise ValueError("La anulacion debe efectuarse en el mismo periodo contable del documento.")
+
+
 def _validate_petty_cash_custodian(custodian_id: str | None) -> None:
     """Valida que el responsable exista y tenga acceso al modulo de bancos."""
     if not custodian_id:
@@ -641,6 +673,7 @@ def create_petty_cash_voucher(
     unit_code: str | None = None,
     project_code: str | None = None,
     comments: str | None = None,
+    naming_series_id: str | None = None,
 ) -> PettyCashVoucher:
     """Crea un vale de caja chica en estado borrador (no postea al GL)."""
     fund = _validate_petty_cash_fund(petty_cash_id, company)
@@ -671,7 +704,7 @@ def create_petty_cash_voucher(
             document=voucher,
             entity_type="petty_cash_voucher",
             posting_date_raw=posted_date,
-            naming_series_id=None,
+            naming_series_id=naming_series_id,
         )
     except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
         pass
@@ -688,18 +721,51 @@ _PETTY_CASH_VOUCHER_STATUS_FLOW = {
 }
 
 
-def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str) -> PettyCashVoucher:
+def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str, *, cancellation_date=None) -> PettyCashVoucher:
     """Transiciona el estado de un vale (borrador -> entregado -> liquidado | cancelado)."""
     new_status = (new_status or "").strip().lower()
     current = voucher.voucher_status or "borrador"
     allowed = _PETTY_CASH_VOUCHER_STATUS_FLOW.get(current, set())
     if new_status not in allowed:
         raise ValueError(f"Transicion de estado no valida: {current} -> {new_status}")
+    if new_status == "cancelado":
+        _validate_same_period_cancellation(voucher.company or "", voucher.posting_date, cancellation_date or date.today())
     voucher.voucher_status = new_status
     if new_status == "cancelado":
         voucher.docstatus = 2
     elif new_status == "entregado":
         voucher.docstatus = 1
+    database.session.commit()
+    return voucher
+
+
+def update_petty_cash_voucher(
+    voucher: PettyCashVoucher,
+    *,
+    concept: str,
+    amount: Decimal,
+    delivered_to: str | None = None,
+    posting_date=None,
+    cost_center_code: str | None = None,
+    unit_code: str | None = None,
+    project_code: str | None = None,
+    comments: str | None = None,
+) -> PettyCashVoucher:
+    """Edita un vale de caja chica en estado borrador (CRUD: editar borrador)."""
+    if (voucher.voucher_status or "borrador") != "borrador":
+        raise ValueError("Solo se puede editar un vale en estado borrador.")
+    if not concept.strip():
+        raise ValueError("El concepto del vale es obligatorio.")
+    if amount is None or amount <= 0:
+        raise ValueError("El importe del vale debe ser mayor a cero.")
+    voucher.concept = concept.strip()
+    voucher.amount = amount
+    voucher.delivered_to = delivered_to or None
+    voucher.posting_date = posting_date or voucher.posting_date
+    voucher.cost_center_code = cost_center_code or None
+    voucher.unit_code = unit_code or None
+    voucher.project_code = project_code or None
+    voucher.comments = comments or None
     database.session.commit()
     return voucher
 
@@ -820,6 +886,7 @@ def create_petty_cash_expense(
     voucher_id: str | None = None,
     remarks: str | None = None,
     actor_id: str | None = None,
+    naming_series_id: str | None = None,
 ) -> PettyCashExpense:
     """Crea y postea un gasto de caja chica (Dr Gasto / Cr Caja Chica)."""
     if posted_date is None:
@@ -880,7 +947,7 @@ def create_petty_cash_expense(
             document=expense,
             entity_type="petty_cash_expense",
             posting_date_raw=posted_date,
-            naming_series_id=None,
+            naming_series_id=naming_series_id,
         )
     except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
         pass
@@ -927,7 +994,7 @@ def create_petty_cash_expense_from_voucher(
     return expense
 
 
-def cancel_petty_cash_expense(expense, *, reason: str | None = None, actor_id: str | None = None):
+def cancel_petty_cash_expense(expense, *, reason: str | None = None, actor_id: str | None = None, cancellation_date=None):
     """Anula un gasto de caja chica, revirtiendo su asiento contable (append-only)."""
     from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
 
@@ -937,6 +1004,7 @@ def cancel_petty_cash_expense(expense, *, reason: str | None = None, actor_id: s
         replenishment = database.session.get(PettyCashReplenishment, expense.replenishment_id)
         if replenishment and replenishment.status == "reembolsado":
             raise ValueError("No se puede anular un gasto después de reponer la Caja Chica.")
+    _validate_same_period_cancellation(expense.company or "", expense.posting_date, cancellation_date or date.today())
     if expense.journal_id:
         journal = database.session.get(ComprobanteContable, expense.journal_id)
         if journal is not None:
@@ -961,6 +1029,7 @@ def create_petty_cash_reconciliation(
     reconciliation_date,
     counted_cash: Decimal,
     explanation: str | None = None,
+    naming_series_id: str | None = None,
 ) -> PettyCashReconciliation:
     """Crea una conciliacion en borrador sin generar asientos contables."""
     fund = _validate_petty_cash_fund(petty_cash_id, company)
@@ -992,6 +1061,7 @@ def create_petty_cash_reconciliation(
         explanation=explanation or None,
         status="borrador",
         docstatus=0,
+        transaction_currency=fund.currency or _company_currency(company),
     )
     database.session.add(reconciliation)
     database.session.flush()
@@ -1000,7 +1070,7 @@ def create_petty_cash_reconciliation(
             document=reconciliation,
             entity_type="petty_cash_reconciliation",
             posting_date_raw=reconciliation_date,
-            naming_series_id=None,
+            naming_series_id=naming_series_id,
         )
     except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
         pass
@@ -1017,6 +1087,49 @@ def reconcile_petty_cash(reconciliation: PettyCashReconciliation, *, actor_id: s
     reconciliation.status = "conciliado"
     reconciliation.docstatus = 1
     reconciliation.reconciled_by = actor_id
+    database.session.commit()
+    return reconciliation
+
+
+def update_petty_cash_reconciliation(
+    reconciliation: PettyCashReconciliation,
+    *,
+    counted_cash: Decimal,
+    explanation: str | None = None,
+    reconciliation_date=None,
+) -> PettyCashReconciliation:
+    """Edita una conciliacion en estado borrador (CRUD: editar borrador)."""
+    if reconciliation.status != "borrador":
+        raise ValueError("Solo se puede editar una conciliacion en borrador.")
+    if counted_cash is None or counted_cash < 0:
+        raise ValueError("El efectivo contado debe ser un importe no negativo.")
+    reconciliation.counted_cash = counted_cash
+    reconciliation.explanation = explanation or None
+    if reconciliation_date:
+        reconciliation.reconciliation_date = reconciliation_date
+        reconciliation.posting_date = reconciliation_date
+    database.session.commit()
+    return reconciliation
+
+
+def cancel_petty_cash_reconciliation(
+    reconciliation: PettyCashReconciliation,
+    *,
+    reason: str | None = None,
+    actor_id: str | None = None,
+    cancellation_date=None,
+) -> PettyCashReconciliation:
+    """Anula una conciliacion de caja chica (append-only, solo mismo periodo)."""
+    if reconciliation.status == "cancelado":
+        raise ValueError("La conciliacion ya fue anulada.")
+    if reconciliation.status == "conciliado" and reconciliation.adjustment_journal_id:
+        raise ValueError("No se puede anular una conciliacion con ajuste contable registrado.")
+    _validate_same_period_cancellation(
+        reconciliation.company or "", reconciliation.reconciliation_date, cancellation_date or date.today()
+    )
+    reconciliation.status = "cancelado"
+    reconciliation.docstatus = 2
+    reconciliation.cancel_reason = reason or None
     database.session.commit()
     return reconciliation
 
@@ -1111,9 +1224,10 @@ def create_petty_cash_replenishment(
     request_date,
     notes: str | None = None,
     actor_id: str | None = None,
+    naming_series_id: str | None = None,
 ) -> PettyCashReplenishment:
     """Crea una solicitud y reserva sus gastos pendientes de reposicion."""
-    _validate_petty_cash_fund(petty_cash_id, company)
+    fund = _validate_petty_cash_fund(petty_cash_id, company)
     ids = list(dict.fromkeys(str(item) for item in expense_ids if item))
     if not ids:
         raise ValueError("Seleccione al menos un gasto para reponer.")
@@ -1137,6 +1251,7 @@ def create_petty_cash_replenishment(
         requested_by=actor_id,
         status="borrador",
         docstatus=0,
+        transaction_currency=fund.currency or _company_currency(company),
     )
     database.session.add(replenishment)
     database.session.flush()
@@ -1147,7 +1262,7 @@ def create_petty_cash_replenishment(
             document=replenishment,
             entity_type="petty_cash_replenishment",
             posting_date_raw=request_date,
-            naming_series_id=None,
+            naming_series_id=naming_series_id,
         )
     except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
         pass
@@ -1168,6 +1283,73 @@ def set_petty_cash_replenishment_status(
         replenishment.docstatus = 1
     elif new_status == "aprobado":
         replenishment.approved_by = actor_id
+    database.session.commit()
+    return replenishment
+
+
+def update_petty_cash_replenishment(
+    replenishment: PettyCashReplenishment,
+    *,
+    expense_ids: list[str],
+    notes: str | None = None,
+    request_date=None,
+) -> PettyCashReplenishment:
+    """Edita una solicitud de reposicion en borrador (CRUD: editar borrador)."""
+    if (replenishment.status or "borrador") != "borrador":
+        raise ValueError("Solo se puede editar una reposicion en borrador.")
+    company = replenishment.company or ""
+    petty_cash_id = replenishment.petty_cash_id
+    _validate_petty_cash_fund(petty_cash_id, company)
+    ids = list(dict.fromkeys(str(item) for item in expense_ids if item))
+    if not ids:
+        raise ValueError("Seleccione al menos un gasto para reponer.")
+    expenses = list(database.session.execute(database.select(PettyCashExpense).filter(PettyCashExpense.id.in_(ids))).scalars())
+    if len(expenses) != len(ids) or any(
+        expense.company != company
+        or expense.petty_cash_id != petty_cash_id
+        or expense.docstatus != 1
+        or (expense.replenishment_id and expense.replenishment_id != replenishment.id)
+        for expense in expenses
+    ):
+        raise ValueError("Uno o mas gastos no estan disponibles para reposicion.")
+    previous = list(
+        database.session.execute(database.select(PettyCashExpense).filter_by(replenishment_id=replenishment.id)).scalars()
+    )
+    for expense in previous:
+        expense.replenishment_id = None
+    for expense in expenses:
+        expense.replenishment_id = replenishment.id
+    replenishment.amount = sum((Decimal(str(expense.amount or 0)) for expense in expenses), Decimal("0"))
+    replenishment.notes = notes or None
+    if request_date:
+        replenishment.request_date = request_date
+        replenishment.posting_date = request_date
+    database.session.commit()
+    return replenishment
+
+
+def cancel_petty_cash_replenishment(
+    replenishment: PettyCashReplenishment,
+    *,
+    reason: str | None = None,
+    actor_id: str | None = None,
+    cancellation_date=None,
+) -> PettyCashReplenishment:
+    """Anula una solicitud de reposicion (append-only, solo mismo periodo)."""
+    if (replenishment.status or "borrador") == "reembolsado":
+        raise ValueError("No se puede anular una reposicion ya reembolsada.")
+    if replenishment.status == "cancelado":
+        raise ValueError("La reposicion ya fue anulada.")
+    _validate_same_period_cancellation(
+        replenishment.company or "", replenishment.request_date, cancellation_date or date.today()
+    )
+    for expense in list(
+        database.session.execute(database.select(PettyCashExpense).filter_by(replenishment_id=replenishment.id)).scalars()
+    ):
+        expense.replenishment_id = None
+    replenishment.status = "cancelado"
+    replenishment.docstatus = 2
+    replenishment.cancel_reason = reason or None
     database.session.commit()
     return replenishment
 
