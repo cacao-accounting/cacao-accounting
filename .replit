@@ -19,6 +19,7 @@ exposeLocalhost = true
 [[ports]]
 localPort = 8080
 externalPort = 8080
+exposeLocalhost = true
 
 [rules]
 

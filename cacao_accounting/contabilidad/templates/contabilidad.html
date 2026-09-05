@@ -118,6 +118,14 @@
         <a href="{{ url_for('contabilidad.revalorizaciones_cambiarias') }}">Revalorización cambiaria</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
+      <li>
+        <a href="{{ url_for('compras.compras_factura_compra_lista') }}">Factura de Proveedor</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
+      <li>
+        <a href="{{ url_for('ventas.ventas_factura_venta_lista') }}">Factura de Cliente</a>
+        {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
+      </li>
       {% else %}
       <li class="ca-no-access">
         <span>Comprobantes Contables</span>
