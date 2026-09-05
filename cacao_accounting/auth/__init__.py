@@ -33,7 +33,6 @@ ph = PasswordHasher()
 INICIO_SESION = redirect("/login")
 
 PROFILE_HTML = "profile.html"
-PROFILE_TITLE = "Mi Perfil - Cacao Accounting"
 
 
 @administrador_sesion.user_loader
@@ -418,5 +417,5 @@ def _render_profile(profile_form: Any, password_form: Any) -> str:
         PROFILE_HTML,
         profile_form=profile_form,
         password_form=password_form,
-        titulo=PROFILE_TITLE,
+        titulo=_("Mi Perfil - Cacao Accounting"),
     )

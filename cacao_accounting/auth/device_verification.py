@@ -203,10 +203,10 @@ def enviar_otp_por_email(user: User, code: str) -> None:
         log.warning("User %s has no email configured", user.user)
         return
     body = (
-        f"{'Hola'} {user.name or user.user},\n\n"
+        f"{_('Hola')} {user.name or user.user},\n\n"
         f"{_('Se detectó un intento de inicio de sesión desde un navegador no reconocido.')}\n\n"
         f"{_('Su código de verificación es:')}: {code}\n\n"
-        f"{_('Este código expira en')} {OTP_TTL_MINUTES} {'minutos'}.\n\n"
+        f"{_('Este código expira en')} {OTP_TTL_MINUTES} {_('minutos')}.\n\n"
         f"{_('Si usted no solicitó este código, ignore este mensaje.')}"
     )
     try:
@@ -236,11 +236,11 @@ def enviar_token_recuperacion_email(user: User, token: str) -> None:
         return
 
     body = (
-        f"{'Hola'} {user.name or user.user},\n\n"
+        f"{_('Hola')} {user.name or user.user},\n\n"
         f"{_('Recibimos una solicitud para restablecer su contraseña.')}\n\n"
         f"{_('Para crear una nueva contraseña, haga clic en el siguiente enlace:')}\n\n"
         f"{reset_url}\n\n"
-        f"{_('Este enlace expira en')} {PASSWORD_RESET_TTL_HOURS} {'hora(s)'}.\n\n"
+        f"{_('Este enlace expira en')} {PASSWORD_RESET_TTL_HOURS} {_('hora(s)')}.\n\n"
         f"{_('Si usted no solicitó este cambio, ignore este mensaje.')}"
     )
     try:
