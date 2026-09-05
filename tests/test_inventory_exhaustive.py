@@ -655,6 +655,32 @@ def test_05_ajustes_valores_positivos_negativos(app):
         assert bin_row.valuation_rate == Decimal("120.00")
 
 
+def test_value_only_adjustment_saves_explicit_amount_when_quantity_is_zero(app):
+    """La línea de ajuste de solo valor conserva el monto enviado por el formulario."""
+    from cacao_accounting.inventario.services import _save_stock_entry_item
+
+    _setup_inventory_test_data(app)
+    with app.app_context():
+        entry = StockEntry(
+            company="cacao",
+            purpose="adjustment_negative",
+            from_warehouse="WH-MAIN",
+            transaction_currency="NIO",
+            base_currency="NIO",
+        )
+        database.session.add(entry)
+        database.session.flush()
+        with app.test_request_context(
+            method="POST",
+            data={"qty_0": "0", "rate_0": "0", "amount_0": "25", "uom_0": "UND"},
+        ):
+            _save_stock_entry_item(entry, 0, "ITEM-GOODS")
+
+        line = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)).scalar_one()
+        assert line.qty == Decimal("0")
+        assert line.amount == Decimal("25")
+
+
 def test_negative_value_adjustment_cannot_create_negative_stock_value(app):
     """Un ajuste negativo de solo valor no puede dejar valuación negativa."""
     _setup_inventory_test_data(app)

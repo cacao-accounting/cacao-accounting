@@ -2900,6 +2900,8 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
 
     if purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
         amount = _decimal_value(line.amount)
+        if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount <= 0:
+            raise PostingError("Un ajuste de solo valor requiere un monto mayor a cero.")
         if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount > 0:
             # A positive adjustment can change value without changing quantity.
             # It must bypass _line_rate, whose zero-quantity guard protects
@@ -2925,6 +2927,8 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
     if purpose in ("material_issue", "adjustment_negative"):
         source_warehouse = line.source_warehouse or document.from_warehouse
         if qty == 0:
+            if _decimal_value(line.amount) <= 0:
+                raise PostingError("Un ajuste de solo valor requiere un monto mayor a cero.")
             value = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
             fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
             return [

@@ -340,6 +340,7 @@
         availableUoms: Array.isArray(config.uoms) ? [...config.uoms] : [],
         availableWarehouses: Array.isArray(config.warehouses) ? [...config.warehouses] : [],
         availableSourceTypes: normalizeAvailableSourceTypes(config.formKey, config.availableSourceTypes),
+        allowManualAmount: config.allowManualAmount === true,
         searchCriteria: {
           source_type: config.initialSourceType || ''
         },
@@ -657,6 +658,11 @@
         },
 
         calcAmount(line) {
+          if (this.allowManualAmount && toNumber(line.qty) === 0) {
+            line.amount = toNumber(line.amount);
+            this.queueTaxPreview();
+            return;
+          }
           const gross = toNumber(line.qty) * toNumber(line.rate);
           line.amount = gross * (1 - (toNumber(line.discount_percentage) / 100));
           this.queueTaxPreview();

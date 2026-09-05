@@ -748,6 +748,7 @@ def inventario_entrada_nuevo():
             {"value": "purchase_receipt", "label": _("Recepción de Compra")},
             {"value": "delivery_note", "label": _("Remisión de Mercadería Vendida")},
         ],
+        "allowManualAmount": purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"},
     }
     if request.method == "POST":
         if formulario.validate():
@@ -970,8 +971,13 @@ def inventario_entrada_submit(entry_id: str):
             items=items,
             require_party=False,
             require_warehouse=True,
-            require_qty_positive=registro.purpose != "stock_reconciliation",
+            require_qty_positive=registro.purpose
+            not in {"stock_reconciliation", "adjustment_positive", "adjustment_negative", "stock_adjustment"},
+            require_rate_positive=registro.purpose not in {"adjustment_positive", "adjustment_negative", "stock_adjustment"},
         )
+        if registro.purpose in {"adjustment_positive", "adjustment_negative", "stock_adjustment"}:
+            if any(Decimal(str(item.qty or 0)) == 0 and Decimal(str(item.amount or 0)) <= 0 for item in items):
+                raise ValueError(_("Un ajuste de solo valor requiere un monto mayor a cero."))
         from cacao_accounting.inventario.service import validate_batch_serial_draft
 
         validate_batch_serial_draft(items)
