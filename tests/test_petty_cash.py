@@ -911,8 +911,8 @@ def test_gasto_con_vale_liquida_el_vale(app_ctx_book):
         reconciliation_date=date(2026, 2, 10),
         counted_cash=Decimal("900.0000"),
     )
-    assert reconciliacion.expected_cash == Decimal("900.0000")
-    assert reconciliacion.difference == Decimal("0.0000")
+    assert reconciliacion.expected_cash == Decimal("1000.0000")
+    assert reconciliacion.difference == Decimal("-100.0000")
 
     with pytest.raises(ValueError):
         create_petty_cash_expense(
@@ -1055,11 +1055,11 @@ def test_crear_y_conciliar_caja_chica(app_ctx_book):
         petty_cash_id=fondo.id,
         reconciliation_date=date(2026, 2, 3),
         counted_cash=Decimal("780.0000"),
-        explanation="Faltante de 20 cordobas",
+        explanation="Faltante de 220 cordobas",
     )
     assert recon.ledger_balance == Decimal("800.0000")
-    assert recon.expected_cash == Decimal("800.0000")
-    assert recon.difference == Decimal("-20.0000")
+    assert recon.expected_cash == Decimal("1000.0000")
+    assert recon.difference == Decimal("-220.0000")
     assert recon.status == "borrador"
 
     reconcile_petty_cash(recon, actor_id="user-1")
@@ -1073,6 +1073,54 @@ def test_crear_y_conciliar_caja_chica(app_ctx_book):
     )
     assert journal is not None
     assert recon.adjustment_journal_id == str(journal.id)
+
+
+def test_conciliacion_incluye_gastos_pendientes_en_efectivo_esperado(app_ctx_book):
+    """El efectivo esperado incluye los gastos posteados sin reponer.
+
+    Refs: #799. Cuando un gasto se postea sin reponer el fondo, el saldo del GL
+    disminuye pero el efectivo fisico esperado en caja sigue incluyendo el gasto
+    pendiente de reposicion.
+    """
+    from cacao_accounting.bancos.services import create_petty_cash_expense, create_petty_cash_reconciliation
+    from cacao_accounting.database import GLEntry, database
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 2, 1),
+            company="cacao",
+            account_id=fondo.account_id,
+            debit=Decimal("1000.0000"),
+            credit=Decimal("0"),
+            voucher_type="journal_entry",
+            voucher_id="SEED-FLOAT",
+        )
+    )
+    database.session.commit()
+
+    create_petty_cash_expense(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_account_code="EXP-001",
+        concept="Gasto sin reponer",
+        amount=Decimal("200.0000"),
+        cost_center_code="MAIN",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+
+    recon = create_petty_cash_reconciliation(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        reconciliation_date=date(2026, 2, 3),
+        counted_cash=Decimal("1000.0000"),
+    )
+    assert recon.ledger_balance == Decimal("800.0000")
+    assert recon.expected_cash == Decimal("1000.0000")
+    assert recon.difference == Decimal("0.0000")
+    assert recon.explained_amount == Decimal("800.0000")
 
 
 def test_conciliacion_diferencia_sin_explicacion_falla(app_ctx_book):
