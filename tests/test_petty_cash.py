@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -44,7 +45,7 @@ def app_ctx():
         database.drop_all()
 
 
-def _crear_cuenta_petty_cash(company: str = "cacao") -> object:
+def _crear_cuenta_petty_cash(company: str = "cacao") -> Any:
     """Crea una cuenta contable de tipo petty_cash para la compania."""
     from cacao_accounting.database import Accounts, database
 
@@ -628,8 +629,9 @@ def test_vale_transiciones_borrador_entregado_liquidado(app_ctx):
     set_petty_cash_voucher_status(vale, "entregado")
     assert vale.voucher_status == "entregado"
     assert vale.docstatus == 1
-    set_petty_cash_voucher_status(vale, "liquidado")
-    assert vale.voucher_status == "liquidado"
+    with pytest.raises(ValueError, match="gasto contabilizado"):
+        set_petty_cash_voucher_status(vale, "liquidado")
+    assert vale.voucher_status == "entregado"
 
 
 def test_vale_transicion_no_valida_falla(app_ctx):
@@ -844,6 +846,12 @@ def test_liquidar_vale_en_gasto(app_ctx_book):
     assert gasto.id is not None
     assert vale.voucher_status == "liquidado"
     assert vale.expense_id == gasto.id
+
+    # El estado también puede confirmarse por la transición genérica cuando
+    # ya existe un gasto posteado y su asiento GL activo.
+    vale.voucher_status = "entregado"
+    set_petty_cash_voucher_status(vale, "liquidado")
+    assert vale.voucher_status == "liquidado"
 
 
 def test_anular_gasto_reabre_vale_origen(app_ctx_book):
