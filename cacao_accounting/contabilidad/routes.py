@@ -2392,18 +2392,18 @@ def importar_tasas_cambio():
         try:
             resultado = svc.import_rates(archivo.filename, archivo.read())
             flash(
-                _(
-                    "Importación completada: %(inserted)s insertadas, %(skipped)s duplicadas omitidas.",
-                    inserted=resultado["inserted"],
-                    skipped=resultado["skipped"],
-                ),
+                _("Importación completada: %(inserted)s insertadas, %(skipped)s duplicadas omitidas.")
+                % {"inserted": resultado["inserted"], "skipped": resultado["skipped"]},
                 "success",
             )
             if resultado["errors"]:
                 for err in resultado["errors"][:10]:
                     flash(err, "warning")
                 if len(resultado["errors"]) > 10:
-                    flash(_("%(count)s errores adicionales omitidos.", count=len(resultado["errors"]) - 10), "warning")
+                    flash(
+                        _("%(count)s errores adicionales omitidos.") % {"count": len(resultado["errors"]) - 10},
+                        "warning",
+                    )
             return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
         except ExchangeRateImportError as error:
             flash(str(error), "danger")
