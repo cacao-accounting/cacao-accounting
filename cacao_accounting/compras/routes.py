@@ -1987,16 +1987,18 @@ def compras_orden_compra_editar(order_id: str):
     )
 
 
-def _copy_purchase_order_source_relations(
-    source_order: PurchaseOrder,
-    target_order: PurchaseOrder,
+def _copy_active_document_relations(
+    source_id: str,
+    target_id: str,
+    target_type: str,
+    target_company: str | None,
     item_ids: dict[str, str],
 ) -> None:
-    """Copy active source relations to a duplicated purchase order draft."""
+    """Copy active source relations to a duplicated purchase document draft."""
     relations = (
         database.session.execute(
             database.select(DocumentRelation)
-            .filter_by(target_type="purchase_order", target_id=source_order.id, status="active")
+            .filter_by(target_type=target_type, target_id=source_id, status="active")
             .order_by(DocumentRelation.created.asc(), DocumentRelation.id.asc())
         )
         .scalars()
@@ -2012,9 +2014,9 @@ def _copy_purchase_order_source_relations(
                 source_id=relation.source_id,
                 source_item_id=relation.source_item_id,
                 target_type=relation.target_type,
-                target_id=target_order.id,
+                target_id=target_id,
                 target_item_id=target_item_id,
-                company=relation.company or target_order.company,
+                company=relation.company or target_company,
                 qty=relation.qty,
                 qty_in_base_uom=relation.qty_in_base_uom,
                 uom=relation.uom,
@@ -2088,7 +2090,7 @@ def compras_orden_compra_duplicar(order_id: str):
     duplicada.net_total = total
     duplicada.grand_total = total
     duplicada.base_total = (total * Decimal(str(duplicada.exchange_rate or 1))).quantize(Decimal("0.0001"))
-    _copy_purchase_order_source_relations(origen, duplicada, item_ids)
+    _copy_active_document_relations(origen.id, duplicada.id, "purchase_order", duplicada.company, item_ids)
     log_create(duplicada)
     database.session.commit()
     flash(_("Orden de compra duplicada como nuevo borrador."), "success")
@@ -2696,11 +2698,13 @@ def compras_recepcion_duplicar(receipt_id: str):
         supplier_id=origen.supplier_id,
         supplier_name=origen.supplier_name,
         company=origen.company,
+        purchase_order_id=origen.purchase_order_id,
         transaction_currency=origen.transaction_currency,
         base_currency=origen.base_currency,
         exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
         remarks=origen.remarks,
+        is_return=origen.is_return,
         docstatus=0,
     )
     _copy_logistics(duplicada, origen)
@@ -2714,6 +2718,7 @@ def compras_recepcion_duplicar(receipt_id: str):
         naming_series_id=None,
     )
     total = Decimal("0")
+    item_ids: dict[str, str] = {}
     for item in database.session.execute(
         database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=origen.id)
     ).scalars():
@@ -2723,15 +2728,21 @@ def compras_recepcion_duplicar(receipt_id: str):
             item_name=item.item_name,
             qty=item.qty,
             uom=item.uom,
+            qty_in_base_uom=item.qty_in_base_uom,
             rate=item.rate,
             amount=item.amount,
+            base_amount=item.base_amount,
             warehouse=item.warehouse,
             batch_id=item.batch_id,
             serial_no=item.serial_no,
+            valuation_rate=item.valuation_rate,
         )
         database.session.add(linea)
+        database.session.flush()
+        item_ids[item.id] = linea.id
         total += item.amount or Decimal("0")
     _set_purchase_receipt_totals(duplicada, total)
+    _copy_active_document_relations(origen.id, duplicada.id, "purchase_receipt", duplicada.company, item_ids)
     log_create(duplicada)
     database.session.commit()
     flash(_("Recepcion de compra duplicada como nuevo borrador."), "success")
