@@ -4726,6 +4726,17 @@ def test_line_amount_ignores_client_supplied_total(app_ctx):
         assert inventory_line_amount(0) == Decimal("50")
 
 
+def test_line_amount_free_item_returns_zero(app_ctx):
+    """An item with amount=0 is explicitly free and is not re-valued at qty*rate (#798)."""
+    from cacao_accounting.accounting_engine.document_builders import _line_amount
+
+    free_item = SimpleNamespace(amount=Decimal("0"), qty=Decimal("1"), rate=Decimal("100"))
+    assert _line_amount(free_item) == Decimal("0")
+
+    unset_item = SimpleNamespace(amount=None, qty=Decimal("1"), rate=Decimal("100"))
+    assert _line_amount(unset_item) == Decimal("100")
+
+
 def test_cancel_landed_cost_reverses_capitalized_inventory_value(app_ctx):
     """Cancelar el landed cost revierte la capa y el valor del StockBin."""
     from cacao_accounting.contabilidad.posting import _cancel_landed_cost_valuations

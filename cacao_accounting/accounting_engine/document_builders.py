@@ -1547,9 +1547,9 @@ def _document_exchange_rate(document: Any) -> Decimal:
 
 def _line_amount(line: Any) -> Decimal:
     """Resolve a transactional line amount."""
-    amount = _decimal_value(getattr(line, "amount", None))
-    if amount > 0:
-        return amount
+    raw_amount = getattr(line, "amount", None)
+    if raw_amount is not None:
+        return _decimal_value(raw_amount)
     return _decimal_value(getattr(line, "qty", None)) * _decimal_value(getattr(line, "rate", None))
 
 
