@@ -131,6 +131,19 @@ def test_sales_form_decimal_rejects_non_numeric_input_as_value_error(app_ctx):
             _form_decimal("qty_0")
 
 
+def test_sales_customer_creation_respects_unchecked_active_box(app_ctx):
+    """A customer created without the active checkbox must remain inactive."""
+    from cacao_accounting.ventas import _handle_cliente_create
+
+    form = {"name": "Cliente inactivo de prueba", "company": "cacao"}
+    with app_ctx.test_request_context("/sales/customer/new", method="POST", data=form):
+        response = _handle_cliente_create(form, "cacao", [], None, "Nuevo Cliente")
+
+    assert response.status_code == 302
+    customer = database.session.execute(database.select(Party).where(Party.name == "Cliente inactivo de prueba")).scalar_one()
+    assert customer.is_active is False
+
+
 def test_sales_invoice_form_exposes_company_warehouses(app_ctx):
     """La factura de venta muestra la bodega por línea para crear la DN correcta."""
     client = app_ctx.test_client()
