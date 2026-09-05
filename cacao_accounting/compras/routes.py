@@ -1225,7 +1225,7 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         database.session.execute(
             database.select(PurchaseRequestComparisonLine)
             .where(PurchaseRequestComparisonLine.comparison_id == request_comparison.id)
-            .order_by(PurchaseRequestComparisonLine.id)
+            .order_by(PurchaseRequestComparisonLine.purchase_request_item_id, PurchaseRequestComparisonLine.id)
         )
         .scalars()
         .all()

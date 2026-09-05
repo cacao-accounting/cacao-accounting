@@ -237,7 +237,7 @@ def test_purchase_request_to_placed_purchase_orders_over_http(e2e_app):
                 database.session.execute(
                     database.select(PurchaseRequestComparisonLine)
                     .where(PurchaseRequestComparisonLine.comparison_id == comparison.id)
-                    .order_by(PurchaseRequestComparisonLine.id)
+                    .order_by(PurchaseRequestComparisonLine.purchase_request_item_id)
                 )
                 .scalars()
                 .all()
