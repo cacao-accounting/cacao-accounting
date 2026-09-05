@@ -3147,9 +3147,17 @@ def _skip_balance_sheet_row(
     if not include_closing and row.is_fiscal_year_closing:
         row_year = date(int(row.posting_year), 1, 1)
         return fiscal_year_start is None or classification in _PL_CLASSIFICATIONS or row_year >= fiscal_year_start
-    if classification in _PL_CLASSIFICATIONS and fiscal_year_start:
+    if classification in _PL_CLASSIFICATIONS and int(row.posting_year) in closed_fiscal_years:
+        # El resultado de un año fiscal cerrado ya se transfirió a patrimonio
+        # mediante la contrapartida del asiento de cierre; excluir sus cuentas
+        # P&L originales evita duplicar el neto en period_profit. Esa
+        # contrapartida solo se acumula en equity cuando el usuario pide el
+        # asiento de cierre o cuando el cierre pertenece a un año anterior, de
+        # modo que en otro caso el neto del ejercicio se conserva como P&L.
+        if include_closing:
+            return True
         row_year = date(int(row.posting_year), 1, 1)
-        return row_year < fiscal_year_start and int(row.posting_year) in closed_fiscal_years
+        return fiscal_year_start is not None and row_year < fiscal_year_start
     return False
 
 

@@ -370,3 +370,101 @@ def test_multiannual_balance_sheet_balanced(app, setup_data):
         assert report.totals["liabilities"] == Decimal("0.00")
         assert report.totals["equity"] == Decimal("500.00")
         assert report.totals["difference"] == Decimal("0.00")
+
+
+def test_balance_sheet_counts_closed_fiscal_year_result_once(app, setup_data):
+    """El balance general no duplica el resultado neto del propio año cerrado.
+
+    Tras postear el asiento de cierre del año fiscal, el balance para el
+    período que contiene dicho asiento debe presentar el resultado una sola
+    vez (en las utilidades acumuladas), sin volver a sumarlo vía el P&L del
+    mismo año. Ref: #811
+    """
+    from cacao_accounting.reportes.services import get_balance_sheet_report, FinancialReportFilters
+
+    with app.app_context():
+        capital_acc = Accounts(
+            entity="CMP",
+            code="31.01",
+            name="Capital",
+            classification="equity",
+            group=False,
+            active=True,
+        )
+        database.session.add(capital_acc)
+        database.session.commit()
+
+        # Post income of 1000 and expense of 600 (net result 400) in period 2024-12.
+        payload1 = {
+            "company": "CMP",
+            "posting_date": "2024-12-15",
+            "transaction_currency": "USD",
+            "exchange_rate": "1",
+            "lines": [
+                {"account": setup_data["cash_acc_code"], "debit": "1000", "credit": "0"},
+                {"account": setup_data["income_acc_code"], "debit": "0", "credit": "1000"},
+            ],
+        }
+        j1 = create_journal_draft(payload1, setup_data["admin_user_id"])
+        submit_journal(j1.id)
+
+        payload2 = {
+            "company": "CMP",
+            "posting_date": "2024-12-15",
+            "transaction_currency": "USD",
+            "exchange_rate": "1",
+            "lines": [
+                {"account": setup_data["expense_acc_code"], "debit": "600", "credit": "0"},
+                {"account": setup_data["cash_acc_code"], "debit": "0", "credit": "600"},
+            ],
+        }
+        j2 = create_journal_draft(payload2, setup_data["admin_user_id"])
+        submit_journal(j2.id)
+
+        payload3 = {
+            "company": "CMP",
+            "posting_date": "2024-12-15",
+            "transaction_currency": "USD",
+            "exchange_rate": "1",
+            "lines": [
+                {"account": setup_data["cash_acc_code"], "debit": "100", "credit": "0"},
+                {"account": capital_acc.code, "debit": "0", "credit": "100"},
+            ],
+        }
+        j3 = create_journal_draft(payload3, setup_data["admin_user_id"])
+        submit_journal(j3.id)
+
+        # Close the fiscal year 2024 and post the closing entry.
+        fy2024 = database.session.get(FiscalYear, setup_data["fiscal_year_id"])
+        fy2024.is_closed = True
+        period2024 = database.session.execute(
+            database.select(AccountingPeriod).filter_by(fiscal_year_id=setup_data["fiscal_year_id"])
+        ).scalar_one()
+        period2024.is_closed = True
+        period2024.enabled = False
+        database.session.commit()
+
+        closing_journal = create_fiscal_year_closing_voucher("CMP", setup_data["fiscal_year_id"], setup_data["admin_user_id"])
+        assert closing_journal.status == "submitted"
+
+        # Balance general for the period that contains the closing entry
+        # (2024-12). The net result 400 must be counted exactly once.
+        report = get_balance_sheet_report(
+            FinancialReportFilters(
+                company="CMP",
+                ledger="GEN",
+                accounting_period="2024-12",
+                include_closing=True,
+            )
+        )
+
+        # assets = 1000 - 600 + 100
+        # equity = capital 100 + retained earnings 400 (one single time)
+        assert report.totals["assets"] == Decimal("500.00")
+        assert report.totals["liabilities"] == Decimal("0.00")
+        assert report.totals["equity"] == Decimal("500.00")
+        assert report.totals["period_profit"] == Decimal("0.00")
+        assert report.totals["difference"] == Decimal("0.00")
+
+        equity_rows = sum(Decimal(str(row.values["amount"])) for row in report.rows if row.values["section"] == "equity")
+        assert equity_rows == Decimal("500.00")
