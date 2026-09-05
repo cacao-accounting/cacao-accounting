@@ -596,7 +596,7 @@ def _comparison_selected_lines(comparison: PurchaseRequestComparison) -> list[Pu
                 PurchaseRequestComparisonLine.comparison_id == comparison.id,
                 PurchaseRequestComparisonLine.selected_supplier_quotation_id.is_not(None),
             )
-            .order_by(PurchaseRequestComparisonLine.id)
+            .order_by(PurchaseRequestComparisonLine.purchase_request_item_id, PurchaseRequestComparisonLine.id)
         )
         .scalars()
         .all()
