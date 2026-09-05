@@ -3694,7 +3694,7 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
             line_context = _ledger_context_with_currency(context, line_currency, getattr(line, "exchange_rate", None))
             line_context, company_value = _comprobante_line_value(line_context, original_value)
             params = _comprobante_entry_params(line_context, line, account_id, company_value, original_value, is_fy_closing)
-            entries.append(_create_gl_entry(context=context, params=params))
+            entries.append(_create_gl_entry(context=line_context, params=params))
 
     total_value = sum((_decimal_value(getattr(line, "value", None)) for line in lines), Decimal("0"))
     if total_value != 0:

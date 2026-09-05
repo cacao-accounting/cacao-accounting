@@ -608,6 +608,80 @@ def test_submit_journal_converts_foreign_currency_to_book_currency(app_ctx):
     assert credit_entry.credit == Decimal("360.0000") or credit_entry.credit == Decimal("360.00")
 
 
+def test_submit_journal_posts_each_line_with_its_own_currency_and_rate(app_ctx):
+    """Refs: #812 — Un comprobante manual con línea en moneda distinta a la cabecera
+    debe postear cada línea GL con la moneda y tasa de esa línea, no las de la cabecera."""
+    from decimal import Decimal
+
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
+    from cacao_accounting.database import Accounts, Book, Currency, GLEntry, database
+
+    usd_expense = Accounts(entity="cacao", code="EXP-USD", name="Gasto USD", active=True, enabled=True, group=False)
+    usd_cash = Accounts(entity="cacao", code="CASH-USD", name="Caja USD", active=True, enabled=True, group=False)
+    nio_expense = Accounts(entity="cacao", code="EXP-NIO", name="Gasto NIO", active=True, enabled=True, group=False)
+    nio_cash = Accounts(entity="cacao", code="CASH-NIO", name="Caja NIO", active=True, enabled=True, group=False)
+    fiscal_book = Book(entity="cacao", code="FISC", name="Fiscal", currency="NIO", status="activo", is_primary=True)
+    database.session.add_all(
+        [
+            usd_expense,
+            usd_cash,
+            nio_expense,
+            nio_cash,
+            fiscal_book,
+            Currency(code="USD", name="Dollar", decimals=2, active=True, default=False),
+        ]
+    )
+    database.session.commit()
+
+    # Cabecera en NIO (moneda funcional) pero las líneas USD usan su propia moneda/tasa.
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-06",
+            "books": ["FISC"],
+            "transaction_currency": "NIO",
+            "lines": [
+                {"account": usd_expense.id, "debit": "100.00", "credit": "0", "currency": "USD", "exchange_rate": "36.00"},
+                {"account": usd_cash.id, "debit": "0", "credit": "100.00", "currency": "USD", "exchange_rate": "36.00"},
+                {"account": nio_expense.id, "debit": "50.00", "credit": "0", "currency": "NIO"},
+                {"account": nio_cash.id, "debit": "0", "credit": "50.00", "currency": "NIO"},
+            ],
+        },
+        user_id="user-1",
+    )
+
+    submit_journal(journal.id)
+
+    # Se postea a todos los libros activos; nos fijamos en el libro FISC configurado.
+    posted_entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id, ledger_id=fiscal_book.id))
+        .scalars()
+        .all()
+    )
+    assert len(posted_entries) == 4
+
+    usd_debit = next(entry for entry in posted_entries if entry.account_id == usd_expense.id)
+    usd_credit = next(entry for entry in posted_entries if entry.account_id == usd_cash.id)
+    nio_debit = next(entry for entry in posted_entries if entry.account_id == nio_expense.id)
+    nio_credit = next(entry for entry in posted_entries if entry.account_id == nio_cash.id)
+
+    # Las líneas USD conservan su propia moneda, tasa y montos en moneda de cuenta.
+    assert usd_debit.account_currency == "USD"
+    assert usd_debit.debit_in_account_currency == Decimal("100.00")
+    assert usd_debit.debit == Decimal("3600.0000") or usd_debit.debit == Decimal("3600.00")
+    assert usd_debit.exchange_rate == Decimal("36.000000000") or usd_debit.exchange_rate == Decimal("36.00")
+    assert usd_credit.account_currency == "USD"
+    assert usd_credit.credit_in_account_currency == Decimal("100.00")
+    assert usd_credit.credit == Decimal("3600.0000") or usd_credit.credit == Decimal("3600.00")
+    assert usd_credit.exchange_rate == Decimal("36.000000000") or usd_credit.exchange_rate == Decimal("36.00")
+
+    # Las líneas NIO permanecen en moneda funcional sin conversión.
+    assert nio_debit.account_currency == "NIO"
+    assert nio_debit.debit == Decimal("50.0000") or nio_debit.debit == Decimal("50.00")
+    assert nio_credit.account_currency == "NIO"
+    assert nio_credit.credit == Decimal("50.0000") or nio_credit.credit == Decimal("50.00")
+
+
 def test_submit_journal_infers_currency_for_multilibro_without_transaction_currency(app_ctx):
     """R2R-AUDIT-21: un journal manual sin transaction_currency debe inferir la
     moneda funcional de la compañía y convertir a cada libro usando tasas históricas."""
