@@ -1987,6 +1987,46 @@ def compras_orden_compra_editar(order_id: str):
     )
 
 
+def _copy_purchase_order_source_relations(
+    source_order: PurchaseOrder,
+    target_order: PurchaseOrder,
+    item_ids: dict[str, str],
+) -> None:
+    """Copy active source relations to a duplicated purchase order draft."""
+    relations = (
+        database.session.execute(
+            database.select(DocumentRelation)
+            .filter_by(target_type="purchase_order", target_id=source_order.id, status="active")
+            .order_by(DocumentRelation.created.asc(), DocumentRelation.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+    for relation in relations:
+        target_item_id = item_ids.get(relation.target_item_id) if relation.target_item_id else None
+        if relation.target_item_id and target_item_id is None:
+            continue
+        database.session.add(
+            DocumentRelation(
+                source_type=relation.source_type,
+                source_id=relation.source_id,
+                source_item_id=relation.source_item_id,
+                target_type=relation.target_type,
+                target_id=target_order.id,
+                target_item_id=target_item_id,
+                company=relation.company or target_order.company,
+                qty=relation.qty,
+                qty_in_base_uom=relation.qty_in_base_uom,
+                uom=relation.uom,
+                rate=relation.rate,
+                amount=relation.amount,
+                relation_type=relation.relation_type,
+                status="active",
+                metadata_json=relation.metadata_json,
+            )
+        )
+
+
 @compras.route("/purchase-order/<order_id>/duplicate", methods=["POST"])
 @modulo_activo("purchases")
 @login_required
@@ -2006,6 +2046,7 @@ def compras_orden_compra_duplicar(order_id: str):
         posting_date=origen.posting_date,
         remarks=origen.remarks,
         transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
         exchange_rate=origen.exchange_rate,
         docstatus=0,
     )
@@ -2021,17 +2062,25 @@ def compras_orden_compra_duplicar(order_id: str):
     )
     total = Decimal("0")
     total_qty = Decimal("0")
+    item_ids: dict[str, str] = {}
     for item in database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=origen.id)).scalars():
         linea = PurchaseOrderItem(
             purchase_order_id=duplicada.id,
             item_code=item.item_code,
             item_name=item.item_name,
+            description=item.description,
             qty=item.qty,
             uom=item.uom,
+            qty_in_base_uom=item.qty_in_base_uom,
             rate=item.rate,
             amount=item.amount,
+            base_rate=item.base_rate,
+            base_amount=item.base_amount,
+            warehouse=item.warehouse,
         )
         database.session.add(linea)
+        database.session.flush()
+        item_ids[item.id] = linea.id
         total_qty += item.qty or Decimal("0")
         total += item.amount or Decimal("0")
     duplicada.total_qty = total_qty
@@ -2039,6 +2088,7 @@ def compras_orden_compra_duplicar(order_id: str):
     duplicada.net_total = total
     duplicada.grand_total = total
     duplicada.base_total = (total * Decimal(str(duplicada.exchange_rate or 1))).quantize(Decimal("0.0001"))
+    _copy_purchase_order_source_relations(origen, duplicada, item_ids)
     log_create(duplicada)
     database.session.commit()
     flash(_("Orden de compra duplicada como nuevo borrador."), "success")
