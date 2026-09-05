@@ -894,6 +894,95 @@ class TestPurchaseInvoiceSubmit:
     def test_purchase_invoice_duplicate_copies_batch_and_serial(self, app_ctx):
         bid = _batch_id_by_no("LOT-001")
         client, invoice = self._create_doc(app_ctx, bid, "SN-001")
+        original_item = (
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id))
+            .scalars()
+            .first()
+        )
+        order = PurchaseOrder(
+            supplier_id=invoice.supplier_id,
+            supplier_name=invoice.supplier_name,
+            company="cacao",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            posting_date=invoice.posting_date,
+            docstatus=1,
+        )
+        receipt = PurchaseReceipt(
+            supplier_id=invoice.supplier_id,
+            supplier_name=invoice.supplier_name,
+            company="cacao",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            posting_date=invoice.posting_date,
+            purchase_order_id=None,
+            total=invoice.total,
+            base_total=invoice.total,
+            grand_total=invoice.total,
+            docstatus=1,
+        )
+        database.session.add_all([order, receipt])
+        database.session.flush()
+        order_item = PurchaseOrderItem(
+            purchase_order_id=order.id,
+            item_code=original_item.item_code,
+            item_name=original_item.item_name,
+            qty=original_item.qty,
+            uom=original_item.uom,
+            qty_in_base_uom=original_item.qty,
+            rate=original_item.rate,
+            amount=original_item.amount,
+        )
+        database.session.add(order_item)
+        database.session.flush()
+        receipt.purchase_order_id = order.id
+        invoice.purchase_order_id = order.id
+        invoice.purchase_receipt_id = receipt.id
+        invoice.supplier_invoice_no = "SUP-INV-823"
+        invoice.base_currency = "NIO"
+        original_item.base_rate = Decimal("20")
+        original_item.base_amount = Decimal("60")
+        original_item.expense_account_id = None
+        original_item.warehouse = "WH-TEST"
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_order",
+                source_id=order.id,
+                source_item_id=order_item.id,
+                target_type="purchase_invoice",
+                target_id=invoice.id,
+                target_item_id=original_item.id,
+                company="cacao",
+                qty=original_item.qty,
+                qty_in_base_uom=original_item.qty,
+                uom=original_item.uom,
+                rate=original_item.rate,
+                amount=original_item.amount,
+                relation_type="invoice",
+                status="active",
+            )
+        )
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_order",
+                source_id=order.id,
+                source_item_id=order_item.id,
+                target_type="purchase_invoice",
+                target_id=invoice.id,
+                target_item_id=original_item.id,
+                company="cacao",
+                qty=original_item.qty,
+                qty_in_base_uom=original_item.qty,
+                uom=original_item.uom,
+                rate=original_item.rate,
+                amount=original_item.amount,
+                relation_type="historical",
+                status="closed",
+            )
+        )
+        database.session.commit()
         resp = client.post(f"/buying/purchase-invoice/{invoice.id}/duplicate", follow_redirects=True)
         assert resp.status_code == 200
         database.session.expire_all()
@@ -907,11 +996,6 @@ class TestPurchaseInvoiceSubmit:
             .first()
         )
         assert duplicate is not None
-        original_item = (
-            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id))
-            .scalars()
-            .first()
-        )
         duplicate_item = (
             database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=duplicate.id))
             .scalars()
@@ -920,6 +1004,127 @@ class TestPurchaseInvoiceSubmit:
         assert duplicate_item is not None
         assert duplicate_item.batch_id == original_item.batch_id
         assert duplicate_item.serial_no == original_item.serial_no
+        assert duplicate.supplier_invoice_no is None
+        assert duplicate.purchase_order_id == order.id
+        assert duplicate.purchase_receipt_id == receipt.id
+        assert duplicate.base_currency == invoice.base_currency
+        assert duplicate_item.base_rate == original_item.base_rate
+        assert duplicate_item.base_amount == original_item.base_amount
+        assert duplicate_item.warehouse == original_item.warehouse
+        relations = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(
+                    target_type="purchase_invoice", target_id=duplicate.id, status="active"
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(relations) == 1
+        assert relations[0].source_id == order.id
+        assert relations[0].source_item_id == order_item.id
+        assert relations[0].target_item_id == duplicate_item.id
+
+    def test_purchase_invoice_duplicate_preserves_reversal_and_relation(self, app_ctx):
+        client, source = self._create_doc(app_ctx, None, None)
+        source.supplier_invoice_no = "SUP-SOURCE-823"
+        database.session.commit()
+        response = client.post(f"/buying/purchase-invoice/{source.id}/submit", follow_redirects=True)
+        assert response.status_code == 200
+        database.session.expire_all()
+        source = database.session.get(PurchaseInvoice, source.id)
+        assert source.docstatus == 1
+
+        note = PurchaseInvoice(
+            supplier_id=source.supplier_id,
+            supplier_name=source.supplier_name,
+            company=source.company,
+            posting_date=source.posting_date,
+            document_type="purchase_credit_note",
+            is_return=True,
+            reversal_of=source.id,
+            transaction_currency=source.transaction_currency,
+            base_currency=source.base_currency,
+            exchange_rate=source.exchange_rate,
+            total=Decimal("20"),
+            base_total=Decimal("20"),
+            grand_total=Decimal("20"),
+            base_grand_total=Decimal("20"),
+            outstanding_amount=Decimal("20"),
+            base_outstanding_amount=Decimal("20"),
+            docstatus=0,
+        )
+        database.session.add(note)
+        database.session.flush()
+        note_item = PurchaseInvoiceItem(
+            purchase_invoice_id=note.id,
+            item_code="ITEM-BATCH",
+            item_name="Item con lote",
+            qty=Decimal("1"),
+            uom="UND",
+            rate=Decimal("20"),
+            amount=Decimal("20"),
+            base_rate=Decimal("20"),
+            base_amount=Decimal("20"),
+        )
+        database.session.add(note_item)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_invoice",
+                source_id=source.id,
+                source_item_id=None,
+                target_type="purchase_credit_note",
+                target_id=note.id,
+                target_item_id=None,
+                company=source.company,
+                qty=Decimal("1"),
+                uom="UND",
+                amount=Decimal("20"),
+                relation_type="invoice_reversal",
+                status="active",
+            )
+        )
+        database.session.commit()
+
+        response = client.post(f"/buying/purchase-invoice/{note.id}/duplicate", follow_redirects=True)
+        assert response.status_code == 200
+        database.session.expire_all()
+        duplicate = (
+            database.session.execute(
+                database.select(PurchaseInvoice)
+                .where(PurchaseInvoice.id.not_in([source.id, note.id]))
+                .order_by(PurchaseInvoice.created.desc())
+            )
+            .scalars()
+            .first()
+        )
+        assert duplicate is not None
+        assert duplicate.document_type == "purchase_credit_note"
+        assert duplicate.is_return is True
+        assert duplicate.reversal_of == source.id
+        duplicate_item = (
+            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=duplicate.id))
+            .scalars()
+            .first()
+        )
+        assert duplicate_item is not None
+        assert duplicate_item.item_code == note_item.item_code
+        relation = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(
+                    source_id=source.id,
+                    target_type="purchase_credit_note",
+                    target_id=duplicate.id,
+                    relation_type="invoice_reversal",
+                    status="active",
+                )
+            )
+            .scalars()
+            .one_or_none()
+        )
+        assert relation is not None
+        assert relation.target_item_id is None
 
 
 # <------------------------------------------------------------------------------------------> #
