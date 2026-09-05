@@ -2372,6 +2372,45 @@ def editar_tasa_cambio(rate_id):
     )
 
 
+@contabilidad.route("/exchange/import", methods=["GET", "POST"])
+@login_required
+@modulo_activo("accounting")
+@verifica_acceso("accounting")
+def importar_tasas_cambio():
+    """Importación masiva de tasas de cambio desde hoja de cálculo."""
+    from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportError, ExchangeRateImportService
+
+    TITULO = "Contabilidad | Importar Tasas de Cambio - " + APPNAME
+
+    if request.method == "POST":
+        archivo = request.files.get("file")
+        if not archivo or archivo.filename == "":
+            flash(_("Debe seleccionar un archivo."), "danger")
+            return render_template("contabilidad/tc_importar.html", titulo=TITULO)
+
+        svc = ExchangeRateImportService()
+        try:
+            resultado = svc.import_rates(archivo.filename, archivo.read())
+            flash(
+                _(
+                    "Importación completada: %(inserted)s insertadas, %(skipped)s duplicadas omitidas.",
+                    inserted=resultado["inserted"],
+                    skipped=resultado["skipped"],
+                ),
+                "success",
+            )
+            if resultado["errors"]:
+                for err in resultado["errors"][:10]:
+                    flash(err, "warning")
+                if len(resultado["errors"]) > 10:
+                    flash(_("%(count)s errores adicionales omitidos.", count=len(resultado["errors"]) - 10), "warning")
+            return redirect(url_for(CONTABILIDAD_TASA_CAMBIO))
+        except ExchangeRateImportError as error:
+            flash(str(error), "danger")
+
+    return render_template("contabilidad/tc_importar.html", titulo=TITULO)
+
+
 @contabilidad.route("/accounting_period")
 @login_required
 @modulo_activo("accounting")

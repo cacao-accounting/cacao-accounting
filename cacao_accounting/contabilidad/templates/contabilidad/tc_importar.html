@@ -1,0 +1,52 @@
+{% set acceso = permisos(modulo=id_modulo("accounting"), usuario=usuario.id)%}
+{% extends "base.html" %}
+{% block contenido %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb lh-sm">
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _('Contabilidad') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.tasa_cambio') }}" class="link-dark">{{ _('Tasas de Cambio') }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Importar') }}</li>
+  </ol>
+</nav>
+
+<div class="ca-page-header">
+  <h4><i class="bi bi-file-earmark-spreadsheet me-2" style="color:#BB6A40"></i>{{ _('Importar Tasas de Cambio en Lote') }}</h4>
+</div>
+
+<div class="ca-card mt-3">
+  <div class="p-4">
+    <h5>{{ _('Instrucciones') }}</h5>
+    <p>{{ _('Prepare un archivo CSV, XLS, XLSX u ODS con las siguientes columnas (la primera fila debe ser el encabezado):') }}</p>
+    <div class="table-responsive mb-3" style="max-width: 500px;">
+      <table class="ca-table">
+        <caption style="display: none;">{{ _('Columnas esperadas') }}</caption>
+        <thead>
+          <tr>
+            <th>{{ _('Columna') }}</th>
+            <th>{{ _('Tipo') }}</th>
+            <th>{{ _('Ejemplo') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Moneda Base</strong></td><td>{{ _('Texto') }}</td><td>NIO</td></tr>
+          <tr><td><strong>Moneda Destino</strong></td><td>{{ _('Texto') }}</td><td>USD</td></tr>
+          <tr><td><strong>Fecha</strong></td><td>{{ _('DD-MM-YYYY') }}</td><td>30-09-2027</td></tr>
+          <tr><td><strong>Tipo de Cambio</strong></td><td>{{ _('Numérico') }}</td><td>36.6243</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="text-muted small"><i class="bi bi-info-circle me-1"></i>{{ _('Las monedas deben existir y estar activas en el sistema. Las tasas duplicadas (misma base, destino y fecha) se omitirán automáticamente.') }}</p>
+
+    <form method="post" enctype="multipart/form-data" class="mt-4">
+      <div class="mb-3" style="max-width: 400px;">
+        <label class="form-label">{{ _('Seleccionar archivo') }}</label>
+        <input type="file" name="file" class="form-control" accept=".csv, .xlsx, .xls, .ods" required>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>{{ _('Importar') }}</button>
+      <a href="{{ url_for('contabilidad.tasa_cambio') }}" class="btn btn-outline-secondary ms-2">{{ _('Cancelar') }}</a>
+    </form>
+  </div>
+</div>
+{% endblock %}
