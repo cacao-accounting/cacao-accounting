@@ -101,6 +101,53 @@ def test_duplicate_payment_warning_covers_receipts(app_ctx):
     assert any(category == "warning" for category, _message in messages)
 
 
+def test_direct_payment_with_realized_fx_difference_is_rejected(monkeypatch, app_ctx):
+    """The legacy direct GL path must not post an applied payment without its FX line."""
+    from cacao_accounting.contabilidad import posting_service
+    from cacao_accounting.database import GLEntry
+
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date.today(),
+        payment_type="pay",
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36.50"),
+        paid_amount=Decimal("100"),
+        base_paid_amount=Decimal("3650"),
+        docstatus=1,
+    )
+    database.session.add(payment)
+    database.session.flush()
+    database.session.add(
+        PaymentReference(
+            payment_id=payment.id,
+            reference_type="purchase_invoice",
+            reference_id="INV-FX-001",
+            allocated_amount=Decimal("100"),
+            payment_currency="USD",
+            payment_amount=Decimal("100"),
+            payment_exchange_rate=Decimal("36.50"),
+            base_allocated_amount=Decimal("3600"),
+            base_payment_amount=Decimal("3650"),
+            fx_difference_amount=Decimal("-50"),
+        )
+    )
+    database.session.commit()
+
+    monkeypatch.setattr(posting_service, "_post_with_calculation_engine_payload", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(posting_service.PostingError, match="diferencia cambiaria"):
+        posting_service.post_payment_entry(payment)
+
+    assert (
+        database.session.execute(
+            database.select(GLEntry.id).filter_by(voucher_type="payment_entry", voucher_id=payment.id)
+        ).scalar_one_or_none()
+        is None
+    )
+
+
 def test_invoice_outstanding_ignores_base_currency_cache(monkeypatch):
     """El saldo aplicable no debe mezclar moneda transaccional y moneda base."""
     bancos_module = import_module("cacao_accounting.bancos.services")
