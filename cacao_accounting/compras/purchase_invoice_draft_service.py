@@ -180,10 +180,15 @@ def _validate_sources(command: PurchaseInvoiceDraftCommand, settings: CompanyPar
     order = database.session.get(PurchaseOrder, command.purchase_order_id) if command.purchase_order_id else None
     receipt = database.session.get(PurchaseReceipt, command.purchase_receipt_id) if command.purchase_receipt_id else None
     if command.matching_mode == "NON_PO_INVOICE":
-        if order or receipt or not settings.allow_purchase_invoice_without_order:
+        if order or not settings.allow_purchase_invoice_without_order:
             raise PurchaseInvoiceDraftError(
                 "PURCHASE_ORDER_REQUIRED",
                 "La política del proveedor exige orden de compra.",
+            )
+        if receipt or not settings.allow_purchase_invoice_without_receipt:
+            raise PurchaseInvoiceDraftError(
+                "RECEIPT_REQUIRED",
+                "La política del proveedor exige recepción.",
             )
         return
     if order is None or order.docstatus != 1:

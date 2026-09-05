@@ -9,6 +9,7 @@ from cacao_accounting.compras.purchase_invoice_draft_service import (
     PurchaseInvoiceDraftCommand,
     PurchaseInvoiceDraftError,
     _validate_idempotency_replay,
+    _validate_sources,
 )
 from cacao_accounting.database import PurchaseInvoice
 
@@ -42,3 +43,36 @@ def test_idempotency_replay_returns_same_tenant_and_supplier_invoice() -> None:
     command = cast(PurchaseInvoiceDraftCommand, SimpleNamespace(company_id="company-a", supplier_id="supplier-a"))
 
     assert _validate_idempotency_replay(existing, command) is existing
+
+
+def test_non_po_invoice_requires_supplier_permission_without_receipt() -> None:
+    """NON_PO drafts require both no-order and no-receipt supplier permissions."""
+    command = SimpleNamespace(
+        matching_mode="NON_PO_INVOICE",
+        purchase_order_id=None,
+        purchase_receipt_id=None,
+    )
+    settings = SimpleNamespace(
+        allow_purchase_invoice_without_order=True,
+        allow_purchase_invoice_without_receipt=False,
+    )
+
+    with pytest.raises(PurchaseInvoiceDraftError) as exc_info:
+        _validate_sources(command, settings)
+
+    assert exc_info.value.code == "RECEIPT_REQUIRED"
+
+
+def test_non_po_invoice_accepts_both_supplier_permissions() -> None:
+    """NON_PO drafts are accepted when both source bypasses are configured."""
+    command = SimpleNamespace(
+        matching_mode="NON_PO_INVOICE",
+        purchase_order_id=None,
+        purchase_receipt_id=None,
+    )
+    settings = SimpleNamespace(
+        allow_purchase_invoice_without_order=True,
+        allow_purchase_invoice_without_receipt=True,
+    )
+
+    _validate_sources(command, settings)
