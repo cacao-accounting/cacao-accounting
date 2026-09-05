@@ -891,6 +891,8 @@ def _validate_gl_reconciliation_match(match: BankReconciliationMatch, transactio
     if entry.bank_account_id and entry.bank_account_id != transaction.bank_account_id:
         raise BankReconciliationError("La entrada GL pertenece a otra cuenta bancaria.")
     _validate_gl_entry_eligibility(entry)
+    if _gl_direction(entry) != _bank_direction(transaction):
+        raise BankReconciliationError("La entrada GL no coincide con la direccion bancaria.")
 
 
 def _validate_payment_reconciliation_match(match: BankReconciliationMatch, transaction: BankTransaction) -> None:
