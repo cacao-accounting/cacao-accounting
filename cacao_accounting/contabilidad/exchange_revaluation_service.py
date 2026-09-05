@@ -173,24 +173,42 @@ class ExchangeRevaluationService:
             run.generated_journal = True
             run.journal_entry_id = journal.id
             run.affected_documents_count = len(affected)
-            run.total_gain = sum(
-                (
-                    self._decimal(entry.credit)
-                    for entry in entries
-                    if entry.ledger_id == summary_ledger.id
-                    and entry.account_id == defaults.unrealized_exchange_gain_account_id
-                ),
-                Decimal("0"),
-            )
-            run.total_loss = sum(
-                (
-                    self._decimal(entry.debit)
-                    for entry in entries
-                    if entry.ledger_id == summary_ledger.id
-                    and entry.account_id == defaults.unrealized_exchange_loss_account_id
-                ),
-                Decimal("0"),
-            )
+            summary_entries = [entry for entry in entries if entry.ledger_id == summary_ledger.id]
+            if summary_entries:
+                run.total_gain = sum(
+                    (
+                        self._decimal(entry.credit)
+                        for entry in summary_entries
+                        if entry.account_id == defaults.unrealized_exchange_gain_account_id
+                    ),
+                    Decimal("0"),
+                )
+                run.total_loss = sum(
+                    (
+                        self._decimal(entry.debit)
+                        for entry in summary_entries
+                        if entry.account_id == defaults.unrealized_exchange_loss_account_id
+                    ),
+                    Decimal("0"),
+                )
+            else:
+                total_gain = Decimal("0")
+                total_loss = Decimal("0")
+                for entry in entries:
+                    credit, debit = self._decimal(entry.credit), self._decimal(entry.debit)
+                    if entry.account_id == defaults.unrealized_exchange_gain_account_id and credit > 0:
+                        try:
+                            rate = self._closing_rate(entry.company_currency, summary_ledger.currency, period.end)
+                            total_gain += (credit * rate).quantize(Decimal("0.0001"))
+                        except ExchangeRevaluationError:
+                            pass
+                    elif entry.account_id == defaults.unrealized_exchange_loss_account_id and debit > 0:
+                        try:
+                            rate = self._closing_rate(entry.company_currency, summary_ledger.currency, period.end)
+                            total_loss += (debit * rate).quantize(Decimal("0.0001"))
+                        except ExchangeRevaluationError:
+                            pass
+                run.total_gain, run.total_loss = total_gain, total_loss
             log_submit(run)
             database.session.commit()
             return run
@@ -389,10 +407,31 @@ class ExchangeRevaluationService:
         candidates.extend(self._open_bank_accounts(company, as_of_date, ledgers))
         return candidates
 
+    @staticmethod
+    def _document_has_gl(company: str, voucher_type: str, voucher_id: Any, as_of_date: date):
+        return (
+            select(1)
+            .select_from(GLEntry)
+            .where(
+                GLEntry.company == company,
+                GLEntry.voucher_type == voucher_type,
+                GLEntry.voucher_id == voucher_id,
+                GLEntry.is_cancelled.is_(False),
+                GLEntry.is_reversal.is_(False),
+                GLEntry.posting_date <= as_of_date,
+            )
+            .exists()
+        )
+
     def _open_sales_invoices(self, company: str, as_of_date: date) -> list[RevaluationCandidate]:
         rows = (
             database.session.execute(
-                select(SalesInvoice).filter_by(company=company, docstatus=1).where(SalesInvoice.posting_date <= as_of_date)
+                select(SalesInvoice)
+                .filter_by(company=company, docstatus=1)
+                .where(
+                    SalesInvoice.posting_date <= as_of_date,
+                    self._document_has_gl(company, "sales_invoice", SalesInvoice.id, as_of_date),
+                )
             )
             .scalars()
             .all()
@@ -427,7 +466,10 @@ class ExchangeRevaluationService:
             database.session.execute(
                 select(PurchaseInvoice)
                 .filter_by(company=company, docstatus=1)
-                .where(PurchaseInvoice.posting_date <= as_of_date)
+                .where(
+                    PurchaseInvoice.posting_date <= as_of_date,
+                    self._document_has_gl(company, "purchase_invoice", PurchaseInvoice.id, as_of_date),
+                )
             )
             .scalars()
             .all()
@@ -502,6 +544,8 @@ class ExchangeRevaluationService:
                     continue
                 rate = self._closing_rate(candidate.original_currency, ledger_currency, closing_date)
                 previous = self._current_ledger_balance(candidate, ledger)
+                if previous is None:
+                    continue
                 revalued = (candidate.open_amount_original * rate).quantize(Decimal("0.0001"))
                 difference = (revalued - previous).quantize(Decimal("0.0001"))
                 drafts.append(
@@ -604,11 +648,16 @@ class ExchangeRevaluationService:
 
     def _item_for_draft(self, run: ExchangeRevaluation, draft: RevaluationLineDraft) -> ExchangeRevaluationItem:
         candidate = draft.candidate
+        old_rate = None
+        if candidate.open_amount_original != 0 and draft.previous_ledger_balance != 0:
+            old_rate = (abs(draft.previous_ledger_balance) / abs(candidate.open_amount_original)).quantize(
+                Decimal("0.000000001")
+            )
         return ExchangeRevaluationItem(
             revaluation_id=run.id,
             reference_type=candidate.source_document_type,
             reference_id=candidate.source_document_id,
-            old_rate=None,
+            old_rate=old_rate,
             new_rate=draft.closing_rate,
             difference_amount=draft.exchange_difference,
             source_document_type=candidate.source_document_type,
@@ -649,12 +698,14 @@ class ExchangeRevaluationService:
             if debit != credit:
                 raise ExchangeRevaluationError("Las entradas de revalorizacion no balancean por libro.")
 
-    def _current_ledger_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal:
+    def _current_ledger_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal | None:
         original = self._source_gl_balance(candidate, ledger)
+        if original is None:
+            return None
         revaluations = self._active_revaluation_balance(candidate, ledger)
         return (original + revaluations).quantize(Decimal("0.0001"))
 
-    def _source_gl_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal:
+    def _source_gl_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal | None:
         """Valor en libros del documento en un libro, sin ajustes de revaluacion.
 
         Incluye las liquidaciones parciales previas y sus pares de revaluacion
@@ -662,6 +713,7 @@ class ExchangeRevaluationService:
         ya reconocida. Si no hay entradas GL de soporte se recurre al prorrateo
         historico por proporcion.
         """
+        database.session.flush()
         from cacao_accounting.accounting_engine.document_builders import _document_carrying_value_in_ledger
 
         carrying = _document_carrying_value_in_ledger(
@@ -701,7 +753,10 @@ class ExchangeRevaluationService:
                 .where(GLEntry.posting_date <= (candidate.as_of_date or date.today()))
                 .where(GLEntry.voucher_type != EXCHANGE_REVALUATION_ENTITY_TYPE)
             )
-        balance = self._normal_balance(database.session.execute(query).scalars().all(), candidate.normal_balance)
+        entries = database.session.execute(query).scalars().all()
+        if not entries:
+            return None
+        balance = self._normal_balance(entries, candidate.normal_balance)
         if candidate.total_amount_original > 0 and candidate.open_amount_original < candidate.total_amount_original:
             proportion = candidate.open_amount_original / candidate.total_amount_original
             return (balance * proportion).quantize(Decimal("0.0001"))
