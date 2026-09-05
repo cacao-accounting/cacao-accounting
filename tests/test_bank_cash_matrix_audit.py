@@ -252,6 +252,48 @@ def test_gl_reconciliation_rejects_entry_from_another_bank_account(app_ctx, char
         )
 
 
+def test_gl_reconciliation_rejects_incompatible_direction(app_ctx, chart):
+    """A withdrawal cannot reconcile against a debit GL entry (a deposit)."""
+    from cacao_accounting.bancos.reconciliation_service import (
+        BankReconciliationError,
+        BankReconciliationMatch,
+        BankReconciliationRequest,
+        reconcile_bank_items,
+    )
+    from cacao_accounting.database import GLEntry, database
+
+    transaction = _make_bank_transaction(chart["account_a"], withdrawal=Decimal("40.00"))
+    deposit_entry = GLEntry(
+        posting_date=AS_OF,
+        company=COMPANY,
+        ledger_id=chart["book_id"],
+        account_id=chart["bank_gl_a_id"],
+        debit=Decimal("40.00"),
+        credit=Decimal("0"),
+        voucher_type="journal_entry",
+        voucher_id="JRN-INCOMPATIBLE-DIRECTION",
+        bank_account_id=chart["account_a"].id,
+    )
+    database.session.add(deposit_entry)
+    database.session.commit()
+
+    with pytest.raises(BankReconciliationError, match="direccion bancaria"):
+        reconcile_bank_items(
+            BankReconciliationRequest(
+                company=COMPANY,
+                reconciliation_date=AS_OF,
+                matches=[
+                    BankReconciliationMatch(
+                        bank_transaction_id=transaction.id,
+                        target_type="gl_entry",
+                        target_id=deposit_entry.id,
+                        allocated_amount=Decimal("40.00"),
+                    )
+                ],
+            )
+        )
+
+
 def _make_payment(
     *,
     amount: Decimal,
