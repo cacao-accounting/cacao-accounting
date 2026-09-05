@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-05 21:30+0000\n"
+"POT-Creation-Date: 2026-09-05 21:46+0000\n"
 "PO-Revision-Date: 2026-08-23 16:28+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -3299,7 +3299,7 @@ msgid "Se requiere una tasa para monedas distintas."
 msgstr ""
 
 #: cacao_accounting/api/line_import.py:1048
-#, fuzzy, python-brace-format
+#, fuzzy
 msgid "El monto aplicado excede el saldo pendiente del documento."
 msgstr ""
 "El monto aplicado ({0}) no puede ser mayor al saldo pendiente ({1}) del "
@@ -4289,6 +4289,7 @@ msgstr "Conciliación Facturas/Pagos"
 #: cacao_accounting/bancos/templates/bancos.html:167
 #: cacao_accounting/compras/templates/compras.html:129
 #: cacao_accounting/contabilidad/templates/contabilidad.html:159
+#: cacao_accounting/contabilidad/templates/contabilidad.html:193
 #: cacao_accounting/inventario/templates/inventario.html:125
 #: cacao_accounting/ventas/templates/ventas.html:121
 #, fuzzy
@@ -6111,27 +6112,27 @@ msgstr "Direccion actualizada correctamente."
 msgid "Direccion desactivada correctamente."
 msgstr "Direccion desactivada correctamente."
 
-#: cacao_accounting/compras/routes.py:2044
+#: cacao_accounting/compras/routes.py:2096
 msgid "Orden de compra duplicada como nuevo borrador."
 msgstr "Orden de compra duplicada como nuevo borrador."
 
-#: cacao_accounting/compras/routes.py:2260
+#: cacao_accounting/compras/routes.py:2312
 msgid "Solicitud de cotizacion duplicada como nuevo borrador."
 msgstr "Solicitud de cotizacion duplicada como nuevo borrador."
 
-#: cacao_accounting/compras/routes.py:2300
+#: cacao_accounting/compras/routes.py:2352
 msgid "Solicitud de cotizacion aprobada."
 msgstr "Solicitud de cotizacion aprobada."
 
-#: cacao_accounting/compras/routes.py:2335
+#: cacao_accounting/compras/routes.py:2387
 msgid "Solicitud de cotizacion cancelada."
 msgstr "Solicitud de cotizacion cancelada."
 
-#: cacao_accounting/compras/routes.py:2687
+#: cacao_accounting/compras/routes.py:2748
 msgid "Recepcion de compra duplicada como nuevo borrador."
 msgstr "Recepcion de compra duplicada como nuevo borrador."
 
-#: cacao_accounting/compras/routes.py:2943
+#: cacao_accounting/compras/routes.py:3004
 #: cacao_accounting/compras/services.py:2049
 #: cacao_accounting/compras/templates/compras/recepcion.html:54
 #: cacao_accounting/inventario/routes.py:748
@@ -6140,19 +6141,19 @@ msgstr "Recepcion de compra duplicada como nuevo borrador."
 msgid "Recepción de Compra"
 msgstr "Recepción de Compra"
 
-#: cacao_accounting/compras/routes.py:3052
+#: cacao_accounting/compras/routes.py:3113
 msgid "Factura de compra duplicada como nuevo borrador."
 msgstr "Factura de compra duplicada como nuevo borrador."
 
-#: cacao_accounting/compras/routes.py:3112
+#: cacao_accounting/compras/routes.py:3173
 msgid "Factura de compra aprobada y contabilizada."
 msgstr "Factura de compra aprobada y contabilizada."
 
-#: cacao_accounting/compras/routes.py:3148
+#: cacao_accounting/compras/routes.py:3209
 msgid "No se puede cancelar la factura de compra porque tiene pagos activos."
 msgstr "No se puede cancelar la factura de compra porque tiene pagos activos."
 
-#: cacao_accounting/compras/routes.py:3151
+#: cacao_accounting/compras/routes.py:3212
 msgid ""
 "No se puede cancelar la factura de compra porque tiene notas de crédito o"
 " débito activas."
@@ -6160,27 +6161,27 @@ msgstr ""
 "No se puede cancelar la factura de compra porque tiene notas de crédito o"
 " débito activas."
 
-#: cacao_accounting/compras/routes.py:3190
+#: cacao_accounting/compras/routes.py:3251
 msgid "Factura de compra cancelada con reverso contable."
 msgstr "Factura de compra cancelada con reverso contable."
 
-#: cacao_accounting/compras/routes.py:3312
+#: cacao_accounting/compras/routes.py:3373
 msgid "Costo de importacion aprobado y contabilizado."
 msgstr "Costo de importacion aprobado y contabilizado."
 
-#: cacao_accounting/compras/routes.py:3342
+#: cacao_accounting/compras/routes.py:3403
 msgid "Solicitud de cancelacion enviada para aprobacion."
 msgstr "Solicitud de cancelacion enviada para aprobacion."
 
-#: cacao_accounting/compras/routes.py:3362
+#: cacao_accounting/compras/routes.py:3423
 msgid "Costo de importacion cancelado."
 msgstr "Costo de importacion cancelado."
 
-#: cacao_accounting/compras/routes.py:3374
+#: cacao_accounting/compras/routes.py:3435
 msgid "Proveedor habilitado como cliente exitosamente."
 msgstr "Proveedor habilitado como cliente exitosamente."
 
-#: cacao_accounting/compras/routes.py:3389
+#: cacao_accounting/compras/routes.py:3450
 msgid "Rol de cliente deshabilitado exitosamente."
 msgstr "Rol de cliente deshabilitado exitosamente."
 
@@ -7197,6 +7198,157 @@ msgstr "Contabilidad"
 msgid "Registra operaciones contables, cierres y reportes financieros."
 msgstr ""
 
+#: cacao_accounting/contabilidad/templates/contabilidad.html:38
+#: cacao_accounting/contabilidad/templates/contabilidad.html:79
+#: cacao_accounting/contabilidad/templates/contabilidad/entidad_lista.html:23
+msgid "Entidades"
+msgstr "Entidades"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:42
+#: cacao_accounting/contabilidad/templates/contabilidad.html:83
+#, fuzzy
+msgid "Catálogo de Cuentas"
+msgstr "Rango de Cuentas"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:46
+#: cacao_accounting/contabilidad/templates/contabilidad/centro-costo_lista.html:10
+msgid "Centros de Costos"
+msgstr "Centros de Costos"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:50
+#: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html:11
+#: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html:17
+msgid "Unidades de Negocio"
+msgstr "Unidades de Negocio"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:54
+#: cacao_accounting/contabilidad/templates/contabilidad/book_lista.html:20
+msgid "Libros de Contabilidad"
+msgstr "Libros de Contabilidad"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:58
+#: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:9
+#: cacao_accounting/contabilidad/templates/contabilidad/proyecto_lista.html:10
+#: cacao_accounting/contabilidad/templates/contabilidad/proyecto_lista.html:16
+msgid "Proyectos"
+msgstr "Proyectos"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:62
+#: cacao_accounting/contabilidad/templates/contabilidad.html:87
+#: cacao_accounting/contabilidad/templates/contabilidad/moneda.html:8
+#: cacao_accounting/contabilidad/templates/contabilidad/moneda_lista.html:16
+msgid "Monedas"
+msgstr "Monedas"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:66
+#: cacao_accounting/contabilidad/templates/contabilidad/tc.html:8
+#: cacao_accounting/contabilidad/templates/contabilidad/tc_importar.html:9
+#: cacao_accounting/contabilidad/templates/contabilidad/tc_lista.html:16
+msgid "Tasas de Cambio"
+msgstr "Tasas de Cambio"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:70
+#: cacao_accounting/contabilidad/templates/contabilidad/periodo.html:8
+#: cacao_accounting/contabilidad/templates/contabilidad/periodo_lista.html:15
+msgid "Períodos Contables"
+msgstr "Períodos Contables"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:74
+#: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year.html:8
+#: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year_lista.html:15
+msgid "Años Fiscales"
+msgstr "Años Fiscales"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:102
+#: cacao_accounting/contabilidad/templates/contabilidad.html:123
+#, fuzzy
+msgid "Comprobantes Contables"
+msgstr "Comprobantes contables"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:106
+#, fuzzy
+msgid "Comprobantes Contables de Cierre"
+msgstr "Comprobantes contables"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:110
+#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:15
+#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:20
+#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_nuevo.html:32
+#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_ver.html:18
+msgid "Comprobante Recurrente"
+msgstr "Comprobante Recurrente"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:114
+#: cacao_accounting/contabilidad/templates/contabilidad/monthly_close_assistant.html:14
+#: cacao_accounting/contabilidad/templates/contabilidad/monthly_close_assistant.html:19
+msgid "Asistente de Cierre Mensual"
+msgstr "Asistente de Cierre Mensual"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:118
+#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:9
+#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:21
+#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html:10
+#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html:16
+#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html:8
+msgid "Revalorización cambiaria"
+msgstr "Revalorización cambiaria"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:134
+#: cacao_accounting/contabilidad/templates/contabilidad.html:148
+#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html:80
+#: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:41
+#: cacao_accounting/contabilidad/templates/contabilidad/proyecto_crear.html:69
+msgid "Presupuesto"
+msgstr "Presupuesto"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:139
+#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/list.html:7
+#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/list.html:12
+msgid "Administrar Presupuestos"
+msgstr "Administrar Presupuestos"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:143
+#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html:9
+#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html:63
+msgid "Real versus Presupuesto"
+msgstr "Real versus Presupuesto"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:164
+#: cacao_accounting/reportes/routes.py:260
+#: cacao_accounting/reportes/routes.py:268
+msgid "Detalle de Movimiento Contable"
+msgstr "Detalle de Movimiento Contable"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:168
+#: cacao_accounting/reportes/routes.py:240
+msgid "Resumen de Movimiento por Cuenta"
+msgstr "Resumen de Movimiento por Cuenta"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:172
+#: cacao_accounting/reportes/routes.py:286
+#: cacao_accounting/reportes/routes.py:587
+msgid "Balanza de Comprobación"
+msgstr "Balanza de Comprobación"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:176
+#: cacao_accounting/reportes/routes.py:322
+msgid "Balance General"
+msgstr "Balance General"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:180
+#: cacao_accounting/reportes/routes.py:304
+msgid "Estado de Resultado"
+msgstr "Estado de Resultado"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:184
+#: cacao_accounting/reportes/routes.py:343
+#: cacao_accounting/reportes/routes.py:344
+#: cacao_accounting/reportes/routes.py:356
+#, fuzzy
+msgid "Estado de Flujo de Efectivo"
+msgstr "Listado de Tipos de Cambio"
+
+#: cacao_accounting/contabilidad/templates/contabilidad.html:188
 #: cacao_accounting/contabilidad/templates/contabilidad_cash_flow_config.html:7
 #, fuzzy
 msgid "Clasificación EFE"
@@ -7354,10 +7506,6 @@ msgstr "Guardar Libro"
 msgid "Buscar entidad"
 msgstr "Buscar entidad"
 
-#: cacao_accounting/contabilidad/templates/contabilidad/book_lista.html:20
-msgid "Libros de Contabilidad"
-msgstr "Libros de Contabilidad"
-
 #: cacao_accounting/contabilidad/templates/contabilidad/book_lista.html:23
 msgid "Nuevo Libro"
 msgstr "Nuevo Libro"
@@ -7466,10 +7614,6 @@ msgstr "Buscar centro de grupo"
 #: cacao_accounting/contabilidad/templates/contabilidad/centro-costo_crear.html:98
 msgid "Es centro de grupo"
 msgstr "Es centro de grupo"
-
-#: cacao_accounting/contabilidad/templates/contabilidad/centro-costo_lista.html:10
-msgid "Centros de Costos"
-msgstr "Centros de Costos"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/centro-costo_lista.html:16
 msgid "Catálogo de Centros de Costos."
@@ -7664,10 +7808,6 @@ msgstr "Guardar Cambios"
 msgid "Entidad activa"
 msgstr "Entidad activa"
 
-#: cacao_accounting/contabilidad/templates/contabilidad/entidad_lista.html:23
-msgid "Entidades"
-msgstr "Entidades"
-
 #: cacao_accounting/contabilidad/templates/contabilidad/entidad_lista.html:27
 msgid "Nueva Entidad"
 msgstr "Nueva Entidad"
@@ -7679,14 +7819,6 @@ msgstr "Listado de Entidades"
 #: cacao_accounting/contabilidad/templates/contabilidad/entidad_lista.html:56
 msgid "Listado de entidades"
 msgstr "Listado de entidades"
-
-#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:9
-#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:21
-#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html:10
-#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_lista.html:16
-#: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html:8
-msgid "Revalorización cambiaria"
-msgstr "Revalorización cambiaria"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:39
 #: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation_nueva.html:100
@@ -7875,11 +8007,6 @@ msgstr "Sin periodos abiertos"
 #: cacao_accounting/contabilidad/templates/contabilidad/external_counter_lista.html:87
 msgid "Cambiar estado del contador?"
 msgstr "Cambiar estado del contador?"
-
-#: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year.html:8
-#: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year_lista.html:15
-msgid "Años Fiscales"
-msgstr "Años Fiscales"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year.html:17
 #: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year_crear.html:70
@@ -8455,11 +8582,6 @@ msgstr "Validar datos"
 msgid "Insertar líneas"
 msgstr "Insertar líneas"
 
-#: cacao_accounting/contabilidad/templates/contabilidad/moneda.html:8
-#: cacao_accounting/contabilidad/templates/contabilidad/moneda_lista.html:16
-msgid "Monedas"
-msgstr "Monedas"
-
 #: cacao_accounting/contabilidad/templates/contabilidad/moneda.html:28
 #: cacao_accounting/contabilidad/templates/contabilidad/moneda_lista.html:81
 #: cacao_accounting/contabilidad/templates/contabilidad/moneda_lista.html:83
@@ -8493,11 +8615,6 @@ msgstr "Listado de Monedas"
 #: cacao_accounting/contabilidad/templates/contabilidad/moneda_lista.html:47
 msgid "Listado de monedas"
 msgstr "Listado de monedas"
-
-#: cacao_accounting/contabilidad/templates/contabilidad/monthly_close_assistant.html:14
-#: cacao_accounting/contabilidad/templates/contabilidad/monthly_close_assistant.html:19
-msgid "Asistente de Cierre Mensual"
-msgstr "Asistente de Cierre Mensual"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/monthly_close_assistant.html:23
 msgid "Ver cierres"
@@ -8672,11 +8789,6 @@ msgstr "Mensaje"
 msgid "Aún no se han ejecutado pasos."
 msgstr "Aún no se han ejecutado pasos."
 
-#: cacao_accounting/contabilidad/templates/contabilidad/periodo.html:8
-#: cacao_accounting/contabilidad/templates/contabilidad/periodo_lista.html:15
-msgid "Períodos Contables"
-msgstr "Períodos Contables"
-
 #: cacao_accounting/contabilidad/templates/contabilidad/periodo.html:31
 #: cacao_accounting/contabilidad/templates/contabilidad/periodo_crear.html:82
 #: cacao_accounting/contabilidad/templates/contabilidad/periodo_lista.html:53
@@ -8777,12 +8889,6 @@ msgstr "Listado de periodos contables"
 msgid "No se encontraron períodos contables."
 msgstr "No se encontraron períodos contables."
 
-#: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:9
-#: cacao_accounting/contabilidad/templates/contabilidad/proyecto_lista.html:10
-#: cacao_accounting/contabilidad/templates/contabilidad/proyecto_lista.html:16
-msgid "Proyectos"
-msgstr "Proyectos"
-
 #: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:23
 msgid "Detenido"
 msgstr "Detenido"
@@ -8798,12 +8904,6 @@ msgstr "Fecha inicio"
 #: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:39
 msgid "Fecha fin"
 msgstr "Fecha fin"
-
-#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html:80
-#: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:41
-#: cacao_accounting/contabilidad/templates/contabilidad/proyecto_crear.html:69
-msgid "Presupuesto"
-msgstr "Presupuesto"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:45
 #: cacao_accounting/contabilidad/templates/contabilidad/proyecto_crear.html:65
@@ -8840,13 +8940,6 @@ msgstr "Moneda del Presupuesto"
 #: cacao_accounting/contabilidad/templates/contabilidad/proyecto_crear.html:95
 msgid "Cuenta de Activo de Capitalización"
 msgstr "Cuenta de Activo de Capitalización"
-
-#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:15
-#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:20
-#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_nuevo.html:32
-#: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_ver.html:18
-msgid "Comprobante Recurrente"
-msgstr "Comprobante Recurrente"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:23
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_nuevo.html:33
@@ -9019,12 +9112,6 @@ msgstr "Motivo"
 msgid "Confirmar"
 msgstr "Confirmar"
 
-#: cacao_accounting/contabilidad/templates/contabilidad/tc.html:8
-#: cacao_accounting/contabilidad/templates/contabilidad/tc_importar.html:9
-#: cacao_accounting/contabilidad/templates/contabilidad/tc_lista.html:16
-msgid "Tasas de Cambio"
-msgstr "Tasas de Cambio"
-
 #: cacao_accounting/contabilidad/templates/contabilidad/tc.html:24
 msgid "Moneda base"
 msgstr "Moneda base"
@@ -9171,11 +9258,6 @@ msgstr "Nueva Unidad de Negocio"
 #: cacao_accounting/contabilidad/templates/contabilidad/unidad_crear.html:19
 msgid "Guardar Unidad"
 msgstr "Guardar Unidad"
-
-#: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html:11
-#: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html:17
-msgid "Unidades de Negocio"
-msgstr "Unidades de Negocio"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html:19
 #: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html:26
@@ -9341,11 +9423,6 @@ msgstr "Cuenta Contable"
 msgid "Guardar Línea"
 msgstr "Guardar Línea"
 
-#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/list.html:7
-#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/list.html:12
-msgid "Administrar Presupuestos"
-msgstr "Administrar Presupuestos"
-
 #: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/list.html:22
 msgid "Buscar por nombre o código"
 msgstr "Buscar por nombre o código"
@@ -9369,11 +9446,6 @@ msgstr "No se encontraron presupuestos."
 #: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/list.html:77
 msgid "Navegación de páginas"
 msgstr "Navegación de páginas"
-
-#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html:9
-#: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html:63
-msgid "Real versus Presupuesto"
-msgstr "Real versus Presupuesto"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html:18
 #: cacao_accounting/reportes/templates/reportes/financial_report.html:18
@@ -10574,35 +10646,6 @@ msgstr ""
 #, fuzzy
 msgid "No se permiten rangos parciales: use períodos contables completos."
 msgstr "No se pudo crear el período contable inicial."
-
-#: cacao_accounting/reportes/routes.py:240
-msgid "Resumen de Movimiento por Cuenta"
-msgstr "Resumen de Movimiento por Cuenta"
-
-#: cacao_accounting/reportes/routes.py:260
-#: cacao_accounting/reportes/routes.py:268
-msgid "Detalle de Movimiento Contable"
-msgstr "Detalle de Movimiento Contable"
-
-#: cacao_accounting/reportes/routes.py:286
-#: cacao_accounting/reportes/routes.py:587
-msgid "Balanza de Comprobación"
-msgstr "Balanza de Comprobación"
-
-#: cacao_accounting/reportes/routes.py:304
-msgid "Estado de Resultado"
-msgstr "Estado de Resultado"
-
-#: cacao_accounting/reportes/routes.py:322
-msgid "Balance General"
-msgstr "Balance General"
-
-#: cacao_accounting/reportes/routes.py:343
-#: cacao_accounting/reportes/routes.py:344
-#: cacao_accounting/reportes/routes.py:356
-#, fuzzy
-msgid "Estado de Flujo de Efectivo"
-msgstr "Listado de Tipos de Cambio"
 
 #: cacao_accounting/reportes/routes.py:381
 msgid "Reporte fiscal mensual de retenciones aplicadas"
