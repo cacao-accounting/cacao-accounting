@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from typing import Any, NoReturn, Sequence, cast
 
@@ -847,7 +847,11 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
 def _form_decimal(field_name: str, default: str = "0") -> Decimal:
     """Convierte un valor de formulario a Decimal."""
     value = request.form.get(field_name)
-    return Decimal(str(value if value not in (None, "") else default))
+    raw_value = value if value not in (None, "") else default
+    try:
+        return Decimal(str(raw_value))
+    except InvalidOperation as exc:
+        raise ValueError(_("El campo {} debe contener un número válido.").format(field_name)) from exc
 
 
 def _line_amount(index: int) -> Decimal:

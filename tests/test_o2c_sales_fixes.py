@@ -122,6 +122,15 @@ def test_sales_order_new_handles_unexpected_error(app_ctx):
     assert result is None
 
 
+def test_sales_form_decimal_rejects_non_numeric_input_as_value_error(app_ctx):
+    """Invalid numeric form data must reach route handlers as a controlled validation error."""
+    from cacao_accounting.ventas import _form_decimal
+
+    with app_ctx.test_request_context("/sales/sales-order/new", method="POST", data={"qty_0": "abc"}):
+        with pytest.raises(ValueError, match="número válido"):
+            _form_decimal("qty_0")
+
+
 def test_sales_invoice_form_exposes_company_warehouses(app_ctx):
     """La factura de venta muestra la bodega por línea para crear la DN correcta."""
     client = app_ctx.test_client()
