@@ -153,6 +153,57 @@ def test_item_account_rows_require_company_write_access(app_ctx):
             )
 
 
+def test_item_account_rows_reject_accounts_without_account_type(app_ctx):
+    """Item account mappings must reject accounts without an accounting classification."""
+    from flask_login import login_user
+    from cacao_accounting.database import (
+        Accounts,
+        Book,
+        Modules,
+        Roles,
+        RolesAccess,
+        RolesUser,
+        User,
+        UserCompanyAccess,
+        database,
+    )
+    from cacao_accounting.inventario.service import ItemAccountRow, validate_item_account_rows
+
+    viewer = database.session.execute(database.select(User).filter_by(user="viewer")).scalar_one()
+    module = database.session.execute(database.select(Modules).filter_by(module="inventory")).scalar_one()
+    role = Roles(name="inventory_account_type_reader", note="Inventory account type reader")
+    book = Book(code="CACAO-ACCOUNT-TYPE", name="Cacao account type book", entity="cacao", is_primary=True)
+    account = Accounts(
+        id="ACC-MISSING-TYPE",
+        entity="cacao",
+        code="ACC-MISSING-TYPE",
+        name="Cuenta sin clasificación",
+        active=True,
+        enabled=True,
+        group=False,
+        account_type=None,
+    )
+    database.session.add_all([role, book, account])
+    database.session.flush()
+    database.session.add_all(
+        [
+            RolesUser(user_id=viewer.id, role_id=role.id, active=True),
+            RolesAccess(rol_id=role.id, module_id=module.id, access=True, view=True, create=True, edit=True),
+            UserCompanyAccess(user_id=viewer.id, company_code="cacao"),
+        ]
+    )
+    database.session.commit()
+
+    with app_ctx.test_request_context():
+        login_user(viewer)
+        with pytest.raises(ValueError, match="debe ser valida"):
+            validate_item_account_rows(
+                "goods",
+                True,
+                [ItemAccountRow(company="cacao", expense_account_id=account.id)],
+            )
+
+
 def test_default_warehouse_requires_company_write_access(app_ctx):
     """An item cannot select a default warehouse from another company."""
     from flask_login import login_user
