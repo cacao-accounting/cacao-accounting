@@ -196,6 +196,84 @@ def test_sales_return_combines_with_credit_note_without_double_count(app_ctx):
     assert compute_outstanding_amount(invoice) == Decimal("500")
 
 
+def test_sales_return_over_limit_is_rejected_on_submit_and_approval(app_ctx):
+    """Una devolución no puede exceder el saldo de la factura origen."""
+    from cacao_accounting.approval_engine import ApprovalEngine
+    from cacao_accounting.document_flow.payment import compute_outstanding_amount
+
+    customer = _ensure_customer("CUST-SR781-C", "Cliente SR781 C")
+    item = _ensure_item("ITEM-SR781-C")
+    client = app_ctx.test_client()
+    client.post("/login", data={"usuario": "cacao", "acceso": "cacao"}, follow_redirects=True)
+
+    invoice = _create_invoice(customer, item, amount="1000", document_type="sales_invoice")
+    assert client.post(f"/sales/sales-invoice/{invoice.id}/submit", follow_redirects=True).status_code == 200
+
+    over_limit = _create_invoice(customer, item, amount="1001", document_type="sales_return", reversal_of=invoice.id)
+    response = client.post(f"/sales/sales-invoice/{over_limit.id}/submit", follow_redirects=True)
+
+    assert response.status_code == 200
+    database.session.refresh(over_limit)
+    assert over_limit.docstatus == 0
+    assert (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                source_type="sales_invoice",
+                source_id=invoice.id,
+                target_type="sales_return",
+                target_id=over_limit.id,
+                status="active",
+            )
+        )
+        .scalars()
+        .first()
+        is None
+    )
+    assert compute_outstanding_amount(invoice) == Decimal("1000")
+
+    from cacao_accounting.database import GLEntry
+
+    assert (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_type="sales_invoice", voucher_id=over_limit.id))
+        .scalars()
+        .first()
+        is None
+    )
+    with pytest.raises(ValueError, match="excede el saldo pendiente"):
+        ApprovalEngine._validate_final_submission("sales_return", over_limit)
+
+
+def test_approval_engine_dispatches_sales_return_to_posting(app_ctx, monkeypatch):
+    """La aprobación final de sales_return debe ejecutar el posting de factura."""
+    from types import SimpleNamespace
+
+    import cacao_accounting.approval_engine as approval_engine
+
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        approval_engine.ApprovalEngine,
+        "_validate_final_submission",
+        staticmethod(lambda _doctype, _document: None),
+    )
+    monkeypatch.setattr(
+        approval_engine,
+        "_submit_document_and_refresh_flow",
+        lambda doctype, document: calls.append((doctype, document.id)),
+    )
+    monkeypatch.setattr("cacao_accounting.audit_trail_service.log_submit", lambda _document: None)
+
+    document = SimpleNamespace(
+        document_type="sales_return",
+        id="SALES-RETURN-APPROVAL",
+        update_inventory=False,
+        delivery_note_id=None,
+        reversal_of=None,
+    )
+    approval_engine.ApprovalEngine._execute_submit("sales_return", document, SimpleNamespace(id="user-1"))
+
+    assert calls == [("sales_return", document.id)]
+
+
 def test_sales_reversal_source_supports_sales_return(app_ctx):
     """La vía UI resuelve la factura origen también para sales_return."""
     from cacao_accounting.ventas.services import _sales_reversal_source
