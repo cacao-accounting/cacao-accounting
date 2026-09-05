@@ -4,22 +4,22 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item active" aria-current="page">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
-        <i class="bi bi-house"></i> Inicio
+        <i class="bi bi-house"></i> {{ _("Inicio") }}
       </a>
     </li>
-    <li class="breadcrumb-item active" aria-current="page">Mi Perfil</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Mi Perfil") }}</li>
   </ol>
 </nav>
 
 <div class="ca-page-header">
-  <h4><i class="bi bi-person-circle me-2"></i>Mi Perfil</h4>
+  <h4><i class="bi bi-person-circle me-2"></i>{{ _("Mi Perfil") }}</h4>
 </div>
 
 <div class="row g-4">
   <div class="col-12 col-lg-6">
     <div class="ca-card p-4">
-      <h5 class="mb-3">Información personal</h5>
-      <p class="text-muted">Actualiza tus datos personales para mantener tu cuenta al día.</p>
+      <h5 class="mb-3">{{ _("Información personal") }}</h5>
+      <p class="text-muted">{{ _("Actualiza tus datos personales para mantener tu cuenta al día.") }}</p>
 
       <form method="post">
         {{ profile_form.hidden_tag() }}
@@ -33,55 +33,55 @@
         {% endwith %}
 
         <div class="mb-3">
-          <label class="form-label">Usuario</label>
+          <label class="form-label">{{ _("Usuario") }}</label>
           <input class="form-control form-control-sm" type="text" value="{{ current_user.user }}" readonly>
         </div>
 
         <div class="row g-3">
           <div class="col-6">
-            <label class="form-label" for="name">Nombre</label>
+            <label class="form-label" for="name">{{ _("Nombre") }}</label>
             {{ profile_form.name(class="form-control form-control-sm{% if profile_form.name.errors %} is-invalid{% endif %}", id="name") }}
             {% for error in profile_form.name.errors %}
               <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
           </div>
           <div class="col-6">
-            <label class="form-label" for="name2">Segundo nombre</label>
+            <label class="form-label" for="name2">{{ _("Segundo nombre") }}</label>
             {{ profile_form.name2(class="form-control form-control-sm{% if profile_form.name2.errors %} is-invalid{% endif %}", id="name2") }}
             {% for error in profile_form.name2.errors %}
               <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
           </div>
           <div class="col-6">
-            <label class="form-label" for="last_name">Apellido</label>
+            <label class="form-label" for="last_name">{{ _("Apellido") }}</label>
             {{ profile_form.last_name(class="form-control form-control-sm{% if profile_form.last_name.errors %} is-invalid{% endif %}", id="last_name") }}
             {% for error in profile_form.last_name.errors %}
               <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
           </div>
           <div class="col-6">
-            <label class="form-label" for="last_name2">Segundo apellido</label>
+            <label class="form-label" for="last_name2">{{ _("Segundo apellido") }}</label>
             {{ profile_form.last_name2(class="form-control form-control-sm{% if profile_form.last_name2.errors %} is-invalid{% endif %}", id="last_name2") }}
             {% for error in profile_form.last_name2.errors %}
               <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
           </div>
           <div class="col-6">
-            <label class="form-label" for="e_mail">Correo electrónico</label>
+            <label class="form-label" for="e_mail">{{ _("Correo electrónico") }}</label>
             {{ profile_form.e_mail(class="form-control form-control-sm{% if profile_form.e_mail.errors %} is-invalid{% endif %}", id="e_mail") }}
             {% for error in profile_form.e_mail.errors %}
               <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
           </div>
           <div class="col-6">
-            <label class="form-label" for="phone">Teléfono</label>
+            <label class="form-label" for="phone">{{ _("Teléfono") }}</label>
             {{ profile_form.phone(class="form-control form-control-sm{% if profile_form.phone.errors %} is-invalid{% endif %}", id="phone") }}
             {% for error in profile_form.phone.errors %}
               <div class="invalid-feedback d-block">{{ error }}</div>
             {% endfor %}
           </div>
           <div class="col-6">
-            <label class="form-label" for="language">Idioma</label>
+            <label class="form-label" for="language">{{ _("Idioma") }}</label>
             {{ profile_form.language(class="form-select form-select-sm{% if profile_form.language.errors %} is-invalid{% endif %}", id="language") }}
             {% for error in profile_form.language.errors %}
               <div class="invalid-feedback d-block">{{ error }}</div>
@@ -98,28 +98,28 @@
 
   <div class="col-12 col-lg-6">
     <div class="ca-card p-4">
-      <h5 class="mb-3">Cambiar contraseña</h5>
-      <p class="text-muted">Actualiza tu contraseña para mantener la seguridad de tu cuenta.</p>
+      <h5 class="mb-3">{{ _("Cambiar contraseña") }}</h5>
+      <p class="text-muted">{{ _("Actualiza tu contraseña para mantener la seguridad de tu cuenta.") }}</p>
 
       <form method="post">
         {{ password_form.hidden_tag() }}
 
         <div class="mb-3">
-          <label class="form-label" for="current_password">Contraseña actual</label>
+          <label class="form-label" for="current_password">{{ _("Contraseña actual") }}</label>
           {{ password_form.current_password(class="form-control form-control-sm{% if password_form.current_password.errors %} is-invalid{% endif %}", id="current_password") }}
           {% for error in password_form.current_password.errors %}
             <div class="invalid-feedback d-block">{{ error }}</div>
           {% endfor %}
         </div>
         <div class="mb-3">
-          <label class="form-label" for="new_password">Nueva contraseña</label>
+          <label class="form-label" for="new_password">{{ _("Nueva contraseña") }}</label>
           {{ password_form.new_password(class="form-control form-control-sm{% if password_form.new_password.errors %} is-invalid{% endif %}", id="new_password") }}
           {% for error in password_form.new_password.errors %}
             <div class="invalid-feedback d-block">{{ error }}</div>
           {% endfor %}
         </div>
         <div class="mb-3">
-          <label class="form-label" for="confirm_password">Confirmar contraseña</label>
+          <label class="form-label" for="confirm_password">{{ _("Confirmar contraseña") }}</label>
           {{ password_form.confirm_password(class="form-control form-control-sm{% if password_form.confirm_password.errors %} is-invalid{% endif %}", id="confirm_password") }}
           {% for error in password_form.confirm_password.errors %}
             <div class="invalid-feedback d-block">{{ error }}</div>

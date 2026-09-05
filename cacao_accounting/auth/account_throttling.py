@@ -154,16 +154,16 @@ def notificar_intento_fallido(usuario: User) -> None:
     if minutos > 0:
         asunto = _("Cacao Accounting - Cuenta bloqueada temporalmente")
         cuerpo = (
-            f"{'Hola'} {usuario.name or usuario.user},\n\n"
+            f"{_('Hola')} {usuario.name or usuario.user},\n\n"
             f"{_('Se detectaron múltiples intentos fallidos de inicio de sesión en su cuenta.')}\n\n"
             f"{_('Su cuenta ha sido bloqueada temporalmente por')} {minutos} "
-            f"{'minuto(s)'}.\n\n"
+            f"{_('minuto(s)')}.\n\n"
             f"{_('Si usted no realizó estos intentos, cambie su contraseña y contacte al administrador.')}"
         )
     else:
         asunto = _("Cacao Accounting - Alerta de seguridad")
         cuerpo = (
-            f"{'Hola'} {usuario.name or usuario.user},\n\n"
+            f"{_('Hola')} {usuario.name or usuario.user},\n\n"
             f"{_('Se detectó un intento fallido de inicio de sesión en su cuenta.')}\n\n"
             f"{_('Si usted no realizó este intente, cambie su contraseña.')}"
         )

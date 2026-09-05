@@ -1,9 +1,9 @@
 {% import "macros.html" as macros %}
 <!DOCTYPE html>
-<html lang="es">
+<html lang="{{ session.get('lang', 'es') }}">
 
 <head>
-  <title>Cacao Accounting — Inicio de Sesión</title>
+  <title>{{ _("Cacao Accounting — Inicio de Sesión") }}</title>
   {{ macros.headertags() }}
   <link href="{{ url_for('static', filename='css/signin.css') }}" rel="stylesheet">
 </head>
@@ -14,7 +14,7 @@
       <div style="text-align:center;margin-bottom:1.5rem;">
         <img src="{{ url_for('static', filename='media/brand.svg') }}" alt="Cacao Accounting"
           height="64">
-        <h1 class="h5 mt-3 mb-0" style="font-weight:700;color:#1e293b;">Inicio de Sesión</h1>
+        <h1 class="h5 mt-3 mb-0" style="font-weight:700;color:#1e293b;">{{ _("Inicio de Sesión") }}</h1>
         <p class="login-subtitle" style="font-size:.8rem;margin-top:.25rem;">{{ _("Ingrese sus credenciales para continuar") }}</p>
       </div>
       <form method="post">
@@ -28,10 +28,10 @@
         {% endwith %}
         <label for="usuario" class="form-label">{{ _("Usuario") }}</label>
         {{ form.usuario(class="form-control form-control-sm", id="usuario", placeholder=_("Nombre de usuario"), autocomplete="off", autocapitalize="none", autocorrect="off", spellcheck="false") }}
-        <label for="acceso" class="form-label">Contraseña</label>
-        {{ form.acceso(class="form-control form-control-sm", id="acceso", placeholder="Contraseña", autocomplete="off", autocapitalize="none", autocorrect="off", spellcheck="false") }}
+        <label for="acceso" class="form-label">{{ _("Contraseña") }}</label>
+        {{ form.acceso(class="form-control form-control-sm", id="acceso", placeholder=_("Contraseña"), autocomplete="off", autocapitalize="none", autocorrect="off", spellcheck="false") }}
         <button class="w-100 btn btn-primary btn-sm mt-2" type="submit">
-          <i class="bi bi-box-arrow-in-right me-1"></i>Iniciar Sesión
+          <i class="bi bi-box-arrow-in-right me-1"></i>{{ _("Iniciar Sesión") }}
         </button>
       </form>
       <p class="text-center mt-2 mb-0">
@@ -43,11 +43,11 @@
       <div class="mt-3">
         <button class="btn btn-light btn-sm w-100" type="button" data-bs-toggle="collapse" data-bs-target="#devDetails"
           aria-expanded="false">
-          <i class="bi bi-info-circle me-1"></i>Detalles
+          <i class="bi bi-info-circle me-1"></i>{{ _("Detalles") }}
         </button>
         <div class="collapse mt-2" id="devDetails">
           <div class="card card-body py-2 small">
-            <strong>Modo Escritorio Activado</strong>
+            <strong>{{ _("Modo Escritorio Activado") }}</strong>
           </div>
         </div>
       </div>
