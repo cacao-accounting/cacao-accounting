@@ -156,15 +156,15 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('bancos.cash_forecast_list') }}">Flujo de caja (Year to Day) Real, Periodo Corriente, Proyección</a>
+        <a href="{{ url_for('bancos.cash_forecast_list') }}">Flujo de Caja</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('bancos.cash_forecast_compare') }}">Comparativo de real versus presupuesto de flujo de caja</a>
+        <a href="{{ url_for('bancos.cash_forecast_compare') }}">Comparativo Real vs. Presupuesto</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('bancos.cash_forecast_manual_entries') }}">Forecast de Entradas manuales</a>
+        <a href="{{ url_for('bancos.cash_forecast_manual_entries') }}">Entradas Manuales</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       {% else %}
