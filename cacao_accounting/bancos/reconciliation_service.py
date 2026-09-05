@@ -246,6 +246,11 @@ def _allocated_for_source(bank_transaction_id: str) -> Decimal:
     return _decimal_value(value)
 
 
+def bank_transaction_pending_amount(transaction: BankTransaction) -> Decimal:
+    """Devuelve el saldo aún disponible de una transacción bancaria."""
+    return max(_bank_amount(transaction) - _allocated_for_source(str(transaction.id)), Decimal("0"))
+
+
 def _allocated_for_target(target_type: str, target_id: str, *, bank_account_id: str | None = None) -> Decimal:
     """Suma asignaciones activas del destino.
 
