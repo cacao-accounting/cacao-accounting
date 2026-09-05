@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from sqlalchemy import select
@@ -420,7 +420,7 @@ def _canonical_tax_rule_base(
 def _canonical_tax_rule_amount(tax_rule: TaxRule, base_amount: Decimal, rate: Decimal) -> Decimal:
     """Calculate the persisted amount from canonical rule values."""
     if tax_rule.calculation_method == "percentage":
-        return base_amount * rate / Decimal("100")
+        return (base_amount * rate / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if tax_rule.calculation_method in {"fixed", "manual"}:
         return _to_decimal(tax_rule.amount)
     return Decimal("0")

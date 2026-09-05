@@ -16,6 +16,7 @@ from cacao_accounting.compras import _validate_purchase_tax_template
 from cacao_accounting.config import configuracion
 from cacao_accounting.fiscal_persistence_service import (
     build_tax_rule_contexts_from_snapshot,
+    calculate_document_total_with_taxes,
     load_document_fiscal_lines,
     persist_document_fiscal_snapshot,
 )
@@ -912,6 +913,49 @@ def test_document_tax_snapshot_uses_canonical_rule_values(app_ctx: Flask) -> Non
     assert persisted_line.amount == Decimal("15.0000")
     assert persisted_line.account_id == account.id
     assert '"rate": "15"' in persisted_line.rule_snapshot_json
+
+
+def test_document_tax_snapshot_rounds_percentage_amounts_like_fiscal_engine(app_ctx: Flask) -> None:
+    """Canonical persisted tax amounts must use the engine's two-decimal HALF_UP policy."""
+    from cacao_accounting.database import PurchaseInvoice, TaxRule, database
+
+    rule = TaxRule(
+        company="cacao",
+        name="IVA redondeado",
+        concept="IVA",
+        tax_type="tax",
+        calculation_method="percentage",
+        rate=Decimal("15"),
+        amount=Decimal("0"),
+        base_mode="goods",
+        accounting_treatment="separate_tax_account",
+        recognition_event="purchase_invoice_confirmed",
+        is_active=True,
+    )
+    invoice = PurchaseInvoice(company="cacao", posting_date=date(2026, 5, 5), document_type="purchase_invoice")
+    database.session.add_all([rule, invoice])
+    database.session.flush()
+
+    tax_lines = [{"source_rule_id": rule.id, "concept": "IVA", "base_amount": "100.55", "amount": "999.9999"}]
+    persist_document_fiscal_snapshot(
+        company="cacao",
+        document_type="purchase_invoice",
+        document_id=invoice.id,
+        currency="NIO",
+        tax_lines=tax_lines,
+        tax_summary={"subtotal": "100.55"},
+        server_subtotal=Decimal("100.55"),
+    )
+
+    persisted_line = load_document_fiscal_lines("purchase_invoice", invoice.id)[0]
+    assert persisted_line.base_amount == Decimal("100.550000000")
+    assert persisted_line.amount == Decimal("15.08")
+    assert calculate_document_total_with_taxes(
+        invoice,
+        Decimal("100.55"),
+        [],
+        tax_lines_payload=tax_lines,
+    ) == Decimal("115.63")
 
 
 def test_manual_tax_snapshot_rejects_cross_company_account(app_ctx: Flask) -> None:
