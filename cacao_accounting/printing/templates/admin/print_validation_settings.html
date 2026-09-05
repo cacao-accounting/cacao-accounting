@@ -12,6 +12,7 @@
     <div class="card">
         <div class="card-body">
             <form method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-check form-switch mb-3">
                     <input
                         class="form-check-input"
