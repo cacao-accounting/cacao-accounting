@@ -2462,7 +2462,7 @@ def _validate_reversal_of(
         raise ValueError(f"La factura origen '{reversal_of}' no pertenece al mismo cliente.")
     if company and source.company != company:
         raise ValueError(f"La factura origen '{reversal_of}' no pertenece a la misma compania.")
-    if document_type == "sales_credit_note" and note_amount is not None:
+    if document_type in {"sales_credit_note", "sales_return"} and note_amount is not None:
         from cacao_accounting.document_flow.payment import compute_outstanding_amount
 
         # Una NC no puede eludir pagos ya aplicados eligiendo una fecha anterior.

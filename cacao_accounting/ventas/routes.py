@@ -2343,8 +2343,12 @@ def ventas_factura_venta_submit(invoice_id: str):
         _validate_sales_invoice_quantities(invoice_id)
         _validate_sales_invoice_line_amounts(registro, items)
         warnings = _validate_invoice_prices_against_source(registro)
-        if registro.document_type in ("sales_credit_note", "sales_debit_note") and registro.reversal_of:
-            note_amount = Decimal(str(registro.grand_total or "0")) if registro.document_type == "sales_credit_note" else None
+        if registro.document_type in ("sales_credit_note", "sales_return", "sales_debit_note") and registro.reversal_of:
+            note_amount = (
+                Decimal(str(registro.grand_total or "0"))
+                if registro.document_type in ("sales_credit_note", "sales_return")
+                else None
+            )
             _validate_reversal_of(
                 registro.reversal_of,
                 registro.customer_id,

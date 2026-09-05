@@ -473,7 +473,7 @@ class ApprovalEngine:
                 current_document=document,
             )
             return
-        if doctype != "sales_invoice":
+        if doctype not in {"sales_invoice", "sales_return"}:
             return
         from cacao_accounting.ventas import (
             _validate_invoice_prices_against_source,
@@ -490,7 +490,7 @@ class ApprovalEngine:
             )
         _validate_sales_invoice_quantities(document.id)
         _validate_invoice_prices_against_source(document)
-        if getattr(document, "document_type", None) == "sales_credit_note":
+        if getattr(document, "document_type", None) in {"sales_credit_note", "sales_return"}:
             _validate_reversal_of(
                 document.reversal_of or "",
                 document.customer_id,
@@ -581,6 +581,7 @@ class ApprovalEngine:
             "sales_order": (SalesOrderItem, "sales_order_id"),
             "delivery_note": (DeliveryNoteItem, "delivery_note_id"),
             "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
+            "sales_return": (SalesInvoiceItem, "sales_invoice_id"),
             "purchase_request": (PurchaseRequestItem, "purchase_request_id"),
             "purchase_quotation": (PurchaseQuotationItem, "purchase_quotation_id"),
             "supplier_quotation": (SupplierQuotationItem, "supplier_quotation_id"),
@@ -605,10 +606,10 @@ class ApprovalEngine:
             items=items,
             require_party=doctype not in {"stock_entry", "delivery_note", "purchase_request"},
             require_rate_positive=doctype not in {"delivery_note", "stock_entry", "sales_request", "purchase_request"},
-            require_amount_nonzero=doctype in {"sales_invoice", "purchase_invoice"},
+            require_amount_nonzero=doctype in {"sales_invoice", "sales_return", "purchase_invoice"},
             require_warehouse=doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"},
         )
-        if doctype in {"sales_order", "sales_invoice"}:
+        if doctype in {"sales_order", "sales_invoice", "sales_return"}:
             ApprovalEngine._validate_sales_submission(doctype, document)
         elif doctype == "purchase_invoice":
             ApprovalEngine._validate_purchase_submission(document)
@@ -839,7 +840,7 @@ class ApprovalEngine:
             log_submit(document)
             return
 
-        if doctype == "sales_invoice":
+        if doctype in {"sales_invoice", "sales_return"}:
             from cacao_accounting.ventas import _create_delivery_note_from_invoice, _persist_sales_reversal_relation
 
             _submit_document_and_refresh_flow(doctype, document)
