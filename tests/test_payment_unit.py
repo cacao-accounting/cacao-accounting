@@ -251,6 +251,16 @@ class TestPaymentCandidateHelpers:
 
         assert _payment_candidate_physical_type("sales_debit_note") == "sales_invoice"
 
+    def test_payment_candidate_physical_type_purchase_return(self):
+        from cacao_accounting.document_flow.payment import _payment_candidate_physical_type
+
+        assert _payment_candidate_physical_type("purchase_return") == "purchase_invoice"
+
+    def test_payment_candidate_physical_type_sales_return(self):
+        from cacao_accounting.document_flow.payment import _payment_candidate_physical_type
+
+        assert _payment_candidate_physical_type("sales_return") == "sales_invoice"
+
     def test_payment_candidate_physical_type_passthrough(self):
         from cacao_accounting.document_flow.payment import _payment_candidate_physical_type
 
@@ -313,6 +323,18 @@ class TestPaymentCandidateHelpers:
         assert _payment_type_matches_source("receive", "sales_invoice") is True
         assert _payment_type_matches_source("receive", "purchase_credit_note") is True
         assert _payment_type_matches_source("pay", "sales_credit_note") is True
+
+    def test_payment_type_matches_source_return_valid_direction(self):
+        from cacao_accounting.document_flow.payment import _payment_type_matches_source
+
+        assert _payment_type_matches_source("pay", "sales_return") is True
+        assert _payment_type_matches_source("receive", "purchase_return") is True
+
+    def test_payment_type_matches_source_return_invalid_direction(self):
+        from cacao_accounting.document_flow.payment import _payment_type_matches_source
+
+        assert _payment_type_matches_source("receive", "sales_return") is False
+        assert _payment_type_matches_source("pay", "purchase_return") is False
 
     def test_payment_type_matches_source_invalid(self):
         from cacao_accounting.document_flow.payment import _payment_type_matches_source
@@ -440,6 +462,7 @@ class TestPaymentReferenceModel:
         assert _payment_reference_model("purchase_invoice") is PurchaseInvoice
         assert _payment_reference_model("purchase_credit_note") is PurchaseInvoice
         assert _payment_reference_model("purchase_debit_note") is PurchaseInvoice
+        assert _payment_reference_model("purchase_return") is PurchaseInvoice
 
     def test_sales_types_return_sales_invoice(self):
         from cacao_accounting.document_flow.payment import _payment_reference_model
@@ -448,12 +471,33 @@ class TestPaymentReferenceModel:
         assert _payment_reference_model("sales_invoice") is SalesInvoice
         assert _payment_reference_model("sales_credit_note") is SalesInvoice
         assert _payment_reference_model("sales_debit_note") is SalesInvoice
+        assert _payment_reference_model("sales_return") is SalesInvoice
 
     def test_unknown_type_raises(self):
         from cacao_accounting.document_flow.payment import _payment_reference_model
 
         with pytest.raises(ValueError, match="Tipo de referencia invalido"):
             _payment_reference_model("unknown_type")
+
+
+class TestGetModelByType:
+    """Unit tests for the _get_model_by_type doctype-to-model mapping."""
+
+    def test_purchase_types_map_to_purchase_invoice(self):
+        from cacao_accounting.document_flow.payment import _get_model_by_type
+        from cacao_accounting.database import PurchaseInvoice
+
+        models = _get_model_by_type()
+        for doctype in ("purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_return"):
+            assert models[doctype] is PurchaseInvoice
+
+    def test_sales_types_map_to_sales_invoice(self):
+        from cacao_accounting.document_flow.payment import _get_model_by_type
+        from cacao_accounting.database import SalesInvoice
+
+        models = _get_model_by_type()
+        for doctype in ("sales_invoice", "sales_debit_note", "sales_credit_note", "sales_return"):
+            assert models[doctype] is SalesInvoice
 
 
 # ---------------------------------------------------------------------------
@@ -471,6 +515,7 @@ class TestCandidateSourceTypes:
         assert "purchase_invoice" in result
         assert "purchase_debit_note" in result
         assert "purchase_credit_note" in result
+        assert "purchase_return" in result
 
     def test_customer(self):
         from cacao_accounting.document_flow.payment import _candidate_source_types
@@ -479,6 +524,7 @@ class TestCandidateSourceTypes:
         assert "sales_invoice" in result
         assert "sales_debit_note" in result
         assert "sales_credit_note" in result
+        assert "sales_return" in result
 
 
 # ---------------------------------------------------------------------------
@@ -602,6 +648,64 @@ class TestPaymentReferenceCandidates:
             source_types=["sales_order"],
         )
         assert all(r["document_id"] != so.id for r in results)
+
+    def test_sales_return_candidates_are_exposed_for_customer(self, app_ctx):
+        """Una devolucion de venta debe poder seleccionarse como referencia de reembolso."""
+        from cacao_accounting.document_flow.payment import payment_reference_candidates
+
+        customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
+        sr = SalesInvoice(
+            company="cacao",
+            customer_id=customer.id,
+            posting_date=date.today(),
+            document_type="sales_return",
+            docstatus=1,
+            grand_total=Decimal("400"),
+            outstanding_amount=Decimal("400"),
+            base_outstanding_amount=Decimal("400"),
+        )
+        database.session.add(sr)
+        database.session.commit()
+
+        results = payment_reference_candidates(
+            company="cacao",
+            party_type="customer",
+            party_id=customer.id,
+            source_types=["sales_return"],
+        )
+        assert any(r["document_id"] == sr.id for r in results)
+        return_rows = [r for r in results if r["document_id"] == sr.id]
+        assert return_rows and return_rows[0]["model_type"] == "sales_invoice"
+        assert return_rows[0]["flow_source_type"] == "sales_return"
+
+    def test_purchase_return_candidates_are_exposed_for_supplier(self, app_ctx):
+        """Una devolucion de compra debe poder seleccionarse como referencia de reembolso."""
+        from cacao_accounting.document_flow.payment import payment_reference_candidates
+
+        supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+        pr = PurchaseInvoice(
+            company="cacao",
+            supplier_id=supplier.id,
+            posting_date=date.today(),
+            document_type="purchase_return",
+            docstatus=1,
+            grand_total=Decimal("300"),
+            outstanding_amount=Decimal("300"),
+            base_outstanding_amount=Decimal("300"),
+        )
+        database.session.add(pr)
+        database.session.commit()
+
+        results = payment_reference_candidates(
+            company="cacao",
+            party_type="supplier",
+            party_id=supplier.id,
+            source_types=["purchase_return"],
+        )
+        assert any(r["document_id"] == pr.id for r in results)
+        return_rows = [r for r in results if r["document_id"] == pr.id]
+        assert return_rows and return_rows[0]["model_type"] == "purchase_invoice"
+        assert return_rows[0]["flow_source_type"] == "purchase_return"
 
 
 # ---------------------------------------------------------------------------

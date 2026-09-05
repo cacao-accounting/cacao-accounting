@@ -109,9 +109,9 @@ def _base_amount(amount: Decimal, document: Any) -> Decimal:
 def _payment_candidate_physical_type(flow_source_type: str) -> str:
     """Devuelve el tipo fisico del modelo SQLAlchemy para una referencia de pago."""
     source_key = normalize_doctype(flow_source_type)
-    if source_key in {"purchase_credit_note", "purchase_debit_note"}:
+    if source_key in {"purchase_credit_note", "purchase_debit_note", "purchase_return"}:
         return "purchase_invoice"
-    if source_key in {"sales_credit_note", "sales_debit_note"}:
+    if source_key in {"sales_credit_note", "sales_debit_note", "sales_return"}:
         return "sales_invoice"
     return source_key
 
@@ -484,9 +484,9 @@ def payment_reference_candidates(
     if not company or party_type not in {"supplier", "customer"} or not party_id:
         raise _document_flow_error("Debe indicar compania, tipo de tercero y tercero.")
     allowed_by_party = (
-        {"purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_order"}
+        {"purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_return", "purchase_order"}
         if party_type == "supplier"
-        else {"sales_invoice", "sales_debit_note", "sales_credit_note", "sales_order"}
+        else {"sales_invoice", "sales_debit_note", "sales_credit_note", "sales_return", "sales_order"}
     )
     model_by_type = _get_model_by_type()
     rows: list[dict[str, Any]] = []
@@ -508,10 +508,12 @@ def _get_model_by_type() -> dict[str, Any]:
         "purchase_invoice": PurchaseInvoice,
         "purchase_debit_note": PurchaseInvoice,
         "purchase_credit_note": PurchaseInvoice,
+        "purchase_return": PurchaseInvoice,
         "purchase_order": PurchaseOrder,
         "sales_invoice": SalesInvoice,
         "sales_debit_note": SalesInvoice,
         "sales_credit_note": SalesInvoice,
+        "sales_return": SalesInvoice,
         "sales_order": SalesOrder,
     }
 
@@ -676,8 +678,8 @@ def _candidate_documents(
 def _candidate_source_types(party_type: str) -> list[str]:
     """Resuelve los doctypes origen validos para el tipo de tercero."""
     if party_type == "supplier":
-        return ["purchase_invoice", "purchase_debit_note", "purchase_credit_note"]
-    return ["sales_invoice", "sales_debit_note", "sales_credit_note"]
+        return ["purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_return"]
+    return ["sales_invoice", "sales_debit_note", "sales_credit_note", "sales_return"]
 
 
 def _filter_candidates_by_currency(
@@ -711,9 +713,11 @@ def _payment_type_matches_source(payment_type: str, flow_source_type: str) -> bo
         "purchase_invoice": "pay",
         "purchase_debit_note": "pay",
         "purchase_credit_note": "receive",
+        "purchase_return": "receive",
         "sales_invoice": "receive",
         "sales_debit_note": "receive",
         "sales_credit_note": "pay",
+        "sales_return": "pay",
     }.get(normalize_doctype(flow_source_type))
     return expected is None or payment_type == expected
 
