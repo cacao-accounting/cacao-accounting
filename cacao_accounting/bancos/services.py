@@ -1098,6 +1098,52 @@ def create_petty_cash_reconciliation(
     return reconciliation
 
 
+def update_petty_cash_reconciliation(
+    *,
+    reconciliation: PettyCashReconciliation,
+    reconciliation_date,
+    counted_cash: Decimal,
+    explanation: str | None = None,
+) -> PettyCashReconciliation:
+    """Actualiza un borrador de conciliacion recomputando sus campos derivados.
+
+    La edicion recalcula saldo de GL, vales abiertos, gastos pendientes, efectivo
+    esperado, importe explicado y diferencia para la nueva fecha y conteo antes
+    del commit, evitando que un borrador conserve cifras desactualizadas.
+    """
+    if reconciliation.status != "borrador":
+        raise ValueError("Solo se puede editar una conciliacion en borrador.")
+    if counted_cash is None or counted_cash < 0:
+        raise ValueError("El efectivo contado debe ser un importe no negativo.")
+    fund = _validate_petty_cash_fund(reconciliation.petty_cash_id, reconciliation.company)
+    duplicate = database.session.execute(
+        database.select(PettyCashReconciliation).filter(
+            PettyCashReconciliation.company == reconciliation.company,
+            PettyCashReconciliation.petty_cash_id == reconciliation.petty_cash_id,
+            PettyCashReconciliation.reconciliation_date == reconciliation_date,
+            PettyCashReconciliation.id != reconciliation.id,
+        )
+    ).scalar_one_or_none()
+    if duplicate:
+        raise ValueError("Ya existe una conciliacion para esa caja y fecha.")
+    derived = _petty_cash_reconciliation_derived_values(fund, reconciliation_date)
+    open_vouchers = derived["open_vouchers"]
+    pending_expenses = derived["pending_expenses"]
+    expected_cash = derived["expected_cash"]
+    explained_amount = counted_cash + open_vouchers - pending_expenses
+    reconciliation.posting_date = reconciliation_date
+    reconciliation.reconciliation_date = reconciliation_date
+    reconciliation.ledger_balance = derived["ledger_balance"]
+    reconciliation.open_vouchers = open_vouchers
+    reconciliation.expected_cash = expected_cash
+    reconciliation.counted_cash = counted_cash
+    reconciliation.explained_amount = explained_amount
+    reconciliation.difference = counted_cash - expected_cash
+    reconciliation.explanation = explanation or None
+    database.session.commit()
+    return reconciliation
+
+
 def reconcile_petty_cash(reconciliation: PettyCashReconciliation, *, actor_id: str | None = None):
     """Marca una conciliacion como conciliada conservando sus cifras originales."""
     if reconciliation.status != "borrador":
