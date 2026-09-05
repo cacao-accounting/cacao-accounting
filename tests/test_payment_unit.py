@@ -1571,6 +1571,89 @@ class TestCreatePaymentTarget:
         remaining = compute_outstanding_amount(si)
         assert remaining == Decimal("200")
 
+    def test_pending_refund_closes_credit_note_outstanding(self, app_ctx):
+        """An unposted refund moves a signed credit-note balance toward zero."""
+        from cacao_accounting.database import ARAPLedgerEntry
+        from cacao_accounting.document_flow.payment import _validate_and_get_outstanding, compute_outstanding_amount
+        from cacao_accounting.document_flow.service import create_document_relation
+
+        supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+        credit_note = PurchaseInvoice(
+            company="cacao",
+            supplier_id=supplier.id,
+            posting_date=date.today(),
+            document_type="purchase_credit_note",
+            is_return=True,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            grand_total=Decimal("100"),
+            docstatus=1,
+        )
+        database.session.add(credit_note)
+        database.session.flush()
+        opening = ARAPLedgerEntry(
+            company="cacao",
+            ledger_type="AP",
+            party_type="supplier",
+            party_id=supplier.id,
+            document_type="purchase_credit_note",
+            document_id=credit_note.id,
+            posting_date=date.today(),
+            event_type="opening",
+            currency="NIO",
+            document_amount=Decimal("-100"),
+        )
+        database.session.add(opening)
+        database.session.commit()
+
+        opening_id = opening.id
+        assert compute_outstanding_amount(credit_note) == Decimal("100")
+        assert compute_outstanding_amount(credit_note, signed=True) == Decimal("-100")
+
+        payment = PaymentEntry(
+            company="cacao",
+            payment_type="receive",
+            party_type="supplier",
+            party_id=supplier.id,
+            posting_date=date.today(),
+            transaction_currency="NIO",
+            base_currency="NIO",
+            received_amount=Decimal("100"),
+            docstatus=1,
+        )
+        database.session.add(payment)
+        database.session.flush()
+        reference = PaymentReference(
+            payment_id=payment.id,
+            reference_type="purchase_invoice",
+            flow_source_type="purchase_credit_note",
+            reference_id=credit_note.id,
+            allocated_amount=Decimal("100"),
+            allocation_date=date.today(),
+        )
+        database.session.add(reference)
+        database.session.flush()
+        create_document_relation(
+            source_type="purchase_credit_note",
+            source_id=credit_note.id,
+            source_item_id=None,
+            target_type="payment_entry",
+            target_id=payment.id,
+            target_item_id=reference.id,
+            qty=Decimal("1"),
+            amount=Decimal("100"),
+        )
+        database.session.commit()
+
+        assert compute_outstanding_amount(credit_note) == Decimal("0")
+        assert compute_outstanding_amount(credit_note, signed=True) == Decimal("0")
+        with pytest.raises(ValueError, match="no tiene saldo pendiente"):
+            _validate_and_get_outstanding(credit_note, Decimal("1"), date.today())
+        opening = database.session.get(ARAPLedgerEntry, opening_id)
+        assert opening is not None
+        assert opening.document_amount == Decimal("-100")
+        assert database.session.query(ARAPLedgerEntry).filter_by(document_id=credit_note.id).count() == 1
+
     def test_create_payment_creates_document_relation(self, app_ctx):
         from cacao_accounting.document_flow.service import create_target_document
 
