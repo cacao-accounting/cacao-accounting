@@ -249,13 +249,24 @@ def _document_payment_references(document: Any, as_of_date: date | None = None) 
     return references + legacy_references
 
 
-def compute_outstanding_amount(document: Any, as_of_date: date | None = None) -> Decimal:
-    """Calcula el saldo vivo de una factura usando las referencias de pago y notas de credito/debito."""
+def compute_outstanding_amount(
+    document: Any,
+    as_of_date: date | None = None,
+    *,
+    signed: bool = False,
+) -> Decimal:
+    """Calcula el saldo vivo de un documento y opcionalmente conserva su signo contable.
+
+    El valor predeterminado es positivo para mantener el contrato de los
+    flujos de asignación; ``signed=True`` expone como crédito negativo el
+    saldo pendiente de una nota de crédito o devolución.
+    """
     if as_of_date is None:
         as_of_date = date.today()
     from cacao_accounting.database import ARAPLedgerEntry
 
     document_type = normalize_doctype(str(getattr(document, "document_type", None) or getattr(document, "__tablename__", "")))
+    is_return = bool(getattr(document, "is_return", False)) or "credit_note" in document_type or "return" in document_type
     ledger_query = select(func.sum(ARAPLedgerEntry.document_amount)).where(
         ARAPLedgerEntry.document_type == document_type,
         ARAPLedgerEntry.document_id == str(getattr(document, "id", "")),
@@ -292,23 +303,32 @@ def compute_outstanding_amount(document: Any, as_of_date: date | None = None) ->
             for reference in _document_payment_references(document, as_of_date=as_of_date)
             if str(reference.payment_id) not in represented_payment_ids
         ]
-        balance -= sum((decimal_or_zero(reference.allocated_amount) for reference in pending_references), Decimal("0"))
+        pending_amount = sum((decimal_or_zero(reference.allocated_amount) for reference in pending_references), Decimal("0"))
+        # Un reembolso incrementa el saldo firmado negativo de una nota hasta
+        # llevarlo a cero; tratarlo como un pago normal lo alejaba de cero y
+        # permitía que el mismo crédito se ofreciera nuevamente.
+        balance += pending_amount if is_return else -pending_amount
         # Las notas de credito/debito vinculadas al documento reducen el saldo
         # vivo aunque no generen un evento documental propio sobre el mismo
         # documento; se descuentan aqui para que el corte comun del subledger
         # (reportes y validaciones de conciliacion) coincida.
         balance -= _compute_allocated_notes_amount(document, as_of_date=as_of_date)
-        is_return = bool(getattr(document, "is_return", False)) or "credit_note" in document_type or "return" in document_type
-        if is_return:
-            return abs(balance)
-        return balance if balance > 0 else Decimal("0")
+        return _outstanding_result(balance, is_return=is_return, signed=signed)
     allocated_payments = sum(
         decimal_or_zero(reference.allocated_amount)
         for reference in _document_payment_references(document, as_of_date=as_of_date)
     )
     allocated_notes = _compute_allocated_notes_amount(document, as_of_date=as_of_date)
     outstanding = grand_total - allocated_payments - allocated_notes
-    return outstanding if outstanding > 0 else Decimal("0")
+    return _outstanding_result(outstanding, is_return=is_return, signed=signed)
+
+
+def _outstanding_result(balance: Decimal, *, is_return: bool, signed: bool) -> Decimal:
+    """Normaliza un saldo documental para asignación o presentación contable."""
+    outstanding = abs(balance) if is_return else max(balance, Decimal("0"))
+    if signed and is_return and outstanding:
+        return -outstanding
+    return outstanding
 
 
 def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
