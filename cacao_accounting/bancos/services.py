@@ -1022,6 +1022,26 @@ def cancel_petty_cash_expense(expense, *, reason: str | None = None, actor_id: s
 # --------------------------------------------------------------------------------------------- #
 # Conciliacion y reposicion de Caja Chica
 # --------------------------------------------------------------------------------------------- #
+def _petty_cash_reconciliation_derived_values(fund, as_of_date) -> dict[str, Decimal]:
+    """Calcula los campos derivados de una conciliacion para una fecha de corte.
+
+    ``ledger_balance`` refleja el saldo contable del fondo, ``open_vouchers`` el
+    efectivo entregado en vales aun no liquidados y ``pending_expenses`` los
+    gastos posteados aun no repuestos. El efectivo esperado en caja respeta la
+    relacion ``ledger_balance + pending_expenses - open_vouchers``.
+    """
+    ledger_balance = petty_cash_ledger_balance(fund, as_of_date=as_of_date)
+    open_vouchers = petty_cash_open_vouchers_total(fund, as_of_date)
+    pending_expenses = petty_cash_pending_replenishment_total(fund, as_of_date)
+    expected_cash = ledger_balance + pending_expenses - open_vouchers
+    return {
+        "ledger_balance": ledger_balance,
+        "open_vouchers": open_vouchers,
+        "pending_expenses": pending_expenses,
+        "expected_cash": expected_cash,
+    }
+
+
 def create_petty_cash_reconciliation(
     *,
     company: str,
@@ -1042,17 +1062,17 @@ def create_petty_cash_reconciliation(
     ).scalar_one_or_none()
     if duplicate:
         raise ValueError("Ya existe una conciliacion para esa caja y fecha.")
-    ledger_balance = petty_cash_ledger_balance(fund, as_of_date=reconciliation_date)
-    open_vouchers = petty_cash_open_vouchers_total(fund, reconciliation_date)
-    pending_expenses = petty_cash_pending_replenishment_total(fund, reconciliation_date)
-    expected_cash = ledger_balance - open_vouchers
-    explained_amount = counted_cash + open_vouchers + pending_expenses
+    derived = _petty_cash_reconciliation_derived_values(fund, reconciliation_date)
+    open_vouchers = derived["open_vouchers"]
+    pending_expenses = derived["pending_expenses"]
+    expected_cash = derived["expected_cash"]
+    explained_amount = counted_cash + open_vouchers - pending_expenses
     reconciliation = PettyCashReconciliation(
         company=company,
         petty_cash_id=petty_cash_id,
         posting_date=reconciliation_date,
         reconciliation_date=reconciliation_date,
-        ledger_balance=ledger_balance,
+        ledger_balance=derived["ledger_balance"],
         open_vouchers=open_vouchers,
         expected_cash=expected_cash,
         counted_cash=counted_cash,
