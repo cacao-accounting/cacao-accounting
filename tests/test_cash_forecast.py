@@ -14,14 +14,18 @@ from z_func import init_test_db
 from cacao_accounting import create_app
 from cacao_accounting.database import (
     database as db,
+    Accounts,
+    Book,
     CashForecast,
     CashForecastEntry,
     Entity,
     FiscalYear,
+    GLEntry,
     SalesInvoice,
 )
 from cacao_accounting.bancos.cash_forecast_service import (
     CashForecastConversionError,
+    _compute_real_movements,
     generate_periods,
     get_base_amount,
     get_cash_forecast_matrix,
@@ -187,6 +191,273 @@ def test_cash_forecast_matrix_calculation():
         db.session.delete(entry_out)
         db.session.delete(forecast)
         db.session.commit()
+
+
+def test_real_movements_classify_party_from_counterpart_line():
+    """Classify bank cash flows from the AR/AP line in the same voucher."""
+    with test_app.app_context():
+        from cacao_accounting.ledger_queries import primary_ledger_id
+
+        cash_account = Accounts(
+            entity="cacao",
+            code="CASH-FORECAST-PARTY",
+            name="Caja pronóstico terceros",
+            active=True,
+            enabled=True,
+            group=False,
+            account_type="cash",
+        )
+        receivable_account = Accounts(
+            entity="cacao",
+            code="AR-FORECAST-PARTY",
+            name="Clientes pronóstico terceros",
+            active=True,
+            enabled=True,
+            group=False,
+            account_type="receivable",
+        )
+        payable_account = Accounts(
+            entity="cacao",
+            code="AP-FORECAST-PARTY",
+            name="Proveedores pronóstico terceros",
+            active=True,
+            enabled=True,
+            group=False,
+            account_type="payable",
+        )
+        db.session.add_all([cash_account, receivable_account, payable_account])
+        db.session.flush()
+
+        secondary_book = Book(
+            entity="cacao",
+            code="FCAST-SEC",
+            name="Libro secundario pronóstico",
+            currency="NIO",
+            status="activo",
+            is_primary=False,
+        )
+        db.session.add(secondary_book)
+        db.session.flush()
+
+        ledger_id = primary_ledger_id("cacao")
+        entries = [
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=cash_account.id,
+                posting_date=date(2026, 7, 5),
+                debit=Decimal("100"),
+                credit=Decimal("0"),
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-CUSTOMER",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=receivable_account.id,
+                posting_date=date(2026, 7, 5),
+                debit=Decimal("0"),
+                credit=Decimal("100"),
+                party_type="customer",
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-CUSTOMER",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=cash_account.id,
+                posting_date=date(2026, 7, 6),
+                debit=Decimal("0"),
+                credit=Decimal("40"),
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-SUPPLIER",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=payable_account.id,
+                posting_date=date(2026, 7, 6),
+                debit=Decimal("40"),
+                credit=Decimal("0"),
+                party_type="supplier",
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-SUPPLIER",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=cash_account.id,
+                posting_date=date(2026, 7, 7),
+                debit=Decimal("7"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="FORECAST-OTHER",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=receivable_account.id,
+                posting_date=date(2026, 7, 7),
+                debit=Decimal("0"),
+                credit=Decimal("7"),
+                voucher_type="journal_entry",
+                voucher_id="FORECAST-OTHER",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=cash_account.id,
+                posting_date=date(2026, 7, 8),
+                debit=Decimal("11"),
+                credit=Decimal("0"),
+                voucher_type="journal_entry",
+                voucher_id="FORECAST-AMBIGUOUS",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=receivable_account.id,
+                posting_date=date(2026, 7, 8),
+                debit=Decimal("0"),
+                credit=Decimal("5"),
+                party_type="customer",
+                voucher_type="journal_entry",
+                voucher_id="FORECAST-AMBIGUOUS",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=payable_account.id,
+                posting_date=date(2026, 7, 8),
+                debit=Decimal("0"),
+                credit=Decimal("6"),
+                party_type="supplier",
+                voucher_type="journal_entry",
+                voucher_id="FORECAST-AMBIGUOUS",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=cash_account.id,
+                posting_date=date(2026, 7, 9),
+                debit=Decimal("13"),
+                credit=Decimal("0"),
+                is_cancelled=True,
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-CANCELLED",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=receivable_account.id,
+                posting_date=date(2026, 7, 9),
+                debit=Decimal("0"),
+                credit=Decimal("13"),
+                party_type="customer",
+                is_cancelled=True,
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-CANCELLED",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=cash_account.id,
+                posting_date=date(2026, 7, 10),
+                debit=Decimal("0"),
+                credit=Decimal("17"),
+                is_reversal=True,
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-REVERSED",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=payable_account.id,
+                posting_date=date(2026, 7, 10),
+                debit=Decimal("17"),
+                credit=Decimal("0"),
+                party_type="supplier",
+                is_reversal=True,
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-REVERSED",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=secondary_book.id,
+                account_id=cash_account.id,
+                posting_date=date(2026, 7, 11),
+                debit=Decimal("500"),
+                credit=Decimal("0"),
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-SECONDARY",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=secondary_book.id,
+                account_id=receivable_account.id,
+                posting_date=date(2026, 7, 11),
+                debit=Decimal("0"),
+                credit=Decimal("500"),
+                party_type="customer",
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-SECONDARY",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=cash_account.id,
+                posting_date=date(2026, 7, 12),
+                debit=Decimal("0"),
+                credit=Decimal("9"),
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-CUSTOMER-REFUND",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=receivable_account.id,
+                posting_date=date(2026, 7, 12),
+                debit=Decimal("9"),
+                credit=Decimal("0"),
+                party_type="customer",
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-CUSTOMER-REFUND",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=cash_account.id,
+                posting_date=date(2026, 7, 13),
+                debit=Decimal("8"),
+                credit=Decimal("0"),
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-SUPPLIER-REFUND",
+            ),
+            GLEntry(
+                company="cacao",
+                ledger_id=ledger_id,
+                account_id=payable_account.id,
+                posting_date=date(2026, 7, 13),
+                debit=Decimal("0"),
+                credit=Decimal("8"),
+                party_type="supplier",
+                voucher_type="payment_entry",
+                voucher_id="FORECAST-SUPPLIER-REFUND",
+            ),
+        ]
+        db.session.add_all(entries)
+        db.session.flush()
+
+        movements = _compute_real_movements(
+            "cacao",
+            [cash_account.id],
+            date(2026, 7, 1),
+            date(2026, 7, 31),
+        )
+
+        assert movements == (Decimal("108.0000"), Decimal("49.0000"), Decimal("18.0000"))
+
+        db.session.rollback()
 
 
 def test_cash_forecast_includes_invoice_with_missing_outstanding_cache():

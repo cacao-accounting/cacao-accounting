@@ -6,7 +6,7 @@
 import calendar
 from datetime import date, timedelta
 from decimal import Decimal
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, tuple_
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from cacao_accounting.database import (
     database,
@@ -167,14 +167,59 @@ def _query_gl_sum(
 def _compute_real_movements(
     company: str, account_ids: list[str], start_date: date, limit_end: date
 ) -> tuple[Decimal, Decimal, Decimal]:
-    """Calcula flujos reales (ingreso, egreso, otros) para un período."""
+    """Calcula flujos reales clasificando el tercero en la contrapartida del voucher.
+
+    Las líneas de banco/caja no llevan ``party_type`` porque esa dimensión pertenece
+    a la cuenta AR/AP. La clasificación se hace por voucher para no perder los
+    cobros y pagos que sí tienen un tercero en otra línea del asiento.
+    """
     if not account_ids:
         return Decimal("0"), Decimal("0"), Decimal("0")
-    real_inflow = _query_gl_sum(company, account_ids, start_date, limit_end, party_type_filter="customer")
-    real_outflow = _query_gl_sum(
-        company, account_ids, start_date, limit_end, party_type_filter="supplier", use_debit_credit=False
-    )
-    real_other = _query_gl_sum(company, account_ids, start_date, limit_end, exclude_party_types=True)
+
+    filters = [
+        GLEntry.company == company,
+        GLEntry.account_id.in_(account_ids),
+        GLEntry.posting_date >= start_date,
+        GLEntry.posting_date <= limit_end,
+        GLEntry.is_cancelled.is_(False),
+        GLEntry.is_reversal.is_(False),
+    ]
+    ledger_id = primary_ledger_id(company)
+    if ledger_id:
+        filters.append(GLEntry.ledger_id == ledger_id)
+    cash_entries = database.session.query(GLEntry).filter(*filters).all()
+    if not cash_entries:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+
+    voucher_keys = {(entry.voucher_type, entry.voucher_id) for entry in cash_entries}
+    counterpart_filters = [
+        GLEntry.company == company,
+        GLEntry.is_cancelled.is_(False),
+        GLEntry.is_reversal.is_(False),
+        tuple_(GLEntry.voucher_type, GLEntry.voucher_id).in_(voucher_keys),
+    ]
+    if ledger_id:
+        counterpart_filters.append(GLEntry.ledger_id == ledger_id)
+    related_entries = database.session.query(GLEntry).filter(*counterpart_filters).all()
+    party_types_by_voucher: dict[tuple[str, str], set[str]] = {}
+    for entry in related_entries:
+        party_type = (entry.party_type or "").strip().lower()
+        if party_type in {"customer", "supplier"}:
+            party_types_by_voucher.setdefault((entry.voucher_type, entry.voucher_id), set()).add(party_type)
+
+    real_inflow = Decimal("0")
+    real_outflow = Decimal("0")
+    real_other = Decimal("0")
+    for entry in cash_entries:
+        delta = Decimal(str(entry.debit or 0)) - Decimal(str(entry.credit or 0))
+        party_types = party_types_by_voucher.get((entry.voucher_type, entry.voucher_id), set())
+        if party_types in ({"customer"}, {"supplier"}):
+            if delta >= 0:
+                real_inflow += delta
+            else:
+                real_outflow -= delta
+        else:
+            real_other += delta
     return real_inflow, real_outflow, real_other
 
 
