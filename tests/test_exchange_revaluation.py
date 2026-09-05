@@ -732,29 +732,58 @@ def test_bank_functional_only_balance_divides_inverse_exchange_pair(app_ctx):
 def test_revaluation_uses_credit_note_nature_for_open_ar_and_ap(app_ctx):
     """Open credit notes must revalue with the opposite subledger nature."""
     from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
-    from cacao_accounting.database import PurchaseInvoice, SalesInvoice, database
+    from cacao_accounting.database import Accounts, GLEntry, PurchaseInvoice, SalesInvoice, database
 
+    si = SalesInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        customer_id="CUST-CREDIT-NOTE",
+        transaction_currency="USD",
+        grand_total=Decimal("10"),
+        outstanding_amount=Decimal("10"),
+        is_return=True,
+        docstatus=1,
+    )
+    pi = PurchaseInvoice(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        supplier_id="SUPP-CREDIT-NOTE",
+        transaction_currency="USD",
+        grand_total=Decimal("10"),
+        outstanding_amount=Decimal("10"),
+        is_return=True,
+        docstatus=1,
+    )
+    database.session.add_all([si, pi])
+    database.session.flush()
+    book = _book("USD")
+    ar_account_id = database.session.execute(database.select(Accounts.id).filter_by(entity="cacao", code="1105")).scalar_one()
+    ap_account_id = database.session.execute(database.select(Accounts.id).filter_by(entity="cacao", code="2105")).scalar_one()
     database.session.add_all(
         [
-            SalesInvoice(
-                company="cacao",
+            GLEntry(
                 posting_date=date(2026, 5, 1),
-                customer_id="CUST-CREDIT-NOTE",
-                transaction_currency="USD",
-                grand_total=Decimal("10"),
-                outstanding_amount=Decimal("10"),
-                is_return=True,
-                docstatus=1,
+                company="cacao",
+                ledger_id=book.id,
+                account_id=ar_account_id,
+                voucher_type="sales_invoice",
+                voucher_id=si.id,
+                debit=Decimal("10"),
+                credit=Decimal("0"),
+                is_cancelled=False,
+                is_reversal=False,
             ),
-            PurchaseInvoice(
-                company="cacao",
+            GLEntry(
                 posting_date=date(2026, 5, 1),
-                supplier_id="SUPP-CREDIT-NOTE",
-                transaction_currency="USD",
-                grand_total=Decimal("10"),
-                outstanding_amount=Decimal("10"),
-                is_return=True,
-                docstatus=1,
+                company="cacao",
+                ledger_id=book.id,
+                account_id=ap_account_id,
+                voucher_type="purchase_invoice",
+                voucher_id=pi.id,
+                debit=Decimal("0"),
+                credit=Decimal("10"),
+                is_cancelled=False,
+                is_reversal=False,
             ),
         ]
     )
@@ -766,6 +795,76 @@ def test_revaluation_uses_credit_note_nature_for_open_ar_and_ap(app_ctx):
 
     assert ar[-1].normal_balance == "credit"
     assert ap[-1].normal_balance == "debit"
+
+
+def test_revaluation_ignores_unposted_documents_without_gl_entries(app_ctx):
+    """Invoices with docstatus=1 but no posted GL entries must not be revalued."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import SalesInvoice, database
+
+    database.session.add(
+        SalesInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 1),
+            customer_id="CUST-NO-GL",
+            transaction_currency="USD",
+            grand_total=Decimal("100"),
+            outstanding_amount=Decimal("100"),
+            docstatus=1,
+        )
+    )
+    database.session.commit()
+
+    service = ExchangeRevaluationService()
+    run = service.run(company="cacao", year=2026, month=5, user_id="admin")
+
+    assert run.processed_documents_count == 0
+    assert run.affected_documents_count == 0
+    assert run.status == "completed_no_changes"
+    assert run.total_gain == Decimal("0")
+    assert run.total_loss == Decimal("0")
+
+
+def test_revaluation_ignores_unposted_purchase_invoices_without_gl_entries(app_ctx):
+    """Purchase invoices with docstatus=1 but no posted GL entries must not be revalued."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+    from cacao_accounting.database import PurchaseInvoice, database
+
+    database.session.add(
+        PurchaseInvoice(
+            company="cacao",
+            posting_date=date(2026, 5, 1),
+            supplier_id="SUPP-NO-GL",
+            transaction_currency="USD",
+            grand_total=Decimal("100"),
+            outstanding_amount=Decimal("100"),
+            docstatus=1,
+        )
+    )
+    database.session.commit()
+
+    service = ExchangeRevaluationService()
+    run = service.run(company="cacao", year=2026, month=5, user_id="admin")
+
+    assert run.processed_documents_count == 0
+    assert run.affected_documents_count == 0
+    assert run.status == "completed_no_changes"
+    assert run.total_gain == Decimal("0")
+    assert run.total_loss == Decimal("0")
+
+
+def test_revaluation_populates_old_rate_in_items(app_ctx):
+    """Revaluation items must store historical old_rate for auditing."""
+    from cacao_accounting.contabilidad.exchange_revaluation_service import ExchangeRevaluationService
+
+    _create_sales_invoice()
+    service = ExchangeRevaluationService()
+    run = service.run(company="cacao", year=2026, month=5, user_id="admin")
+
+    lines = service.list_lines(run.id)
+    assert lines
+    assert lines[0].old_rate is not None
+    assert lines[0].old_rate > 0
 
 
 def test_service_voids_posted_revaluation_with_reversal_entries(app_ctx):
