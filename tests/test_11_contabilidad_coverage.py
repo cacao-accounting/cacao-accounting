@@ -513,6 +513,8 @@ def test_journal_service_cancel_submitted(app_ctx):
     submit_journal(journal.id)
     entries = cancel_submitted_journal(journal.id, user_id="admin", reason="Prueba de anulacion")
     assert len(entries) >= 0
+    database.session.refresh(journal)
+    assert journal.docstatus == 2
 
 
 def test_journal_service_duplicate_nonexistent(app_ctx):
