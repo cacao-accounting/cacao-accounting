@@ -263,6 +263,41 @@ def test_account_movement_filters_by_period_dimension(parity_app) -> None:
     assert seen == {"IN-FUERA-VENTANA-PERIODO"}
 
 
+def test_account_summary_does_not_double_count_date_misaligned_period_entry(parity_app) -> None:
+    """El resumen excluye de apertura un asiento de fecha previa asignado al período actual."""
+    from cacao_accounting.database import Accounts, AccountingPeriod, Book, GLEntry, database
+    from cacao_accounting.reportes.services import FinancialReportFilters, get_account_summary_report
+
+    _seed(parity_app)
+    period = database.session.execute(database.select(AccountingPeriod).where(AccountingPeriod.name == "01-2026")).scalar_one()
+    account = database.session.execute(database.select(Accounts).where(Accounts.code == "1.01")).scalar_one()
+    book_id = database.session.execute(database.select(Book.id).where(Book.code == "FISC")).scalar_one()
+    database.session.add(
+        GLEntry(
+            account_id=account.id,
+            account_code=account.code,
+            debit=Decimal("7"),
+            credit=Decimal("0"),
+            posting_date=date(2025, 12, 31),
+            accounting_period_id=period.id,
+            company="cacao",
+            ledger_id=book_id,
+            voucher_type="journal_entry",
+            voucher_id="MISALIGNED-SUMMARY",
+            is_cancelled=False,
+            is_reversal=False,
+        )
+    )
+    database.session.commit()
+
+    report = get_account_summary_report(
+        FinancialReportFilters(company="cacao", ledger="FISC", period_from=str(period.id), period_to=str(period.id))
+    )
+    row = next(row for row in report.rows if row.values["account_code"] == "1.01")
+    assert row.values["opening_balance"] == Decimal("-10")
+    assert row.values["debit"] == Decimal("97")
+
+
 def test_account_movement_export_csv_uses_same_period(parity_app) -> None:
     """La exportación CSV usa exactamente el mismo período que la vista."""
     from cacao_accounting.database import AccountingPeriod, User, database
