@@ -42,6 +42,7 @@ from cacao_accounting.compras.purchase_sourcing_service import (
     set_purchase_sourcing_config,
     submitted_supplier_quotations,
 )
+from cacao_accounting.compras.services import _create_purchase_orders_from_award
 from cacao_accounting.compras.purchase_order_comparison_service import (
     comparable_purchase_orders,
     create_purchase_order_comparison,
@@ -468,3 +469,66 @@ def test_purchase_order_comparison_matches_repeated_lines_by_commercial_identity
 
         assert _comparison_item_at_occurrence([offer_unit, offer_box], base_box, 0).rate == Decimal("101")
         assert _comparison_item_at_occurrence([offer_unit, offer_box], base_unit, 0).rate == Decimal("11")
+
+
+def test_purchase_orders_from_award_receive_base_currency_and_current_date(app_ctx):
+    """Orders created from an award must have base_currency and today's posting_date."""
+    with app_ctx.app_context():
+        entity = Entity(code="cacao", name="Cacao", company_name="Cacao", tax_id="T-1", currency="NIO")
+        uom = UOM(code="UND", name="Unidad")
+        item = Item(code="ITEM-01", name="Producto", item_type="goods", is_stock_item=True, default_uom="UND")
+        rfq = PurchaseQuotation(
+            id="RFQ-AWARD-01",
+            company="cacao",
+            posting_date=date(2025, 1, 1),
+            docstatus=1,
+        )
+        rfq_item = PurchaseQuotationItem(
+            id="RFQI-AWARD-01",
+            purchase_quotation_id=rfq.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("10"),
+            uom=uom.code,
+            rate=Decimal("0"),
+            amount=Decimal("0"),
+        )
+        supplier = Party(code="SUP-AWARD", name="Proveedor Award", is_supplier=True)
+        offer = SupplierQuotation(
+            id="SQ-AWARD-01",
+            company="cacao",
+            supplier_id=supplier.id,
+            supplier_name=supplier.name,
+            purchase_quotation_id=rfq.id,
+            transaction_currency="NIO",
+            posting_date=date(2025, 1, 2),
+            docstatus=1,
+        )
+        offer_item = SupplierQuotationItem(
+            id="SQI-AWARD-01",
+            supplier_quotation_id=offer.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=Decimal("10"),
+            uom=uom.code,
+            rate=Decimal("100"),
+            amount=Decimal("1000"),
+        )
+        database.session.add_all([entity, uom, item, rfq, rfq_item, supplier, offer, offer_item])
+        database.session.flush()
+
+        manager = _manager()
+        set_purchase_sourcing_config(False, 1)
+        database.session.commit()
+
+        award = create_purchase_quotation_award(rfq, {rfq_item.id: offer.id}, manager.id, "Proveedor único disponible")
+        award.status = "finalized"
+        database.session.commit()
+
+        orders = _create_purchase_orders_from_award(award)
+        assert len(orders) == 1
+        order = orders[0]
+
+        assert order.base_currency == "NIO"
+        assert order.posting_date == date.today()
+        assert order.transaction_currency == "NIO"

@@ -739,9 +739,10 @@ def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[Pu
             supplier_id=quotation.supplier_id,
             supplier_name=quotation.supplier_name,
             company=award.company,
-            posting_date=rfq.posting_date if rfq else None,
+            posting_date=date.today(),
             purchase_award_id=award.id,
             transaction_currency=quotation.transaction_currency,
+            base_currency=company_currency(award.company),
             docstatus=0,
         )
         _copy_logistics(order, quotation or rfq)
