@@ -2701,10 +2701,18 @@ def _grouped_account_gl_query(
     account_code = func.coalesce(GLEntry.account_code, Accounts.code, "")
     dimension_clause = _period_dimension_clause(period_ids, period_start, period_end)
     movement_condition = dimension_clause if dimension_clause is not None else literal(True)
-    # El saldo inicial es el acumulado anterior a la ventana: se conserva la
-    # frontera temporal (``posting_date < period_start``) porque no pertenece a
-    # la identidad dimensional del período sino al arrastre de saldos.
-    opening_value = case((GLEntry.posting_date < period_start, GLEntry.debit - GLEntry.credit), else_=0) if period_start else 0
+    # El saldo inicial usa la frontera temporal, pero excluye cualquier fila
+    # que el mismo predicado dimensional clasifica como movimiento. Así un
+    # asiento fechado antes del período, pero asignado al período seleccionado,
+    # no se cuenta dos veces.
+    if period_start and period_ids:
+        opening_condition = and_(
+            GLEntry.posting_date < period_start,
+            or_(GLEntry.accounting_period_id.is_(None), ~GLEntry.accounting_period_id.in_(period_ids)),
+        )
+    else:
+        opening_condition = GLEntry.posting_date < period_start if period_start else literal(False)
+    opening_value = case((opening_condition, GLEntry.debit - GLEntry.credit), else_=0)
     movement_debit = case((movement_condition, GLEntry.debit), else_=0)
     movement_credit = case((movement_condition, GLEntry.credit), else_=0)
     movement_count = case((movement_condition, 1), else_=0)
