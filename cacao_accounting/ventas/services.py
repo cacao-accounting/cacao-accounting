@@ -726,7 +726,7 @@ def _handle_cliente_create(
         comercial_name=form.get("comercial_name"),
         tax_id=form.get("tax_id"),
         fiscal_name=form.get("fiscal_name"),
-        is_active=form.get("is_active", "on") is not None,
+        is_active=form.get("is_active") is not None,
     )
     try:
         database.session.add(cliente)
