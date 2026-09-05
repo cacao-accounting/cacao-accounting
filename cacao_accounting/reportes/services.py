@@ -792,23 +792,35 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         ).scalars()
         if account
     ]
-    bank_subledger = _decimal_value(
-        database.session.execute(
-            select(
-                func.coalesce(
-                    func.sum(func.coalesce(BankTransaction.deposit, 0) - func.coalesce(BankTransaction.withdrawal, 0)),
-                    0,
-                )
+    bank_amounts_by_currency = database.session.execute(
+        select(
+            BankAccount.currency,
+            func.coalesce(
+                func.sum(func.coalesce(BankTransaction.deposit, 0) - func.coalesce(BankTransaction.withdrawal, 0)),
+                0,
+            ),
+        )
+        .join(BankAccount, BankTransaction.bank_account_id == BankAccount.id)
+        .where(BankAccount.company == filters.company, BankTransaction.posting_date <= as_of_date)
+        .group_by(BankAccount.currency)
+    ).all()
+    bank_subledger = sum(
+        (
+            _convert_to_ledger_currency(
+                _decimal_value(amount),
+                str(currency) if currency else company_currency,
+                selected_ledger.currency,
+                as_of_date,
             )
-            .join(BankAccount, BankTransaction.bank_account_id == BankAccount.id)
-            .where(BankAccount.company == filters.company, BankTransaction.posting_date <= as_of_date)
-        ).scalar_one()
+            for currency, amount in bank_amounts_by_currency
+        ),
+        Decimal("0"),
     )
     rows.append(
         _reconciliation_row(
             "Bank",
             [str(account) for account in bank_accounts],
-            _convert(bank_subledger, company_currency),
+            bank_subledger,
             _reconciliation_gl_amount(
                 filters.company,
                 selected_ledger.id,

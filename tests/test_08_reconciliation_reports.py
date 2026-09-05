@@ -1083,6 +1083,102 @@ def test_reconciliation_matrix_converts_subledger_to_ledger_currency(app_ctx):
     assert ar_row_nio["difference"] == Decimal("0")
 
 
+def test_reconciliation_matrix_converts_bank_movements_to_selected_ledger_currency(app_ctx):
+    """La matriz convierte cada movimiento bancario desde su moneda de cuenta."""
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, Book, Currency, ExchangeRate, database
+    from cacao_accounting.reportes.services import ReconciliationFilters, get_reconciliation_matrix
+
+    database.session.add_all(
+        [
+            Currency(code="USD", name="Dolares", decimals=2, active=True),
+            Book(code="BANK-NIO", name="Banco NIO", entity="cacao", currency="NIO", status="activo", is_primary=True),
+            Book(code="BANK-USD", name="Banco USD", entity="cacao", currency="USD", status="activo"),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36"), date=date(2026, 8, 1)),
+        ]
+    )
+    bank = Bank(name="Banco Multimoneda")
+    database.session.add(bank)
+    database.session.flush()
+    usd_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta USD",
+        currency="USD",
+    )
+    usd_account_2 = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta USD 2",
+        currency="USD",
+    )
+    nio_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta NIO",
+        currency="NIO",
+    )
+    legacy_account = BankAccount(
+        bank_id=bank.id,
+        company="cacao",
+        account_name="Cuenta legacy",
+        currency=None,
+    )
+    database.session.add_all([usd_account, usd_account_2, nio_account, legacy_account])
+    database.session.flush()
+    database.session.add_all(
+        [
+            BankTransaction(
+                bank_account_id=usd_account.id,
+                posting_date=date(2026, 8, 1),
+                deposit=Decimal("100"),
+            ),
+            BankTransaction(
+                bank_account_id=usd_account.id,
+                posting_date=date(2026, 8, 2),
+                withdrawal=Decimal("25"),
+            ),
+            BankTransaction(
+                bank_account_id=usd_account.id,
+                posting_date=date(2026, 9, 1),
+                deposit=Decimal("99"),
+            ),
+            BankTransaction(
+                bank_account_id=usd_account_2.id,
+                posting_date=date(2026, 8, 1),
+                deposit=Decimal("50"),
+            ),
+            BankTransaction(
+                bank_account_id=usd_account_2.id,
+                posting_date=date(2026, 9, 1),
+                deposit=Decimal("99"),
+            ),
+            BankTransaction(
+                bank_account_id=legacy_account.id,
+                posting_date=date(2026, 8, 1),
+                deposit=Decimal("200"),
+            ),
+            BankTransaction(
+                bank_account_id=nio_account.id,
+                posting_date=date(2026, 8, 1),
+                deposit=Decimal("10"),
+            ),
+        ]
+    )
+    database.session.commit()
+
+    nio_report = get_reconciliation_matrix(
+        ReconciliationFilters(company="cacao", ledger="BANK-NIO", as_of_date=date(2026, 8, 31))
+    )
+    nio_bank = next(row.values for row in nio_report.rows if row.values["area"] == "Bank")
+    assert nio_bank["subledger_amount"] == Decimal("125") * Decimal("36") + Decimal("210")
+
+    usd_report = get_reconciliation_matrix(
+        ReconciliationFilters(company="cacao", ledger="BANK-USD", as_of_date=date(2026, 8, 31))
+    )
+    usd_bank = next(row.values for row in usd_report.rows if row.values["area"] == "Bank")
+    assert usd_bank["subledger_amount"] == Decimal("125") + Decimal("210") / Decimal("36")
+
+
 def test_reconciliation_report_diagnoses_posting_without_bank_transaction(app_ctx):
     """El reporte identifica pagos posteados sin extracto bancario enlazado."""
     from cacao_accounting.database import Bank, BankAccount, PaymentEntry, database
