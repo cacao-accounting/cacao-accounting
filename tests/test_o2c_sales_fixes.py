@@ -25,6 +25,8 @@ from cacao_accounting.database import (
     SalesMatchingConfig,
     SalesOrder,
     SalesOrderItem,
+    SalesRequest,
+    SalesRequestItem,
     database,
     Warehouse,
 )
@@ -188,6 +190,130 @@ def test_sales_order_items_reject_duplicate_item_codes(app_ctx):
         with pytest.raises(DocumentFlowError, match="no puede repetirse"):
             _save_sales_order_items(order.id)
     database.session.rollback()
+
+
+@pytest.mark.parametrize(
+    "item_code",
+    [
+        "ART-O2C-NOT-FOUND",
+        "DOES-NOT-EXIST",
+    ],
+)
+def test_sales_request_items_reject_nonexistent_item_code(app_ctx, item_code):
+    """El pedido de venta rechaza líneas con un código de artículo inexistente."""
+    from cacao_accounting.ventas import _save_sales_request_items
+
+    sr = SalesRequest(company="cacao", posting_date=date.today(), docstatus=0)
+    database.session.add(sr)
+    database.session.flush()
+
+    with app_ctx.test_request_context(
+        "/sales/sales-request/new",
+        method="POST",
+        data={
+            "company": "cacao",
+            "posting_date": date.today().isoformat(),
+            "item_code_0": item_code,
+            "qty_0": "1",
+            "rate_0": "10",
+            "amount_0": "10",
+        },
+    ):
+        with pytest.raises(ValueError, match="no existe"):
+            _save_sales_request_items(sr.id)
+    database.session.rollback()
+
+
+def test_sales_request_items_reject_inactive_item(app_ctx):
+    """El pedido de venta rechaza líneas con un artículo inactivo."""
+    from cacao_accounting.ventas import _save_sales_request_items
+
+    item = _ensure_item("ART-O2C-INACTIVE")
+    item.is_active = False
+    sr = SalesRequest(company="cacao", posting_date=date.today(), docstatus=0)
+    database.session.add(sr)
+    database.session.commit()
+
+    with app_ctx.test_request_context(
+        "/sales/sales-request/new",
+        method="POST",
+        data={
+            "company": "cacao",
+            "posting_date": date.today().isoformat(),
+            "item_code_0": item.code,
+            "qty_0": "1",
+            "rate_0": "10",
+            "amount_0": "10",
+        },
+    ):
+        with pytest.raises(ValueError, match="no está habilitado para venta"):
+            _save_sales_request_items(sr.id)
+    database.session.rollback()
+
+
+def test_sales_request_items_reject_non_sale_item(app_ctx):
+    """El pedido de venta rechaza líneas con un artículo no habilitado para venta."""
+    from cacao_accounting.ventas import _save_sales_request_items
+
+    item = _ensure_item("ART-O2C-NON-SALE")
+    item.is_sale_item = False
+    sr = SalesRequest(company="cacao", posting_date=date.today(), docstatus=0)
+    database.session.add(sr)
+    database.session.commit()
+
+    with app_ctx.test_request_context(
+        "/sales/sales-request/new",
+        method="POST",
+        data={
+            "company": "cacao",
+            "posting_date": date.today().isoformat(),
+            "item_code_0": item.code,
+            "qty_0": "1",
+            "rate_0": "10",
+            "amount_0": "10",
+        },
+    ):
+        with pytest.raises(ValueError, match="no está habilitado para venta"):
+            _save_sales_request_items(sr.id)
+    database.session.rollback()
+
+
+def test_sales_request_items_accept_valid_line(app_ctx):
+    """El pedido de venta acepta una línea válida con precio de catálogo vigente."""
+    from cacao_accounting.ventas import _save_sales_request_items
+
+    item = _ensure_item("ART-O2C-VALID")
+    sr = SalesRequest(company="cacao", posting_date=date.today(), docstatus=0)
+    database.session.add(sr)
+    database.session.flush()
+    price_list = PriceList(name="Default O2C Valid", company="cacao", is_selling=True, is_default=True, is_active=True)
+    database.session.add(price_list)
+    database.session.flush()
+    database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, uom="UND", price=Decimal("10")))
+    database.session.commit()
+
+    with app_ctx.test_request_context(
+        "/sales/sales-request/new",
+        method="POST",
+        data={
+            "company": "cacao",
+            "posting_date": date.today().isoformat(),
+            "item_code_0": item.code,
+            "qty_0": "1",
+            "rate_0": "10",
+            "amount_0": "10",
+        },
+    ):
+        total_qty, total = _save_sales_request_items(sr.id)
+    database.session.commit()
+
+    assert total_qty == Decimal("1")
+    assert total == Decimal("10")
+    saved_item = (
+        database.session.execute(database.select(SalesRequestItem).filter_by(sales_request_id=sr.id)).scalars().first()
+    )
+    assert saved_item is not None
+    assert saved_item.item_code == item.code
 
 
 def test_flow_source_line_is_loaded_with_a_submission_lock(app_ctx):

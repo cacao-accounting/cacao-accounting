@@ -1053,6 +1053,11 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
             discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
+            item_obj = _item_by_code(item_code)
+            if not item_obj:
+                raise ValueError(f"El item {item_code} no existe.")
+            if not item_obj.is_active or not item_obj.is_sale_item:
+                raise ValueError(f"El item {item_code} no está habilitado para venta.")
             _validate_sales_catalog_rate(sales_request, i, item_code, qty, uom, rate)
             linea = SalesRequestItem(
                 sales_request_id=request_id,
