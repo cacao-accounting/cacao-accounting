@@ -951,7 +951,11 @@ def _svl_stream(item: str, warehouse: str) -> list[tuple[Decimal, Decimal, Decim
         database.session.execute(
             select(StockValuationLayer)
             .filter_by(company=COMPANY, item_code=item, warehouse=warehouse)
-            .order_by(StockValuationLayer.posting_date, StockValuationLayer.id)
+            .order_by(
+                StockValuationLayer.posting_date,
+                StockValuationLayer.qty == 0,
+                StockValuationLayer.id,
+            )
         )
         .scalars()
         .all()

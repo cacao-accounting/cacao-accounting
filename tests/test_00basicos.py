@@ -92,6 +92,15 @@ def test_build_version_returns_plain_semver_without_release_suffixes():
     assert build_version("1", "2", "3") == "1.2.3"
 
 
+def test_build_version_canonical_alpha_prerelease():
+    from cacao_accounting.version import VERSION, build_version
+
+    assert build_version("0", "1", "0", "a1") == "0.1.0a1"
+    assert build_version("0", "1", "0", "b1") == "0.1.0b1"
+    assert build_version("0", "1", "0", "rc1") == "0.1.0rc1"
+    assert VERSION == "0.1.0a1"
+
+
 def test_create_app_uses_fixed_secret_key_in_testing():
     from cacao_accounting import create_app
 
