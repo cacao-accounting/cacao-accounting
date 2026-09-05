@@ -42,6 +42,7 @@ from cacao_accounting.database import (
     StockLedgerEntry,
     StockValuationLayer,
     GLEntry,
+    ItemUOMConversion,
 )
 from cacao_accounting.contabilidad.posting import (
     PostingError,
@@ -139,7 +140,9 @@ def _setup_inventory_test_data(app):
             database.session.add(
                 User(id="test-user", user="test-user", name="Test User", password=b"x", classification="admin", active=True)
             )
-        if not database.session.execute(database.select(AccountingPeriod).filter_by(entity="cacao", name="2026-05")).scalar_one_or_none():
+        if not database.session.execute(
+            database.select(AccountingPeriod).filter_by(entity="cacao", name="2026-05")
+        ).scalar_one_or_none():
             database.session.add(
                 AccountingPeriod(
                     entity="cacao",
@@ -709,6 +712,83 @@ def test_07_ajustes_por_inventario(app):
         assert bin_row.actual_qty == Decimal("12.0")
         assert bin_row.stock_value == Decimal("1320.00")
         assert bin_row.valuation_rate == Decimal("110.00")
+
+
+def test_reconciliation_persists_entered_and_base_uom_quantities(app):
+    """Una conciliación conserva la cantidad ingresada y su delta en UOM base."""
+    from cacao_accounting.inventario.services import _save_stock_reconciliation_item
+
+    _setup_inventory_test_data(app)
+    with app.app_context():
+        database.session.add_all(
+            [
+                UOM(code="KG-REC", name="Kilogramo de conciliación"),
+                UOM(code="BOX-REC", name="Caja de conciliación"),
+                Item(
+                    code="ITEM-UOM-REC",
+                    name="Artículo UOM conciliación",
+                    item_type="goods",
+                    is_stock_item=True,
+                    default_uom="KG-REC",
+                    allow_negative_stock=False,
+                ),
+                ItemUOMConversion(
+                    item_code="ITEM-UOM-REC",
+                    from_uom="BOX-REC",
+                    to_uom="KG-REC",
+                    conversion_factor=Decimal("0.5"),
+                ),
+                StockBin(
+                    company="cacao",
+                    item_code="ITEM-UOM-REC",
+                    warehouse="WH-MAIN",
+                    actual_qty=Decimal("10"),
+                    stock_value=Decimal("100"),
+                    valuation_rate=Decimal("10"),
+                ),
+            ]
+        )
+        database.session.flush()
+
+        entry = StockEntry(company="cacao", purpose="stock_reconciliation", to_warehouse="WH-MAIN")
+        database.session.add(entry)
+        database.session.flush()
+        with app.test_request_context(
+            method="POST",
+            data={
+                "uom_0": "BOX-REC",
+                "counted_qty_0": "24",
+                "target_valuation_rate_0": "10",
+                "target_stock_value_0": "120",
+            },
+        ):
+            _save_stock_reconciliation_item(entry, 0, "ITEM-UOM-REC", "WH-MAIN")
+
+        line = database.session.execute(database.select(StockEntryItem).filter_by(stock_entry_id=entry.id)).scalar_one()
+        assert line.qty == Decimal("4")
+        assert line.uom == "BOX-REC"
+        assert line.qty_in_base_uom == Decimal("2")
+        assert line.counted_qty == Decimal("12")
+
+        default_entry = StockEntry(company="cacao", purpose="stock_reconciliation", to_warehouse="WH-MAIN")
+        database.session.add(default_entry)
+        database.session.flush()
+        with app.test_request_context(
+            method="POST",
+            data={
+                "uom_0": "BOX-REC",
+                "target_valuation_rate_0": "10",
+                "target_stock_value_0": "100",
+            },
+        ):
+            _save_stock_reconciliation_item(default_entry, 0, "ITEM-UOM-REC", "WH-MAIN")
+
+        default_line = database.session.execute(
+            database.select(StockEntryItem).filter_by(stock_entry_id=default_entry.id)
+        ).scalar_one()
+        assert default_line.counted_qty == Decimal("10")
+        assert default_line.qty == Decimal("0")
+        assert default_line.qty_in_base_uom == Decimal("0")
 
 
 def test_08_kardex_confiable_y_reconstructibilidad(app):
