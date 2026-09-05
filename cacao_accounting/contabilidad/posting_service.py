@@ -1029,6 +1029,18 @@ def _payment_total_allocated(payment_id: str) -> Decimal:
     return result or Decimal("0")
 
 
+def _payment_has_realized_fx_difference(payment_id: str | None) -> bool:
+    """Indica si una referencia de pago conserva una diferencia cambiaria realizada."""
+    if not payment_id:
+        return False
+    from cacao_accounting.database import PaymentReference
+
+    fx_amounts = database.session.execute(
+        select(PaymentReference.fx_difference_amount).filter_by(payment_id=payment_id)
+    ).scalars()
+    return any(amount is not None and _decimal_value(amount) != 0 for amount in fx_amounts)
+
+
 def _signed_tax_delta(document: Any, tax_result: TaxCalculationResult | None) -> Decimal:
     if tax_result is None:
         return Decimal("0")
@@ -1371,6 +1383,8 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
 
                 create_withholding_certificate(document, settlement)
             return engine_payload.entries
+        if _payment_has_realized_fx_difference(document.id):
+            raise PostingError("Los pagos aplicados con diferencia cambiaria requieren el motor de settlement.")
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         if payment_type == "pay":
