@@ -1359,7 +1359,7 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
     company = _company_for(document)
     amount = _decimal_value(document.paid_amount or document.received_amount)
     payment_type = getattr(document, "payment_type", "").lower()
-    if amount < 0 or (amount == 0 and payment_type not in {"pay", "receive"}):
+    if amount <= 0:
         raise PostingError("El monto del pago debe ser mayor que cero.")
 
     if payment_type in {"pay", "receive"}:
