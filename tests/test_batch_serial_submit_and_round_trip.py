@@ -66,6 +66,8 @@ from cacao_accounting.database import (
     StockEntryItem,
     StockLedgerEntry,
     StockValuationLayer,
+    Project,
+    Unit,
     UOM,
     Warehouse,
     WarehouseCompanyAccount,
@@ -1243,3 +1245,37 @@ class TestStockEntrySubmit:
         assert duplicate_item is not None
         assert duplicate_item.batch_id == original_item.batch_id
         assert duplicate_item.serial_no == original_item.serial_no
+
+    def test_stock_entry_duplicate_copies_currency_and_accounting_dimensions(self, app_ctx):
+        """A duplicated entry retains the posting contract and analytical dimensions."""
+        client, entry = self._create_doc(app_ctx, None, None, purpose="material_receipt")
+        unit = Unit(code="UNIT-826", name="Unidad 826", entity="cacao", enabled=True)
+        project = Project(code="PROJ-826", name="Proyecto 826", entity="cacao", enabled=True)
+        database.session.add_all([unit, project])
+        entry.adjustment_account_id = "ACC-INV-720"
+        entry.cost_center_code = "CC-826"
+        entry.unit_code = unit.code
+        entry.project_code = project.code
+        entry.transaction_currency = "NIO"
+        entry.base_currency = "NIO"
+        entry.exchange_rate = Decimal("1")
+        database.session.commit()
+
+        response = client.post(f"/inventory/stock-entry/{entry.id}/duplicate", follow_redirects=True)
+        assert response.status_code == 200
+        database.session.expire_all()
+        duplicate = (
+            database.session.execute(
+                database.select(StockEntry).where(StockEntry.id != entry.id).order_by(StockEntry.created.desc())
+            )
+            .scalars()
+            .first()
+        )
+        assert duplicate is not None
+        assert duplicate.transaction_currency == entry.transaction_currency
+        assert duplicate.base_currency == entry.base_currency
+        assert duplicate.exchange_rate == entry.exchange_rate
+        assert duplicate.adjustment_account_id == entry.adjustment_account_id
+        assert duplicate.cost_center_code == entry.cost_center_code
+        assert duplicate.unit_code == entry.unit_code
+        assert duplicate.project_code == entry.project_code
