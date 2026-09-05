@@ -43,6 +43,7 @@ from cacao_accounting.database import (
     Book,
     CompanyDefaultAccount,
     CompanyParty,
+    DocumentRelation,
     DeliveryNote,
     DeliveryNoteItem,
     Entity,
@@ -53,6 +54,8 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseMatchingConfig,
+    PurchaseOrder,
+    PurchaseOrderItem,
     PurchaseReceipt,
     PurchaseReceiptItem,
     SalesInvoice,
@@ -675,6 +678,79 @@ class TestPurchaseReceiptSubmit:
     def test_purchase_receipt_duplicate_copies_batch_and_serial(self, app_ctx):
         bid = _batch_id_by_no("LOT-001")
         client, receipt = self._create_doc(app_ctx, bid, "SN-001")
+        original_item = (
+            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id))
+            .scalars()
+            .first()
+        )
+        order = PurchaseOrder(
+            supplier_id=receipt.supplier_id,
+            supplier_name=receipt.supplier_name,
+            company="cacao",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            exchange_rate=Decimal("1"),
+            posting_date=receipt.posting_date,
+            docstatus=1,
+        )
+        database.session.add(order)
+        database.session.flush()
+        order_item = PurchaseOrderItem(
+            purchase_order_id=order.id,
+            item_code=original_item.item_code,
+            item_name=original_item.item_name,
+            qty=original_item.qty,
+            uom=original_item.uom,
+            qty_in_base_uom=original_item.qty,
+            rate=original_item.rate,
+            amount=original_item.amount,
+        )
+        receipt.purchase_order_id = order.id
+        receipt.is_return = True
+        original_item.qty_in_base_uom = original_item.qty
+        original_item.base_amount = original_item.amount
+        original_item.valuation_rate = Decimal("11.25")
+        database.session.add(order_item)
+        database.session.flush()
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_order",
+                source_id=order.id,
+                source_item_id=order_item.id,
+                target_type="purchase_receipt",
+                target_id=receipt.id,
+                target_item_id=original_item.id,
+                company="cacao",
+                qty=original_item.qty,
+                qty_in_base_uom=original_item.qty,
+                uom=original_item.uom,
+                rate=original_item.rate,
+                amount=original_item.amount,
+                relation_type="receipt",
+                status="active",
+            )
+        )
+        database.session.add(
+            DocumentRelation(
+                source_type="purchase_order",
+                source_id=order.id,
+                source_item_id=order_item.id,
+                target_type="purchase_receipt",
+                target_id=receipt.id,
+                target_item_id=original_item.id,
+                company="cacao",
+                qty=original_item.qty,
+                qty_in_base_uom=original_item.qty,
+                uom=original_item.uom,
+                rate=original_item.rate,
+                amount=original_item.amount,
+                relation_type="historical",
+                status="closed",
+            )
+        )
+        original_receipt_state = (receipt.purchase_order_id, receipt.is_return, receipt.docstatus)
+        original_item_state = (original_item.qty_in_base_uom, original_item.base_amount, original_item.valuation_rate)
+        database.session.commit()
         resp = client.post(f"/buying/purchase-receipt/{receipt.id}/duplicate", follow_redirects=True)
         assert resp.status_code == 200
         database.session.expire_all()
@@ -702,6 +778,34 @@ class TestPurchaseReceiptSubmit:
         assert duplicate_item is not None
         assert duplicate_item.batch_id == original_item.batch_id
         assert duplicate_item.serial_no == original_item.serial_no
+        assert duplicate.purchase_order_id == order.id
+        assert duplicate.is_return is True
+        assert duplicate_item.qty_in_base_uom == original_item.qty_in_base_uom
+        assert duplicate_item.base_amount == original_item.base_amount
+        assert duplicate_item.valuation_rate == original_item.valuation_rate
+        assert (receipt.purchase_order_id, receipt.is_return, receipt.docstatus) == original_receipt_state
+        assert (original_item.qty_in_base_uom, original_item.base_amount, original_item.valuation_rate) == original_item_state
+        relation = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(
+                    target_type="purchase_receipt", target_id=duplicate.id, target_item_id=duplicate_item.id, status="active"
+                )
+            )
+            .scalars()
+            .first()
+        )
+        assert relation is not None
+        assert relation.source_id == order.id
+        assert relation.source_item_id == order_item.id
+        duplicate_relations = (
+            database.session.execute(
+                database.select(DocumentRelation).filter_by(target_type="purchase_receipt", target_id=duplicate.id)
+            )
+            .scalars()
+            .all()
+        )
+        assert len(duplicate_relations) == 1
+        assert duplicate_relations[0].status == "active"
 
 
 # <------------------------------------------------------------------------------------------> #
