@@ -846,6 +846,105 @@ def test_liquidar_vale_en_gasto(app_ctx_book):
     assert vale.expense_id == gasto.id
 
 
+def test_anular_gasto_reabre_vale_origen(app_ctx_book):
+    """La anulacion del gasto devuelve el vale a entregado sin borrar evidencia."""
+    from cacao_accounting.bancos.services import (
+        cancel_petty_cash_expense,
+        create_petty_cash_expense_from_voucher,
+        create_petty_cash_voucher,
+        petty_cash_open_vouchers_total,
+        set_petty_cash_voucher_status,
+    )
+    from cacao_accounting.database import database
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+    vale = create_petty_cash_voucher(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        posted_date=date(2026, 2, 1),
+        delivered_to="Maria",
+        concept="Viaticos",
+        amount=Decimal("30.0000"),
+    )
+    set_petty_cash_voucher_status(vale, "entregado")
+    gasto = create_petty_cash_expense_from_voucher(
+        vale,
+        expense_account_code="EXP-001",
+        cost_center_code="MAIN",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+    expense_id = gasto.id
+    journal_id = gasto.journal_id
+
+    cancel_petty_cash_expense(gasto, reason="Correccion", actor_id="user-1")
+
+    database.session.refresh(vale)
+    assert gasto.docstatus == 2
+    assert gasto.id == expense_id
+    assert gasto.journal_id == journal_id
+    assert vale.voucher_status == "entregado"
+    assert vale.expense_id is None
+    assert petty_cash_open_vouchers_total(fondo) == Decimal("30.0000")
+
+    gasto_nuevo = create_petty_cash_expense_from_voucher(
+        vale,
+        expense_account_code="EXP-001",
+        cost_center_code="MAIN",
+        posted_date=date(2026, 2, 3),
+        actor_id="user-1",
+    )
+    assert gasto_nuevo.id != expense_id
+    assert vale.voucher_status == "liquidado"
+    assert vale.expense_id == gasto_nuevo.id
+
+
+def test_anular_gasto_con_reposicion_reservada_falla(app_ctx_book):
+    """Un gasto reservado para reposicion no puede dejar una solicitud inconsistente."""
+    from cacao_accounting.bancos.services import (
+        cancel_petty_cash_expense,
+        create_petty_cash_expense_from_voucher,
+        create_petty_cash_replenishment,
+        create_petty_cash_voucher,
+        set_petty_cash_voucher_status,
+    )
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+    vale = create_petty_cash_voucher(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        posted_date=date(2026, 2, 1),
+        delivered_to="Maria",
+        concept="Viaticos",
+        amount=Decimal("30.0000"),
+    )
+    set_petty_cash_voucher_status(vale, "entregado")
+    gasto = create_petty_cash_expense_from_voucher(
+        vale,
+        expense_account_code="EXP-001",
+        cost_center_code="MAIN",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+    reposicion = create_petty_cash_replenishment(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_ids=[gasto.id],
+        request_date=date(2026, 2, 3),
+        actor_id="user-1",
+    )
+
+    with pytest.raises(ValueError, match="reservado"):
+        cancel_petty_cash_expense(gasto, reason="Correccion", actor_id="user-1")
+
+    assert gasto.docstatus == 1
+    assert gasto.replenishment_id == reposicion.id
+    assert vale.voucher_status == "liquidado"
+    assert vale.expense_id == gasto.id
+
+
 def test_gasto_con_vale_liquida_el_vale(app_ctx_book):
     """Un gasto creado con voucher_id (flujo UI) debe liquidar el vale.
 
@@ -1253,7 +1352,9 @@ def test_crear_aprobar_y_reponer_caja_chica(app_ctx_book):
     fondo = _crear_fondo_caja()
     _crear_cuenta_gasto()
 
-    cuenta_banco = Accounts(entity="cacao", code="1102", name="Banco BAC", active=True, enabled=True, group=False, account_type="bank")
+    cuenta_banco = Accounts(
+        entity="cacao", code="1102", name="Banco BAC", active=True, enabled=True, group=False, account_type="bank"
+    )
     database.session.add(cuenta_banco)
     banco = Bank(name="BAC")
     database.session.add(banco)
