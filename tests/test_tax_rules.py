@@ -295,6 +295,39 @@ def test_tax_template_does_not_tax_free_items_using_a_stale_document_total(app_c
     assert result.payable_delta == Decimal("0.0000")
 
 
+def test_tax_template_with_no_item_lines_ignores_stale_document_total(app_ctx: Flask) -> None:
+    """A document with no line items is not taxed on a stale persisted grand total."""
+    from cacao_accounting.database import Tax, TaxTemplate, TaxTemplateItem, database
+    from cacao_accounting.tax_pricing_service import calculate_taxes
+
+    tax = Tax(name="IVA", rate=Decimal("15"), tax_type="percentage", applies_to="sales", is_active=True)
+    template = TaxTemplate(name="Venta sin lineas", company="cacao", template_type="selling", is_active=True)
+    database.session.add_all([tax, template])
+    database.session.flush()
+    database.session.add(
+        TaxTemplateItem(
+            tax_template_id=template.id,
+            tax_id=tax.id,
+            sequence=1,
+            calculation_base="net_document",
+            behavior="additive",
+        )
+    )
+    database.session.commit()
+
+    result = calculate_taxes(
+        SimpleNamespace(
+            company="cacao",
+            total=Decimal("100"),
+            grand_total=Decimal("100"),
+        ),
+        template.id,
+    )
+
+    assert result.additive_total == Decimal("0.0000")
+    assert result.payable_delta == Decimal("0.0000")
+
+
 def test_tax_template_preserves_negative_base_for_credit_note(app_ctx: Flask) -> None:
     """Credit notes must produce tax amounts with the same negative direction as their lines."""
     from cacao_accounting.database import Tax, TaxTemplate, TaxTemplateItem, database
