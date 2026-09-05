@@ -929,7 +929,7 @@ def _validate_item_account(company: str, account_id: str | None, expected_type: 
         "inventory": {"inventory", "current_asset"},
         "stock_adjustment": {"expense", "income"},
     }[expected_type]
-    if account_type and account_type not in expected_aliases:
+    if account_type not in expected_aliases:
         raise InventoryServiceError(f"La cuenta de {label} debe ser valida para {label} en la compañia.")
 
 
