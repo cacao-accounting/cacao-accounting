@@ -26,6 +26,7 @@
     </ul>
 
     <form method="post" enctype="multipart/form-data" class="mt-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="mb-3" style="max-width: 400px;">
         <label class="form-label">{{ _("Seleccionar archivo") }}</label>
         <input type="file" name="file" class="form-control" accept=".csv, .xlsx, .xls, .ods" required>
@@ -67,6 +68,7 @@
     </div>
 
     <form method="post" class="mt-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="import_id" value="{{ import_id }}">
       <p class="alert alert-warning">{{ _("Nota: Esta acción insertará todas las líneas validadas en el presupuesto. No se puede deshacer masivamente.") }}</p>
       <button type="submit" class="btn btn-success btn-lg">{{ _("Confirmar Importación") }}</button>

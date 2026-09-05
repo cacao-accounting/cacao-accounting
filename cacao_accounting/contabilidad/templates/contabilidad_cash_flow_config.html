@@ -49,6 +49,7 @@
 </div>
 
 <form method="post" action="{{ url_for('contabilidad.cash_flow_config', company=selected_company) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="company" value="{{ selected_company }}">
   <div class="ca-card">
     <div class="ca-card-header d-flex justify-content-between align-items-center">

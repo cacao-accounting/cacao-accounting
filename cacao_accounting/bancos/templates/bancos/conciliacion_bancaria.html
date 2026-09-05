@@ -14,6 +14,7 @@
     <h5 class="ca-card-title">{{ _("Conciliación Bancaria") }}</h5>
   </div>
   <form method="post" action="{{ url_for('bancos.bancos_conciliacion_bancaria_aplicar') }}" class="p-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="company" value="{{ company or 'cacao' }}">
     <div class="mb-3 row">
       <label for="reconciliation_date" class="col-sm-2 col-form-label">{{ _("Fecha de conciliación") }}</label>

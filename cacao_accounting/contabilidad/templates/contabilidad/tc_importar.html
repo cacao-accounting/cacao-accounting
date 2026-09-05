@@ -40,6 +40,7 @@
     <p class="text-muted small"><i class="bi bi-info-circle me-1"></i>{{ _('Las monedas deben existir y estar activas en el sistema. Las tasas duplicadas (misma base, destino y fecha) se omitirán automáticamente.') }}</p>
 
     <form method="post" enctype="multipart/form-data" class="mt-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="mb-3" style="max-width: 400px;">
         <label class="form-label">{{ _('Seleccionar archivo') }}</label>
         <input type="file" name="file" class="form-control" accept=".csv, .xlsx, .xls, .ods" required>
