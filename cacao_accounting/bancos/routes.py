@@ -38,6 +38,7 @@ from cacao_accounting.database import (
     BankTransaction,
     Book,
     ExternalCounter,
+    Entity,
     GLEntry,
     PaymentEntry,
     PaymentReference,
@@ -752,7 +753,7 @@ def bancos_banco_nuevo():
 
     formulario = FormularioBanco()
     titulo = "Nuevo Banco - " + APPNAME
-    if formulario.validate_on_submit() or request.method == "POST":
+    if formulario.validate_on_submit():
         banco = Bank(
             name=request.form.get("name"),
             swift_code=request.form.get("swift_code"),
@@ -789,9 +790,34 @@ def bancos_cuenta_bancaria_nuevo():
     formulario = FormularioCuentaBancaria()
     formulario.bank_id.choices = [(b[0].id, b[0].name) for b in database.session.execute(database.select(Bank)).all()]
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    submitted_company = request.values.get("company")
+    if submitted_company and not any(value == submitted_company for value, _label in formulario.company.choices):
+        company_record = database.session.execute(
+            database.select(Entity).filter_by(code=submitted_company)
+        ).scalar_one_or_none()
+        if company_record and company_record.enabled:
+            # The smart-select route enforces authorization separately; keep
+            # valid direct submissions visible to WTForms as well.
+            formulario.company.choices.append((submitted_company, company_record.name or submitted_company))
     formulario.currency.choices = [("", "")] + obtener_lista_monedas()
+    selected_company = request.values.get("company") or None
+    formulario.gl_account_id.choices = [("", "")] + [
+        (str(account.id), f"{account.code} - {account.name}")
+        for account in database.session.execute(database.select(Accounts).filter_by(account_type="bank")).scalars()
+    ]
+    formulario.default_naming_series_id.choices = [("", "")] + [
+        (str(series.id), series.name) for series in get_active_naming_series("payment_entry", selected_company)
+    ]
+    formulario.default_external_counter_id.choices = [("", "")] + [
+        (str(counter.id), counter.name)
+        for counter in database.session.execute(
+            database.select(ExternalCounter).filter_by(company=selected_company, counter_type="checkbook", is_active=True)
+        )
+        .scalars()
+        .all()
+    ]
     titulo = "Nueva Cuenta Bancaria - " + APPNAME
-    if formulario.validate_on_submit() or request.method == "POST":
+    if formulario.validate_on_submit():
         gl_account_id = request.form.get("gl_account_id") or None
         company = request.form.get("company")
         default_naming_series_id = request.form.get("default_naming_series_id") or None

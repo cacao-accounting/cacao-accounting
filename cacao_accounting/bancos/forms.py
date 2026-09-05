@@ -20,8 +20,8 @@ class FormularioBanco(FlaskForm):
 class FormularioCuentaBancaria(FlaskForm):
     """Formulario para crear o editar una cuenta bancaria."""
 
-    bank_id = SelectField("Banco", choices=[])
-    company = SelectField(_LABEL_COMPANY, choices=[])
+    bank_id = SelectField("Banco", choices=[], validators=[DataRequired()])
+    company = SelectField(_LABEL_COMPANY, choices=[], validators=[DataRequired()])
     account_name = StringField("Nombre de Cuenta", validators=[DataRequired()])
     account_no = StringField("Número de Cuenta")
     iban = StringField("IBAN")

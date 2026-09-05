@@ -301,6 +301,49 @@ def test_bank_account_new_saves_payment_series_and_checkbook(app_ctx, monkeypatc
     assert account.id in (mapping.condition_json or "")
 
 
+def test_bank_new_with_empty_post_renders_validation_errors_without_persisting(app_ctx):
+    """An empty bank POST must be rejected by WTForms instead of hitting NOT NULL constraints."""
+    from cacao_accounting.bancos import bancos_banco_nuevo
+    from cacao_accounting.database import Bank, database
+
+    with app_ctx.test_request_context("/cash_management/bank/new", method="POST", data={}):
+        response = unwrap(bancos_banco_nuevo)()
+
+    assert isinstance(response, str)
+    assert database.session.execute(database.select(Bank)).scalars().all() == []
+
+
+def test_bank_account_new_with_empty_post_renders_validation_errors_without_persisting(app_ctx, monkeypatch):
+    """An empty bank-account POST must not create a row with a missing account name."""
+    from cacao_accounting.bancos import bancos_cuenta_bancaria_nuevo
+    from cacao_accounting.database import BankAccount, database
+
+    monkeypatch.setattr(import_module("cacao_accounting.bancos.routes"), "exige_acceso_compania", lambda *args, **kwargs: None)
+    with app_ctx.test_request_context("/cash_management/bank-account/new", method="POST", data={}):
+        response = unwrap(bancos_cuenta_bancaria_nuevo)()
+
+    assert isinstance(response, str)
+    assert database.session.execute(database.select(BankAccount)).scalars().all() == []
+
+
+def test_bank_account_new_rejects_unknown_dynamic_select_values(app_ctx, monkeypatch):
+    """Dynamic smart-select fields must still reject identifiers absent from the database."""
+    from cacao_accounting.bancos import bancos_cuenta_bancaria_nuevo
+    from cacao_accounting.database import BankAccount, database
+
+    data = {
+        "bank_id": "BANK-UNKNOWN",
+        "company": "cacao",
+        "account_name": "Cuenta inválida",
+    }
+    monkeypatch.setattr(import_module("cacao_accounting.bancos.routes"), "exige_acceso_compania", lambda *args, **kwargs: None)
+    with app_ctx.test_request_context("/cash_management/bank-account/new", method="POST", data=data):
+        response = unwrap(bancos_cuenta_bancaria_nuevo)()
+
+    assert isinstance(response, str)
+    assert database.session.execute(database.select(BankAccount)).scalars().all() == []
+
+
 def test_bank_account_new_rejects_non_payment_series(app_ctx, monkeypatch):
     from cacao_accounting.bancos import bancos_cuenta_bancaria_nuevo
     from cacao_accounting.database import Bank, BankAccount, database
