@@ -12,6 +12,9 @@ from cacao_accounting.database import (
     Entity,
     Book,
     ExchangeRate,
+    ItemUOMConversion,
+    UOM,
+    Item,
     PurchaseRequest,
     PurchaseRequestItem,
     PurchaseQuotation,
@@ -226,6 +229,113 @@ def test_duplicate_purchase_order_creates_audit_log(app_ctx):
         .first()
     )
     assert log is not None, "La duplicacion debe registrar un log de creacion"
+
+
+def test_duplicate_purchase_order_preserves_base_quantity_and_source_relation(app_ctx):
+    """A duplicated purchase order retains normalized quantities and active provenance."""
+    client = app_ctx.test_client()
+    login(client, "cacao", "cacao")
+    supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
+    item = database.session.execute(database.select(Item).filter_by(code="ART-001")).scalars().first()
+    base_uom = database.session.execute(database.select(UOM).filter_by(code=item.default_uom)).scalars().first()
+    alternate_uom = UOM(code="BOX-824", name="Caja #824")
+    database.session.add_all(
+        [
+            alternate_uom,
+            ItemUOMConversion(item_code=item.code, from_uom=alternate_uom.code, to_uom=base_uom.code, conversion_factor=10),
+        ]
+    )
+    source = PurchaseRequest(company="cacao", posting_date=date.today(), docstatus=1)
+    original = PurchaseOrder(
+        supplier_id=supplier.id,
+        supplier_name=supplier.name,
+        company="cacao",
+        posting_date=date.today(),
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+        docstatus=0,
+    )
+    database.session.add_all([source, original])
+    database.session.flush()
+    source_item = PurchaseRequestItem(
+        purchase_request_id=source.id,
+        item_code=item.code,
+        item_name=item.name,
+        qty=Decimal("20"),
+        uom=base_uom.code,
+        qty_in_base_uom=Decimal("20"),
+    )
+    original_item = PurchaseOrderItem(
+        purchase_order_id=original.id,
+        item_code=item.code,
+        item_name=item.name,
+        description="Source quantity",
+        qty=Decimal("2"),
+        uom=alternate_uom.code,
+        qty_in_base_uom=Decimal("20"),
+        rate=Decimal("45"),
+        amount=Decimal("90"),
+        base_rate=Decimal("45"),
+        base_amount=Decimal("90"),
+    )
+    database.session.add_all([source_item, original_item])
+    database.session.flush()
+    database.session.add(
+        DocumentRelation(
+            source_type="purchase_request",
+            source_id=source.id,
+            source_item_id=source_item.id,
+            target_type="purchase_order",
+            target_id=original.id,
+            target_item_id=original_item.id,
+            company="cacao",
+            qty=Decimal("2"),
+            qty_in_base_uom=Decimal("20"),
+            uom=alternate_uom.code,
+            rate=Decimal("45"),
+            amount=Decimal("90"),
+            relation_type="order",
+            status="active",
+        )
+    )
+    database.session.commit()
+
+    response = client.post(f"/buying/purchase-order/{original.id}/duplicate", follow_redirects=True)
+    assert response.status_code == 200
+    duplicate = (
+        database.session.execute(
+            database.select(PurchaseOrder)
+            .where(PurchaseOrder.id != original.id)
+            .order_by(PurchaseOrder.created.desc(), PurchaseOrder.id.desc())
+        )
+        .scalars()
+        .first()
+    )
+    assert duplicate is not None
+    duplicate_item = (
+        database.session.execute(database.select(PurchaseOrderItem).filter_by(purchase_order_id=duplicate.id))
+        .scalars()
+        .first()
+    )
+    relation = (
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(
+                target_type="purchase_order", target_id=duplicate.id, target_item_id=duplicate_item.id, status="active"
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert duplicate_item is not None
+    assert duplicate_item.qty == Decimal("2.000000000")
+    assert duplicate_item.qty_in_base_uom == Decimal("20.000000000")
+    assert duplicate_item.base_rate == Decimal("45.0000")
+    assert duplicate_item.base_amount == Decimal("90.0000")
+    assert relation is not None
+    assert relation.source_id == source.id
+    assert relation.source_item_id == source_item.id
+    assert relation.qty_in_base_uom == Decimal("20.000000000")
 
 
 def test_purchase_happy_path(app_ctx):
