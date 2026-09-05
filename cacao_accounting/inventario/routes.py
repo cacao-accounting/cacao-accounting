@@ -904,7 +904,14 @@ def inventario_entrada_duplicar(entry_id: str):
         posting_date=origen.posting_date,
         from_warehouse=origen.from_warehouse,
         to_warehouse=origen.to_warehouse,
+        adjustment_account_id=origen.adjustment_account_id,
+        cost_center_code=origen.cost_center_code,
+        unit_code=origen.unit_code,
+        project_code=origen.project_code,
         remarks=origen.remarks,
+        transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
+        exchange_rate=origen.exchange_rate,
         docstatus=0,
     )
     database.session.add(duplicado)
