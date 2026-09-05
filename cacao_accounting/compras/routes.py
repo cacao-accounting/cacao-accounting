@@ -18,7 +18,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from flask_login import current_user, login_required
 
 from cacao_accounting.compras.purchase_reconciliation_service import (
-    emit_goods_received_cancelled,
     get_purchase_order_status_report,
     get_purchase_reconciliation_panel_groups,
     get_purchase_reconciliation_pending,
@@ -2776,7 +2775,6 @@ def compras_recepcion_cancel(receipt_id: str):
             actor_user_id=str(current_user.id),
             cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
         )  # type: ignore[misc]
-        emit_goods_received_cancelled(receipt_id, registro.company)
         revert_relations_for_target("purchase_receipt", receipt_id)
         refresh_source_caches_for_target("purchase_receipt", receipt_id)
         log_cancel(registro)

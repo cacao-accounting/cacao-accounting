@@ -493,6 +493,55 @@ def test_stock_cancellation_appends_reciprocal_kardex_entry(kardex_app):
     assert any(entry.is_reversal for entry in entries)
 
 
+def test_purchase_receipt_cancel_route_does_not_emit_duplicate_event(kardex_app, monkeypatch):
+    """La ruta delega el evento de cancelación al servicio central de posting."""
+    from cacao_accounting.compras import routes as purchase_routes
+    from cacao_accounting.database import PurchaseEconomicEvent, PurchaseReconciliation, database
+
+    emitted_by_route: list[tuple[object, ...]] = []
+    monkeypatch.setattr(
+        purchase_routes,
+        "emit_goods_received_cancelled",
+        lambda *args: emitted_by_route.append(args),
+        raising=False,
+    )
+    receipt = _posted_receipt()
+    reconciliation = PurchaseReconciliation(
+        company="cacao",
+        purchase_receipt_id=receipt.id,
+        matching_type="3-way",
+        matched_amount=Decimal("50.00"),
+        status="reconciled",
+    )
+    database.session.add(reconciliation)
+    database.session.commit()
+
+    client = kardex_app.test_client()
+    _login(client, "admin")
+    response = client.post(
+        f"/buying/purchase-receipt/{receipt.id}/cancel",
+        data={"reason": "Cancelación de prueba"},
+    )
+
+    assert response.status_code == 302
+    assert emitted_by_route == []
+    database.session.refresh(receipt)
+    assert receipt.docstatus == 2
+    database.session.refresh(reconciliation)
+    assert reconciliation.status == "cancelled"
+    events = (
+        database.session.execute(
+            database.select(PurchaseEconomicEvent).where(
+                PurchaseEconomicEvent.event_type == "GOODS_RECEIVED_CANCELLED",
+                PurchaseEconomicEvent.document_id == receipt.id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(events) == 1
+
+
 def test_stock_cancellation_rejects_different_period(kardex_app):
     """Inventario no tiene reversiones en otro período: la anulación debe quedar en el mismo."""
     from cacao_accounting.contabilidad.posting import PostingError, cancel_document
