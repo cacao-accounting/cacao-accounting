@@ -2061,7 +2061,7 @@ def _build_sales_invoice_from_context(context: dict[str, Any]) -> SalesInvoice:
         delivery_note_id=context["from_note_id"],
         transaction_currency=request.form.get("transaction_currency") or request.form.get("currency") or None,
         update_inventory=bool(request.form.get("update_inventory"))
-        and document_type not in ("sales_credit_note", "sales_return"),
+        and document_type not in ("sales_credit_note", "sales_debit_note", "sales_return"),
         is_return=document_type in ("sales_credit_note", "sales_return"),
         reversal_of=context["reversal_of"],
         remarks=request.form.get("remarks"),
@@ -2200,7 +2200,11 @@ def _handle_sales_invoice_edit_post(registro):
         registro.company = requested_company
         registro.posting_date = _parse_date(request.form.get("posting_date"))
         registro.remarks = request.form.get("remarks")
-        registro.update_inventory = bool(request.form.get("update_inventory")) and not registro.is_return
+        registro.update_inventory = (
+            bool(request.form.get("update_inventory"))
+            and not registro.is_return
+            and registro.document_type != "sales_debit_note"
+        )
         if registro.reversal_of and (
             before_state.get("customer_id") != registro.customer_id or before_state.get("company") != registro.company
         ):
