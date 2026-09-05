@@ -110,6 +110,7 @@ class LedgerContext:
     document_base_currency: str | None
     exchange_rate: Decimal | None
     document_remarks: str | None
+    document_exchange_rate: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -168,6 +169,7 @@ def _ledger_context_with_currency(
         document_base_currency=context.document_base_currency,
         exchange_rate=exchange_rate,
         document_remarks=context.document_remarks,
+        document_exchange_rate=context.document_exchange_rate,
     )
 
 
@@ -320,6 +322,7 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
                 document_base_currency=document_base_currency,
                 exchange_rate=exchange_rate,
                 document_remarks=getattr(document, "remarks", None),
+                document_exchange_rate=_decimal_value(document_exchange_rate) if document_exchange_rate is not None else None,
             )
         )
     if missing_rates:
@@ -347,7 +350,22 @@ def _ledger_exchange_rate(
         if rate <= 0:
             raise InvalidExchangeRateError("El tipo de cambio debe ser mayor que cero.")
         return rate
-    return _lookup_exchange_rate(transaction_currency, ledger_currency, posting_date)
+    try:
+        return _lookup_exchange_rate(transaction_currency, ledger_currency, posting_date)
+    except InvalidExchangeRateError:
+        raise
+    except PostingError:
+        if not document_base_currency or transaction_currency == document_base_currency:
+            raise
+        transaction_to_base = (
+            _decimal_value(document_exchange_rate)
+            if document_exchange_rate is not None
+            else _lookup_exchange_rate(transaction_currency, document_base_currency, posting_date)
+        )
+        if transaction_to_base <= 0:
+            raise InvalidExchangeRateError("El tipo de cambio debe ser mayor que cero.")
+        base_to_ledger = _lookup_exchange_rate(document_base_currency, ledger_currency, posting_date)
+        return transaction_to_base * base_to_ledger
 
 
 def _account_code_for(account_id: str) -> str | None:
@@ -3643,20 +3661,57 @@ def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -
 def _comprobante_line_value(
     context: LedgerContext,
     original_value: Decimal,
+    document_context: LedgerContext | None = None,
 ) -> tuple[LedgerContext, Decimal]:
+    """Convert a journal line to the destination book currency.
+
+    Las tasas específicas de una línea se expresan contra la moneda
+    transaccional de la cabecera. La conversión continúa desde esa moneda a
+    la moneda de cada libro usando su tasa histórica directa; si no existe,
+    utiliza la moneda base del documento como puente.
+    """
     if not context.transaction_currency or not context.company_currency:
         return context, original_value
-    if context.company_currency == context.transaction_currency:
-        return context, original_value
+    base_context = document_context or context
+    line_currency = context.transaction_currency
+    book_currency = context.company_currency
+    base_currency = base_context.document_base_currency
+    if not base_currency:
+        raise PostingError("El comprobante requiere moneda base para convertir sus líneas.")
+    if line_currency == book_currency:
+        line_context = context.__class__(**{**context.__dict__, "exchange_rate": Decimal("1")})
+        return line_context, original_value
 
-    if context.exchange_rate is None:
-        exchange_rate = _lookup_exchange_rate(
-            context.transaction_currency,
-            context.company_currency,
-            context.posting_date,
+    header_currency = base_context.transaction_currency
+    if not header_currency:
+        raise PostingError("El comprobante requiere moneda transaccional para convertir sus líneas.")
+
+    if line_currency == header_currency:
+        line_to_header_rate = Decimal("1")
+    elif line_currency == base_currency:
+        line_to_header_rate = _lookup_exchange_rate(line_currency, header_currency, context.posting_date)
+    else:
+        line_to_header_rate = context.exchange_rate or _lookup_exchange_rate(
+            line_currency, header_currency, context.posting_date
         )
-        context = context.__class__(**{**context.__dict__, "exchange_rate": exchange_rate})
-    return context, _to_company_currency(original_value, context.exchange_rate or Decimal("1"))
+
+    if book_currency == header_currency:
+        header_to_book_rate = Decimal("1")
+    elif base_context.exchange_rate is not None:
+        header_to_book_rate = base_context.exchange_rate
+    elif base_context.document_exchange_rate is not None and base_currency != book_currency:
+        header_to_book_rate = base_context.document_exchange_rate * _lookup_exchange_rate(
+            base_currency, book_currency, context.posting_date
+        )
+    else:
+        header_to_book_rate = _lookup_exchange_rate(header_currency, book_currency, context.posting_date)
+
+    effective_rate = line_to_header_rate * header_to_book_rate
+    if effective_rate <= 0:
+        raise InvalidExchangeRateError("El tipo de cambio debe ser mayor que cero.")
+    converted_value = _to_company_currency(original_value, effective_rate)
+    line_context = context.__class__(**{**context.__dict__, "exchange_rate": effective_rate})
+    return line_context, converted_value
 
 
 def _comprobante_entry_params(
@@ -3707,6 +3762,7 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
     is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
     for context in _document_contexts(document, ledger_code=ledger_code):
         context_book = database.session.get(Book, context.ledger_id) if context.ledger_id else None
+        total_value = Decimal("0")
         for line in lines:
             line_book = str(getattr(line, "book", None) or "")
             if line_book and context_book and line_book not in {context_book.id, context_book.code}:
@@ -3718,13 +3774,12 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
             account_id = _account_id_for_comprobante_line(line, company)
             line_currency = getattr(line, "currency_id", None) or context.transaction_currency
             line_context = _ledger_context_with_currency(context, line_currency, getattr(line, "exchange_rate", None))
-            line_context, company_value = _comprobante_line_value(line_context, original_value)
+            line_context, company_value = _comprobante_line_value(line_context, original_value, document_context=context)
+            total_value += company_value
             params = _comprobante_entry_params(line_context, line, account_id, company_value, original_value, is_fy_closing)
             entries.append(_create_gl_entry(context=line_context, params=params))
-
-    total_value = sum((_decimal_value(getattr(line, "value", None)) for line in lines), Decimal("0"))
-    if total_value != 0:
-        raise PostingError("El comprobante contable no está balanceado.")
+        if total_value != 0:
+            raise PostingError("El comprobante contable no está balanceado en la moneda del libro.")
 
     return _add_entries(entries)
 
