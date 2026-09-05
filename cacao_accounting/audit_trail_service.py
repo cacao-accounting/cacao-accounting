@@ -26,6 +26,7 @@ ALLOWED_ACTIONS = {
     "reversal_draft_created",
     "imported",
     "reconciled",
+    "partially_reconciled",
     "closed",
     "reopened",
     "commented",

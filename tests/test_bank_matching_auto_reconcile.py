@@ -365,3 +365,24 @@ def test_auto_reconcile_respects_amount_tolerance(app_ctx, chart):
     assert result.reconciled is True
     assert result.reason is None
     assert database.session.get(BankTransaction, tx.id).is_reconciled is True
+
+
+def test_auto_reconcile_reports_partial_when_candidate_is_below_bank_amount(app_ctx, chart):
+    """Una tolerancia no debe reportar como completa una asignación con remanente."""
+    from cacao_accounting.bancos.statement_service import auto_reconcile_bank_transaction
+    from cacao_accounting.database import AuditTrail, BankTransaction, database
+
+    _make_payment(amount=Decimal("95.00"), payment_type="receive", bank_account=chart["account"], posting_date=AS_OF)
+    _make_matching_rule(account_id=chart["account"].id, auto_reconcile=True, amount_tolerance=Decimal("5"))
+
+    tx = _make_bank_transaction(chart["account"], deposit=Decimal("100.00"), posting_date=AS_OF)
+    result = auto_reconcile_bank_transaction(tx.id)
+
+    assert result.reconciled is False
+    assert result.reason == "partial_match"
+    assert result.allocated_amount == Decimal("95.00")
+    assert database.session.get(BankTransaction, tx.id).is_reconciled is False
+    audit = database.session.execute(
+        database.select(AuditTrail).filter_by(document_id=tx.id, action="partially_reconciled")
+    ).scalar_one_or_none()
+    assert audit is not None

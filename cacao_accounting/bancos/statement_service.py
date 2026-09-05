@@ -206,11 +206,15 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
             ],
         )
     )
+    fully_reconciled = allocated >= transaction_amount
+    event_action = "reconciled" if fully_reconciled else "partially_reconciled"
+    event_prefix = "Conciliación automática aplicada" if fully_reconciled else "Conciliación automática parcial aplicada"
     log_task_event(
         transaction,
-        "reconciled",
-        "Conciliación automática aplicada por la regla de matching '{0}' contra {1} {2} "
-        "por {3} (conciliación {4}).".format(
+        event_action,
+        "{0} por la regla de matching '{1}' contra {2} {3} "
+        "por {4} (conciliación {5}).".format(
+            event_prefix,
             best_rule.name if best_rule else "",
             candidate.reference_type,
             candidate.reference_id,
@@ -220,12 +224,12 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
     )
     return BankAutoReconciliationResult(
         bank_transaction_id=bank_transaction_id,
-        reconciled=True,
+        reconciled=fully_reconciled,
         rule_id=best_rule.id if best_rule else None,
         candidate_reference_type=candidate.reference_type,
         candidate_reference_id=candidate.reference_id,
         allocated_amount=allocated,
-        reason=None,
+        reason=None if fully_reconciled else "partial_match",
         reconciliation_id=reconciliation.id,
     )
 
