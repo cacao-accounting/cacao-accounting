@@ -682,6 +682,159 @@ def test_submit_journal_posts_each_line_with_its_own_currency_and_rate(app_ctx):
     assert nio_credit.credit == Decimal("50.0000") or nio_credit.credit == Decimal("50.00")
 
 
+def test_submit_journal_balances_using_converted_line_currency_values(app_ctx):
+    """A journal balanced after line-level FX conversion must post successfully."""
+    from decimal import Decimal
+
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
+    from cacao_accounting.database import Accounts, Book, Currency, GLEntry, database
+
+    debit_account = Accounts(entity="cacao", code="EXP-EUR-BAL", name="Gasto EUR", active=True, enabled=True, group=False)
+    credit_account = Accounts(entity="cacao", code="CASH-NIO-BAL", name="Caja NIO", active=True, enabled=True, group=False)
+    fiscal_book = Book(
+        entity="cacao", code="FISC-EUR-BAL", name="Fiscal EUR balance", currency="NIO", status="activo", is_primary=True
+    )
+    database.session.add_all(
+        [
+            debit_account,
+            credit_account,
+            fiscal_book,
+            Currency(code="EUR", name="Euro", decimals=2, active=True, default=False),
+        ]
+    )
+    database.session.commit()
+
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-06",
+            "books": ["FISC-EUR-BAL"],
+            "transaction_currency": "NIO",
+            "lines": [
+                {"account": debit_account.id, "debit": "100.00", "credit": "0", "currency": "EUR", "exchange_rate": "36.00"},
+                {"account": credit_account.id, "debit": "0", "credit": "3600.00", "currency": "NIO"},
+            ],
+        },
+        user_id="user-1",
+    )
+
+    submit_journal(journal.id)
+
+    entries = (
+        database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id, ledger_id=fiscal_book.id))
+        .scalars()
+        .all()
+    )
+    assert len(entries) == 2
+    debit_entry = next(entry for entry in entries if entry.debit > 0)
+    credit_entry = next(entry for entry in entries if entry.credit > 0)
+    assert debit_entry.debit == Decimal("3600.0000") or debit_entry.debit == Decimal("3600.00")
+    assert credit_entry.credit == Decimal("3600.0000") or credit_entry.credit == Decimal("3600.00")
+    assert debit_entry.account_currency == "EUR"
+    assert debit_entry.debit_in_account_currency == Decimal("100.00")
+
+
+def test_submit_journal_converts_line_currency_through_base_for_each_book(app_ctx):
+    """A line rate to the base currency must be bridged independently to each book."""
+    from decimal import Decimal
+
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
+    from cacao_accounting.database import Accounts, Book, Currency, ExchangeRate, GLEntry, database
+
+    debit_account = Accounts(entity="cacao", code="EXP-EUR-MULTI", name="Gasto EUR", active=True, enabled=True, group=False)
+    credit_account = Accounts(entity="cacao", code="CASH-NIO-MULTI", name="Caja NIO", active=True, enabled=True, group=False)
+    nio_book = Book(entity="cacao", code="NIO-EUR-MULTI", name="Libro NIO", currency="NIO", status="activo", is_primary=True)
+    usd_book = Book(entity="cacao", code="USD-EUR-MULTI", name="Libro USD", currency="USD", status="activo")
+    database.session.add_all(
+        [
+            debit_account,
+            credit_account,
+            nio_book,
+            usd_book,
+            Currency(code="EUR", name="Euro", decimals=2, active=True, default=False),
+            Currency(code="USD", name="Dollar", decimals=2, active=True, default=False),
+            ExchangeRate(origin="NIO", destination="USD", rate="0.0273043", date=date(2026, 5, 6)),
+        ]
+    )
+    database.session.commit()
+
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-06",
+            "books": [nio_book.code, usd_book.code],
+            "transaction_currency": "NIO",
+            "lines": [
+                {"account": debit_account.id, "debit": "100.00", "credit": "0", "currency": "EUR", "exchange_rate": "36.00"},
+                {"account": credit_account.id, "debit": "0", "credit": "3600.00", "currency": "NIO"},
+            ],
+        },
+        user_id="user-1",
+    )
+
+    submit_journal(journal.id)
+
+    entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
+    by_book = {book.code: [entry for entry in entries if entry.ledger_id == book.id] for book in (nio_book, usd_book)}
+    assert len(by_book[nio_book.code]) == 2
+    assert len(by_book[usd_book.code]) == 2
+    nio_debit = next(entry for entry in by_book[nio_book.code] if entry.debit > 0)
+    usd_debit = next(entry for entry in by_book[usd_book.code] if entry.debit > 0)
+    assert nio_debit.debit == Decimal("3600.0000")
+    assert usd_debit.debit == Decimal("98.2955")
+    assert usd_debit.account_currency == "EUR"
+    assert usd_debit.debit_in_account_currency == Decimal("100.00")
+
+
+def test_submit_journal_uses_base_currency_bridge_when_book_rate_is_missing(app_ctx):
+    """A missing header-to-book rate may be resolved through the document base currency."""
+    from decimal import Decimal
+
+    from cacao_accounting.contabilidad.journal_service import create_journal_draft, submit_journal
+    from cacao_accounting.database import Accounts, Book, Currency, ExchangeRate, GLEntry, database
+
+    debit_account = Accounts(entity="cacao", code="EXP-GBP-BRIDGE", name="Gasto GBP", active=True, enabled=True, group=False)
+    credit_account = Accounts(entity="cacao", code="CASH-GBP-BRIDGE", name="Caja GBP", active=True, enabled=True, group=False)
+    nio_book = Book(entity="cacao", code="NIO-GBP-BRIDGE", name="Libro NIO", currency="NIO", status="activo", is_primary=True)
+    eur_book = Book(entity="cacao", code="EUR-GBP-BRIDGE", name="Libro EUR", currency="EUR", status="activo")
+    database.session.add_all(
+        [
+            debit_account,
+            credit_account,
+            nio_book,
+            eur_book,
+            Currency(code="GBP", name="Pound", decimals=2, active=True, default=False),
+            Currency(code="EUR", name="Euro", decimals=2, active=True, default=False),
+            ExchangeRate(origin="GBP", destination="NIO", rate="36.00", date=date(2026, 5, 6)),
+            ExchangeRate(origin="NIO", destination="EUR", rate="0.025", date=date(2026, 5, 6)),
+        ]
+    )
+    database.session.commit()
+
+    journal = create_journal_draft(
+        {
+            "company": "cacao",
+            "posting_date": "2026-05-06",
+            "books": [nio_book.code, eur_book.code],
+            "transaction_currency": "GBP",
+            "exchange_rate": "36.00",
+            "lines": [
+                {"account": debit_account.id, "debit": "10.00", "credit": "0", "currency": "GBP"},
+                {"account": credit_account.id, "debit": "0", "credit": "10.00", "currency": "GBP"},
+            ],
+        },
+        user_id="user-1",
+    )
+
+    submit_journal(journal.id)
+
+    entries = database.session.execute(database.select(GLEntry).filter_by(voucher_id=journal.id)).scalars().all()
+    nio_debit = next(entry for entry in entries if entry.ledger_id == nio_book.id and entry.debit > 0)
+    eur_debit = next(entry for entry in entries if entry.ledger_id == eur_book.id and entry.debit > 0)
+    assert nio_debit.debit == Decimal("360.0000")
+    assert eur_debit.debit == Decimal("9.0000")
+
+
 def test_submit_journal_infers_currency_for_multilibro_without_transaction_currency(app_ctx):
     """R2R-AUDIT-21: un journal manual sin transaction_currency debe inferir la
     moneda funcional de la compañía y convertir a cada libro usando tasas históricas."""
