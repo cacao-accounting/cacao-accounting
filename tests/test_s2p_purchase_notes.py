@@ -17,6 +17,7 @@ from cacao_accounting.database import (
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseReceipt,
+    PurchaseReceiptItem,
     DocumentRelation,
     User,
     Entity,
@@ -262,6 +263,74 @@ def test_purchase_note_from_reconciled_invoice_skips_upstream_receipt_matching(a
     )
     assert note is not None
     assert note.purchase_receipt_id == receipt.id
+
+
+@pytest.mark.parametrize("document_type", ["purchase_credit_note", "purchase_debit_note"])
+def test_purchase_adjustment_note_never_reconciles_receipt(app_ctx, document_type):
+    """Una nota de crédito o débito ajusta AP y no debe consumir una recepción."""
+    from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_reconciliation_pending
+    from cacao_accounting.contabilidad.posting_service import _record_purchase_reconciliation
+
+    receipt = PurchaseReceipt(
+        company="cacao",
+        posting_date=date.today(),
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+    )
+    database.session.add(receipt)
+    database.session.flush()
+    receipt_item = PurchaseReceiptItem(
+        purchase_receipt_id=receipt.id,
+        item_code="ITEM-NOTE-ADJUSTMENT",
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("100"),
+    )
+    database.session.add(receipt_item)
+    database.session.commit()
+    pending_before = get_purchase_reconciliation_pending("cacao")
+
+    note = SimpleNamespace(
+        is_return=False,
+        document_type=document_type,
+        purchase_receipt_id=receipt.id,
+        purchase_order_id=None,
+    )
+
+    with patch("cacao_accounting.compras.purchase_reconciliation_service.reconcile_purchase_invoice") as reconcile:
+        _record_purchase_reconciliation(note, Decimal("10"))
+
+    reconcile.assert_not_called()
+    pending_after = get_purchase_reconciliation_pending("cacao")
+    assert [(row.pending_qty, row.pending_amount) for row in pending_after] == [
+        (row.pending_qty, row.pending_amount) for row in pending_before
+    ]
+
+
+def test_purchase_invoice_still_reconciles_receipt():
+    """Una factura normal vinculada a recepción conserva el matching automático."""
+    from cacao_accounting.contabilidad.posting_service import _record_purchase_reconciliation
+
+    invoice = SimpleNamespace(
+        id="invoice-id",
+        is_return=False,
+        document_type="purchase_invoice",
+        purchase_receipt_id="receipt-id",
+        purchase_order_id=None,
+        company="cacao",
+    )
+
+    with (
+        patch("cacao_accounting.compras.purchase_reconciliation_service.get_matching_config") as get_config,
+        patch("cacao_accounting.compras.purchase_reconciliation_service.reconcile_purchase_invoice") as reconcile,
+        patch("cacao_accounting.contabilidad.posting_service._validate_purchase_receipt_for_reconciliation"),
+    ):
+        get_config.return_value.auto_reconcile = True
+        _record_purchase_reconciliation(invoice, Decimal("10"))
+
+    reconcile.assert_called_once_with("invoice-id")
 
 
 def test_purchase_credit_note_exceeds_source_balance(app_ctx):
