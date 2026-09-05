@@ -92,7 +92,7 @@ def _document_items_total(document: Any) -> Decimal:
     # previously persisted grand total in that case creates tax on a value
     # that is not present in its current lines.
     if not items:
-        total = _decimal_value(getattr(document, "total", None) or getattr(document, "grand_total", None))
+        return Decimal("0")
     return total
 
 
