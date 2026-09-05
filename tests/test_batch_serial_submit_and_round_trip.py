@@ -57,6 +57,7 @@ from cacao_accounting.database import (
     PurchaseReceiptItem,
     SalesInvoice,
     SalesInvoiceItem,
+    SalesOrder,
     Sequence,
     SerialNumber,
     SeriesSequenceMap,
@@ -71,7 +72,6 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import inicia_base_de_datos
-
 
 # <------------------------------------------------------------------------------------------> #
 # Fixtures y helpers de seed
@@ -915,6 +915,119 @@ class TestDeliveryNoteSubmit:
         assert duplicate_item is not None
         assert duplicate_item.batch_id == original_item.batch_id
         assert duplicate_item.serial_no == original_item.serial_no
+
+    def test_delivery_return_duplicate_preserves_direction_and_sales_order(self, app_ctx):
+        """Duplicar una devolución conserva su signo y vínculo comercial."""
+        client = app_ctx.test_client()
+        _login(client)
+        bid = _batch_id_by_no("LOT-001")
+        order = SalesOrder(
+            customer_id="CUST-720",
+            company="cacao",
+            posting_date=date(2026, 5, 1),
+            docstatus=1,
+        )
+        database.session.add(order)
+        database.session.flush()
+        original = DeliveryNote(
+            customer_id="CUST-720",
+            company="cacao",
+            transaction_currency="NIO",
+            base_currency="NIO",
+            posting_date=date(2026, 5, 1),
+            docstatus=1,
+        )
+        database.session.add(original)
+        database.session.flush()
+        original_item = DeliveryNoteItem(
+            delivery_note_id=original.id,
+            item_code="ITEM-BATCH",
+            item_name="Item con lote",
+            qty=Decimal("1"),
+            uom="UND",
+            rate=Decimal("18"),
+            amount=Decimal("18"),
+            warehouse="WH-TEST",
+            batch_id=bid,
+        )
+        database.session.add(original_item)
+        database.session.flush()
+        database.session.add(
+            StockLedgerEntry(
+                company="cacao",
+                posting_date=date(2026, 5, 1),
+                item_code="ITEM-BATCH",
+                warehouse="WH-TEST",
+                qty_change=Decimal("-1"),
+                qty_after_transaction=Decimal("99"),
+                valuation_rate=Decimal("10"),
+                stock_value_difference=Decimal("-10"),
+                stock_value=Decimal("990"),
+                voucher_type="delivery_note",
+                voucher_id=original.id,
+                batch_id=bid,
+                is_cancelled=False,
+            )
+        )
+        source = DeliveryNote(
+            customer_id="CUST-720",
+            company="cacao",
+            sales_order_id=order.id,
+            is_return=True,
+            reversal_of=original.id,
+            transaction_currency="NIO",
+            base_currency="NIO",
+            posting_date=date(2026, 5, 2),
+            docstatus=1,
+        )
+        database.session.add(source)
+        database.session.flush()
+        database.session.add(
+            DeliveryNoteItem(
+                delivery_note_id=source.id,
+                item_code="ITEM-BATCH",
+                item_name="Item con lote",
+                qty=Decimal("1"),
+                uom="UND",
+                rate=Decimal("18"),
+                amount=Decimal("18"),
+                warehouse="WH-TEST",
+                batch_id=bid,
+            )
+        )
+        database.session.commit()
+
+        response = client.post(f"/sales/delivery-note/{source.id}/duplicate", follow_redirects=True)
+
+        assert response.status_code == 200
+        duplicate = (
+            database.session.execute(
+                database.select(DeliveryNote)
+                .where(DeliveryNote.id.not_in({source.id, original.id}))
+                .order_by(DeliveryNote.created.desc())
+            )
+            .scalars()
+            .first()
+        )
+        assert duplicate is not None
+        assert duplicate.is_return is True
+        assert duplicate.sales_order_id == order.id
+        assert duplicate.reversal_of == original.id
+
+        from cacao_accounting.contabilidad.posting import submit_document
+
+        submit_document(duplicate)
+        database.session.commit()
+        database.session.refresh(duplicate)
+        assert duplicate.docstatus == 1
+        movement = (
+            database.session.execute(
+                database.select(StockLedgerEntry).filter_by(voucher_type="delivery_note", voucher_id=duplicate.id)
+            )
+            .scalars()
+            .one()
+        )
+        assert movement.qty_change == Decimal("1")
 
 
 # <------------------------------------------------------------------------------------------> #

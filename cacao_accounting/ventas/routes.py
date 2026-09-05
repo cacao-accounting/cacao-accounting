@@ -1889,6 +1889,9 @@ def ventas_entrega_duplicar(note_id: str):
         base_currency=origen.base_currency,
         exchange_rate=origen.exchange_rate,
         posting_date=origen.posting_date,
+        sales_order_id=origen.sales_order_id,
+        is_return=origen.is_return,
+        reversal_of=origen.reversal_of,
         remarks=origen.remarks,
         docstatus=0,
     )
