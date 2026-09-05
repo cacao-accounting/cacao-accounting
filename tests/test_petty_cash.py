@@ -1123,6 +1123,106 @@ def test_conciliacion_incluye_gastos_pendientes_en_efectivo_esperado(app_ctx_boo
     assert recon.explained_amount == Decimal("800.0000")
 
 
+def test_editar_borrador_recalcula_campos_derivados(app_ctx_book):
+    """Editar un borrador de conciliacion recalcula sus cifras derivadas.
+
+    Cambiar la fecha o el conteo de un borrador debe recomputar
+    saldo GL, vales abiertos, gastos pendientes, efectivo esperado, importe
+    explicado y diferencia para la nueva fecha antes del commit.
+    """
+    from cacao_accounting.bancos.services import (
+        create_petty_cash_expense,
+        create_petty_cash_reconciliation,
+        create_petty_cash_voucher,
+        reconcile_petty_cash,
+        set_petty_cash_voucher_status,
+        update_petty_cash_reconciliation,
+    )
+    from cacao_accounting.database import GLEntry, database
+
+    fondo = _crear_fondo_caja()
+    _crear_cuenta_gasto()
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 2, 1),
+            company="cacao",
+            account_id=fondo.account_id,
+            debit=Decimal("1000.0000"),
+            credit=Decimal("0"),
+            voucher_type="journal_entry",
+            voucher_id="SEED-FLOAT",
+        )
+    )
+    database.session.commit()
+
+    create_petty_cash_expense(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        expense_account_code="EXP-001",
+        concept="Gasto sin reponer",
+        amount=Decimal("200.0000"),
+        cost_center_code="MAIN",
+        posted_date=date(2026, 2, 2),
+        actor_id="user-1",
+    )
+
+    recon = create_petty_cash_reconciliation(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        reconciliation_date=date(2026, 2, 3),
+        counted_cash=Decimal("780.0000"),
+    )
+    assert recon.ledger_balance == Decimal("800.0000")
+    assert recon.expected_cash == Decimal("1000.0000")
+    assert recon.difference == Decimal("-220.0000")
+
+    database.session.add(
+        GLEntry(
+            posting_date=date(2026, 2, 5),
+            company="cacao",
+            account_id=fondo.account_id,
+            debit=Decimal("100.0000"),
+            credit=Decimal("0"),
+            voucher_type="journal_entry",
+            voucher_id="LATER-GL",
+        )
+    )
+    vale = create_petty_cash_voucher(
+        company="cacao",
+        petty_cash_id=fondo.id,
+        posted_date=date(2026, 2, 6),
+        delivered_to="Juan",
+        concept="Vale abierto",
+        amount=Decimal("100.0000"),
+    )
+    set_petty_cash_voucher_status(vale, "entregado")
+    database.session.commit()
+
+    update_petty_cash_reconciliation(
+        reconciliation=recon,
+        reconciliation_date=date(2026, 2, 10),
+        counted_cash=Decimal("760.0000"),
+        explanation="Recontado",
+    )
+    assert recon.reconciliation_date == date(2026, 2, 10)
+    assert recon.posting_date == date(2026, 2, 10)
+    assert recon.counted_cash == Decimal("760.0000")
+    assert recon.ledger_balance == Decimal("900.0000")
+    assert recon.open_vouchers == Decimal("100.0000")
+    assert recon.expected_cash == Decimal("1000.0000")
+    assert recon.explained_amount == Decimal("660.0000")
+    assert recon.difference == Decimal("-240.0000")
+    assert recon.explanation == "Recontado"
+
+    reconcile_petty_cash(recon, actor_id="user-1")
+    with pytest.raises(ValueError):
+        update_petty_cash_reconciliation(
+            reconciliation=recon,
+            reconciliation_date=date(2026, 2, 10),
+            counted_cash=Decimal("700.0000"),
+        )
+
+
 def test_conciliacion_diferencia_sin_explicacion_falla(app_ctx_book):
     from cacao_accounting.bancos.services import create_petty_cash_reconciliation, reconcile_petty_cash
 
