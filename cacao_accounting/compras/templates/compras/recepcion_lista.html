@@ -8,30 +8,30 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Listado de Recepciones</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Listado de Recepciones") }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title"><i class="bi bi-box-seam"></i> Listado de Recepciones de Compra.</h5>
+    <h5 class="ca-card-title"><i class="bi bi-box-seam"></i> {{ _("Listado de Recepciones de Compra.") }}</h5>
     {% if can_manage_receipts %}<a href="{{ url_for('compras.compras_recepcion_nuevo') }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-circle me-1"></i>Nuevo
+      <i class="bi bi-plus-circle me-1"></i>{{ _("Nuevo") }}
     </a>{% endif %}
   </div>
   {{ macros.list_filters(show_status=True, extra_params=consulta.period_extra_params) }}
   {{ macros.period_list_filters(consulta) }}
   <table class="ca-table">
-    <caption style="display: none;">Listado de recepciones de compra.</caption>
+    <caption style="display: none;">{{ _("Listado de recepciones de compra.") }}</caption>
     <thead>
       <tr>
-        <th scope="col">Número</th>
-        <th scope="col">Proveedor</th>
-        <th scope="col">Estado</th>
-        <th scope="col">Fecha</th>
-        <th scope="col">Total</th>
+        <th scope="col">{{ _("Número") }}</th>
+        <th scope="col">{{ _("Proveedor") }}</th>
+        <th scope="col">{{ _("Estado") }}</th>
+        <th scope="col">{{ _("Fecha") }}</th>
+        <th scope="col">{{ _("Total") }}</th>
       </tr>
     </thead>
     <tbody>

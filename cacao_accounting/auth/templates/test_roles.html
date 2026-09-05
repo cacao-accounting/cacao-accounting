@@ -2,42 +2,42 @@
 {% block contenido %}
 
 <div class="ca-page-header">
-  <h4><i class="bi bi-shield-check me-2" style="color:#BB6A40"></i>Verificación de Permisos de Acceso</h4>
+  <h4><i class="bi bi-shield-check me-2" style="color:#BB6A40"></i>{{ _("Verificación de Permisos de Acceso") }}</h4>
 </div>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-person-circle"></i> Usuario Actual</h5>
+    <h5 class="ca-card-title"><i class="bi bi-person-circle"></i> {{ _("Usuario Actual") }}</h5>
   </div>
   <table class="ca-table">
-    <caption class="visually-hidden">Información del usuario actualmente autenticado</caption>
+    <caption class="visually-hidden">{{ _("Información del usuario actualmente autenticado") }}</caption>
     <thead>
       <tr>
-        <th scope="col">Campo</th>
-        <th scope="col">Valor</th>
+        <th scope="col">{{ _("Campo") }}</th>
+        <th scope="col">{{ _("Valor") }}</th>
       </tr>
     </thead>
     <tbody>
-      <tr><td style="color:#64748b;">Nombre</td><td>{{ current_user.name }} {{ current_user.name2 }}</td></tr>
-      <tr><td style="color:#64748b;">Apellido</td><td>{{ current_user.last_name }} {{ current_user.last_name2 }}</td></tr>
-      <tr><td style="color:#64748b;">Correo</td><td>{{ current_user.e_mail }}</td></tr>
-      <tr><td style="color:#64748b;">Usuario</td><td>{{ current_user.user }}</td></tr>
-      <tr><td style="color:#64748b;">UUID</td><td style="font-family:monospace;font-size:.8rem;">{{ current_user.id }}</td></tr>
+      <tr><td style="color:#64748b;">{{ _("Nombre") }}</td><td>{{ current_user.name }} {{ current_user.name2 }}</td></tr>
+      <tr><td style="color:#64748b;">{{ _("Apellido") }}</td><td>{{ current_user.last_name }} {{ current_user.last_name2 }}</td></tr>
+      <tr><td style="color:#64748b;">{{ _("Correo") }}</td><td>{{ current_user.e_mail }}</td></tr>
+      <tr><td style="color:#64748b;">{{ _("Usuario") }}</td><td>{{ current_user.user }}</td></tr>
+      <tr><td style="color:#64748b;">{{ _("UUID") }}</td><td style="font-family:monospace;font-size:.8rem;">{{ current_user.id }}</td></tr>
     </tbody>
   </table>
 </div>
 
 <div class="ca-card mt-3">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-person-badge"></i> Roles Asignados</h5>
+    <h5 class="ca-card-title"><i class="bi bi-person-badge"></i> {{ _("Roles Asignados") }}</h5>
   </div>
   <table class="ca-table">
-    <caption class="visually-hidden">Roles asignados al usuario actual</caption>
+    <caption class="visually-hidden">{{ _("Roles asignados al usuario actual") }}</caption>
     <thead>
       <tr>
-        <th>Usuario</th>
-        <th>Rol</th>
-        <th>Código Único</th>
+        <th>{{ _("Usuario") }}</th>
+        <th>{{ _("Rol") }}</th>
+        <th>{{ _("Código Único") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -55,45 +55,45 @@
 {% for modulo in modulos %}
 <div class="ca-card mt-3">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-puzzle"></i> Módulo: {{ modulo.modulo | capitalize }}</h5>
+    <h5 class="ca-card-title"><i class="bi bi-puzzle"></i> {{ _("Módulo: %(modulo)s", modulo=modulo.modulo | capitalize) }}</h5>
     <span style="font-size:.75rem;color:#64748b;font-family:monospace;">{{ modulo.id }}</span>
   </div>
   <table class="ca-table">
-    <caption class="visually-hidden">Permisos disponibles para el módulo mostrado</caption>
+    <caption class="visually-hidden">{{ _("Permisos disponibles para el módulo mostrado") }}</caption>
     <thead>
       <tr>
-        <th>Permiso</th>
-        <th>Estado</th>
+        <th>{{ _("Permiso") }}</th>
+        <th>{{ _("Estado") }}</th>
       </tr>
     </thead>
     <tbody>
       {% set perms = [
-        ("Autorizado", "autorizado"),
-        ("Actualizar", "actualizar"),
-        ("Anular", "anular"),
-        ("Autorizar", "autorizar"),
-        ("BI", "bi"),
-        ("Cerrar", "cerrar"),
-        ("Crear", "crear"),
-        ("Consultar", "consultar"),
-        ("Corregir", "corregir"),
-        ("Eliminar", "eliminar"),
-        ("Editar", "editar"),
-        ("Importar", "importar"),
-        ("Listar", "listar"),
-        ("Reportar", "reportes"),
-        ("Solicitar", "solicitar"),
-        ("Validar", "validar"),
-        ("Validar Solicitud", "validar_solicitud"),
+        (_("Autorizado"), "autorizado"),
+        (_("Actualizar"), "actualizar"),
+        (_("Anular"), "anular"),
+        (_("Autorizar"), "autorizar"),
+        (_("BI"), "bi"),
+        (_("Cerrar"), "cerrar"),
+        (_("Crear"), "crear"),
+        (_("Consultar"), "consultar"),
+        (_("Corregir"), "corregir"),
+        (_("Eliminar"), "eliminar"),
+        (_("Editar"), "editar"),
+        (_("Importar"), "importar"),
+        (_("Listar"), "listar"),
+        (_("Reportar"), "reportes"),
+        (_("Solicitar"), "solicitar"),
+        (_("Validar"), "validar"),
+        (_("Validar Solicitud"), "validar_solicitud"),
       ] %}
       {% for label, attr in perms %}
       <tr>
         <td>{{ label }}</td>
         <td>
           {% if permisos(modulo=modulo.id, usuario=current_user.id)[attr] %}
-          <span style="color:#78BF30;"><i class="bi bi-check-circle-fill me-1"></i>Permitido</span>
+          <span style="color:#78BF30;"><i class="bi bi-check-circle-fill me-1"></i>{{ _("Permitido") }}</span>
           {% else %}
-          <span style="color:#e74c3c;"><i class="bi bi-x-circle me-1"></i>No Permitido</span>
+          <span style="color:#e74c3c;"><i class="bi bi-x-circle me-1"></i>{{ _("No Permitido") }}</span>
           {% endif %}
         </td>
       </tr>

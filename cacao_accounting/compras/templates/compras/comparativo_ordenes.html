@@ -5,7 +5,7 @@
       <a
         href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}"
         class="link-dark"
-        >Comparativo de Ofertas</a
+        >{{ _("Comparativo de Ofertas") }}</a
       >
     </li>
     <li class="breadcrumb-item active" aria-current="page">
@@ -17,24 +17,24 @@
 <div class="ca-card">
   <div class="ca-card-header">
     <h5 class="ca-card-title">
-      <i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas
+      <i class="bi bi-bar-chart-line"></i> {{ _("Comparativo de Ofertas") }}
     </h5>
     <p class="mb-0 text-muted">
-      {% if purchase_request %}Solicitud de Compra:
+      {% if purchase_request %}{{ _("Solicitud de Compra:") }}
       <strong>{{ purchase_request.document_no or purchase_request.id }}</strong> ·{% else %}
-      <span class="text-warning">Comparativo legacy sin Solicitud de Compra reconstruible</span> ·{% endif %}
-      Orden base: <strong>{{ base_order.document_no or base_order.id }}</strong> ·
-      Ofertas participantes: {{ orders|length }}
-      {% if selected_round %} · Ronda {{ selected_round.round_number }} ({{ selected_round.status }}){% endif %}
+      <span class="text-warning">{{ _("Comparativo legacy sin Solicitud de Compra reconstruible") }}</span> ·{% endif %}
+      {{ _("Orden base:") }} <strong>{{ base_order.document_no or base_order.id }}</strong> ·
+      {{ _("Ofertas participantes: %(count)s", count=orders|length) }}
+      {% if selected_round %} · {{ _("Ronda %(number)s (%(status)s)", number=selected_round.round_number, status=selected_round.status) }}{% endif %}
     </p>
   </div>
   {% if rounds %}
   <div class="border-bottom p-3">
     <div class="d-flex flex-wrap gap-2 align-items-center">
-      <span class="text-muted">Histórico de rondas:</span>
+      <span class="text-muted">{{ _("Histórico de rondas:") }}</span>
       {% for round in rounds %}
       <a class="btn btn-sm {% if selected_round and round.id == selected_round.id %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{{ url_for('compras.compras_comparativo_ordenes', comparison_id=comparison.id, round_id=round.id) }}">
-        Ronda {{ round.round_number }} · {{ round.status }}
+        {{ _("Ronda %(number)s", number=round.round_number) }} · {{ round.status }}
       </a>
       {% endfor %}
     </div>
@@ -42,8 +42,8 @@
   <form method="post" action="{{ url_for('compras.compras_comparativo_ordenes_abrir_ronda', comparison_id=comparison.id) }}" class="border-bottom p-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <fieldset>
-      <legend class="h6">Abrir nueva ronda</legend>
-      <p class="small text-muted">Seleccione explícitamente las órdenes que participarán. La ronda actual quedará cerrada e inmutable.</p>
+      <legend class="h6">{{ _("Abrir nueva ronda") }}</legend>
+      <p class="small text-muted">{{ _("Seleccione explícitamente las órdenes que participarán. La ronda actual quedará cerrada e inmutable.") }}</p>
       <div class="row g-2">
         {% for order in candidate_orders %}
         <div class="col-md-6 col-lg-4">
@@ -55,17 +55,17 @@
         {% endfor %}
       </div>
     </fieldset>
-    <button type="submit" class="btn btn-outline-primary btn-sm mt-3"><i class="bi bi-arrow-repeat me-1"></i>Abrir ronda</button>
+    <button type="submit" class="btn btn-outline-primary btn-sm mt-3"><i class="bi bi-arrow-repeat me-1"></i>{{ _("Abrir ronda") }}</button>
   </form>
   {% endif %}
   <div class="table-responsive">
     <table class="ca-table">
       <caption style="display: none">
-        Comparación de líneas entre órdenes de compra participantes.
+        {{ _("Comparación de líneas entre órdenes de compra participantes.") }}
       </caption>
       <thead>
         <tr>
-          <th scope="col">Artículo</th>
+          <th scope="col">{{ _("Artículo") }}</th>
           {% for order in orders %}
           <th scope="col">
             {{ order.supplier_name or order.document_no or order.id }}<small
@@ -91,14 +91,14 @@
             {% if offer %}<strong>{{ offer.rate or "0" }}</strong
             ><small class="d-block text-muted"
               >{{ offer.qty }} · {{ offer.amount or "0" }}</small
-            >{% else %}<span class="text-muted">Sin cobertura</span>{% endif %}
+            >{% else %}<span class="text-muted">{{ _("Sin cobertura") }}</span>{% endif %}
           </td>
           {% endfor %}
         </tr>
         {% else %}
         <tr>
           <td colspan="{{ orders|length + 1 }}" class="text-center text-muted">
-            Las órdenes no tienen líneas para comparar.
+            {{ _("Las órdenes no tienen líneas para comparar.") }}
           </td>
         </tr>
         {% endfor %}

@@ -8,27 +8,27 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">Compras</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}" class="link-dark">Comparativo de Ofertas</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_comparativo_ofertas_lista') }}" class="link-dark">{{ _("Comparativo de Ofertas") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
   </ol>
 </nav>
 
 <div class="ca-card" style="max-width:860px;">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-bar-chart-line"></i> Comparativo de Ofertas</h5>
-    <span class="badge text-bg-secondary">{% if award and award.status == 'finalized' %}Finalizado{% elif award and award.status == 'used' %}Utilizado{% elif award and award.status == 'closed' %}Cerrado manualmente{% else %}Borrador{% endif %}</span>
+    <h5 class="ca-card-title"><i class="bi bi-bar-chart-line"></i> {{ _("Comparativo de Ofertas") }}</h5>
+    <span class="badge text-bg-secondary">{% if award and award.status == 'finalized' %}{{ _("Finalizado") }}{% elif award and award.status == 'used' %}{{ _("Utilizado") }}{% elif award and award.status == 'closed' %}{{ _("Cerrado manualmente") }}{% else %}{{ _("Borrador") }}{% endif %}</span>
   </div>
   <div class="row g-3 p-3">
     <div class="col-md-6">
-      <div><strong>Solicitud de Cotización</strong></div>
+      <div><strong>{{ _("Solicitud de Cotización") }}</strong></div>
       <div>{{ registro.document_no or registro.id }}</div>
-      <div class="mt-3"><strong>Fecha</strong></div>
+      <div class="mt-3"><strong>{{ _("Fecha") }}</strong></div>
       <div>{{ registro.posting_date or "-" }}</div>
     </div>
     <div class="col-md-6">
-      <div><strong>Total RFQ</strong></div>
+      <div><strong>{{ _("Total RFQ") }}</strong></div>
       <div>{{ registro.grand_total or "0" }}</div>
     </div>
   </div>
@@ -36,28 +36,28 @@
 
 {% if negotiation_round %}
 <div class="mt-3 d-flex align-items-center justify-content-between alert alert-info">
-  <span><strong>Ronda {{ negotiation_round.round_number }}</strong> · {{ 'Abierta' if negotiation_round.status == 'open' else 'Cerrada' }}</span>
+  <span><strong>{{ _("Ronda %(number)s", number=negotiation_round.round_number) }}</strong> · {{ _('Abierta') if negotiation_round.status == 'open' else _('Cerrada') }}</span>
   {% if not award and negotiation_round.status == 'open' %}
-  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=registro.id) }}">Agregar oferta a esta ronda</a>
+  <a class="btn btn-sm btn-outline-primary" href="{{ url_for('compras.compras_cotizacion_proveedor_nueva', from_rfq=registro.id) }}">{{ _("Agregar oferta a esta ronda") }}</a>
   {% endif %}
 </div>
 {% elif not award %}
 <div class="mt-3 d-flex justify-content-end">
   <form method="post" action="{{ url_for('compras.compras_comparativo_abrir_ronda', rfq_id=registro.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i>Abrir ronda de negociación</button>
+    <button class="btn btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat me-1"></i>{{ _("Abrir ronda de negociación") }}</button>
   </form>
 </div>
 {% endif %}
 
 {% if not award and is_purchase_sourcing_authorizer %}
 <div class="mt-3 ca-card">
-  <div class="ca-card-header"><h6 class="ca-card-title">Cierre manual</h6></div>
+  <div class="ca-card-header"><h6 class="ca-card-title">{{ _("Cierre manual") }}</h6></div>
   <form method="post" action="{{ url_for('compras.compras_comparativo_ofertas_cerrar', rfq_id=registro.id) }}" class="p-3">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="form-label" for="manual_close_reason">Justificación del cierre</label>
+    <label class="form-label" for="manual_close_reason">{{ _("Justificación del cierre") }}</label>
     <textarea class="form-control" id="manual_close_reason" name="authorization_reason" required></textarea>
-    <button class="btn btn-outline-secondary mt-3" type="submit">Cerrar comparativo manualmente</button>
+    <button class="btn btn-outline-secondary mt-3" type="submit">{{ _("Cerrar comparativo manualmente") }}</button>
   </form>
 </div>
 {% endif %}
@@ -67,7 +67,7 @@
   <form method="post" action="{{ url_for('compras.compras_comparativo_colocar_ordenes', rfq_id=registro.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-success" type="submit">
-      <i class="bi bi-cart-check me-1"></i>Colocar Órdenes de Compra
+      <i class="bi bi-cart-check me-1"></i>{{ _("Colocar Órdenes de Compra") }}
     </button>
   </form>
 </div>
@@ -75,10 +75,10 @@
 
 {% if award and award_lines %}
 <div class="mt-3 ca-card">
-  <div class="ca-card-header"><h6 class="ca-card-title">Líneas adjudicadas</h6></div>
+  <div class="ca-card-header"><h6 class="ca-card-title">{{ _("Líneas adjudicadas") }}</h6></div>
   <table class="ca-table">
-    <caption style="display: none;">Detalle de líneas adjudicadas.</caption>
-    <thead><tr><th>Artículo</th><th>Proveedor</th><th>Cantidad</th><th>Tarifa</th><th>Total</th></tr></thead>
+    <caption style="display: none;">{{ _("Detalle de líneas adjudicadas.") }}</caption>
+    <thead><tr><th>{{ _("Artículo") }}</th><th>{{ _("Proveedor") }}</th><th>{{ _("Cantidad") }}</th><th>{{ _("Tarifa") }}</th><th>{{ _("Total") }}</th></tr></thead>
     <tbody>{% for line in award_lines %}
       <tr><td>{{ line.item_code }}</td><td>{{ line.supplier_quotation_id }}</td><td>{{ line.qty }}</td><td>{{ line.rate }}</td><td>{{ line.amount }}</td></tr>
     {% endfor %}</tbody>
@@ -89,16 +89,16 @@
 {% if not award %}
 <div class="mt-3 ca-card">
   <div class="ca-card-header">
-    <h6 class="ca-card-title">Ofertas Recibidas</h6>
+    <h6 class="ca-card-title">{{ _("Ofertas Recibidas") }}</h6>
   </div>
   <table class="ca-table">
-    <caption style="display: none;">Comparativo de ofertas recibidas.</caption>
+    <caption style="display: none;">{{ _("Comparativo de ofertas recibidas.") }}</caption>
     <thead>
       <tr>
-        <th scope="col">Proveedor</th>
-        <th scope="col">Documento</th>
-        <th scope="col">Total</th>
-        <th scope="col">Detalle</th>
+        <th scope="col">{{ _("Proveedor") }}</th>
+        <th scope="col">{{ _("Documento") }}</th>
+        <th scope="col">{{ _("Total") }}</th>
+        <th scope="col">{{ _("Detalle") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -108,7 +108,7 @@
         <td>{{ offer.document_no or offer.id }}</td>
         <td>{{ offer.grand_total or "" }}</td>
         <td>
-          <a href="{{ url_for('compras.compras_cotizacion_proveedor', quotation_id=offer.id) }}" class="btn btn-sm btn-outline-secondary">Ver</a>
+          <a href="{{ url_for('compras.compras_cotizacion_proveedor', quotation_id=offer.id) }}" class="btn btn-sm btn-outline-secondary">{{ _("Ver") }}</a>
         </td>
       </tr>
       {%- endfor %}
@@ -118,15 +118,15 @@
 
 <div class="mt-3 ca-card">
   <div class="ca-card-header">
-    <h6 class="ca-card-title">Adjudicación por línea</h6>
-    <div class="small text-muted">Ofertas aprobadas: {{ offers|length }} · Mínimo requerido: {{ sourcing_config.minimum_offers }}</div>
+    <h6 class="ca-card-title">{{ _("Adjudicación por línea") }}</h6>
+    <div class="small text-muted">{{ _("Ofertas aprobadas: %(count)s · Mínimo requerido: %(minimum)s", count=offers|length, minimum=sourcing_config.minimum_offers) }}</div>
   </div>
   <form method="post" action="{{ url_for('compras.compras_comparativo_ofertas_adjudicar', rfq_id=registro.id) }}" class="p-3" data-offers-insufficient="{{ 'true' if offers|length < sourcing_config.minimum_offers else 'false' }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="table-responsive">
       <table class="ca-table">
-        <caption style="display: none;">Selección de ofertas por artículo.</caption>
-        <thead><tr><th>Artículo</th><th>Cantidad</th>{% for offer in offers %}<th>{{ offer.supplier_name or offer.id }}</th>{% endfor %}</tr></thead>
+        <caption style="display: none;">{{ _("Selección de ofertas por artículo.") }}</caption>
+        <thead><tr><th>{{ _("Artículo") }}</th><th>{{ _("Cantidad") }}</th>{% for offer in offers %}<th>{{ offer.supplier_name or offer.id }}</th>{% endfor %}</tr></thead>
         <tbody>
         {% for item in rfq_items %}
           <tr>
@@ -140,7 +140,7 @@
                     <input type="radio" name="award_item_{{ item.id }}" value="{{ offer.id }}" data-rate="{{ line.rate or 0 }}">
                     <span>{{ line.rate or 0 }} / {{ line.qty }}</span>
                   </label>
-                {% else %}<span class="text-muted">Sin cobertura</span>{% endif %}
+                {% else %}<span class="text-muted">{{ _("Sin cobertura") }}</span>{% endif %}
               </td>
             {% endfor %}
           </tr>
@@ -149,13 +149,13 @@
       </table>
     </div>
     {% if offers|length < sourcing_config.minimum_offers and not is_purchase_sourcing_authorizer %}
-      <div class="alert alert-warning mt-3">No se puede adjudicar: se requieren {{ sourcing_config.minimum_offers }} ofertas.</div>
+      <div class="alert alert-warning mt-3">{{ _("No se puede adjudicar: se requieren %(minimum)s ofertas.", minimum=sourcing_config.minimum_offers) }}</div>
     {% elif is_purchase_sourcing_authorizer %}
-      <div class="alert alert-warning mt-3">La justificación será obligatoria para una excepción de ofertas o una selección no recomendada.</div>
-      <label class="form-label" for="authorization_reason">Justificación de autorización</label>
+      <div class="alert alert-warning mt-3">{{ _("La justificación será obligatoria para una excepción de ofertas o una selección no recomendada.") }}</div>
+      <label class="form-label" for="authorization_reason">{{ _("Justificación de autorización") }}</label>
       <textarea class="form-control" id="authorization_reason" name="authorization_reason"></textarea>
     {% endif %}
-    <button class="btn btn-primary mt-3" id="award-submit" type="submit" {% if offers|length < sourcing_config.minimum_offers and not is_purchase_sourcing_authorizer %}disabled{% endif %}>Adjudicar y finalizar comparativo</button>
+    <button class="btn btn-primary mt-3" id="award-submit" type="submit" {% if offers|length < sourcing_config.minimum_offers and not is_purchase_sourcing_authorizer %}disabled{% endif %}>{{ _("Adjudicar y finalizar comparativo") }}</button>
   </form>
 </div>
 {% endif %}

@@ -5,14 +5,14 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
-        <i class="bi bi-house"></i> Inicio
+        <i class="bi bi-house"></i> {{ _("Inicio") }}
       </a>
     </li>
     <li class="breadcrumb-item">
-      <a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a>
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a>
     </li>
     <li class="breadcrumb-item">
-      <a href="{{ url_for('admin.lista_roles') }}" class="link-dark">Roles</a>
+      <a href="{{ url_for('admin.lista_roles') }}" class="link-dark">{{ _("Roles") }}</a>
     </li>
     <li class="breadcrumb-item active" aria-current="page">{{ titulo }}</li>
   </ol>
@@ -53,7 +53,7 @@
 
     <div class="mt-4">
       <button type="submit" class="btn btn-primary">{{ accion }}</button>
-      <a href="{{ url_for('admin.lista_roles') }}" class="btn btn-outline-secondary ms-2">Cancelar</a>
+      <a href="{{ url_for('admin.lista_roles') }}" class="btn btn-outline-secondary ms-2">{{ _("Cancelar") }}</a>
     </div>
   </form>
 </div>
