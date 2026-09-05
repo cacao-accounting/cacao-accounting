@@ -2236,6 +2236,7 @@ def _upsert_stock_bin(
     valuation_rate: Decimal,
     value_change: Decimal,
     preserve_reserved_qty: bool = False,
+    reject_negative_stock_value: bool = False,
 ) -> tuple[Decimal, Decimal]:
     """Actualiza StockBin con FOR UPDATE para evitar condiciones de carrera.
 
@@ -2262,8 +2263,12 @@ def _upsert_stock_bin(
         )
         database.session.add(bin_row)
 
+    current_stock_value = _decimal_value(bin_row.stock_value)
+    stock_value_after = current_stock_value + value_change
+    if reject_negative_stock_value and stock_value_after < 0:
+        raise PostingError("El ajuste de valor no puede reducir el valor del inventario por debajo de cero.")
     bin_row.actual_qty = _decimal_value(bin_row.actual_qty) + qty_change
-    bin_row.stock_value = _decimal_value(bin_row.stock_value) + value_change
+    bin_row.stock_value = stock_value_after
 
     # Las reservas representan compromisos de venta, no un límite derivado del
     # stock físico. Mantenerlas permite que sobrevivan a stock cero/negativo;
@@ -2467,6 +2472,7 @@ def _create_stock_movement(
     value_change: Decimal,
     _skip_layer_consumption: bool = False,
     source_layer_id: str | None = None,
+    reject_negative_stock_value: bool = False,
 ) -> StockLedgerEntry:
     from cacao_accounting.inventario.service import InventoryServiceError, update_serial_state, validate_batch_serial
 
@@ -2523,6 +2529,7 @@ def _create_stock_movement(
         qty_change=qty_change,
         valuation_rate=valuation_rate,
         value_change=value_change,
+        reject_negative_stock_value=reject_negative_stock_value,
     )
     if qty_after < 0:
         item = _stock_item_for(line)
@@ -2928,6 +2935,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
                     qty_change=Decimal("0"),
                     valuation_rate=fallback_rate,
                     value_change=-value,
+                    reject_negative_stock_value=True,
                 )
             ]
         cost_amount, cost_rate, source_layer_id = _consume_outflow_stock_valuation(document, line, source_warehouse, qty)

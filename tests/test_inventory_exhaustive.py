@@ -655,6 +655,37 @@ def test_05_ajustes_valores_positivos_negativos(app):
         assert bin_row.valuation_rate == Decimal("120.00")
 
 
+def test_negative_value_adjustment_cannot_create_negative_stock_value(app):
+    """Un ajuste negativo de solo valor no puede dejar valuación negativa."""
+    _setup_inventory_test_data(app)
+    with app.app_context():
+        _create_and_submit_stock_entry(
+            purpose="material_receipt",
+            posting_date=date(2026, 5, 1),
+            item_code="ITEM-GOODS",
+            qty=Decimal("10.0"),
+            valuation_rate=Decimal("100.00"),
+            amount=Decimal("1000.00"),
+            target_warehouse="WH-MAIN",
+        )
+
+        with pytest.raises(PostingError, match="valor del inventario por debajo de cero"):
+            _create_and_submit_stock_entry(
+                purpose="adjustment_negative",
+                posting_date=date(2026, 5, 2),
+                item_code="ITEM-GOODS",
+                qty=Decimal("0"),
+                amount=Decimal("1000.01"),
+                source_warehouse="WH-MAIN",
+                adjustment_account_id="5200-ADJ",
+            )
+
+        database.session.rollback()
+        bin_row = _get_bin()
+        assert bin_row.actual_qty == Decimal("10.0")
+        assert bin_row.stock_value == Decimal("1000.00")
+
+
 def test_06_ajustes_cantidades_positivos_negativos(app):
     """Prueba de Ajustes Negativos / Positivos de Cantidad (material_issue / adjustment_negative)."""
     _setup_inventory_test_data(app)
