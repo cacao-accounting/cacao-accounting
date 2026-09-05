@@ -288,6 +288,71 @@ def test_import_landed_cost_preserves_invoice_currency_and_base_amounts(app_ctx)
     assert charge.base_amount == Decimal("180.0000")
 
 
+def test_import_landed_cost_total_base_amount_includes_charge_bases(app_ctx, monkeypatch):
+    """The landed cost base total must include item and charge base amounts."""
+    from flask_login import login_user
+    from importlib import import_module
+
+    services_module = import_module("cacao_accounting.compras.services")
+    _create_import_landed_cost_from_request = services_module._create_import_landed_cost_from_request
+
+    monkeypatch.setattr(services_module, "exige_acceso_compania", lambda *_args, **_kwargs: None)
+
+    source_invoice = PurchaseInvoice(
+        supplier_id="SUP-S2P-01",
+        company="cacao",
+        posting_date=date.today(),
+        transaction_currency="USD",
+        base_currency="NIO",
+        exchange_rate=Decimal("36"),
+        docstatus=1,
+    )
+    database.session.add(source_invoice)
+    database.session.flush()
+    database.session.add(
+        PurchaseInvoiceItem(
+            purchase_invoice_id=source_invoice.id,
+            item_code="ITEM-S2P-01",
+            item_name="Laptop Pro",
+            qty=Decimal("2"),
+            uom="UND",
+            rate=Decimal("10"),
+            amount=Decimal("20"),
+        )
+    )
+    database.session.commit()
+
+    manager = database.session.get(User, "user-manager")
+    assert manager is not None
+    with app_ctx.test_request_context(
+        "/buying/import-landed-cost/new",
+        method="POST",
+        data={
+            "company": "cacao",
+            "posting_date": date.today().isoformat(),
+            "from_invoice": source_invoice.id,
+            "allocation_method": "by_value",
+            "item_item_code_0": "ITEM-S2P-01",
+            "item_item_name_0": "Laptop Pro",
+            "item_qty_0": "2",
+            "item_uom_0": "UND",
+            "item_rate_0": "10",
+            "charge_concept_0": "Flete",
+            "charge_amount_0": "5",
+            "charge_type_0": "charge",
+        },
+    ):
+        login_user(manager)
+        response = _create_import_landed_cost_from_request()
+
+    assert response.status_code == 302
+    landed_cost = database.session.execute(
+        database.select(ImportLandedCost).where(ImportLandedCost.purchase_invoice_id == source_invoice.id)
+    ).scalar_one()
+    assert landed_cost.total_base_amount == Decimal("900.0000")
+    assert landed_cost.total_inventory_value == Decimal("25.0000")
+
+
 def test_s2p_sourcing_and_negotiation_rounds(app_ctx):
     """
     Prueba paso a paso el flujo inicial de Sourcing:
@@ -753,9 +818,7 @@ def test_s2p_credit_and_debit_notes_and_returns(app_ctx):
     from cacao_accounting.database import GLEntry
 
     wca_gl_account = database.session.execute(
-        database.select(WarehouseCompanyAccount.inventory_account_id).filter_by(
-            warehouse_code="ALM-MAIN", company="cacao"
-        )
+        database.select(WarehouseCompanyAccount.inventory_account_id).filter_by(warehouse_code="ALM-MAIN", company="cacao")
     ).scalar_one()
     inventory_gl = database.session.execute(
         database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).filter_by(
