@@ -172,6 +172,48 @@ def test_retroactive_reconciliation_date_is_persisted(app_ctx, chart):
     assert item.reconciliation_date == retroactive_date
 
 
+def test_reconciliation_form_accepts_difference_on_pending_bank_amount(app_ctx, chart):
+    """El formulario usa el remanente, no el total, al agregar una diferencia."""
+    from cacao_accounting.bancos.routes import _parse_reconciliation_item_from_form
+    from cacao_accounting.database import Reconciliation, ReconciliationItem
+
+    transaction = _bank_transaction(chart, deposit=Decimal("100.00"))
+    reconciliation = Reconciliation(company=COMPANY, recon_date=OPEN_PERIOD_START, recon_type="bank")
+    database.session.add(reconciliation)
+    database.session.flush()
+    database.session.add(
+        ReconciliationItem(
+            reconciliation_id=reconciliation.id,
+            reference_type="bank_transaction",
+            reference_id=transaction.id,
+            amount=Decimal("60.00"),
+            allocated_amount=Decimal("60.00"),
+            status="partial",
+            source_type="bank_transaction",
+            source_id=transaction.id,
+            target_type="payment_entry",
+            target_id="PAYMENT-60",
+        )
+    )
+    database.session.commit()
+
+    with app_ctx.test_request_context(
+        "/cash_management/bank-reconciliation/apply",
+        method="POST",
+        data={
+            f"target_{transaction.id}": "payment_entry:PAYMENT-40",
+            f"amount_{transaction.id}": "35.00",
+            f"difference_{transaction.id}": "5.00",
+        },
+    ):
+        match, difference, error = _parse_reconciliation_item_from_form(transaction.id)
+
+    assert error is None
+    assert match is not None
+    assert match.allocated_amount == Decimal("35.00")
+    assert difference == (transaction.id, Decimal("5.00"))
+
+
 def test_reconciliation_route_rejects_closed_period(app_ctx, chart):
     """Una fecha en un período ya cerrado se rechaza con HTTP 400."""
     client = app_ctx.test_client()

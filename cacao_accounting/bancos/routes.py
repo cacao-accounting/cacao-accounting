@@ -19,6 +19,7 @@ from cacao_accounting.bancos.reconciliation_service import (
     BankReconciliationError,
     BankReconciliationMatch,
     BankReconciliationRequest,
+    bank_transaction_pending_amount,
     reconcile_bank_items,
 )
 
@@ -543,7 +544,7 @@ def _parse_reconciliation_item_from_form(
     diff_req = None
     if difference > 0:
         transaction = database.session.get(BankTransaction, transaction_id)
-        bank_amount = _bank_reconciliation_allocated_amount(transaction) if transaction else None
+        bank_amount = bank_transaction_pending_amount(transaction) if transaction else None
         if bank_amount is None or amount + difference != bank_amount:
             return None, None, _("El monto conciliado más la diferencia debe coincidir con el monto bancario.")
         diff_req = (transaction_id, difference)
