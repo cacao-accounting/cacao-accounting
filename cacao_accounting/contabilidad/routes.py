@@ -2245,6 +2245,7 @@ def nueva_tasa_cambio():
                 _TPL_TC_CREAR,
                 titulo=TITULO,
                 form=formulario,
+                monedas=monedas_choices,
             )
         if formulario.origin.data == formulario.destination.data:
             flash(_("La moneda origen y destino deben ser diferentes."), "danger")
@@ -2252,6 +2253,7 @@ def nueva_tasa_cambio():
                 _TPL_TC_CREAR,
                 titulo=TITULO,
                 form=formulario,
+                monedas=monedas_choices,
             )
         if formulario.rate.data is None or formulario.rate.data <= 0:
             flash(_("La tasa debe ser mayor a cero."), "danger")
@@ -2259,6 +2261,7 @@ def nueva_tasa_cambio():
                 _TPL_TC_CREAR,
                 titulo=TITULO,
                 form=formulario,
+                monedas=monedas_choices,
             )
         DATA = ExchangeRate(
             origin=formulario.origin.data,
@@ -2274,6 +2277,7 @@ def nueva_tasa_cambio():
         _TPL_TC_CREAR,
         titulo=TITULO,
         form=formulario,
+        monedas=monedas_choices,
     )
 
 
@@ -2363,6 +2367,7 @@ def editar_tasa_cambio(rate_id):
         _TPL_TC_CREAR,
         titulo="Editar Tasa de Cambio - " + APPNAME,
         form=formulario,
+        monedas=monedas_choices,
         edit=True,
     )
 
