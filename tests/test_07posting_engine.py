@@ -775,6 +775,27 @@ def test_post_payment_entry_creates_balanced_gl_entries(app_ctx):
     assert any(entry.credit == Decimal("50.00") and entry.account_id == bank_account.id for entry in posted_entries)
 
 
+@pytest.mark.parametrize("payment_type", ["pay", "receive"])
+def test_post_payment_entry_rejects_zero_amount(app_ctx, payment_type):
+    """Payments with no economic amount must not be approved without GL entries."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, post_payment_entry
+    from cacao_accounting.database import PaymentEntry, database
+
+    amount_field = "paid_amount" if payment_type == "pay" else "received_amount"
+    payment = PaymentEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 4),
+        payment_type=payment_type,
+        docstatus=1,
+        **{amount_field: Decimal("0")},
+    )
+    database.session.add(payment)
+    database.session.commit()
+
+    with pytest.raises(PostingError, match="mayor que cero"):
+        post_payment_entry(payment)
+
+
 def test_post_sales_invoice_posts_once_per_active_book(app_ctx):
     from cacao_accounting.contabilidad.posting import post_document_to_gl
     from cacao_accounting.database import Accounts, Book, GLEntry, PartyAccount, SalesInvoice, SalesInvoiceItem, database
