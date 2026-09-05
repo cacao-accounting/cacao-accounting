@@ -3064,11 +3064,15 @@ def compras_factura_compra_duplicar(invoice_id: str):
         supplier_name=origen.supplier_name,
         company=origen.company,
         posting_date=origen.posting_date,
-        supplier_invoice_no=origen.supplier_invoice_no,
+        supplier_invoice_no=None,
         document_type=origen.document_type,
+        purchase_order_id=origen.purchase_order_id,
+        purchase_receipt_id=origen.purchase_receipt_id,
         tax_template_id=origen.tax_template_id,
         is_return=origen.is_return,
+        reversal_of=origen.reversal_of,
         transaction_currency=origen.transaction_currency,
+        base_currency=origen.base_currency,
         exchange_rate=origen.exchange_rate,
         remarks=origen.remarks,
         docstatus=0,
@@ -3084,6 +3088,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
         naming_series_id=None,
     )
     total = Decimal("0")
+    item_ids: dict[str, str] = {}
     for item in database.session.execute(
         database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=origen.id)
     ).scalars():
@@ -3095,10 +3100,16 @@ def compras_factura_compra_duplicar(invoice_id: str):
             uom=item.uom,
             rate=item.rate,
             amount=item.amount,
+            base_rate=item.base_rate,
+            base_amount=item.base_amount,
+            expense_account_id=item.expense_account_id,
+            warehouse=item.warehouse,
             batch_id=item.batch_id,
             serial_no=item.serial_no,
         )
         database.session.add(linea)
+        database.session.flush()
+        item_ids[item.id] = linea.id
         total += item.amount or Decimal("0")
     duplicada.total = total
     exchange_rate = Decimal(str(duplicada.exchange_rate or 1))
@@ -3108,6 +3119,18 @@ def compras_factura_compra_duplicar(invoice_id: str):
     duplicada.base_grand_total = base_total
     duplicada.outstanding_amount = total
     duplicada.base_outstanding_amount = base_total
+    relation_target_type = (
+        duplicada.document_type
+        if duplicada.document_type in {PURCHASE_RETURN, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE}
+        else PURCHASE_INVOICE
+    )
+    _copy_active_document_relations(
+        origen.id,
+        duplicada.id,
+        relation_target_type,
+        duplicada.company,
+        item_ids,
+    )
     log_create(duplicada)
     database.session.commit()
     flash(_("Factura de compra duplicada como nuevo borrador."), "success")
