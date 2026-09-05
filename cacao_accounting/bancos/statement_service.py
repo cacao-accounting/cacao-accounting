@@ -273,6 +273,11 @@ def _is_duplicate(
     deposit: Decimal | None,
     withdrawal: Decimal | None,
 ) -> bool:
+    """Detect a persisted duplicate only when the statement provides an identity reference."""
+    if reference_number is None:
+        # Date and amount are not a safe identity: banks can emit multiple
+        # legitimate fees or transfers with those same values.
+        return False
     query = select(BankTransaction).filter_by(bank_account_id=bank_account_id, posting_date=posting_date)
     query = query.filter_by(reference_number=reference_number)
     if deposit is not None:

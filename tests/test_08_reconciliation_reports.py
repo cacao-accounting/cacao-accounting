@@ -3748,12 +3748,12 @@ def test_bank_statement_import_preview_and_matching_rule(app_ctx):
     assert run.candidates_by_transaction
 
 
-def test_bank_statement_import_requires_company_and_detects_missing_reference(app_ctx):
-    """El importador ata la cuenta a su compañía y no omite referencias nulas."""
+def test_bank_statement_import_requires_company_and_preserves_missing_reference_rows(app_ctx):
+    """El importador ata la cuenta a su compañía y conserva cargos sin referencia."""
     from io import StringIO
 
     from cacao_accounting.bancos.statement_service import BankStatementError, import_bank_statement
-    from cacao_accounting.database import Bank, BankAccount, database
+    from cacao_accounting.database import Bank, BankAccount, BankTransaction, database
 
     bank = Bank(name="Banco ownership")
     database.session.add(bank)
@@ -3778,11 +3778,13 @@ def test_bank_statement_import_requires_company_and_detects_missing_reference(ap
             preview=True,
         )
 
-    csv_data = "date,reference,description,deposit,withdrawal\n2026-05-05,,Ingreso,25.00,\n"
+    csv_data = (
+        "date,reference,description,deposit,withdrawal\n" "2026-05-05,,Comision 1,25.00,\n" "2026-05-05,,Comision 2,25.00,\n"
+    )
     imported = import_bank_statement(StringIO(csv_data), mapping, account.id, company="cacao", preview=False)
-    duplicate = import_bank_statement(StringIO(csv_data), mapping, account.id, company="cacao", preview=True)
-    assert imported.imported_count == 1
-    assert duplicate.duplicate_count == 1
+    assert imported.imported_count == 2
+    assert imported.duplicate_count == 0
+    assert len(database.session.execute(database.select(BankTransaction)).scalars().all()) == 2
 
 
 def test_bank_statement_withdrawal_only_is_reconcilable(app_ctx):
