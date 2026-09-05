@@ -2799,6 +2799,16 @@ def _create_import_landed_cost_from_request():
     registro.grand_total = total_item_amount
 
     total_charges = _save_import_landed_cost_charges(registro)
+    total_charge_base_amount = sum(
+        (
+            Decimal(str(charge.base_amount or "0"))
+            for charge in database.session.execute(
+                database.select(ImportLandedCostCharge).filter_by(import_landed_cost_id=registro.id)
+            ).scalars()
+        ),
+        Decimal("0"),
+    )
+    registro.total_base_amount = total_item_base_amount + total_charge_base_amount
     registro.total_charges_amount = total_charges
     registro.total_inventory_value = total_item_amount + total_charges
     registro.grand_total = total_item_amount + total_charges
