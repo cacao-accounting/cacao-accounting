@@ -120,6 +120,19 @@ def test_warehouse_detail_hides_inaccessible_company_accounts(app_ctx):
     assert b">cafe<" not in response.data
 
 
+def test_warehouse_creation_rejects_multiple_companies_until_model_supports_them(app_ctx):
+    """La configuración de bodega no ofrece compañías que el modelo no puede usar."""
+    from cacao_accounting.inventario.services import _validate_warehouse_company_rows
+
+    with pytest.raises(ValueError, match="una sola compañía por bodega"):
+        _validate_warehouse_company_rows(
+            [
+                {"company": "cacao", "inventory_account_id": ""},
+                {"company": "cafe", "inventory_account_id": ""},
+            ]
+        )
+
+
 def test_item_account_rows_require_company_write_access(app_ctx):
     """Item accounting mappings cannot be changed for another company."""
     from flask_login import login_user

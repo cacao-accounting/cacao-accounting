@@ -423,6 +423,8 @@ def _validate_warehouse_company_rows(rows: list[dict[str, str]]) -> None:
     """Valida filas contables de bodega por compañía."""
     if not rows:
         raise ValueError(_("La bodega requiere al menos una configuración por compañía."))
+    if len(rows) > 1:
+        raise ValueError(_("El modelo actual permite una sola compañía por bodega."))
     seen: set[str] = set()
     for row in rows:
         company = row["company"]
