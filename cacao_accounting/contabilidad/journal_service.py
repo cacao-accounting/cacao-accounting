@@ -297,7 +297,9 @@ def cancel_submitted_journal(
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_SUBMITTED:
         raise JournalValidationError("Solo se puede anular un comprobante contabilizado.")
-    setattr(journal, "docstatus", 1)
+    # Manual journal posting predates DocBase transitions and may leave this
+    # flag at draft; cancel_document requires the approved state as a guard.
+    journal.docstatus = 1
     try:
         entries = cancel_document(
             journal,
@@ -310,6 +312,7 @@ def cancel_submitted_journal(
     except (PostingError, IdentifierConfigurationError, DocumentFlowError) as exc:
         database.session.rollback()
         raise JournalValidationError(str(exc)) from exc
+    journal.docstatus = 2
     journal.status = JOURNAL_STATUS_CANCELLED
     if user_id:
         journal.modified_by = user_id
