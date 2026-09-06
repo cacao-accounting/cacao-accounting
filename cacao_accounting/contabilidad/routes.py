@@ -980,10 +980,23 @@ def eliminar_libro(id_unidad):
                 ("presupuestos", database.select(Budget.id).filter_by(ledger_id=libro.id)),
                 ("comprobantes", database.select(ComprobanteContable.id).filter_by(book=libro.code)),
                 (_(ENTRADAS_GL_LABEL), database.select(GLEntry.id).filter_by(ledger_id=libro.id)),
-                ("plantillas recurrentes", database.select(RecurringJournalTemplate.id).filter_by(ledger_id=libro.id)),
+                (
+                    "plantillas recurrentes",
+                    database.select(RecurringJournalTemplate.id).where(
+                        or_(
+                            RecurringJournalTemplate.ledger_id == libro.id,
+                            RecurringJournalTemplate.ledger_id == libro.code,
+                        )
+                    ),
+                ),
                 (
                     "aplicaciones recurrentes",
-                    database.select(RecurringJournalApplication.id).filter_by(ledger_id=libro.id),
+                    database.select(RecurringJournalApplication.id).where(
+                        or_(
+                            RecurringJournalApplication.ledger_id == libro.id,
+                            RecurringJournalApplication.ledger_id == libro.code,
+                        )
+                    ),
                 ),
             ],
         ):
@@ -1061,8 +1074,18 @@ def editar_libro(id_libro):
             database.select(GLEntry.id).filter_by(ledger_id=libro.id),
             database.select(ExchangeRevaluationItem.id).filter_by(ledger_id=libro.id),
             database.select(Budget.id).filter_by(ledger_id=libro.id),
-            database.select(RecurringJournalTemplate.id).filter_by(ledger_id=libro.id),
-            database.select(RecurringJournalApplication.id).filter_by(ledger_id=libro.id),
+            database.select(RecurringJournalTemplate.id).where(
+                or_(
+                    RecurringJournalTemplate.ledger_id == libro.id,
+                    RecurringJournalTemplate.ledger_id == libro.code,
+                )
+            ),
+            database.select(RecurringJournalApplication.id).where(
+                or_(
+                    RecurringJournalApplication.ledger_id == libro.id,
+                    RecurringJournalApplication.ledger_id == libro.code,
+                )
+            ),
             database.select(ComprobanteContable.id).filter_by(book=libro.code),
             database.select(PeriodCloseRun.id).filter_by(company=libro.entity),
         )
