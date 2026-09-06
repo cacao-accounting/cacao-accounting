@@ -135,8 +135,17 @@ def test_monthly_withholding_report_is_fiscal_detail(withholding_app):
     assert get_monthly_withholding_report("cacao", 2026, 7).total_rows == 0
 
 
-def _create_invoice_with_withholding(invoice_id="INV-WH-001", cert_status="issued", cert_docstatus=1):
-    """Helper: create a purchase invoice, payment, withholding certificate, and reference."""
+def _create_invoice_with_withholding(
+    invoice_id="INV-WH-001",
+    cert_status="issued",
+    cert_docstatus=1,
+    gross_amount=Decimal("1000"),
+    withheld_amount=Decimal("20"),
+    cash_amount=Decimal("980"),
+    create_reference=True,
+    reference_invoice_id=None,
+):
+    """Helper: create a purchase invoice, payment, withholding certificate, and optionally a reference."""
     supplier = Party(code="SUP-WH-001", name="Proveedor WH", tax_id="J-WH", is_supplier=True, is_active=True)
     invoice = PurchaseInvoice(
         id=invoice_id,
@@ -144,7 +153,7 @@ def _create_invoice_with_withholding(invoice_id="INV-WH-001", cert_status="issue
         supplier_id="SUP-WH-001",
         supplier_name="Proveedor WH",
         posting_date=date(2026, 8, 26),
-        grand_total=Decimal("1000"),
+        grand_total=gross_amount,
         docstatus=1,
     )
     payment = PaymentEntry(
@@ -154,7 +163,7 @@ def _create_invoice_with_withholding(invoice_id="INV-WH-001", cert_status="issue
         party_id="SUP-WH-001",
         party_name="Proveedor WH",
         currency="NIO",
-        paid_amount=Decimal("980"),
+        paid_amount=cash_amount,
         posting_date=date(2026, 8, 26),
         document_no="PAY-WH-001",
         docstatus=1,
@@ -167,20 +176,24 @@ def _create_invoice_with_withholding(invoice_id="INV-WH-001", cert_status="issue
         certificate_no="CERT-WH-001",
         posting_date=date(2026, 8, 26),
         currency="NIO",
-        gross_amount=Decimal("1000"),
-        withheld_amount=Decimal("20"),
-        cash_amount=Decimal("980"),
-        lines_json=json.dumps([{"concept": "renta", "amount": "20"}]),
+        gross_amount=gross_amount,
+        withheld_amount=withheld_amount,
+        cash_amount=cash_amount,
+        lines_json=json.dumps([{"concept": "renta", "amount": str(withheld_amount)}]),
         status=cert_status,
         docstatus=cert_docstatus,
     )
-    reference = PaymentReference(
-        payment_id="PAY-WH-001",
-        reference_id=invoice_id,
-        reference_type="purchase_invoice",
-        allocated_amount=Decimal("980"),
-    )
-    database.session.add_all([supplier, invoice, payment, certificate, reference])
+    objects = [supplier, invoice, payment, certificate]
+    if create_reference:
+        ref_id = reference_invoice_id or invoice_id
+        reference = PaymentReference(
+            payment_id="PAY-WH-001",
+            reference_id=ref_id,
+            reference_type="purchase_invoice",
+            allocated_amount=cash_amount,
+        )
+        objects.append(reference)
+    database.session.add_all(objects)
     database.session.flush()
     return invoice
 
@@ -235,5 +248,81 @@ def test_credit_note_allowed_without_withholding(withholding_app):
         invoice.id,
         supplier_id=invoice.supplier_id,
         company=invoice.company,
+        document_type="purchase_credit_note",
+    )
+
+
+def test_partial_withholding_still_blocks_credit_note(withholding_app):
+    """Refs: #819 - A partial withholding (withheld < gross) still blocks the credit note."""
+    from cacao_accounting.compras.services import _validate_purchase_reversal_of
+
+    invoice = _create_invoice_with_withholding(
+        gross_amount=Decimal("1000"),
+        withheld_amount=Decimal("10"),
+        cash_amount=Decimal("990"),
+    )
+
+    with pytest.raises(ValueError, match="retención emitida"):
+        _validate_purchase_reversal_of(
+            invoice.id,
+            supplier_id=invoice.supplier_id,
+            company=invoice.company,
+            document_type="purchase_credit_note",
+        )
+
+
+def test_credit_note_allowed_when_no_payment_references(withholding_app):
+    """Refs: #819 - A credit note is allowed when the invoice has no payment references."""
+    from cacao_accounting.compras.services import _validate_purchase_reversal_of
+
+    _create_invoice_with_withholding(create_reference=False)
+
+    invoice = database.session.get(PurchaseInvoice, "INV-WH-001")
+    assert invoice is not None
+
+    _validate_purchase_reversal_of(
+        invoice.id,
+        supplier_id=invoice.supplier_id,
+        company=invoice.company,
+        document_type="purchase_credit_note",
+    )
+
+
+def test_credit_note_allowed_when_certificate_in_draft(withholding_app):
+    """Refs: #819 - A credit note is allowed when the withholding certificate is in draft state."""
+    from cacao_accounting.compras.services import _validate_purchase_reversal_of
+
+    invoice = _create_invoice_with_withholding(cert_status="draft", cert_docstatus=0)
+
+    _validate_purchase_reversal_of(
+        invoice.id,
+        supplier_id=invoice.supplier_id,
+        company=invoice.company,
+        document_type="purchase_credit_note",
+    )
+
+
+def test_credit_note_allowed_when_reference_points_to_other_invoice(withholding_app):
+    """Refs: #819 - A credit note is allowed when the payment reference links to a different invoice."""
+    from cacao_accounting.compras.services import _validate_purchase_reversal_of
+
+    _create_invoice_with_withholding(invoice_id="INV-WH-001", reference_invoice_id="INV-OTHER-999")
+
+    other_invoice = PurchaseInvoice(
+        id="INV-WH-002",
+        company="cacao",
+        supplier_id="SUP-WH-001",
+        supplier_name="Proveedor WH",
+        posting_date=date(2026, 8, 26),
+        grand_total=Decimal("500"),
+        docstatus=1,
+    )
+    database.session.add(other_invoice)
+    database.session.flush()
+
+    _validate_purchase_reversal_of(
+        "INV-WH-001",
+        supplier_id="SUP-WH-001",
+        company="cacao",
         document_type="purchase_credit_note",
     )
