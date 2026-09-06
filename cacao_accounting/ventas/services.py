@@ -1326,6 +1326,9 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
 
     dn.total = total
     dn.grand_total = total
+    exchange_rate = Decimal(str(invoice.exchange_rate or "1"))
+    dn.base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
+    dn.base_grand_total = dn.base_total
 
     _validate_delivery_quantities_against_so(dn.id)
     submit_document(dn)  # type: ignore[misc]
