@@ -72,9 +72,10 @@ def get_document_lines(company: str, document_type: str, document_id: str) -> li
     _document, line_model, foreign_key, _party_field = resolved
     if line_model is None or foreign_key is None:
         return []
-    rows = database.session.execute(
-        database.select(line_model).where(getattr(line_model, foreign_key) == document_id).order_by(line_model.id)
-    ).scalars()
+    line_query = database.select(line_model).where(getattr(line_model, foreign_key) == document_id)
+    if hasattr(line_model, "is_superseded"):
+        line_query = line_query.where(line_model.is_superseded.is_(False))
+    rows = database.session.execute(line_query.order_by(line_model.id)).scalars()
     return [
         {
             "id": row.id,

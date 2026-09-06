@@ -35,10 +35,11 @@ def get_document_items(doctype: str, document_id: str) -> list[Any]:
     """Devuelve las lineas de un documento."""
     spec = get_document_type(doctype)
     parent_column = getattr(spec.item_model, spec.parent_field)
+    filters = [parent_column == document_id]
+    if hasattr(spec.item_model, "is_superseded"):
+        filters.append(spec.item_model.is_superseded.is_(False))
     return list(
-        database.session.execute(
-            database.select(spec.item_model).where(parent_column == document_id).order_by(spec.item_model.created)
-        ).scalars()
+        database.session.execute(database.select(spec.item_model).where(*filters).order_by(spec.item_model.created)).scalars()
     )
 
 

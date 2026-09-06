@@ -312,7 +312,10 @@ def _document_line_summary(document_type: str, document_id: str) -> tuple[int, D
     if config is None:
         return 0, Decimal("0")
     model, fk_name, amount_name = config
-    rows = database.session.execute(select(model).filter_by(**{fk_name: document_id})).scalars().all()
+    line_query = select(model).filter_by(**{fk_name: document_id})
+    if hasattr(model, "is_superseded"):
+        line_query = line_query.filter_by(is_superseded=False)
+    rows = database.session.execute(line_query).scalars().all()
     total = sum(
         (abs(_as_decimal(getattr(row, amount_name, 0) or 0)) for row in rows),
         Decimal("0"),

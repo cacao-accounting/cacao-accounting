@@ -802,7 +802,10 @@ def _build_line_document_context(
     context = build_common_context(company_code, _user_name(user))
     if document is None:
         return context
-    items = database.session.execute(select(item_model).filter_by(**{foreign_key: document_id})).scalars().all()
+    item_query = select(item_model).filter_by(**{foreign_key: document_id})
+    if hasattr(item_model, "is_superseded"):
+        item_query = item_query.filter_by(is_superseded=False)
+    items = database.session.execute(item_query).scalars().all()
     context[root_name] = {
         "number": _document_number(document),
         "date": _date_text(_first_attr(document, "posting_date", "document_date", "date")),

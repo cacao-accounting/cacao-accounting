@@ -267,7 +267,9 @@ def supplier_invoice(invoice_id):
     if not is_admin and invoice.supplier_id != current_user.party_id:
         abort(403)
 
-    items = database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)).all()
+    items = database.session.execute(
+        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id, is_superseded=False)
+    ).all()
     return render_template("portal/invoice_detail.html", registro=invoice, items=items, role="supplier")
 
 
@@ -326,5 +328,7 @@ def supplier_receipt(receipt_id):
     if not is_admin and receipt.supplier_id != current_user.party_id:
         abort(403)
 
-    items = database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt_id)).all()
+    items = database.session.execute(
+        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt_id, is_superseded=False)
+    ).all()
     return render_template("portal/receipt_detail.html", registro=receipt, items=items, role="supplier")

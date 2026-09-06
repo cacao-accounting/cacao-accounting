@@ -151,7 +151,7 @@ def get_purchase_analysis(
     query = (
         select(PurchaseInvoice, PurchaseInvoiceItem)
         .join(PurchaseInvoiceItem, PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id)
-        .where(PurchaseInvoice.docstatus == 1)
+        .where(PurchaseInvoice.docstatus == 1, PurchaseInvoiceItem.is_superseded.is_(False))
     )
     if company:
         query = query.where(PurchaseInvoice.company == company)

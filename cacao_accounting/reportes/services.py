@@ -3331,7 +3331,11 @@ def get_purchases_by_item(filters: OperationalReportFilters) -> PaginatedReport:
     query = (
         select(PurchaseInvoice, PurchaseInvoiceItem)
         .join(PurchaseInvoiceItem, PurchaseInvoiceItem.purchase_invoice_id == PurchaseInvoice.id)
-        .filter(PurchaseInvoice.company == filters.company, PurchaseInvoice.docstatus == 1)
+        .filter(
+            PurchaseInvoice.company == filters.company,
+            PurchaseInvoice.docstatus == 1,
+            PurchaseInvoiceItem.is_superseded.is_(False),
+        )
     )
     if filters.item_code:
         query = query.filter(PurchaseInvoiceItem.item_code == filters.item_code)
