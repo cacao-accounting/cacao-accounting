@@ -616,7 +616,9 @@ def _matched_qty_for_order_item(order_item_id: str) -> Decimal:
 
 def _receipt_items(receipt_id: str) -> list[PurchaseReceiptItem]:
     return list(
-        database.session.execute(select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt_id)).scalars().all()
+        database.session.execute(select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt_id, is_superseded=False))
+        .scalars()
+        .all()
     )
 
 
@@ -624,7 +626,9 @@ def _lock_receipt_items(receipt_id: str) -> list[PurchaseReceiptItem]:
     """Carga y bloquea líneas de recepción durante un matching."""
     return list(
         database.session.execute(
-            select(PurchaseReceiptItem).where(PurchaseReceiptItem.purchase_receipt_id == receipt_id).with_for_update()
+            select(PurchaseReceiptItem)
+            .where(PurchaseReceiptItem.purchase_receipt_id == receipt_id, PurchaseReceiptItem.is_superseded.is_(False))
+            .with_for_update()
         )
         .scalars()
         .all()
@@ -633,7 +637,9 @@ def _lock_receipt_items(receipt_id: str) -> list[PurchaseReceiptItem]:
 
 def _invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
     return list(
-        database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)).scalars().all()
+        database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id, is_superseded=False))
+        .scalars()
+        .all()
     )
 
 
@@ -849,6 +855,8 @@ def seed_matching_config_for_company(company: str) -> PurchaseMatchingConfig:
 # Motor de eventos economicos
 # ---------------------------------------------------------------------------
 
+_DOCUMENT_LEVEL_EVENTS = frozenset({EventType.GOODS_RECEIVED, EventType.INVOICE_RECEIVED})
+
 
 def emit_economic_event(
     event_type: str,
@@ -857,13 +865,41 @@ def emit_economic_event(
     document_id: str,
     payload: dict[str, Any] | None = None,
 ) -> PurchaseEconomicEvent:
-    """Emit an immutable economic event to the event log."""
+    """Emit an immutable economic event to the event log.
+
+    Para eventos documentales (GOODS_RECEIVED, INVOICE_RECEIVED) se aplica
+    idempotencia mediante una clave estable por documento y ciclo de posting.
+    """
+    idempotency_key = None
+    if event_type in _DOCUMENT_LEVEL_EVENTS:
+        idempotency_key = f"{event_type}:{document_type}:{document_id}:posting"
+        database.session.flush()
+        existing = (
+            database.session.execute(
+                select(PurchaseEconomicEvent).where(
+                    or_(
+                        PurchaseEconomicEvent.idempotency_key == idempotency_key,
+                        (
+                            PurchaseEconomicEvent.idempotency_key.is_(None)
+                            & (PurchaseEconomicEvent.event_type == event_type)
+                            & (PurchaseEconomicEvent.document_type == document_type)
+                            & (PurchaseEconomicEvent.document_id == document_id)
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if existing is not None:
+            return existing
     event = PurchaseEconomicEvent(
         event_type=event_type,
         company=company,
         document_type=document_type,
         document_id=document_id,
         payload=json.dumps(payload or {}),
+        idempotency_key=idempotency_key,
         processing_status="pending",
     )
     database.session.add(event)
@@ -1533,6 +1569,7 @@ def get_purchase_reconciliation_pending(company: str, as_of_date: date | None = 
             PurchaseReceipt.company == company,
             PurchaseReceipt.docstatus == 1,
             PurchaseReceipt.is_return.is_(False),
+            PurchaseReceiptItem.is_superseded.is_(False),
         )
     )
     if as_of_date is not None:
@@ -1693,6 +1730,21 @@ def reconstruct_reconciliation_state(company: str, document_id: str) -> Reconcil
 
     import json as _json
 
+    # Deduplicar eventos documentales: conservar solo la primera emisión de
+    # GOODS_RECEIVED / INVOICE_RECEIVED por documento para tolerar datos
+    # pre-existentes con duplicados.
+    _doc_event_values = {e.value for e in _DOCUMENT_LEVEL_EVENTS}
+    seen_document_events: set[str] = set()
+    deduplicated: list[Any] = []
+    for ev in events_raw:
+        ev_type_val = ev.event_type.value if isinstance(ev.event_type, EventType) else str(ev.event_type)
+        if ev_type_val in _doc_event_values:
+            key = f"{ev_type_val}:{ev.document_id}"
+            if key in seen_document_events:
+                continue
+            seen_document_events.add(key)
+        deduplicated.append(ev)
+
     events_list: list[dict[str, Any]] = [
         {
             "id": ev.id,
@@ -1703,7 +1755,7 @@ def reconstruct_reconciliation_state(company: str, document_id: str) -> Reconcil
             "processing_status": ev.processing_status,
             "created_at": str(getattr(ev, "created_at", "")),
         }
-        for ev in events_raw
+        for ev in deduplicated
     ]
 
     # Derive current status by replaying events in order

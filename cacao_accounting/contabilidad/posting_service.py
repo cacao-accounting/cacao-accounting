@@ -1251,7 +1251,11 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
         _resolve_party_account_id(document.supplier_id, company, receivable=False),
         "No existe cuenta por pagar configurada para el proveedor.",
     )
-    items = database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=document.id)).scalars().all()
+    items = (
+        database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=document.id, is_superseded=False))
+        .scalars()
+        .all()
+    )
     if not items:
         raise PostingError("La factura de compra no contiene lineas para contabilizar.")
 
@@ -3091,7 +3095,11 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
 def _document_items(document: Any) -> list[Any]:
     if isinstance(document, PurchaseReceipt):
         return list(
-            database.session.execute(select(PurchaseReceiptItem).filter_by(purchase_receipt_id=document.id)).scalars().all()
+            database.session.execute(
+                select(PurchaseReceiptItem).filter_by(purchase_receipt_id=document.id, is_superseded=False)
+            )
+            .scalars()
+            .all()
         )
     if isinstance(document, DeliveryNote):
         return list(database.session.execute(select(DeliveryNoteItem).filter_by(delivery_note_id=document.id)).scalars().all())
@@ -3313,7 +3321,9 @@ def _purchase_return_landed_cost_per_unit(document: Any, line: Any, warehouse: s
 
     source_item_ids = list(
         database.session.execute(
-            select(PurchaseReceiptItem.id).where(PurchaseReceiptItem.purchase_receipt_id == source.id)
+            select(PurchaseReceiptItem.id).where(
+                PurchaseReceiptItem.purchase_receipt_id == source.id, PurchaseReceiptItem.is_superseded.is_(False)
+            )
         ).scalars()
     )
     source_qty = database.session.execute(

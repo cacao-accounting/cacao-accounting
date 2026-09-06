@@ -1767,6 +1767,7 @@ class PurchaseOrder(database.Model, DocBase):  # type: ignore[name-defined]
     net_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     tax_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    base_grand_total = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     billing_address_id = database.Column(
         database.String(26), database.ForeignKey(ADDRESS_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
@@ -2346,6 +2347,7 @@ class PurchaseReceiptItem(database.Model, BaseTabla):  # type: ignore[name-defin
     )
     serial_no = database.Column(database.String(100), nullable=True)
     valuation_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
+    is_superseded = database.Column(database.Boolean, default=False, nullable=False, server_default="0")
 
 
 class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
@@ -2473,6 +2475,7 @@ class PurchaseInvoiceItem(database.Model, BaseTabla):  # type: ignore[name-defin
         database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     serial_no = database.Column(database.String(100), nullable=True)
+    is_superseded = database.Column(database.Boolean, default=False, nullable=False, server_default="0")
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -4911,6 +4914,7 @@ class PurchaseEconomicEvent(database.Model, BaseTabla):  # type: ignore[name-def
     document_type = database.Column(database.String(50), nullable=False, index=True)
     document_id = database.Column(database.String(26), nullable=False, index=True)
     payload = database.Column(database.Text(), nullable=True)
+    idempotency_key = database.Column(database.String(255), nullable=True, unique=True, index=True)
     # pending | processed | failed | skipped
     processing_status = database.Column(database.String(20), default="pending", nullable=False, index=True)
     processed_at = database.Column(database.DateTime(timezone=True), nullable=True)
