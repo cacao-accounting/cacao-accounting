@@ -304,12 +304,14 @@ def _authorized_template_books(company: str, requested: Any, user_id: str, actio
     )
     if not getattr(permissions, permission_name, False) or not permissions.tiene_acceso_compania(company):
         raise RecurringJournalError("El usuario no tiene acceso a la compañía seleccionada.")
-    active = database.session.execute(
-        database.select(Book)
-        .where(Book.entity == company)
-        .where(Book.status == "activo")
-        .order_by(Book.is_primary.desc(), Book.code)
-    ).scalars()
+    active = list(
+        database.session.execute(
+            database.select(Book)
+            .where(Book.entity == company)
+            .where(Book.status == "activo")
+            .order_by(Book.is_primary.desc(), Book.code)
+        ).scalars()
+    )
     active_codes = [book.code for book in active]
     if not active_codes:
         raise RecurringJournalError("La compañía no tiene libros contables activos.")

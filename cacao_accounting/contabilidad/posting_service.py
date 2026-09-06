@@ -2573,7 +2573,7 @@ def _create_stock_movement(
             warehouse=warehouse,
             company=document.company,
             qty=qty_change,
-            rate=valuation_rate,
+            rate=max(_decimal_value(valuation_rate), Decimal("0")),
             stock_value_difference=value_change,
             remaining_qty=max(qty_after, Decimal("0")),
             remaining_stock_value=max(stock_value_after, Decimal("0")),
@@ -3115,7 +3115,8 @@ def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, wareho
             continue
         available = row_qty - remaining_to_skip
         take = min(available, remaining)
-        cost += take * (_decimal_value(row.stock_value_difference) / row_qty)
+        # stock_value_difference is negative for outflows; return requires positive value
+        cost += take * abs(_decimal_value(row.stock_value_difference) / row_qty)
         remaining -= take
         remaining_to_skip = Decimal("0")
         if remaining <= 0:

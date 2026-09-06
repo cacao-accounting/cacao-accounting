@@ -118,8 +118,12 @@ def _bank_transaction(chart, *, deposit=None, withdrawal=None, posting_date=OPEN
     return transaction
 
 
-def _gl_entry_target(chart, voucher_id: str, credit: Decimal) -> str:
-    """Crea la entrada GL bancaria destino de la conciliación."""
+def _gl_entry_target(chart, voucher_id: str, amount: Decimal) -> str:
+    """Crea la entrada GL bancaria destino de la conciliación.
+
+    Para un depósito bancario, la entrada GL correspondiente es un débito.
+    Para un retiro bancario, la entrada GL correspondiente es un crédito.
+    """
     from cacao_accounting.database import GLEntry, database
 
     entry = GLEntry(
@@ -128,8 +132,8 @@ def _gl_entry_target(chart, voucher_id: str, credit: Decimal) -> str:
         ledger_id=chart["book_id"],
         account_id=chart["bank_gl_id"],
         account_code="1001",
-        debit=Decimal("0"),
-        credit=credit,
+        debit=amount,
+        credit=Decimal("0"),
         account_currency="NIO",
         company_currency="NIO",
         voucher_type="journal_entry",

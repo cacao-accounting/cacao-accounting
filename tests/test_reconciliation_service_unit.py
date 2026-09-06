@@ -167,7 +167,7 @@ def test_validate_reconciliation_match_accepts_gl_and_payment_targets(monkeypatc
     transaction = SimpleNamespace(
         id="bank-1", bank_account_id="account-1", company="cacao", deposit=Decimal("100"), withdrawal=Decimal("0")
     )
-    gl_entry = SimpleNamespace(account_id="bank-gl", bank_account_id="account-1")
+    gl_entry = SimpleNamespace(account_id="bank-gl", bank_account_id="account-1", debit=Decimal("10"), credit=Decimal("0"))
     payment = SimpleNamespace(
         bank_account_id="account-1",
         target_bank_account_id=None,
