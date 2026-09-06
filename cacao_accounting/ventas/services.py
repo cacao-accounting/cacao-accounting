@@ -911,6 +911,7 @@ def _source_line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | 
     model_data = {
         "sales_quotation": (SalesQuotationItem, "sales_quotation_id"),
         "sales_order": (SalesOrderItem, "sales_order_id"),
+        "delivery_note": (DeliveryNoteItem, "delivery_note_id"),
         "sales_invoice": (SalesInvoiceItem, "sales_invoice_id"),
     }.get(source_type)
     if not model_data:
@@ -918,14 +919,15 @@ def _source_line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | 
     source_item: Any = database.session.get(model_data[0], source_item_id)
     if source_item is None or getattr(source_item, model_data[1]) != source_id:
         return None
-    percentage = Decimal(str(source_item.discount_percentage or "0"))
+    percentage = Decimal(str(getattr(source_item, "discount_percentage", None) or "0"))
     if percentage:
         amount = (gross_amount * percentage / Decimal("100")).quantize(Decimal("0.0001"))
     else:
         source_gross = Decimal(str(source_item.qty or "0")) * Decimal(str(source_item.rate or "0"))
-        amount = (
-            (gross_amount * Decimal(str(source_item.discount_amount or "0")) / source_gross) if source_gross else Decimal("0")
-        )
+        stored_discount = getattr(source_item, "discount_amount", None)
+        if stored_discount is None and source_type == "delivery_note":
+            stored_discount = source_gross - Decimal(str(source_item.amount or "0"))
+        amount = (gross_amount * Decimal(str(stored_discount or "0")) / source_gross) if source_gross else Decimal("0")
     return percentage or None, amount or None, gross_amount - amount
 
 
@@ -1148,7 +1150,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
-            amount = qty * rate
+            _discount_percentage, _discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
             _validate_sales_catalog_rate(delivery_note, i, item_code, qty, uom, rate)
             warehouse = (
