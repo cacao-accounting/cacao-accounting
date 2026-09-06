@@ -334,11 +334,38 @@ def _propagate_billed_qty(source_type: str, source_id: str, source_item_id: str 
 def refresh_source_caches_for_target(target_type: str, target_id: str) -> None:
     """Recalcula caches de origen afectados por un documento destino."""
     target_key = normalize_doctype(target_type)
-    relations = database.session.execute(
-        database.select(DocumentRelation).filter_by(target_type=target_key, target_id=target_id)
-    ).scalars()
+    relations = list(
+        database.session.execute(
+            database.select(DocumentRelation).filter_by(target_type=target_key, target_id=target_id)
+        ).scalars()
+    )
+
+    # Returns have no negative PO relation.  Refresh the original receipt's
+    # PO relations because consumed_qty_for_source now derives their net
+    # quantity from active return allocations.
+    if target_key == "purchase_receipt":
+        target = get_document(target_key, target_id)
+        original_id = getattr(target, "reversal_of", None) if target and getattr(target, "is_return", False) else None
+        if original_id:
+            relations.extend(
+                database.session.execute(
+                    database.select(DocumentRelation).filter_by(
+                        target_type=target_key,
+                        target_id=original_id,
+                        source_type="purchase_order",
+                    )
+                ).scalars()
+            )
     for relation in relations:
         _update_source_cache(relation.source_type, relation.source_id, relation.source_item_id, target_key)
+        if target_key == "purchase_receipt" and relation.source_type == "purchase_order":
+            recompute_line_flow_state(
+                relation.source_type,
+                relation.source_id,
+                relation.source_item_id,
+                target_key,
+                relation.company,
+            )
 
 
 def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: str | None) -> Decimal:

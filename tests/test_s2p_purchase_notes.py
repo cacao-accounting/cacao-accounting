@@ -499,7 +499,7 @@ def test_purchase_invoice_still_reconciles_receipt():
 
 
 def test_purchase_credit_note_exceeds_source_balance(app_ctx):
-    """Verifies that a purchase credit note cannot exceed the outstanding balance of its source."""
+    """A purchase credit note cannot exceed the source invoice's credit capacity."""
     supplier = _ensure_supplier("SUPLR-AP-NOTE-2", "Proveedor AP Note 2")
 
     source_invoice = PurchaseInvoice(
@@ -517,7 +517,7 @@ def test_purchase_credit_note_exceeds_source_balance(app_ctx):
     database.session.commit()
 
     # Credit note for 600 should raise an exception
-    with pytest.raises(ValueError, match="excede el saldo pendiente"):
+    with pytest.raises(ValueError, match="excede el credito disponible"):
         _validate_purchase_reversal_of(
             reversal_of="PINV-ORIG-002",
             supplier_id=supplier.id,
@@ -538,8 +538,8 @@ def test_purchase_credit_note_exceeds_source_balance(app_ctx):
     )
 
 
-def test_purchase_credit_note_limit_uses_current_outstanding_not_backdated_balance(app_ctx):
-    """A backdated purchase credit note cannot ignore a subsequent payment."""
+def test_purchase_credit_note_after_payment_uses_invoice_capacity(app_ctx):
+    """A paid invoice can still receive a credit note up to its original total."""
     supplier = _ensure_supplier("SUPLR-AP-NOTE-CURRENT", "Proveedor saldo actual")
     source_invoice = PurchaseInvoice(
         id="PINV-ORIG-CURRENT",
@@ -554,17 +554,16 @@ def test_purchase_credit_note_limit_uses_current_outstanding_not_backdated_balan
     database.session.commit()
 
     with patch("cacao_accounting.document_flow.payment.compute_outstanding_amount", return_value=Decimal("0")) as outstanding:
-        with pytest.raises(ValueError, match="excede el saldo pendiente"):
-            _validate_purchase_reversal_of(
-                reversal_of=source_invoice.id,
-                supplier_id=supplier.id,
-                company="cacao",
-                note_amount=Decimal("100.00"),
-                document_type="purchase_credit_note",
-                posting_date=date(2026, 2, 15),
-            )
+        _validate_purchase_reversal_of(
+            reversal_of=source_invoice.id,
+            supplier_id=supplier.id,
+            company="cacao",
+            note_amount=Decimal("100.00"),
+            document_type="purchase_credit_note",
+            posting_date=date(2026, 2, 15),
+        )
 
-    outstanding.assert_called_once_with(source_invoice)
+    outstanding.assert_not_called()
 
 
 def test_purchase_invoice_cannot_cancel_with_active_reversal_note(app_ctx):

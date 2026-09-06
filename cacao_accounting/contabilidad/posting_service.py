@@ -1260,6 +1260,24 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
     amount_total = item_amount_total + _signed_tax_delta(document, tax_result)
     if getattr(document, "purchase_receipt_id", None) or getattr(document, "purchase_order_id", None):
         _record_purchase_reconciliation(document, abs(item_amount_total))
+    if getattr(document, "purchase_order_id", None) and not getattr(document, "purchase_receipt_id", None):
+        # A 2-way invoice may be approved after one or more partial receipts.
+        # Allocate it to those already-posted receipts immediately; later
+        # receipts will consume only the remaining invoice quantity.
+        from cacao_accounting.compras.purchase_reconciliation_service import allocate_purchase_invoice_receipt_lines
+
+        posted_receipts = database.session.execute(
+            select(PurchaseReceipt)
+            .where(
+                PurchaseReceipt.company == document.company,
+                PurchaseReceipt.purchase_order_id == document.purchase_order_id,
+                PurchaseReceipt.docstatus == 1,
+                PurchaseReceipt.is_return.is_(False),
+            )
+            .order_by(PurchaseReceipt.posting_date, PurchaseReceipt.id)
+        ).scalars()
+        for receipt in posted_receipts:
+            allocate_purchase_invoice_receipt_lines(receipt.id, document.id)
 
     if getattr(document, "document_type", None) == "purchase_credit_note":
         from cacao_accounting.compras.purchase_reconciliation_service import (
@@ -1294,6 +1312,9 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
 
     _update_purchase_grand_total(document, amount_total)
     _emit_purchase_invoice_event(document, company)
+    from cacao_accounting.document_flow.service import refresh_source_caches_for_target
+
+    refresh_source_caches_for_target("purchase_invoice", document.id)
     return result
 
 
@@ -3242,7 +3263,93 @@ def _purchase_return_cost(document: Any, line: Any, warehouse: str, quantity: De
         if consumed_qty > primary_qty:
             primary_source = layer_id
             primary_qty = consumed_qty
+    # Landed-cost postings adjust the stock bin with zero-quantity valuation
+    # layers.  They therefore do not appear in the source receipt's positive
+    # layers above, but remain part of the historical inventory value that a
+    # return must reverse.  Apply the source receipt's capitalized amount
+    # proportionally to the returned quantity.
+    landed_per_unit = _purchase_return_landed_cost_per_unit(document, line, warehouse, source)
+    cost += quantity * landed_per_unit
     return cost.quantize(Decimal("0.0001")), primary_source
+
+
+def _purchase_return_landed_cost_per_unit(document: Any, line: Any, warehouse: str, source: Any) -> Decimal:
+    """Return capitalized landed cost per base unit for a source receipt."""
+    from cacao_accounting.database import (
+        ImportLandedCost,
+        PurchaseInvoice,
+        PurchaseInvoiceItem,
+        PurchaseInvoiceReceiptAllocation,
+    )
+
+    source_item_ids = list(
+        database.session.execute(
+            select(PurchaseReceiptItem.id).where(PurchaseReceiptItem.purchase_receipt_id == source.id)
+        ).scalars()
+    )
+    source_qty = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseReceiptItem.qty_in_base_uom), 0)).where(
+            PurchaseReceiptItem.id.in_(source_item_ids),
+            PurchaseReceiptItem.item_code == line.item_code,
+            PurchaseReceiptItem.warehouse == warehouse,
+        )
+    ).scalar_one()
+    source_qty = _decimal_value(source_qty)
+    if source_qty <= 0:
+        return Decimal("0")
+
+    invoice_ids = set(
+        database.session.execute(select(PurchaseInvoice.id).where(PurchaseInvoice.purchase_receipt_id == source.id)).scalars()
+    )
+    if source_item_ids:
+        invoice_ids.update(
+            database.session.execute(
+                select(PurchaseInvoiceItem.purchase_invoice_id)
+                .join(
+                    PurchaseInvoiceReceiptAllocation,
+                    PurchaseInvoiceReceiptAllocation.invoice_item_id == PurchaseInvoiceItem.id,
+                )
+                .where(
+                    PurchaseInvoiceReceiptAllocation.receipt_item_id.in_(source_item_ids),
+                    PurchaseInvoiceReceiptAllocation.status == "active",
+                )
+            ).scalars()
+        )
+    import_ids = set()
+    if invoice_ids:
+        import_ids.update(
+            database.session.execute(
+                select(ImportLandedCost.id).where(ImportLandedCost.purchase_invoice_id.in_(invoice_ids))
+            ).scalars()
+        )
+    criteria = [
+        (LandedCostAllocation.document_type == "purchase_receipt") & (LandedCostAllocation.document_id == source.id),
+    ]
+    if import_ids:
+        criteria.append(
+            (LandedCostAllocation.document_type == "import_landed_cost") & LandedCostAllocation.document_id.in_(import_ids)
+        )
+    landed_total = database.session.execute(
+        select(func.coalesce(func.sum(LandedCostAllocation.allocated_amount), 0)).where(
+            LandedCostAllocation.company == document.company,
+            LandedCostAllocation.item_code == line.item_code,
+            LandedCostAllocation.warehouse == warehouse,
+            (criteria[0] if len(criteria) == 1 else criteria[0] | criteria[1]),
+        )
+    ).scalar_one()
+    return (_decimal_value(landed_total) / source_qty).quantize(Decimal("0.000000001"))
+
+
+def _prepare_purchase_return_inventory_costs(document: Any) -> None:
+    """Compute historical return values before building GL context."""
+    for line in _document_items(document):
+        if _should_skip_non_stock_line(line):
+            continue
+        warehouse = getattr(line, "warehouse", None)
+        if not warehouse:
+            continue
+        cost, _ = _purchase_return_cost(document, line, warehouse, _line_qty_generic(line))
+        line._inventory_cost_amount = cost
 
 
 def _comprobante_lines(document: ComprobanteContable) -> list[ComprobanteContableDetalle]:
@@ -3672,6 +3779,8 @@ def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id,
             qty = _line_qty_generic(line)
             rate = _line_rate_generic(line)
             amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
+            if getattr(document, "is_return", False) and getattr(line, "_inventory_cost_amount", None) is not None:
+                amount = _decimal_value(line._inventory_cost_amount)
             value = _signed_amount(document, amount)
             inventory_account_id = _require_account(
                 _warehouse_inventory_account_id(document, line, company),
@@ -3713,8 +3822,12 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
         )
     if document.is_return:
         create_purchase_receipt_return_allocations(document.id)
+        _prepare_purchase_return_inventory_costs(document)
     else:
         allocate_purchase_invoice_receipt_lines(document.id)
+    from cacao_accounting.document_flow.service import refresh_source_caches_for_target
+
+    refresh_source_caches_for_target("purchase_receipt", document.id)
     engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code) if bridge_account_id else None
     landed_cost_result = engine_payload.results.get("landed_cost") if engine_payload is not None else None
     movements = _create_stock_ledger_for_document_type(document, Decimal("1"), landed_cost_result=landed_cost_result)
@@ -4698,8 +4811,10 @@ def _emit_cancel_events(document: Any, voucher_id: str, company: str) -> None:
             cancel_purchase_settlement_allocations,
             emit_goods_received_cancelled,
         )
+        from cacao_accounting.document_flow.service import refresh_source_caches_for_target
 
         cancel_purchase_settlement_allocations(receipt_id=document.id)
+        refresh_source_caches_for_target("purchase_receipt", document.id)
         emit_goods_received_cancelled(voucher_id, company)
 
     if isinstance(document, PurchaseInvoice) and (
