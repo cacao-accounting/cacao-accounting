@@ -1279,7 +1279,7 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
         for receipt in posted_receipts:
             allocate_purchase_invoice_receipt_lines(receipt.id, document.id)
 
-    if getattr(document, "document_type", None) == "purchase_credit_note":
+    if getattr(document, "document_type", None) == "purchase_credit_note" and getattr(document, "reversal_of", None):
         from cacao_accounting.compras.purchase_reconciliation_service import (
             PurchaseReconciliationError,
             create_purchase_credit_note_allocations,
@@ -2695,9 +2695,26 @@ def _reconciliation_snapshot(
             "La conciliación no puede aumentar cantidad mientras reduce el valor; registre el ajuste de valor por separado."
         )
     if qty_change < 0 and value_change > 0:
-        raise PostingError(
-            "La conciliación no puede reducir cantidad mientras aumenta el valor; registre el ajuste de valor por separado."
-        )
+        # A reduction can legitimately increase the remaining value when the
+        # physical count also changes the unit cost. The FIFO consumer below
+        # records the historical cost and a separate zero-quantity value
+        # adjustment. Without a source layer there is no auditable cost to
+        # consume, so retain the guard for incomplete inventory history.
+        source_layer = database.session.execute(
+            select(StockValuationLayer.id)
+            .where(
+                StockValuationLayer.company == document.company,
+                StockValuationLayer.item_code == line.item_code,
+                StockValuationLayer.warehouse == warehouse,
+                StockValuationLayer.remaining_qty > 0,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if source_layer is None:
+            raise PostingError(
+                "La conciliación no puede reducir cantidad mientras aumenta el valor; "
+                "registre el ajuste de valor por separado."
+            )
     return current_qty, counted_qty, current_value, target_value, qty_change, value_change
 
 
@@ -3315,7 +3332,7 @@ def _purchase_return_landed_cost_per_unit(document: Any, line: Any, warehouse: s
                 )
             ).scalars()
         )
-    import_ids = set()
+    import_ids: set[str] = set()
     if invoice_ids:
         import_ids.update(
             database.session.execute(

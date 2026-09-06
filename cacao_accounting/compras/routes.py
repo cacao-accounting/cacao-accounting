@@ -1490,6 +1490,26 @@ def compras_recepcion_lista():
     )
 
 
+@compras.route("/purchase-invoice/return/list")
+@modulo_activo(("purchases", "inventory"))
+@login_required
+def compras_factura_compra_devolucion_lista():
+    """Lista las devoluciones físicas sin tratarlas como facturas AP."""
+    consulta = _paginate_list(
+        PurchaseReceipt,
+        (PurchaseReceipt.document_no, PurchaseReceipt.supplier_name, PurchaseReceipt.remarks),
+        database.select(PurchaseReceipt).filter(PurchaseReceipt.is_return.is_(True)),
+        access_modules=("purchases", "inventory"),
+    )
+    titulo = "Listado de Devoluciones de Compra - " + APPNAME
+    return render_template(
+        "compras/recepcion_lista.html",
+        consulta=consulta,
+        titulo=titulo,
+        can_manage_receipts=_can_manage_purchase_receipts(),
+    )
+
+
 @compras.route("/purchase-invoice/list")
 @modulo_activo("purchases")
 @login_required
