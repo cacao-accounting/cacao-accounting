@@ -66,28 +66,39 @@ El sistema es:
 
 # Uso de cache 
 
-El archivo Docker Compose incluye Redis como cache, el sistema no puede depender del servicio de cache para funcionar,
-en desktop no hay caché, el uso de cache solo debe aplicar a asuntos que hagan sentido y siempre debe ser condicional y
-no fallar por falta de cache.
+El archivo Docker Compose incluye Redis como cache, el sistema no puede ni debe depender del servicio de cache activo
+para funcionar, esto es debido a que en modo desktop no hay caché disponible, modo desktop asume que el unico servicio
+disponible es la base de datos SQLite que sirve de data store al sistema local, el uso de cache solo debe aplicarse para
+asuntos que hagan sentido y siempre debe ser condicional y no fallar por falta de cache.
 
 # Instrucciones
 
-Si la tarea en que se esta trabajando tiene un issue asociado en Github utilizar el issue como bitacora
-de desarrollo de la tarea: comentarios de analisis de codigo, verificaciones, fixes propuestos, limitaciones,
-decisiones de diseño.
+No tomes deciciones de negocio ni modifiques el core, si hay dudas sobre el mejor camino a seguir detente y consulta.
+
+## Coordinación de trabajos asociados a un ticket (issue).
+
+Si la tarea en que se esta trabajando tiene un issue asociado en Github se debe utilizar ese issue como bitacora
+de desarrollo de la tarea:
+
+- Comentarios de analisis de codigo
+- Verificaciones
+- Fixes propuestos
+- Limitaciones
+- Decisiones de diseño aprobadas por el desarrollador a cargo de la tarea.
 
 Las siguientes etiquetas son utiles para coordinar el trabajo con issues:
 
 - needs-review: issue no verificado, posible falso positivo, posible duplicado, se requiere establecer
   un criterio o politica antes de continuar.
-- needs-work: issue verificado sin solución aplicada o con solución parcial.
-- fix-proposed: existe un commit relacionado a la tarea indicada, puede avanzar a:
-  - fix-confirmed: el fix se considera apropiado.
+- needs-work: issue verificado sin solución aplicada o con solución parcial o incompleta, puede ser trabajo
+  avanzado en avanzado pero no se considera finalizado y requiere iteraciones adicionales.
+- fix-proposed: existe un o mas commits relacionados a la tarea indicada, puede avanzar a:
+  - fix-confirmed: el fix se considera apropiado, completo, es una solución robusta, completa y bien implementada.
   - needs-work: el fix se considera incompleto y requiere trabajo adicional.
 - fixed: issue con una solución aceptada implementada.
 
 Toda tarea asociada a un Issue debe usar el formato 'Refs: ###' para facilitar triaje, no cerrar issues on push,
-todo trabajo asociado a un Issue debe ser validado por al menos dos agentes que coincidan que el fix aplicado es
+todo trabajo asociado a un issue debe ser validado por al menos dos agentes que coincidan que el fix aplicado es
 correcto, robusto, correctamente cubierto por pruebas unitarias, técnicamente válido y con cobertura a posibles
 edge cases asociados al flujo de negocio relacionado a la tarea que se está realizando.
 
@@ -138,12 +149,22 @@ extensa y tarda mucho en ejecutarse la mejor forma de ejecutar los tests es:
 - El archivo scripts\run_tests_by_file.sh ayuda a ejecutar los test ejecutando ese patron.
 
 Respetar la identidad de git configurada, hacer commits semánticos con sign-off. Commits pequeños y acotados, no
-hacer commits gigantes incomprensibles e inaudibles.
+hacer commits gigantes incomprensibles e inauditables, los commits debe tener calidad siguiendo el siguiente formato:
 
-Solo se consideran validos cambios que han sido validados por dos agentes: un implementador y un
-QA ademas de feedback del desarrollar a cargo de la tares.
+- Commit semantico (fix, feature, docs, refactor, release, chore).
+- Linea de titulo de 50 caracteres.
+- Separa el titulo del cuertpo con una linea en blanco.
+- Usar lenguaje directo en el titulo: implementa, corrige, agrega, mejora, extiende, documenta 
+- Cuerpo del issue maximo 72 characteres
+- El cuerpo de commit descrique como y porque (el diff define claramente el que), el cuerpo del commit debe aportar
+  contexto y servir de documentación al cambio.
+- Siempre cerrar el commit con el sign-off apropiado,
 
-Usa siempre .venv para ejecutar las pruebas de calidad.
+Solo se consideran validos cambios que han sido validados por dos agentes: un implementador y un agente de QA,
+ademas de feedback del desarrollar a cargo de la tares o un tercera ronda de validación de un agente independiente
+con un contexto limpio.
+
+Usa siempre .venv o venv para ejecutar las pruebas de calidad.
 
 ## Cobertura de codigo unitario
 
