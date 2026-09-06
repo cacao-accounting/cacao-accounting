@@ -751,6 +751,14 @@ def test_comparison_orders_apply_exchange_rate_to_base_total(app_ctx):
         assert orders[0].exchange_rate == Decimal("36")
         assert orders[0].base_total == Decimal("720")
 
+        usd_order = next(o for o in orders if o.transaction_currency == "USD")
+        assert len(usd_order.items) == 1
+        order_item = usd_order.items[0]
+        assert order_item.rate == Decimal("2")
+        assert order_item.amount == Decimal("20")
+        assert order_item.base_rate == Decimal("72.0000")
+        assert order_item.base_amount == Decimal("720.0000")
+
 
 def test_comparison_rejects_cancelled_offer_when_placing_orders(app_ctx):
     """A quotation cancelled after finalization must not be turned into an order."""
