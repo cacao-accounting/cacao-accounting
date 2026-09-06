@@ -154,7 +154,11 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         item_record = database.session.get(Item, item.item_code)
         if item_record is not None and (item_record.item_type == "service" or not item_record.is_stock_item):
             continue
-        amount = _line_amount(item)
+        amount = (
+            _decimal_value(getattr(item, "_inventory_cost_amount", None))
+            if getattr(document, "is_return", False) and getattr(item, "_inventory_cost_amount", None) is not None
+            else _line_amount(item)
+        )
         inventory_account_id = _require_account_id(
             inventory_account_id_for_document_line(document, item, company),
             "Falta la cuenta de inventario para una línea de recepción de compra.",

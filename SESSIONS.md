@@ -2408,3 +2408,18 @@ python3.11 que sombrea los paquetes del venv y rompe el arranque de mypy 2.3.0. 
   una capa de salida con costo histórico; si no existe cantidad suficiente, el posting debe bloquearse. Criterio:
   no se crean capas de retorno con costo calculado desde la tasa de compra de la devolución ni se permite saldo FIFO
   negativo.
+
+## 2026-09-06 (fix propuesto para #816 y #817)
+
+El commit `5ecf5b69` separa las devoluciones fisicas de los documentos AP: `purchase_return` es una recepcion con
+asignaciones de devolucion append-only; no cancela la conciliacion completa de la factura y no reduce por si sola el
+saldo del proveedor. Una nota de credito explicita vinculada a la devolucion reduce el `outstanding_amount`.
+
+Se anadieron regresiones en `tests/test_s2p_purchase_returns.py` para la matriz OC -> recepcion -> factura -> devolucion ->
+nueva recepcion: devolucion parcial y total, anulacion sin doble reversion, reapertura neta de la OC, factura 3-way y
+factura 2-way emitida antes de completar la entrega, reposicion sin doble facturacion, saldo AP hasta la nota de credito
+explicita, rechazo de sobre-devolucion y landed cost capitalizado. Tambien se excluyeron las recepciones fisicas de
+devolucion del listado de GRNI pendiente.
+
+Validacion: 11 pruebas de retornos y 64 regresiones S2P/document flow en verde; Black, Ruff, Flake8, Mypy y pydocstyle
+limpios sobre los archivos modificados.

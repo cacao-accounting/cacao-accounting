@@ -324,12 +324,14 @@ def allocate_purchase_invoice_receipt_lines(
         PurchaseInvoice.supplier_id == receipt.supplier_id,
         PurchaseInvoice.docstatus == 1,
         PurchaseInvoice.is_return.is_(False),
-        PurchaseInvoice.posting_date <= receipt.posting_date,
     )
     if invoice_id:
         invoices_query = invoices_query.where(PurchaseInvoice.id == invoice_id)
     elif receipt.purchase_order_id:
-        invoices_query = invoices_query.where(PurchaseInvoice.purchase_order_id == receipt.purchase_order_id)
+        invoices_query = invoices_query.where(
+            PurchaseInvoice.purchase_order_id == receipt.purchase_order_id,
+            PurchaseInvoice.posting_date <= receipt.posting_date,
+        )
     else:
         return []
     invoices = (
@@ -1527,7 +1529,11 @@ def get_purchase_reconciliation_pending(company: str, as_of_date: date | None = 
             PurchaseReceiptItem,
             PurchaseReceiptItem.purchase_receipt_id == PurchaseReceipt.id,
         )
-        .filter(PurchaseReceipt.company == company, PurchaseReceipt.docstatus == 1)
+        .filter(
+            PurchaseReceipt.company == company,
+            PurchaseReceipt.docstatus == 1,
+            PurchaseReceipt.is_return.is_(False),
+        )
     )
     if as_of_date is not None:
         query = query.where(PurchaseReceipt.posting_date <= as_of_date)

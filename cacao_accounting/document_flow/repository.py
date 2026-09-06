@@ -129,20 +129,39 @@ def consumed_qty_for_source(
         relation.qty_in_base_uom = normalized
         return normalized
 
-    return sum(
-        (
-            relation_qty_in_base(relation)
-            for relation in iter_active_relations_for_source(
-                source_type,
-                source_id,
-                source_item_id,
-                target_type,
-                exclude_draft_targets=exclude_draft_targets,
-                include_target_id=include_target_id,
-            )
-        ),
-        Decimal("0"),
+    relations = iter_active_relations_for_source(
+        source_type,
+        source_id,
+        source_item_id,
+        target_type,
+        exclude_draft_targets=exclude_draft_targets,
+        include_target_id=include_target_id,
     )
+    consumed = sum((relation_qty_in_base(relation) for relation in relations), Decimal("0"))
+
+    # A physical purchase return is deliberately not represented as a
+    # negative PO relation.  Return allocations are append-only evidence and
+    # reduce the net receipt consumption instead.
+    if (
+        normalize_doctype(source_type) == "purchase_order"
+        and target_type
+        and normalize_doctype(target_type) == "purchase_receipt"
+    ):
+        from sqlalchemy import func
+
+        from cacao_accounting.database import PurchaseReceiptReturnAllocation
+
+        receipt_item_ids = [relation.target_item_id for relation in relations if relation.target_item_id]
+        if receipt_item_ids:
+            returned = database.session.execute(
+                database.select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.qty_in_base_uom), 0)).where(
+                    PurchaseReceiptReturnAllocation.original_receipt_item_id.in_(receipt_item_ids),
+                    PurchaseReceiptReturnAllocation.status == "active",
+                )
+            ).scalar_one()
+            consumed -= decimal_or_zero(returned)
+
+    return consumed if consumed > 0 else Decimal("0")
 
 
 def save_relation(relation: DocumentRelation) -> DocumentRelation:

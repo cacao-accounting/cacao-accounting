@@ -2237,14 +2237,36 @@ def _validate_purchase_reversal_of(
                 "No se puede revertir una factura con retención emitida; ajuste o cancele primero el certificado de retención."
             )
     if document_type == "purchase_credit_note" and note_amount is not None:
-        from cacao_accounting.document_flow.payment import compute_outstanding_amount
-
-        # The credit note must not exceed the invoice's live open balance.
-        # A backdated date cannot reopen an amount that has already been paid.
-        outstanding = compute_outstanding_amount(source)
-        if note_amount > outstanding:
+        # A credit note is a commercial reversal of the invoice, so its
+        # capacity is independent of payments already applied to the source.
+        # Payments affect the supplier's cash settlement, not the amount that
+        # can be credited back after a physical return.  Keep the guard against
+        # cumulative over-crediting by considering active credit/debit notes.
+        active_relations = database.session.execute(
+            database.select(DocumentRelation).where(
+                DocumentRelation.source_type == "purchase_invoice",
+                DocumentRelation.source_id == source.id,
+                DocumentRelation.target_type.in_(("purchase_credit_note", "purchase_debit_note")),
+                DocumentRelation.relation_type == "invoice_reversal",
+                DocumentRelation.status == "active",
+            )
+        ).scalars()
+        credited = Decimal("0")
+        debited = Decimal("0")
+        for relation in active_relations:
+            target = database.session.get(PurchaseInvoice, relation.target_id)
+            if target is None or target.docstatus == 2:
+                continue
+            amount = Decimal(str(relation.amount or target.grand_total or "0"))
+            if target.document_type == "purchase_credit_note":
+                credited += amount
+            elif target.document_type == "purchase_debit_note":
+                debited += amount
+        invoice_total = Decimal(str(source.grand_total or "0"))
+        credit_capacity = max(invoice_total + debited - credited, Decimal("0"))
+        if note_amount > credit_capacity:
             raise ValueError(
-                f"La nota de credito ({note_amount}) excede el saldo pendiente de la factura origen ({outstanding})."
+                f"La nota de credito ({note_amount}) excede el credito disponible de la factura origen ({credit_capacity})."
             )
 
 
