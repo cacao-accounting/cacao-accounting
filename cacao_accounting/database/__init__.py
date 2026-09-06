@@ -1789,6 +1789,12 @@ class PurchaseOrder(database.Model, DocBase):  # type: ignore[name-defined]
         nullable=True,
         index=True,
     )
+    items = database.relationship(
+        "PurchaseOrderItem",
+        back_populates="purchase_order",
+        foreign_keys="PurchaseOrderItem.purchase_order_id",
+        cascade="all, delete-orphan",
+    )
 
 
 class PurchaseOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -1827,6 +1833,11 @@ class PurchaseOrderItem(database.Model, BaseTabla):  # type: ignore[name-defined
     billed_qty = database.Column(database.Numeric(precision=20, scale=9), nullable=True)
     warehouse = database.Column(
         database.String(20), database.ForeignKey(WAREHOUSE_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
+    purchase_order = database.relationship(
+        "PurchaseOrder",
+        back_populates="items",
+        foreign_keys=[purchase_order_id],
     )
 
 
@@ -2840,6 +2851,8 @@ class DeliveryNoteItem(database.Model, BaseTabla):  # type: ignore[name-defined]
         database.String(26), database.ForeignKey(BATCH_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     serial_no = database.Column(database.String(100), nullable=True)
+    discount_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
+    discount_percentage = database.Column(database.Numeric(precision=10, scale=4), nullable=True)
 
 
 class SalesInvoice(database.Model, DocBase):  # type: ignore[name-defined]
@@ -3050,6 +3063,9 @@ class PettyCashVoucher(database.Model, DocBase):  # type: ignore[name-defined]
         index=True,
     )
     voucher_no = database.Column(database.String(100), nullable=True, index=True)
+    naming_series_id = database.Column(
+        database.String(26), database.ForeignKey(NAMING_SERIES_ID, ondelete=FK_SET_NULL, onupdate=FK_CASCADE), nullable=True
+    )
     # Estado del dominio: borrador, entregado, liquidado, cancelado
     voucher_status = database.Column(database.String(20), nullable=False, default="borrador", index=True)
     delivered_to = database.Column(database.String(150), nullable=True)

@@ -641,6 +641,7 @@ def create_petty_cash_voucher(
     unit_code: str | None = None,
     project_code: str | None = None,
     comments: str | None = None,
+    naming_series_id: str | None = None,
 ) -> PettyCashVoucher:
     """Crea un vale de caja chica en estado borrador (no postea al GL)."""
     fund = _validate_petty_cash_fund(petty_cash_id, company)
@@ -663,6 +664,7 @@ def create_petty_cash_voucher(
         voucher_status="borrador",
         docstatus=0,
         transaction_currency=fund.currency or _company_currency(company),
+        naming_series_id=naming_series_id,
     )
     database.session.add(voucher)
     database.session.flush()
@@ -671,11 +673,35 @@ def create_petty_cash_voucher(
             document=voucher,
             entity_type="petty_cash_voucher",
             posting_date_raw=posted_date,
-            naming_series_id=None,
+            naming_series_id=naming_series_id,
         )
     except IdentifierConfigurationError:  # pragma: no cover - numeracion opcional
         pass
     voucher.voucher_no = voucher.document_no or None
+    database.session.commit()
+    return voucher
+
+
+def update_petty_cash_voucher(
+    voucher: PettyCashVoucher,
+    *,
+    concept: str | None = None,
+    amount: Decimal | None = None,
+    delivered_to: str | None = None,
+) -> PettyCashVoucher:
+    """Actualiza un vale de caja chica en estado borrador."""
+    if voucher.voucher_status != "borrador":
+        raise ValueError("Solo se pueden editar vales en estado borrador.")
+    if concept is not None:
+        if not concept.strip():
+            raise ValueError("El concepto del vale es obligatorio.")
+        voucher.concept = concept.strip()
+    if amount is not None:
+        if amount <= 0:
+            raise ValueError("El importe del vale debe ser mayor a cero.")
+        voucher.amount = amount
+    if delivered_to is not None:
+        voucher.delivered_to = delivered_to or None
     database.session.commit()
     return voucher
 
@@ -943,7 +969,13 @@ def create_petty_cash_expense_from_voucher(
     return expense
 
 
-def cancel_petty_cash_expense(expense, *, reason: str | None = None, actor_id: str | None = None):
+def cancel_petty_cash_expense(
+    expense,
+    *,
+    reason: str | None = None,
+    actor_id: str | None = None,
+    cancellation_date=None,
+):
     """Anula un gasto de caja chica, revirtiendo su asiento contable (append-only)."""
     from cacao_accounting.contabilidad.journal_service import cancel_submitted_journal
 
@@ -954,6 +986,19 @@ def cancel_petty_cash_expense(expense, *, reason: str | None = None, actor_id: s
         if replenishment and replenishment.status == "reembolsado":
             raise ValueError("No se puede anular un gasto después de reponer la Caja Chica.")
         raise ValueError("No se puede anular un gasto reservado en una reposicion de Caja Chica.")
+    if cancellation_date is not None and hasattr(expense, "posting_date"):
+        from cacao_accounting.database import AccountingPeriod
+
+        period = (
+            database.session.query(AccountingPeriod)
+            .filter(AccountingPeriod.entity == expense.company)
+            .filter(AccountingPeriod.start <= expense.posting_date)
+            .filter(AccountingPeriod.end >= expense.posting_date)
+            .first()
+        )
+        if period:
+            if not (period.start <= cancellation_date <= period.end):
+                raise ValueError("La anulación de un gasto solo se permite en el mismo periodo contable.")
     if expense.journal_id:
         journal = database.session.get(ComprobanteContable, expense.journal_id)
         if journal is not None:
@@ -1034,6 +1079,7 @@ def create_petty_cash_reconciliation(
         explanation=explanation or None,
         status="borrador",
         docstatus=0,
+        transaction_currency=fund.currency or _company_currency(company),
     )
     database.session.add(reconciliation)
     database.session.flush()
@@ -1215,6 +1261,7 @@ def create_petty_cash_replenishment(
     ):
         raise ValueError("Uno o mas gastos no estan disponibles para reposicion.")
     amount = sum((Decimal(str(expense.amount or 0)) for expense in expenses), Decimal("0"))
+    fund = _validate_petty_cash_fund(petty_cash_id, company)
     replenishment = PettyCashReplenishment(
         company=company,
         petty_cash_id=petty_cash_id,
@@ -1225,6 +1272,7 @@ def create_petty_cash_replenishment(
         requested_by=actor_id,
         status="borrador",
         docstatus=0,
+        transaction_currency=fund.currency or _company_currency(company),
     )
     database.session.add(replenishment)
     database.session.flush()

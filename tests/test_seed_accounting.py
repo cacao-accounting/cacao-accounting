@@ -217,7 +217,7 @@ def test_seed_multi_book_journal_converts_transaction_currency_to_book_currency(
         assert fisc_debit.account_currency == "NIO"
         assert fisc_debit.debit == Decimal("10.0000")
         assert fisc_debit.debit_in_account_currency == Decimal("10.0000")
-        assert fisc_debit.exchange_rate is None
+        assert fisc_debit.exchange_rate == Decimal("1.000000000")
 
         assert fin_debit.company_currency == "USD"
         assert fin_debit.account_currency == "NIO"
