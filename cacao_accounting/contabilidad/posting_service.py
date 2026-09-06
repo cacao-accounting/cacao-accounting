@@ -3413,6 +3413,12 @@ def _create_stock_reversal(document: Any, movement: StockLedgerEntry, cancellati
     qty_change = -_decimal_value(movement.qty_change)
     value_change = -_decimal_value(movement.stock_value_difference)
     valuation_rate = _decimal_value(movement.valuation_rate)
+    # A cancelled outbound movement may have been created after the bin was
+    # exhausted, when the bin's derived rate was zero.  The reversal restores
+    # both quantity and value, so its layer rate must come from that restored
+    # value rather than from the exhausted bin snapshot.
+    if qty_change > 0 and value_change > 0:
+        valuation_rate = value_change / qty_change
     posting_date = cancellation_date
     qty_after, stock_value_after = _upsert_stock_bin(
         company=movement.company,
