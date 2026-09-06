@@ -1130,3 +1130,13 @@ def test_delivery_note_validation_passes_with_discount(app_ctx):
     )
 
     _validate_sales_invoice_line_amounts(note, [line])
+
+
+def test_delivery_note_validation_supports_legacy_items_without_discount_fields(app_ctx):
+    """Refs: #820 - Shared validation accepts delivery lines from legacy models."""
+    from cacao_accounting.ventas.services import _validate_sales_invoice_line_amounts
+
+    note = DeliveryNote(company="cacao", docstatus=0)
+    legacy_line = SimpleNamespace(item_code="ART-LEGACY", qty=Decimal("10"), rate=Decimal("100"), amount=Decimal("1000"))
+
+    _validate_sales_invoice_line_amounts(note, [legacy_line])
