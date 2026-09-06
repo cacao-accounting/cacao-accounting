@@ -1018,12 +1018,102 @@ def test_delivery_note_preserves_discount_from_source(app_ctx):
     ):
         _save_delivery_note_items(note.id)
 
-    items = (
-        database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=note.id)).scalars().all()
-    )
+    items = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=note.id)).scalars().all()
     assert len(items) == 1
     assert items[0].discount_percentage == Decimal("10")
     assert items[0].amount == Decimal("900")
+
+
+def test_order_delivery_note_invoice_preserves_net_discount(app_ctx):
+    """Refs: #821 - OC→DN→SI keeps the net line amount and cannot overbill."""
+    from cacao_accounting.ventas import _save_delivery_note_items, _save_sales_invoice_items
+
+    item = _ensure_item("ART-DISC-FLOW")
+    customer = _ensure_customer("CUST-DISC-FLOW", "Cliente Flujo Descuento")
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="cacao")).scalars().first()
+    price_list = PriceList(name="Default Disc Flow", company="cacao", is_selling=True, is_default=True, is_active=True)
+    database.session.add(price_list)
+    database.session.flush()
+    database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, uom="UND", price=Decimal("100")))
+    order = SalesOrder(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1)
+    database.session.add(order)
+    database.session.flush()
+    order_item = SalesOrderItem(
+        sales_order_id=order.id,
+        item_code=item.code,
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("100"),
+        amount=Decimal("900"),
+        discount_percentage=Decimal("10"),
+        discount_amount=Decimal("100"),
+    )
+    database.session.add(order_item)
+    database.session.flush()
+    note = DeliveryNote(
+        company="cacao",
+        customer_id=customer.id,
+        sales_order_id=order.id,
+        posting_date=date.today(),
+        docstatus=1,
+    )
+    database.session.add(note)
+    database.session.flush()
+
+    with app_ctx.test_request_context(
+        "/sales/delivery-note/new",
+        method="POST",
+        data={
+            "company": "cacao",
+            "customer_id": customer.id,
+            "from_order": order.id,
+            "posting_date": date.today().isoformat(),
+            "item_code_0": item.code,
+            "qty_0": "10",
+            "rate_0": "100",
+            "warehouse_0": warehouse.code,
+            "source_type_0": "sales_order",
+            "source_id_0": order.id,
+            "source_item_id_0": order_item.id,
+        },
+    ):
+        _save_delivery_note_items(note.id)
+
+    note_item = database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=note.id)).scalar_one()
+    assert note_item.amount == Decimal("900")
+    assert note_item.discount_percentage == Decimal("10")
+
+    invoice = SalesInvoice(
+        company="cacao",
+        customer_id=customer.id,
+        delivery_note_id=note.id,
+        posting_date=date.today(),
+        docstatus=0,
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    with app_ctx.test_request_context(
+        "/sales/sales-invoice/new",
+        method="POST",
+        data={
+            "company": "cacao",
+            "customer_id": customer.id,
+            "from_note": note.id,
+            "posting_date": date.today().isoformat(),
+            "item_code_0": item.code,
+            "qty_0": "10",
+            "rate_0": "100",
+            "source_type_0": "delivery_note",
+            "source_id_0": note.id,
+            "source_item_id_0": note_item.id,
+        },
+    ):
+        _save_sales_invoice_items(invoice.id)
+
+    invoice_item = database.session.execute(
+        database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)
+    ).scalar_one()
+    assert invoice_item.amount == Decimal("900")
 
 
 def test_delivery_note_validation_passes_with_discount(app_ctx):
