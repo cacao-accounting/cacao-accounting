@@ -2655,6 +2655,10 @@ def _reconciliation_snapshot(
         raise PostingError(
             "La conciliación no puede aumentar cantidad mientras reduce el valor; registre el ajuste de valor por separado."
         )
+    if qty_change < 0 and value_change > 0:
+        raise PostingError(
+            "La conciliación no puede reducir cantidad mientras aumenta el valor; registre el ajuste de valor por separado."
+        )
     return current_qty, counted_qty, current_value, target_value, qty_change, value_change
 
 
