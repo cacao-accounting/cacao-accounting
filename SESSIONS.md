@@ -2394,3 +2394,10 @@ python3.11 que sombrea los paquetes del venv y rompe el arranque de mypy 2.3.0. 
 - `tests/test_petty_cash.py`: 39/39 en verde.
 - Black y Ruff pasaron sobre los archivos modificados.
 - Mypy no pudo iniciar en el entorno por el paquete `pathspec.patterns.gitignore` ausente; no se agregaron dependencias.
+
+## 2026-09-06 (propuestas de fix pendientes)
+
+- #853: versionar las líneas de recepción y factura en vez de borrarlas al editar borradores. Las filas anteriores
+  deben conservarse como `superseded`, el lector debe usar solo la versión vigente y los eventos de aprobación deben
+  tener una clave idempotente por documento y ciclo de posting. Criterio: ninguna fila de evidencia se elimina y una
+  segunda aprobación legítima no duplica eventos.
