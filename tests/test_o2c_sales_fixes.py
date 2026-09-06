@@ -14,6 +14,8 @@ from cacao_accounting import create_app
 from cacao_accounting.database import (
     Book,
     CompanyParty,
+    DeliveryNote,
+    DeliveryNoteItem,
     DocumentRelation,
     ExchangeRate,
     Item,
@@ -980,3 +982,61 @@ def test_sales_list_helpers_apply_company_and_period_scopes(app_ctx, monkeypatch
     monkeypatch.setattr(sales_services, "current_user", SimpleNamespace(id="USER-1", classification="admin"))
     with app_ctx.test_request_context("/sales/sales-order/list?page=2"):
         assert sales_services._paginate_list(SimpleNamespace(), (), query=object()) == "page"
+
+
+def test_delivery_note_preserves_discount_from_source(app_ctx):
+    """Refs: #820, #821 - Delivery note must preserve discount_percentage and discount_amount."""
+    from cacao_accounting.ventas import _save_delivery_note_items
+
+    item = _ensure_item("ART-DISC")
+    customer = _ensure_customer("CUST-DISC", "Cliente Descuento")
+    warehouse = database.session.execute(database.select(Warehouse).filter_by(company="cacao")).scalars().first()
+    price_list = PriceList(name="Default Disc", company="cacao", is_selling=True, is_default=True, is_active=True)
+    database.session.add(price_list)
+    database.session.flush()
+    database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, uom="UND", price=Decimal("100")))
+    database.session.commit()
+
+    note = DeliveryNote(company="cacao", posting_date=date.today(), docstatus=0, customer_id=customer.id)
+    database.session.add(note)
+    database.session.flush()
+
+    with app_ctx.test_request_context(
+        "/sales/delivery-note/new",
+        method="POST",
+        data={
+            "company": "cacao",
+            "customer_id": customer.id,
+            "posting_date": date.today().isoformat(),
+            "item_code_0": "ART-DISC",
+            "qty_0": "10",
+            "rate_0": "100",
+            "amount_0": "900",
+            "discount_percentage_0": "10",
+            "warehouse_0": warehouse.code,
+        },
+    ):
+        _save_delivery_note_items(note.id)
+
+    items = (
+        database.session.execute(database.select(DeliveryNoteItem).filter_by(delivery_note_id=note.id)).scalars().all()
+    )
+    assert len(items) == 1
+    assert items[0].discount_percentage == Decimal("10")
+    assert items[0].amount == Decimal("900")
+
+
+def test_delivery_note_validation_passes_with_discount(app_ctx):
+    """Refs: #820 - Validation must accept DeliveryNoteItem with discount fields."""
+    from cacao_accounting.ventas.services import _validate_sales_invoice_line_amounts
+
+    note = DeliveryNote(company="cacao", docstatus=0)
+    line = DeliveryNoteItem(
+        item_code="ART-DISC",
+        qty=Decimal("10"),
+        rate=Decimal("100"),
+        amount=Decimal("900"),
+        discount_percentage=Decimal("10"),
+    )
+
+    _validate_sales_invoice_line_amounts(note, [line])

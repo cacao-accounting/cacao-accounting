@@ -1150,7 +1150,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
-            _discount_percentage, _discount_amount, amount = _line_discount(i, qty * rate)
+            discount_percentage, discount_amount, amount = _line_discount(i, qty * rate)
             uom = request.form.get(f"uom_{i}") or None
             _validate_sales_catalog_rate(delivery_note, i, item_code, qty, uom, rate)
             warehouse = (
@@ -1169,6 +1169,8 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
                 uom=uom,
                 rate=rate,
                 amount=amount,
+                discount_percentage=discount_percentage,
+                discount_amount=discount_amount,
                 warehouse=warehouse,
                 batch_id=request.form.get(f"batch_id_{i}") or None,
                 serial_no=request.form.get(f"serial_no_{i}") or None,
@@ -1642,9 +1644,11 @@ def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[
         rate = Decimal(str(item.rate or 0))
         amount = Decimal(str(item.amount or 0))
         gross_amount = qty * rate
-        discount_amount = Decimal(str(item.discount_amount or 0))
-        if item.discount_percentage:
-            discount_amount = (gross_amount * Decimal(str(item.discount_percentage)) / Decimal("100")).quantize(
+        item_discount_pct = getattr(item, "discount_percentage", None)
+        item_discount_amt = getattr(item, "discount_amount", None)
+        discount_amount = Decimal(str(item_discount_amt or 0))
+        if item_discount_pct:
+            discount_amount = (gross_amount * Decimal(str(item_discount_pct)) / Decimal("100")).quantize(
                 Decimal("0.0001")
             )
         expected = gross_amount - discount_amount
