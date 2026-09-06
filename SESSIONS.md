@@ -2460,3 +2460,16 @@ de paridad GL/kardex y cancelacion.
 - Ruff, Flake8, pydocstyle y `git diff --check`: limpios.
 - Black reporta ambos archivos sin cambios de formato, pero su proceso no termina en este entorno; se deja registrada
   la limitacion operativa.
+
+## 2026-09-06 (fix #853: append-only draft lines + idempotente events)
+
+- Commit `54a21ce6`: implementa fix completo para #853.
+- Versionado de líneas: columna `is_superseded` en PurchaseReceiptItem y PurchaseInvoiceItem.
+  Los edit handlers marcan líneas anteriores como superseded en vez de eliminarlas.
+- Queries críticas en posting_service, reconciliation_service y document_builders filtran
+  `is_superseded=False`.
+- Idempotencia: `emit_economic_event` no duplica GOODS_RECEIVED/INVOICE_RECEIVED para
+  el mismo documento. `reconstruct_reconciliation_state` deduplica eventos legacy.
+- 12 pruebas unitarias nuevas: 12/12 pasando.
+- Black, Ruff, Flake8: limpios sobre archivos modificados.
+- Label cambiado de `needs-work` a `fix-proposed` en GitHub.
