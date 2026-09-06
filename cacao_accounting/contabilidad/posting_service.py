@@ -3079,15 +3079,46 @@ def _delivery_already_returned_qty(
 
 
 def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, quantity: Decimal) -> Decimal:
-    """Return the historical inventory cost for a sales delivery return line."""
+    """Return historical cost using the source delivery's layer sequence.
+
+    A delivery can contain several outgoing valuation rows when FIFO spans
+    multiple receipt layers.  Averaging all rows before pricing a partial
+    return loses that composition and can value the return at a rate that was
+    never present in the source delivery.
+    """
     source = _delivery_return_source(document)
-    outgoing_qty, outgoing_value = _delivery_outgoing_totals(document, line, warehouse, source)
     already_returned = _delivery_already_returned_qty(document, line, warehouse, source)
-    outgoing_qty_decimal = _decimal_value(outgoing_qty)
-    available_qty = outgoing_qty_decimal - _decimal_value(already_returned)
-    if quantity > available_qty or outgoing_qty_decimal <= 0:
+    outgoing_rows = database.session.execute(
+        select(StockLedgerEntry)
+        .where(
+            StockLedgerEntry.company == document.company,
+            StockLedgerEntry.voucher_type == "delivery_note",
+            StockLedgerEntry.voucher_id == source.id,
+            StockLedgerEntry.item_code == line.item_code,
+            StockLedgerEntry.warehouse == warehouse,
+            StockLedgerEntry.qty_change < 0,
+            StockLedgerEntry.is_cancelled.is_(False),
+        )
+        .order_by(StockLedgerEntry.posting_date, StockLedgerEntry.id)
+    ).scalars().all()
+    remaining_to_skip = _decimal_value(already_returned)
+    remaining = quantity
+    cost = Decimal("0")
+    for row in outgoing_rows:
+        row_qty = abs(_decimal_value(row.qty_change))
+        if remaining_to_skip >= row_qty:
+            remaining_to_skip -= row_qty
+            continue
+        available = row_qty - remaining_to_skip
+        take = min(available, remaining)
+        cost += take * (_decimal_value(row.stock_value_difference) / row_qty)
+        remaining -= take
+        remaining_to_skip = Decimal("0")
+        if remaining <= 0:
+            break
+    if remaining > 0:
         raise PostingError("La devolución excede la cantidad entregada pendiente de devolver.")
-    return (_decimal_value(outgoing_value) * quantity / outgoing_qty_decimal).quantize(Decimal("0.0001"))
+    return cost.quantize(Decimal("0.0001"))
 
 
 def _comprobante_lines(document: ComprobanteContable) -> list[ComprobanteContableDetalle]:
