@@ -125,7 +125,7 @@ def test_purchase_credit_note_reduces_outstanding_balance(app_ctx):
 
 
 def test_purchase_return_reduces_outstanding_balance(app_ctx):
-    """A posted purchase return offsets the related supplier invoice."""
+    """A posted purchase return offsets the related supplier invoice (Refs: #817)."""
     supplier = _ensure_supplier("SUPLR-AP-RETURN-1", "Proveedor devolución AP")
     source_invoice = PurchaseInvoice(
         id="PINV-RETURN-ORIG-001",
