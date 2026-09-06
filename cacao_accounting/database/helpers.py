@@ -136,6 +136,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             database.create_all()
             log.info("Esquema de base de datos creado correctamente.")
             _ensure_stock_valuation_layer_batch_column()
+            _ensure_purchase_line_version_columns()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
             _validate_and_fix_stock_bin_reserved_qty()
             if with_examples:
@@ -664,3 +665,40 @@ def _ensure_stock_valuation_layer_batch_column() -> None:
         pass
     except Exception as exc:
         log.warning("Could not ensure StockValuationLayer.batch_id during initialization: {}", exc)
+
+
+def _ensure_purchase_line_version_columns() -> None:
+    """Agrega columnas append-only a líneas de compras en esquemas existentes."""
+    try:
+        from sqlalchemy import inspect as sa_inspect
+
+        from cacao_accounting.database import PurchaseEconomicEvent, PurchaseInvoiceItem, PurchaseReceiptItem
+
+        dialect = database.engine.dialect.name
+        boolean_default = "FALSE" if dialect == "postgresql" else "0"
+        definitions = (
+            (PurchaseReceiptItem.__tablename__, "is_superseded", f"BOOLEAN NOT NULL DEFAULT {boolean_default}"),
+            (PurchaseInvoiceItem.__tablename__, "is_superseded", f"BOOLEAN NOT NULL DEFAULT {boolean_default}"),
+            (PurchaseEconomicEvent.__tablename__, "idempotency_key", "VARCHAR(255)"),
+        )
+        inspector = sa_inspect(database.engine)
+        for table_name, column_name, definition in definitions:
+            if not inspector.has_table(table_name):
+                continue
+            columns = {column["name"] for column in inspector.get_columns(table_name)}
+            if column_name not in columns:
+                database.session.execute(database.text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"))
+        if inspector.has_table(PurchaseEconomicEvent.__tablename__):
+            database.session.execute(
+                database.text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "uq_purchase_economic_event_idempotency "
+                    "ON purchase_economic_event (idempotency_key)"
+                )
+            )
+        database.session.commit()
+    except (OperationalError, ProgrammingError, InterfaceError):
+        database.session.rollback()
+    except Exception as exc:
+        database.session.rollback()
+        log.warning("Could not ensure purchase line version columns during initialization: {}", exc)

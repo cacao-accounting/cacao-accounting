@@ -593,7 +593,10 @@ class ApprovalEngine:
         if doctype not in item_models:
             return
         item_model, foreign_key = item_models[doctype]
-        items = db.session.execute(db.select(item_model).filter_by(**{foreign_key: document.id})).scalars().all()
+        item_query = db.select(item_model).filter_by(**{foreign_key: document.id})
+        if hasattr(item_model, "is_superseded"):
+            item_query = item_query.filter_by(is_superseded=False)
+        items = db.session.execute(item_query).scalars().all()
         if doctype in {"delivery_note", "sales_invoice", "purchase_receipt", "stock_entry"}:
             from cacao_accounting.inventario.service import validate_batch_serial_draft
 

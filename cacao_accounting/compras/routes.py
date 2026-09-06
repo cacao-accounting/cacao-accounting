@@ -2577,7 +2577,9 @@ def compras_recepcion(receipt_id):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro)
-    items = database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)).all()
+    items = database.session.execute(
+        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id, is_superseded=False)
+    ).all()
     create_actions = get_create_actions("purchase_receipt", receipt_id)
     create_actions_json = json.dumps(create_actions, ensure_ascii=False)
     titulo = (registro.document_no or registro.id) + " - " + APPNAME
@@ -2643,7 +2645,7 @@ def compras_recepcion_editar(receipt_id: str):
         return _handle_purchase_receipt_edit_post(registro)
 
     lineas = database.session.execute(
-        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
+        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id, is_superseded=False)
     ).scalars()
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_RECEIPT,
@@ -2729,7 +2731,7 @@ def compras_recepcion_duplicar(receipt_id: str):
     total = Decimal("0")
     item_ids: dict[str, str] = {}
     for item in database.session.execute(
-        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=origen.id)
+        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=origen.id, is_superseded=False)
     ).scalars():
         linea = PurchaseReceiptItem(
             purchase_receipt_id=duplicada.id,
@@ -2772,7 +2774,9 @@ def compras_recepcion_submit(receipt_id: str):
         abort(400)
     try:
         items = (
-            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id))
+            database.session.execute(
+                database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id, is_superseded=False)
+            )
             .scalars()
             .all()
         )
@@ -2943,7 +2947,9 @@ def compras_factura_compra(invoice_id):
     if not registro:
         abort(404)
     _require_purchase_document_access(registro)
-    items = database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id)).all()
+    items = database.session.execute(
+        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id, is_superseded=False)
+    ).all()
     titulo = (registro.document_no or invoice_id) + " - " + APPNAME
     document_type_label = DOCUMENT_TYPE_LABELS.get(registro.document_type, FACTURA_DE_COMPRA)
     audit_timeline = format_document_timeline(registro.document_type or "purchase_invoice", registro.id)
@@ -3003,7 +3009,7 @@ def compras_factura_compra_editar(invoice_id: str):
         return _handle_purchase_invoice_edit_post(registro)
 
     lineas = database.session.execute(
-        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
+        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id, is_superseded=False)
     ).scalars()
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_INVOICE,
@@ -3102,7 +3108,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
     total = Decimal("0")
     item_ids: dict[str, str] = {}
     for item in database.session.execute(
-        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=origen.id)
+        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=origen.id, is_superseded=False)
     ).scalars():
         linea = PurchaseInvoiceItem(
             purchase_invoice_id=duplicada.id,
@@ -3161,7 +3167,9 @@ def compras_factura_compra_submit(invoice_id: str):
         abort(400)
     try:
         items = (
-            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id))
+            database.session.execute(
+                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id, is_superseded=False)
+            )
             .scalars()
             .all()
         )
