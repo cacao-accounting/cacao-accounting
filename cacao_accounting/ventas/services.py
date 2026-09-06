@@ -1631,8 +1631,18 @@ def _validate_sales_invoice_quantities(invoice_id: str) -> None:
             _validate_sales_invoice_relation(rel, invoice_id=invoice_id)
 
 
-def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[SalesInvoiceItem]) -> None:
-    """Reject inconsistent or negative amounts on ordinary sales invoices."""
+def _discounted_line_amount(item: Any, gross_amount: Decimal) -> Decimal:
+    """Calculate a line's net amount for models with optional discount fields."""
+    discount_percentage = getattr(item, "discount_percentage", None)
+    if discount_percentage:
+        discount_amount = (gross_amount * Decimal(str(discount_percentage)) / Decimal("100")).quantize(Decimal("0.0001"))
+    else:
+        discount_amount = Decimal(str(getattr(item, "discount_amount", None) or 0))
+    return gross_amount - discount_amount
+
+
+def _validate_sales_invoice_line_amounts(invoice: Any, items: Sequence[Any]) -> None:
+    """Reject inconsistent or negative amounts on ordinary sales invoices and delivery notes."""
     if getattr(invoice, "is_return", False) or getattr(invoice, "document_type", "") in {
         "sales_credit_note",
         "sales_debit_note",
@@ -1644,14 +1654,7 @@ def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[
         rate = Decimal(str(item.rate or 0))
         amount = Decimal(str(item.amount or 0))
         gross_amount = qty * rate
-        item_discount_pct = getattr(item, "discount_percentage", None)
-        item_discount_amt = getattr(item, "discount_amount", None)
-        discount_amount = Decimal(str(item_discount_amt or 0))
-        if item_discount_pct:
-            discount_amount = (gross_amount * Decimal(str(item_discount_pct)) / Decimal("100")).quantize(
-                Decimal("0.0001")
-            )
-        expected = gross_amount - discount_amount
+        expected = _discounted_line_amount(item, gross_amount)
         if amount <= 0:
             raise ValueError(f"La línea {item.item_code} debe tener un monto positivo.")
         if abs(amount - expected) > tolerance:
