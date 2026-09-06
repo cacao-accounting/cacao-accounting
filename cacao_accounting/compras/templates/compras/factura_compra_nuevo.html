@@ -17,7 +17,7 @@
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_factura_compra_lista') }}"
         class="link-dark">Facturas de Compra</a></li>
     <li class="breadcrumb-item active" aria-current="page">
-      {{ (registro.document_no or registro.id) if edit else (document_type == 'purchase_credit_note' and 'Nueva Nota de Crédito' or document_type == 'purchase_debit_note' and 'Nueva Nota de Débito' or document_type == 'purchase_return' and 'Nueva Devolución' or 'Nueva Factura de Compra') }}
+      {{ (registro.document_no or registro.id) if edit else (document_type == 'purchase_credit_note' and 'Nueva Nota de Crédito' or document_type == 'purchase_debit_note' and 'Nueva Nota de Débito' or 'Nueva Factura de Compra') }}
     </li>
   </ol>
 </nav>
@@ -33,7 +33,7 @@
       edit and 'Editar Factura de Compra'
       or document_type == 'purchase_credit_note' and 'Nota de Crédito de Compra'
       or document_type == 'purchase_debit_note' and 'Nota de Débito de Compra'
-      or document_type == 'purchase_return' and 'Devolución de Compra'
+      or document_type == 'purchase_invoice' and 'Factura de Compra'
       or 'Factura de Compra',
       cancel_url=url_for('compras.compras_factura_compra_lista'),
       include_currency=False
@@ -70,8 +70,17 @@
             locked_expr="typeof isFlowFieldLocked === 'function' && isFlowFieldLocked('currency')",
             x_model="header.transaction_currency",
             on_select="function(opt){ header.transaction_currency_label = opt.display_name; }"
-            ) }}
+        ) }}
       </div>
+      {% if document_type == 'purchase_credit_note' %}
+      <div class="col-md-6">
+        <label class="form-label" for="credit_note_type">{{ _('Tipo de nota de crédito') }}</label>
+        <select class="form-select" id="credit_note_type" name="credit_note_type">
+          <option value="commercial_adjustment">{{ _('Ajuste comercial') }}</option>
+          <option value="physical_return">{{ _('Devolución física') }}</option>
+        </select>
+      </div>
+      {% endif %}
     </div>
   </div>
 
@@ -81,7 +90,7 @@
          source_label="Factura de Compra") }}
   {% elif from_receipt_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,
-         source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=" ~ (document_type == 'purchase_return' and 'purchase_return' or 'purchase_invoice') ~ "&source_id=" ~ from_receipt_id ~ "&company=" ~ recepcion_origen.company,
+         source_api_url="/api/document-flow/pending-lines?source_type=purchase_receipt&target_type=purchase_invoice&source_id=" ~ from_receipt_id ~ "&company=" ~ recepcion_origen.company,
          source_label="Recepción de Compra") }}
   {% elif from_order_id %}
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles,

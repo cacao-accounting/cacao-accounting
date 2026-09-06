@@ -347,6 +347,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 83.05.01,Fair Value Loss — Financial Instruments,83,0,Expense,,
 83.06.01,Fair Value Loss — Biological Assets,83,0,Expense,,
 83.09.01,Other Losses,83,0,Expense,,
+83.09.02,Purchase Settlement Variances,83,0,Expense,,purchase_settlement_variance
 9,Income Tax Expense,,1,Expense,,
 91,Current Income Tax Expense,9,1,Expense,,
 91.01.01,Current Income Tax Expense,91,0,Expense,,

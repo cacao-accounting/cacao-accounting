@@ -200,21 +200,6 @@ def test_credit_note_blocked_when_withholding_issued(withholding_app):
         )
 
 
-def test_return_blocked_when_withholding_issued(withholding_app):
-    """Refs: #819 - A purchase return must be blocked when the invoice has an issued withholding."""
-    from cacao_accounting.compras.services import _validate_purchase_reversal_of
-
-    invoice = _create_invoice_with_withholding()
-
-    with pytest.raises(ValueError, match="retención emitida"):
-        _validate_purchase_reversal_of(
-            invoice.id,
-            supplier_id=invoice.supplier_id,
-            company=invoice.company,
-            document_type="purchase_return",
-        )
-
-
 def test_credit_note_allowed_when_withholding_cancelled(withholding_app):
     """Refs: #819 - A credit note is allowed when the withholding certificate is cancelled."""
     from cacao_accounting.compras.services import _validate_purchase_reversal_of

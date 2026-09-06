@@ -10,6 +10,7 @@
     "default_cogs": "510100",
     "inventory_adjustment_account_id": "510400",
     "bridge_account_id": "211200",
+    "purchase_settlement_variance_account_id": "720500",
     "customer_advance_account_id": "215100",
     "supplier_advance_account_id": "112500",
     "bank_difference_account_id": "629100",

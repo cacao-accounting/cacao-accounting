@@ -227,17 +227,13 @@ def _document_type_label(document: Any, default_label: str) -> str:
         "sales_debit_note": "Nota de Débito",
         "purchase_debit_note": "Nota de Débito",
         "sales_return": "Devolución",
-        "purchase_return": "Devolución de Compra",
     }
     return labels.get(document.document_type, default_label)
 
 
 def _invoice_is_credit(document: Any) -> bool:
     """Return whether an invoice is represented with a credit sign."""
-    return bool(
-        document.is_return
-        or document.document_type in {"sales_credit_note", "sales_return", "purchase_credit_note", "purchase_return"}
-    )
+    return bool(document.is_return or document.document_type in {"sales_credit_note", "sales_return", "purchase_credit_note"})
 
 
 def _invoice_item(document: Any, default_label: str, outstanding: Decimal) -> dict[str, Any]:

@@ -21,7 +21,7 @@
 {% set doc_label = _('Factura de Venta') if role == 'customer' else (
     _('Nota de Crédito') if registro.document_type == 'purchase_credit_note' else (
     _('Nota de Débito') if registro.document_type == 'purchase_debit_note' else (
-    _('Devolución') if registro.document_type == 'purchase_return' else _('Factura de Compra')
+    _('Factura de Compra')
     ))
 ) %}
 {% set status_info = document_status_info(doc_type, registro) %}

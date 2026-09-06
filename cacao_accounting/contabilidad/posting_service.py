@@ -1261,6 +1261,17 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
     if getattr(document, "purchase_receipt_id", None) or getattr(document, "purchase_order_id", None):
         _record_purchase_reconciliation(document, abs(item_amount_total))
 
+    if getattr(document, "document_type", None) == "purchase_credit_note":
+        from cacao_accounting.compras.purchase_reconciliation_service import (
+            PurchaseReconciliationError,
+            create_purchase_credit_note_allocations,
+        )
+
+        try:
+            create_purchase_credit_note_allocations(document.id)
+        except PurchaseReconciliationError as exc:
+            raise PostingError(str(exc)) from exc
+
     engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code)
     if engine_payload is not None:
         result = engine_payload.entries
@@ -3340,9 +3351,7 @@ def _create_stock_ledger_for_document(
             valuation_rate = cost_rate
             value_change = -cost_amount
         else:
-            cost_amount, cost_rate, source_layer_id = _outgoing_stock_values(
-                document, line, warehouse, qty_change, item
-            )
+            cost_amount, cost_rate, source_layer_id = _outgoing_stock_values(document, line, warehouse, qty_change, item)
             valuation_rate = cost_rate
             value_change = -cost_amount
     else:
@@ -3501,6 +3510,10 @@ def _record_purchase_reconciliation(document: PurchaseInvoice, matched_amount: D
 
     try:
         reconcile_purchase_invoice(document.id)
+        if isinstance(document, PurchaseInvoice) and getattr(document, "purchase_receipt_id", None):
+            from cacao_accounting.compras.purchase_reconciliation_service import allocate_purchase_invoice_receipt_lines
+
+            allocate_purchase_invoice_receipt_lines(document.purchase_receipt_id, document.id)
     except PurchaseReconciliationError as exc:
         raise PostingError(str(exc)) from exc
 
@@ -3686,6 +3699,10 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
 
     company = _company_for(document)
     from cacao_accounting.compras.purchase_reconciliation_service import get_matching_config
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        allocate_purchase_invoice_receipt_lines,
+        create_purchase_receipt_return_allocations,
+    )
 
     matching_config = get_matching_config(company)
     bridge_account_id = _resolve_item_account_id(None, company, "bridge")
@@ -3694,6 +3711,10 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
             bridge_account_id,
             "Falta la cuenta puente configurada para lacompañia.",
         )
+    if document.is_return:
+        create_purchase_receipt_return_allocations(document.id)
+    else:
+        allocate_purchase_invoice_receipt_lines(document.id)
     engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code) if bridge_account_id else None
     landed_cost_result = engine_payload.results.get("landed_cost") if engine_payload is not None else None
     movements = _create_stock_ledger_for_document_type(document, Decimal("1"), landed_cost_result=landed_cost_result)
@@ -4673,13 +4694,21 @@ def _cancel_landed_cost_valuations(
 def _emit_cancel_events(document: Any, voucher_id: str, company: str) -> None:
     """Emitir eventos de cancelacion especificos por tipo de documento."""
     if isinstance(document, PurchaseReceipt):
-        from cacao_accounting.compras.purchase_reconciliation_service import emit_goods_received_cancelled
+        from cacao_accounting.compras.purchase_reconciliation_service import (
+            cancel_purchase_settlement_allocations,
+            emit_goods_received_cancelled,
+        )
 
+        cancel_purchase_settlement_allocations(receipt_id=document.id)
         emit_goods_received_cancelled(voucher_id, company)
 
     if isinstance(document, PurchaseInvoice) and (
         getattr(document, "purchase_receipt_id", None) or getattr(document, "purchase_order_id", None)
     ):
-        from cacao_accounting.compras.purchase_reconciliation_service import cancel_purchase_reconciliation
+        from cacao_accounting.compras.purchase_reconciliation_service import (
+            cancel_purchase_reconciliation,
+            cancel_purchase_settlement_allocations,
+        )
 
+        cancel_purchase_settlement_allocations(invoice_id=document.id)
         cancel_purchase_reconciliation(document.id)

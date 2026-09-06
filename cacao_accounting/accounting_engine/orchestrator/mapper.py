@@ -227,7 +227,6 @@ class AccountingMapper:
                 "sales_credit_note_confirmed",
                 "purchase_credit_note_confirmed",
                 "sales_return_confirmed",
-                "purchase_return_confirmed",
             }:
                 is_debit = not is_debit
             side = "debit" if is_debit else "credit"

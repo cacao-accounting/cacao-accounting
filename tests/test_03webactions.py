@@ -396,22 +396,6 @@ def test_purchase_credit_note_list_route(request):
                 assert "Listado de Notas de Crédito de Compra" in response.get_data(as_text=True)
 
 
-def test_purchase_return_list_route(request):
-
-    if request.config.getoption("--slow") == "True":
-
-        with app.app_context():
-            from flask_login import current_user
-
-            with app.test_client() as client:
-                client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
-                assert current_user.is_authenticated
-
-                response = client.get("/buying/purchase-invoice/return/list")
-                assert response.status_code == 200
-                assert "Listado de Devoluciones de Compra" in response.get_data(as_text=True)
-
-
 def test_purchase_debit_note_list_route(request):
 
     if request.config.getoption("--slow") == "True":
@@ -435,13 +419,12 @@ def test_purchase_invoice_document_type_helper_prefers_sources_and_ignores_untru
         from cacao_accounting.compras import (
             PURCHASE_CREDIT_NOTE,
             PURCHASE_INVOICE,
-            PURCHASE_RETURN,
             _purchase_invoice_document_type,
         )
 
         source_ids = {"from_receipt_id": "REC-1", "from_invoice_id": None}
         with app.test_request_context("/buying/purchase-invoice/new"):
-            assert _purchase_invoice_document_type(source_ids) == PURCHASE_RETURN
+            assert _purchase_invoice_document_type(source_ids) == PURCHASE_INVOICE
 
         source_ids = {"from_order_id": "PO-1", "from_receipt_id": "REC-1", "from_invoice_id": None}
         with app.test_request_context("/buying/purchase-invoice/new"):

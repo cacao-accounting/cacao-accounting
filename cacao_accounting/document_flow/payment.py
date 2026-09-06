@@ -109,7 +109,7 @@ def _base_amount(amount: Decimal, document: Any) -> Decimal:
 def _payment_candidate_physical_type(flow_source_type: str) -> str:
     """Devuelve el tipo fisico del modelo SQLAlchemy para una referencia de pago."""
     source_key = normalize_doctype(flow_source_type)
-    if source_key in {"purchase_credit_note", "purchase_debit_note", "purchase_return"}:
+    if source_key in {"purchase_credit_note", "purchase_debit_note"}:
         return "purchase_invoice"
     if source_key in {"sales_credit_note", "sales_debit_note", "sales_return"}:
         return "sales_invoice"
@@ -361,9 +361,7 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
             .join(
                 PurchaseInvoice,
                 (DocumentRelation.target_id == PurchaseInvoice.id)
-                & DocumentRelation.target_type.in_(
-                    ("purchase_invoice", "purchase_return", "purchase_credit_note", "purchase_debit_note")
-                ),
+                & DocumentRelation.target_type.in_(("purchase_invoice", "purchase_credit_note", "purchase_debit_note")),
             )
             .where(
                 DocumentRelation.source_type == document_type,
@@ -378,7 +376,7 @@ def _compute_allocated_notes_amount(document: Any, as_of_date: date) -> Decimal:
 
         return decimal_or_zero(res) + decimal_or_zero(res_p)
 
-    res_credit = _sum_notes(("sales_credit_note", "sales_return", "purchase_credit_note", "purchase_return"))
+    res_credit = _sum_notes(("sales_credit_note", "sales_return", "purchase_credit_note"))
     res_debit = _sum_notes(("sales_debit_note", "purchase_debit_note"))
 
     return res_credit - res_debit
@@ -504,7 +502,7 @@ def payment_reference_candidates(
     if not company or party_type not in {"supplier", "customer"} or not party_id:
         raise _document_flow_error("Debe indicar compania, tipo de tercero y tercero.")
     allowed_by_party = (
-        {"purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_return", "purchase_order"}
+        {"purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_order"}
         if party_type == "supplier"
         else {"sales_invoice", "sales_debit_note", "sales_credit_note", "sales_return", "sales_order"}
     )
@@ -528,7 +526,6 @@ def _get_model_by_type() -> dict[str, Any]:
         "purchase_invoice": PurchaseInvoice,
         "purchase_debit_note": PurchaseInvoice,
         "purchase_credit_note": PurchaseInvoice,
-        "purchase_return": PurchaseInvoice,
         "purchase_order": PurchaseOrder,
         "sales_invoice": SalesInvoice,
         "sales_debit_note": SalesInvoice,
@@ -698,7 +695,7 @@ def _candidate_documents(
 def _candidate_source_types(party_type: str) -> list[str]:
     """Resuelve los doctypes origen validos para el tipo de tercero."""
     if party_type == "supplier":
-        return ["purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_return"]
+        return ["purchase_invoice", "purchase_debit_note", "purchase_credit_note"]
     return ["sales_invoice", "sales_debit_note", "sales_credit_note", "sales_return"]
 
 
@@ -715,9 +712,9 @@ def _filter_candidates_by_currency(
 def _payment_reference_model(flow_source_type: str) -> type[PurchaseInvoice] | type[SalesInvoice]:
     """Devuelve el modelo fisico de una referencia AR/AP."""
     source_key = normalize_doctype(flow_source_type)
-    if source_key.startswith("purchase_"):
+    if source_key in {"purchase_invoice", "purchase_credit_note", "purchase_debit_note"}:
         return PurchaseInvoice
-    if source_key.startswith("sales_"):
+    if source_key in {"sales_invoice", "sales_credit_note", "sales_debit_note", "sales_return"}:
         return SalesInvoice
     raise _document_flow_error("Tipo de referencia invalido.")
 
@@ -729,11 +726,12 @@ def _payment_reference_party(document: Any, flow_source_type: str) -> tuple[str,
 
 def _payment_type_matches_source(payment_type: str, flow_source_type: str) -> bool:
     """Valida que el tipo de pago sea compatible con factura o nota."""
+    if normalize_doctype(flow_source_type) == "purchase_return":
+        return False
     expected = {
         "purchase_invoice": "pay",
         "purchase_debit_note": "pay",
         "purchase_credit_note": "receive",
-        "purchase_return": "receive",
         "sales_invoice": "receive",
         "sales_debit_note": "receive",
         "sales_credit_note": "pay",

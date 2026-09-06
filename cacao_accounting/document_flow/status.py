@@ -165,7 +165,6 @@ def _payment_status(doctype: str, document: Any) -> DocumentStatusInfo | None:
         "purchase_invoice",
         "purchase_credit_note",
         "purchase_debit_note",
-        "purchase_return",
         "sales_invoice",
     }:
         return None
@@ -179,7 +178,7 @@ def _payment_status(doctype: str, document: Any) -> DocumentStatusInfo | None:
     paid = grand_total - outstanding
     if paid > 0:
         return _status("partially_paid", "Pagado Parcialmente", "blue")
-    if doctype in {"purchase_invoice", "purchase_credit_note", "purchase_debit_note", "purchase_return"}:
+    if doctype in {"purchase_invoice", "purchase_credit_note", "purchase_debit_note"}:
         return _status("pending_payment", "Pendiente Pagar", "blue")
     return _status("pending_collection", "Pendiente Cobrar", "blue")
 
@@ -200,7 +199,6 @@ def _primary_flow_targets(doctype: str) -> list[str]:
         "purchase_invoice": ["import_landed_cost"],
         "purchase_credit_note": [],
         "purchase_debit_note": [],
-        "purchase_return": [],
         "purchase_request": ["purchase_order", "purchase_quotation"],
         "purchase_quotation": ["supplier_quotation"],
         "supplier_quotation": ["purchase_order"],

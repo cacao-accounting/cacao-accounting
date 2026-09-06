@@ -16,8 +16,12 @@ from cacao_accounting.database import (
     CompanyParty,
     PurchaseInvoice,
     PurchaseInvoiceItem,
+    PurchaseInvoiceReceiptAllocation,
+    PurchaseCreditNoteAllocation,
     PurchaseReceipt,
     PurchaseReceiptItem,
+    PurchaseReceiptReturnAllocation,
+    Item,
     DocumentRelation,
     User,
     Entity,
@@ -67,6 +71,23 @@ def _ensure_supplier(code, name):
         )
         database.session.commit()
     return supplier
+
+
+def _ensure_purchase_item(code="ITEM-S2P-ALLOC"):
+    """Create the stock item used by allocation tests."""
+    item = database.session.get(Item, code)
+    if item is None:
+        item = Item(
+            code=code,
+            name="Artículo S2P",
+            item_type="goods",
+            default_uom="UND",
+            is_stock_item=True,
+            is_purchase_item=True,
+        )
+        database.session.add(item)
+        database.session.flush()
+    return item
 
 
 def test_purchase_credit_note_reduces_outstanding_balance(app_ctx):
@@ -124,52 +145,12 @@ def test_purchase_credit_note_reduces_outstanding_balance(app_ctx):
     assert source_invoice.outstanding_amount == Decimal("600.00")
 
 
-def test_purchase_return_reduces_outstanding_balance(app_ctx):
-    """A posted purchase return offsets the related supplier invoice (Refs: #817)."""
-    supplier = _ensure_supplier("SUPLR-AP-RETURN-1", "Proveedor devolución AP")
-    source_invoice = PurchaseInvoice(
-        id="PINV-RETURN-ORIG-001",
-        supplier_id=supplier.id,
-        company="cacao",
-        posting_date=date.today(),
-        docstatus=1,
-        document_type="purchase_invoice",
-        grand_total=Decimal("1000.00"),
-        outstanding_amount=Decimal("1000.00"),
-        base_outstanding_amount=Decimal("1000.00"),
-    )
-    purchase_return = PurchaseInvoice(
-        id="PRET-001",
-        supplier_id=supplier.id,
-        company="cacao",
-        posting_date=date.today(),
-        docstatus=1,
-        document_type="purchase_return",
-        grand_total=Decimal("400.00"),
-        outstanding_amount=Decimal("400.00"),
-        reversal_of=source_invoice.id,
-        is_return=True,
-    )
-    database.session.add_all((source_invoice, purchase_return))
-    database.session.flush()
+def test_purchase_return_invoice_route_is_removed(app_ctx):
+    """Physical returns are receipts and cannot be created as AP invoices (Refs: #816, #817)."""
+    from cacao_accounting.compras.services import _purchase_invoice_document_type
 
-    _validate_purchase_reversal_of(
-        reversal_of=purchase_return.reversal_of,
-        supplier_id=purchase_return.supplier_id,
-        company=purchase_return.company,
-        note_amount=purchase_return.grand_total,
-        document_type=purchase_return.document_type,
-        posting_date=purchase_return.posting_date,
-    )
-    _persist_purchase_reversal_relation(purchase_return)
-    database.session.commit()
-
-    assert compute_outstanding_amount(source_invoice) == Decimal("600.00")
-    assert source_invoice.outstanding_amount == Decimal("600.00")
-    relation = database.session.execute(
-        database.select(DocumentRelation).filter_by(target_type="purchase_return", target_id=purchase_return.id)
-    ).scalar_one()
-    assert relation.source_id == source_invoice.id
+    with pytest.raises(ValueError, match="devoluciones físicas"):
+        _purchase_invoice_document_type({}, "purchase_return")
 
 
 def test_purchase_note_from_reconciled_invoice_skips_upstream_receipt_matching(app_ctx):
@@ -263,6 +244,190 @@ def test_purchase_note_from_reconciled_invoice_skips_upstream_receipt_matching(a
     )
     assert note is not None
     assert note.purchase_receipt_id == receipt.id
+
+
+def test_invoice_before_receipt_creates_idempotent_line_allocation(app_ctx):
+    """Refs: #816, #817 - invoice-before-receipt is settled by durable line evidence."""
+    from cacao_accounting.compras.purchase_reconciliation_service import allocate_purchase_invoice_receipt_lines
+
+    supplier = _ensure_supplier("SUPLR-ALLOC-1", "Proveedor Allocation")
+    item = _ensure_purchase_item()
+    receipt = PurchaseReceipt(
+        id="PREC-ALLOC-1",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date(2026, 5, 10),
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+    )
+    invoice = PurchaseInvoice(
+        id="PINV-ALLOC-1",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        docstatus=1,
+        document_type="purchase_invoice",
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+    )
+    database.session.add_all([receipt, invoice])
+    database.session.flush()
+    receipt_item = PurchaseReceiptItem(
+        id="PREC-ALLOC-ITEM-1",
+        purchase_receipt_id=receipt.id,
+        item_code=item.code,
+        qty=Decimal("2"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("20"),
+    )
+    invoice_item = PurchaseInvoiceItem(
+        id="PINV-ALLOC-ITEM-1",
+        purchase_invoice_id=invoice.id,
+        item_code=item.code,
+        qty=Decimal("2"),
+        uom="UND",
+        rate=Decimal("12"),
+        amount=Decimal("24"),
+    )
+    database.session.add_all([receipt_item, invoice_item])
+    database.session.commit()
+
+    first = allocate_purchase_invoice_receipt_lines(receipt.id, invoice.id)
+    second = allocate_purchase_invoice_receipt_lines(receipt.id, invoice.id)
+
+    assert len(first) == 1
+    assert second == []
+    allocation = database.session.get(PurchaseInvoiceReceiptAllocation, first[0].id)
+    assert allocation is not None
+    assert allocation.qty_in_base_uom == Decimal("2")
+    assert allocation.receipt_amount == Decimal("20")
+    assert allocation.invoice_amount == Decimal("24")
+    assert allocation.price_variance_base == Decimal("4")
+
+
+def test_physical_return_and_credit_note_require_separate_audit_allocations(app_ctx):
+    """Refs: #816, #817 - physical return and AP credit note remain separate."""
+    from cacao_accounting.compras.purchase_reconciliation_service import (
+        allocate_purchase_invoice_receipt_lines,
+        create_purchase_credit_note_allocations,
+        create_purchase_receipt_return_allocations,
+    )
+
+    supplier = _ensure_supplier("SUPLR-ALLOC-2", "Proveedor Return Allocation")
+    item = _ensure_purchase_item("ITEM-S2P-RETURN")
+    original = PurchaseReceipt(
+        id="PREC-RETURN-1",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date(2026, 5, 10),
+        docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+    )
+    invoice = PurchaseInvoice(
+        id="PINV-RETURN-1",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date(2026, 5, 10),
+        docstatus=1,
+        document_type="purchase_invoice",
+        purchase_receipt_id=original.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+        grand_total=Decimal("100"),
+    )
+    database.session.add_all([original, invoice])
+    database.session.flush()
+    original_item = PurchaseReceiptItem(
+        id="PREC-RETURN-ITEM-1",
+        purchase_receipt_id=original.id,
+        item_code=item.code,
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("100"),
+    )
+    invoice_item = PurchaseInvoiceItem(
+        id="PINV-RETURN-ITEM-1",
+        purchase_invoice_id=invoice.id,
+        item_code=item.code,
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("100"),
+    )
+    database.session.add_all([original_item, invoice_item])
+    database.session.commit()
+    allocate_purchase_invoice_receipt_lines(original.id, invoice.id)
+
+    returned = PurchaseReceipt(
+        id="PREC-RETURN-2",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date(2026, 5, 11),
+        docstatus=1,
+        is_return=True,
+        reversal_of=original.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+    )
+    database.session.add(returned)
+    database.session.flush()
+    returned_item = PurchaseReceiptItem(
+        id="PREC-RETURN-ITEM-2",
+        purchase_receipt_id=returned.id,
+        item_code=item.code,
+        qty=Decimal("2"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("20"),
+    )
+    database.session.add(returned_item)
+    database.session.commit()
+    return_allocations = create_purchase_receipt_return_allocations(returned.id)
+    assert len(return_allocations) == 1
+
+    credit_note = PurchaseInvoice(
+        id="PINV-RETURN-CN-1",
+        supplier_id=supplier.id,
+        company="cacao",
+        posting_date=date(2026, 5, 11),
+        docstatus=1,
+        document_type="purchase_credit_note",
+        credit_note_type="physical_return",
+        purchase_receipt_id=returned.id,
+        reversal_of=invoice.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
+    )
+    database.session.add(credit_note)
+    database.session.flush()
+    credit_item = PurchaseInvoiceItem(
+        id="PINV-RETURN-CN-ITEM-1",
+        purchase_invoice_id=credit_note.id,
+        item_code=item.code,
+        qty=Decimal("2"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("20"),
+    )
+    database.session.add(credit_item)
+    database.session.commit()
+
+    credit_allocations = create_purchase_credit_note_allocations(credit_note.id)
+    assert len(credit_allocations) == 1
+    assert credit_allocations[0].allocation_type == "physical_return"
+    assert credit_allocations[0].return_receipt_item_id == returned_item.id
+    assert database.session.query(PurchaseCreditNoteAllocation).count() == 1
+    assert database.session.query(PurchaseReceiptReturnAllocation).count() == 1
 
 
 @pytest.mark.parametrize("document_type", ["purchase_credit_note", "purchase_debit_note"])
@@ -622,8 +787,8 @@ def test_approval_engine_execute_submit_and_cancel_purchase_credit_note(app_ctx)
         assert source_invoice.outstanding_amount == Decimal("600.00")
 
 
-def test_purchase_invoice_source_helpers_cover_receipt_return_and_relations(app_ctx, monkeypatch):
-    """Source resolution preserves receipt returns and upstream relation selection."""
+def test_purchase_invoice_source_helpers_cover_receipt_and_relations(app_ctx, monkeypatch):
+    """A receipt source creates a normal invoice; only invoice sources create notes."""
     from cacao_accounting.compras import services as compras_module
     from flask import current_app
 
@@ -631,11 +796,10 @@ def test_purchase_invoice_source_helpers_cover_receipt_return_and_relations(app_
     source_invoice = SimpleNamespace(id="PINV-HELPER", purchase_order_id="PO-HELPER", purchase_receipt_id="REC-HELPER")
     monkeypatch.setattr(compras_module.database.session, "get", lambda model, identifier: receipt)
     monkeypatch.setattr(compras_module, "_purchase_invoice_sources", lambda source_ids: (None, receipt, None))
-    monkeypatch.setattr(compras_module, "_resolve_purchase_return_invoice", lambda source, invoice: source_invoice)
     with current_app.test_request_context("/buying/purchase-invoice/new", method="POST", data={"from_receipt": receipt.id}):
-        return_context = compras_module._purchase_invoice_source_context()
-    assert return_context["document_type"] == "purchase_return"
-    assert return_context["from_invoice"] == source_invoice.id
+        invoice_context = compras_module._purchase_invoice_source_context()
+    assert invoice_context["document_type"] == "purchase_invoice"
+    assert invoice_context["from_receipt"] == receipt.id
 
     monkeypatch.setattr(compras_module, "_purchase_invoice_sources", lambda source_ids: (None, None, source_invoice))
     with current_app.test_request_context(

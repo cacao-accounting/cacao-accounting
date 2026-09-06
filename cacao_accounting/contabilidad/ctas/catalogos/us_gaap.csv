@@ -223,6 +223,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 720200,Loss on Disposal of Assets,720000,0,Expense,,
 720300,Realized Foreign Exchange Loss,720000,0,Expense,,exchange_loss
 720400,Unrealized Foreign Exchange Loss,720000,0,Expense,,unrealized_exchange_loss
+720500,Purchase Settlement Variances,720000,0,Expense,,purchase_settlement_variance
 720900,Other Nonoperating Expense,720000,0,Expense,,
 800000,Income Tax Expense,,1,Expense,,
 810000,Income Tax Expense (Benefit),800000,1,Expense,,

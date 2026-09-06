@@ -24,6 +24,8 @@
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
   {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
+  {% if from_receipt_id %}<input type="hidden" name="from_receipt" value="{{ from_receipt_id }}">{% endif %}
+  {% if recepcion_origen %}<input type="hidden" name="is_return" value="1">{% endif %}
   {{ tf_macros.transaction_form_header("Editar Recepción de Compra" if edit else "Recepción de Compra", cancel_url=url_for('compras.compras_recepcion_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">

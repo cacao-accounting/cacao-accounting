@@ -372,7 +372,6 @@ class PrintService:
             "purchase_invoice": PurchaseInvoice,
             "purchase_credit_note": PurchaseInvoice,
             "purchase_debit_note": PurchaseInvoice,
-            "purchase_return": PurchaseInvoice,
             "purchase_order": PurchaseOrder,
             "sales_order": SalesOrder,
             "sales_request": SalesRequest,
