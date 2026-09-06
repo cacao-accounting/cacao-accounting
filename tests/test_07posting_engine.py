@@ -307,10 +307,10 @@ def test_posting_rejects_active_books_without_a_destination_currency(app_ctx):
         _document_contexts(document)
 
 
-def test_stock_reconciliation_rejects_negative_rate_from_positive_quantity_delta(app_ctx):
-    """A quantity increase cannot derive a negative valuation-layer rate."""
+def test_stock_reconciliation_rejects_mixed_quantity_value_adjustment(app_ctx):
+    """Refs: #808 - mixed quantity/value adjustments cannot diverge GL and kardex."""
     from cacao_accounting.contabilidad.posting_service import PostingError, _create_stock_reconciliation_movement
-    from cacao_accounting.database import StockBin, StockEntry, StockEntryItem, database
+    from cacao_accounting.database import StockBin, StockEntry, StockEntryItem, StockLedgerEntry, StockValuationLayer, database
 
     database.session.add(
         StockBin(company="cacao", item_code="RECON-NONNEG", warehouse="WH-RECON-NONNEG", actual_qty=10, stock_value=1000)
@@ -334,9 +334,12 @@ def test_stock_reconciliation_rejects_negative_rate_from_positive_quantity_delta
     with pytest.raises(PostingError, match="aumentar cantidad mientras reduce el valor"):
         _create_stock_reconciliation_movement(entry, line)
 
+    assert database.session.execute(database.select(StockLedgerEntry).filter_by(voucher_id=entry.id)).scalars().all() == []
+    assert database.session.execute(database.select(StockValuationLayer).filter_by(voucher_id=entry.id)).scalars().all() == []
+
 
 def test_stock_reconciliation_rejects_value_increase_with_quantity_decrease(app_ctx):
-    """Refs: #808 - A quantity decrease cannot increase value (GL/kardex divergence)."""
+    """A quantity decrease without a source layer cannot increase inventory value."""
     from cacao_accounting.contabilidad.posting_service import PostingError, _create_stock_reconciliation_movement
     from cacao_accounting.database import StockBin, StockEntry, StockEntryItem, database
 

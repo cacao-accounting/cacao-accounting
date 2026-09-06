@@ -2690,10 +2690,7 @@ def _reconciliation_snapshot(
         raise PostingError("La conciliacion no permite cantidad o valor objetivo negativo.")
     if current_qty <= 0 and counted_qty <= 0 and value_change != 0:
         raise PostingError("No se puede ajustar valor sin stock positivo o cantidad contada positiva.")
-    if qty_change > 0 and value_change < 0:
-        raise PostingError(
-            "La conciliación no puede aumentar cantidad mientras reduce el valor; registre el ajuste de valor por separado."
-        )
+    _validate_reconciliation_value_direction(qty_change, value_change)
     if qty_change < 0 and value_change > 0:
         # A reduction can legitimately increase the remaining value when the
         # physical count also changes the unit cost. The FIFO consumer below
@@ -2716,6 +2713,21 @@ def _reconciliation_snapshot(
                 "registre el ajuste de valor por separado."
             )
     return current_qty, counted_qty, current_value, target_value, qty_change, value_change
+
+
+def _validate_reconciliation_value_direction(qty_change: Decimal, value_change: Decimal) -> None:
+    """Reject mixed adjustments that cannot be represented by one stock layer.
+
+    Increasing physical quantity while decreasing total inventory value would
+    make the stock movement carry a negative unit value. The GL can post the
+    total value change, but the quantity layer would only carry the incoming
+    quantity at a non-negative rate, breaking the GL/kardex invariant tracked
+    by issue #808.
+    """
+    if qty_change > 0 and value_change < 0:
+        raise PostingError(
+            "La conciliación no puede aumentar cantidad mientras reduce el valor; registre el ajuste de valor por separado."
+        )
 
 
 def _reconciliation_valuation(

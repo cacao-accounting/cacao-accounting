@@ -2435,3 +2435,28 @@ limpios sobre los archivos modificados.
 
 Verificacion: los seis fallos reportados pasan; regresion focalizada de 154 pruebas en verde; Black, Ruff, Flake8, Mypy,
 pydocstyle y `git diff --check` limpios.
+
+## 2026-09-06 (reanudacion de QA, issue #808)
+
+### Analisis de los comentarios del issue
+
+El primer intento (`51c38b97`) solo agregaba aserciones para un ajuste exclusivamente de valor. QA lo marco como
+`needs-work` porque no cubria el escenario reportado: aumentar cantidad y reducir el valor objetivo (`qty_change > 0`,
+`value_change < 0`), que puede producir una tasa unitaria negativa y separar el GL del kardex. El criterio aceptable es
+rechazar ese ajuste mixto o demostrar paridad completa.
+
+### Correccion y cobertura
+
+La regla se centraliza en `_validate_reconciliation_value_direction()` y se ejecuta antes de cualquier mutacion de la
+linea, del `StockBin` o de capas append-only. La prueba dedicada `test_stock_reconciliation_rejects_mixed_quantity_value_adjustment`
+reproduce 10 unidades/1000 de valor contra un conteo de 12 unidades/600 de valor, exige el rechazo y verifica que no se
+persistan `StockLedgerEntry` ni `StockValuationLayer`. El caso de ajuste solo de valor conserva la cobertura end-to-end
+de paridad GL/kardex y cancelacion.
+
+### Verificacion
+
+- `tests/test_07posting_engine.py`: 84/84.
+- `tests/test_audit004_inventory_reconciliation.py`: 28/28.
+- Ruff, Flake8, pydocstyle y `git diff --check`: limpios.
+- Black reporta ambos archivos sin cambios de formato, pero su proceso no termina en este entorno; se deja registrada
+  la limitacion operativa.
