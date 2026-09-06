@@ -1160,7 +1160,9 @@ def _purchase_invoice_account_lines(
             line_amount = allocated_receipt_amount
         else:
             account_id = _require_account_id(
-                _item_account_for_line(item, company, account_type) or variance_account_id,
+                _item_account_for_line(item, company, account_type)
+                or variance_account_id
+                or _item_account_for_line(item, company, "expense"),
                 "Falta la cuenta de gasto, variaciones o cuenta puente para una línea de factura de compra.",
             )
             line_amount = _line_amount(item) if not use_bridge_account or not has_allocation else Decimal("0")

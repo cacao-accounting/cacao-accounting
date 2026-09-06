@@ -2423,3 +2423,15 @@ devolucion del listado de GRNI pendiente.
 
 Validacion: 11 pruebas de retornos y 64 regresiones S2P/document flow en verde; Black, Ruff, Flake8, Mypy y pydocstyle
 limpios sobre los archivos modificados.
+
+## 2026-09-06 (regresiones de posting y listados posteriores a #816/#817)
+
+- Se preserva la conciliacion FIFO que reduce cantidad y aumenta valor cuando existe una capa de valuacion historica; sin
+  capa fuente el movimiento sigue bloqueado para evitar costo no auditable.
+- Se restauro el endpoint de devoluciones como listado de recepciones fisicas, sin reintroducir `purchase_return` como
+  documento AP. Las notas de credito sin origen pueden generar GL independiente, pero la asignacion AP exige factura origen.
+- Los ajustes comerciales usan la cuenta de variaciones configurada y caen a la cuenta de gasto por defecto cuando la
+  compania no tiene una cuenta de variaciones especifica.
+
+Verificacion: los seis fallos reportados pasan; regresion focalizada de 154 pruebas en verde; Black, Ruff, Flake8, Mypy,
+pydocstyle y `git diff --check` limpios.
