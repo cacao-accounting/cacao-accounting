@@ -3088,19 +3088,23 @@ def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, wareho
     """
     source = _delivery_return_source(document)
     already_returned = _delivery_already_returned_qty(document, line, warehouse, source)
-    outgoing_rows = database.session.execute(
-        select(StockLedgerEntry)
-        .where(
-            StockLedgerEntry.company == document.company,
-            StockLedgerEntry.voucher_type == "delivery_note",
-            StockLedgerEntry.voucher_id == source.id,
-            StockLedgerEntry.item_code == line.item_code,
-            StockLedgerEntry.warehouse == warehouse,
-            StockLedgerEntry.qty_change < 0,
-            StockLedgerEntry.is_cancelled.is_(False),
+    outgoing_rows = (
+        database.session.execute(
+            select(StockLedgerEntry)
+            .where(
+                StockLedgerEntry.company == document.company,
+                StockLedgerEntry.voucher_type == "delivery_note",
+                StockLedgerEntry.voucher_id == source.id,
+                StockLedgerEntry.item_code == line.item_code,
+                StockLedgerEntry.warehouse == warehouse,
+                StockLedgerEntry.qty_change < 0,
+                StockLedgerEntry.is_cancelled.is_(False),
+            )
+            .order_by(StockLedgerEntry.posting_date, StockLedgerEntry.id)
         )
-        .order_by(StockLedgerEntry.posting_date, StockLedgerEntry.id)
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     remaining_to_skip = _decimal_value(already_returned)
     remaining = quantity
     cost = Decimal("0")
