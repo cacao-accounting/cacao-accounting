@@ -493,6 +493,33 @@ def test_stock_cancellation_appends_reciprocal_kardex_entry(kardex_app):
     assert any(entry.is_reversal for entry in entries)
 
 
+def test_stock_reversal_derives_rate_from_restored_value_when_original_rate_is_zero(kardex_app, monkeypatch):
+    """A reversal of an exhausted outbound layer keeps the restored unit cost."""
+    from cacao_accounting.contabilidad import posting_service
+    from cacao_accounting.database import StockLedgerEntry, StockValuationLayer, database
+
+    movement = StockLedgerEntry(
+        company="cacao",
+        item_code="ITEM-GOODS",
+        warehouse="WH-MAIN",
+        qty_change=Decimal("-10"),
+        valuation_rate=Decimal("0"),
+        stock_value_difference=Decimal("-100"),
+        voucher_type="stock_entry",
+        voucher_id="cancelled-outbound",
+        posting_date=date(2026, 1, 1),
+    )
+    captured_layers = []
+    monkeypatch.setattr(posting_service, "_upsert_stock_bin", lambda **_: (Decimal("10"), Decimal("100")))
+    monkeypatch.setattr(database.session, "add", captured_layers.append)
+
+    reversal = posting_service._create_stock_reversal(movement, movement, date(2026, 1, 2))
+    layer = captured_layers[0]
+    assert isinstance(layer, StockValuationLayer)
+    assert reversal.valuation_rate == Decimal("10")
+    assert layer.rate == Decimal("10")
+
+
 def test_purchase_receipt_cancel_route_does_not_emit_duplicate_event(kardex_app, monkeypatch):
     """La ruta delega el evento de cancelación al servicio central de posting."""
     from cacao_accounting.compras import routes as purchase_routes
