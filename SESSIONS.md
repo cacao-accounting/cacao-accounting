@@ -2473,3 +2473,27 @@ de paridad GL/kardex y cancelacion.
 - 12 pruebas unitarias nuevas: 12/12 pasando.
 - Black, Ruff, Flake8: limpios sobre archivos modificados.
 - Label cambiado de `needs-work` a `fix-proposed` en GitHub.
+
+## 2026-09-06 (QA de cierre, issues #821 y #832)
+
+### #821 — descuento en OC -> DN -> SI
+
+La implementación vigente conserva `discount_percentage` y `discount_amount` al crear líneas de notas de entrega,
+reconoce `delivery_note` como fuente al crear la factura y usa acceso compatible con líneas legacy que no exponen los
+campos de descuento. La regresión `test_order_delivery_note_invoice_preserves_net_discount` demuestra que una línea
+bruta de 1,000 con descuento de 10% permanece en 900 en la DN y en la SI, sin sobrefacturación.
+
+### #832 — duplicación de devoluciones de entrega
+
+La duplicación conserva `is_return`, `sales_order_id` y `reversal_of`. El costo histórico de la devolución normaliza el
+signo negativo de las salidas origen antes de calcular la tasa, evitando capas de valuación con tasa negativa y
+manteniendo el movimiento positivo de inventario al aprobar el duplicado.
+
+### Verificación
+
+- `tests/test_o2c_sales_fixes.py`: 41/41.
+- `tests/test_batch_serial_submit_and_round_trip.py::TestDeliveryNoteSubmit::test_delivery_return_duplicate_preserves_direction_and_sales_order`: 1/1.
+- La corrida combinada de ambos archivos pasó 73 pruebas; quedaron 2 fallos preexistentes de edición de cantidades en
+  recibos/facturas de compra, fuera del alcance de estos issues.
+- Ruff, Flake8, Mypy y `git diff --check` pasan. Black no terminó en el entorno tras varios minutos y fue detenido;
+  no se modificó código en esta ronda.
