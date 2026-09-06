@@ -38,12 +38,12 @@ def create_recurring_template(data: Dict[str, Any], items: List[Dict[str, Any]],
     validate_template_balance(items)
     company = data["company"]
     books = _authorized_template_books(company, data.get("books"), user_id, "crear")
-    ledger_id = books[0] if books else None
+    primary_book = _book_for_reference(company, books[0]) if books else None
 
     template = RecurringJournalTemplate(
         code=data["code"],
         company=company,
-        ledger_id=ledger_id or (books[0] if books else None),
+        ledger_id=primary_book.id if primary_book else None,
         naming_series_id=data.get("naming_series_id"),
         book_codes=_serialize_book_codes(books),
         name=data["name"],
@@ -133,11 +133,14 @@ def cancel_recurring_template(template_id: str, reason: str, user_id: str):
 def get_applicable_templates(company: str, ledger_id: str, period_date: date) -> Sequence[RecurringJournalTemplate]:
     """Obtiene las plantillas aplicables para un periodo."""
     # Filtros: compañía, ledger, rango de fechas, estado aprobado, no completado
+    book = _book_for_reference(company, ledger_id)
+    if book is None:
+        return []
     stmt = select(RecurringJournalTemplate).where(
         RecurringJournalTemplate.company == company,
         or_(
-            RecurringJournalTemplate.ledger_id == ledger_id,
-            RecurringJournalTemplate.book_codes.contains(f'"{ledger_id}"'),
+            RecurringJournalTemplate.ledger_id == book.id,
+            RecurringJournalTemplate.book_codes.contains(f'"{book.code}"'),
         ),
         RecurringJournalTemplate.start_date <= period_date,
         RecurringJournalTemplate.end_date >= period_date,
@@ -189,11 +192,14 @@ def apply_recurring_template(
 
     base_currency = database.session.execute(select(Entity.currency).filter_by(code=template.company)).scalar_one_or_none()
     transaction_currency = template.currency or base_currency
+    primary_book = database.session.get(Book, template.ledger_id)
+    if primary_book is None or primary_book.entity != template.company:
+        raise RecurringJournalError("La plantilla recurrente referencia un libro inexistente.")
 
     # Generar ComprobanteContable
     journal = ComprobanteContable(
         entity=template.company,
-        book=template.ledger_id,
+        book=primary_book.code,
         book_codes=template.book_codes,
         naming_series_id=template.naming_series_id,
         date=application_date,
@@ -287,7 +293,7 @@ def _serialize_book_codes(books: Any) -> str | None:
 
 
 def _authorized_template_books(company: str, requested: Any, user_id: str, action: str) -> list[str] | None:
-    """Valida compañía y devuelve todos sus libros activos."""
+    """Valida compañía y devuelve los libros activos seleccionados."""
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
@@ -307,7 +313,13 @@ def _authorized_template_books(company: str, requested: Any, user_id: str, actio
     active_codes = [book.code for book in active]
     if not active_codes:
         raise RecurringJournalError("La compañía no tiene libros contables activos.")
-    return active_codes
+    selected = _normalize_requested_books(requested)
+    if not selected:
+        return active_codes
+    invalid = [value for value in selected if value not in active_codes and not any(str(book.id) == value for book in active)]
+    if invalid:
+        raise RecurringJournalError("La selección contiene libros inactivos o ajenos a la compañía.")
+    return [book.code for book in active if book.code in selected or str(book.id) in selected]
 
 
 def _normalize_requested_books(value: Any) -> list[str] | None:
@@ -362,6 +374,15 @@ def _canonical_book_reference(company: str, value: Any) -> str | None:
         database.select(Book).where(Book.entity == company).where((Book.id == str(value)) | (Book.code == str(value)))
     ).scalar_one_or_none()
     return book.code if book else str(value)
+
+
+def _book_for_reference(company: str, value: Any) -> Book | None:
+    """Resolve a book by UUID or code within the template company."""
+    if not value:
+        return None
+    return database.session.execute(
+        select(Book).where(Book.entity == company).where((Book.id == str(value)) | (Book.code == str(value)))
+    ).scalar_one_or_none()
 
 
 def _deserialize_book_codes(value: str | None) -> list[str] | None:
