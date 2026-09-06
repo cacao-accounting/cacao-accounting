@@ -134,7 +134,9 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
     company = _require_company(document.company)
     defaults = _company_defaults(company)
     items = list(
-        database.session.execute(select(PurchaseReceiptItem).filter_by(purchase_receipt_id=document.id)).scalars().all()
+        database.session.execute(select(PurchaseReceiptItem).filter_by(purchase_receipt_id=document.id, is_superseded=False))
+        .scalars()
+        .all()
     )
     if not items:
         raise CalculationContextBuilderError("La recepción de compra no contiene líneas para cálculo.")
@@ -263,7 +265,7 @@ def _invoice_before_receipt_allocated_amounts(document: PurchaseReceipt) -> dict
                 [
                     item.id
                     for item in database.session.execute(
-                        select(PurchaseReceiptItem).filter_by(purchase_receipt_id=document.id)
+                        select(PurchaseReceiptItem).filter_by(purchase_receipt_id=document.id, is_superseded=False)
                     ).scalars()
                 ]
             ),
@@ -336,7 +338,9 @@ def _late_invoice_amounts(invoices: Iterable[PurchaseInvoice]) -> tuple[dict[str
     amounts: dict[str, Decimal] = {}
     posting_dates: dict[str, date] = {}
     for invoice in invoices:
-        items = database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)).scalars()
+        items = database.session.execute(
+            select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id, is_superseded=False)
+        ).scalars()
         for item in items:
             amounts[item.item_code] = amounts.get(item.item_code, Decimal("0")) + _line_amount(item)
             if item.item_code not in posting_dates or invoice.posting_date < posting_dates[item.item_code]:
@@ -389,7 +393,9 @@ def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationCon
     """Build the context for a submitted purchase invoice or credit note."""
     company = _require_company(document.company)
     items = list(
-        database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=document.id)).scalars().all()
+        database.session.execute(select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=document.id, is_superseded=False))
+        .scalars()
+        .all()
     )
     if not items:
         raise CalculationContextBuilderError("La factura de compra no contiene líneas para cálculo.")

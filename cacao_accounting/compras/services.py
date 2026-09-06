@@ -1052,6 +1052,28 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
     return total_qty, total
 
 
+def _active_receipt_items(receipt_id: str) -> list[PurchaseReceiptItem]:
+    """Devuelve solo las líneas vigentes de una recepción de compra."""
+    return list(
+        database.session.execute(
+            database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt_id, is_superseded=False)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _active_invoice_items(invoice_id: str) -> list[PurchaseInvoiceItem]:
+    """Devuelve solo las líneas vigentes de una factura de compra."""
+    return list(
+        database.session.execute(
+            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id, is_superseded=False)
+        )
+        .scalars()
+        .all()
+    )
+
+
 def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una recepción de compra desde el formulario."""
     receipt = database.session.get(PurchaseReceipt, receipt_id)
@@ -1162,7 +1184,9 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
 
 def _persist_purchase_invoice_fiscal_snapshot(invoice: PurchaseInvoice) -> None:
     """Persist the editable fiscal snapshot captured in the form."""
-    items = database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id)).scalars()
+    items = database.session.execute(
+        database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id, is_superseded=False)
+    ).scalars()
     subtotal = sum((Decimal(str(item.amount or "0")) for item in items), Decimal("0"))
     persist_document_fiscal_snapshot(
         company=str(invoice.company or ""),
@@ -1660,11 +1684,7 @@ def _create_purchase_receipt_from_form():
         )
         _total_qty, total = _save_purchase_receipt_items(receipt.id)
         if receipt.purchase_order_id and not receipt.is_return:
-            receipt_items = (
-                database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id))
-                .scalars()
-                .all()
-            )
+            receipt_items = _active_receipt_items(receipt.id)
             _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
         _set_purchase_receipt_totals(receipt, total)
         log_create(receipt)
@@ -1689,10 +1709,8 @@ def _handle_purchase_receipt_edit_post(registro):
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
 
-    for item in database.session.execute(
-        database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=registro.id)
-    ).scalars():
-        database.session.delete(item)
+    for item in _active_receipt_items(registro.id):
+        item.is_superseded = True
     _total_qty, total = _save_purchase_receipt_items(registro.id)
     _set_purchase_receipt_totals(registro, total)
     after_state = _capture_purchase_state(registro)
@@ -1783,11 +1801,7 @@ def _validate_receipt_quantities_against_po(receipt_id: str) -> None:
     """Valida que las cantidades recibidas no excedan las ordenadas en la OC."""
     receipt = database.session.get(PurchaseReceipt, receipt_id)
     if receipt and receipt.purchase_order_id:
-        receipt_items = (
-            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt_id))
-            .scalars()
-            .all()
-        )
+        receipt_items = _active_receipt_items(receipt_id)
         _validate_purchase_source_link(receipt, "purchase_order", receipt.purchase_order_id, receipt_items)
         purchase_order = database.session.get(PurchaseOrder, receipt.purchase_order_id)
         if purchase_order and purchase_order.supplier_id != receipt.supplier_id:
@@ -1833,11 +1847,7 @@ def _validate_invoice_quantities_against_receipt(invoice_id: str) -> None:
     invoice = database.session.get(PurchaseInvoice, invoice_id)
     target_type = PURCHASE_INVOICE
     if invoice:
-        invoice_items = (
-            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice_id))
-            .scalars()
-            .all()
-        )
+        invoice_items = _active_invoice_items(invoice_id)
         if invoice.purchase_receipt_id:
             _validate_purchase_source_link(invoice, "purchase_receipt", invoice.purchase_receipt_id, invoice_items)
         elif invoice.purchase_order_id:
@@ -2359,12 +2369,14 @@ def _invoice_for_physical_return(receipt_id: str) -> str | None:
             return None
         original_item_ids = database.select(PurchaseReceiptReturnAllocation.original_receipt_item_id).where(
             PurchaseReceiptReturnAllocation.return_receipt_item_id.in_(
-                database.select(PurchaseReceiptItem.id).filter_by(purchase_receipt_id=receipt_id)
+                database.select(PurchaseReceiptItem.id).filter_by(purchase_receipt_id=receipt_id, is_superseded=False)
             ),
             PurchaseReceiptReturnAllocation.status == "active",
         )
     else:
-        original_item_ids = database.select(PurchaseReceiptItem.id).filter_by(purchase_receipt_id=receipt_id)
+        original_item_ids = database.select(PurchaseReceiptItem.id).filter_by(
+            purchase_receipt_id=receipt_id, is_superseded=False
+        )
     invoice_ids = (
         database.session.execute(
             database.select(PurchaseInvoice.id)
@@ -2522,11 +2534,7 @@ def _finalize_purchase_invoice(factura: PurchaseInvoice, total: Decimal, context
     fx_rate = _purchase_exchange_rate(factura.company, factura.posting_date, factura.transaction_currency)
     factura.exchange_rate = fx_rate
     base_total, _base = _compute_base_amounts(total, fx_rate)
-    items = list(
-        database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id))
-        .scalars()
-        .all()
-    )
+    items = _active_invoice_items(factura.id)
     grand_total = calculate_document_total_with_taxes(factura, total, items, request.form.get("tax_summary_payload"))
     base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
     factura.base_total = base_total
@@ -2553,11 +2561,7 @@ def _create_purchase_invoice_from_request():
         context = _purchase_invoice_creation_context()
         factura = _build_purchase_invoice(context)
         _total_qty, total = _save_purchase_invoice_items(factura.id)
-        invoice_items = (
-            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=factura.id))
-            .scalars()
-            .all()
-        )
+        invoice_items = _active_invoice_items(factura.id)
         _validate_purchase_invoice_source(factura, invoice_items)
         _finalize_purchase_invoice(factura, total, context)
         database.session.commit()
@@ -2606,19 +2610,13 @@ def _handle_purchase_invoice_edit_post(registro):
             registro.transaction_currency,
         )
         registro.remarks = request.form.get("remarks")
-        for item in database.session.execute(
-            database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id)
-        ).scalars():
-            database.session.delete(item)
+        for item in _active_invoice_items(registro.id):
+            item.is_superseded = True
         _total_qty, total = _save_purchase_invoice_items(registro.id)
         fx_rate = _purchase_exchange_rate(registro.company, registro.posting_date, registro.transaction_currency)
         registro.exchange_rate = fx_rate
         base_total, _base = _compute_base_amounts(total, fx_rate)
-        items = (
-            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=registro.id))
-            .scalars()
-            .all()
-        )
+        items = _active_invoice_items(registro.id)
         grand_total = calculate_document_total_with_taxes(registro, total, items, request.form.get("tax_summary_payload"))
         base_grand_total, _base2 = _compute_base_amounts(grand_total, fx_rate)
         registro.total = total
@@ -2735,11 +2733,7 @@ def _link_landed_cost_to_invoice(
     """Crea relaciones documentales entre la factura de compra y el costo de importacion."""
     from cacao_accounting.document_flow import create_document_relation
 
-    invoice_items = (
-        database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=from_invoice_id))
-        .scalars()
-        .all()
-    )
+    invoice_items = _active_invoice_items(from_invoice_id)
     for item in invoice_items:
         our_item = (
             database.session.execute(
