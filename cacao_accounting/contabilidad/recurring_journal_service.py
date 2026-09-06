@@ -293,7 +293,12 @@ def _serialize_book_codes(books: Any) -> str | None:
 
 
 def _authorized_template_books(company: str, requested: Any, user_id: str, action: str) -> list[str] | None:
-    """Valida compañía y devuelve los libros activos seleccionados."""
+    """Valida compañía y devuelve los libros activos solicitados por el usuario.
+
+    Si `requested` es None o lista vacía, devuelve todos los libros activos (backwards compatibility).
+    Si `requested` tiene valores específicos, devuelve únicamente esos libros (respetando selección del usuario).
+    Valida permisos del usuario y que los libros solicitados sean válidos y activos.
+    """
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
