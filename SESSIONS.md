@@ -2401,3 +2401,6 @@ python3.11 que sombrea los paquetes del venv y rompe el arranque de mypy 2.3.0. 
   deben conservarse como `superseded`, el lector debe usar solo la versión vigente y los eventos de aprobación deben
   tener una clave idempotente por documento y ciclo de posting. Criterio: ninguna fila de evidencia se elimina y una
   segunda aprobación legítima no duplica eventos.
+- #816: separar devolución física y conciliación GRNI. Una `purchase_return` parcial debe afectar únicamente el saldo
+  pendiente de la recepción no facturada; una recepción facturada requiere una nota de crédito explícita para AP. La
+  anulación de la devolución debe emitir solo su contra-asiento y nunca cancelar el matching completo de la factura.
