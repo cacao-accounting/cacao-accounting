@@ -203,7 +203,8 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 52.03.008,Provision for Inventory Obsolescence,52.03,0,Expense,,
 52.03.009,Redondeo,52.03,0,Expense,,rounding
 52.03.010,Retenciones Asumidas,52.03,0,Expense,,
-52.03.011,Pérdida Cambiaria no Realizada,52.03,0,Expense,,unrealized_exchange_loss
+52.03.011,Unrealized Foreign Exchange Loss,52.03,0,Expense,,unrealized_exchange_loss
+52.03.012,Purchase Settlement Variances,52.03,0,Expense,,purchase_settlement_variance
 52.04,Financial Expenses,52,1,Expense,,
 52.04.001,Disbursement Commission,52.04,0,Expense,,
 52.04.002,Gastos por Transferencia,52.04,0,Expense,,

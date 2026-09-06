@@ -656,10 +656,11 @@ def test_get_create_actions_builds_urls_with_query_params(app_ctx):
     assert "from_invoice=PINV-ACT-001" in (purchase_debit["create_url"] or "")
     assert "document_type=purchase_debit_note" in (purchase_debit["create_url"] or "")
 
-    purchase_return = _find_action(purchase_receipt_actions, "Crear Devolución")
-    assert purchase_return["query_params"]["document_type"] == "purchase_return"
+    purchase_return = _find_action(purchase_receipt_actions, "Crear devolución física")
+    assert purchase_return["target_type"] == "purchase_receipt"
+    assert purchase_return["query_params"]["is_return"] == "1"
     assert "from_receipt=PREC-ACT-001" in (purchase_return["create_url"] or "")
-    assert "document_type=purchase_return" in (purchase_return["create_url"] or "")
+    assert "is_return=1" in (purchase_return["create_url"] or "")
 
     purchase_receipt_invoice = _find_action(purchase_receipt_actions, "Crear Factura")
     assert purchase_receipt_invoice["query_params"]["document_type"] == "purchase_invoice"
@@ -830,15 +831,11 @@ def test_inventory_owns_physical_receipt_and_delivery_documents():
     assert DOCUMENT_TYPES["delivery_note"].label == "Remisión de Mercadería Vendida"
 
 
-def test_purchase_return_document_type_registered():
-    """Verifica que purchase_return existe como DocumentType en el registro."""
+def test_purchase_return_document_type_removed():
+    """Las devoluciones físicas no son documentos de cuentas por pagar."""
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
 
-    assert "purchase_return" in DOCUMENT_TYPES
-    spec = DOCUMENT_TYPES["purchase_return"]
-    assert spec.label == "Devolución de Compra"
-    assert spec.module == "purchases"
-    assert spec.list_endpoint == "compras.compras_factura_compra_devolucion_lista"
+    assert "purchase_return" not in DOCUMENT_TYPES
 
 
 def test_sales_return_document_type_registered():
@@ -860,11 +857,12 @@ def test_sales_return_flow_is_allowed():
     assert is_allowed_flow("sales_invoice", "sales_return")
 
 
-def test_purchase_return_flow_is_allowed():
-    """Verifica que purchase_receipt -> purchase_return esta permitido."""
+def test_physical_purchase_return_reuses_purchase_receipt_flow():
+    """La devolución física reutiliza el tipo documental de recepción."""
     from cacao_accounting.document_flow.registry import is_allowed_flow
 
-    assert is_allowed_flow("purchase_receipt", "purchase_return")
+    assert is_allowed_flow("purchase_receipt", "purchase_receipt")
+    assert not is_allowed_flow("purchase_receipt", "purchase_return")
 
 
 def test_has_active_source_relations_true_when_children_exist(app_ctx):

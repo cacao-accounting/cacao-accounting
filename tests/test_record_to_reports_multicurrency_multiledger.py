@@ -364,11 +364,12 @@ def test_semantic_reports_net_returns_and_expose_base_amount(app_ctx):
         invoice(SalesInvoice, "customer_id", "CUSTOMER-SEMANTIC", Decimal("10")),
         invoice(SalesInvoice, "customer_id", "CUSTOMER-SEMANTIC", Decimal("2"), True),
     )
-    purchase, purchase_return = (
+    purchase, purchase_credit_note = (
         invoice(PurchaseInvoice, "supplier_id", "SUPPLIER-SEMANTIC", Decimal("20")),
         invoice(PurchaseInvoice, "supplier_id", "SUPPLIER-SEMANTIC", Decimal("5"), True),
     )
-    database.session.add_all([sale, sale_return, purchase, purchase_return])
+    purchase_credit_note.document_type = "purchase_credit_note"
+    database.session.add_all([sale, sale_return, purchase, purchase_credit_note])
     database.session.flush()
     database.session.add_all(
         [
@@ -376,7 +377,7 @@ def test_semantic_reports_net_returns_and_expose_base_amount(app_ctx):
             SalesInvoiceItem(sales_invoice_id=sale_return.id, item_code="ITEM-SEMANTIC", qty=1, amount=2, base_amount=72),
             PurchaseInvoiceItem(purchase_invoice_id=purchase.id, item_code="ITEM-SEMANTIC", qty=2, amount=20, base_amount=720),
             PurchaseInvoiceItem(
-                purchase_invoice_id=purchase_return.id, item_code="ITEM-SEMANTIC", qty=1, amount=5, base_amount=180
+                purchase_invoice_id=purchase_credit_note.id, item_code="ITEM-SEMANTIC", qty=1, amount=5, base_amount=180
             ),
         ]
     )

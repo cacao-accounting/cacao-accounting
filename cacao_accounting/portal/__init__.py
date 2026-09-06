@@ -205,7 +205,7 @@ def supplier_dashboard():
     q_notes = database.select(PurchaseInvoice).filter(
         PurchaseInvoice.company == current_user.company,
         PurchaseInvoice.docstatus == 1,
-        PurchaseInvoice.document_type.in_(["purchase_credit_note", "purchase_debit_note", "purchase_return"]),
+        PurchaseInvoice.document_type.in_(["purchase_credit_note", "purchase_debit_note"]),
     )
     q_orders = database.select(PurchaseOrder).filter_by(company=current_user.company, docstatus=1)
     q_quotations = database.select(PurchaseQuotation).filter_by(company=current_user.company, docstatus=1)

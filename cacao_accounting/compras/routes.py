@@ -235,7 +235,6 @@ PURCHASE_DEBIT_NOTE = "purchase_debit_note"
 
 PURCHASE_CREDIT_NOTE = "purchase_credit_note"
 
-PURCHASE_RETURN = "purchase_return"
 
 FACTURA_COMPRA_LABEL = "Factura de Compra"
 
@@ -305,7 +304,6 @@ DOCUMENT_TYPE_LABELS: dict[str, str] = {
     PURCHASE_INVOICE: FACTURA_DE_COMPRA,
     PURCHASE_DEBIT_NOTE: "Nota de Débito de Compra",
     PURCHASE_CREDIT_NOTE: "Nota de Crédito de Compra",
-    PURCHASE_RETURN: "Devolución de Compra",
     IMPORT_LANDED_COST: IMPORT_LANDED_COST_LABEL,
 }
 
@@ -1565,33 +1563,6 @@ def compras_factura_compra_nota_credito_lista():
     )
 
 
-@compras.route("/purchase-invoice/return/list")
-@modulo_activo("purchases")
-@login_required
-def compras_factura_compra_devolucion_lista():
-    """Listado de devoluciones de compra."""
-    consulta = _paginate_list(
-        PurchaseInvoice,
-        (
-            PurchaseInvoice.document_no,
-            PurchaseInvoice.supplier_name,
-            PurchaseInvoice.supplier_invoice_no,
-            PurchaseInvoice.remarks,
-        ),
-        database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_RETURN),
-    )
-    titulo = "Listado de Devoluciones de Compra - " + APPNAME
-    return render_template(
-        COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
-        consulta=consulta,
-        titulo=titulo,
-        page_heading="Listado de Devoluciones de Compra",
-        new_button_label="Nueva Devolución",
-        page_caption="Listado de devoluciones de compra.",
-        new_document_type=PURCHASE_RETURN,
-    )
-
-
 @compras.route("/purchase-invoice/debit-note/new", methods=["GET", "POST"])
 @modulo_activo("purchases")
 @login_required
@@ -1606,14 +1577,6 @@ def compras_factura_compra_nota_debito_nueva():
 def compras_factura_compra_nota_credito_nueva():
     """Alias explicito para crear nota de crédito de compra."""
     return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, document_type=PURCHASE_CREDIT_NOTE))
-
-
-@compras.route("/purchase-invoice/return/new", methods=["GET", "POST"])
-@modulo_activo("purchases")
-@login_required
-def compras_factura_compra_devolucion_nueva():
-    """Alias explicito para crear devolución de compra."""
-    return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, document_type=PURCHASE_RETURN))
 
 
 @compras.route("/supplier/list")
@@ -2484,10 +2447,13 @@ def compras_recepcion_nuevo():
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
 
     from_order_id = request.args.get("from_order") or request.form.get("from_order")
+    from_receipt_id = request.args.get("from_receipt") or request.form.get("from_receipt")
     orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
+    recepcion_origen = database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None
 
     selected_company = (
-        (orden_origen.company if orden_origen else None)
+        (recepcion_origen.company if recepcion_origen else None)
+        or (orden_origen.company if orden_origen else None)
         or request.values.get("company")
         or (formulario.company.choices[0][0] if formulario.company.choices else None)
     )
@@ -2512,8 +2478,14 @@ def compras_recepcion_nuevo():
         {"code": w[0].code, "name": w[0].name}
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
-    titulo = "Nueva Recepción de Compra - " + APPNAME
-    company_id = (orden_origen.company if orden_origen else None) or request.args.get("company") or selected_company
+    is_return = bool(recepcion_origen) or request.args.get("is_return") in {"1", "true", "True"}
+    titulo = ("Nueva Devolución de Recepción" if is_return else "Nueva Recepción de Compra") + " - " + APPNAME
+    company_id = (
+        (recepcion_origen.company if recepcion_origen else None)
+        or (orden_origen.company if orden_origen else None)
+        or request.args.get("company")
+        or selected_company
+    )
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_RECEIPT,
         "viewKey": "draft",
@@ -2521,13 +2493,28 @@ def compras_recepcion_nuevo():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "initialSourceType": "purchase_order" if from_order_id else "",
-        "availableSourceTypes": [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}],
+        "initialSourceType": "purchase_receipt" if is_return else ("purchase_order" if from_order_id else ""),
+        "availableSourceTypes": [
+            (
+                {"value": "purchase_receipt", "label": _("Recepción original")}
+                if is_return
+                else {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}
+            )
+        ],
         "initialHeader": {
             "company": company_id or "",
             "posting_date": str(date.today()),
         },
     }
+    if recepcion_origen:
+        transaction_config["initialHeader"] = {
+            "company": recepcion_origen.company or "",
+            "currency": effective_currency(recepcion_origen) or "",
+            "transaction_currency": effective_currency(recepcion_origen) or "",
+            "party": recepcion_origen.supplier_id or "",
+            "party_label": recepcion_origen.supplier_name or "",
+            "posting_date": str(date.today()),
+        }
     if orden_origen:
         source_currency = effective_currency(orden_origen)
         transaction_config["initialHeader"] = {
@@ -2547,7 +2534,9 @@ def compras_recepcion_nuevo():
         form=formulario,
         titulo=titulo,
         orden_origen=orden_origen,
+        recepcion_origen=recepcion_origen,
         from_order_id=from_order_id,
+        from_receipt_id=from_receipt_id,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         bodegas_disponibles=bodegas_disponibles,
@@ -2771,7 +2760,8 @@ def compras_recepcion_submit(receipt_id: str):
         from cacao_accounting.inventario.service import validate_batch_serial_draft
 
         validate_batch_serial_draft(items)
-        _validate_receipt_quantities_against_po(receipt_id)
+        if not registro.is_return:
+            _validate_receipt_quantities_against_po(receipt_id)
         check_budget_control(
             company=registro.company,
             posting_date=registro.posting_date,
@@ -2866,8 +2856,10 @@ def compras_factura_compra_nuevo():
     from_order_id = source_ids["from_order_id"]
     from_receipt_id = source_ids["from_receipt_id"]
     from_invoice_id = source_ids["from_invoice_id"]
-    document_type = _purchase_invoice_document_type(source_ids, request.args.get("document_type"))
-    formulario.is_return.data = document_type == PURCHASE_RETURN
+    document_type = _purchase_invoice_document_type(
+        source_ids, request.args.get("document_type") or request.form.get("document_type")
+    )
+    formulario.is_return.data = False
     orden_origen, recepcion_origen, factura_origen = _purchase_invoice_sources(source_ids)
     document_title = DOCUMENT_TYPE_LABELS.get(document_type, FACTURA_DE_COMPRA)
     items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
@@ -3027,7 +3019,7 @@ def compras_factura_compra_editar(invoice_id: str):
         ],
     }
     document_type = registro.document_type or PURCHASE_INVOICE
-    formulario.is_return.data = document_type == PURCHASE_RETURN
+    formulario.is_return.data = False
     return render_template(
         "compras/factura_compra_nuevo.html",
         form=formulario,
@@ -3120,9 +3112,7 @@ def compras_factura_compra_duplicar(invoice_id: str):
     duplicada.outstanding_amount = total
     duplicada.base_outstanding_amount = base_total
     relation_target_type = (
-        duplicada.document_type
-        if duplicada.document_type in {PURCHASE_RETURN, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE}
-        else PURCHASE_INVOICE
+        duplicada.document_type if duplicada.document_type in {PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE} else PURCHASE_INVOICE
     )
     _copy_active_document_relations(
         origen.id,
@@ -3170,7 +3160,7 @@ def compras_factura_compra_submit(invoice_id: str):
             getattr(registro, "supplier_invoice_no", None),
             exclude_id=registro.id,
         )
-        if registro.document_type in {"purchase_return", "purchase_credit_note", "purchase_debit_note"}:
+        if registro.document_type in {"purchase_credit_note", "purchase_debit_note"}:
             _validate_purchase_reversal_of(
                 registro.reversal_of or "",
                 registro.supplier_id,

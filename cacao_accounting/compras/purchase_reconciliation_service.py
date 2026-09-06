@@ -22,17 +22,20 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from cacao_accounting.database import (
     Item,
     ItemUOMConversion,
     PurchaseEconomicEvent,
+    PurchaseCreditNoteAllocation,
+    PurchaseInvoiceReceiptAllocation,
     PurchaseInvoice,
     PurchaseInvoiceItem,
     PurchaseMatchingConfig,
     PurchaseReceipt,
     PurchaseReceiptItem,
+    PurchaseReceiptReturnAllocation,
     PurchaseReconciliation,
     PurchaseReconciliationItem,
     database,
@@ -215,7 +218,20 @@ def _matched_qty_for_receipt_item(receipt_item_id: str) -> Decimal:
         )
         .where(PurchaseReconciliationItem.status != "cancelled")
     ).scalar_one()
-    return _decimal_value(matched)
+    allocated = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.qty_in_base_uom), 0)).where(
+            PurchaseInvoiceReceiptAllocation.receipt_item_id == receipt_item_id,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+        )
+    ).scalar_one()
+    returned = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.qty_in_base_uom), 0)).where(
+            PurchaseReceiptReturnAllocation.original_receipt_item_id == receipt_item_id,
+            PurchaseReceiptReturnAllocation.status == "active",
+        )
+    ).scalar_one()
+    matched_value = _decimal_value(allocated) if _decimal_value(allocated) > 0 else _decimal_value(matched)
+    return matched_value + _decimal_value(returned)
 
 
 def _matched_amount_for_receipt_item(receipt_item_id: str) -> Decimal:
@@ -226,7 +242,365 @@ def _matched_amount_for_receipt_item(receipt_item_id: str) -> Decimal:
         )
         .where(PurchaseReconciliationItem.status != "cancelled")
     ).scalar_one()
-    return _decimal_value(matched)
+    allocated = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.receipt_amount), 0)).where(
+            PurchaseInvoiceReceiptAllocation.receipt_item_id == receipt_item_id,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+        )
+    ).scalar_one()
+    returned = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.amount), 0)).where(
+            PurchaseReceiptReturnAllocation.original_receipt_item_id == receipt_item_id,
+            PurchaseReceiptReturnAllocation.status == "active",
+        )
+    ).scalar_one()
+    matched_value = _decimal_value(allocated) if _decimal_value(allocated) > 0 else _decimal_value(matched)
+    return matched_value + _decimal_value(returned)
+
+
+def _item_qty_in_base_uom(item: Any) -> Decimal:
+    """Return a line quantity in base UOM for allocation limits."""
+    explicit = getattr(item, "qty_in_base_uom", None)
+    if explicit is not None:
+        return _decimal_value(explicit)
+    qty = _decimal_value(getattr(item, "qty", None))
+    uom = getattr(item, "uom", None)
+    item_record = database.session.get(Item, getattr(item, "item_code", None))
+    base_uom = getattr(item_record, "default_uom", None) if item_record else None
+    if not uom or not base_uom or uom == base_uom:
+        return qty
+    from cacao_accounting.inventario.service import InventoryServiceError, convert_item_qty
+
+    try:
+        return _decimal_value(convert_item_qty(str(item.item_code), qty, str(uom), str(base_uom)))
+    except InventoryServiceError as exc:
+        raise PurchaseReconciliationError(str(exc)) from exc
+
+
+def _allocated_invoice_qty(invoice_item_id: str) -> Decimal:
+    """Return the active quantity already allocated from an invoice line."""
+    value = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.qty_in_base_uom), 0)).where(
+            PurchaseInvoiceReceiptAllocation.invoice_item_id == invoice_item_id,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+        )
+    ).scalar_one()
+    return _decimal_value(value)
+
+
+def _allocated_receipt_qty(receipt_item_id: str) -> Decimal:
+    """Return active invoice allocation quantity for one receipt line."""
+    value = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.qty_in_base_uom), 0)).where(
+            PurchaseInvoiceReceiptAllocation.receipt_item_id == receipt_item_id,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+        )
+    ).scalar_one()
+    returned = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.qty_in_base_uom), 0)).where(
+            PurchaseReceiptReturnAllocation.original_receipt_item_id == receipt_item_id,
+            PurchaseReceiptReturnAllocation.status == "active",
+        )
+    ).scalar_one()
+    return _decimal_value(value) + _decimal_value(returned)
+
+
+def allocate_purchase_invoice_receipt_lines(
+    receipt_id: str,
+    invoice_id: str | None = None,
+) -> list[PurchaseInvoiceReceiptAllocation]:
+    """Create deterministic line allocations for receipt/invoice compensation.
+
+    A receipt may settle one or more invoices and a 2-way invoice may be
+    settled by later receipts.  Allocation rows are never updated or deleted;
+    cancellation marks the derived status and future allocations use only
+    active rows.
+    """
+    receipt = database.session.get(PurchaseReceipt, receipt_id, with_for_update=True)
+    if receipt is None or receipt.docstatus != 1 or receipt.is_return:
+        return []
+    invoices_query = select(PurchaseInvoice).where(
+        PurchaseInvoice.company == receipt.company,
+        PurchaseInvoice.supplier_id == receipt.supplier_id,
+        PurchaseInvoice.docstatus == 1,
+        PurchaseInvoice.is_return.is_(False),
+        PurchaseInvoice.posting_date <= receipt.posting_date,
+    )
+    if invoice_id:
+        invoices_query = invoices_query.where(PurchaseInvoice.id == invoice_id)
+    elif receipt.purchase_order_id:
+        invoices_query = invoices_query.where(PurchaseInvoice.purchase_order_id == receipt.purchase_order_id)
+    else:
+        return []
+    invoices = (
+        database.session.execute(invoices_query.order_by(PurchaseInvoice.posting_date, PurchaseInvoice.id)).scalars().all()
+    )
+    receipt_items = _receipt_items(receipt.id)
+    allocations: list[PurchaseInvoiceReceiptAllocation] = []
+    for invoice in invoices:
+        if invoice.transaction_currency and receipt.transaction_currency:
+            if invoice.transaction_currency != receipt.transaction_currency:
+                raise PurchaseReconciliationError("La factura y la recepción deben usar la misma moneda.")
+        invoice_items = _invoice_items(invoice.id)
+        for invoice_item in invoice_items:
+            remaining_invoice_qty = _item_qty_in_base_uom(invoice_item) - _allocated_invoice_qty(invoice_item.id)
+            if remaining_invoice_qty <= 0:
+                continue
+            for receipt_item in receipt_items:
+                if remaining_invoice_qty <= 0:
+                    break
+                if receipt_item.item_code != invoice_item.item_code:
+                    continue
+                remaining_receipt_qty = _item_qty_in_base_uom(receipt_item) - _allocated_receipt_qty(receipt_item.id)
+                if remaining_receipt_qty <= 0:
+                    continue
+                qty_base = min(remaining_invoice_qty, remaining_receipt_qty)
+                receipt_qty_base = _item_qty_in_base_uom(receipt_item)
+                invoice_qty_base = _item_qty_in_base_uom(invoice_item)
+                if receipt_qty_base <= 0 or invoice_qty_base <= 0:
+                    raise PurchaseReconciliationError("Las líneas de factura y recepción deben tener cantidad positiva.")
+                receipt_amount = _line_amount(receipt_item) * qty_base / receipt_qty_base
+                invoice_amount = _line_amount(invoice_item) * qty_base / invoice_qty_base
+                receipt_fx = _decimal_value(receipt.exchange_rate) or Decimal("1")
+                invoice_fx = _decimal_value(invoice.exchange_rate) or Decimal("1")
+                receipt_base_amount = receipt_amount * receipt_fx
+                invoice_base_amount = invoice_amount * invoice_fx
+                price_base = (invoice_amount - receipt_amount) * invoice_fx
+                exchange_base = invoice_base_amount - receipt_base_amount - price_base
+                row = PurchaseInvoiceReceiptAllocation(
+                    invoice_item_id=invoice_item.id,
+                    receipt_item_id=receipt_item.id,
+                    company=receipt.company,
+                    qty_in_base_uom=qty_base,
+                    receipt_amount=receipt_amount,
+                    receipt_base_amount=receipt_base_amount,
+                    invoice_amount=invoice_amount,
+                    invoice_base_amount=invoice_base_amount,
+                    price_variance_base=price_base,
+                    exchange_variance_base=exchange_base,
+                    transaction_currency=invoice.transaction_currency or receipt.transaction_currency or receipt.base_currency,
+                    base_currency=invoice.base_currency or receipt.base_currency,
+                    receipt_exchange_rate=receipt_fx,
+                    invoice_exchange_rate=invoice_fx,
+                    status="active",
+                )
+                database.session.add(row)
+                allocations.append(row)
+                remaining_invoice_qty -= qty_base
+    database.session.flush()
+    return allocations
+
+
+def create_purchase_receipt_return_allocations(receipt_id: str) -> list[PurchaseReceiptReturnAllocation]:
+    """Validate and persist physical return allocations against a receipt."""
+    returned_receipt = database.session.get(PurchaseReceipt, receipt_id, with_for_update=True)
+    if returned_receipt is None or not returned_receipt.is_return:
+        return []
+    if not returned_receipt.reversal_of:
+        raise PurchaseReconciliationError("La devolución requiere una recepción original.")
+    original = database.session.get(PurchaseReceipt, returned_receipt.reversal_of, with_for_update=True)
+    if original is None or original.docstatus != 1:
+        raise PurchaseReconciliationError("La recepción original debe estar aprobada.")
+    if original.company != returned_receipt.company or original.supplier_id != returned_receipt.supplier_id:
+        raise PurchaseReconciliationError("La devolución y la recepción original deben compartir compañía y proveedor.")
+    original_items: dict[str, list[PurchaseReceiptItem]] = defaultdict(list)
+    for item in _receipt_items(original.id):
+        original_items[item.item_code].append(item)
+    allocations: list[PurchaseReceiptReturnAllocation] = []
+    for return_item in _receipt_items(returned_receipt.id):
+        original_candidates = original_items.get(return_item.item_code, [])
+        if len(original_candidates) != 1:
+            raise PurchaseReconciliationError(
+                "La línea de devolución no corresponde de forma unívoca a la recepción original."
+            )
+        original_item = original_candidates[0]
+        qty = _decimal_value(return_item.qty)
+        qty_in_base_uom = _item_qty_in_base_uom(return_item)
+        already_returned = database.session.execute(
+            select(func.coalesce(func.sum(PurchaseReceiptReturnAllocation.qty_in_base_uom), 0)).where(
+                PurchaseReceiptReturnAllocation.original_receipt_item_id == original_item.id,
+                PurchaseReceiptReturnAllocation.status == "active",
+            )
+        ).scalar_one()
+        if qty_in_base_uom + _decimal_value(already_returned) > _item_qty_in_base_uom(original_item):
+            raise PurchaseReconciliationError("La devolución excede la cantidad recibida original.")
+        receipt_fx = _decimal_value(returned_receipt.exchange_rate) or Decimal("1")
+        row = PurchaseReceiptReturnAllocation(
+            original_receipt_item_id=original_item.id,
+            return_receipt_item_id=return_item.id,
+            company=returned_receipt.company,
+            qty=qty,
+            qty_in_base_uom=qty_in_base_uom,
+            amount=_line_amount(return_item),
+            base_amount=_line_amount(return_item) * receipt_fx,
+            transaction_currency=returned_receipt.transaction_currency or returned_receipt.base_currency,
+            base_currency=returned_receipt.base_currency,
+            exchange_rate=receipt_fx,
+            status="active",
+        )
+        database.session.add(row)
+        allocations.append(row)
+    database.session.flush()
+    return allocations
+
+
+def create_purchase_credit_note_allocations(credit_note_id: str) -> list[PurchaseCreditNoteAllocation]:
+    """Persist auditable applications of a supplier credit note.
+
+    Commercial adjustments are applied against the source invoice lines. A
+    physical-return credit note must additionally reference a posted physical
+    return whose lines are already allocated to the source invoice. The AP
+    relation remains the document-level source of outstanding balance; these
+    rows provide the immutable line-level evidence for audit and GL routing.
+    """
+    note = database.session.get(PurchaseInvoice, credit_note_id, with_for_update=True)
+    if note is None or note.docstatus != 1 or note.document_type != "purchase_credit_note":
+        return []
+    if not note.reversal_of:
+        raise PurchaseReconciliationError("La nota de crédito requiere una factura origen.")
+    source = database.session.get(PurchaseInvoice, note.reversal_of, with_for_update=True)
+    if source is None or source.docstatus != 1:
+        raise PurchaseReconciliationError("La factura origen de la nota de crédito debe estar aprobada.")
+    if source.company != note.company or source.supplier_id != note.supplier_id:
+        raise PurchaseReconciliationError("La nota y la factura origen deben compartir compañía y proveedor.")
+
+    source_items = _invoice_items(source.id)
+    source_by_code: dict[str, list[PurchaseInvoiceItem]] = defaultdict(list)
+    for item in source_items:
+        source_by_code[item.item_code].append(item)
+    note_items = _invoice_items(note.id)
+    return_receipt = database.session.get(PurchaseReceipt, note.purchase_receipt_id) if note.purchase_receipt_id else None
+    physical_return = note.credit_note_type == "physical_return"
+    return_items_by_code: dict[str, list[PurchaseReceiptItem]] = defaultdict(list)
+    if physical_return:
+        if return_receipt is None or not return_receipt.is_return or return_receipt.docstatus != 1:
+            raise PurchaseReconciliationError("La nota física requiere una devolución de recepción aprobada.")
+        for item in _receipt_items(return_receipt.id):
+            return_items_by_code[item.item_code].append(item)
+
+    allocations: list[PurchaseCreditNoteAllocation] = []
+    for note_item in note_items:
+        existing = database.session.execute(
+            select(PurchaseCreditNoteAllocation).where(
+                PurchaseCreditNoteAllocation.credit_note_item_id == note_item.id,
+                PurchaseCreditNoteAllocation.status == "active",
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            allocations.append(existing)
+            continue
+        candidates = source_by_code.get(note_item.item_code, [])
+        if len(candidates) != 1:
+            raise PurchaseReconciliationError("La línea de la nota debe corresponder a una única línea de la factura origen.")
+        source_item = candidates[0]
+        amount = _line_amount(note_item)
+        allocated_amount = database.session.execute(
+            select(func.coalesce(func.sum(PurchaseCreditNoteAllocation.amount), 0)).where(
+                PurchaseCreditNoteAllocation.invoice_item_id == source_item.id,
+                PurchaseCreditNoteAllocation.status == "active",
+            )
+        ).scalar_one()
+        source_amount = _line_amount(source_item)
+        if _decimal_value(allocated_amount) + amount > source_amount:
+            raise PurchaseReconciliationError("La nota de crédito excede el importe de la línea de la factura origen.")
+
+        return_item = None
+        if physical_return:
+            matching_returns = return_items_by_code.get(note_item.item_code, [])
+            if len(matching_returns) != 1:
+                raise PurchaseReconciliationError(
+                    "La nota física debe corresponder a una única línea de devolución de recepción."
+                )
+            return_item = matching_returns[0]
+            return_allocation = database.session.execute(
+                select(PurchaseReceiptReturnAllocation).where(
+                    PurchaseReceiptReturnAllocation.return_receipt_item_id == return_item.id,
+                    PurchaseReceiptReturnAllocation.status == "active",
+                )
+            ).scalar_one_or_none()
+            if return_allocation is None:
+                raise PurchaseReconciliationError("La devolución física no tiene asignación de recepción activa.")
+            invoice_allocation = database.session.execute(
+                select(PurchaseInvoiceReceiptAllocation).where(
+                    PurchaseInvoiceReceiptAllocation.invoice_item_id == source_item.id,
+                    PurchaseInvoiceReceiptAllocation.receipt_item_id == return_allocation.original_receipt_item_id,
+                    PurchaseInvoiceReceiptAllocation.status == "active",
+                )
+            ).scalar_one_or_none()
+            if invoice_allocation is None:
+                raise PurchaseReconciliationError("La devolución física no está vinculada a la factura origen.")
+            if _item_qty_in_base_uom(note_item) > _item_qty_in_base_uom(return_item):
+                raise PurchaseReconciliationError("La nota física excede la cantidad de la devolución de recepción.")
+            return_invoice_amount = database.session.execute(
+                select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.invoice_amount), 0)).where(
+                    PurchaseInvoiceReceiptAllocation.invoice_item_id == source_item.id,
+                    PurchaseInvoiceReceiptAllocation.receipt_item_id == return_allocation.original_receipt_item_id,
+                    PurchaseInvoiceReceiptAllocation.status == "active",
+                )
+            ).scalar_one()
+            if amount > _decimal_value(return_invoice_amount):
+                raise PurchaseReconciliationError("La nota física excede el importe facturado de la devolución.")
+
+        row = PurchaseCreditNoteAllocation(
+            credit_note_item_id=note_item.id,
+            invoice_item_id=source_item.id,
+            return_receipt_item_id=return_item.id if return_item else None,
+            company=note.company,
+            amount=amount,
+            base_amount=amount * (_decimal_value(note.exchange_rate) or Decimal("1")),
+            allocation_type="physical_return" if physical_return else "commercial_adjustment",
+            transaction_currency=note.transaction_currency or note.base_currency,
+            base_currency=note.base_currency,
+            exchange_rate=_decimal_value(note.exchange_rate) or Decimal("1"),
+            status="active",
+        )
+        database.session.add(row)
+        allocations.append(row)
+    database.session.flush()
+    return allocations
+
+
+def cancel_purchase_settlement_allocations(*, receipt_id: str | None = None, invoice_id: str | None = None) -> None:
+    """Cancel derived allocation rows when an upstream document is cancelled."""
+    if not receipt_id and not invoice_id:
+        return
+    receipt_item_ids = []
+    invoice_item_ids = []
+    if receipt_id:
+        receipt_item_ids = [item.id for item in _receipt_items(receipt_id)]
+    if invoice_id:
+        invoice_item_ids = [item.id for item in _invoice_items(invoice_id)]
+    query = select(PurchaseInvoiceReceiptAllocation).where(PurchaseInvoiceReceiptAllocation.status == "active")
+    if receipt_item_ids:
+        query = query.where(PurchaseInvoiceReceiptAllocation.receipt_item_id.in_(receipt_item_ids))
+    if invoice_item_ids:
+        query = query.where(PurchaseInvoiceReceiptAllocation.invoice_item_id.in_(invoice_item_ids))
+    for row in database.session.execute(query).scalars().all():
+        row.status = "cancelled"
+
+    if receipt_item_ids:
+        return_query = select(PurchaseReceiptReturnAllocation).where(
+            PurchaseReceiptReturnAllocation.return_receipt_item_id.in_(receipt_item_ids),
+            PurchaseReceiptReturnAllocation.status == "active",
+        )
+        for row in database.session.execute(return_query).scalars().all():
+            row.status = "cancelled"
+
+    credit_note_query = select(PurchaseCreditNoteAllocation).where(PurchaseCreditNoteAllocation.status == "active")
+    credit_note_filters = []
+    if invoice_item_ids:
+        credit_note_filters.extend(
+            [
+                PurchaseCreditNoteAllocation.credit_note_item_id.in_(invoice_item_ids),
+                PurchaseCreditNoteAllocation.invoice_item_id.in_(invoice_item_ids),
+            ]
+        )
+    if receipt_item_ids:
+        credit_note_filters.append(PurchaseCreditNoteAllocation.return_receipt_item_id.in_(receipt_item_ids))
+    if credit_note_filters:
+        credit_note_query = credit_note_query.where(or_(*credit_note_filters))
+        for row in database.session.execute(credit_note_query).scalars().all():
+            row.status = "cancelled"
 
 
 def _matched_qty_for_order_item(order_item_id: str) -> Decimal:
@@ -1162,8 +1536,8 @@ def get_purchase_reconciliation_pending(company: str, as_of_date: date | None = 
     for receipt, item in database.session.execute(query).all():
         item_qty = _line_qty(item)
         item_amount = _line_amount(item)
-        pending_qty = item_qty - _matched_qty_for_receipt_item(item.id)
-        pending_amount = item_amount - _matched_amount_for_receipt_item(item.id)
+        pending_qty = max(Decimal("0"), item_qty - _matched_qty_for_receipt_item(item.id))
+        pending_amount = max(Decimal("0"), item_amount - _matched_amount_for_receipt_item(item.id))
         if pending_qty <= 0 and pending_amount <= 0:
             continue
         rows.append(

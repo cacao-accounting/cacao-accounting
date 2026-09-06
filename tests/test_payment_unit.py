@@ -298,11 +298,6 @@ class TestPaymentCandidateHelpers:
 
         assert _payment_candidate_physical_type("sales_debit_note") == "sales_invoice"
 
-    def test_payment_candidate_physical_type_purchase_return(self):
-        from cacao_accounting.document_flow.payment import _payment_candidate_physical_type
-
-        assert _payment_candidate_physical_type("purchase_return") == "purchase_invoice"
-
     def test_payment_candidate_physical_type_sales_return(self):
         from cacao_accounting.document_flow.payment import _payment_candidate_physical_type
 
@@ -375,7 +370,7 @@ class TestPaymentCandidateHelpers:
         from cacao_accounting.document_flow.payment import _payment_type_matches_source
 
         assert _payment_type_matches_source("pay", "sales_return") is True
-        assert _payment_type_matches_source("receive", "purchase_return") is True
+        assert _payment_type_matches_source("receive", "purchase_return") is False
 
     def test_payment_type_matches_source_return_invalid_direction(self):
         from cacao_accounting.document_flow.payment import _payment_type_matches_source
@@ -509,7 +504,8 @@ class TestPaymentReferenceModel:
         assert _payment_reference_model("purchase_invoice") is PurchaseInvoice
         assert _payment_reference_model("purchase_credit_note") is PurchaseInvoice
         assert _payment_reference_model("purchase_debit_note") is PurchaseInvoice
-        assert _payment_reference_model("purchase_return") is PurchaseInvoice
+        with pytest.raises(ValueError, match="Tipo de referencia invalido"):
+            _payment_reference_model("purchase_return")
 
     def test_sales_types_return_sales_invoice(self):
         from cacao_accounting.document_flow.payment import _payment_reference_model
@@ -535,7 +531,7 @@ class TestGetModelByType:
         from cacao_accounting.database import PurchaseInvoice
 
         models = _get_model_by_type()
-        for doctype in ("purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_return"):
+        for doctype in ("purchase_invoice", "purchase_debit_note", "purchase_credit_note"):
             assert models[doctype] is PurchaseInvoice
 
     def test_sales_types_map_to_sales_invoice(self):
@@ -562,7 +558,7 @@ class TestCandidateSourceTypes:
         assert "purchase_invoice" in result
         assert "purchase_debit_note" in result
         assert "purchase_credit_note" in result
-        assert "purchase_return" in result
+        assert "purchase_return" not in result
 
     def test_customer(self):
         from cacao_accounting.document_flow.payment import _candidate_source_types
@@ -724,35 +720,6 @@ class TestPaymentReferenceCandidates:
         return_rows = [r for r in results if r["document_id"] == sr.id]
         assert return_rows and return_rows[0]["model_type"] == "sales_invoice"
         assert return_rows[0]["flow_source_type"] == "sales_return"
-
-    def test_purchase_return_candidates_are_exposed_for_supplier(self, app_ctx):
-        """Una devolucion de compra debe poder seleccionarse como referencia de reembolso."""
-        from cacao_accounting.document_flow.payment import payment_reference_candidates
-
-        supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-        pr = PurchaseInvoice(
-            company="cacao",
-            supplier_id=supplier.id,
-            posting_date=date.today(),
-            document_type="purchase_return",
-            docstatus=1,
-            grand_total=Decimal("300"),
-            outstanding_amount=Decimal("300"),
-            base_outstanding_amount=Decimal("300"),
-        )
-        database.session.add(pr)
-        database.session.commit()
-
-        results = payment_reference_candidates(
-            company="cacao",
-            party_type="supplier",
-            party_id=supplier.id,
-            source_types=["purchase_return"],
-        )
-        assert any(r["document_id"] == pr.id for r in results)
-        return_rows = [r for r in results if r["document_id"] == pr.id]
-        assert return_rows and return_rows[0]["model_type"] == "purchase_invoice"
-        assert return_rows[0]["flow_source_type"] == "purchase_return"
 
 
 # ---------------------------------------------------------------------------

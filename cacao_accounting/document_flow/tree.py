@@ -63,7 +63,7 @@ def get_document_node(document_type: str, document_id: str) -> dict[str, Any]:
 
 def _base_relation_type(doctype: str) -> str:
     """Mapea tipos de documento específicos al tipo técnico base usado en relaciones."""
-    if doctype in ("purchase_return", "purchase_credit_note", "purchase_debit_note"):
+    if doctype in ("purchase_credit_note", "purchase_debit_note"):
         return "purchase_invoice"
     if doctype in ("sales_return", "sales_credit_note", "sales_debit_note"):
         return "sales_invoice"

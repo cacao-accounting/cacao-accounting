@@ -1110,12 +1110,9 @@ def test_validate_invoice_requires_supplier_link(app_ctx):
     _validate_invoice_requires_supplier_link(inv.id)
 
 
-def test_purchase_return_uses_return_relations_for_submit_validation(app_ctx):
-    """A purchase return validates its receipt link and consumed quantity."""
-    from cacao_accounting.compras import (
-        _validate_invoice_quantities_against_receipt,
-        _validate_invoice_requires_supplier_link,
-    )
+def test_physical_purchase_return_uses_receipt_allocation(app_ctx):
+    """A physical return is a receipt and records only the returned quantity."""
+    from cacao_accounting.compras.purchase_reconciliation_service import create_purchase_receipt_return_allocations
 
     supplier = Party(name="Prov S2P751", code="SUP-S2P751", is_supplier=True, is_active=True)
     database.session.add(supplier)
@@ -1134,6 +1131,9 @@ def test_purchase_return_uses_return_relations_for_submit_validation(app_ctx):
         company="cacao",
         posting_date=date.today(),
         docstatus=1,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
     database.session.add(receipt)
     database.session.flush()
@@ -1145,42 +1145,35 @@ def test_purchase_return_uses_return_relations_for_submit_validation(app_ctx):
         rate=Decimal("10"),
         amount=Decimal("100"),
     )
-    purchase_return = PurchaseInvoice(
+    physical_return = PurchaseReceipt(
         id="PRET-S2P751",
         supplier_id=supplier.id,
         company="cacao",
         posting_date=date.today(),
-        document_type="purchase_return",
-        docstatus=0,
+        docstatus=1,
+        is_return=True,
+        reversal_of=receipt.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        exchange_rate=Decimal("1"),
     )
-    database.session.add_all((receipt_item, purchase_return))
+    database.session.add_all((receipt_item, physical_return))
     database.session.flush()
-    return_item = PurchaseInvoiceItem(
+    return_item = PurchaseReceiptItem(
         id="PRET-ITEM-S2P751",
-        purchase_invoice_id=purchase_return.id,
+        purchase_receipt_id=physical_return.id,
         item_code="ART-001",
         qty=Decimal("2"),
         rate=Decimal("10"),
         amount=Decimal("20"),
     )
     database.session.add(return_item)
-    database.session.add(
-        DocumentRelation(
-            source_type="purchase_receipt",
-            source_id=receipt.id,
-            source_item_id=receipt_item.id,
-            target_type="purchase_return",
-            target_id=purchase_return.id,
-            target_item_id=return_item.id,
-            qty=Decimal("2"),
-            relation_type="fulfillment",
-            status="active",
-        )
-    )
     database.session.commit()
 
-    _validate_invoice_quantities_against_receipt(purchase_return.id)
-    _validate_invoice_requires_supplier_link(purchase_return.id)
+    allocations = create_purchase_receipt_return_allocations(physical_return.id)
+    assert len(allocations) == 1
+    assert allocations[0].original_receipt_item_id == receipt_item.id
+    assert allocations[0].qty_in_base_uom == Decimal("2")
 
 
 def test_invoice_edit_preserves_supplier_invoice_no(app_ctx):

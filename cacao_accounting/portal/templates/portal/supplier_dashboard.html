@@ -154,8 +154,6 @@
             <span class="badge text-bg-info">{{ _('Nota de Crédito') }}</span>
           {% elif item.document_type == 'purchase_debit_note' %}
             <span class="badge text-bg-warning">{{ _('Nota de Débito') }}</span>
-          {% elif item.document_type == 'purchase_return' %}
-            <span class="badge text-bg-secondary">{{ _('Devolución') }}</span>
           {% else %}
             <span class="badge text-bg-light">{{ item.document_type }}</span>
           {% endif %}

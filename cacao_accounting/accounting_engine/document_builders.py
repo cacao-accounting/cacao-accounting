@@ -143,7 +143,9 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         getattr(defaults, "bridge_account_id", None),
         "Falta la cuenta puente configurada para la compañía.",
     )
-    late_two_way_amounts = _late_two_way_invoice_amounts(document)
+    late_two_way_amounts = {} if getattr(document, "is_return", False) else _late_two_way_invoice_amounts(document)
+    allocated_late_amounts = _invoice_before_receipt_allocated_amounts(document)
+    variance_account_id = getattr(defaults, "purchase_settlement_variance_account_id", None)
     account_lines: list[AccountLineSpec] = []
     item_contexts: list[ItemContext] = []
     inventory_side = "credit" if getattr(document, "is_return", False) else "debit"
@@ -166,7 +168,13 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
                 description=f"{description} - {_event_label('purchase_receipt_confirmed')}",
             )
         )
-        reclassified_amount = min(late_two_way_amounts.get(item.item_code, Decimal("0")), amount)
+        allocated_receipt_amount, allocated_invoice_amount = allocated_late_amounts.get(
+            str(getattr(item, "id", "")), (Decimal("0"), Decimal("0"))
+        )
+        has_allocation = allocated_receipt_amount > 0 or allocated_invoice_amount > 0
+        reclassified_amount = allocated_invoice_amount
+        if not has_allocation:
+            reclassified_amount = min(late_two_way_amounts.get(item.item_code, Decimal("0")), amount)
         if reclassified_amount > 0:
             expense_account_id = _require_account_id(
                 _item_account_for_line(item, company, "expense"),
@@ -181,8 +189,23 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
                     party_id=document.supplier_id,
                 )
             )
+            variance = reclassified_amount - allocated_receipt_amount if has_allocation else Decimal("0")
+            if variance:
+                if not variance_account_id:
+                    raise CalculationContextBuilderError(
+                        "Falta la cuenta de variaciones de liquidación de compras para compensar una factura 2-way."
+                    )
+                account_lines.append(
+                    AccountLineSpec(
+                        account_id=variance_account_id,
+                        amount=abs(variance),
+                        side="debit" if variance > 0 else "credit",
+                        description=_("Variación de liquidación de compras"),
+                        party_id=document.supplier_id,
+                    )
+                )
             late_two_way_amounts[item.item_code] -= reclassified_amount
-        bridge_amount = amount - reclassified_amount
+        bridge_amount = amount - allocated_receipt_amount if has_allocation else amount - reclassified_amount
         if bridge_amount > 0:
             account_lines.append(
                 AccountLineSpec(
@@ -216,6 +239,41 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
             account_lines=account_lines,
         ),
     )
+
+
+def _invoice_before_receipt_allocated_amounts(document: PurchaseReceipt) -> dict[str, tuple[Decimal, Decimal]]:
+    """Return invoice amounts allocated to the current receipt by line.
+
+    This is the durable replacement for matching an invoice-before-receipt
+    flow by an aggregate item amount.  It intentionally returns transaction
+    currency amounts because the accounting mapper applies the document
+    exchange-rate snapshot consistently to every line in the context.
+    """
+    from cacao_accounting.database import PurchaseInvoiceReceiptAllocation, database
+
+    rows = database.session.execute(
+        select(PurchaseInvoiceReceiptAllocation).where(
+            PurchaseInvoiceReceiptAllocation.company == document.company,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+            PurchaseInvoiceReceiptAllocation.receipt_item_id.in_(
+                [
+                    item.id
+                    for item in database.session.execute(
+                        select(PurchaseReceiptItem).filter_by(purchase_receipt_id=document.id)
+                    ).scalars()
+                ]
+            ),
+        )
+    ).scalars()
+    amounts: dict[str, tuple[Decimal, Decimal]] = {}
+    for row in rows:
+        key = str(row.receipt_item_id)
+        receipt_amount, invoice_amount = amounts.get(key, (Decimal("0"), Decimal("0")))
+        amounts[key] = (
+            receipt_amount + _decimal_value(row.receipt_amount),
+            invoice_amount + _decimal_value(row.invoice_amount),
+        )
+    return amounts
 
 
 def _late_two_way_invoice_amounts(document: PurchaseReceipt) -> dict[str, Decimal]:
@@ -1038,6 +1096,7 @@ def _build_references(
     custom["unrealized_exchange_loss_account_id"] = getattr(defaults, "unrealized_exchange_loss_account_id", None)
     custom["sales_discount_account_id"] = getattr(defaults, "sales_discount_account_id", None)
     custom["purchase_discount_account_id"] = getattr(defaults, "purchase_discount_account_id", None)
+    custom["purchase_settlement_variance_account_id"] = getattr(defaults, "purchase_settlement_variance_account_id", None)
     custom["advance_account_id"] = (
         getattr(defaults, "supplier_advance_account_id", None)
         if direction == "purchase"
@@ -1070,24 +1129,94 @@ def _purchase_invoice_account_lines(
     company: str,
 ) -> list[AccountLineSpec]:
     """Resolve the non-tax lines for purchase invoices and credit notes."""
-    use_bridge_account = _purchase_invoice_has_receipt(document, company)
-    side = "credit" if _is_purchase_credit_note(document) else "debit"
-    account_type = "bridge" if use_bridge_account else "expense"
+    raw_document_type = getattr(document, "document_type", None)
+    credit_note_type = getattr(document, "credit_note_type", None)
+    if credit_note_type is None and raw_document_type == "purchase_credit_note":
+        credit_note_type = "commercial_adjustment"
+    is_credit_note = _is_purchase_credit_note(document)
+    use_bridge_account = _purchase_invoice_has_receipt(document, company) and (
+        not is_credit_note or credit_note_type == "physical_return"
+    )
+    side = "credit" if is_credit_note else "debit"
+    account_type = (
+        "bridge"
+        if use_bridge_account
+        else ("purchase_settlement_variance" if credit_note_type == "commercial_adjustment" else "expense")
+    )
     specs: list[AccountLineSpec] = []
+    variance_account_id = getattr(_company_defaults(company), "purchase_settlement_variance_account_id", None)
     for item in items:
-        account_id = _require_account_id(
-            _item_account_for_line(item, company, account_type),
-            "Falta la cuenta de gasto o cuenta puente para una línea de factura de compra.",
-        )
-        specs.append(
-            AccountLineSpec(
-                account_id=account_id,
-                amount=_line_amount(item),
-                side=side,
-                description=getattr(item, "item_name", None) or item.item_code,
+        allocated_receipt_amount, allocated_invoice_amount = _invoice_receipt_allocation_amounts(item)
+        has_allocation = allocated_invoice_amount > 0 or allocated_receipt_amount > 0
+        if use_bridge_account and has_allocation:
+            account_id = _require_account_id(
+                getattr(_company_defaults(company), "bridge_account_id", None),
+                "Falta la cuenta puente para liquidar una factura de compra.",
             )
-        )
+            line_amount = allocated_receipt_amount
+        else:
+            account_id = _require_account_id(
+                _item_account_for_line(item, company, account_type) or variance_account_id,
+                "Falta la cuenta de gasto, variaciones o cuenta puente para una línea de factura de compra.",
+            )
+            line_amount = _line_amount(item) if not use_bridge_account or not has_allocation else Decimal("0")
+        if line_amount > 0:
+            specs.append(
+                AccountLineSpec(
+                    account_id=account_id,
+                    amount=line_amount,
+                    side=side,
+                    description=getattr(item, "item_name", None) or item.item_code,
+                )
+            )
+        if use_bridge_account and has_allocation:
+            remaining_amount = _line_amount(item) - allocated_invoice_amount
+            if remaining_amount > 0:
+                expense_account_id = _require_account_id(
+                    _item_account_for_line(item, company, "expense"),
+                    "Falta la cuenta de gasto para la porción de factura aún no recibida.",
+                )
+                specs.append(
+                    AccountLineSpec(
+                        account_id=expense_account_id,
+                        amount=remaining_amount,
+                        side=side,
+                        description=f"{getattr(item, 'item_name', None) or item.item_code} - {_('Porción no recibida')}",
+                    )
+                )
+            variance = allocated_invoice_amount - allocated_receipt_amount
+            if variance:
+                if not variance_account_id:
+                    raise CalculationContextBuilderError(
+                        "Falta la cuenta de variaciones de liquidación de compras para liquidar la factura."
+                    )
+                specs.append(
+                    AccountLineSpec(
+                        account_id=variance_account_id,
+                        amount=abs(variance),
+                        side="debit" if (variance > 0) == (side == "debit") else "credit",
+                        description=_("Variación de liquidación de compras"),
+                    )
+                )
     return specs
+
+
+def _invoice_receipt_allocation_amounts(item: PurchaseInvoiceItem) -> tuple[Decimal, Decimal]:
+    """Return receipt and invoice amounts allocated to an invoice line."""
+    from cacao_accounting.database import PurchaseInvoiceReceiptAllocation
+
+    rows = database.session.execute(
+        select(PurchaseInvoiceReceiptAllocation).where(
+            PurchaseInvoiceReceiptAllocation.invoice_item_id == item.id,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+        )
+    ).scalars()
+    receipt_amount = Decimal("0")
+    invoice_amount = Decimal("0")
+    for row in rows:
+        receipt_amount += _decimal_value(row.receipt_amount)
+        invoice_amount += _decimal_value(row.invoice_amount)
+    return receipt_amount, invoice_amount
 
 
 def _purchase_invoice_has_receipt(document: PurchaseInvoice, company: str) -> bool:

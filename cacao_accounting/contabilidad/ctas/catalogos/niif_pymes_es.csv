@@ -347,6 +347,7 @@ codigo,nombre,padre,grupo,rubro,tipo,account_type
 83.05.01,Pérdida por Valor Razonable — Instrumentos Financieros,83,0,Expense,,
 83.06.01,Pérdida por Valor Razonable — Activos Biológicos,83,0,Expense,,
 83.09.01,Otras Pérdidas,83,0,Expense,,
+83.09.02,Variaciones de liquidación de compras,83,0,Expense,,purchase_settlement_variance
 9,Gasto por Impuesto a las Ganancias,,1,Expense,,
 91,Gasto por Impuesto Corriente,9,1,Expense,,
 91.01.01,Gasto por Impuesto Corriente sobre las Ganancias,91,0,Expense,,

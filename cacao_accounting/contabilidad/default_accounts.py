@@ -43,6 +43,11 @@ DEFAULT_ACCOUNT_DEFINITIONS: tuple[DefaultAccountDefinition, ...] = (
     ),
     DefaultAccountDefinition("bridge_account_id", "Cuenta puente de compras", ("bridge",)),
     DefaultAccountDefinition(
+        "purchase_settlement_variance_account_id",
+        "Variaciones de liquidación de compras",
+        ("purchase_settlement_variance", "expense", "income"),
+    ),
+    DefaultAccountDefinition(
         "customer_advance_account_id",
         "Cuenta de anticipos de clientes",
         ("customer_advance", "liability"),
@@ -109,6 +114,7 @@ SPECIAL_ACCOUNT_TYPES: frozenset[str] = frozenset(
         "inventory",
         "tax",
         "bridge",
+        "purchase_settlement_variance",
         "cost_of_goods_sold",
         "inventory_adjustment",
         "customer_advance",
@@ -141,6 +147,7 @@ ACCOUNT_TYPE_ALLOWED_VOUCHERS: dict[str, frozenset[str]] = {
     "inventory": frozenset({"purchase_receipt", "delivery_note", "stock_entry"}),
     "tax": frozenset({"sales_invoice", "purchase_invoice"}),
     "bridge": frozenset({"purchase_receipt", "purchase_invoice", "stock_entry"}),
+    "purchase_settlement_variance": frozenset({"purchase_receipt", "purchase_invoice", "journal_entry"}),
     "cost_of_goods_sold": frozenset({"delivery_note"}),
     "inventory_adjustment": frozenset({"stock_entry"}),
     "customer_advance": frozenset({"payment_entry"}),

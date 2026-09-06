@@ -1495,8 +1495,8 @@ def test_ar_ap_subledger_excludes_nonposted_documents_and_cancelled_payments(app
     assert report.rows[0].values["outstanding_amount"] == Decimal("100")
 
 
-def test_accounts_payable_reports_exclude_purchase_returns_and_keep_legacy_invoice(app_ctx):
-    """AP views show payable invoices, not negative purchase returns."""
+def test_accounts_payable_reports_exclude_purchase_credit_notes_and_keep_invoice(app_ctx):
+    """AP views show payable invoices, not credit notes when returns are excluded."""
     from cacao_accounting.database import PurchaseInvoice, database
     from cacao_accounting.reportes.services import (
         AgingFilters,
@@ -1514,18 +1514,18 @@ def test_accounts_payable_reports_exclude_purchase_returns_and_keep_legacy_invoi
         outstanding_amount=Decimal("50"),
         docstatus=1,
     )
-    purchase_return = PurchaseInvoice(
-        id="PI-REPORT-RETURN",
-        document_no="cacao-PI-RETURN-00001",
+    purchase_credit_note = PurchaseInvoice(
+        id="PI-REPORT-CREDIT",
+        document_no="cacao-PI-CREDIT-00001",
         company="cacao",
         posting_date=date(2026, 8, 15),
         grand_total=Decimal("20000"),
         outstanding_amount=Decimal("20000"),
         is_return=True,
-        document_type="purchase_return",
+        document_type="purchase_credit_note",
         docstatus=1,
     )
-    database.session.add_all([invoice, purchase_return])
+    database.session.add_all([invoice, purchase_credit_note])
     database.session.commit()
 
     report = get_ar_ap_subledger(SubledgerFilters(company="cacao", party_type="supplier", include_returns=False))

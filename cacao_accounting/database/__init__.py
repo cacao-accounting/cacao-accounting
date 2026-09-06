@@ -2377,6 +2377,7 @@ class PurchaseInvoice(database.Model, DocBase):  # type: ignore[name-defined]
     purchase_terms = database.Column(database.Text(), nullable=True)
     landed_cost_estimates_json = database.Column(database.Text(), nullable=True)
     document_type = database.Column(database.String(50), nullable=False, default="purchase_invoice")
+    credit_note_type = database.Column(database.String(30), nullable=True)
     is_return = database.Column(database.Boolean(), default=False, nullable=False)
     purchase_order_id = database.Column(
         database.String(26),
@@ -4446,6 +4447,9 @@ class CompanyDefaultAccount(database.Model, BaseTabla):  # type: ignore[name-def
     bridge_account_id = database.Column(
         database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
+    purchase_settlement_variance_account_id = database.Column(
+        database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+    )
     customer_advance_account_id = database.Column(
         database.String(26), database.ForeignKey(ACCOUNT_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
@@ -5020,6 +5024,95 @@ class PurchaseReconciliationItem(database.Model, BaseTabla):  # type: ignore[nam
     price_difference = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
     # partial, reconciled, cancelled
     status = database.Column(database.String(20), default="reconciled", nullable=False, index=True)
+
+
+class PurchaseReceiptReturnAllocation(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Evidencia por línea de una devolución física de recepción.
+
+    La fila es append-only: ``status`` puede pasar a ``cancelled`` durante una
+    anulación, pero la cantidad y los importes históricos no se reescriben.
+    """
+
+    __tablename__ = "purchase_receipt_return_allocation"
+    original_receipt_item_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_receipt_item.id", ondelete=FK_RESTRICT),
+        nullable=False,
+        index=True,
+    )
+    return_receipt_item_id = database.Column(
+        database.String(26),
+        database.ForeignKey("purchase_receipt_item.id", ondelete=FK_RESTRICT),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT), nullable=False, index=True
+    )
+    qty = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    transaction_currency = database.Column(database.String(10), nullable=False)
+    base_currency = database.Column(database.String(10), nullable=False)
+    exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    status = database.Column(database.String(20), default="active", nullable=False, index=True)
+
+
+class PurchaseInvoiceReceiptAllocation(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Compensación auditable entre una línea de factura y una recepción."""
+
+    __tablename__ = "purchase_invoice_receipt_allocation"
+    invoice_item_id = database.Column(
+        database.String(26), database.ForeignKey("purchase_invoice_item.id", ondelete=FK_RESTRICT), nullable=False, index=True
+    )
+    receipt_item_id = database.Column(
+        database.String(26), database.ForeignKey("purchase_receipt_item.id", ondelete=FK_RESTRICT), nullable=False, index=True
+    )
+    purchase_order_item_id = database.Column(
+        database.String(26), database.ForeignKey("purchase_order_item.id", ondelete=FK_RESTRICT), nullable=True, index=True
+    )
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT), nullable=False, index=True
+    )
+    qty_in_base_uom = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    receipt_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    receipt_base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    invoice_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    invoice_base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    price_variance_base = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    exchange_variance_base = database.Column(database.Numeric(precision=20, scale=4), nullable=False, default=0)
+    transaction_currency = database.Column(database.String(10), nullable=False)
+    base_currency = database.Column(database.String(10), nullable=False)
+    receipt_exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    invoice_exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    status = database.Column(database.String(20), default="active", nullable=False, index=True)
+
+
+class PurchaseCreditNoteAllocation(database.Model, BaseTabla):  # type: ignore[name-defined]
+    """Aplicación auditable de una nota de crédito de proveedor por línea."""
+
+    __tablename__ = "purchase_credit_note_allocation"
+    credit_note_item_id = database.Column(
+        database.String(26), database.ForeignKey("purchase_invoice_item.id", ondelete=FK_RESTRICT), nullable=False, index=True
+    )
+    invoice_item_id = database.Column(
+        database.String(26), database.ForeignKey("purchase_invoice_item.id", ondelete=FK_RESTRICT), nullable=False, index=True
+    )
+    return_receipt_item_id = database.Column(
+        database.String(26), database.ForeignKey("purchase_receipt_item.id", ondelete=FK_RESTRICT), nullable=True, index=True
+    )
+    company = database.Column(
+        database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT), nullable=False, index=True
+    )
+    amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    base_amount = database.Column(database.Numeric(precision=20, scale=4), nullable=False)
+    allocation_type = database.Column(database.String(30), nullable=False)
+    transaction_currency = database.Column(database.String(10), nullable=False)
+    base_currency = database.Column(database.String(10), nullable=False)
+    exchange_rate = database.Column(database.Numeric(precision=20, scale=9), nullable=False)
+    status = database.Column(database.String(20), default="active", nullable=False, index=True)
 
 
 # <---------------------------------------------------------------------------------------------> #
