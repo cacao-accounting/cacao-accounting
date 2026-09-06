@@ -51,6 +51,8 @@ from cacao_accounting.database import (
     SupplierQuotationItem,
     TaxTemplate,
     UOM,
+    PaymentReference,
+    WithholdingCertificate,
     database,
 )
 
@@ -2250,6 +2252,22 @@ def _validate_purchase_reversal_of(
         raise ValueError(f"La factura origen '{reversal_of}' no pertenece al mismo proveedor.")
     if company and source.company != company:
         raise ValueError(f"La factura origen '{reversal_of}' no pertenece a la misma compañía.")
+    if document_type in {PURCHASE_RETURN, "purchase_credit_note"}:
+        issued_withholding = database.session.execute(
+            database.select(WithholdingCertificate.id)
+            .join(PaymentReference, PaymentReference.payment_id == WithholdingCertificate.payment_id)
+            .where(
+                PaymentReference.reference_id == source.id,
+                PaymentReference.reference_type.in_(("purchase_invoice", "purchase_credit_note", "purchase_return")),
+                WithholdingCertificate.status == "issued",
+                WithholdingCertificate.docstatus == 1,
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if issued_withholding is not None:
+            raise ValueError(
+                "No se puede revertir una factura con retención emitida; ajuste o cancele primero el certificado de retención."
+            )
     if document_type in {PURCHASE_RETURN, "purchase_credit_note"} and note_amount is not None:
         from cacao_accounting.document_flow.payment import compute_outstanding_amount
 
