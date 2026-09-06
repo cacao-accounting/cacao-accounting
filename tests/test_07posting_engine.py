@@ -335,6 +335,34 @@ def test_stock_reconciliation_rejects_negative_rate_from_positive_quantity_delta
         _create_stock_reconciliation_movement(entry, line)
 
 
+def test_stock_reconciliation_rejects_value_increase_with_quantity_decrease(app_ctx):
+    """Refs: #808 - A quantity decrease cannot increase value (GL/kardex divergence)."""
+    from cacao_accounting.contabilidad.posting_service import PostingError, _create_stock_reconciliation_movement
+    from cacao_accounting.database import StockBin, StockEntry, StockEntryItem, database
+
+    database.session.add(
+        StockBin(company="cacao", item_code="RECON-DOWN", warehouse="WH-RECON-DOWN", actual_qty=10, stock_value=100)
+    )
+    entry = StockEntry(company="cacao", posting_date=date(2026, 5, 4), purpose="stock_reconciliation")
+    database.session.add(entry)
+    database.session.flush()
+    line = StockEntryItem(
+        stock_entry_id=entry.id,
+        item_code="RECON-DOWN",
+        target_warehouse="WH-RECON-DOWN",
+        qty=Decimal("2"),
+        uom="UND",
+        counted_qty=8,
+        target_stock_value=150,
+        target_valuation_rate=18.75,
+    )
+    database.session.add(line)
+    database.session.commit()
+
+    with pytest.raises(PostingError, match="reducir cantidad mientras aumenta el valor"):
+        _create_stock_reconciliation_movement(entry, line)
+
+
 def test_cancelled_status_filter_includes_cancelled_gl_rows(app_ctx):
     """The cancelled status must not conflict with the default scope."""
     from cacao_accounting.database import Book, GLEntry, database
