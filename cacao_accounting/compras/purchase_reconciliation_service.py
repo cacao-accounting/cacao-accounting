@@ -1760,10 +1760,10 @@ def reconstruct_reconciliation_state(company: str, document_id: str) -> Reconcil
 
     # Derive current status by replaying events in order
     derived_status = "unknown"
-    for ev in events_list:
-        match ev["event_type"]:
+    for event_row in events_list:
+        match event_row["event_type"]:
             case EventType.MATCH_COMPLETED:
-                payload = ev.get("payload", {})
+                payload = event_row.get("payload", {})
                 derived_status = payload.get("matching_result", "reconciled")
                 if derived_status == MatchingResult.MATCH_OK.value:
                     derived_status = "reconciled"

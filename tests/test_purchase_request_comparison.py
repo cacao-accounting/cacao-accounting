@@ -758,6 +758,7 @@ def test_comparison_orders_apply_exchange_rate_to_base_total(app_ctx):
         assert order_item.amount == Decimal("20")
         assert order_item.base_rate == Decimal("72.0000")
         assert order_item.base_amount == Decimal("720.0000")
+        assert usd_order.base_grand_total == Decimal("720.0000")
 
 
 def test_comparison_rejects_cancelled_offer_when_placing_orders(app_ctx):
