@@ -1688,6 +1688,12 @@ class StockValuationLayer(database.Model):  # type: ignore[name-defined]
         nullable=True,
         index=True,
     )
+    # Serialización JSON de la composición FIFO consumida por esta capa.
+    # Formato: [{"layer_id": str, "qty": str, "rate": str}, ...]
+    # Solo se aplica a salidas (qty < 0); None para entradas y capas agregadas
+    # de una sola capa. Permite reconstruir el costo exacto de devoluciones
+    # parciales cuando la venta original consumió múltiples capas de recepción.
+    consumed_layers = database.Column(database.Text, nullable=True)
 
 
 class LandedCostAllocation(database.Model, BaseTabla):  # type: ignore[name-defined]

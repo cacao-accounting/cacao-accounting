@@ -3159,15 +3159,135 @@ def _delivery_already_returned_qty(
 
 
 def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, quantity: Decimal) -> Decimal:
-    """Return historical cost using the source delivery's layer sequence.
+    """Return the historical inventory cost for a sales delivery return line.
 
-    A delivery can contain several outgoing valuation rows when FIFO spans
-    multiple receipt layers.  Averaging all rows before pricing a partial
-    return loses that composition and can value the return at a rate that was
-    never present in the source delivery.
+    Uses per-layer FIFO composition when available (multi-layer deliveries);
+    falls back to the aggregated stock ledger entry rate for legacy data.
+    """
+    composition = _delivery_return_cost_composition(document, line, warehouse, quantity)
+    total_cost = Decimal("0")
+    for entry in composition:
+        total_cost += (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001"))
+    return total_cost.quantize(Decimal("0.0001"))
+
+
+def _delivery_return_cost_composition(
+    document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, quantity: Decimal
+) -> list[dict[str, Decimal]]:
+    """Return per-layer cost composition for a delivery return.
+
+    Uses the ``consumed_layers`` JSON stored on the source delivery's outgoing
+    stock valuation layers to reconstruct the exact FIFO cost of each receipt
+    layer consumed by the original delivery.  This ensures partial returns are
+    valued at the historical cost of the layers actually consumed, not at an
+    averaged rate.
+
+    Each dict in the returned list contains ``{"qty": Decimal, "rate": Decimal}``
+    representing a portion of the return quantity valued at a specific receipt
+    layer's cost.  The caller creates one stock movement per entry.
+
+    Falls back to the aggregated rate from the delivery's outgoing SVL when the
+    ``consumed_layers`` field is not available (legacy data).
     """
     source = _delivery_return_source(document)
     already_returned = _delivery_already_returned_qty(document, line, warehouse, source)
+    outgoing_svl = list(
+        database.session.execute(
+            select(StockValuationLayer)
+            .where(
+                StockValuationLayer.company == document.company,
+                StockValuationLayer.voucher_type == "delivery_note",
+                StockValuationLayer.voucher_id == source.id,
+                StockValuationLayer.item_code == line.item_code,
+                StockValuationLayer.warehouse == warehouse,
+                StockValuationLayer.qty < 0,
+            )
+            .order_by(StockValuationLayer.posting_date, StockValuationLayer.id)
+        )
+        .scalars()
+        .all()
+    )
+    if not outgoing_svl:
+        return _delivery_return_cost_from_sle(document, line, warehouse, source, already_returned, quantity)
+    layer_ids: set[str] = set()
+    svl_consumed: list[Any] = []
+    for svl in outgoing_svl:
+        raw = getattr(svl, "consumed_layers", None)
+        if raw:
+            parsed = json.loads(str(raw))
+            for entry in parsed:
+                layer_ids.add(entry["layer_id"])
+            svl_consumed.append(parsed)
+        else:
+            svl_consumed.append(None)
+    receipt_layers_by_id: dict[str, Any] = {}
+    if layer_ids:
+        receipt_layers = database.session.execute(
+            select(StockValuationLayer).where(
+                StockValuationLayer.id.in_(list(layer_ids)),
+                StockValuationLayer.qty > 0,
+            )
+        ).scalars()
+        for layer in receipt_layers:
+            receipt_layers_by_id[str(layer.id)] = layer
+    remaining_to_skip = _decimal_value(already_returned)
+    remaining = quantity
+    composition: list[dict[str, Decimal]] = []
+    for idx, entries in enumerate(svl_consumed):
+        if entries is not None:
+            for entry in entries:
+                layer_id = entry["layer_id"]
+                entry_qty = Decimal(entry["qty"])
+                entry_rate = Decimal(entry["rate"])
+                if remaining_to_skip >= entry_qty:
+                    remaining_to_skip -= entry_qty
+                    continue
+                available = entry_qty - remaining_to_skip
+                take = min(available, remaining)
+                if layer_id in receipt_layers_by_id:
+                    rate = _decimal_value(receipt_layers_by_id[layer_id].rate)
+                else:
+                    rate = entry_rate
+                composition.append({"qty": take, "rate": rate})
+                remaining -= take
+                remaining_to_skip = Decimal("0")
+                if remaining <= 0:
+                    break
+        else:
+            svl = outgoing_svl[idx]
+            svl_qty = abs(_decimal_value(svl.qty))
+            if svl_qty <= 0:
+                continue
+            if remaining_to_skip >= svl_qty:
+                remaining_to_skip -= svl_qty
+                continue
+            available = svl_qty - remaining_to_skip
+            take = min(available, remaining)
+            rate = abs(_decimal_value(svl.stock_value_difference) / svl_qty)
+            composition.append({"qty": take, "rate": rate})
+            remaining -= take
+            remaining_to_skip = Decimal("0")
+        if remaining <= 0:
+            break
+    if remaining > 0:
+        raise PostingError("La devolución excede la cantidad entregada pendiente de devolver.")
+    return composition
+
+
+def _delivery_return_cost_from_sle(
+    document: DeliveryNote,
+    line: DeliveryNoteItem,
+    warehouse: str,
+    source: DeliveryNote,
+    already_returned: Any,
+    quantity: Decimal,
+) -> list[dict[str, Decimal]]:
+    """Fallback return cost from SLE rows when SVL consumed_layers is unavailable.
+
+    Iterates the source delivery's outgoing stock ledger entries and computes
+    cost at the aggregated rate (stock_value_difference / qty_change) for each
+    row, skipping previously-returned quantities.
+    """
     outgoing_rows = (
         database.session.execute(
             select(StockLedgerEntry)
@@ -3187,7 +3307,7 @@ def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, wareho
     )
     remaining_to_skip = _decimal_value(already_returned)
     remaining = quantity
-    cost = Decimal("0")
+    composition: list[dict[str, Decimal]] = []
     for row in outgoing_rows:
         row_qty = abs(_decimal_value(row.qty_change))
         if remaining_to_skip >= row_qty:
@@ -3195,15 +3315,15 @@ def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, wareho
             continue
         available = row_qty - remaining_to_skip
         take = min(available, remaining)
-        # stock_value_difference is negative for outflows; return requires positive value
-        cost += take * abs(_decimal_value(row.stock_value_difference) / row_qty)
+        rate = abs(_decimal_value(row.stock_value_difference) / row_qty)
+        composition.append({"qty": take, "rate": rate})
         remaining -= take
         remaining_to_skip = Decimal("0")
         if remaining <= 0:
             break
     if remaining > 0:
         raise PostingError("La devolución excede la cantidad entregada pendiente de devolver.")
-    return cost.quantize(Decimal("0.0001"))
+    return composition
 
 
 def _purchase_return_source(document: Any) -> Any:
@@ -3571,6 +3691,7 @@ def _create_stock_ledger_for_document_type(
     document._inventory_posting_items = items
 
     allocations_by_line_id = _allocation_by_line_id(landed_cost_result)
+    is_delivery_return = isinstance(document, DeliveryNote) and bool(document.is_return)
     movements: list[StockLedgerEntry] = []
     for line in items:
         if _should_skip_non_stock_line(line):
@@ -3588,15 +3709,51 @@ def _create_stock_ledger_for_document_type(
         warehouse = getattr(line, "warehouse", None)
         if not warehouse:
             raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
-        movements.append(
-            _create_stock_ledger_for_document(
-                document=document,
-                line=line,
-                warehouse=warehouse,
-                qty_change=qty_change,
-                value_change=value_change,
+        if is_delivery_return and qty_change > 0:
+            composition = _delivery_return_cost_composition(document, line, warehouse, qty_change)
+            line._inventory_cost_amount = sum(
+                (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001")) for entry in composition
             )
-        )
+            if len(composition) <= 1:
+                entry = composition[0]
+                entry_qty = entry["qty"]
+                entry_cost = (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001"))
+                entry_rate = entry_cost / entry_qty if entry_qty else Decimal("0")
+                movements.append(
+                    _create_stock_movement(
+                        document=document,
+                        line=line,
+                        warehouse=warehouse,
+                        qty_change=entry_qty,
+                        valuation_rate=entry_rate,
+                        value_change=entry_cost,
+                    )
+                )
+            else:
+                for entry in composition:
+                    entry_qty = entry["qty"]
+                    entry_cost = (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001"))
+                    entry_rate = entry_cost / entry_qty if entry_qty else Decimal("0")
+                    movements.append(
+                        _create_stock_movement(
+                            document=document,
+                            line=line,
+                            warehouse=warehouse,
+                            qty_change=entry_qty,
+                            valuation_rate=entry_rate,
+                            value_change=entry_cost,
+                        )
+                    )
+        else:
+            movements.append(
+                _create_stock_ledger_for_document(
+                    document=document,
+                    line=line,
+                    warehouse=warehouse,
+                    qty_change=qty_change,
+                    value_change=value_change,
+                )
+            )
     database.session.add_all(movements)
     return movements
 
