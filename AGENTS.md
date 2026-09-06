@@ -194,3 +194,16 @@ Aplicar todo medida razonable para evitar que un pip install o npm install conta
 estado de seguridad conocido.
 
 Preferir dependencias con licencia OSI Aproved sin copy left.
+
+## Autoria
+
+Al hacer commit respeta el autor y correo configurado en git local, no agregues lineas de co authored.
+Los commits deben ser revisados y firmados por un humano antes de incorporase al repositorio sin mezclar
+autoria de agentes de asistencia.
+
+
+## Trabajo de terceros
+
+Es posible que en el repositorio haya trabajo paralelo, por ningun motivo se debe revertir trabajo realizado
+por terceros en el repositorio. Respetar el trabajo de terceros y ser un buen vecino enfocado en la tarea
+actual.
