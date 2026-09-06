@@ -79,6 +79,15 @@ def _login(client, user_id: str) -> None:
         session["_fresh"] = True
 
 
+def test_recurring_template_honors_selected_books(app_ctx):
+    """A recurring template stores and authorizes only the books selected by the user."""
+    with app_ctx.app_context():
+        from cacao_accounting.contabilidad.recurring_journal_service import _authorized_template_books
+        selected = _authorized_template_books("abc", ["L02"], "admin", "crear")
+
+        assert selected == ["L02"]
+
+
 def test_recurring_journal_flow(app_ctx):
     with app_ctx.app_context():
         from cacao_accounting.database import AccountingPeriod, FiscalYear, GLEntry
