@@ -4557,8 +4557,10 @@ def test_stock_reconciliation_value_adjustment_uses_warehouse_inventory_account_
     assert all(line.account_id != item_inventory.id for line in gl_entries)
     assert len(stock_entries) == 1
     assert stock_entries[0].qty_change == Decimal("0E-9")
+    assert stock_entries[0].stock_value_difference == Decimal("20.0000")
     assert len(valuation_layers) == 1
     assert valuation_layers[0].qty == Decimal("0E-9")
+    assert valuation_layers[0].stock_value_difference == stock_entries[0].stock_value_difference
     assert bin_row.actual_qty == Decimal("10.000000000")
     assert bin_row.stock_value == Decimal("120.0000")
     assert bin_row.valuation_rate == Decimal("12.000000000")
