@@ -310,6 +310,133 @@ def test_sales_delivery_return_restores_historical_inventory_cost(app_ctx):
     assert any(entry.account_id == cogs_account.id and entry.credit == Decimal("60.0000") for entry in gl_entries)
 
 
+def test_delivery_return_fifo_multilayer_cost(app_ctx):
+    """Partial return values at source layer rates, not averaged cost.
+
+    Scenario (Refs: #833):
+      Receipt layers: 5 @ 8 and 5 @ 12.
+      Delivery of 10: FIFO consumes 5@8 + 5@12, aggregated cost 100, avg 10.
+      Partial return of 5: should value at 40 (first 5 @ 8), not 50 (avg 10).
+    """
+    import json
+
+    from cacao_accounting.contabilidad.posting_service import (
+        _create_delivery_note_gl_entries,
+        _create_stock_ledger_for_document,
+    )
+
+    warehouse, item, cogs_account, inventory_account = _setup_inventory_context()
+
+    layer1 = StockValuationLayer(
+        item_code=item.code,
+        warehouse=warehouse.code,
+        company="cacao",
+        qty=Decimal("5"),
+        rate=Decimal("8"),
+        remaining_qty=Decimal("0"),
+        remaining_stock_value=Decimal("0"),
+        stock_value_difference=Decimal("40"),
+        voucher_type="purchase_receipt",
+        voucher_id="SEED-L1",
+        posting_date=date(2026, 1, 1),
+    )
+    layer2 = StockValuationLayer(
+        item_code=item.code,
+        warehouse=warehouse.code,
+        company="cacao",
+        qty=Decimal("5"),
+        rate=Decimal("12"),
+        remaining_qty=Decimal("0"),
+        remaining_stock_value=Decimal("0"),
+        stock_value_difference=Decimal("60"),
+        voucher_type="purchase_receipt",
+        voucher_id="SEED-L2",
+        posting_date=date(2026, 1, 2),
+    )
+    database.session.add_all([layer1, layer2])
+    database.session.flush()
+
+    original = DeliveryNote(company="cacao", posting_date=date(2026, 5, 1), docstatus=1)
+    database.session.add(original)
+    database.session.flush()
+
+    database.session.add(
+        StockLedgerEntry(
+            posting_date=original.posting_date,
+            item_code=item.code,
+            warehouse=warehouse.code,
+            company="cacao",
+            qty_change=Decimal("-10"),
+            qty_after_transaction=Decimal("0"),
+            valuation_rate=Decimal("10"),
+            stock_value_difference=Decimal("-100"),
+            stock_value=Decimal("0"),
+            voucher_type="delivery_note",
+            voucher_id=original.id,
+        )
+    )
+    database.session.add(
+        StockValuationLayer(
+            item_code=item.code,
+            warehouse=warehouse.code,
+            company="cacao",
+            qty=Decimal("-10"),
+            rate=Decimal("10"),
+            stock_value_difference=Decimal("-100"),
+            remaining_qty=Decimal("0"),
+            remaining_stock_value=Decimal("0"),
+            voucher_type="delivery_note",
+            voucher_id=original.id,
+            posting_date=date(2026, 5, 1),
+            source_layer_id=layer1.id,
+            consumed_layers=json.dumps(
+                [
+                    {"layer_id": layer1.id, "qty": "5", "rate": "8"},
+                    {"layer_id": layer2.id, "qty": "5", "rate": "12"},
+                ]
+            ),
+        )
+    )
+    database.session.flush()
+
+    returned = DeliveryNote(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        transaction_currency="NIO",
+        base_currency="NIO",
+        is_return=True,
+        reversal_of=original.id,
+        docstatus=1,
+    )
+    database.session.add(returned)
+    database.session.flush()
+    line = DeliveryNoteItem(
+        delivery_note_id=returned.id,
+        item_code=item.code,
+        qty=Decimal("5"),
+        uom=item.default_uom,
+        rate=Decimal("100"),
+        amount=Decimal("500"),
+        warehouse=warehouse.code,
+    )
+    database.session.add(line)
+    database.session.flush()
+
+    movement = _create_stock_ledger_for_document(returned, Decimal("5"), Decimal("40"), warehouse.code, line)
+
+    assert movement.valuation_rate == Decimal("8.0000"), f"Expected rate 8, got {movement.valuation_rate}"
+    assert movement.stock_value_difference == Decimal("40.0000"), f"Expected value 40, got {movement.stock_value_difference}"
+    assert line._inventory_cost_amount == Decimal("40.0000"), f"Expected cost 40, got {line._inventory_cost_amount}"
+
+    gl_entries = _create_delivery_note_gl_entries(returned, "cacao", None)
+    assert any(
+        entry.account_id == inventory_account.id and entry.debit == Decimal("40.0000") for entry in gl_entries
+    ), f"Inventory debit 40 not found in GL: {[(e.account_id, e.debit, e.credit) for e in gl_entries]}"
+    assert any(
+        entry.account_id == cogs_account.id and entry.credit == Decimal("40.0000") for entry in gl_entries
+    ), f"COGS credit 40 not found in GL: {[(e.account_id, e.debit, e.credit) for e in gl_entries]}"
+
+
 def test_submit_without_update_inventory_does_not_create_dn(app_ctx):
     """Factura con update_inventory=False no crea DN."""
     client = app_ctx.test_client()
