@@ -95,9 +95,7 @@ def test_as_of_date_must_match_accounting_period(app_with_overlapping_periods) -
 
     from cacao_accounting.reportes.helpers import _resolve_as_of_date
 
-    with app_with_overlapping_periods.test_request_context(
-        "/?as_of_date=2026-01-15&accounting_period=POSTERIOR"
-    ):
+    with app_with_overlapping_periods.test_request_context("/?as_of_date=2026-01-15&accounting_period=POSTERIOR"):
         with pytest.raises(BadRequest):
             _resolve_as_of_date("cacao")
 
@@ -106,9 +104,7 @@ def test_as_of_date_matching_accounting_period_is_accepted(app_with_overlapping_
     """Un as_of_date que coincide con el extremo del período seleccionado se acepta."""
     from cacao_accounting.reportes.helpers import _resolve_as_of_date
 
-    with app_with_overlapping_periods.test_request_context(
-        "/?as_of_date=2026-02-28&accounting_period=POSTERIOR"
-    ):
+    with app_with_overlapping_periods.test_request_context("/?as_of_date=2026-02-28&accounting_period=POSTERIOR"):
         assert _resolve_as_of_date("cacao") == date(2026, 2, 28)
 
 

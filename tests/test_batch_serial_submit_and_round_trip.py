@@ -667,7 +667,9 @@ class TestPurchaseReceiptSubmit:
         assert resp.status_code == 200
         database.session.expire_all()
         item = (
-            database.session.execute(database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id))
+            database.session.execute(
+                database.select(PurchaseReceiptItem).filter_by(purchase_receipt_id=receipt.id, is_superseded=False)
+            )
             .scalars()
             .first()
         )
@@ -883,7 +885,9 @@ class TestPurchaseInvoiceSubmit:
         assert resp.status_code == 200
         database.session.expire_all()
         item = (
-            database.session.execute(database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id))
+            database.session.execute(
+                database.select(PurchaseInvoiceItem).filter_by(purchase_invoice_id=invoice.id, is_superseded=False)
+            )
             .scalars()
             .first()
         )

@@ -10,7 +10,6 @@ from argon2 import PasswordHasher
 from cacao_accounting import create_app
 from cacao_accounting.database import User, database
 
-
 ph = PasswordHasher()
 
 

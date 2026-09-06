@@ -668,7 +668,6 @@ def test_post_payment_with_zero_total_skips_opening(arap_app):
     """Si el total del pago es cero, no se crea apertura propia pero sí las allocations."""
     from cacao_accounting.contabilidad.arap_ledger_service import post_payment_ar_ap
     from cacao_accounting.database import (
-        ARAPLedgerEntry,
         PaymentEntry,
         PaymentReference,
         SalesInvoice,
@@ -712,12 +711,8 @@ def test_post_payment_with_zero_total_skips_opening(arap_app):
     # Apertura propia del pago NO se crea porque total == 0;
     # sólo allocations contra la factura y contra el pago aplicado.
     assert all(m.event_type == "allocation" for m in movements)
-    assert any(
-        m.document_type == "sales_invoice" and m.event_type == "allocation" for m in movements
-    )
-    assert any(
-        m.document_type == "payment_entry" and m.event_type == "allocation" for m in movements
-    )
+    assert any(m.document_type == "sales_invoice" and m.event_type == "allocation" for m in movements)
+    assert any(m.document_type == "payment_entry" and m.event_type == "allocation" for m in movements)
 
 
 def test_post_payment_fully_allocated_closes_open_item(arap_app):
@@ -766,9 +761,7 @@ def test_post_payment_fully_allocated_closes_open_item(arap_app):
     gl_party = SimpleNamespace(party_id="P-ARAP", ledger_id=None, debit=0, credit=100, account_id="ACC-PTY-1")
     post_payment_ar_ap(payment, [gl_party])
     database.session.commit()
-    open_item = database.session.query(ARAPOpenItem).filter_by(
-        document_type="payment_entry", document_id=payment.id
-    ).one()
+    open_item = database.session.query(ARAPOpenItem).filter_by(document_type="payment_entry", document_id=payment.id).one()
     assert open_item.unallocated_amount == Decimal("0")
     assert open_item.status == "closed"
 
@@ -809,12 +802,16 @@ def test_post_payment_without_references_associates_opening_gl_per_book(arap_app
     )
     movements = post_payment_ar_ap(payment, [gl_with_party])
     database.session.commit()
-    opening_movement = database.session.query(ARAPLedgerEntry).filter_by(
-        document_type="payment_entry", document_id=payment.id, event_type="opening"
-    ).one()
-    fisc_book_entry = database.session.query(ARAPLedgerBookEntry).filter_by(
-        ledger_entry_id=opening_movement.id, ledger_id=fiscal_book.id
-    ).one()
+    opening_movement = (
+        database.session.query(ARAPLedgerEntry)
+        .filter_by(document_type="payment_entry", document_id=payment.id, event_type="opening")
+        .one()
+    )
+    fisc_book_entry = (
+        database.session.query(ARAPLedgerBookEntry)
+        .filter_by(ledger_entry_id=opening_movement.id, ledger_id=fiscal_book.id)
+        .one()
+    )
     assert fisc_book_entry.gl_entry_id is not None
     assert movements[0].id == opening_movement.id
 
@@ -867,12 +864,12 @@ def test_post_payment_opening_gl_for_books_is_none_when_references_exist(arap_ap
     post_payment_ar_ap(payment, [gl_with_party])
     database.session.commit()
     # El GL se asocia solo a allocations, no a la apertura del pago.
-    opening_movement = database.session.query(ARAPLedgerEntry).filter_by(
-        document_type="payment_entry", document_id=payment.id, event_type="opening"
-    ).one()
-    opening_books = database.session.query(ARAPLedgerBookEntry).filter_by(
-        ledger_entry_id=opening_movement.id
-    ).all()
+    opening_movement = (
+        database.session.query(ARAPLedgerEntry)
+        .filter_by(document_type="payment_entry", document_id=payment.id, event_type="opening")
+        .one()
+    )
+    opening_books = database.session.query(ARAPLedgerBookEntry).filter_by(ledger_entry_id=opening_movement.id).all()
     assert all(book.gl_entry_id != "GL-AP-1" for book in opening_books)
 
 

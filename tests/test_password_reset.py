@@ -19,7 +19,6 @@ from cacao_accounting.auth.device_verification import (
     validar_token_recuperacion,
 )
 
-
 ph = PasswordHasher()
 
 
