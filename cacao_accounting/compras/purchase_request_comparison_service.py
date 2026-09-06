@@ -737,6 +737,7 @@ def _create_purchase_order_for_group(
     exchange_rate = _purchase_exchange_rate(order.company, order.posting_date, order.transaction_currency)
     order.exchange_rate = exchange_rate
     order.base_total = (total * exchange_rate).quantize(Decimal("0.0001"))
+    order.base_grand_total = (order.grand_total * exchange_rate).quantize(Decimal("0.0001"))
     for order_item in order.items:  # type: ignore[attr-defined]
         order_item.base_rate = (Decimal(str(order_item.rate or 0)) * exchange_rate).quantize(Decimal("0.0001"))
         order_item.base_amount = (Decimal(str(order_item.amount or 0)) * exchange_rate).quantize(Decimal("0.0001"))
