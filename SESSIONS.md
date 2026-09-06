@@ -2404,3 +2404,7 @@ python3.11 que sombrea los paquetes del venv y rompe el arranque de mypy 2.3.0. 
 - #816: separar devolución física y conciliación GRNI. Una `purchase_return` parcial debe afectar únicamente el saldo
   pendiente de la recepción no facturada; una recepción facturada requiere una nota de crédito explícita para AP. La
   anulación de la devolución debe emitir solo su contra-asiento y nunca cancelar el matching completo de la factura.
+- #806: la devolución FIFO contra recepción debe consumir capas de valoración fijadas a la recepción origen y crear
+  una capa de salida con costo histórico; si no existe cantidad suficiente, el posting debe bloquearse. Criterio:
+  no se crean capas de retorno con costo calculado desde la tasa de compra de la devolución ni se permite saldo FIFO
+  negativo.
