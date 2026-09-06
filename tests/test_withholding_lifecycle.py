@@ -18,6 +18,8 @@ from cacao_accounting.database import (
     Modules,
     Party,
     PaymentEntry,
+    PaymentReference,
+    PurchaseInvoice,
     User,
     WithholdingCertificate,
     database,
@@ -131,3 +133,122 @@ def test_monthly_withholding_report_is_fiscal_detail(withholding_app):
     assert report.rows[0].values["certificate_no"] == "RET-001"
     assert report.totals["withheld_amount"] == Decimal("20")
     assert get_monthly_withholding_report("cacao", 2026, 7).total_rows == 0
+
+
+def _create_invoice_with_withholding(invoice_id="INV-WH-001", cert_status="issued", cert_docstatus=1):
+    """Helper: create a purchase invoice, payment, withholding certificate, and reference."""
+    supplier = Party(code="SUP-WH-001", name="Proveedor WH", tax_id="J-WH", is_supplier=True, is_active=True)
+    invoice = PurchaseInvoice(
+        id=invoice_id,
+        company="cacao",
+        supplier_id="SUP-WH-001",
+        supplier_name="Proveedor WH",
+        posting_date=date(2026, 8, 26),
+        grand_total=Decimal("1000"),
+        docstatus=1,
+    )
+    payment = PaymentEntry(
+        company="cacao",
+        payment_type="pay",
+        party_type="supplier",
+        party_id="SUP-WH-001",
+        party_name="Proveedor WH",
+        currency="NIO",
+        paid_amount=Decimal("980"),
+        posting_date=date(2026, 8, 26),
+        document_no="PAY-WH-001",
+        docstatus=1,
+    )
+    certificate = WithholdingCertificate(
+        company="cacao",
+        payment_id="PAY-WH-001",
+        supplier_id="SUP-WH-001",
+        supplier_name="Proveedor WH",
+        certificate_no="CERT-WH-001",
+        posting_date=date(2026, 8, 26),
+        currency="NIO",
+        gross_amount=Decimal("1000"),
+        withheld_amount=Decimal("20"),
+        cash_amount=Decimal("980"),
+        lines_json=json.dumps([{"concept": "renta", "amount": "20"}]),
+        status=cert_status,
+        docstatus=cert_docstatus,
+    )
+    reference = PaymentReference(
+        payment_id="PAY-WH-001",
+        reference_id=invoice_id,
+        reference_type="purchase_invoice",
+        allocated_amount=Decimal("980"),
+    )
+    database.session.add_all([supplier, invoice, payment, certificate, reference])
+    database.session.flush()
+    return invoice
+
+
+def test_credit_note_blocked_when_withholding_issued(withholding_app):
+    """Refs: #819 - A credit note must be blocked when the invoice has an issued withholding."""
+    from cacao_accounting.compras.services import _validate_purchase_reversal_of
+
+    invoice = _create_invoice_with_withholding()
+
+    with pytest.raises(ValueError, match="retención emitida"):
+        _validate_purchase_reversal_of(
+            invoice.id,
+            supplier_id=invoice.supplier_id,
+            company=invoice.company,
+            document_type="purchase_credit_note",
+        )
+
+
+def test_return_blocked_when_withholding_issued(withholding_app):
+    """Refs: #819 - A purchase return must be blocked when the invoice has an issued withholding."""
+    from cacao_accounting.compras.services import _validate_purchase_reversal_of
+
+    invoice = _create_invoice_with_withholding()
+
+    with pytest.raises(ValueError, match="retención emitida"):
+        _validate_purchase_reversal_of(
+            invoice.id,
+            supplier_id=invoice.supplier_id,
+            company=invoice.company,
+            document_type="purchase_return",
+        )
+
+
+def test_credit_note_allowed_when_withholding_cancelled(withholding_app):
+    """Refs: #819 - A credit note is allowed when the withholding certificate is cancelled."""
+    from cacao_accounting.compras.services import _validate_purchase_reversal_of
+
+    invoice = _create_invoice_with_withholding(cert_status="cancelled", cert_docstatus=2)
+
+    _validate_purchase_reversal_of(
+        invoice.id,
+        supplier_id=invoice.supplier_id,
+        company=invoice.company,
+        document_type="purchase_credit_note",
+    )
+
+
+def test_credit_note_allowed_without_withholding(withholding_app):
+    """Refs: #819 - A credit note is allowed when no withholding certificate exists."""
+    from cacao_accounting.compras.services import _validate_purchase_reversal_of
+
+    supplier = Party(code="SUP-NO-WH", name="Proveedor sin WH", tax_id="J-NO-WH", is_supplier=True, is_active=True)
+    invoice = PurchaseInvoice(
+        id="INV-NO-WH",
+        company="cacao",
+        supplier_id="SUP-NO-WH",
+        supplier_name="Proveedor sin WH",
+        posting_date=date(2026, 8, 26),
+        grand_total=Decimal("1000"),
+        docstatus=1,
+    )
+    database.session.add_all([supplier, invoice])
+    database.session.flush()
+
+    _validate_purchase_reversal_of(
+        invoice.id,
+        supplier_id=invoice.supplier_id,
+        company=invoice.company,
+        document_type="purchase_credit_note",
+    )
