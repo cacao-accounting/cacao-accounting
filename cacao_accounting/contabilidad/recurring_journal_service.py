@@ -140,6 +140,7 @@ def get_applicable_templates(company: str, ledger_id: str, period_date: date) ->
         RecurringJournalTemplate.company == company,
         or_(
             RecurringJournalTemplate.ledger_id == book.id,
+            RecurringJournalTemplate.ledger_id == book.code,  # Backward compatibility with legacy code values
             RecurringJournalTemplate.book_codes.contains(f'"{book.code}"'),
         ),
         RecurringJournalTemplate.start_date <= period_date,
@@ -192,7 +193,7 @@ def apply_recurring_template(
 
     base_currency = database.session.execute(select(Entity.currency).filter_by(code=template.company)).scalar_one_or_none()
     transaction_currency = template.currency or base_currency
-    primary_book = database.session.get(Book, template.ledger_id)
+    primary_book = _book_for_reference(template.company, template.ledger_id)
     if primary_book is None or primary_book.entity != template.company:
         raise RecurringJournalError("La plantilla recurrente referencia un libro inexistente.")
 
@@ -381,6 +382,18 @@ def _canonical_book_reference(company: str, value: Any) -> str | None:
         database.select(Book).where(Book.entity == company).where((Book.id == str(value)) | (Book.code == str(value)))
     ).scalar_one_or_none()
     return book.code if book else str(value)
+
+
+def _normalize_ledger_id_for_validation(company: str, ledger_id: Any) -> list[str]:
+    """Convierte ledger_id (UUID o código legacy) a una lista canónica de referencias."""
+    if not ledger_id:
+        return []
+    # Resolve the book regardless of whether ledger_id is UUID or code
+    book = _book_for_reference(company, ledger_id)
+    if book:
+        return [book.code, book.id]  # Include both code and UUID for matching
+    # If book not found, return the value as-is for error reporting
+    return [str(ledger_id)]
 
 
 def _book_for_reference(company: str, value: Any) -> Book | None:
