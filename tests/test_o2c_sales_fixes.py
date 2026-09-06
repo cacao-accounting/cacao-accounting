@@ -34,6 +34,22 @@ from cacao_accounting.database.helpers import inicia_base_de_datos
 from cacao_accounting.document_flow import DocumentFlowError
 
 
+def test_sales_invoice_line_validation_accepts_net_amount_after_discount(app_ctx):
+    """Invoice validation compares the stored net amount with the discounted gross amount."""
+    from cacao_accounting.ventas.services import _validate_sales_invoice_line_amounts
+
+    invoice = SalesInvoice(company="cacao", document_type="sales_invoice", docstatus=0)
+    line = SalesInvoiceItem(
+        item_code="ITEM-DISCOUNT",
+        qty=Decimal("10"),
+        rate=Decimal("100"),
+        amount=Decimal("900"),
+        discount_percentage=Decimal("10"),
+    )
+
+    _validate_sales_invoice_line_amounts(invoice, [line])
+
+
 @pytest.fixture()
 def app_ctx():
     app = create_app(

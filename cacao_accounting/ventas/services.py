@@ -1636,7 +1636,13 @@ def _validate_sales_invoice_line_amounts(invoice: SalesInvoice, items: Sequence[
         qty = Decimal(str(item.qty or 0))
         rate = Decimal(str(item.rate or 0))
         amount = Decimal(str(item.amount or 0))
-        expected = qty * rate
+        gross_amount = qty * rate
+        discount_amount = Decimal(str(item.discount_amount or 0))
+        if item.discount_percentage:
+            discount_amount = (gross_amount * Decimal(str(item.discount_percentage)) / Decimal("100")).quantize(
+                Decimal("0.0001")
+            )
+        expected = gross_amount - discount_amount
         if amount <= 0:
             raise ValueError(f"La línea {item.item_code} debe tener un monto positivo.")
         if abs(amount - expected) > tolerance:
