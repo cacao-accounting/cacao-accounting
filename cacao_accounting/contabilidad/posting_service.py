@@ -688,6 +688,13 @@ def _assert_single_currency_balance(currency: str, curr_entries: list[GLEntry], 
     raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
 
 
+def _is_purchase_receipt(document: Any) -> bool:
+    """Check if document is a PurchaseReceipt."""
+    from cacao_accounting.database import PurchaseReceipt
+
+    return isinstance(document, PurchaseReceipt)
+
+
 def _is_cross_currency_legitimate(curr_entries: list[GLEntry]) -> bool:
     """Check if imbalance is legitimate in a cross-currency FX scenario."""
     non_fx_entries = [e for e in curr_entries if not (e.remarks and "Diferencia cambiaria" in e.remarks)]
@@ -3130,6 +3137,103 @@ def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, wareho
     return cost.quantize(Decimal("0.0001"))
 
 
+def _purchase_return_source(document: Any) -> Any:
+    """Load and validate the original receipt for a purchase return."""
+    from cacao_accounting.database import PurchaseReceipt
+
+    source_id = getattr(document, "reversal_of", None)
+    if not source_id:
+        raise PostingError("La devolución de compra requiere la recepción origen.")
+    source = database.session.get(PurchaseReceipt, source_id)
+    if not source or source.company != document.company or source.docstatus != 1 or source.is_return:
+        raise PostingError("La recepción origen de la devolución no es válida.")
+    return source
+
+
+def _purchase_already_returned_qty(document: Any, line: Any, warehouse: str, source: Any) -> Any:
+    """Return quantity already restored by approved returns of the source."""
+    from cacao_accounting.database import PurchaseReceipt, StockLedgerEntry
+
+    return database.session.execute(
+        select(func.coalesce(func.sum(-StockLedgerEntry.qty_change), 0))
+        .join(PurchaseReceipt, PurchaseReceipt.id == StockLedgerEntry.voucher_id)
+        .where(
+            PurchaseReceipt.company == document.company,
+            PurchaseReceipt.is_return.is_(True),
+            PurchaseReceipt.reversal_of == source.id,
+            PurchaseReceipt.docstatus == 1,
+            StockLedgerEntry.company == document.company,
+            StockLedgerEntry.voucher_type == "purchase_receipt",
+            StockLedgerEntry.item_code == line.item_code,
+            StockLedgerEntry.warehouse == warehouse,
+            StockLedgerEntry.qty_change < 0,
+        )
+    ).scalar_one()
+
+
+def _purchase_return_cost(document: Any, line: Any, warehouse: str, quantity: Decimal) -> tuple[Decimal, str | None]:
+    """Return historical cost using the source receipt's valuation layers.
+
+    A purchase return must consume the original receipt's valuation layers
+    at historical cost, not trigger FIFO consumption as a normal outflow.
+    Returns (cost, source_layer_id) where source_layer_id is the predominant
+    layer consumed.
+    """
+    source = _purchase_return_source(document)
+    already_returned = _purchase_already_returned_qty(document, line, warehouse, source)
+    incoming_layers = (
+        database.session.execute(
+            select(StockValuationLayer)
+            .where(
+                StockValuationLayer.company == document.company,
+                StockValuationLayer.item_code == line.item_code,
+                StockValuationLayer.warehouse == warehouse,
+                StockValuationLayer.voucher_type == "purchase_receipt",
+                StockValuationLayer.voucher_id == source.id,
+                StockValuationLayer.qty > 0,
+            )
+            .order_by(StockValuationLayer.posting_date, StockValuationLayer.id)
+        )
+        .scalars()
+        .all()
+    )
+    if not incoming_layers:
+        raise PostingError("La recepción origen no tiene capas de valuación para la devolución.")
+    total_available = sum(_decimal_value(layer.remaining_qty) for layer in incoming_layers)
+    if total_available < quantity:
+        raise PostingError(
+            f"La devolución ({quantity}) excede la cantidad disponible en la recepción origen ({total_available})."
+        )
+    remaining_to_skip = _decimal_value(already_returned)
+    remaining = quantity
+    cost = Decimal("0")
+    consumed_by_layer: dict[str, Decimal] = {}
+    for layer in incoming_layers:
+        layer_qty = _decimal_value(layer.remaining_qty)
+        if layer_qty <= 0:
+            continue
+        if remaining_to_skip >= layer_qty:
+            remaining_to_skip -= layer_qty
+            continue
+        available = layer_qty - remaining_to_skip
+        take = min(available, remaining)
+        cost += take * _decimal_value(layer.rate)
+        consumed_by_layer[str(layer.id)] = consumed_by_layer.get(str(layer.id), Decimal("0")) + take
+        remaining -= take
+        remaining_to_skip = Decimal("0")
+        if remaining <= 0:
+            break
+    if remaining > 0:
+        raise PostingError("La devolución excede la cantidad disponible en la recepción origen.")
+    primary_source: str | None = None
+    primary_qty = Decimal("0")
+    for layer_id, consumed_qty in consumed_by_layer.items():
+        if consumed_qty > primary_qty:
+            primary_source = layer_id
+            primary_qty = consumed_qty
+    return cost.quantize(Decimal("0.0001")), primary_source
+
+
 def _comprobante_lines(document: ComprobanteContable) -> list[ComprobanteContableDetalle]:
     return list(
         database.session.execute(
@@ -3227,10 +3331,20 @@ def _create_stock_ledger_for_document(
 
     warehouse = _required_stock_warehouse(document, line, warehouse)
     item = _stock_item_for(line)
+    source_layer_id = None
+    is_purchase_return = getattr(document, "is_return", False) and _is_purchase_receipt(document)
     if qty_change < 0:
-        cost_amount, cost_rate, source_layer_id = _outgoing_stock_values(document, line, warehouse, qty_change, item)
-        valuation_rate = cost_rate
-        value_change = -cost_amount
+        if is_purchase_return:
+            cost_amount, source_layer_id = _purchase_return_cost(document, line, warehouse, abs(qty_change))
+            cost_rate = (cost_amount / abs(qty_change)) if qty_change != 0 else Decimal("0")
+            valuation_rate = cost_rate
+            value_change = -cost_amount
+        else:
+            cost_amount, cost_rate, source_layer_id = _outgoing_stock_values(
+                document, line, warehouse, qty_change, item
+            )
+            valuation_rate = cost_rate
+            value_change = -cost_amount
     else:
         value_change, valuation_rate = _incoming_stock_values(document, line, warehouse, qty_change, value_change)
 

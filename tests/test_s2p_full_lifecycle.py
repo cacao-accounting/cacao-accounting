@@ -790,6 +790,7 @@ def test_s2p_credit_and_debit_notes_and_returns(app_ctx):
         posting_date=date.today(),
         docstatus=0,
         is_return=True,
+        reversal_of=receipt.id,
         transaction_currency="NIO",
         base_currency="NIO",
         grand_total=Decimal("1000.00"),
@@ -828,6 +829,112 @@ def test_s2p_credit_and_debit_notes_and_returns(app_ctx):
         )
     ).scalar_one()
     assert inventory_gl == Decimal("-1000.00")
+
+
+def test_purchase_return_consumes_fifo_layers_at_historical_cost(app_ctx):
+    """Refs: #806 - Purchase return must consume original receipt layers, not create negative qty layers."""
+    from cacao_accounting.contabilidad.posting import submit_document
+    from cacao_accounting.database import (
+        GLEntry,
+        PurchaseReceipt,
+        PurchaseReceiptItem,
+        StockBin,
+        StockValuationLayer,
+        WarehouseCompanyAccount,
+    )
+
+    # 1. Recepción original: 10 uds @ 10 = 100
+    receipt = PurchaseReceipt(
+        id="PREC-FIFO-ORIG",
+        company="cacao",
+        supplier_id="SUP-S2P-01",
+        posting_date=date.today(),
+        docstatus=0,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        grand_total=Decimal("100"),
+    )
+    receipt_item = PurchaseReceiptItem(
+        id="PRECI-FIFO-ORIG",
+        purchase_receipt_id=receipt.id,
+        item_code="ITEM-S2P-01",
+        item_name="Laptop Pro",
+        qty=Decimal("10"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("100"),
+        warehouse="ALM-MAIN",
+    )
+    database.session.add_all([receipt, receipt_item])
+    database.session.commit()
+    submit_document(receipt)
+    database.session.commit()
+
+    bin_entry = database.session.query(StockBin).filter_by(warehouse="ALM-MAIN", item_code="ITEM-S2P-01").one()
+    assert bin_entry.actual_qty == Decimal("10")
+    assert bin_entry.stock_value == Decimal("100")
+
+    # 2. Devolución de 3 uds - debe consumir la capa original a costo histórico (10)
+    ret_receipt = PurchaseReceipt(
+        id="PREC-FIFO-RET",
+        company="cacao",
+        supplier_id="SUP-S2P-01",
+        posting_date=date.today(),
+        docstatus=0,
+        is_return=True,
+        reversal_of=receipt.id,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        grand_total=Decimal("30"),
+    )
+    ret_item = PurchaseReceiptItem(
+        id="PRECI-FIFO-RET",
+        purchase_receipt_id=ret_receipt.id,
+        item_code="ITEM-S2P-01",
+        item_name="Laptop Pro",
+        qty=Decimal("3"),
+        uom="UND",
+        rate=Decimal("10"),
+        amount=Decimal("30"),
+        warehouse="ALM-MAIN",
+    )
+    database.session.add_all([ret_receipt, ret_item])
+    database.session.commit()
+    submit_document(ret_receipt)
+    database.session.commit()
+
+    # 3. Verificar stock bin: 10 - 3 = 7 uds @ 10 = 70
+    database.session.refresh(bin_entry)
+    assert bin_entry.actual_qty == Decimal("7")
+    assert bin_entry.stock_value == Decimal("70")
+
+    # 4. Verificar capa de valuación: qty negativa, rate positivo (10), source_layer_id vinculado
+    return_layers = (
+        database.session.execute(
+            database.select(StockValuationLayer)
+            .filter_by(voucher_id=ret_receipt.id, voucher_type="purchase_receipt")
+        )
+        .scalars()
+        .all()
+    )
+    assert len(return_layers) == 1
+    return_layer = return_layers[0]
+    assert return_layer.qty == Decimal("-3")
+    assert return_layer.rate == Decimal("10")
+    assert return_layer.source_layer_id is not None, "Debe vincular a la capa origen"
+
+    # 5. Verificar GL de inventario: -30 (reverso del cargo original)
+    wca_gl_account = database.session.execute(
+        database.select(WarehouseCompanyAccount.inventory_account_id).filter_by(warehouse_code="ALM-MAIN", company="cacao")
+    ).scalar_one()
+    inventory_gl = database.session.execute(
+        database.select(database.func.coalesce(database.func.sum(GLEntry.debit - GLEntry.credit), 0)).filter_by(
+            voucher_type="purchase_receipt",
+            voucher_id=ret_receipt.id,
+            account_id=wca_gl_account,
+        )
+    ).scalar_one()
+    assert inventory_gl == Decimal("-30")
 
 
 def test_s2p_payment_application_and_advance_against_invoice(app_ctx):
