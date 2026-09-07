@@ -24,7 +24,6 @@ from cacao_accounting.admin.session_security_service import (
     smtp_is_configured,
 )
 
-
 ph = PasswordHasher()
 
 

@@ -128,9 +128,11 @@ def flask_server():
 
         from cacao_accounting.database import ItemPrice, PriceList
 
-        price_list = database.session.execute(
-            database.select(PriceList).filter_by(company="cacao", is_selling=True, is_default=True)
-        ).scalars().first()
+        price_list = (
+            database.session.execute(database.select(PriceList).filter_by(company="cacao", is_selling=True, is_default=True))
+            .scalars()
+            .first()
+        )
         if price_list is None:
             price_list = PriceList(
                 name="Lista de ventas E2E",

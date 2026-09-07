@@ -4,6 +4,7 @@
 import json
 from cacao_accounting import create_app
 
+
 def test_pwa_manifest_and_sw():
     app = create_app(
         {

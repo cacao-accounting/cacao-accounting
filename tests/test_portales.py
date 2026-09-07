@@ -39,7 +39,6 @@ from cacao_accounting.auth.roles import asigna_rol_a_usuario
 from cacao_accounting.auth import proteger_passwd
 from cacao_accounting.runtime_mode import is_desktop_mode
 
-
 _PORTAL_CLOUD_ONLY = pytest.mark.skipif(
     is_desktop_mode(), reason="Los portales de clientes y proveedores no están disponibles en Desktop Mode"
 )

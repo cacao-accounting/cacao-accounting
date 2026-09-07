@@ -28,7 +28,6 @@ from cacao_accounting.auth.device_verification import (
     verificar_cookie_dispositivo,
 )
 
-
 ph = PasswordHasher()
 
 

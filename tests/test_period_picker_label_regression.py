@@ -90,9 +90,7 @@ def _login(client, user_id: str) -> None:
 def _period_id(app) -> str:
     from cacao_accounting.database import AccountingPeriod, database
 
-    period = database.session.execute(
-        database.select(AccountingPeriod).where(AccountingPeriod.name == "01-2026")
-    ).scalar_one()
+    period = database.session.execute(database.select(AccountingPeriod).where(AccountingPeriod.name == "01-2026")).scalar_one()
     return str(period.id)
 
 
@@ -133,10 +131,7 @@ def test_delivery_note_list_renders_legible_period_label(period_picker_app) -> N
     client = period_picker_app.test_client()
     _login(client, user.id)
     pid = _period_id(period_picker_app)
-    url = (
-        f"/sales/delivery-note/list?company=cacao"
-        f"&accounting_period_from={pid}&accounting_period_to={pid}"
-    )
+    url = f"/sales/delivery-note/list?company=cacao" f"&accounting_period_from={pid}&accounting_period_to={pid}"
     response = client.get(url)
     assert response.status_code == 200
     html = response.get_data(as_text=True)
@@ -154,10 +149,7 @@ def test_sales_invoice_list_renders_legible_period_label(period_picker_app) -> N
     client = period_picker_app.test_client()
     _login(client, user.id)
     pid = _period_id(period_picker_app)
-    url = (
-        f"/sales/sales-invoice/list?company=cacao"
-        f"&accounting_period_from={pid}&accounting_period_to={pid}"
-    )
+    url = f"/sales/sales-invoice/list?company=cacao" f"&accounting_period_from={pid}&accounting_period_to={pid}"
     response = client.get(url)
     assert response.status_code == 200
     html = response.get_data(as_text=True)
@@ -174,10 +166,7 @@ def test_purchase_invoice_list_renders_legible_period_label(period_picker_app) -
     client = period_picker_app.test_client()
     _login(client, user.id)
     pid = _period_id(period_picker_app)
-    url = (
-        f"/buying/purchase-invoice/list?company=cacao"
-        f"&accounting_period_from={pid}&accounting_period_to={pid}"
-    )
+    url = f"/buying/purchase-invoice/list?company=cacao" f"&accounting_period_from={pid}&accounting_period_to={pid}"
     response = client.get(url)
     assert response.status_code == 200
     html = response.get_data(as_text=True)
@@ -194,10 +183,7 @@ def test_kardex_report_renders_legible_period_label(period_picker_app) -> None:
     client = period_picker_app.test_client()
     _login(client, user.id)
     pid = _period_id(period_picker_app)
-    url = (
-        f"/reports/kardex?company=cacao"
-        f"&accounting_period_from={pid}&accounting_period_to={pid}"
-    )
+    url = f"/reports/kardex?company=cacao" f"&accounting_period_from={pid}&accounting_period_to={pid}"
     response = client.get(url)
     assert response.status_code == 200
     html = response.get_data(as_text=True)

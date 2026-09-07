@@ -1652,7 +1652,9 @@ def test_vale_respeta_serie_explicita(app_ctx):
         naming_series_id=serie.id,
     )
     assert vale.naming_series_id == serie.id
-    assert vale.document_no.startswith(serie.prefix_template.replace("*COMP*-", "cacao-").replace("*YYYY*-", "2026-").replace("*MM*-", "02-"))
+    assert vale.document_no.startswith(
+        serie.prefix_template.replace("*COMP*-", "cacao-").replace("*YYYY*-", "2026-").replace("*MM*-", "02-")
+    )
 
 
 def test_gasto_asigna_naming_series_y_moneda(app_ctx_book):
@@ -1746,7 +1748,11 @@ def test_editar_vale_borrador(app_ctx):
 
 def test_no_se_puede_editar_vale_no_borrador(app_ctx):
     """Un vale entregado o liquidado no se puede editar."""
-    from cacao_accounting.bancos.services import create_petty_cash_voucher, set_petty_cash_voucher_status, update_petty_cash_voucher
+    from cacao_accounting.bancos.services import (
+        create_petty_cash_voucher,
+        set_petty_cash_voucher_status,
+        update_petty_cash_voucher,
+    )
 
     fondo = _crear_fondo_caja()
     vale = create_petty_cash_voucher(

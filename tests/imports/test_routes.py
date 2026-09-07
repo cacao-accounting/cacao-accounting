@@ -259,6 +259,7 @@ def test_upload_mime_type_validation():
             )
             assert response.status_code == 403
 
+
 def test_import_template_headers_follow_selected_language():
     """Generated templates expose English headers when the locale is English."""
     from cacao_accounting.imports.adapters.journal_entry import JournalEntryAdapter
