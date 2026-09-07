@@ -859,6 +859,8 @@ def _apply_single_request_filter(
         return statement.where(CompanyParty.company.in_(clean_values))
     if spec.model is Party and filter_name in ("role", "party_type"):
         return _apply_role_filter(statement, clean_values)
+    if filter_name not in spec.allowed_filters:
+        return statement
 
     column = _column_for(spec.model, spec.allowed_filters[filter_name])
     if spec.model is Accounts and filter_name in {"classification", "account_type"}:

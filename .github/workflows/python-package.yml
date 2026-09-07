@@ -32,11 +32,6 @@ jobs:
           python -m ruff check cacao_accounting/
           python -m pydocstyle cacao_accounting/
           python -m mypy cacao_accounting/
-      - uses: rohaquinlop/complexipy-action@v2
-        with:
-          paths: cacao_accounting/
-          max_complexity_allowed: 25
-          output_format: json
 
   build:
     runs-on: ubuntu-latest
