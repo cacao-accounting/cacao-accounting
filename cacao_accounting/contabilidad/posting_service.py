@@ -2121,12 +2121,13 @@ def _moving_average_valuation(available: list, total_available: Decimal, quantit
     return quantity * average_rate, average_rate
 
 
-def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decimal, str | None]:
-    """Consume FIFO y reporta la capa origen predominante del consumo."""
+def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+    """Consume FIFO y reporta la capa origen predominante del consumo y la composición por capa."""
     total_cost = Decimal("0")
     remaining = quantity
     queue = [list(entry) for entry in available]
     consumed_by_layer: dict[str, Decimal] = {}
+    consumed_layers: list[dict[str, str]] = []
     while remaining > 0 and queue:
         entry = queue[0]
         consume_qty = min(entry[1], remaining)
@@ -2134,7 +2135,13 @@ def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decima
         remaining -= consume_qty
         entry[1] -= consume_qty
         if entry[0]:
-            consumed_by_layer[entry[0]] = consumed_by_layer.get(entry[0], Decimal("0")) + consume_qty
+            layer_id = str(entry[0])
+            consumed_by_layer[layer_id] = consumed_by_layer.get(layer_id, Decimal("0")) + consume_qty
+            consumed_layers.append({
+                "layer_id": layer_id,
+                "qty": str(consume_qty),
+                "rate": str(entry[2]),
+            })
         if entry[1] > 0:
             continue
         queue.pop(0)
@@ -2146,7 +2153,7 @@ def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decima
         if consumed_qty > primary_qty:
             primary_source = layer_id
             primary_qty = consumed_qty
-    return total_cost, total_cost / quantity, primary_source
+    return total_cost, total_cost / quantity, primary_source, consumed_layers
 
 
 def _consume_stock_valuation_layers(
@@ -2155,8 +2162,8 @@ def _consume_stock_valuation_layers(
     warehouse: str,
     quantity: Decimal,
     batch_id: str | None = None,
-) -> tuple[Decimal, Decimal, str | None]:
-    """Consume capas y retorna ``(costo, tasa, capa_origen_predominante)``."""
+) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
+    """Consume capas y retorna ``(costo, tasa, capa_origen_predominante, composicion_capas)``."""
     if quantity <= 0:
         raise PostingError(
             f"La cantidad de consumo debe ser mayor que cero para el artículo {item_code} en la bodega {warehouse}."
@@ -2181,12 +2188,12 @@ def _consume_stock_valuation_layers(
             # de entrada de ese lote (dimension de primer nivel del almacen), no
             # con el promedio global del articulo entre todos los lotes.
             cost_amount, average_rate = _moving_average_valuation(available, total_available, quantity)
-            return cost_amount, average_rate, None
+            return cost_amount, average_rate, None, []
         if bin_qty >= quantity and bin_qty > 0:
             average_rate = bin_value / bin_qty
-            return quantity * average_rate, average_rate, None
+            return quantity * average_rate, average_rate, None, []
         cost_amount, average_rate = _moving_average_valuation(available, total_available, quantity)
-        return cost_amount, average_rate, None
+        return cost_amount, average_rate, None, []
 
     return _fifo_valuation(available, quantity)
 
@@ -2203,7 +2210,7 @@ def _consume_available_layers_for_negative_stock(
     available = _valuation_queue(company, item_code, warehouse, batch_id=batch_id)
     total_available = sum((entry[1] for entry in available), Decimal("0"))
     if total_available > 0:
-        _, avg_rate, _source_layer = _consume_stock_valuation_layers(
+        _, avg_rate, _source_layer, _consumed = _consume_stock_valuation_layers(
             company=company,
             item_code=item_code,
             warehouse=warehouse,
@@ -2567,10 +2574,11 @@ def _create_stock_movement(
     # INV-01: Falso positivo - La verificacion de stock negativo (allow_negative_stock)
     # ocurre ANTES de _upsert_stock_bin. Este check protege el consumo de capas FIFO,
     # no la actualizacion de StockBin. Ver docstring de _upsert_stock_bin.
+    consumed_layers = None
     if qty_change < 0 and not _skip_layer_consumption:
         item = _stock_item_for(line)
         try:
-            cost_amount, cost_rate, consumed_source_layer = _consume_stock_valuation_layers(
+            cost_amount, cost_rate, consumed_source_layer, consumed_layers = _consume_stock_valuation_layers(
                 company=document.company,
                 item_code=line.item_code,
                 warehouse=warehouse,
@@ -2581,6 +2589,7 @@ def _create_stock_movement(
             valuation_rate = cost_rate
             value_change = -cost_amount
             line._inventory_cost_amount = cost_amount
+            line._consumed_layers = consumed_layers
         except PostingError:
             if not item.allow_negative_stock:
                 raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
@@ -2596,6 +2605,10 @@ def _create_stock_movement(
             line._inventory_cost_amount = cost_amount
             valuation_rate = cost_rate
             value_change = -cost_amount
+            consumed_layers = []
+            line._consumed_layers = consumed_layers
+    if qty_change < 0 and consumed_layers is None:
+        consumed_layers = getattr(line, "_consumed_layers", None)
     update_serial_state(line, outgoing=qty_change < 0, warehouse=warehouse)
     qty_after, stock_value_after = _upsert_stock_bin(
         company=document.company,
@@ -2624,6 +2637,7 @@ def _create_stock_movement(
             voucher_id=_get_voucher_id(document),
             posting_date=document.posting_date,
             source_layer_id=source_layer_id if qty_change < 0 else None,
+            consumed_layers=json.dumps(consumed_layers) if (qty_change < 0 and consumed_layers) else None,
             batch_id=getattr(line, "batch_id", None),
         )
     )
@@ -2880,7 +2894,7 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
     """Consume capas FIFO y resuelve el costo de una salida de conciliación."""
     item = _stock_item_for(line)
     try:
-        cost_amount, rate, source_layer_id = _consume_stock_valuation_layers(
+        cost_amount, rate, source_layer_id, consumed_layers = _consume_stock_valuation_layers(
             company=document.company,
             item_code=line.item_code,
             warehouse=warehouse,
@@ -2888,6 +2902,7 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
             batch_id=getattr(line, "batch_id", None),
         )
         line._inventory_source_layer_id = source_layer_id
+        line._consumed_layers = consumed_layers
     except PostingError:
         if not item.allow_negative_stock:
             raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
@@ -2901,6 +2916,7 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
         )
         cost_amount = rate * abs(qty_change)
         line._inventory_source_layer_id = None
+        line._consumed_layers = []
     line._inventory_cost_amount = cost_amount
     return rate, -cost_amount
 
@@ -2971,14 +2987,14 @@ def _consume_outflow_stock_valuation(
     line: Any,
     source_warehouse: str,
     qty: Decimal,
-) -> tuple[Decimal, Decimal, str | None]:
+) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
     """Calculate valuation cost and rate for stock outflows using valuation layers."""
     item = _stock_item_for(line)
     fallback_rate = _decimal_value(getattr(line, "valuation_rate", None) or getattr(line, "basic_rate", None))
     if fallback_rate <= 0 and qty > 0:
         fallback_rate = _decimal_value(getattr(line, "amount", None)) / qty
     try:
-        cost_amount, cost_rate, source_layer_id = _consume_stock_valuation_layers(
+        cost_amount, cost_rate, source_layer_id, consumed_layers = _consume_stock_valuation_layers(
             company=document.company,
             item_code=line.item_code,
             warehouse=source_warehouse,
@@ -2998,8 +3014,10 @@ def _consume_outflow_stock_valuation(
         )
         cost_amount = cost_rate * qty
         source_layer_id = None
+        consumed_layers = []
     line._inventory_cost_amount = cost_amount
-    return cost_amount, cost_rate, source_layer_id
+    line._consumed_layers = consumed_layers
+    return cost_amount, cost_rate, source_layer_id, consumed_layers
 
 
 def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) -> list[StockLedgerEntry]:
@@ -3050,7 +3068,9 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
                     reject_negative_stock_value=True,
                 )
             ]
-        cost_amount, cost_rate, source_layer_id = _consume_outflow_stock_valuation(document, line, source_warehouse, qty)
+        cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
+            document, line, source_warehouse, qty
+        )
         return [
             _create_stock_movement(
                 document=document,
@@ -3068,7 +3088,9 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
             raise PostingError("Las transferencias de material requieren una cantidad mayor a cero.")
         source_warehouse = line.source_warehouse or document.from_warehouse
         target_warehouse = line.target_warehouse or document.to_warehouse
-        cost_amount, cost_rate, source_layer_id = _consume_outflow_stock_valuation(document, line, source_warehouse, qty)
+        cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
+            document, line, source_warehouse, qty
+        )
         return [
             _create_stock_movement(
                 document=document,
@@ -3531,7 +3553,7 @@ def _required_stock_warehouse(document: Any, line: Any, warehouse: str | None) -
 
 def _outgoing_stock_values(
     document: Any, line: Any, warehouse: str, qty_change: Decimal, item: Any
-) -> tuple[Decimal, Decimal, str | None]:
+) -> tuple[Decimal, Decimal, str | None, list[dict[str, str]]]:
     """Valida una salida y obtiene su costo desde las capas de valoración."""
     from cacao_accounting.inventario.service import InventoryServiceError, validate_batch_serial
 
@@ -3545,7 +3567,7 @@ def _outgoing_stock_values(
     except InventoryServiceError as exc:
         raise PostingError(str(exc)) from exc
     try:
-        cost_amount, cost_rate, source_layer_id = _consume_stock_valuation_layers(
+        cost_amount, cost_rate, source_layer_id, consumed_layers = _consume_stock_valuation_layers(
             company=document.company,
             item_code=line.item_code,
             warehouse=warehouse,
@@ -3565,8 +3587,10 @@ def _outgoing_stock_values(
         )
         cost_amount = cost_rate * abs(qty_change)
         source_layer_id = None
+        consumed_layers = []
     line._inventory_cost_amount = cost_amount
-    return cost_amount, cost_rate, source_layer_id
+    line._consumed_layers = consumed_layers
+    return cost_amount, cost_rate, source_layer_id, consumed_layers
 
 
 def _incoming_stock_values(
@@ -3609,6 +3633,7 @@ def _create_stock_ledger_for_document(
     warehouse = _required_stock_warehouse(document, line, warehouse)
     item = _stock_item_for(line)
     source_layer_id = None
+    consumed_layers = None
     is_purchase_return = getattr(document, "is_return", False) and _is_purchase_receipt(document)
     if qty_change < 0:
         if is_purchase_return:
@@ -3617,7 +3642,9 @@ def _create_stock_ledger_for_document(
             valuation_rate = cost_rate
             value_change = -cost_amount
         else:
-            cost_amount, cost_rate, source_layer_id = _outgoing_stock_values(document, line, warehouse, qty_change, item)
+            cost_amount, cost_rate, source_layer_id, consumed_layers = _outgoing_stock_values(
+                document, line, warehouse, qty_change, item
+            )
             valuation_rate = cost_rate
             value_change = -cost_amount
     else:
@@ -3648,6 +3675,7 @@ def _create_stock_ledger_for_document(
         voucher_id=_get_voucher_id(document),
         posting_date=document.posting_date,
         source_layer_id=source_layer_id if qty_change < 0 else None,
+        consumed_layers=json.dumps(consumed_layers) if (qty_change < 0 and consumed_layers) else None,
         batch_id=getattr(line, "batch_id", None),
     )
     database.session.add(stock_layer)
