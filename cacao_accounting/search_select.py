@@ -847,31 +847,37 @@ def _extract_filter_flag(filters: dict[str, list[str]], key: str, *, default: bo
     return bool(_normalize_filter_value(values[0]))
 
 
+def _apply_single_request_filter(
+    statement: Select[tuple[Any]],
+    spec: SearchSelectSpec,
+    filter_name: str,
+    clean_values: list[str],
+) -> Select[tuple[Any]]:
+    if spec.model is Item and filter_name == "company":
+        return statement
+    if spec.model is Party and filter_name == "company":
+        return statement.where(CompanyParty.company.in_(clean_values))
+    if spec.model is Party and filter_name in ("role", "party_type"):
+        return _apply_role_filter(statement, clean_values)
+
+    column = _column_for(spec.model, spec.allowed_filters[filter_name])
+    if spec.model is Accounts and filter_name in {"classification", "account_type"}:
+        # Historical catalogs contain both Spanish labels (e.g. ``Activo``)
+        # and canonical lowercase values (e.g. ``asset``).  The account
+        # form sends the canonical value, so these semantic filters must
+        # not be case-sensitive.
+        conditions = [func.lower(column) == str(value).strip().lower() for value in clean_values]
+        return statement.where(or_(*conditions))
+    return statement.where(_condition_for(column, clean_values))
+
+
 def _apply_request_filters(
     statement: Select[tuple[Any]], spec: SearchSelectSpec, filters: dict[str, list[str]]
 ) -> Select[tuple[Any]]:
     for filter_name, values in filters.items():
         clean_values = [value for value in values if value != ""]
-        if not clean_values:
-            continue
-        if spec.model is Item and filter_name == "company":
-            continue
-        if spec.model is Party and filter_name == "company":
-            statement = statement.where(CompanyParty.company.in_(clean_values))
-            continue
-        if spec.model is Party and filter_name in ("role", "party_type"):
-            statement = _apply_role_filter(statement, clean_values)
-            continue
-        column = _column_for(spec.model, spec.allowed_filters[filter_name])
-        if spec.model is Accounts and filter_name in {"classification", "account_type"}:
-            # Historical catalogs contain both Spanish labels (e.g. ``Activo``)
-            # and canonical lowercase values (e.g. ``asset``).  The account
-            # form sends the canonical value, so these semantic filters must
-            # not be case-sensitive.
-            conditions = [func.lower(column) == str(value).strip().lower() for value in clean_values]
-            statement = statement.where(or_(*conditions))
-            continue
-        statement = statement.where(_condition_for(column, clean_values))
+        if clean_values:
+            statement = _apply_single_request_filter(statement, spec, filter_name, clean_values)
     return statement
 
 

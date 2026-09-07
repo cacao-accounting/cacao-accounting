@@ -2133,15 +2133,7 @@ def ventas_factura_venta(invoice_id):
     )
 
 
-@ventas.route("/sales-invoice/<invoice_id>/edit", methods=["GET", "POST"])
-@modulo_activo("sales")
-@login_required
-def ventas_factura_venta_editar(invoice_id: str):
-    """Edita una factura de venta en borrador."""
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.ventas.forms import FormularioFacturaVenta
-
-    registro = database.session.get(SalesInvoice, invoice_id)
+def _validate_sales_invoice_editable(registro: SalesInvoice | None) -> None:
     if not registro:
         abort(404)
     _require_sales_document_access(registro, "editar")
@@ -2154,36 +2146,15 @@ def ventas_factura_venta_editar(invoice_id: str):
     if registro.docstatus != 0:
         abort(400)
 
-    formulario = FormularioFacturaVenta(obj=registro)
-    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-    selected_company = request.values.get("company") or registro.company
-    formulario.naming_series.choices = _series_choices("sales_invoice", selected_company)
-    formulario.customer_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name)
-        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
-    ]
-    items_disponibles = [
-        {
-            "code": item.code,
-            "name": item.name,
-            "uom": item.default_uom,
-            "has_batch": item.has_batch,
-            "has_serial_no": item.has_serial_no,
-            "has_expiry_date": item.has_expiry_date,
-        }
-        for (item,) in database.session.execute(database.select(Item)).all()
-    ]
-    uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
-    bodegas_disponibles = [
-        {"code": warehouse.code, "name": warehouse.name}
-        for (warehouse,) in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
-    ]
 
-    if request.method == "POST":
-        return _handle_sales_invoice_edit_post(registro)
-
+def _build_sales_invoice_edit_config(
+    registro: SalesInvoice,
+    items_disponibles: list[dict[str, Any]],
+    uoms_disponibles: list[dict[str, Any]],
+    bodegas_disponibles: list[dict[str, Any]],
+) -> dict[str, Any]:
     lineas = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=registro.id)).scalars()
-    transaction_config = {
+    return {
         "formKey": _FORMKEY_SALES_INVOICE,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
         "enableLineDiscounts": True,
@@ -2221,6 +2192,39 @@ def ventas_factura_venta_editar(invoice_id: str):
             for item in lineas
         ],
     }
+
+
+@ventas.route("/sales-invoice/<invoice_id>/edit", methods=["GET", "POST"])
+@modulo_activo("sales")
+@login_required
+def ventas_factura_venta_editar(invoice_id: str):
+    """Edita una factura de venta en borrador."""
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+    from cacao_accounting.ventas.forms import FormularioFacturaVenta
+
+    registro = database.session.get(SalesInvoice, invoice_id)
+    _validate_sales_invoice_editable(registro)
+
+    formulario = FormularioFacturaVenta(obj=registro)
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+    selected_company = request.values.get("company") or registro.company
+    formulario.naming_series.choices = _series_choices("sales_invoice", selected_company)
+    formulario.customer_id.choices = [("", "")] + [
+        (str(p[0].id), p[0].name)
+        for p in database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).all()
+    ]
+    items_disponibles, uoms_disponibles = _sales_invoice_catalogs()
+    bodegas_disponibles = [
+        {"code": warehouse.code, "name": warehouse.name}
+        for (warehouse,) in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
+    ]
+
+    if request.method == "POST":
+        return _handle_sales_invoice_edit_post(registro)
+
+    transaction_config = _build_sales_invoice_edit_config(
+        registro, items_disponibles, uoms_disponibles, bodegas_disponibles
+    )
     document_type = registro.document_type or "sales_invoice"
     formulario.is_return.data = document_type == "sales_credit_note"
     return render_template(
