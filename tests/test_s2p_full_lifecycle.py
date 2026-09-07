@@ -911,8 +911,7 @@ def test_purchase_return_consumes_fifo_layers_at_historical_cost(app_ctx):
     # 4. Verificar capa de valuación: qty negativa, rate positivo (10), source_layer_id vinculado
     return_layers = (
         database.session.execute(
-            database.select(StockValuationLayer)
-            .filter_by(voucher_id=ret_receipt.id, voucher_type="purchase_receipt")
+            database.select(StockValuationLayer).filter_by(voucher_id=ret_receipt.id, voucher_type="purchase_receipt")
         )
         .scalars()
         .all()
