@@ -2012,23 +2012,39 @@ def _schedule_valuation_layers(layers: Sequence[Any]) -> list[tuple[tuple, Any]]
     return scheduled
 
 
+def _filter_batch_valuation_layers(
+    layers: Sequence[StockValuationLayer],
+    company: str,
+    item_code: str,
+    warehouse: str,
+    batch_id: str,
+) -> list[StockValuationLayer]:
+    incoming = [
+        layer
+        for layer in layers
+        if _layer_batch_id(layer, company=company, item_code=item_code, warehouse=warehouse) == str(batch_id)
+        and _decimal_value(layer.qty) > 0
+    ]
+    incoming_ids = {str(layer.id) for layer in incoming}
+    linked_ids = {
+        str(layer.id)
+        for layer in layers
+        if layer.source_layer_id
+        and (
+            str(layer.source_layer_id) in incoming_ids
+            or _layer_batch_id(layer, company=company, item_code=item_code, warehouse=warehouse) == str(batch_id)
+        )
+    }
+    return [layer for layer in layers if str(layer.id) in (incoming_ids | linked_ids)]
+
+
 def _valuation_queue(
     company: str,
     item_code: str,
     warehouse: str,
     batch_id: str | None = None,
 ) -> list[list]:
-    """Reconstruye la cola de capas disponibles ``[layer_id, qty, rate]``.
-
-    La reconstruccion fija cada consumo a su capa origen (``source_layer_id``)
-    e inserta las reversas junto a su capa de origen, preservando la
-    composicion FIFO historica frente a receipts retroactivos y cancelaciones.
-
-    Cuando ``batch_id`` se indica, la cola se limita a las capas de entrada del
-    lote (dimensión de primer nivel del almacen) y sus consumos/reversas
-    vinculados: una salida que selecciona un lote especifico se valora con el
-    costo de ese lote, no con la cola FIFO global del articulo.
-    """
+    """Reconstruye la cola de capas disponibles ``[layer_id, qty, rate]``."""
     layers = (
         database.session.execute(
             select(StockValuationLayer)
@@ -2039,23 +2055,7 @@ def _valuation_queue(
         .all()
     )
     if batch_id:
-        incoming = [
-            layer
-            for layer in layers
-            if _layer_batch_id(layer, company=company, item_code=item_code, warehouse=warehouse) == str(batch_id)
-            and _decimal_value(layer.qty) > 0
-        ]
-        incoming_ids = {str(layer.id) for layer in incoming}
-        linked_ids = {
-            str(layer.id)
-            for layer in layers
-            if layer.source_layer_id
-            and (
-                str(layer.source_layer_id) in incoming_ids
-                or _layer_batch_id(layer, company=company, item_code=item_code, warehouse=warehouse) == str(batch_id)
-            )
-        }
-        layers = [layer for layer in layers if str(layer.id) in (incoming_ids | linked_ids)]
+        layers = _filter_batch_valuation_layers(layers, company, item_code, warehouse, batch_id)
     scheduled = _schedule_valuation_layers(layers)
     queue: list[list] = []
     negative_balance = Decimal("0")
@@ -3020,98 +3020,108 @@ def _consume_outflow_stock_valuation(
     return cost_amount, cost_rate, source_layer_id, consumed_layers
 
 
+def _movement_inflow_receipt(document: StockEntry, line: Any, purpose: str, qty: Decimal) -> list[StockLedgerEntry]:
+    amount = _decimal_value(line.amount)
+    if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount <= 0:
+        raise PostingError("Un ajuste de solo valor requiere un monto mayor a cero.")
+    if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount > 0:
+        valuation_rate = _decimal_value(line.valuation_rate or line.basic_rate)
+        value = amount
+    else:
+        valuation_rate = _line_rate(line)
+        value = amount or (qty * valuation_rate)
+    value = _inventory_value_in_functional_currency(document, value)
+    valuation_rate = value / qty if qty else valuation_rate
+    line._inventory_cost_amount = value
+    return [
+        _create_stock_movement(
+            document=document,
+            line=line,
+            warehouse=line.target_warehouse or document.to_warehouse,
+            qty_change=qty,
+            valuation_rate=valuation_rate,
+            value_change=value,
+        )
+    ]
+
+
+def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> list[StockLedgerEntry]:
+    source_warehouse = line.source_warehouse or document.from_warehouse
+    if qty == 0:
+        if _decimal_value(line.amount) <= 0:
+            raise PostingError("Un ajuste de solo valor requiere un monto mayor a cero.")
+        value = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
+        fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
+        return [
+            _create_stock_movement(
+                document=document,
+                line=line,
+                warehouse=source_warehouse,
+                qty_change=Decimal("0"),
+                valuation_rate=fallback_rate,
+                value_change=-value,
+                reject_negative_stock_value=True,
+            )
+        ]
+    cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
+        document, line, source_warehouse, qty
+    )
+    return [
+        _create_stock_movement(
+            document=document,
+            line=line,
+            warehouse=source_warehouse,
+            qty_change=-qty,
+            valuation_rate=cost_rate,
+            value_change=-cost_amount,
+            _skip_layer_consumption=True,
+            source_layer_id=source_layer_id,
+        )
+    ]
+
+
+def _movement_transfer(document: StockEntry, line: Any, qty: Decimal) -> list[StockLedgerEntry]:
+    if qty == 0:
+        raise PostingError("Las transferencias de material requieren una cantidad mayor a cero.")
+    source_warehouse = line.source_warehouse or document.from_warehouse
+    target_warehouse = line.target_warehouse or document.to_warehouse
+    cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
+        document, line, source_warehouse, qty
+    )
+    return [
+        _create_stock_movement(
+            document=document,
+            line=line,
+            warehouse=source_warehouse,
+            qty_change=-qty,
+            valuation_rate=cost_rate,
+            value_change=-cost_amount,
+            _skip_layer_consumption=True,
+            source_layer_id=source_layer_id,
+        ),
+        _create_stock_movement(
+            document=document,
+            line=line,
+            warehouse=target_warehouse,
+            qty_change=qty,
+            valuation_rate=cost_rate,
+            value_change=cost_amount,
+        ),
+    ]
+
+
 def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) -> list[StockLedgerEntry]:
     """Crea movimientos de inventario para una linea segun el proposito."""
     qty = _line_qty(line)
-
-    if purpose in ("material_receipt", "adjustment_positive", "stock_adjustment"):
-        amount = _decimal_value(line.amount)
-        if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount <= 0:
-            raise PostingError("Un ajuste de solo valor requiere un monto mayor a cero.")
-        if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount > 0:
-            # A positive adjustment can change value without changing quantity.
-            # It must bypass _line_rate, whose zero-quantity guard protects
-            # quantity-bearing movements from silently using a zero rate.
-            valuation_rate = _decimal_value(line.valuation_rate or line.basic_rate)
-            value = amount
-        else:
-            valuation_rate = _line_rate(line)
-            value = amount or (qty * valuation_rate)
-        value = _inventory_value_in_functional_currency(document, value)
-        valuation_rate = value / qty if qty else valuation_rate
-        line._inventory_cost_amount = value
-        return [
-            _create_stock_movement(
-                document=document,
-                line=line,
-                warehouse=line.target_warehouse or document.to_warehouse,
-                qty_change=qty,
-                valuation_rate=valuation_rate,
-                value_change=value,
-            )
-        ]
-    if purpose in ("material_issue", "adjustment_negative"):
-        source_warehouse = line.source_warehouse or document.from_warehouse
-        if qty == 0:
-            if _decimal_value(line.amount) <= 0:
-                raise PostingError("Un ajuste de solo valor requiere un monto mayor a cero.")
-            value = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
-            fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
-            return [
-                _create_stock_movement(
-                    document=document,
-                    line=line,
-                    warehouse=source_warehouse,
-                    qty_change=Decimal("0"),
-                    valuation_rate=fallback_rate,
-                    value_change=-value,
-                    reject_negative_stock_value=True,
-                )
-            ]
-        cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
-            document, line, source_warehouse, qty
-        )
-        return [
-            _create_stock_movement(
-                document=document,
-                line=line,
-                warehouse=source_warehouse,
-                qty_change=-qty,
-                valuation_rate=cost_rate,
-                value_change=-cost_amount,
-                _skip_layer_consumption=True,
-                source_layer_id=source_layer_id,
-            )
-        ]
-    if purpose == "material_transfer":
-        if qty == 0:
-            raise PostingError("Las transferencias de material requieren una cantidad mayor a cero.")
-        source_warehouse = line.source_warehouse or document.from_warehouse
-        target_warehouse = line.target_warehouse or document.to_warehouse
-        cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
-            document, line, source_warehouse, qty
-        )
-        return [
-            _create_stock_movement(
-                document=document,
-                line=line,
-                warehouse=source_warehouse,
-                qty_change=-qty,
-                valuation_rate=cost_rate,
-                value_change=-cost_amount,
-                _skip_layer_consumption=True,
-                source_layer_id=source_layer_id,
-            ),
-            _create_stock_movement(
-                document=document,
-                line=line,
-                warehouse=target_warehouse,
-                qty_change=qty,
-                valuation_rate=cost_rate,
-                value_change=cost_amount,
-            ),
-        ]
-    raise PostingError("Proposito de inventario no soportado para Stock Ledger.")
+    match purpose:
+        case "material_receipt" | "adjustment_positive" | "stock_adjustment":
+            return _movement_inflow_receipt(document, line, purpose, qty)
+        case "material_issue" | "adjustment_negative":
+            return _movement_outflow_issue(document, line, qty)
+        case "material_transfer":
+            return _movement_transfer(document, line, qty)
+        case _:
+            raise PostingError("Proposito de inventario no soportado para Stock Ledger.")
 
 
 def _document_items(document: Any) -> list[Any]:
@@ -3193,24 +3203,50 @@ def _delivery_return_cost(document: DeliveryNote, line: DeliveryNoteItem, wareho
     return total_cost.quantize(Decimal("0.0001"))
 
 
+def _consume_svl_entries(
+    entries: list[dict[str, Any]],
+    remaining_to_skip: Decimal,
+    remaining: Decimal,
+    composition: list[dict[str, Decimal]],
+) -> tuple[Decimal, Decimal]:
+    for entry in entries:
+        entry_qty = Decimal(entry["qty"])
+        entry_rate = Decimal(entry["rate"])
+        if remaining_to_skip >= entry_qty:
+            remaining_to_skip -= entry_qty
+            continue
+        available = entry_qty - remaining_to_skip
+        take = min(available, remaining)
+        composition.append({"qty": take, "rate": entry_rate})
+        remaining -= take
+        remaining_to_skip = Decimal("0")
+        if remaining <= 0:
+            break
+    return remaining_to_skip, remaining
+
+
+def _consume_svl_legacy(
+    svl: StockValuationLayer,
+    remaining_to_skip: Decimal,
+    remaining: Decimal,
+    composition: list[dict[str, Decimal]],
+) -> tuple[Decimal, Decimal]:
+    svl_qty = abs(_decimal_value(svl.qty))
+    if svl_qty <= 0:
+        return remaining_to_skip, remaining
+    if remaining_to_skip >= svl_qty:
+        return remaining_to_skip - svl_qty, remaining
+    available = svl_qty - remaining_to_skip
+    take = min(available, remaining)
+    rate = abs(_decimal_value(svl.stock_value_difference) / svl_qty)
+    composition.append({"qty": take, "rate": rate})
+    return Decimal("0"), remaining - take
+
+
 def _delivery_return_cost_composition(
     document: DeliveryNote, line: DeliveryNoteItem, warehouse: str, quantity: Decimal
 ) -> list[dict[str, Decimal]]:
-    """Return per-layer cost composition for a delivery return.
-
-    Uses the ``consumed_layers`` JSON stored on the source delivery's outgoing
-    stock valuation layers to reconstruct the exact FIFO cost of each receipt
-    layer consumed by the original delivery.  This ensures partial returns are
-    valued at the historical cost of the layers actually consumed, not at an
-    averaged rate.
-
-    Each dict in the returned list contains ``{"qty": Decimal, "rate": Decimal}``
-    representing a portion of the return quantity valued at a specific receipt
-    layer's cost.  The caller creates one stock movement per entry.
-
-    Falls back to the aggregated rate from the delivery's outgoing SVL when the
-    ``consumed_layers`` field is not available (legacy data).
-    """
+    """Return per-layer cost composition for a delivery return."""
     source = _delivery_return_source(document)
     already_returned = _delivery_already_returned_qty(document, line, warehouse, source)
     outgoing_svl = list(
@@ -3231,47 +3267,21 @@ def _delivery_return_cost_composition(
     )
     if not outgoing_svl:
         return _delivery_return_cost_from_sle(document, line, warehouse, source, already_returned, quantity)
-    svl_consumed: list[Any] = []
-    for svl in outgoing_svl:
-        raw = getattr(svl, "consumed_layers", None)
-        if raw:
-            svl_consumed.append(json.loads(str(raw)))
-        else:
-            svl_consumed.append(None)
+
     remaining_to_skip = _decimal_value(already_returned)
     remaining = quantity
     composition: list[dict[str, Decimal]] = []
-    for idx, entries in enumerate(svl_consumed):
-        if entries is not None:
-            for entry in entries:
-                entry_qty = Decimal(entry["qty"])
-                entry_rate = Decimal(entry["rate"])
-                if remaining_to_skip >= entry_qty:
-                    remaining_to_skip -= entry_qty
-                    continue
-                available = entry_qty - remaining_to_skip
-                take = min(available, remaining)
-                composition.append({"qty": take, "rate": entry_rate})
-                remaining -= take
-                remaining_to_skip = Decimal("0")
-                if remaining <= 0:
-                    break
+
+    for svl in outgoing_svl:
+        raw = getattr(svl, "consumed_layers", None)
+        if raw:
+            entries = json.loads(str(raw))
+            remaining_to_skip, remaining = _consume_svl_entries(entries, remaining_to_skip, remaining, composition)
         else:
-            svl = outgoing_svl[idx]
-            svl_qty = abs(_decimal_value(svl.qty))
-            if svl_qty <= 0:
-                continue
-            if remaining_to_skip >= svl_qty:
-                remaining_to_skip -= svl_qty
-                continue
-            available = svl_qty - remaining_to_skip
-            take = min(available, remaining)
-            rate = abs(_decimal_value(svl.stock_value_difference) / svl_qty)
-            composition.append({"qty": take, "rate": rate})
-            remaining -= take
-            remaining_to_skip = Decimal("0")
+            remaining_to_skip, remaining = _consume_svl_legacy(svl, remaining_to_skip, remaining, composition)
         if remaining <= 0:
             break
+
     if remaining > 0:
         raise PostingError("La devolución excede la cantidad entregada pendiente de devolver.")
     return composition
@@ -3686,6 +3696,69 @@ def _allocation_by_line_id(landed_cost_result: Any) -> dict[str, Any]:
     return {str(allocation.item_line_id): allocation for allocation in getattr(landed_cost_result, "allocations", []) or []}
 
 
+def _create_delivery_return_movements(
+    document: Any,
+    line: Any,
+    warehouse: str,
+    qty_change: Decimal,
+) -> list[StockLedgerEntry]:
+    composition = _delivery_return_cost_composition(document, line, warehouse, qty_change)
+    line._inventory_cost_amount = sum(
+        (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001")) for entry in composition
+    )
+    movements = []
+    for entry in composition:
+        entry_qty = entry["qty"]
+        entry_cost = (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001"))
+        entry_rate = entry_cost / entry_qty if entry_qty else Decimal("0")
+        movements.append(
+            _create_stock_movement(
+                document=document,
+                line=line,
+                warehouse=warehouse,
+                qty_change=entry_qty,
+                valuation_rate=entry_rate,
+                value_change=entry_cost,
+            )
+        )
+    return movements
+
+
+def _process_line_stock_ledger(
+    document: Any,
+    line: Any,
+    sign: Decimal,
+    allocations_by_line_id: dict[str, Any],
+    is_delivery_return: bool,
+) -> list[StockLedgerEntry]:
+    if _should_skip_non_stock_line(line):
+        return []
+    qty = _line_qty_generic(line)
+    rate = _line_rate_generic(line)
+    amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
+    allocation = allocations_by_line_id.get(str(getattr(line, "id", "")))
+    if allocation is not None and sign > 0:
+        amount = _decimal_value(getattr(allocation, "final_inventory_cost", None))
+    qty_change = _signed_amount(document, sign * qty)
+    value_change = _signed_amount(document, sign * amount)
+    if qty_change > 0:
+        value_change = _inventory_value_in_functional_currency(document, value_change)
+    warehouse = getattr(line, "warehouse", None)
+    if not warehouse:
+        raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
+    if is_delivery_return and qty_change > 0:
+        return _create_delivery_return_movements(document, line, warehouse, qty_change)
+    return [
+        _create_stock_ledger_for_document(
+            document=document,
+            line=line,
+            warehouse=warehouse,
+            qty_change=qty_change,
+            value_change=value_change,
+        )
+    ]
+
+
 def _create_stock_ledger_for_document_type(
     document: Any,
     sign: Decimal,
@@ -3703,66 +3776,8 @@ def _create_stock_ledger_for_document_type(
     is_delivery_return = isinstance(document, DeliveryNote) and bool(document.is_return)
     movements: list[StockLedgerEntry] = []
     for line in items:
-        if _should_skip_non_stock_line(line):
-            continue
-        qty = _line_qty_generic(line)
-        rate = _line_rate_generic(line)
-        amount = _decimal_value(getattr(line, "amount", None)) or (qty * rate)
-        allocation = allocations_by_line_id.get(str(getattr(line, "id", "")))
-        if allocation is not None and sign > 0:
-            amount = _decimal_value(getattr(allocation, "final_inventory_cost", None))
-        qty_change = _signed_amount(document, sign * qty)
-        value_change = _signed_amount(document, sign * amount)
-        if qty_change > 0:
-            value_change = _inventory_value_in_functional_currency(document, value_change)
-        warehouse = getattr(line, "warehouse", None)
-        if not warehouse:
-            raise PostingError(_ERROR_INVENTARIO_REQUIERE_ALMACEN)
-        if is_delivery_return and qty_change > 0:
-            composition = _delivery_return_cost_composition(document, line, warehouse, qty_change)
-            line._inventory_cost_amount = sum(
-                (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001")) for entry in composition
-            )
-            if len(composition) <= 1:
-                entry = composition[0]
-                entry_qty = entry["qty"]
-                entry_cost = (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001"))
-                entry_rate = entry_cost / entry_qty if entry_qty else Decimal("0")
-                movements.append(
-                    _create_stock_movement(
-                        document=document,
-                        line=line,
-                        warehouse=warehouse,
-                        qty_change=entry_qty,
-                        valuation_rate=entry_rate,
-                        value_change=entry_cost,
-                    )
-                )
-            else:
-                for entry in composition:
-                    entry_qty = entry["qty"]
-                    entry_cost = (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001"))
-                    entry_rate = entry_cost / entry_qty if entry_qty else Decimal("0")
-                    movements.append(
-                        _create_stock_movement(
-                            document=document,
-                            line=line,
-                            warehouse=warehouse,
-                            qty_change=entry_qty,
-                            valuation_rate=entry_rate,
-                            value_change=entry_cost,
-                        )
-                    )
-        else:
-            movements.append(
-                _create_stock_ledger_for_document(
-                    document=document,
-                    line=line,
-                    warehouse=warehouse,
-                    qty_change=qty_change,
-                    value_change=value_change,
-                )
-            )
+        line_movements = _process_line_stock_ledger(document, line, sign, allocations_by_line_id, is_delivery_return)
+        movements.extend(line_movements)
     database.session.add_all(movements)
     return movements
 

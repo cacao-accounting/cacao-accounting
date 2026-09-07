@@ -469,63 +469,89 @@ def _clone_valuation_layer(layer: StockValuationLayer) -> StockValuationLayer:
     )
 
 
-def _merge_rebuilt_layers(
-    rebuilt: list[StockValuationLayer], existing: Sequence[StockValuationLayer]
-) -> list[StockValuationLayer]:
-    """Empareja capas reconstruidas con las preexistentes y preserva las huerfanas.
-
-    La correspondencia uno a uno entre ``StockLedgerEntry`` y capas no captura
-    las capas de ajuste de valor (qty = 0) que la conciliacion de inventario
-    publica junto a su capa de consumo, ni las capas de costos capitalizables,
-    que carecen de movimiento en el ledger. Cada capa preexistente se empareja
-    por comprobante, item, bodega y signo con su capa reconstruida: el consumo
-    hereda tasa, valor FIFO y capa origen; los ajustes sin contraparte derivada
-    del ledger se reinseren tras su consumo o en su posicion cronologica. Las
-    capas finales reciben identificadores explicitos y los fijados a capas
-    reconstruidas se remapean a sus nuevas identidades.
-    """
+def _prepare_valuation_groups(
+    existing: Sequence[StockValuationLayer],
+) -> dict[tuple[str, str, str, str], dict[str, list[StockValuationLayer]]]:
     prepared: dict[tuple[str, str, str, str], dict[str, list[StockValuationLayer]]] = {}
     for layer in existing:
         bucket = _valuation_bucket(layer)
         prepared.setdefault(_valuation_group_key(layer), {"neg": [], "pos": [], "adj": []})[bucket].append(layer)
+    return prepared
 
+
+def _pair_rebuilt_layer(
+    layer: StockValuationLayer,
+    group: dict[str, list[StockValuationLayer]] | None,
+    pairs: list[tuple[StockValuationLayer, StockValuationLayer]],
+) -> str:
+    if group is None:
+        return ""
+    bucket = _valuation_bucket(layer)
+    paired = group[bucket].pop(0) if group[bucket] else None
+    if paired is not None:
+        pairs.append((paired, layer))
+        if bucket == "neg":
+            layer.rate = _decimal_value(paired.rate)
+            layer.stock_value_difference = _decimal_value(paired.stock_value_difference)
+            layer.source_layer_id = paired.source_layer_id
+        elif bucket == "pos":
+            layer.source_layer_id = paired.source_layer_id
+    return bucket
+
+
+def _process_rebuilt_layers(
+    rebuilt: list[StockValuationLayer],
+    prepared: dict[tuple[str, str, str, str], dict[str, list[StockValuationLayer]]],
+) -> tuple[
+    list[StockValuationLayer],
+    list[tuple[StockValuationLayer, StockValuationLayer]],
+    dict[int, list[StockValuationLayer]],
+]:
     staged: list[StockValuationLayer] = []
-    follow_ups: dict[int, list[StockValuationLayer]] = {}
-    orphan_sources: list[StockValuationLayer] = []
     pairs: list[tuple[StockValuationLayer, StockValuationLayer]] = []
+    follow_ups: dict[int, list[StockValuationLayer]] = {}
+
     for layer in rebuilt:
         position = len(staged)
         staged.append(layer)
         group = prepared.get(_valuation_group_key(layer))
-        if group is None:
-            continue
-        bucket = _valuation_bucket(layer)
-        paired = group[bucket].pop(0) if group[bucket] else None
-        if paired is not None:
-            pairs.append((paired, layer))
-            if bucket == "neg":
-                layer.rate = _decimal_value(paired.rate)
-                layer.stock_value_difference = _decimal_value(paired.stock_value_difference)
-                layer.source_layer_id = paired.source_layer_id
-            elif bucket == "pos":
-                layer.source_layer_id = paired.source_layer_id
-        if bucket != "neg":
-            continue
-        adjustment = _take_adjustment_for_qty(group["adj"], _decimal_value(layer.remaining_qty))
-        if adjustment is not None:
-            follow_ups.setdefault(position, []).append(_clone_valuation_layer(adjustment))
-    for buckets in prepared.values():
-        orphan_sources.extend(buckets["adj"])
+        bucket = _pair_rebuilt_layer(layer, group, pairs)
+        if bucket == "neg" and group:
+            adjustment = _take_adjustment_for_qty(group["adj"], _decimal_value(layer.remaining_qty))
+            if adjustment is not None:
+                follow_ups.setdefault(position, []).append(_clone_valuation_layer(adjustment))
+    return staged, pairs, follow_ups
+
+
+def _merge_orphans(
+    merged: list[StockValuationLayer],
+    orphan_sources: list[StockValuationLayer],
+) -> None:
     orphans = [_clone_valuation_layer(row) for row in sorted(orphan_sources, key=lambda row: (row.posting_date, str(row.id)))]
-    merged: list[StockValuationLayer] = []
-    for position, layer in enumerate(staged):
-        merged.append(layer)
-        merged.extend(follow_ups.get(position, []))
     dates: list[Any] = [layer.posting_date for layer in merged]
     for clone in orphans:
         position = bisect_right(dates, clone.posting_date)
         merged.insert(position, clone)
         dates.insert(position, clone.posting_date)
+
+
+def _merge_rebuilt_layers(
+    rebuilt: list[StockValuationLayer], existing: Sequence[StockValuationLayer]
+) -> list[StockValuationLayer]:
+    """Empareja capas reconstruidas con las preexistentes y preserva las huerfanas."""
+    prepared = _prepare_valuation_groups(existing)
+    staged, pairs, follow_ups = _process_rebuilt_layers(rebuilt, prepared)
+
+    orphan_sources: list[StockValuationLayer] = []
+    for buckets in prepared.values():
+        orphan_sources.extend(buckets["adj"])
+
+    merged: list[StockValuationLayer] = []
+    for position, layer in enumerate(staged):
+        merged.append(layer)
+        merged.extend(follow_ups.get(position, []))
+
+    _merge_orphans(merged, orphan_sources)
     _assign_layer_ids(merged, pairs)
     return merged
 
