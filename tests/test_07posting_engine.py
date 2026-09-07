@@ -2493,7 +2493,9 @@ def test_valuation_queue_recovers_after_allowed_negative_stock(app_ctx):
     )
     assert [(entry[1], entry[2]) for entry in queue] == [(Decimal("5"), Decimal("12"))]
     assert remaining_layer is not None and remaining_layer.voucher_id == "QUEUE-IN-2"
-    cost, rate, _source_layer = _consume_stock_valuation_layers("cacao", "ITEM-NEG-QUEUE", "WH-NEG-QUEUE", Decimal("5"))
+    cost, rate, _source_layer, _consumed = _consume_stock_valuation_layers(
+        "cacao", "ITEM-NEG-QUEUE", "WH-NEG-QUEUE", Decimal("5")
+    )
     assert cost == Decimal("60")
     assert rate == Decimal("12")
 
@@ -2518,6 +2520,7 @@ def test_moving_average_consumption_locks_the_stock_bin_before_valuing(app_ctx, 
         Decimal("20"),
         Decimal("10"),
         None,
+        [],
     )
     assert locked == [True]
 
