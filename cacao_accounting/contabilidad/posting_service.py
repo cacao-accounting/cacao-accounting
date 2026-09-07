@@ -3231,34 +3231,19 @@ def _delivery_return_cost_composition(
     )
     if not outgoing_svl:
         return _delivery_return_cost_from_sle(document, line, warehouse, source, already_returned, quantity)
-    layer_ids: set[str] = set()
     svl_consumed: list[Any] = []
     for svl in outgoing_svl:
         raw = getattr(svl, "consumed_layers", None)
         if raw:
-            parsed = json.loads(str(raw))
-            for entry in parsed:
-                layer_ids.add(entry["layer_id"])
-            svl_consumed.append(parsed)
+            svl_consumed.append(json.loads(str(raw)))
         else:
             svl_consumed.append(None)
-    receipt_layers_by_id: dict[str, Any] = {}
-    if layer_ids:
-        receipt_layers = database.session.execute(
-            select(StockValuationLayer).where(
-                StockValuationLayer.id.in_(list(layer_ids)),
-                StockValuationLayer.qty > 0,
-            )
-        ).scalars()
-        for layer in receipt_layers:
-            receipt_layers_by_id[str(layer.id)] = layer
     remaining_to_skip = _decimal_value(already_returned)
     remaining = quantity
     composition: list[dict[str, Decimal]] = []
     for idx, entries in enumerate(svl_consumed):
         if entries is not None:
             for entry in entries:
-                layer_id = entry["layer_id"]
                 entry_qty = Decimal(entry["qty"])
                 entry_rate = Decimal(entry["rate"])
                 if remaining_to_skip >= entry_qty:
@@ -3266,11 +3251,7 @@ def _delivery_return_cost_composition(
                     continue
                 available = entry_qty - remaining_to_skip
                 take = min(available, remaining)
-                if layer_id in receipt_layers_by_id:
-                    rate = _decimal_value(receipt_layers_by_id[layer_id].rate)
-                else:
-                    rate = entry_rate
-                composition.append({"qty": take, "rate": rate})
+                composition.append({"qty": take, "rate": entry_rate})
                 remaining -= take
                 remaining_to_skip = Decimal("0")
                 if remaining <= 0:

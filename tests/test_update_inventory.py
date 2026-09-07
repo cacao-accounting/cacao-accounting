@@ -626,6 +626,169 @@ def test_delivery_return_fifo_multilayer_cost_end_to_end_posting(app_ctx):
     ), f"COGS credit 40 not found in GL: {[(e.account_id, e.debit, e.credit) for e in gl_entries]}"
 
 
+def test_delivery_return_preserves_adjusted_rate_after_valuation_adjustment(app_ctx):
+    """Delivery return uses the adjusted rate from consumed_layers, not the stale initial receipt rate."""
+    import json
+    from cacao_accounting.contabilidad.posting_service import submit_document
+
+    warehouse, item, cogs_account, inventory_account = _setup_inventory_context()
+
+    database.session.add_all(
+        [
+            ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.0273224044"), date=date(2026, 5, 2)),
+            ExchangeRate(origin="NIO", destination="EUR", rate=Decimal("0.0245"), date=date(2026, 5, 2)),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.5"), date=date(2026, 5, 2)),
+            ExchangeRate(origin="NIO", destination="USD", rate=Decimal("0.0273224044"), date=date(2026, 5, 3)),
+            ExchangeRate(origin="NIO", destination="EUR", rate=Decimal("0.0245"), date=date(2026, 5, 3)),
+            ExchangeRate(origin="USD", destination="NIO", rate=Decimal("36.5"), date=date(2026, 5, 3)),
+        ]
+    )
+    database.session.flush()
+
+    # 1. Incoming receipt: 10 units @ 10 = 100
+    entry1 = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        purpose="material_receipt",
+        to_warehouse=warehouse.code,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        docstatus=0,
+    )
+    database.session.add(entry1)
+    database.session.flush()
+    database.session.add(
+        StockEntryItem(
+            stock_entry_id=entry1.id,
+            item_code=item.code,
+            target_warehouse=warehouse.code,
+            qty=Decimal("10"),
+            qty_in_base_uom=Decimal("10"),
+            uom=item.default_uom,
+            basic_rate=Decimal("10"),
+            valuation_rate=Decimal("10"),
+            amount=Decimal("100"),
+        )
+    )
+    submit_document(entry1)
+
+    # 2. Valuation adjustment (+20 value, 0 qty) increasing effective rate to 12
+    adj = StockEntry(
+        company="cacao",
+        posting_date=date(2026, 5, 1),
+        purpose="adjustment_positive",
+        to_warehouse=warehouse.code,
+        transaction_currency="NIO",
+        base_currency="NIO",
+        docstatus=0,
+    )
+    database.session.add(adj)
+    database.session.flush()
+    database.session.add(
+        StockEntryItem(
+            stock_entry_id=adj.id,
+            item_code=item.code,
+            target_warehouse=warehouse.code,
+            qty=Decimal("0"),
+            qty_in_base_uom=Decimal("0"),
+            uom=item.default_uom,
+            basic_rate=Decimal("0"),
+            valuation_rate=Decimal("0"),
+            amount=Decimal("20"),
+        )
+    )
+    submit_document(adj)
+
+    # 3. Outgoing Delivery Note of 10 units at adjusted rate 12 (total 120)
+    outgoing_dn = DeliveryNote(
+        company="cacao",
+        posting_date=date(2026, 5, 2),
+        transaction_currency="NIO",
+        base_currency="NIO",
+        docstatus=0,
+    )
+    database.session.add(outgoing_dn)
+    database.session.flush()
+    database.session.add(
+        DeliveryNoteItem(
+            delivery_note_id=outgoing_dn.id,
+            item_code=item.code,
+            qty=Decimal("10"),
+            uom=item.default_uom,
+            rate=Decimal("100"),
+            amount=Decimal("1000"),
+            warehouse=warehouse.code,
+        )
+    )
+    submit_document(outgoing_dn)
+
+    outgoing_svl = (
+        database.session.execute(
+            database.select(StockValuationLayer).filter_by(
+                company="cacao",
+                voucher_type="delivery_note",
+                voucher_id=outgoing_dn.id,
+                item_code=item.code,
+                warehouse=warehouse.code,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert outgoing_svl is not None
+    assert outgoing_svl.consumed_layers is not None
+    parsed_consumed = json.loads(outgoing_svl.consumed_layers)
+    assert Decimal(parsed_consumed[0]["rate"]) == Decimal("12")
+
+    # 4. Return 5 units - should be valued at adjusted rate 12 = 60
+    return_dn = DeliveryNote(
+        company="cacao",
+        posting_date=date(2026, 5, 3),
+        transaction_currency="NIO",
+        base_currency="NIO",
+        is_return=True,
+        reversal_of=outgoing_dn.id,
+        docstatus=0,
+    )
+    database.session.add(return_dn)
+    database.session.flush()
+    database.session.add(
+        DeliveryNoteItem(
+            delivery_note_id=return_dn.id,
+            item_code=item.code,
+            qty=Decimal("5"),
+            uom=item.default_uom,
+            rate=Decimal("100"),
+            amount=Decimal("500"),
+            warehouse=warehouse.code,
+        )
+    )
+    gl_entries = submit_document(return_dn)
+
+    return_svl = (
+        database.session.execute(
+            database.select(StockValuationLayer).filter_by(
+                company="cacao",
+                voucher_type="delivery_note",
+                voucher_id=return_dn.id,
+                item_code=item.code,
+                warehouse=warehouse.code,
+            )
+        )
+        .scalars()
+        .first()
+    )
+    assert return_svl is not None
+    assert return_svl.stock_value_difference == Decimal("60.0000"), (
+        f"Expected return value 60 (at adjusted rate 12), got {return_svl.stock_value_difference}"
+    )
+    assert return_svl.rate == Decimal("12.0000"), f"Expected return rate 12, got {return_svl.rate}"
+
+    assert any(
+        entry.account_id == inventory_account.id and entry.debit == Decimal("60.0000") for entry in gl_entries
+    ), f"Inventory debit 60 not found in GL: {[(e.account_id, e.debit, e.credit) for e in gl_entries]}"
+
+
 def test_submit_without_update_inventory_does_not_create_dn(app_ctx):
     """Factura con update_inventory=False no crea DN."""
     client = app_ctx.test_client()
