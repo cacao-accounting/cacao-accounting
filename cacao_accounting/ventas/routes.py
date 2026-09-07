@@ -2133,7 +2133,7 @@ def ventas_factura_venta(invoice_id):
     )
 
 
-def _validate_sales_invoice_editable(registro: SalesInvoice | None) -> None:
+def _validate_sales_invoice_editable(registro: SalesInvoice | None) -> SalesInvoice:
     if not registro:
         abort(404)
     _require_sales_document_access(registro, "editar")
@@ -2145,6 +2145,7 @@ def _validate_sales_invoice_editable(registro: SalesInvoice | None) -> None:
         abort(409)
     if registro.docstatus != 0:
         abort(400)
+    return registro
 
 
 def _build_sales_invoice_edit_config(
@@ -2202,8 +2203,8 @@ def ventas_factura_venta_editar(invoice_id: str):
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
     from cacao_accounting.ventas.forms import FormularioFacturaVenta
 
-    registro = database.session.get(SalesInvoice, invoice_id)
-    _validate_sales_invoice_editable(registro)
+    raw_registro = database.session.get(SalesInvoice, invoice_id)
+    registro = _validate_sales_invoice_editable(raw_registro)
 
     formulario = FormularioFacturaVenta(obj=registro)
     formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
