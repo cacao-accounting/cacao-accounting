@@ -210,7 +210,7 @@ actual.
 
 ## Complejidad
 
-El código generado por un LLM, antes de ser incorporado al proyecto, debe ser analizado para asegurar que sea:
+El código productivo (aquel dentro del directorio principal cacao_accounting) generado por un LLM, antes de ser incorporado al proyecto, debe ser analizado para asegurar que sea:
 
 * Entendible y comprensible por un humano.
 * Mantenible.
@@ -242,4 +242,6 @@ Al refactorizar código que supera el límite de complejidad, se deben seguir es
    Una refactorización debe modificar la estructura interna del código sin alterar su comportamiento esperado. Los tests existentes deben continuar pasando y, cuando sea necesario, deben agregarse nuevos tests antes o durante la refactorización para garantizar que el comportamiento original se mantiene.
 
 > **Regla principal:** reducir la métrica de complejidad no es el objetivo final. El objetivo es producir código que pueda ser leído, entendido, modificado y mantenido por una persona. La métrica es únicamente una herramienta para ayudarnos a conseguirlo. Si un codigo es correcto, fluye con naturalidad esta bien probado y sus pruebas unitarias cubren correctamente los caminos posibles y las posibles exepciones es mejor mantenerlo con complejidad de 21, 22, 23 o 25 incluso si y solo si es realmente el mejor patron para implementar la solucion que se esta trabajando.
+
+No es necesario forzar esta regla con pruebas unitarias, solo con codigo productivo.
 
