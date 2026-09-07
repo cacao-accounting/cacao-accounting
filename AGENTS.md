@@ -207,3 +207,41 @@ autoria de agentes de asistencia.
 Es posible que en el repositorio haya trabajo paralelo, por ningun motivo se debe revertir trabajo realizado
 por terceros en el repositorio. Respetar el trabajo de terceros y ser un buen vecino enfocado en la tarea
 actual.
+
+## Complejidad
+
+## Complejidad
+
+El código generado por un LLM, antes de ser incorporado al proyecto, debe ser analizado para asegurar que sea:
+
+* Entendible y comprensible por un humano.
+* Mantenible.
+* Editable.
+
+Por este motivo, el proyecto ha seleccionado **complexipy** como herramienta para medir la complejidad del código nuevo incorporado al proyecto.
+
+Solo se acepta código nuevo con una complejidad **igual o menor a 20**. Para verificarlo, se debe ejecutar:
+
+`complexipy **edited-files** --max-complexity-allowed 20`
+
+Si el código introducido supera este umbral, debe ser refactorizado para reducir su complejidad y garantizar que continúe siendo claro, mantenible y comprensible por un humano.
+
+Al refactorizar código que supera el límite de complejidad, se deben seguir estas cinco reglas:
+
+1. **Divide responsabilidades**
+   Una función, método o clase debe tener una responsabilidad clara. Si realiza múltiples tareas independientes, divídelas en componentes más pequeños con nombres que expresen claramente su propósito.
+
+2. **Reduce el anidamiento**
+   Evita estructuras profundamente anidadas de `if`, `for`, `while`, `try`, etc. Utiliza retornos tempranos (*early returns*), cláusulas de guarda (*guard clauses*) o funciones auxiliares para mantener un flujo de ejecución simple y fácil de seguir. Cuando existan múltiples ramas condicionales sobre un mismo valor o estructura, prioriza match/case sobre largas cadenas de if/elif, siempre que mejore la legibilidad y haga explícitos los diferentes casos posibles.
+
+3. **Extrae lógica, no la ocultes**
+   Extraer código a funciones auxiliares debe mejorar la comprensión del código, no simplemente trasladar la complejidad a otro lugar. Cada función extraída debe representar una operación o concepto claramente identificable.
+
+4. **Prioriza la legibilidad sobre la reducción de líneas**
+   Menos líneas de código no significa necesariamente código más simple. Evita expresiones excesivamente compactas, condiciones difíciles de interpretar o abstracciones innecesarias. El objetivo de la refactorización es que otro desarrollador pueda entender el código rápidamente.
+
+5. **Preserva el comportamiento y verifica con pruebas**
+   Una refactorización debe modificar la estructura interna del código sin alterar su comportamiento esperado. Los tests existentes deben continuar pasando y, cuando sea necesario, deben agregarse nuevos tests antes o durante la refactorización para garantizar que el comportamiento original se mantiene.
+
+> **Regla principal:** reducir la métrica de complejidad no es el objetivo final. El objetivo es producir código que pueda ser leído, entendido, modificado y mantenido por una persona. La métrica es únicamente una herramienta para ayudarnos a conseguirlo. Si un codigo es correcto, fluye con naturalidad esta bien probado y sus pruebas unitarias cubren correctamente los caminos posibles y las posibles exepciones es mejor mantenerlo con complejidad de 21, 22, 23 o 25 incluso si y solo si es realmente el mejor patron para implementar la solucion que se esta trabajando.
+
