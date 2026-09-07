@@ -210,8 +210,6 @@ actual.
 
 ## Complejidad
 
-## Complejidad
-
 El código generado por un LLM, antes de ser incorporado al proyecto, debe ser analizado para asegurar que sea:
 
 * Entendible y comprensible por un humano.
