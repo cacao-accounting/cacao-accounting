@@ -34,6 +34,8 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 
 from typing import Any
 
+from cacao_accounting.i18n import _
+
 _MAGIC_EXCEPTION: type[BaseException] = ImportError
 
 
@@ -124,18 +126,18 @@ def new():
         accounting_book_id = request.form.get("accounting_book_id") or None
 
         if not company_id or not record_type:
-            flash("Debe seleccionar compañía y tipo de registro.", "danger")
+            flash(_("Debe seleccionar compañía y tipo de registro."), "danger")
             return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
 
         exige_acceso_compania("imports", company_id, "crear")
 
         if record_type != "journal_entry" and accounting_book_id:
-            flash("El libro contable solo se permite para comprobantes contables.", "danger")
+            flash(_("El libro contable solo se permite para comprobantes contables."), "danger")
             return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
 
         book = _resolve_company_book(company_id, accounting_book_id)
         if accounting_book_id and not book:
-            flash("El libro contable no pertenece a la compañía seleccionada.", "danger")
+            flash(_("El libro contable no pertenece a la compañía seleccionada."), "danger")
             return redirect(url_for(_ENDPOINT_IMPORTS_NEW))
         if book:
             accounting_book_id = book.code
@@ -258,7 +260,7 @@ def _validate_mime_type(file: Any) -> bool:
             return True
         if extension == "xls" and chunk.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
             return True
-        flash("Tipo de archivo no válido", "danger")
+        flash(_("Tipo de archivo no válido"), "danger")
         return False
     try:
         chunk = file.read(2048)
@@ -268,7 +270,7 @@ def _validate_mime_type(file: Any) -> bool:
         flash(_INVALID_FILE_TYPE_MSG, "danger")
         return False
     if mime not in _ALLOWED_MIMES:
-        flash("Tipo de archivo no válido", "danger")
+        flash(_("Tipo de archivo no válido"), "danger")
         return False
     return True
 
@@ -314,7 +316,7 @@ def upload(batch_id):
     filename = secure_filename(file.filename)
     extension = _extract_file_extension(filename)
     if extension not in ["csv", "xls", "xlsx", "ods"]:
-        flash("Formato de archivo no soportado", "danger")
+        flash(_("Formato de archivo no soportado"), "danger")
         return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
     if not _validate_mime_type(file):
@@ -328,7 +330,7 @@ def upload(batch_id):
     batch.import_status = 1
     database.session.commit()
 
-    flash("Archivo cargado correctamente", "success")
+    flash(_("Archivo cargado correctamente"), "success")
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 
@@ -353,7 +355,7 @@ def execute(batch_id):
     _batch_or_404(batch_id, "autorizar")
     service = ImportService()
     service.execute(batch_id)
-    flash("Importación iniciada", "info")
+    flash(_("Importación iniciada"), "info")
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 
@@ -366,7 +368,7 @@ def cancel(batch_id):
     _batch_or_404(batch_id, "anular")
     service = ImportService()
     service.cancel(batch_id)
-    flash("Cancelación solicitada", "warning")
+    flash(_("Cancelación solicitada"), "warning")
     return redirect(url_for(_ENDPOINT_IMPORTS_DETAIL, batch_id=batch_id))
 
 

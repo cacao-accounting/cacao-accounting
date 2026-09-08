@@ -24,12 +24,7 @@ from cacao_accounting.database import (
     database,
 )
 
-try:
-    from flask_babel import gettext as _
-except ImportError:  # pragma: no cover
-
-    def _(value: str) -> str:
-        return value
+from cacao_accounting.i18n import _
 
 
 def get_setup_value(key: str, default: Any = None) -> Any:
@@ -54,7 +49,7 @@ def set_setup_value(key: str, value: str) -> None:
 def create_default_entity(data: dict, status: str = "default", default: bool = True) -> Entity:
     """Crea y añade una entidad en la sesión de base de datos."""
     if not data.get("id") or not data.get("razon_social") or not data.get("id_fiscal"):
-        raise ValueError("Los datos de la entidad son incompletos.")
+        raise ValueError(_("Los datos de la entidad son incompletos."))
 
     existing_entity = database.session.execute(database.select(Entity).filter_by(code=data["id"])).scalar_one_or_none()
     if existing_entity is not None:
@@ -288,11 +283,11 @@ def _add_months(original_date: date, months: int) -> date:
 
 def _generate_fiscal_period_ranges(start: date, end: date) -> list[tuple[date, date]]:
     if start > end:
-        raise ValueError("La fecha de inicio del año fiscal debe ser anterior a la fecha de fin.")
+        raise ValueError(_("La fecha de inicio del año fiscal debe ser anterior a la fecha de fin."))
 
     ranges: list[tuple[date, date]] = []
     current_start = start
-    for _ in range(12):
+    for _month_idx in range(12):
         next_start = _add_months(current_start, 1)
         period_end = min(next_start - timedelta(days=1), end)
         ranges.append((current_start, period_end))

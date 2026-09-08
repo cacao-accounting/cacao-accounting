@@ -64,7 +64,8 @@ from cacao_accounting.api.dashboard import user_can_access_company
 from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, DocumentType, normalize_doctype
 from cacao_accounting.document_flow.repository import get_document
 from cacao_accounting.document_flow.service import get_source_items
-from cacao_accounting.document_flow.status import _, document_status_payload
+from cacao_accounting.i18n import _
+from cacao_accounting.document_flow.status import document_status_payload
 from cacao_accounting.document_flow.tracing import document_flow_tree
 from cacao_accounting.document_flow.tree import build_document_flow_tree
 from cacao_accounting.fiscal_preview_service import fiscal_preview

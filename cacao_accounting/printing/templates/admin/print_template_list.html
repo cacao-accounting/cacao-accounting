@@ -3,13 +3,13 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">Formatos de impresión</h1>
+        <h1 class="h2">{{ _("Formatos de impresión") }}</h1>
         <div class="btn-toolbar mb-2 mb-md-0">
             <a href="{{ url_for('printing_admin.validation_settings') }}" class="btn btn-sm btn-outline-secondary me-2">
-                <i class="bi bi-qr-code"></i> Configuración validación
+                <i class="bi bi-qr-code"></i> {{ _("Configuración validación") }}
             </a>
             <a href="{{ url_for('printing_admin.create_template') }}" class="btn btn-sm btn-primary">
-                <i class="bi bi-plus"></i> Nuevo formato
+                <i class="bi bi-plus"></i> {{ _("Nuevo formato") }}
             </a>
         </div>
     </div>
@@ -20,14 +20,14 @@
             <caption class="visually-hidden">{{ _("Formatos de impresión registrados") }}</caption>
             <thead>
                 <tr>
-                    <th>Documento</th>
-                    <th>Código</th>
-                    <th>Nombre</th>
-                    <th>Estado</th>
-                    <th>Sistema</th>
-                    <th>Default</th>
-                    <th>Versión</th>
-                    <th>Acciones</th>
+                    <th>{{ _("Documento") }}</th>
+                    <th>{{ _("Código") }}</th>
+                    <th>{{ _("Nombre") }}</th>
+                    <th>{{ _("Estado") }}</th>
+                    <th>{{ _("Sistema") }}</th>
+                    <th>{{ _("Default") }}</th>
+                    <th>{{ _("Versión") }}</th>
+                    <th>{{ _("Acciones") }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -41,29 +41,29 @@
                             {{ template.status }}
                         </span>
                     </td>
-                    <td>{{ "Sí" if template.is_system else "No" }}</td>
-                    <td>{{ "Sí" if template.is_default else "No" }}</td>
+                    <td>{{ _("Sí") if template.is_system else _("No") }}</td>
+                    <td>{{ _("Sí") if template.is_default else _("No") }}</td>
                     <td>{{ template.version }}</td>
                     <td>
                         <div class="btn-group">
-                            <a href="{{ url_for('printing_admin.preview_template', template_id=template.id) }}" target="_blank" class="btn btn-xs btn-outline-info" title="Preview">
+                             <a href="{{ url_for('printing_admin.preview_template', template_id=template.id) }}" target="_blank" class="btn btn-xs btn-outline-info" title="{{ _('Vista previa') }}">
                                 <i class="bi bi-eye"></i>
                             </a>
                             {% if not template.is_system %}
-                            <a href="{{ url_for('printing_admin.edit_template', template_id=template.id) }}" class="btn btn-xs btn-outline-primary" title="Editar">
+                             <a href="{{ url_for('printing_admin.edit_template', template_id=template.id) }}" class="btn btn-xs btn-outline-primary" title="{{ _('Editar') }}">
                                 <i class="bi bi-pencil"></i>
                             </a>
                             {% endif %}
                             <form action="{{ url_for('printing_admin.duplicate_template', template_id=template.id) }}" method="post" style="display:inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-xs btn-outline-secondary" title="Duplicar">
+                                 <button type="submit" class="btn btn-xs btn-outline-secondary" title="{{ _('Duplicar') }}">
                                     <i class="bi bi-files"></i>
                                 </button>
                             </form>
                             {% if template.status == 'draft' %}
                             <form action="{{ url_for('printing_admin.publish_template', template_id=template.id) }}" method="post" style="display:inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-xs btn-outline-success" title="Publicar">
+                                 <button type="submit" class="btn btn-xs btn-outline-success" title="{{ _('Publicar') }}">
                                     <i class="bi bi-cloud-upload"></i>
                                 </button>
                             </form>
@@ -71,7 +71,7 @@
                             {% if template.status == 'published' and not template.is_default %}
                             <form action="{{ url_for('printing_admin.set_default_template', template_id=template.id) }}" method="post" style="display:inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-xs btn-outline-warning" title="Marcar default">
+                                 <button type="submit" class="btn btn-xs btn-outline-warning" title="{{ _('Marcar default') }}">
                                     <i class="bi bi-star"></i>
                                 </button>
                             </form>
@@ -79,7 +79,7 @@
                             {% if template.status != 'archived' and not template.is_system %}
                             <form action="{{ url_for('printing_admin.archive_template', template_id=template.id) }}" method="post" style="display:inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <button type="submit" class="btn btn-xs btn-outline-danger" title="Archivar">
+                                 <button type="submit" class="btn btn-xs btn-outline-danger" title="{{ _('Archivar') }}">
                                     <i class="bi bi-archive"></i>
                                 </button>
                             </form>

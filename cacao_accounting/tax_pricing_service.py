@@ -15,6 +15,9 @@ from sqlalchemy import select
 from cacao_accounting.database import ItemPrice, PriceList, Tax, TaxTemplate, TaxTemplateItem, database
 
 
+from cacao_accounting.i18n import _
+
+
 class TaxPricingError(ValueError):
     """Error controlado de impuestos, cargos o precios."""
 
@@ -173,10 +176,10 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
     """Calcula impuestos/cargos de un documento usando una plantilla."""
     template = database.session.get(TaxTemplate, template_id)
     if not template or not template.is_active:
-        raise TaxPricingError("La plantilla de impuestos no existe o esta inactiva.")
+        raise TaxPricingError(_("La plantilla de impuestos no existe o esta inactiva."))
     company = getattr(document, "company", None)
     if template.company and company and template.company != company:
-        raise TaxPricingError("La plantilla de impuestos pertenece a otra compania.")
+        raise TaxPricingError(_("La plantilla de impuestos pertenece a otra compania."))
 
     base_amount = _document_items_total(document)
     totals = _TaxTotals(running_total=base_amount)
@@ -222,7 +225,7 @@ def get_item_price(
     """Obtiene el precio vigente mas especifico de una lista de precios."""
     price_list = database.session.get(PriceList, price_list_id)
     if not price_list or not price_list.is_active:
-        raise TaxPricingError("La lista de precios no existe o esta inactiva.")
+        raise TaxPricingError(_("La lista de precios no existe o esta inactiva."))
 
     query = (
         select(ItemPrice)
@@ -236,7 +239,7 @@ def get_item_price(
         query = query.where((ItemPrice.uom.is_(None)) | (ItemPrice.uom == uom))
     price = database.session.execute(query).scalars().first()
     if not price:
-        raise TaxPricingError("No existe precio vigente para el item en la lista indicada.")
+        raise TaxPricingError(_("No existe precio vigente para el item en la lista indicada."))
     return PriceSuggestion(
         item_code=item_code,
         price_list_id=price_list_id,

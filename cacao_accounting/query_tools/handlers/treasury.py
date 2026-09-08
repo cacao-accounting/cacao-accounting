@@ -14,6 +14,8 @@ from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
 
+from cacao_accounting.i18n import _
+
 _PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
 
@@ -33,7 +35,7 @@ def _verify_forecast(context: QueryContext, company_id: str, forecast_id: str) -
     validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     forecast = database.session.get(CashForecast, forecast_id)
     if forecast is None or forecast.company != company_id:
-        raise ValueError("Pronóstico no encontrado para la compañía autorizada")
+        raise ValueError(_("Pronóstico no encontrado para la compañía autorizada"))
     return forecast
 
 

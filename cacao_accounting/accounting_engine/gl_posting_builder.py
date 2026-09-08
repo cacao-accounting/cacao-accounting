@@ -32,6 +32,9 @@ from cacao_accounting.database import (
 )
 
 
+from cacao_accounting.i18n import _
+
+
 def post_proforma_to_gl(
     *,
     document: Any,
@@ -43,7 +46,7 @@ def post_proforma_to_gl(
     if not proforma.lines:
         return []
     if not proforma.is_balanced:
-        raise PostingError("El asiento pro-forma no balancea y no puede contabilizarse.")  # type: ignore[misc]
+        raise PostingError(_("El asiento pro-forma no balancea y no puede contabilizarse."))  # type: ignore[misc]
     entries: list[GLEntry] = []
     for ledger_context in _document_contexts(document, ledger_code=ledger_code):  # type: ignore[misc]
         ledger_proforma = _proforma_for_ledger(document, context, proforma, ledger_context)
@@ -53,7 +56,9 @@ def post_proforma_to_gl(
         for line in ledger_proforma.lines:
             account_id = str(line.account_id or "").strip()
             if not account_id:
-                raise PostingError("Falta una cuenta contable requerida para contabilizar el asiento.")  # type: ignore[misc]
+                raise PostingError(
+                    _("Falta una cuenta contable requerida para contabilizar el asiento.")
+                )  # type: ignore[misc]
             debit = Decimal(line.debit or Decimal("0"))
             credit = Decimal(line.credit or Decimal("0"))
             debit_in_account_currency = line.amount_transaction_currency if debit > 0 else None

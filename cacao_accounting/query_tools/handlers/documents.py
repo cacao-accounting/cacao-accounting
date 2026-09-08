@@ -17,6 +17,9 @@ from cacao_accounting.query_tools.pagination import (
 from cacao_accounting.query_tools.permissions import validate_permission
 
 
+from cacao_accounting.i18n import _
+
+
 @query_tool(
     name="documents.get_flow",
     description="Obtiene las relaciones documentales de un documento.",
@@ -117,7 +120,7 @@ def get_related_documents(**kwargs: Any) -> dict[str, Any]:
     """Alias semántico estable para clientes que preguntan por relacionados."""
     handler = get_document_flow.handler
     if handler is None:
-        raise RuntimeError("documents.get_flow handler is not configured")
+        raise RuntimeError(_("documents.get_flow handler is not configured"))
     return handler(**kwargs)
 
 

@@ -64,7 +64,7 @@ def test_user_profile_language_update(app_instance):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        assert b"actualizada correctamente" in response.data
+        assert b"Profile information updated successfully." in response.data
 
         with app_instance.app_context():
             user = database.session.execute(database.select(User).filter_by(user="cacao")).scalar_one()

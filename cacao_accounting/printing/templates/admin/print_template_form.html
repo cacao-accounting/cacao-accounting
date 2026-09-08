@@ -24,7 +24,7 @@
             </div>
             <div class="col-md-4">
                 <div class="card mb-4 shadow-sm">
-                    <div class="card-header bg-light">Configuración</div>
+                    <div class="card-header bg-light">{{ _("Configuración") }}</div>
                     <div class="card-body">
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Tipo de documento</label>
@@ -35,15 +35,15 @@
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Código</label>
+                            <label class="form-label small fw-bold">{{ _("Código") }}</label>
                             <input type="text" name="code" class="form-control form-control-sm" value="{{ template.code if template else '' }}" {% if template %}readonly{% endif %} required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Nombre</label>
+                            <label class="form-label small fw-bold">{{ _("Nombre") }}</label>
                             <input type="text" name="name" class="form-control form-control-sm" value="{{ template.name if template else '' }}" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Compañía</label>
+                            <label class="form-label small fw-bold">{{ _("Compañía") }}</label>
                             <select name="company_code" class="form-select form-select-sm" {% if template %}disabled{% endif %}>
                                 <option value="">Global (Todas)</option>
                                 {% for company in companies %}

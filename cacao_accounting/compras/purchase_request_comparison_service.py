@@ -27,6 +27,9 @@ from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_identifiers import assign_document_identifier
 
 
+from cacao_accounting.i18n import _
+
+
 def purchase_quotation_ids_for_request(purchase_request: PurchaseRequest) -> set[str]:
     """Return active RFQ identifiers derived from a purchase request."""
     rows = database.session.execute(
@@ -135,11 +138,11 @@ def create_purchase_request_comparison(
     the request can be closed; the comparison header is not unique per request.
     """
     if purchase_request.docstatus != 1:
-        raise ValueError("Solo se pueden comparar Solicitudes de Compra aprobadas.")
+        raise ValueError(_("Solo se pueden comparar Solicitudes de Compra aprobadas."))
     candidates = {quotation.id: quotation for quotation in supplier_quotations_for_request(purchase_request)}
     selected_ids = set(supplier_quotation_ids)
     if not selected_ids or not selected_ids.issubset(candidates):
-        raise ValueError("Seleccione únicamente cotizaciones de proveedor asociadas a la Solicitud de Compra.")
+        raise ValueError(_("Seleccione únicamente cotizaciones de proveedor asociadas a la Solicitud de Compra."))
 
     comparison = PurchaseRequestComparison(
         company=purchase_request.company,
@@ -331,10 +334,10 @@ def comparison_recommendations(comparison: PurchaseRequestComparison) -> list[di
     """Build recommendations using the persisted comparison participants."""
     purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
     if not purchase_request:
-        raise ValueError("La Solicitud de Compra del comparativo no existe.")
+        raise ValueError(_("La Solicitud de Compra del comparativo no existe."))
     offers = supplier_quotations_for_comparison(comparison.id)
     if not offers:
-        raise ValueError("El comparativo no tiene Cotizaciones de Proveedor vigentes.")
+        raise ValueError(_("El comparativo no tiene Cotizaciones de Proveedor vigentes."))
     return purchase_request_comparison_recommendations(purchase_request, offers)
 
 
@@ -382,7 +385,7 @@ def save_purchase_request_comparison_draft(
 ) -> list[PurchaseRequestComparisonLine]:
     """Save editable per-line selections without final authorization."""
     if comparison.status in {"finalized", "used"}:
-        raise ValueError("El comparativo ya fue finalizado y no admite cambios.")
+        raise ValueError(_("El comparativo ya fue finalizado y no admite cambios."))
     rows = comparison_recommendations(comparison)
     database.session.query(PurchaseRequestComparisonLine).filter_by(comparison_id=comparison.id).delete(
         synchronize_session=False
@@ -407,9 +410,9 @@ def finalize_purchase_request_comparison(
 ) -> None:
     """Authorize and finalize every selected request line."""
     if not is_authorizer:
-        raise ValueError("Solo un Gerente de Compras o Administrador puede autorizar el comparativo.")
+        raise ValueError(_("Solo un Gerente de Compras o Administrador puede autorizar el comparativo."))
     if comparison.status == "used":
-        raise ValueError("El comparativo ya fue utilizado para crear Órdenes de Compra.")
+        raise ValueError(_("El comparativo ya fue utilizado para crear Órdenes de Compra."))
     rows = comparison_recommendations(comparison)
     saved = {
         line.purchase_request_item_id: line
@@ -432,7 +435,7 @@ def finalize_purchase_request_comparison(
         line.authorized_by = user_id
         selected_line_count += 1
     if selected_line_count == 0:
-        raise ValueError("Debe seleccionar al menos una oferta para cerrar el comparativo.")
+        raise ValueError(_("Debe seleccionar al menos una oferta para cerrar el comparativo."))
     now = datetime.now(timezone.utc)
     comparison.status = "finalized"
     comparison.authorized_by = user_id
@@ -571,7 +574,7 @@ def purchase_request_is_ready_to_close(purchase_request: PurchaseRequest) -> boo
 def _comparison_purchase_request_or_raise(comparison: PurchaseRequestComparison) -> PurchaseRequest:
     """Validate comparison state and return its purchase request."""
     if comparison.status != "finalized":
-        raise ValueError("El comparativo debe estar finalizado antes de crear Órdenes de Compra.")
+        raise ValueError(_("El comparativo debe estar finalizado antes de crear Órdenes de Compra."))
     existing = list(
         database.session.execute(
             database.select(PurchaseOrder).where(PurchaseOrder.purchase_request_comparison_id == comparison.id)
@@ -580,10 +583,10 @@ def _comparison_purchase_request_or_raise(comparison: PurchaseRequestComparison)
         .all()
     )
     if existing:
-        raise ValueError("El comparativo ya tiene Órdenes de Compra generadas.")
+        raise ValueError(_("El comparativo ya tiene Órdenes de Compra generadas."))
     purchase_request = database.session.get(PurchaseRequest, comparison.purchase_request_id)
     if not purchase_request:
-        raise ValueError("La Solicitud de Compra del comparativo no existe.")
+        raise ValueError(_("La Solicitud de Compra del comparativo no existe."))
     return purchase_request
 
 
@@ -608,11 +611,11 @@ def _validated_comparison_quotation(
 ) -> SupplierQuotation:
     """Validate a selected supplier quotation before order generation."""
     if not quotation:
-        raise ValueError("Una cotización seleccionada ya no existe.")
+        raise ValueError(_("Una cotización seleccionada ya no existe."))
     if quotation.company != comparison.company:
-        raise ValueError("Una cotización seleccionada pertenece a otra compañía.")
+        raise ValueError(_("Una cotización seleccionada pertenece a otra compañía."))
     if quotation.docstatus != 1:
-        raise ValueError("Una cotización seleccionada ya no está aprobada.")
+        raise ValueError(_("Una cotización seleccionada ya no está aprobada."))
     return quotation
 
 
@@ -642,7 +645,7 @@ def _comparison_flow_lines(
             database.session.get(SupplierQuotation, selected.selected_supplier_quotation_id), comparison
         )
         if selected_quotation.transaction_currency != quotation.transaction_currency:
-            raise ValueError("No se pueden combinar cotizaciones de un mismo proveedor con monedas distintas.")
+            raise ValueError(_("No se pueden combinar cotizaciones de un mismo proveedor con monedas distintas."))
         flow_lines.append(
             {
                 "source_document_type": "supplier_quotation",
@@ -668,7 +671,7 @@ def _populate_purchase_order_items(
         target_item_id = result["lines"][index]["target_item_id"]
         order_item = database.session.get(PurchaseOrderItem, target_item_id)
         if not request_item or not order_item:
-            raise ValueError("Una línea seleccionada ya no existe.")
+            raise ValueError(_("Una línea seleccionada ya no existe."))
         order_item.item_name = request_item.item_name or order_item.item_name
         order_item.description = request_item.description or order_item.description
         order_item.qty_in_base_uom = request_item.qty_in_base_uom
@@ -712,7 +715,7 @@ def _create_purchase_order_for_group(
     )
     order = database.session.get(PurchaseOrder, result["target_id"])
     if not order:
-        raise ValueError("No se pudo crear la Orden de Compra desde el framework documental.")
+        raise ValueError(_("No se pudo crear la Orden de Compra desde el framework documental."))
     from cacao_accounting.compras import _copy_logistics, _landed_cost_snapshot
     from cacao_accounting.logistics import ensure_compatible_logistics
 

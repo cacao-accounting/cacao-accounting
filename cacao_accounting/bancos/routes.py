@@ -67,8 +67,7 @@ from cacao_accounting.document_flow.service import apply_payment_reconciliation
 from cacao_accounting.document_flow.context import effective_currency
 
 
-from cacao_accounting.document_flow.status import _
-
+from cacao_accounting.i18n import _
 from cacao_accounting.document_identifiers import (
     IdentifierConfigurationError,
 )
@@ -585,7 +584,7 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
         for transaction_id, difference in difference_requests:
             transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)
             if transaction is None:
-                raise BankReconciliationError("La transaccion bancaria no existe.")
+                raise BankReconciliationError(_("La transaccion bancaria no existe."))
             _post_bank_difference_adjustment(
                 reconciliation.id,
                 transaction,
@@ -665,15 +664,15 @@ def bancos_regla_matching_ejecutar(rule_id: str):
     try:
         rule = database.session.get(BankMatchingRule, rule_id)
         if not rule:
-            raise BankStatementError("La regla de matching no existe.")
+            raise BankStatementError(_("La regla de matching no existe."))
         exige_acceso_compania("cash", rule.company, "editar")
         bank_account_id = request.form.get("bank_account_id") or ""
         if bank_account_id:
             bank_account = database.session.get(BankAccount, bank_account_id)
             if not bank_account:
-                raise BankStatementError("La cuenta bancaria indicada no existe.")
+                raise BankStatementError(_("La cuenta bancaria indicada no existe."))
             if bank_account.company != rule.company:
-                raise BankStatementError("La cuenta bancaria no pertenece a la compañía de la regla.")
+                raise BankStatementError(_("La cuenta bancaria no pertenece a la compañía de la regla."))
         date_from = date.fromisoformat(request.form.get("date_from") or date.today().isoformat())
         date_to = date.fromisoformat(request.form.get("date_to") or date.today().isoformat())
         result = apply_bank_matching_rule(rule_id, bank_account_id, (date_from, date_to))

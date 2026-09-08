@@ -53,6 +53,8 @@ from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_do
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
+from cacao_accounting.i18n import _
+
 JOURNAL_ENTITY_TYPE = "journal_entry"
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
 JOURNAL_STATUS_DRAFT = "draft"
@@ -127,11 +129,11 @@ def create_journal_draft(
     """Crea un comprobante contable manual en borrador."""
     data = _normalize_journal_payload(payload)
     if data.is_closing and not allow_closing:
-        raise JournalValidationError("El comprobante de cierre solo puede crearse desde un flujo autorizado.")
+        raise JournalValidationError(_("El comprobante de cierre solo puede crearse desde un flujo autorizado."))
     if data.is_fiscal_year_closing and not allow_fiscal_year_closing:
-        raise JournalValidationError("El cierre fiscal solo puede crearse desde el servicio de cierre.")
+        raise JournalValidationError(_("El cierre fiscal solo puede crearse desde el servicio de cierre."))
     if data.is_fiscal_year_closing and not data.is_closing:
-        raise JournalValidationError("El cierre fiscal debe marcarse también como comprobante de cierre.")
+        raise JournalValidationError(_("El cierre fiscal debe marcarse también como comprobante de cierre."))
     data = replace(
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "crear"),
@@ -172,12 +174,12 @@ def _validate_fiscal_year_closing(journal: ComprobanteContable) -> FiscalYear | 
     if not journal.is_fiscal_year_closing:
         return None
     if not journal.fiscal_year_id:
-        raise JournalValidationError("El cierre fiscal debe indicar un año fiscal.")
+        raise JournalValidationError(_("El cierre fiscal debe indicar un año fiscal."))
     fiscal_year = database.session.get(FiscalYear, journal.fiscal_year_id, with_for_update=True)
     if not fiscal_year or fiscal_year.entity != journal.entity or not fiscal_year.is_closed:
-        raise JournalValidationError("El año fiscal del cierre no es válido o no está cerrado administrativamente.")
+        raise JournalValidationError(_("El año fiscal del cierre no es válido o no está cerrado administrativamente."))
     if fiscal_year.financial_closed and fiscal_year.closing_voucher_id != journal.id:
-        raise JournalValidationError("El año fiscal ya tiene un cierre contable.")
+        raise JournalValidationError(_("El año fiscal ya tiene un cierre contable."))
     return fiscal_year
 
 
@@ -207,7 +209,7 @@ def _process_recurrent_application(journal: ComprobanteContable, commit: bool) -
     if not application or application.journal_id != journal.id:
         if commit:
             database.session.rollback()
-        raise JournalValidationError("La aplicación recurrente del comprobante no es válida.")
+        raise JournalValidationError(_("La aplicación recurrente del comprobante no es válida."))
     application.status = "applied"
     template = database.session.get(RecurringJournalTemplate, application.template_id)
     if template:
@@ -226,11 +228,11 @@ def submit_journal(journal_id: str, commit: bool = True, user_id: str | None = N
     if journal is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
-        raise JournalValidationError("Solo se puede contabilizar un comprobante en borrador.")
+        raise JournalValidationError(_("Solo se puede contabilizar un comprobante en borrador."))
 
     actor_id = user_id or journal.user_id
     if not actor_id:
-        raise JournalValidationError("El comprobante requiere un usuario autorizado para contabilizarse.")
+        raise JournalValidationError(_("El comprobante requiere un usuario autorizado para contabilizarse."))
     _validate_journal_book_access(
         journal.entity,
         _selected_books_for_journal(journal),
@@ -274,7 +276,7 @@ def reject_journal_draft(journal_id: str, user_id: str | None = None) -> Comprob
     if journal is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
-        raise JournalValidationError("Solo se puede rechazar un comprobante en borrador.")
+        raise JournalValidationError(_("Solo se puede rechazar un comprobante en borrador."))
     journal.status = JOURNAL_STATUS_REJECTED
     if user_id:
         journal.modified_by = user_id
@@ -296,7 +298,7 @@ def cancel_submitted_journal(
     if journal is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_SUBMITTED:
-        raise JournalValidationError("Solo se puede anular un comprobante contabilizado.")
+        raise JournalValidationError(_("Solo se puede anular un comprobante contabilizado."))
     # Manual journal posting predates DocBase transitions and may leave this
     # flag at draft; cancel_document requires the approved state as a guard.
     journal.docstatus = 1
@@ -403,7 +405,7 @@ def duplicate_journal_as_draft(journal_id: str, user_id: str) -> ComprobanteCont
     if source is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if source.status not in JOURNAL_DUPLICABLE_STATUSES:
-        raise JournalValidationError("Solo se puede duplicar un comprobante en borrador, rechazado o contabilizado.")
+        raise JournalValidationError(_("Solo se puede duplicar un comprobante en borrador, rechazado o contabilizado."))
 
     payload = serialize_journal_for_form(source)
     payload["reference"] = source.document_no or source.id
@@ -429,7 +431,7 @@ def duplicate_journal_as_reversal_draft(
     if source is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if source.status != JOURNAL_STATUS_SUBMITTED:
-        raise JournalValidationError("Solo se puede revertir un comprobante contabilizado.")
+        raise JournalValidationError(_("Solo se puede revertir un comprobante contabilizado."))
     existing_reversal = database.session.execute(
         select(DocumentTransition.id).where(
             DocumentTransition.source_type == JOURNAL_TRANSACTION_TYPE,
@@ -438,10 +440,10 @@ def duplicate_journal_as_reversal_draft(
         )
     ).scalar_one_or_none()
     if existing_reversal is not None:
-        raise JournalValidationError("El comprobante ya tiene una reversión registrada.")
+        raise JournalValidationError(_("El comprobante ya tiene una reversión registrada."))
     normalized_reason = (reason or "").strip()
     if not normalized_reason:
-        raise JournalValidationError("Debe indicar el motivo de la reversión.")
+        raise JournalValidationError(_("Debe indicar el motivo de la reversión."))
 
     reversal_date = parse_posting_date(reversal_date_raw)
     source_period = _accounting_period_for_date(source.entity, source.date)
@@ -451,11 +453,11 @@ def duplicate_journal_as_reversal_draft(
     # Según IAS/IFRS, las reversiones se registran en periodo distinto al origen.
     # Para corregir en el mismo periodo, usar cancel_submitted_journal (ver R2R-03 / ISSUE #128).
     if source_period.id == reversal_period.id:
-        raise JournalValidationError("La reversión debe registrarse en un periodo contable distinto al comprobante origen.")
+        raise JournalValidationError(_("La reversión debe registrarse en un periodo contable distinto al comprobante origen."))
     if bool(reversal_period.is_closed) or not bool(reversal_period.enabled):
-        raise JournalValidationError("No puede crear una reversión en un periodo contable cerrado o deshabilitado.")
+        raise JournalValidationError(_("No puede crear una reversión en un periodo contable cerrado o deshabilitado."))
     if source.is_fiscal_year_closing:
-        raise JournalValidationError("El cierre fiscal debe revertirse desde el flujo de cierre fiscal.")
+        raise JournalValidationError(_("El cierre fiscal debe revertirse desde el flujo de cierre fiscal."))
     payload = serialize_journal_for_form(source)
     payload["posting_date"] = reversal_date.isoformat()
     payload["reference"] = source.document_no or source.id
@@ -497,14 +499,14 @@ def update_journal_draft(journal_id: str, payload: dict[str, Any], user_id: str)
     if journal is None:
         raise JournalValidationError(EL_COMPROBANTE_INDICADO_NO_EXISTE)
     if journal.status != JOURNAL_STATUS_DRAFT:
-        raise JournalValidationError("Solo se puede editar un comprobante en borrador.")
+        raise JournalValidationError(_("Solo se puede editar un comprobante en borrador."))
 
     before = serialize_journal_for_form(journal)
     previous_posting_date = journal.date
     previous_naming_series_id = journal.naming_series_id
     data = _normalize_journal_payload(payload)
     if data.is_closing != bool(journal.is_closing) or data.is_fiscal_year_closing != bool(journal.is_fiscal_year_closing):
-        raise JournalValidationError("Los flags de cierre no pueden cambiarse al editar un borrador.")
+        raise JournalValidationError(_("Los flags de cierre no pueden cambiarse al editar un borrador."))
     data = replace(
         data,
         books=_authorized_journal_books(data.company, data.books, user_id, "editar"),
@@ -608,7 +610,7 @@ def _accounting_period_for_date(company: str, posting_date: date) -> AccountingP
         .first()
     )
     if period is None:
-        raise JournalValidationError("No existe un periodo contable configurado para la fecha indicada.")
+        raise JournalValidationError(_("No existe un periodo contable configurado para la fecha indicada."))
     return period
 
 
@@ -619,9 +621,9 @@ def parse_journal_form(form_data: Any) -> dict[str, Any]:
         try:
             parsed_payload = json.loads(raw_payload)
         except json.JSONDecodeError as exc:
-            raise JournalValidationError("El detalle del comprobante no tiene un formato valido.") from exc
+            raise JournalValidationError(_("El detalle del comprobante no tiene un formato valido.")) from exc
         if not isinstance(parsed_payload, dict):
-            raise JournalValidationError("El detalle del comprobante no tiene un formato valido.")
+            raise JournalValidationError(_("El detalle del comprobante no tiene un formato valido."))
         return parsed_payload
     return {
         "company": form_data.get("company"),
@@ -664,7 +666,7 @@ def _normalize_journal_currency_fields(
         _validate_active_transaction_currency(base_currency)
     exchange_rate = _optional_decimal(payload.get("exchange_rate"))
     if exchange_rate is not None and exchange_rate <= 0:
-        raise JournalValidationError("El tipo de cambio debe ser mayor que cero.")
+        raise JournalValidationError(_("El tipo de cambio debe ser mayor que cero."))
     return transaction_currency, base_currency, exchange_rate, lines
 
 
@@ -674,11 +676,11 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
     posting_date = _parse_date(payload.get("posting_date"))
     lines_payload = payload.get("lines") or []
     if not isinstance(lines_payload, list):
-        raise JournalValidationError("Las lineas del comprobante no tienen un formato valido.")
+        raise JournalValidationError(_("Las lineas del comprobante no tienen un formato valido."))
     lines = [_normalize_line(line, index + 1) for index, line in enumerate(lines_payload)]
     lines = [line for line in lines if line.account or line.debit or line.credit]
     if not lines:
-        raise JournalValidationError("El comprobante debe contener al menos una linea.")
+        raise JournalValidationError(_("El comprobante debe contener al menos una linea."))
     books = _normalize_books(payload.get("books"))
     if books is None and (book := _optional_text(payload.get("book"))):
         books = [book]
@@ -704,7 +706,7 @@ def _normalize_journal_payload(payload: dict[str, Any]) -> JournalDraftInput:
 
 def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
     if not isinstance(raw_line, dict):
-        raise JournalValidationError("Cada linea del comprobante debe ser un objeto.")
+        raise JournalValidationError(_("Cada linea del comprobante debe ser un objeto."))
     debit = _decimal(raw_line.get("debit"))
     credit = _decimal(raw_line.get("credit"))
     return JournalLineInput(
@@ -735,23 +737,23 @@ def _normalize_line(raw_line: Any, fallback_order: int) -> JournalLineInput:
 def _validate_journal_line(company: str, line: JournalLineInput, account_cache: dict[str, Accounts | None]) -> None:
     """Valida una linea individual del comprobante."""
     if not line.account:
-        raise JournalValidationError("Cada linea debe tener una cuenta contable.")
+        raise JournalValidationError(_("Cada linea debe tener una cuenta contable."))
     if line.debit < 0 or line.credit < 0:
-        raise JournalValidationError("Los importes de debe y haber no pueden ser negativos.")
+        raise JournalValidationError(_("Los importes de debe y haber no pueden ser negativos."))
     if line.debit > 0 and line.credit > 0:
-        raise JournalValidationError("Una linea no puede tener debe y haber positivos al mismo tiempo.")
+        raise JournalValidationError(_("Una linea no puede tener debe y haber positivos al mismo tiempo."))
     if line.debit == 0 and line.credit == 0:
-        raise JournalValidationError("Cada linea debe tener un importe en debe o en haber.")
+        raise JournalValidationError(_("Cada linea debe tener un importe en debe o en haber."))
     if line.exchange_rate is not None and line.exchange_rate <= 0:
-        raise JournalValidationError("El tipo de cambio de la línea debe ser mayor que cero.")
+        raise JournalValidationError(_("El tipo de cambio de la línea debe ser mayor que cero."))
     if line.reference_exchange_rate is not None and line.reference_exchange_rate <= 0:
-        raise JournalValidationError("El tipo de cambio de la referencia debe ser mayor que cero.")
+        raise JournalValidationError(_("El tipo de cambio de la referencia debe ser mayor que cero."))
     account = account_cache.get(line.account)
     if line.account not in account_cache:
         account = _account_record(company, line.account)
         account_cache[line.account] = account
     if account is not None and account.account_type == "expense" and not line.cost_center:
-        raise JournalValidationError("Las cuentas de gasto requieren centro de costo.")
+        raise JournalValidationError(_("Las cuentas de gasto requieren centro de costo."))
 
 
 def _validate_balanced_lines(
@@ -765,7 +767,7 @@ def _validate_balanced_lines(
     totals: dict[str | None, tuple[Decimal, Decimal]] = {}
     explicit_books = {line.book for line in lines if line.book}
     if explicit_books and any(not line.book for line in lines):
-        raise JournalValidationError("Todas las líneas deben indicar libro cuando alguna línea está asignada a un libro.")
+        raise JournalValidationError(_("Todas las líneas deben indicar libro cuando alguna línea está asignada a un libro."))
     company_currency = database.session.execute(select(Entity.currency).where(Entity.code == company)).scalar_one_or_none()
     for line in lines:
         _validate_journal_line(company, line, account_cache)
@@ -779,7 +781,7 @@ def _validate_balanced_lines(
         debit, credit = totals.get(line.book, (Decimal("0"), Decimal("0")))
         totals[line.book] = debit + line.debit * effective_rate, credit + line.credit * effective_rate
     if any(debit != credit for debit, credit in totals.values()):
-        raise JournalValidationError("El comprobante contable no esta balanceado por libro.")
+        raise JournalValidationError(_("El comprobante contable no esta balanceado por libro."))
 
 
 def _normalize_party_type(value: str | None) -> str | None:
@@ -832,23 +834,23 @@ def _validate_ar_ap_party(company: str, line: JournalLineInput, account_type: st
     """Valida el tercero requerido por una cuenta auxiliar AP/AR."""
     expected_party = "customer" if account_type in CUSTOMER_AR_AP_ACCOUNT_TYPES else "supplier"
     if party_type != expected_party or not line.party:
-        raise JournalValidationError("Las cuentas AP/AR requieren tercero del tipo correspondiente.")
+        raise JournalValidationError(_("Las cuentas AP/AR requieren tercero del tipo correspondiente."))
     from cacao_accounting.database import CompanyParty
 
     party = database.session.get(Party, line.party)
     if party is None:
         party = database.session.execute(select(Party).where(Party.code == line.party)).scalar_one_or_none()
     if party is None or not bool(getattr(party, "is_active", True)):
-        raise JournalValidationError("El tercero AP/AR no existe o está inactivo.")
+        raise JournalValidationError(_("El tercero AP/AR no existe o está inactivo."))
     company_party = database.session.execute(
         select(CompanyParty).where(CompanyParty.company == company, CompanyParty.party_id == party.id)
     ).scalar_one_or_none()
     if company_party is None or not bool(getattr(company_party, "is_active", True)):
-        raise JournalValidationError("El tercero AP/AR no está activo en la compañía.")
+        raise JournalValidationError(_("El tercero AP/AR no está activo en la compañía."))
     if expected_party == "customer" and not bool(getattr(party, "is_customer", False)):
-        raise JournalValidationError("El tercero seleccionado no está habilitado como cliente.")
+        raise JournalValidationError(_("El tercero seleccionado no está habilitado como cliente."))
     if expected_party == "supplier" and not bool(getattr(party, "is_supplier", False)):
-        raise JournalValidationError("El tercero seleccionado no está habilitado como proveedor.")
+        raise JournalValidationError(_("El tercero seleccionado no está habilitado como proveedor."))
 
 
 def _find_ar_ap_reference_targets(
@@ -892,19 +894,19 @@ def _validate_ar_ap_reference(
 ) -> None:
     """Valida la referencia y el sentido del movimiento AP/AR."""
     if bool(line.reference_type) != bool(line.reference_name or line.reference_open_item_id):
-        raise JournalValidationError("La referencia AP/AR requiere tipo y documento.")
+        raise JournalValidationError(_("La referencia AP/AR requiere tipo y documento."))
     if not line.reference_type or not ar_ap_type:
         return
     reference_name = line.reference_open_item_id or line.reference_name or ""
     document_type = _reference_document_type(line.reference_type, party_type or "")
     target = _find_ar_ap_reference_targets(company, line, party_type, document_type, reference_name)
     if len(target) != 1:
-        raise JournalValidationError("El documento de referencia AP/AR no tiene un saldo abierto único.")
+        raise JournalValidationError(_("El documento de referencia AP/AR no tiene un saldo abierto único."))
     target_direction = getattr(target[0], "direction", None)
     net_amount = line.debit - line.credit if account_type in CUSTOMER_AR_AP_ACCOUNT_TYPES else line.credit - line.debit
     source_direction = "debit" if net_amount > 0 else "credit"
     if target_direction and target_direction == source_direction:
-        raise JournalValidationError("La referencia AP/AR debe tener sentido contrario al movimiento.")
+        raise JournalValidationError(_("La referencia AP/AR debe tener sentido contrario al movimiento."))
 
 
 def _validate_ar_ap_lines(company: str, lines: list[JournalLineInput]) -> None:
@@ -933,7 +935,7 @@ def _validate_line_books(company: str, books: list[str] | None, lines: list[Jour
     selected_ids = {book_ids[value] for value in (books or []) if value in book_ids}
     requested_ids = {book_ids[value] for value in requested}
     if selected_ids and not requested_ids.issubset(selected_ids):
-        raise JournalValidationError("Las líneas por libro deben pertenecer a los libros seleccionados.")
+        raise JournalValidationError(_("Las líneas por libro deben pertenecer a los libros seleccionados."))
 
 
 def _authorized_journal_books(
@@ -946,7 +948,7 @@ def _authorized_journal_books(
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
-        raise JournalValidationError("El usuario indicado no existe o no puede autorizar libros contables.")
+        raise JournalValidationError(_("El usuario indicado no existe o no puede autorizar libros contables."))
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
     permission_name = {
         "autorizar": "autorizar",
@@ -956,7 +958,7 @@ def _authorized_journal_books(
         "validar": "validar",
     }.get(action, "crear")
     if not getattr(permissions, permission_name, False) or not permissions.tiene_acceso_compania(company):
-        raise JournalValidationError("El usuario no tiene acceso a la compañía seleccionada.")
+        raise JournalValidationError(_("El usuario no tiene acceso a la compañía seleccionada."))
     return [
         book.code
         for book in database.session.execute(
@@ -1033,7 +1035,7 @@ def _normalize_books(value: Any) -> list[str] | None:
         normalized = _optional_text(value)
         return [normalized] if normalized else None
     if not isinstance(value, list):
-        raise JournalValidationError("La selección de libros no tiene un formato valido.")
+        raise JournalValidationError(_("La selección de libros no tiene un formato valido."))
 
     books: list[str] = []
     for item in value:
@@ -1054,7 +1056,7 @@ def _selected_books_for_journal(journal: ComprobanteContable) -> list[str] | Non
         try:
             return _normalize_books(json.loads(journal.book_codes))
         except json.JSONDecodeError as exc:
-            raise JournalValidationError("La selección de libros del comprobante no es valida.") from exc
+            raise JournalValidationError(_("La selección de libros del comprobante no es valida.")) from exc
     if journal.book:
         return [str(journal.book)]
     return None
@@ -1198,17 +1200,17 @@ def _validate_active_transaction_currency(transaction_currency: str | None) -> N
         return
     currency = database.session.execute(database.select(Currency).filter_by(code=transaction_currency)).scalar_one_or_none()
     if currency is None:
-        raise JournalValidationError("La moneda del comprobante no existe.")
+        raise JournalValidationError(_("La moneda del comprobante no existe."))
     if not bool(currency.active):
-        raise JournalValidationError("La moneda del comprobante está inactiva.")
+        raise JournalValidationError(_("La moneda del comprobante está inactiva."))
 
 
 def _validate_active_company(company: str) -> None:
     company_record = database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
     if company_record is None:
-        raise JournalValidationError("La compañia indicada no existe.")
+        raise JournalValidationError(_("La compañia indicada no existe."))
     if company_record.enabled is False:
-        raise JournalValidationError("La compañia indicada está inactiva.")
+        raise JournalValidationError(_("La compañia indicada está inactiva."))
 
 
 def _account_record(company: str, account_value: str) -> Accounts | None:
@@ -1222,13 +1224,13 @@ def _account_code(company: str, account_value: str) -> str:
     account = database.session.get(Accounts, account_value)
     if account is not None:
         if account.entity != company:
-            raise JournalValidationError("La cuenta contable no pertenece a la compañia del comprobante.")
+            raise JournalValidationError(_("La cuenta contable no pertenece a la compañia del comprobante."))
         return str(account.code)
     account = (
         database.session.execute(database.select(Accounts).filter_by(entity=company, code=account_value)).scalars().first()
     )
     if account is None:
-        raise JournalValidationError("La cuenta contable indicada no existe para la compañia.")
+        raise JournalValidationError(_("La cuenta contable indicada no existe para la compañia."))
     return str(account.code)
 
 
@@ -1251,7 +1253,7 @@ def _parse_date(value: Any) -> date:
     try:
         return date.fromisoformat(normalized)
     except ValueError as exc:
-        raise JournalValidationError("La fecha de contabilizacion no es valida.") from exc
+        raise JournalValidationError(_("La fecha de contabilizacion no es valida.")) from exc
 
 
 def _decimal(value: Any) -> Decimal:
@@ -1260,7 +1262,7 @@ def _decimal(value: Any) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, ValueError) as exc:
-        raise JournalValidationError("Los importes del comprobante no son validos.") from exc
+        raise JournalValidationError(_("Los importes del comprobante no son validos.")) from exc
 
 
 def _optional_decimal(value: Any) -> Decimal | None:

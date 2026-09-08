@@ -26,6 +26,9 @@ from cacao_accounting.database import (
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.document_flow.registry import normalize_doctype
 
+
+from cacao_accounting.i18n import _
+
 PENDING_APPROVAL_STATUS = "Pending Approval"
 PENDING_CANCELLATION_STATUS = "Pending Cancellation"
 _RELATION_ONLY_CANCEL_DOCTYPES = frozenset(
@@ -404,14 +407,14 @@ class ApprovalEngine:
                 None,
             )
             if expected_hash:
-                _, actual_hash = ApprovalEngine._approval_snapshot(document)
+                _snapshot, actual_hash = ApprovalEngine._approval_snapshot(document)
                 if actual_hash != expected_hash:
-                    raise ValueError("El documento cambió después de solicitar aprobación; debe enviarse nuevamente.")
+                    raise ValueError(_("El documento cambió después de solicitar aprobación; debe enviarse nuevamente."))
                 return
         requested_at = getattr(req, "created_at", None)
         modified_at = getattr(document, "modified", None)
         if requested_at and modified_at and modified_at > requested_at:
-            raise ValueError("El documento cambió después de solicitar aprobación; debe enviarse nuevamente.")
+            raise ValueError(_("El documento cambió después de solicitar aprobación; debe enviarse nuevamente."))
 
     @staticmethod
     def ensure_document_editable(document: Any) -> None:
@@ -425,7 +428,7 @@ class ApprovalEngine:
             )
         ).scalar_one_or_none()
         if pending:
-            raise ValueError("El documento tiene una solicitud de aprobación pendiente y no puede editarse.")
+            raise ValueError(_("El documento tiene una solicitud de aprobación pendiente y no puede editarse."))
 
     @staticmethod
     def _validate_final_cancellation(doctype: str, document: Any) -> None:
@@ -434,13 +437,13 @@ class ApprovalEngine:
             from cacao_accounting.document_flow.repository import has_active_source_relations
 
             if has_active_source_relations(doctype, document.id):
-                raise ValueError("El documento adquirió relaciones activas mientras esperaba aprobación.")
+                raise ValueError(_("El documento adquirió relaciones activas mientras esperaba aprobación."))
         if doctype == "purchase_invoice":
             from cacao_accounting.database import DocumentRelation, PaymentEntry, PaymentReference
             from cacao_accounting.compras import _has_active_purchase_reversal_notes
 
             if _has_active_purchase_reversal_notes(document.id):
-                raise ValueError("La factura adquirió notas de crédito o débito activas mientras esperaba aprobación.")
+                raise ValueError(_("La factura adquirió notas de crédito o débito activas mientras esperaba aprobación."))
 
             active_payment = (
                 database.select(PaymentReference.id)
@@ -458,7 +461,7 @@ class ApprovalEngine:
                 )
             )
             if database.session.execute(active_payment).scalars().first() is not None:
-                raise ValueError("La factura adquirió una aplicación de pago activa mientras esperaba aprobación.")
+                raise ValueError(_("La factura adquirió una aplicación de pago activa mientras esperaba aprobación."))
 
     @staticmethod
     def _validate_sales_submission(doctype: str, document: Any) -> None:
@@ -672,7 +675,7 @@ class ApprovalEngine:
         doctype = f"cancel_{base_doctype}"
         if base_doctype in _POSTED_CANCEL_DOCTYPES or base_doctype == "journal_entry":
             if not (reason or "").strip():
-                raise ValueError("Debe indicar el motivo de la anulacion.")
+                raise ValueError(_("Debe indicar el motivo de la anulacion."))
         amount = cls.get_document_amount(document)
 
         req = database.session.execute(
@@ -770,14 +773,14 @@ class ApprovalEngine:
         if req.status == "Approved":
             return True
         if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
-            raise ValueError("La solicitud de aprobación no está en estado pendiente.")
+            raise ValueError(_("La solicitud de aprobación no está en estado pendiente."))
 
         cls._assert_approval_snapshot(req, document)
 
         rules = cls._get_user_rules(user.id, company_id, doctype)
         applicable_rule = cls._find_applicable_rule(rules, amount, user, req.required_level)
         if not applicable_rule:
-            raise ValueError("El usuario no tiene límites autorizados suficientes para aprobar este documento.")
+            raise ValueError(_("El usuario no tiene límites autorizados suficientes para aprobar este documento."))
 
         action = ApprovalAction(
             approval_request_id=req.id,
@@ -927,10 +930,10 @@ class ApprovalEngine:
             )
         ).scalar_one_or_none()
         if not req:
-            raise ValueError("No existe ninguna solicitud de aprobación para este documento.")
+            raise ValueError(_("No existe ninguna solicitud de aprobación para este documento."))
 
         if req.status not in {PENDING_APPROVAL_STATUS, PENDING_CANCELLATION_STATUS}:
-            raise ValueError("La solicitud de aprobación no está pendiente.")
+            raise ValueError(_("La solicitud de aprobación no está pendiente."))
 
         rules = cls._get_user_rules(user.id, company_id, doctype)
         rule = rules[0] if rules else None

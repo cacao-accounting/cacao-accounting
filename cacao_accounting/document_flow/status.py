@@ -9,21 +9,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Callable
 
-try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
-    from flask_babel import gettext as _babel_gettext
-except ImportError:  # pragma: no cover
-
-    def _(value: str) -> str:
-        return value
-
-else:
-
-    def _(value: str) -> str:
-        try:
-            return _babel_gettext(value)
-        except (KeyError, RuntimeError):
-            return value
-
+from cacao_accounting.i18n import _
 
 from cacao_accounting.document_flow.registry import ALLOWED_FLOWS, normalize_doctype
 from cacao_accounting.document_flow.repository import (

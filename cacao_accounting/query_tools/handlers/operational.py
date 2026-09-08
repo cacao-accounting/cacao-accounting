@@ -22,6 +22,9 @@ from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
 
+
+from cacao_accounting.i18n import _
+
 _PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
 
@@ -221,7 +224,7 @@ def get_payment_applications(
 ) -> dict[str, Any]:
     validate_permission(context, _PERM_BANKING_REPORTS_READ, "cash", company_id)
     if not payment_id and not document_id:
-        raise ValueError("payment_id o document_id es obligatorio")
+        raise ValueError(_("payment_id o document_id es obligatorio"))
     current_page, size = paginate(page, page_size)
     query = database.select(PaymentReference).where(PaymentReference.company == company_id)
     if payment_id:

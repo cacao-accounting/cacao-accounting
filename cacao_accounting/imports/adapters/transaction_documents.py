@@ -46,6 +46,9 @@ from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.imports.utils.validation import is_period_open
 
 
+from cacao_accounting.i18n import _
+
+
 @dataclass(frozen=True)
 class TransactionImportConfig:
     """Configuración declarativa para importar un documento transaccional."""
@@ -304,7 +307,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         """
         base_currency = company_currency(company)
         if not base_currency:
-            raise ValueError("La compania no tiene moneda funcional configurada.")
+            raise ValueError(_("La compania no tiene moneda funcional configurada."))
         row_currency = first_row.get("moneda") or first_row.get("transaction_currency")
         source_currency = effective_currency(source)
         if row_currency:
@@ -333,7 +336,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                     f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}."
                 ) from exc
         if rate <= 0:
-            raise ValueError("El tipo de cambio debe ser positivo.")
+            raise ValueError(_("El tipo de cambio debe ser positivo."))
         return transaction_currency, base_currency, rate
 
     def _apply_totals(self, header: Any, total_qty: Decimal, total: Decimal, exchange_rate: Decimal = Decimal("1")) -> None:

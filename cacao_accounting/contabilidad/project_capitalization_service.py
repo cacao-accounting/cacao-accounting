@@ -25,6 +25,9 @@ from cacao_accounting.ledger_queries import primary_ledger_id
 from cacao_accounting.logs import log
 
 
+from cacao_accounting.i18n import _
+
+
 @dataclass(frozen=True)
 class CapitalizationLine:
     """Línea fuente normalizada para un comprobante de capitalización."""
@@ -76,7 +79,7 @@ def _create_capitalization_journal(
 ) -> ComprobanteContable:
     """Crea un comprobante que capitaliza todas las líneas de un documento fuente."""
     if not lines:
-        raise ValueError("No hay líneas elegibles para capitalizar.")
+        raise ValueError(_("No hay líneas elegibles para capitalizar."))
     entry = lines[0].entry
     unique_suffix = str(uuid4())[:8].upper()
     today = date.today()
@@ -84,7 +87,7 @@ def _create_capitalization_journal(
 
     transaction_currency = entry.account_currency or entry.company_currency
     if not transaction_currency:
-        raise ValueError("No se pudo determinar la moneda del movimiento a capitalizar.")
+        raise ValueError(_("No se pudo determinar la moneda del movimiento a capitalizar."))
 
     cap_journal = ComprobanteContable(
         id=f"CAP-{unique_suffix}",
@@ -115,7 +118,7 @@ def _create_capitalization_journal(
         source = capitalization_line.entry
         source_currency = source.account_currency or source.company_currency
         if source_currency != transaction_currency:
-            raise ValueError("Un comprobante fuente contiene líneas capitalizables en monedas incompatibles.")
+            raise ValueError(_("Un comprobante fuente contiene líneas capitalizables en monedas incompatibles."))
         orig_doc_no = source.document_no or "JV-000000"
         common_kwargs: dict[str, Any] = {
             "transaction": "journal_entry",

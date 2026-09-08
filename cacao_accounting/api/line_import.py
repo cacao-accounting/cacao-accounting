@@ -39,8 +39,9 @@ from cacao_accounting.database import (
     database,
 )
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-from cacao_accounting.document_flow.status import _
 from cacao_accounting.document_flow.registry import normalize_doctype
+
+from cacao_accounting.i18n import _
 
 line_import_bp = Blueprint("line_import", __name__)
 

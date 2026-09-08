@@ -9,7 +9,7 @@
       </a>
     </li>
     <li class="breadcrumb-item">
-      <a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a>
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a>
     </li>
     <li class="breadcrumb-item active" aria-current="page">Administración de Módulos</li>
   </ol>
@@ -39,11 +39,11 @@
       <caption>{{ _("Administración de Módulos y Extensiones") }}</caption>
       <thead>
         <tr>
-          <th>Nombre</th>
-          <th>Tipo</th>
+          <th>{{ _("Nombre") }}</th>
+          <th>{{ _("Tipo") }}</th>
           <th>Predeterminado</th>
-          <th>Estado</th>
-          <th>Acción</th>
+          <th>{{ _("Estado") }}</th>
+          <th>{{ _("Acción") }}</th>
         </tr>
       </thead>
       <tbody>

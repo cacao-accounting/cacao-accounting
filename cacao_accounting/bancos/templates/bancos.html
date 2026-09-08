@@ -35,7 +35,7 @@
 
       {% if acceso.configurar %}
       <li>
-        <a href="{{ url_for('bancos.bancos_banco_lista') }}">Bancos</a>
+        <a href="{{ url_for('bancos.bancos_banco_lista') }}">{{ _("Bancos") }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
@@ -48,7 +48,7 @@
       </li>
       {% else %}
       <li class="ca-no-access">
-        <span>Bancos</span>
+        <span>{{ _("Bancos") }}</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       <li class="ca-no-access">
@@ -194,7 +194,7 @@
       </li>
       {% else %}
       <li class="ca-no-access">
-        <span>Reportes</span>
+        <span>{{ _("Reportes") }}</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes', view_permission='reportes')) }}
       </li>
       {% endif %}

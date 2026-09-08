@@ -45,7 +45,6 @@ from cacao_accounting.database.helpers import (
     entidades_creadas,
     obtener_id_modulo_por_nombre,
 )
-from cacao_accounting.document_flow.status import _
 from cacao_accounting.exceptions.mensajes import ERROR2
 from cacao_accounting.logs import log
 from cacao_accounting.messaging.email import can_send_transaction_emails
@@ -69,10 +68,10 @@ from cacao_accounting.contabilidad.balance_confirmation_bp import balance_confir
 from cacao_accounting.version import PRERELEASE
 from flask_babel import Babel
 
+from cacao_accounting.i18n import _, _get_locale, _get_timezone
+
 alembic = Alembic()
 babel = Babel()
-
-DEFAULT_TIMEZONE = "America/Managua"
 
 
 def command() -> None:  # pragma: no cover
@@ -80,44 +79,6 @@ def command() -> None:  # pragma: no cover
     from cacao_accounting.cli import linea_comandos_main
 
     linea_comandos_main()
-
-
-def _get_locale():
-    """Retorna el idioma configurado para la aplicacion."""
-    from flask import has_app_context, has_request_context
-    from flask_login import current_user
-
-    if not (has_app_context() or has_request_context()):
-        return "es"
-
-    try:
-        if current_user and current_user.is_authenticated:
-            user_lang = getattr(current_user, "language", None)
-            if user_lang:
-                return user_lang
-    except Exception:
-        pass
-
-    try:
-        from cacao_accounting.setup.service import get_setup_value, SETUP_LANGUAGE
-
-        return get_setup_value(SETUP_LANGUAGE, "es")
-    except SQLAlchemyError:
-        return "es"
-
-
-def _get_timezone():
-    """Retorna la zona horaria configurada para la aplicacion."""
-    from flask import has_app_context, has_request_context
-
-    if not (has_app_context() or has_request_context()):
-        return DEFAULT_TIMEZONE
-    try:
-        from cacao_accounting.setup.service import get_setup_value, SETUP_TIMEZONE
-
-        return get_setup_value(SETUP_TIMEZONE, DEFAULT_TIMEZONE)
-    except SQLAlchemyError:
-        return DEFAULT_TIMEZONE
 
 
 def iniciar_extenciones(app: Flask | None = None) -> None:
@@ -265,6 +226,7 @@ def actualiza_variables_globales_jinja(app: Flask | None = None) -> None:
             app.jinja_env.globals.update(current_user_open_task_count=current_user_open_task_count)
             app.jinja_env.globals.update(pending_approval_count=pending_approval_count)
             app.jinja_env.globals.update(audit_action_label=audit_action_label)
+            app.jinja_env.globals.update(transaction_form_i18n=_transaction_form_i18n_labels)
 
             def get_balance_confirmations_history(party_id: str, party_type: str, company: str | None = None):
                 from cacao_accounting.database import BalanceConfirmation, database
@@ -400,6 +362,49 @@ def audit_action_label(action: str) -> str:
         "task_cancelled": _("canceló una tarea"),
     }
     return labels.get(action, action)
+
+
+def _transaction_form_i18n_labels() -> dict[str, str]:
+    """Retorna labels traducidos para formularios transaccionales del frontend.
+
+    Callable que resuelve traducciones en tiempo de ejecución usando Flask-Babel
+    y el locale activo (idioma del usuario o del sistema como fallback).
+
+    Las claves usan camelCase porque son el contrato que consume el JavaScript
+    de ``static/js/transaction-form.js`` vía ``globalThis.__TXF_I18N__``.
+    """
+    return {
+        # Tipos de documentos operativos
+        "purchaseRequest": _("Solicitud de Compra"),
+        "purchaseQuotation": _("Solicitud de Cotización"),
+        "supplierQuotation": _("Cotización de Proveedor"),
+        "purchaseOrder": _("Orden de Compra"),
+        "purchaseReceipt": _("Recepción de Compra"),
+        "purchaseInvoice": _("Factura de Compra"),
+        "salesRequest": _("Pedido de Venta"),
+        "salesQuotation": _("Cotización de Venta"),
+        "salesOrder": _("Orden de Venta"),
+        "deliveryNote": _("Nota de Entrega"),
+        "salesInvoice": _("Factura de Venta"),
+        "stockEntry": _("Movimiento de Inventario"),
+        # Labels de columnas del grid
+        "itemCodeLabel": _("Código del item"),
+        "itemNameLabel": _("Descripción del item"),
+        "uomLabel": _("Unidad de medida"),
+        "qtyLabel": _("Cantidad"),
+        "rateLabel": _("Precio / Costo Unitario"),
+        "amountLabel": _("Precio / Costo Total"),
+        # Mensajes de error
+        "errorLoadingSource": _("No se pudieron cargar las líneas del documento origen."),
+        "errorCurrencyRequired": _("La moneda transaccional es obligatoria."),
+        "errorLinesRequired": _("El documento requiere al menos una línea."),
+        "errorBatchRequired": _("El item {item_code} requiere lote."),
+        "errorSerialRequired": _("El item {item_code} requiere número de serie."),
+        "errorTaxPreview": _("No se pudo calcular."),
+        "errorLoadingSourceStep": _("Espere a que termine la carga del documento origen."),
+        # Valores por defecto para líneas fiscales manuales
+        "manualTaxConcept": _("Cargo manual"),
+    }
 
 
 def create_app(ajustes: dict | None = None) -> Flask:

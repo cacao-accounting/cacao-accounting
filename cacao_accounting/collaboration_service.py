@@ -17,6 +17,8 @@ from cacao_accounting.document_flow.registry import DOCUMENT_TYPES, normalize_do
 from cacao_accounting.document_flow.repository import get_document
 from cacao_accounting.runtime_mode import is_desktop_mode
 
+from cacao_accounting.i18n import _
+
 TASK_STATUSES = {"open", "in_progress", "completed", "cancelled"}
 TASK_PRIORITIES = {"low", "normal", "high"}
 COMMENT_MAX_LENGTH = 2000
@@ -300,4 +302,4 @@ def _audit_action_for_status(new_status: str, previous_status: str) -> str:
 def abort_for_collaboration_error(error: CollaborationError) -> NoReturn:
     """Abort a Flask request using the status carried by the collaboration error."""
     abort(error.status_code)
-    raise RuntimeError("Flask abort returned unexpectedly")
+    raise RuntimeError(_("Flask abort returned unexpectedly"))

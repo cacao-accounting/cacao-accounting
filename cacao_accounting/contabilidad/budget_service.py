@@ -22,6 +22,9 @@ from cacao_accounting.database import (
 )
 
 
+from cacao_accounting.i18n import _
+
+
 class BudgetError(Exception):
     """Excepción base para errores de presupuesto."""
 
@@ -54,10 +57,10 @@ class BudgetService:
         """Actualiza el encabezado de un presupuesto en borrador."""
         budget = database.session.get(Budget, budget_id)
         if not budget:
-            raise BudgetError("Presupuesto no encontrado.")
+            raise BudgetError(_("Presupuesto no encontrado."))
 
         if budget.status != "draft":
-            raise BudgetError("Solo se pueden editar presupuestos en estado borrador.")
+            raise BudgetError(_("Solo se pueden editar presupuestos en estado borrador."))
 
         # No permitir cambiar compañía, libro o año fiscal si ya tiene líneas
         has_lines = database.session.query(BudgetLine).filter_by(budget_id=budget_id).first() is not None
@@ -66,7 +69,7 @@ class BudgetService:
             or data.get("ledger_id") != budget.ledger_id
             or data.get("fiscal_year_id") != budget.fiscal_year_id
         ):
-            raise BudgetError("No se puede cambiar la compañía, libro o año fiscal si el presupuesto ya tiene líneas.")
+            raise BudgetError(_("No se puede cambiar la compañía, libro o año fiscal si el presupuesto ya tiene líneas."))
 
         self._validate_header_data(data, exclude_id=budget_id)
 
@@ -84,7 +87,7 @@ class BudgetService:
         """Agrega una línea a un presupuesto en borrador."""
         budget = database.session.get(Budget, budget_id)
         if not budget or budget.status != "draft":
-            raise BudgetError("El presupuesto no existe o no está en borrador.")
+            raise BudgetError(_("El presupuesto no existe o no está en borrador."))
 
         self._validate_line_data(budget, data)
 
@@ -107,11 +110,11 @@ class BudgetService:
         """Actualiza una línea de presupuesto."""
         line = database.session.get(BudgetLine, line_id)
         if not line:
-            raise BudgetError("Línea de presupuesto no encontrada.")
+            raise BudgetError(_("Línea de presupuesto no encontrada."))
 
         budget = database.session.get(Budget, line.budget_id)
         if not budget or budget.status != "draft":
-            raise BudgetError("Solo se pueden editar líneas de presupuestos en borrador.")
+            raise BudgetError(_("Solo se pueden editar líneas de presupuestos en borrador."))
 
         self._validate_line_data(budget, data, exclude_line_id=line_id)
 
@@ -136,7 +139,7 @@ class BudgetService:
 
         budget = database.session.get(Budget, line.budget_id)
         if not budget or budget.status != "draft":
-            raise BudgetError("Solo se pueden eliminar líneas de presupuestos en borrador.")
+            raise BudgetError(_("Solo se pueden eliminar líneas de presupuestos en borrador."))
 
         database.session.delete(line)
         database.session.commit()
@@ -145,12 +148,12 @@ class BudgetService:
         """Aprueba un presupuesto."""
         budget = database.session.get(Budget, budget_id)
         if not budget or budget.status != "draft":
-            raise BudgetError("El presupuesto no puede ser aprobado.")
+            raise BudgetError(_("El presupuesto no puede ser aprobado."))
 
         # Validar que tenga al menos una línea
         has_lines = database.session.query(BudgetLine).filter_by(budget_id=budget_id).first() is not None
         if not has_lines:
-            raise BudgetError("No se puede aprobar un presupuesto sin líneas.")
+            raise BudgetError(_("No se puede aprobar un presupuesto sin líneas."))
 
         budget.status = "approved"
         budget.approved_by = user_id
@@ -161,7 +164,7 @@ class BudgetService:
         """Cierra un presupuesto aprobado."""
         budget = database.session.get(Budget, budget_id)
         if not budget or budget.status != "approved":
-            raise BudgetError("Solo se pueden cerrar presupuestos aprobados.")
+            raise BudgetError(_("Solo se pueden cerrar presupuestos aprobados."))
 
         budget.status = "closed"
         budget.closed_by = user_id
@@ -172,18 +175,18 @@ class BudgetService:
         """Valida datos del encabezado."""
         entity = database.session.execute(database.select(Entity).filter_by(code=data["company"])).scalar_one_or_none()
         if entity is None:
-            raise BudgetError("Compañía no válida.")
+            raise BudgetError(_("Compañía no válida."))
 
         ledger = database.session.get(Book, data["ledger_id"])
         if not ledger or ledger.entity != data["company"]:
-            raise BudgetError("Libro contable no válido para la compañía.")
+            raise BudgetError(_("Libro contable no válido para la compañía."))
         ledger_currency = ledger.currency or entity.currency
         if data.get("currency_id") != ledger_currency:
-            raise BudgetError("La moneda del presupuesto debe coincidir con la moneda del libro contable.")
+            raise BudgetError(_("La moneda del presupuesto debe coincidir con la moneda del libro contable."))
 
         fy = database.session.get(FiscalYear, data["fiscal_year_id"])
         if not fy or fy.entity != data["company"]:
-            raise BudgetError("Año fiscal no válido para la compañía.")
+            raise BudgetError(_("Año fiscal no válido para la compañía."))
 
         # Validar duplicidad de código
         query = database.session.query(Budget).filter_by(
@@ -196,7 +199,7 @@ class BudgetService:
             query = query.filter(Budget.id != exclude_id)
 
         if query.first():
-            raise BudgetError("El código de presupuesto ya existe para este año fiscal y libro.")
+            raise BudgetError(_("El código de presupuesto ya existe para este año fiscal y libro."))
 
     def _validate_line_data(self, budget: Budget, data: Dict[str, Any], exclude_line_id: Optional[str] = None):
         """Valida datos de una línea de presupuesto."""
@@ -210,19 +213,19 @@ class BudgetService:
     def _validate_line_account(self, budget: Budget, data: Dict[str, Any]) -> None:
         account = database.session.get(Accounts, data["account_id"])
         if not account or account.entity != budget.company:
-            raise BudgetError("Cuenta contable no válida.")
+            raise BudgetError(_("Cuenta contable no válida."))
         if account.group:
-            raise BudgetError("No se puede presupuestar en una cuenta agrupadora.")
+            raise BudgetError(_("No se puede presupuestar en una cuenta agrupadora."))
 
     def _validate_line_cost_center(self, budget: Budget, data: Dict[str, Any]) -> None:
         cc = database.session.get(CostCenter, data["cost_center_id"])
         if not cc or cc.entity != budget.company:
-            raise BudgetError("Centro de costo no válido.")
+            raise BudgetError(_("Centro de costo no válido."))
 
     def _validate_line_period(self, budget: Budget, data: Dict[str, Any]) -> None:
         period = database.session.get(AccountingPeriod, data["period_id"])
         if not period or period.fiscal_year_id != budget.fiscal_year_id:
-            raise BudgetError("El período no pertenece al año fiscal del presupuesto.")
+            raise BudgetError(_("El período no pertenece al año fiscal del presupuesto."))
 
     def _validate_line_business_unit(self, budget: Budget, data: Dict[str, Any]) -> None:
         unit_id = data.get("business_unit_id")
@@ -230,7 +233,7 @@ class BudgetService:
             return
         unit = database.session.get(Unit, unit_id)
         if not unit or unit.entity != budget.company:
-            raise BudgetError("Unidad de negocio no válida.")
+            raise BudgetError(_("Unidad de negocio no válida."))
 
     def _validate_line_project(self, budget: Budget, data: Dict[str, Any]) -> None:
         project_id = data.get("project_id")
@@ -238,7 +241,7 @@ class BudgetService:
             return
         project = database.session.get(Project, project_id)
         if not project or project.entity != budget.company:
-            raise BudgetError("Proyecto no válido.")
+            raise BudgetError(_("Proyecto no válido."))
 
     def _validate_line_uniqueness(self, budget: Budget, data: Dict[str, Any], exclude_line_id: Optional[str] = None) -> None:
         business_unit_id = data.get("business_unit_id")
@@ -260,7 +263,7 @@ class BudgetService:
             query = query.filter(BudgetLine.id != exclude_line_id)
 
         if query.first():
-            raise BudgetError("Ya existe una línea para esta combinación de dimensiones y período.")
+            raise BudgetError(_("Ya existe una línea para esta combinación de dimensiones y período."))
 
     def get_budget_totals(self, budget_id: str) -> Dict[str, Decimal]:
         """Obtiene totales del presupuesto agrupados por período."""
@@ -482,9 +485,9 @@ class BudgetService:
         unit = database.session.get(Unit, business_unit_id) if business_unit_id else None
         project = database.session.get(Project, project_id) if project_id else None
         if business_unit_id and (not unit or unit.entity != company):
-            raise BudgetError("Unidad de negocio no válida.")
+            raise BudgetError(_("Unidad de negocio no válida."))
         if project_id and (not project or project.entity != company):
-            raise BudgetError("Proyecto no válido.")
+            raise BudgetError(_("Proyecto no válido."))
 
         budgets = database.session.query(Budget).filter_by(
             company=company, fiscal_year_id=period.fiscal_year_id, status="approved"

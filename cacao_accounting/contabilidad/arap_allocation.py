@@ -19,6 +19,9 @@ from sqlalchemy import func, select
 from cacao_accounting.database import ARAPLedgerEntry, ARAPOpenItem as ARAPOpenItemModel, database
 
 
+from cacao_accounting.i18n import _
+
+
 class AllocationError(ValueError):
     """Error de negocio al resolver, planear o aplicar una asignación."""
 
@@ -67,12 +70,12 @@ class ARAPOpenItem:
         """Valida identificadores y saldo no negativo."""
         amount = _decimal(self.outstanding)
         if not self.document_id or not self.document_type or not self.currency:
-            raise AllocationError("Un open item requiere documento y moneda explícitos.")
+            raise AllocationError(_("Un open item requiere documento y moneda explícitos."))
         if amount < 0:
-            raise AllocationError("El saldo pendiente no puede ser negativo.")
+            raise AllocationError(_("El saldo pendiente no puede ser negativo."))
         object.__setattr__(self, "outstanding", amount)
         if self.direction is not None and self.direction not in {"debit", "credit"}:
-            raise AllocationError("La dirección del open item debe ser debit o credit.")
+            raise AllocationError(_("La dirección del open item debe ser debit o credit."))
 
     @classmethod
     def from_model(cls, model: Any) -> "ARAPOpenItem":
@@ -365,7 +368,7 @@ class AllocationPlanner:
         """Crea un plan sin mutar saldos."""
         available = _decimal(source_amount)
         if available <= 0 or not source_currency:
-            raise AllocationError("El efectivo y su moneda deben ser mayores que cero.")
+            raise AllocationError(_("El efectivo y su moneda deben ser mayores que cero."))
         existing = set(existing_keys)
         lines: list[AllocationLine] = []
         requested: dict[str, Decimal] = {}
@@ -385,7 +388,7 @@ class AllocationPlanner:
             rate = self._rate(item.currency, source_currency, request.rate)
             source_line = (amount * rate).quantize(Decimal("0.0001"))
             if consumed + source_line > available:
-                raise AllocationOverpaymentError("Las asignaciones exceden el efectivo disponible.")
+                raise AllocationOverpaymentError(_("Las asignaciones exceden el efectivo disponible."))
             consumed += source_line
             lines.append(
                 AllocationLine(
@@ -406,10 +409,10 @@ class AllocationPlanner:
         """Valida la tasa documento→origen."""
         if document_currency == source_currency:
             if requested_rate is not None and _decimal(requested_rate) != 1:
-                raise AllocationCurrencyError("La tasa en la misma moneda debe ser 1.")
+                raise AllocationCurrencyError(_("La tasa en la misma moneda debe ser 1."))
             return Decimal("1")
         if requested_rate is None or _decimal(requested_rate) <= 0:
-            raise AllocationCurrencyError("Se requiere una tasa positiva entre monedas distintas.")
+            raise AllocationCurrencyError(_("Se requiere una tasa positiva entre monedas distintas."))
         return _decimal(requested_rate)
 
 

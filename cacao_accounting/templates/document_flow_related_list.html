@@ -40,15 +40,15 @@
     <thead>
       <tr>
         <th scope="col">N° Documento</th>
-        <th scope="col">Estado</th>
-        <th scope="col">Fecha</th>
+        <th scope="col">{{ _("Estado") }}</th>
+        <th scope="col">{{ _("Fecha") }}</th>
         {% if spec.party_field %}
         <th scope="col">Tercero</th>
         {% endif %}
         {% if spec.total_field %}
-        <th scope="col">Total</th>
+        <th scope="col">{{ _("Total") }}</th>
         {% endif %}
-        <th scope="col">Acción</th>
+        <th scope="col">{{ _("Acción") }}</th>
       </tr>
     </thead>
     <tbody>

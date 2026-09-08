@@ -23,6 +23,8 @@ from cacao_accounting.database import (
     database,
 )
 
+from cacao_accounting.i18n import _
+
 REQUIRE_COMPARISON_KEY = "PURCHASE_REQUIRE_OFFER_COMPARISON"
 MINIMUM_OFFERS_KEY = "PURCHASE_MINIMUM_REQUIRED_OFFERS"
 logger = getLogger(__name__)
@@ -62,7 +64,7 @@ def get_purchase_sourcing_config() -> PurchaseSourcingConfig:
 def set_purchase_sourcing_config(require_comparison: bool, minimum_offers: int) -> None:
     """Persist global sourcing configuration."""
     if minimum_offers < 1:
-        raise PurchaseSourcingError("El mínimo de ofertas debe ser mayor o igual a uno.")
+        raise PurchaseSourcingError(_("El mínimo de ofertas debe ser mayor o igual a uno."))
     values = {
         REQUIRE_COMPARISON_KEY: "1" if require_comparison else "0",
         MINIMUM_OFFERS_KEY: str(minimum_offers),
@@ -115,7 +117,7 @@ def open_negotiation_round(rfq_id: str, user_id: str | None) -> PurchaseNegotiat
             PurchaseQuotationAward.status.in_(("finalized", "used")),
         )
     ).scalar_one_or_none():
-        raise PurchaseSourcingError("No se puede abrir una ronda después de finalizar el comparativo.")
+        raise PurchaseSourcingError(_("No se puede abrir una ronda después de finalizar el comparativo."))
     if latest:
         latest.status = "closed"
     round_record = PurchaseNegotiationRound(
@@ -196,10 +198,10 @@ def validate_award_request(
         .all()
     )
     if not selections:
-        raise PurchaseSourcingError("Debe adjudicar al menos una línea.")
+        raise PurchaseSourcingError(_("Debe adjudicar al menos una línea."))
     manual_override_items = _find_manual_override_items(items, offers, selections)
     if manual_override_items and (not is_purchase_sourcing_authorizer(user_id) or not reason):
-        raise PurchaseSourcingError("Seleccionar una oferta no recomendada requiere autorización y justificación.")
+        raise PurchaseSourcingError(_("Seleccionar una oferta no recomendada requiere autorización y justificación."))
     return cast(list[PurchaseQuotationItem], items), offers, manual_override_items
 
 
@@ -212,9 +214,9 @@ def _validate_award_authorization(
     if insufficient and not authorizer:
         raise PurchaseSourcingError(f"Se requieren al menos {minimum_offers} ofertas; solo existen {len(offers)}.")
     if insufficient and not reason:
-        raise PurchaseSourcingError("La autorización de oferta única requiere una justificación.")
+        raise PurchaseSourcingError(_("La autorización de oferta única requiere una justificación."))
     if reason and not authorizer:
-        raise PurchaseSourcingError("Solo un Administrador o el Gerente de Compras puede autorizar excepciones.")
+        raise PurchaseSourcingError(_("Solo un Administrador o el Gerente de Compras puede autorizar excepciones."))
 
 
 def _find_manual_override_items(
@@ -250,7 +252,7 @@ def create_purchase_quotation_award(
         .where(PurchaseQuotationAward.status.in_(("finalized", "used")))
     ).scalar_one_or_none()
     if existing:
-        raise PurchaseSourcingError("La solicitud de cotización ya tiene un comparativo finalizado.")
+        raise PurchaseSourcingError(_("La solicitud de cotización ya tiene un comparativo finalizado."))
     items, _offers, manual_override_items = validate_award_request(rfq, selections, user_id, reason)
     negotiation_round = current_negotiation_round(rfq.id)
     award = PurchaseQuotationAward(
@@ -295,16 +297,16 @@ def close_purchase_quotation_comparison(
 ) -> PurchaseQuotationAward:
     """Close an RFQ comparison manually with an authorized explanation."""
     if not is_purchase_sourcing_authorizer(user_id):
-        raise PurchaseSourcingError("Solo un Administrador o el Gerente de Compras puede cerrar el comparativo.")
+        raise PurchaseSourcingError(_("Solo un Administrador o el Gerente de Compras puede cerrar el comparativo."))
     if not reason or not reason.strip():
-        raise PurchaseSourcingError("El cierre manual del comparativo requiere una justificación.")
+        raise PurchaseSourcingError(_("El cierre manual del comparativo requiere una justificación."))
     existing = database.session.execute(
         database.select(PurchaseQuotationAward)
         .filter_by(purchase_quotation_id=rfq.id)
         .where(PurchaseQuotationAward.status.in_(("finalized", "used", "closed")))
     ).scalar_one_or_none()
     if existing:
-        raise PurchaseSourcingError("La solicitud de cotización ya tiene el comparativo cerrado.")
+        raise PurchaseSourcingError(_("La solicitud de cotización ya tiene el comparativo cerrado."))
     negotiation_round = current_negotiation_round(rfq.id)
     award = PurchaseQuotationAward(
         purchase_quotation_id=rfq.id,

@@ -122,6 +122,9 @@ from cacao_accounting.list_filters import apply_list_filters
 from cacao_accounting.version import APPNAME
 
 
+from cacao_accounting.i18n import _
+
+
 def _accounting_company_scope(query, company_column, action: str = "consultar"):
     """Limit an accounting master-data query to assigned active companies."""
     from cacao_accounting.auth.permisos import Permisos
@@ -554,7 +557,7 @@ def nueva_entidad():
 
         return LISTA_ENTIDADES
     elif request.method == "POST":
-        flash("Complete los campos correctamente.", "danger")
+        flash(_("Complete los campos correctamente."), "danger")
 
     return render_template(
         "contabilidad/entidad_crear.html",
@@ -780,7 +783,7 @@ def eliminar_unidad(id_unidad):
     unidad = database.session.execute(database.select(Unit).filter_by(code=id_unidad)).scalar_one_or_none()
     if unidad:
         if len(unidad.children) > 0:
-            flash("No se puede eliminar la unidad porque tiene unidades hijas asignadas (RN-006).", "danger")
+            flash(_("No se puede eliminar la unidad porque tiene unidades hijas asignadas (RN-006)."), "danger")
             return redirect(url_for(CONTABILIDAD_UNIDADES))
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
@@ -1354,7 +1357,7 @@ def editar_cuenta(entity, id_cta):
     ).scalar_one_or_none()
 
     if registro is None:
-        flash("La cuenta contable indicada no existe.", "warning")
+        flash(_("La cuenta contable indicada no existe."), "warning")
         return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
 
     formulario, entity_initial_label, parent_initial_label = _build_account_edit_form(registro, entity)
@@ -1789,7 +1792,7 @@ def eliminar_proyecto(project_id):
     proyecto = database.session.execute(database.select(Project).filter_by(code=project_id)).scalar_one_or_none()
     if proyecto:
         if len(proyecto.children) > 0:
-            flash("No se puede eliminar el proyecto porque tiene proyectos hijos asignados (RN-006).", "danger")
+            flash(_("No se puede eliminar el proyecto porque tiene proyectos hijos asignados (RN-006)."), "danger")
             return redirect(url_for(CONTABILIDAD_PROYECTOS))
         from cacao_accounting.database import BudgetLine, ComprobanteContableDetalle, GLEntry, StockEntry
 
@@ -1899,7 +1902,7 @@ def fiscal_year_edit(fy_id):
             requested_entity = request.form.get("entidad", fiscal_year.entity)
             _validate_active_entity_submission(requested_entity)
             if requested_entity != fiscal_year.entity:
-                raise ValueError("La compañía del año fiscal no puede cambiarse.")
+                raise ValueError(_("La compañía del año fiscal no puede cambiarse."))
             exige_acceso_compania("accounting", fiscal_year.entity, "editar")
         except ValueError as error:
             flash_error(error)
@@ -1911,7 +1914,7 @@ def fiscal_year_edit(fy_id):
                 entity_initial_label=entity_initial_label,
             )
         if fiscal_year.financial_closed and not bool(formulario.cerrado.data):
-            flash("No se puede abrir un año con cierre contable realizado.", "danger")
+            flash(_("No se puede abrir un año con cierre contable realizado."), "danger")
             return redirect(url_for("contabilidad.fiscal_year_edit", fy_id=fy_id))
 
         fiscal_year.name = request.form.get("id", fiscal_year.name)
@@ -1974,7 +1977,7 @@ def fiscal_year_delete(fy_id):
             ],
         ):
             (
-                flash("No se puede eliminar un año fiscal cerrado financieramente.", "danger")
+                flash(_("No se puede eliminar un año fiscal cerrado financieramente."), "danger")
                 if fiscal_year.financial_closed
                 else None
             )
@@ -2011,7 +2014,7 @@ def accounting_period_new():
             _validate_active_entity_submission(requested_entity)
             selected_fiscal_year = database.session.get(FiscalYear, request.form.get("fiscal_year"))
             if not selected_fiscal_year or selected_fiscal_year.entity != requested_entity:
-                raise ValueError("El año fiscal debe pertenecer a la compañía del período.")
+                raise ValueError(_("El año fiscal debe pertenecer a la compañía del período."))
             exige_acceso_compania("accounting", requested_entity, "crear")
         except ValueError as error:
             flash_error(error)
@@ -2081,12 +2084,12 @@ def accounting_period_edit(period_id):
             requested_entity = request.form.get("entidad", period.entity)
             _validate_active_entity_submission(requested_entity)
             if requested_entity != period.entity:
-                raise ValueError("La compañía del período no puede cambiarse.")
+                raise ValueError(_("La compañía del período no puede cambiarse."))
             exige_acceso_compania("accounting", period.entity, "editar")
             fiscal_year_id = request.form.get("fiscal_year", period.fiscal_year_id)
             selected_fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
             if not selected_fiscal_year or selected_fiscal_year.entity != period.entity:
-                raise ValueError("El año fiscal debe pertenecer a la compañía del período.")
+                raise ValueError(_("El año fiscal debe pertenecer a la compañía del período."))
         except ValueError as error:
             flash_error(error)
             return render_template(
@@ -2578,7 +2581,7 @@ def nuevo_comprobante_recurrente():
         try:
             items_json = request.form.get("items_json")
             if not items_json:
-                raise RecurringJournalError("Debe incluir al menos dos líneas contables.")
+                raise RecurringJournalError(_("Debe incluir al menos dos líneas contables."))
 
             items = json.loads(items_json)
             selected_books = request.form.getlist("books")
@@ -2600,7 +2603,7 @@ def nuevo_comprobante_recurrente():
                 items=items,
                 user_id=str(current_user.id),
             )
-            flash("Plantilla de comprobante recurrente creada.", "success")
+            flash(_("Plantilla de comprobante recurrente creada."), "success")
             return redirect(url_for("contabilidad.comprobantes_recurrentes"))
         except (RecurringJournalError, json.JSONDecodeError) as exc:
             flash_error(exc)
@@ -2626,7 +2629,7 @@ def ver_plantilla_recurrente(identifier: str):
 
     plantilla = database.session.get(RecurringJournalTemplate, identifier)
     if not plantilla:
-        flash("Plantilla no encontrada.", "warning")
+        flash(_("Plantilla no encontrada."), "warning")
         return redirect(url_for("contabilidad.comprobantes_recurrentes"))
     try:
         validate_recurring_template_access(plantilla, str(current_user.id), "consultar")
@@ -2662,7 +2665,7 @@ def aprobar_plantilla_recurrente(identifier: str):
 
     try:
         approve_recurring_template(identifier, user_id=str(current_user.id))
-        flash("Plantilla recurrente aprobada.", "success")
+        flash(_("Plantilla recurrente aprobada."), "success")
     except RecurringJournalError as exc:
         flash_error(exc)
 
@@ -2679,12 +2682,12 @@ def cancelar_plantilla_recurrente(identifier: str):
 
     motivo = request.form.get("reason")
     if not motivo:
-        flash("Debe indicar un motivo de cancelación.", "danger")
+        flash(_("Debe indicar un motivo de cancelación."), "danger")
         return redirect(url_for(CONTABILIDAD_VER_PLANTILLA_RECURRENTE, identifier=identifier))
 
     try:
         cancel_recurring_template(identifier, reason=motivo, user_id=str(current_user.id))
-        flash("Plantilla recurrente cancelada.", "warning")
+        flash(_("Plantilla recurrente cancelada."), "warning")
     except RecurringJournalError as exc:
         flash_error(exc)
 
@@ -2751,13 +2754,13 @@ def nuevo_cierre_mensual():
         database.select(PeriodCloseRun).filter_by(company=period.entity, period_id=period.id)
     ).scalar_one_or_none()
     if existing:
-        flash("Ya existe un cierre mensual para ese periodo.", "warning")
+        flash(_("Ya existe un cierre mensual para ese periodo."), "warning")
         return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=existing.id))
 
     close_run = PeriodCloseRun(company=period.entity, period_id=period.id, run_status="open")
     database.session.add(close_run)
     database.session.commit()
-    flash("Cierre mensual creado.", "success")
+    flash(_("Cierre mensual creado."), "success")
     return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
 
@@ -2975,9 +2978,9 @@ def ejecutar_revalorizacion_cierre(identifier: str) -> "Any":
             )
         )
         database.session.commit()
-        flash("La revalorizacion fue ejecutada correctamente.", "success")
+        flash(_("La revalorizacion fue ejecutada correctamente."), "success")
         if run.status == "completed_no_changes":
-            flash("No se generaron diferencias cambiarias.", "info")
+            flash(_("No se generaron diferencias cambiarias."), "info")
 
     return redirect(url_for(CONTABILIDAD_VER_CIERRE_MENSUAL, identifier=close_run.id))
 
@@ -3073,7 +3076,7 @@ def ver_revalorizacion_cambiaria(identifier: str):
 
     run = database.session.get(ExchangeRevaluation, identifier)
     if not run:
-        flash("Revalorizacion no encontrada.", "warning")
+        flash(_("Revalorizacion no encontrada."), "warning")
         return redirect(url_for(CONTABILIDAD_REVALORIZACION_LIST))
 
     period = None
@@ -3146,7 +3149,7 @@ def anular_revalorizacion_cambiaria(identifier: str):
         flash_error(exc)
         return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=identifier))
 
-    flash("Revalorizacion anulada correctamente.", "success")
+    flash(_("Revalorizacion anulada correctamente."), "success")
     return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
 
 
@@ -3172,7 +3175,7 @@ def nuevo_comprobante():
         except JournalValidationError as exc:
             flash_error(exc)
         else:
-            flash("Comprobante contable guardado como borrador.", "success")
+            flash(_("Comprobante contable guardado como borrador."), "success")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
 
     TITULO = "Nuevo Comprobante Contable - " + APPNAME
@@ -3214,19 +3217,19 @@ def contabilizar_comprobante(identifier: str):
                 ApprovalEngine.request_approval(journal)
                 ApprovalEngine.approve(journal, current_user, "Aprobado por el remitente")
                 database.session.commit()
-                flash("Comprobante contable aprobado.", "success")
+                flash(_("Comprobante contable aprobado."), "success")
             else:
                 ApprovalEngine.request_approval(journal)
                 journal.status = "Pending Approval"
                 database.session.commit()
-                flash("Comprobante contable enviado para aprobación (Pendiente de Aprobación).", "info")
+                flash(_("Comprobante contable enviado para aprobación (Pendiente de Aprobación)."), "info")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
         submit_journal(identifier, user_id=str(current_user.id))
     except JournalValidationError as exc:
         flash_error(exc)
     else:
-        flash("Comprobante contable contabilizado.", "success")
+        flash(_("Comprobante contable contabilizado."), "success")
     return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
 
@@ -3254,7 +3257,7 @@ def rechazar_comprobante(identifier: str):
     except JournalValidationError as exc:
         flash_error(exc)
     else:
-        flash("Comprobante contable rechazado.", "warning")
+        flash(_("Comprobante contable rechazado."), "warning")
     return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
 
@@ -3290,7 +3293,7 @@ def anular_comprobante(identifier: str):
                 cancellation_date=request.form.get("cancellation_date") or journal.date,
             )
             database.session.commit()
-            flash("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).", "info")
+            flash(_("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."), "info")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
         cancel_submitted_journal(
@@ -3302,7 +3305,7 @@ def anular_comprobante(identifier: str):
     except JournalValidationError as exc:
         flash_error(exc)
     else:
-        flash("Comprobante contable anulado con reversa contable.", "warning")
+        flash(_("Comprobante contable anulado con reversa contable."), "warning")
     return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
 
@@ -3317,7 +3320,7 @@ def ver_comprobante(identifier: str):
 
     journal = get_journal(identifier)
     if journal is None:
-        flash("El comprobante contable indicado no existe.", "warning")
+        flash(_("El comprobante contable indicado no existe."), "warning")
         return redirect(url_for("contabilidad.conta"))
     exige_acceso_compania("accounting", journal.entity, "consultar")
     creator = database.session.get(User, journal.user_id) if journal.user_id else None
@@ -3390,7 +3393,7 @@ def duplicar_comprobante(identifier: str):
         flash_error(exc)
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
-    flash("Comprobante duplicado como nuevo borrador.", "success")
+    flash(_("Comprobante duplicado como nuevo borrador."), "success")
     return redirect(url_for(CONTABILIDAD_EDITAR_COMPROBANTE, identifier=duplicated.id))
 
 
@@ -3427,7 +3430,7 @@ def revertir_comprobante(identifier: str):
         flash_error(exc)
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
-    flash("Reversión creada como nuevo borrador editable.", "success")
+    flash(_("Reversión creada como nuevo borrador editable."), "success")
     return redirect(url_for(CONTABILIDAD_EDITAR_COMPROBANTE, identifier=reversed_draft.id))
 
 
@@ -3447,14 +3450,14 @@ def editar_comprobante(identifier: str):
 
     journal = get_journal(identifier)
     if journal is None:
-        flash("El comprobante contable indicado no existe.", "warning")
+        flash(_("El comprobante contable indicado no existe."), "warning")
         return redirect(url_for("contabilidad.listar_comprobantes"))
     exige_acceso_compania("accounting", journal.entity, "editar")
     if journal.voucher_type == "Capitalización Automática de Proyecto":
-        flash("No se puede editar un comprobante de capitalización automática.", "warning")
+        flash(_("No se puede editar un comprobante de capitalización automática."), "warning")
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
     if journal.status != "draft":
-        flash("Solo se puede editar un comprobante en borrador.", "warning")
+        flash(_("Solo se puede editar un comprobante en borrador."), "warning")
         return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=identifier))
 
     if request.method == "POST":
@@ -3463,7 +3466,7 @@ def editar_comprobante(identifier: str):
         except JournalValidationError as exc:
             flash_error(exc)
         else:
-            flash("Comprobante contable actualizado.", "success")
+            flash(_("Comprobante contable actualizado."), "success")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
 
     TITULO = "Editar Comprobante Contable - " + APPNAME
@@ -3854,7 +3857,7 @@ def external_counter_adjust(counter_id: str):
                 changed_by=current_user.id if current_user.is_authenticated else None,
             )
             database.session.commit()
-            flash("Contador externo ajustado correctamente.", "success")
+            flash(_("Contador externo ajustado correctamente."), "success")
         except IdentifierConfigurationError as exc:
             from cacao_accounting.logs import log
 
@@ -3995,7 +3998,7 @@ def fiscal_year_closing_list():
 def fiscal_year_closing_new():
     """Formulario para ejecutar un nuevo cierre de año fiscal."""
     if current_user.classification != "admin":
-        flash("Solo el administrador del sistema puede ejecutar el cierre de año fiscal.", "danger")
+        flash(_("Solo el administrador del sistema puede ejecutar el cierre de año fiscal."), "danger")
         return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
 
     from cacao_accounting.database import Entity, FiscalYear
@@ -4012,7 +4015,7 @@ def fiscal_year_closing_new():
         exige_acceso_compania("accounting", company, "autorizar")
         try:
             create_fiscal_year_closing_voucher(company, fiscal_year_id, user_id=str(current_user.id))
-            flash("Cierre de año fiscal ejecutado correctamente.", "success")
+            flash(_("Cierre de año fiscal ejecutado correctamente."), "success")
             return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
         except FiscalYearClosingError as exc:
             flash_error(exc)
@@ -4037,7 +4040,7 @@ def fiscal_year_closing_new():
 def fiscal_year_closing_reverse(fy_id):
     """Revierte un cierre de año fiscal."""
     if current_user.classification != "admin":
-        flash("Solo el administrador del sistema puede revertir el cierre de año fiscal.", "danger")
+        flash(_("Solo el administrador del sistema puede revertir el cierre de año fiscal."), "danger")
         return redirect(url_for(CONTABILIDAD_FISCAL_YEAR_CLOSING_LIST))
 
     from cacao_accounting.contabilidad.fiscal_year_closing import (
@@ -4049,10 +4052,10 @@ def fiscal_year_closing_reverse(fy_id):
     try:
         fiscal_year = database.session.get(FiscalYear, fy_id)
         if not fiscal_year:
-            raise FiscalYearClosingError("Año fiscal no encontrado.")
+            raise FiscalYearClosingError(_("Año fiscal no encontrado."))
         exige_acceso_compania("accounting", fiscal_year.entity, "autorizar")
         reverse_fiscal_year_closing(fy_id, user_id=str(current_user.id))
-        flash("Cierre de año fiscal revertido correctamente.", "success")
+        flash(_("Cierre de año fiscal revertido correctamente."), "success")
     except FiscalYearClosingError as exc:
         flash_error(exc)
 

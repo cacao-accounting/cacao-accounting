@@ -60,7 +60,7 @@
   <div class="card-body bg-light border-top">
     <div class="row g-3">
       <div class="col-md-3">
-        <span class="text-muted d-block small">Estado</span>
+        <span class="text-muted d-block small">{{ _("Estado") }}</span>
         <strong class="fs-5">
           {% if forecast.status == "Draft" %}
           <span class="text-warning"><i class="bi bi-file-earmark-diff"></i> Borrador</span>
@@ -82,7 +82,7 @@
         <strong>{{ forecast.created_by or "Sistema" }}</strong>
       </div>
       <div class="col-md-3">
-        <span class="text-muted d-block small">Descripción</span>
+        <span class="text-muted d-block small">{{ _("Descripción") }}</span>
         <p class="mb-0 text-muted small">{{ forecast.description or "Sin descripción" }}</p>
       </div>
     </div>
@@ -171,7 +171,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <div class="col-md-3">
-        <label for="type" class="form-label small fw-bold">Tipo</label>
+        <label for="type" class="form-label small fw-bold">{{ _("Tipo") }}</label>
         <select name="type" id="type" class="form-select form-select-sm" required>
           <option value="Income">Ingreso (+)</option>
           <option value="Expense">Egreso (-)</option>
@@ -179,12 +179,12 @@
       </div>
 
       <div class="col-md-3">
-        <label for="concept" class="form-label small fw-bold">Concepto</label>
+        <label for="concept" class="form-label small fw-bold">{{ _("Concepto") }}</label>
         <input type="text" name="concept" id="concept" class="form-control form-control-sm" placeholder="Ej: Nómina, Préstamo, Impuestos" required>
       </div>
 
       <div class="col-md-2">
-        <label for="currency" class="form-label small fw-bold">Moneda</label>
+        <label for="currency" class="form-label small fw-bold">{{ _("Moneda") }}</label>
         <select name="currency" id="currency" class="form-select form-select-sm" required>
           {% for code, name in currencies %}
           <option value="{{ code }}" {% if code == currency %}selected{% endif %}>{{ code }} - {{ name }}</option>
@@ -193,7 +193,7 @@
       </div>
 
       <div class="col-md-2">
-        <label for="amount" class="form-label small fw-bold">Monto</label>
+        <label for="amount" class="form-label small fw-bold">{{ _("Monto") }}</label>
         <input type="number" step="0.01" name="amount" id="amount" class="form-control form-control-sm" placeholder="0.00" required>
       </div>
 
@@ -226,13 +226,13 @@
       <thead class="table-light">
         <tr>
           <th scope="col">Fecha Estimada</th>
-          <th scope="col">Tipo</th>
-          <th scope="col">Concepto</th>
-          <th scope="col" class="text-end">Monto</th>
-          <th scope="col">Moneda</th>
+          <th scope="col">{{ _("Tipo") }}</th>
+          <th scope="col">{{ _("Concepto") }}</th>
+          <th scope="col" class="text-end">{{ _("Monto") }}</th>
+          <th scope="col">{{ _("Moneda") }}</th>
           <th scope="col">Notas</th>
           {% if forecast.status == "Draft" %}
-          <th scope="col">Acciones</th>
+          <th scope="col">{{ _("Acciones") }}</th>
           {% endif %}
         </tr>
       </thead>

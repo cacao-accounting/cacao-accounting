@@ -21,7 +21,6 @@ from cacao_accounting.contabilidad.ctas import (
     base as catalogo_base,
     cargar_catalogos,
 )
-from cacao_accounting.document_flow.status import _
 from cacao_accounting.database import Entity, database
 from cacao_accounting.document_identifiers import ensure_default_naming_series_for_company, ensure_global_naming_series
 from cacao_accounting.runtime_mode import force_single_entity
@@ -38,6 +37,8 @@ from cacao_accounting.setup.repository import (
     get_setup_value,
     set_setup_value,
 )
+
+from cacao_accounting.i18n import _
 
 SETUP_LANGUAGE = "SETUP_LANGUAGE"
 SETUP_COUNTRY = "SETUP_COUNTRY"
@@ -94,7 +95,7 @@ def create_company(
     """Crea una compañia con los registros contables mínimos necesarios."""
     company_count = database.session.execute(database.select(database.func.count(Entity.id))).scalar() or 0
     if force_single_entity() and company_count >= 1:
-        raise ValueError("Esta instalación solo permite una compañía.")
+        raise ValueError(_("Esta instalación solo permite una compañía."))
 
     entity = create_default_entity(company_data, status=status, default=default)
     create_default_book(entity)
@@ -112,7 +113,7 @@ def create_company(
 
     if catalogo_tipo == "preexistente":
         if country is None or idioma is None:
-            raise ValueError("No se puede cargar el catálogo sin país e idioma.")
+            raise ValueError(_("No se puede cargar el catálogo sin país e idioma."))
         catalogo = choose_catalog_file(country, idioma, catalogo_archivo)
         if catalogo is None:
             raise ValueError(_("El catálogo seleccionado no está disponible o no tiene mapping JSON de cuentas por defecto."))
@@ -141,10 +142,10 @@ def save_regional_settings(country: str, currency: str, timezone: str) -> None:
         database.select(Currency).filter_by(code=currency, active=True)
     ).scalar_one_or_none()
     if selected_currency is None:
-        raise ValueError("La moneda seleccionada no existe o no está activa.")
+        raise ValueError(_("La moneda seleccionada no existe o no está activa."))
 
     if timezone not in zoneinfo.available_timezones():
-        raise ValueError("La zona horaria seleccionada no es válida.")
+        raise ValueError(_("La zona horaria seleccionada no es válida."))
 
     set_setup_value(SETUP_COUNTRY, country)
     set_setup_value(SETUP_CURRENCY, currency)

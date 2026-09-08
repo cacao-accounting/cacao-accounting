@@ -61,7 +61,6 @@ from cacao_accounting.contabilidad.default_accounts import (
     upsert_company_default_accounts,
 )
 
-from cacao_accounting.document_flow.status import _
 
 from cacao_accounting.modulos import listado_modulos, obtener_modulos_disponibles, sincronizar_modulos
 
@@ -138,6 +137,9 @@ from cacao_accounting.contabilidad.ledger_mapping_service import (
     deactivate_ledger_mapping_rule,
     list_ledger_mapping_rules,
 )
+
+
+from cacao_accounting.i18n import _
 
 
 def _require_price_list_editor() -> None:
@@ -217,11 +219,11 @@ def lista_modulos():
         module = database.session.get(Modules, module_id) if module_id else None
 
         if module is None:
-            flash("Módulo no encontrado.", "danger")
+            flash(_("Módulo no encontrado."), "danger")
             return redirect(url_for(LISTA_MODULOS))
 
         if module.module == "admin":
-            flash("El módulo administrativo no puede deshabilitarse.", "danger")
+            flash(_("El módulo administrativo no puede deshabilitarse."), "danger")
             return redirect(url_for(LISTA_MODULOS))
 
         if action == "toggle":
@@ -1216,7 +1218,7 @@ def crear_usuario():
         nuevo_usuario = _crear_usuario_desde_form(form)
         database.session.add(nuevo_usuario)
         database.session.commit()
-        flash("Usuario creado correctamente.", "success")
+        flash(_("Usuario creado correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
@@ -1243,7 +1245,7 @@ def editar_usuario(user_id: str):
     _populate_portal_choices(form)
     if form.validate_on_submit() and _validate_portal_fields(form) and _apply_user_edit(form, usuario):
         database.session.commit()
-        flash("Usuario actualizado correctamente.", "success")
+        flash(_("Usuario actualizado correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
@@ -1268,7 +1270,7 @@ def usuario_roles(user_id: str):
         return redirect(url_for(LISTA_USUARIOS))
 
     if usuario.classification in ("customer", "supplier"):
-        flash("Solo los usuarios de tipo 'system' pueden tener roles de acceso.", "warning")
+        flash(_("Solo los usuarios de tipo 'system' pueden tener roles de acceso."), "warning")
         return redirect(url_for(LISTA_USUARIOS))
 
     roles = _obtener_roles_disponibles()
@@ -1284,7 +1286,7 @@ def usuario_roles(user_id: str):
         for rol_id in seleccionado:
             database.session.add(RolesUser(user_id=usuario.id, role_id=rol_id, active=True))
         database.session.commit()
-        flash("Roles actualizados correctamente.", "success")
+        flash(_("Roles actualizados correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
@@ -1307,7 +1309,7 @@ def usuario_companias(user_id: str):
         flash(USUARIO_NO_ENCONTRADO, "danger")
         return redirect(url_for(LISTA_USUARIOS))
     if usuario.classification in ("customer", "supplier"):
-        flash("Solo los usuarios internos pueden tener compañías asignadas.", "warning")
+        flash(_("Solo los usuarios internos pueden tener compañías asignadas."), "warning")
         return redirect(url_for(LISTA_USUARIOS))
 
     form = UserCompanyAccessForm()
@@ -1332,7 +1334,7 @@ def usuario_companias(user_id: str):
             [UserCompanyAccess(user_id=usuario.id, company_code=company_code) for company_code in selected]
         )
         database.session.commit()
-        flash("Compañías actualizadas correctamente.", "success")
+        flash(_("Compañías actualizadas correctamente."), "success")
         return redirect(url_for(LISTA_USUARIOS))
     return render_template("admin/usuario_companias.html", form=form, usuario=usuario)
 
@@ -1357,7 +1359,7 @@ def usuario_password(user_id: str):
         else:
             usuario.password = proteger_passwd(form.password.data)
             database.session.commit()
-            flash("Contraseña actualizada correctamente.", "success")
+            flash(_("Contraseña actualizada correctamente."), "success")
             return redirect(url_for(LISTA_USUARIOS))
 
     return render_template(
@@ -1392,7 +1394,7 @@ def crear_rol():
             nuevo_rol = Roles(name=form.name.data, note=form.note.data or "")
             database.session.add(nuevo_rol)
             database.session.commit()
-            flash("Rol creado correctamente.", "success")
+            flash(_("Rol creado correctamente."), "success")
             return redirect(url_for(LISTA_ROLES))
 
     return render_template(
@@ -1411,7 +1413,7 @@ def editar_rol(role_id: str):
     _require_system_admin()
     rol = _obtener_rol(role_id)
     if rol is None:
-        flash("Rol no encontrado.", "danger")
+        flash(_("Rol no encontrado."), "danger")
         return redirect(url_for(LISTA_ROLES))
 
     form = RoleForm(obj=rol)
@@ -1425,7 +1427,7 @@ def editar_rol(role_id: str):
             rol.name = form.name.data
             rol.note = form.note.data or ""
             database.session.commit()
-            flash("Rol actualizado correctamente.", "success")
+            flash(_("Rol actualizado correctamente."), "success")
             return redirect(url_for(LISTA_ROLES))
 
     return render_template(
@@ -1445,7 +1447,7 @@ def rol_permisos(role_id: str):
     _require_system_admin()
     rol = _obtener_rol(role_id)
     if rol is None:
-        flash("Rol no encontrado.", "danger")
+        flash(_("Rol no encontrado."), "danger")
         return redirect(url_for(LISTA_ROLES))
 
     modulos = _obtener_modulos_disponibles()
@@ -1480,7 +1482,7 @@ def rol_permisos(role_id: str):
             if any(permiso_kwargs[action] for action, _label in acciones):
                 database.session.add(RolesAccess(**permiso_kwargs))
         database.session.commit()
-        flash("Permisos del rol actualizados correctamente.", "success")
+        flash(_("Permisos del rol actualizados correctamente."), "success")
         return redirect(url_for(LISTA_ROLES))
 
     return render_template(

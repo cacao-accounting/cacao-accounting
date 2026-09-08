@@ -15,7 +15,7 @@ from sqlalchemy import select
 from cacao_accounting.accounting_engine.common.context import TaxRuleContext
 from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_from_treatment
 from cacao_accounting.database import Accounts, DocumentTaxLine, DocumentTaxSummary, TaxRule, database
-from cacao_accounting.document_flow.status import _
+from cacao_accounting.i18n import _
 
 
 def calculate_document_total_with_taxes(
@@ -44,7 +44,7 @@ def calculate_document_total_with_taxes(
         if not _normalize_lines_payload(tax_lines_payload):
             total = _document_total_from_active_rules(document=document, items=items, subtotal=subtotal)
     if total < 0:
-        raise ValueError("El total fiscal no puede ser negativo.")
+        raise ValueError(_("El total fiscal no puede ser negativo."))
     return total
 
 
@@ -382,7 +382,7 @@ def _canonical_tax_line_payload(
     rate = _decimal_or_none(line_payload.get("rate")) or Decimal("0")
     amount = _decimal_or_none(line_payload.get("amount")) or Decimal("0")
     if base_amount < 0 or rate < 0 or amount < 0:
-        raise ValueError("Las líneas fiscales manuales no pueden contener importes negativos.")
+        raise ValueError(_("Las líneas fiscales manuales no pueden contener importes negativos."))
     return {
         **line_payload,
         "source_rule_id": rule_id or f"MANUAL-{line_payload.get('concept') or 'LINE'}",
@@ -433,7 +433,7 @@ def _validated_tax_account_id(company: str, account_id: Any) -> str | None:
         return None
     account = database.session.get(Accounts, cleaned)
     if account is None or account.entity != company:
-        raise ValueError("La cuenta fiscal debe pertenecer a la compañía del documento.")
+        raise ValueError(_("La cuenta fiscal debe pertenecer a la compañía del documento."))
     return cleaned
 
 

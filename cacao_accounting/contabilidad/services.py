@@ -64,6 +64,9 @@ from cacao_accounting.database.helpers import (
 
 from cacao_accounting.decorators import exige_acceso_compania
 
+
+from cacao_accounting.i18n import _
+
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 
 contabilidad.register_blueprint(gl, url_prefix="/gl")
@@ -432,7 +435,7 @@ def _validate_project_creation_form(formulario: Any) -> tuple[str | None, str | 
     capitalizable = bool(formulario.capitalizable.data)
     capitalization_account_id = request.form.get("capitalization_account_id") or None
     if capitalizable and not capitalization_account_id:
-        raise ValueError("La cuenta de activo es obligatoria si el proyecto es capitalizable.")
+        raise ValueError(_("La cuenta de activo es obligatoria si el proyecto es capitalizable."))
     if not capitalizable:
         capitalization_account_id = None
 
@@ -485,7 +488,7 @@ def _validate_project_edit_form(formulario: Any, proyecto: Any) -> tuple[str | N
     capitalizable = bool(formulario.capitalizable.data)
     capitalization_account_id = request.form.get("capitalization_account_id") or None
     if capitalizable and not capitalization_account_id:
-        raise ValueError("La cuenta de activo es obligatoria si el proyecto es capitalizable.")
+        raise ValueError(_("La cuenta de activo es obligatoria si el proyecto es capitalizable."))
     if not capitalizable:
         capitalization_account_id = None
 
@@ -1006,10 +1009,10 @@ def _validate_exchange_revaluation_period(company: str, fiscal_year_id: str, per
 
     period = database.session.get(AccountingPeriod, period_id)
     if not period or period.entity != company:
-        flash("Periodo contable inválido para la compañía y período seleccionados.", "danger")
+        flash(_("Periodo contable inválido para la compañía y período seleccionados."), "danger")
         return None
     if fiscal_year_id and period.fiscal_year_id != fiscal_year_id:
-        flash("Periodo contable inválido para la compañía y año fiscal seleccionados.", "danger")
+        flash(_("Periodo contable inválido para la compañía y año fiscal seleccionados."), "danger")
         return None
     return period
 
@@ -1028,7 +1031,7 @@ def _handle_exchange_revaluation_post() -> "Any":
     month = request.form.get("month")
 
     if not company:
-        flash("La compañía es requerida.", "danger")
+        flash(_("La compañía es requerida."), "danger")
         return None
     exige_acceso_compania("accounting", company, "autorizar")
 
@@ -1039,7 +1042,7 @@ def _handle_exchange_revaluation_post() -> "Any":
             fiscal_year_id = resolved_fiscal_year_id or fiscal_year_id
 
     if not period_id:
-        flash("El periodo contable es requerido.", "danger")
+        flash(_("El periodo contable es requerido."), "danger")
         return None
 
     period = _validate_exchange_revaluation_period(company, fiscal_year_id, period_id)
@@ -1053,9 +1056,9 @@ def _handle_exchange_revaluation_post() -> "Any":
         flash_error(exc)
         return None
 
-    flash("La revalorizacion fue ejecutada correctamente.", "success")
+    flash(_("La revalorizacion fue ejecutada correctamente."), "success")
     if run.status == "completed_no_changes":
-        flash("No se generaron diferencias cambiarias.", "info")
+        flash(_("No se generaron diferencias cambiarias."), "info")
     return redirect(url_for(CONTABILIDAD_REVALORIZACION_VER, identifier=run.id))
 
 

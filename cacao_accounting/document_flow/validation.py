@@ -17,6 +17,9 @@ from cacao_accounting.database import DocumentRelation, database
 from cacao_accounting.document_flow import DocumentFlowError
 
 
+from cacao_accounting.i18n import _
+
+
 def _collect_currency_sources(registro: Any) -> list[Any]:
     """Devuelve los documentos origen asociados a un documento via relaciones activas.
 
@@ -125,37 +128,37 @@ def assert_currency_contract_or_raise(
 def _validate_basic_document_fields(registro):
     """Valida campos basicos del documento (compania y fecha)."""
     if not registro.company:
-        raise ValueError("El documento debe tener una compania.")
+        raise ValueError(_("El documento debe tener una compania."))
     if not registro.posting_date:
-        raise ValueError("El documento debe tener una fecha de contabilizacion.")
+        raise ValueError(_("El documento debe tener una fecha de contabilizacion."))
 
 
 def _validate_party(registro):
     """Valida que el documento tenga un cliente o proveedor."""
     party_id = getattr(registro, "supplier_id", None) or getattr(registro, "customer_id", None)
     if not party_id:
-        raise ValueError("El documento debe tener un cliente o proveedor.")
+        raise ValueError(_("El documento debe tener un cliente o proveedor."))
 
 
 def _validate_item_quantities(items):
     """Valida que todas las cantidades sean mayores a cero."""
     for item in items:
         if getattr(item, "qty", 0) <= 0:
-            raise ValueError("Todas las cantidades deben ser mayores a cero.")
+            raise ValueError(_("Todas las cantidades deben ser mayores a cero."))
 
 
 def _validate_item_rates(items):
     """Valida que todas las tarifas sean mayores a cero."""
     for item in items:
         if getattr(item, "rate", 0) <= 0:
-            raise ValueError("Todas las tarifas deben ser mayores a cero.")
+            raise ValueError(_("Todas las tarifas deben ser mayores a cero."))
 
 
 def _validate_item_amounts(items):
     """Valida que los montos no sean cero."""
     for item in items:
         if getattr(item, "amount", 0) == 0:
-            raise ValueError("Los montos no pueden ser cero.")
+            raise ValueError(_("Los montos no pueden ser cero."))
 
 
 def _validate_warehouse_assignments(items, warehouse_for_stock_items_only):
@@ -231,7 +234,7 @@ def validate_submit_prerequisites(
         _validate_party(registro)
     if require_lines:
         if items is None or len(items) == 0:
-            raise ValueError("El documento debe tener al menos una linea de detalle.")
+            raise ValueError(_("El documento debe tener al menos una linea de detalle."))
         if require_qty_positive:
             _validate_item_quantities(items)
         if require_rate_positive:

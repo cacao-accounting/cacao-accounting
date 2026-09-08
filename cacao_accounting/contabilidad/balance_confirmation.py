@@ -31,6 +31,9 @@ from cacao_accounting.document_flow.payment import compute_outstanding_amount
 from cacao_accounting.contabilidad.arap_allocation import list_open_items
 from cacao_accounting.audit_trail_service import log_balance_confirmation_event
 
+
+from cacao_accounting.i18n import _
+
 # Helper functions for calculations
 
 
@@ -414,14 +417,14 @@ def create_balance_confirmation(
     company = database.session.execute(select(Entity).where(Entity.code == company_id)).scalar_one_or_none()
     party = database.session.get(Party, party_id)
     if not company or not party:
-        raise ValueError("Compañía o tercero no válido.")
+        raise ValueError(_("Compañía o tercero no válido."))
 
     if party_type not in ("customer", "supplier"):
-        raise ValueError("Tipo de tercero no válido, debe ser customer o supplier.")
+        raise ValueError(_("Tipo de tercero no válido, debe ser customer o supplier."))
 
     party_classified_as = party.is_customer if party_type == "customer" else party.is_supplier
     if not party_classified_as:
-        raise ValueError("El tercero no está clasificado para el tipo de confirmación solicitado.")
+        raise ValueError(_("El tercero no está clasificado para el tipo de confirmación solicitado."))
 
     company_party = database.session.execute(
         select(CompanyParty).where(
@@ -430,7 +433,7 @@ def create_balance_confirmation(
         )
     ).scalar_one_or_none()
     if not company_party or not company_party.is_active:
-        raise ValueError("El tercero no está activo en la compañía seleccionada.")
+        raise ValueError(_("El tercero no está activo en la compañía seleccionada."))
 
     # Obtener partidas abiertas
     items = get_open_documents_at_cutoff(company_id, party_id, party_type, cutoff_date)

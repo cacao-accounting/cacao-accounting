@@ -11,6 +11,9 @@ from cacao_accounting.database import BankAccount, BankTransaction, database
 from cacao_accounting.imports.adapters.base import BaseImportAdapter
 
 
+from cacao_accounting.i18n import _
+
+
 class BankStatementAdapter(BaseImportAdapter):
     """Adaptador para Extractos Bancarios."""
 
@@ -38,10 +41,10 @@ class BankStatementAdapter(BaseImportAdapter):
         elif "," in normalized:
             decimal_part = normalized.rsplit(",", 1)[1]
             if len(decimal_part) > 2:
-                raise InvalidOperation("Separador de miles ambiguo")
+                raise InvalidOperation(_("Separador de miles ambiguo"))
             normalized = normalized.replace(",", ".")
         elif normalized.count(".") > 1:
-            raise InvalidOperation("Separador de miles ambiguo")
+            raise InvalidOperation(_("Separador de miles ambiguo"))
         amount = Decimal(normalized)
         return amount if amount != 0 else None
 
@@ -127,7 +130,7 @@ class BankStatementAdapter(BaseImportAdapter):
                 }
             )
             if transactions[-1]["deposit"] is not None and transactions[-1]["withdrawal"] is not None:
-                raise ValueError("Una fila bancaria no puede contener depósito y retiro simultáneamente.")
+                raise ValueError(_("Una fila bancaria no puede contener depósito y retiro simultáneamente."))
         return transactions
 
     def persist_document(self, document: Any) -> None:
@@ -160,7 +163,7 @@ class BankStatementAdapter(BaseImportAdapter):
                 .first()
             )
             if existing:
-                raise ValueError("La transacción bancaria ya existe en la base de datos.")
+                raise ValueError(_("La transacción bancaria ya existe en la base de datos."))
             tx = BankTransaction(
                 bank_account_id=tx_data["bank_account_id"],
                 posting_date=tx_data["posting_date"],

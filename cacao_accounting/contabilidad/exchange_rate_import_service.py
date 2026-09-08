@@ -14,6 +14,9 @@ from sqlalchemy.exc import IntegrityError
 from cacao_accounting.database import Currency, ExchangeRate, database
 
 
+from cacao_accounting.i18n import _
+
+
 class ExchangeRateImportError(Exception):
     """Errores de importación de tasas de cambio."""
 
@@ -50,7 +53,7 @@ class ExchangeRateImportService:
             case "ods":
                 return self._parse_ods(file_content)
             case _:
-                raise ExchangeRateImportError("Formato de archivo no soportado. Use CSV, XLSX, XLS u ODS.")
+                raise ExchangeRateImportError(_("Formato de archivo no soportado. Use CSV, XLSX, XLS u ODS."))
 
     def import_rates(self, filename: str, file_content: bytes) -> Dict[str, Any]:
         """Valida e importa tasas de cambio desde un archivo.
@@ -59,7 +62,7 @@ class ExchangeRateImportService:
         """
         rows = self.parse_file(filename, file_content)
         if not rows:
-            raise ExchangeRateImportError("El archivo está vacío o no contiene datos.")
+            raise ExchangeRateImportError(_("El archivo está vacío o no contiene datos."))
 
         self._validate_headers(rows[0])
         active_currencies = self._load_active_currencies()

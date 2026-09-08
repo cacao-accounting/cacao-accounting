@@ -35,6 +35,8 @@ from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 from cacao_accounting.audit_trail_service import log_cancel, log_create, log_submit
 
+from cacao_accounting.i18n import _
+
 EXCHANGE_REVALUATION_ENTITY_TYPE = "exchange_revaluation"
 EXCHANGE_REVALUATION_STATUS_POSTED = "posted"
 EXCHANGE_REVALUATION_STATUS_VOIDED = "voided"
@@ -93,15 +95,15 @@ class ExchangeRevaluationService:
         if period_id:
             period = database.session.get(AccountingPeriod, period_id)
             if period is None:
-                raise ExchangeRevaluationError("No existe el periodo contable seleccionado.")
+                raise ExchangeRevaluationError(_("No existe el periodo contable seleccionado."))
             if period.entity != company:
-                raise ExchangeRevaluationError("El periodo contable no pertenece a la compañía seleccionada.")
+                raise ExchangeRevaluationError(_("El periodo contable no pertenece a la compañía seleccionada."))
             if period.is_closed:
-                raise ExchangeRevaluationError("No se puede operar revalorizacion en un periodo cerrado o inexistente.")
+                raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
             year = period.end.year
             month = period.end.month
         elif year is None or month is None:
-            raise ExchangeRevaluationError("El año y el mes son requeridos para ejecutar la revalorización.")
+            raise ExchangeRevaluationError(_("El año y el mes son requeridos para ejecutar la revalorización."))
         else:
             period = self._period_for(company, year, month)
 
@@ -228,16 +230,16 @@ class ExchangeRevaluationService:
         """Anula una revalorizacion contabilizada mediante reversos GL."""
         run = database.session.get(ExchangeRevaluation, run_id)
         if run is None:
-            raise ExchangeRevaluationError("La revalorizacion indicada no existe.")
+            raise ExchangeRevaluationError(_("La revalorizacion indicada no existe."))
         if run.status != EXCHANGE_REVALUATION_STATUS_POSTED:
-            raise ExchangeRevaluationError("Solo se puede anular una revalorizacion contabilizada.")
+            raise ExchangeRevaluationError(_("Solo se puede anular una revalorizacion contabilizada."))
         effective_reversal_date = reversal_date or self._date_for(run)
         self._ensure_period_open(str(run.company), effective_reversal_date)
 
         journal = self._create_journal(run, user_id, reversal=True, posting_date=effective_reversal_date)
         originals = self._active_run_entries(run.id)
         if not originals:
-            raise ExchangeRevaluationError("La revalorizacion no tiene entradas GL activas para reversar.")
+            raise ExchangeRevaluationError(_("La revalorizacion no tiene entradas GL activas para reversar."))
 
         reversal_period_id, reversal_fiscal_year_id = self._period_ids(str(run.company), effective_reversal_date)
         reversals: list[GLEntry] = []
@@ -349,7 +351,7 @@ class ExchangeRevaluationService:
             .first()
         )
         if period is None:
-            raise ExchangeRevaluationError("No existe un periodo contable abierto para la compania, mes y anio.")
+            raise ExchangeRevaluationError(_("No existe un periodo contable abierto para la compania, mes y anio."))
         return period
 
     def _ensure_period_open(self, company: str, posting_date: date) -> None:
@@ -364,16 +366,16 @@ class ExchangeRevaluationService:
             .first()
         )
         if period is None or period.is_closed:
-            raise ExchangeRevaluationError("No se puede operar revalorizacion en un periodo cerrado o inexistente.")
+            raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
 
     def _validated_defaults(self, company: str) -> CompanyDefaultAccount:
         defaults = database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalars().first()
         if defaults is None:
-            raise ExchangeRevaluationError("No existe configuracion de cuentas predeterminadas para la compania.")
+            raise ExchangeRevaluationError(_("No existe configuracion de cuentas predeterminadas para la compania."))
         if not defaults.unrealized_exchange_gain_account_id:
-            raise ExchangeRevaluationError("No existe cuenta de ganancia cambiaria no realizada configurada.")
+            raise ExchangeRevaluationError(_("No existe cuenta de ganancia cambiaria no realizada configurada."))
         if not defaults.unrealized_exchange_loss_account_id:
-            raise ExchangeRevaluationError("No existe cuenta de perdida cambiaria no realizada configurada.")
+            raise ExchangeRevaluationError(_("No existe cuenta de perdida cambiaria no realizada configurada."))
         return defaults
 
     def _active_ledgers(self, company: str) -> list[Book]:
@@ -388,7 +390,7 @@ class ExchangeRevaluationService:
             .all()
         )
         if not ledgers:
-            raise ExchangeRevaluationError("No existen libros contables activos para la compania.")
+            raise ExchangeRevaluationError(_("No existen libros contables activos para la compania."))
         invalid = [ledger.code for ledger in ledgers if not ledger.currency]
         if invalid:
             raise ExchangeRevaluationError("Hay libros activos sin moneda configurada: " + ", ".join(invalid))
@@ -643,7 +645,7 @@ class ExchangeRevaluationService:
                 defaults.unrealized_exchange_gain_account_id if increased else defaults.unrealized_exchange_loss_account_id
             )
         if offset_account is None:
-            raise ExchangeRevaluationError("No existe cuenta de resultado cambiario configurada.")
+            raise ExchangeRevaluationError(_("No existe cuenta de resultado cambiario configurada."))
         return monetary_debit, monetary_credit, offset_account
 
     def _item_for_draft(self, run: ExchangeRevaluation, draft: RevaluationLineDraft) -> ExchangeRevaluationItem:
@@ -684,9 +686,9 @@ class ExchangeRevaluationService:
     def _validate_entries(self, entries: list[GLEntry]) -> None:
         for entry in entries:
             if self._decimal(entry.debit) < 0 or self._decimal(entry.credit) < 0:
-                raise ExchangeRevaluationError("Los montos GL de revalorizacion no pueden ser negativos.")
+                raise ExchangeRevaluationError(_("Los montos GL de revalorizacion no pueden ser negativos."))
             if (self._decimal(entry.debit) > 0) == (self._decimal(entry.credit) > 0):
-                raise ExchangeRevaluationError("Cada linea GL debe afectar solo debe o haber.")
+                raise ExchangeRevaluationError(_("Cada linea GL debe afectar solo debe o haber."))
             try:
                 validate_gl_account_usage(entry.account_id, entry.voucher_type)
             except DefaultAccountError as exc:
@@ -696,7 +698,7 @@ class ExchangeRevaluationService:
             debit = sum((self._decimal(entry.debit) for entry in ledger_entries), Decimal("0"))
             credit = sum((self._decimal(entry.credit) for entry in ledger_entries), Decimal("0"))
             if debit != credit:
-                raise ExchangeRevaluationError("Las entradas de revalorizacion no balancean por libro.")
+                raise ExchangeRevaluationError(_("Las entradas de revalorizacion no balancean por libro."))
 
     def _current_ledger_balance(self, candidate: RevaluationCandidate, ledger: Book) -> Decimal | None:
         original = self._source_gl_balance(candidate, ledger)
@@ -861,7 +863,7 @@ class ExchangeRevaluationService:
         def _validated_rate(value: Decimal) -> Decimal:
             """Reject invalid historical rates instead of creating false FX gains."""
             if not value.is_finite() or value <= 0:
-                raise ExchangeRevaluationError("El tipo de cambio debe ser un número positivo y finito.")
+                raise ExchangeRevaluationError(_("El tipo de cambio debe ser un número positivo y finito."))
             return value
 
         rate_val = _rate(origin, destination, closing_date)
@@ -983,7 +985,7 @@ class ExchangeRevaluationService:
     def _date_for(self, run: ExchangeRevaluation) -> date:
         posting_date = run.posting_date or run.run_date
         if not posting_date:
-            raise ExchangeRevaluationError("La revalorizacion no tiene fecha contable.")
+            raise ExchangeRevaluationError(_("La revalorizacion no tiene fecha contable."))
         return posting_date
 
     def _decimal(self, value: Any) -> Decimal:
@@ -994,4 +996,4 @@ class ExchangeRevaluationService:
         try:
             return Decimal(str(value))
         except (InvalidOperation, TypeError) as exc:
-            raise ExchangeRevaluationError("Valor numerico invalido en revalorizacion.") from exc
+            raise ExchangeRevaluationError(_("Valor numerico invalido en revalorizacion.")) from exc

@@ -24,6 +24,9 @@ from cacao_accounting.database import (
 from cacao_accounting.database.helpers import generate_identifier, get_active_naming_series
 
 
+from cacao_accounting.i18n import _
+
+
 class IdentifierConfigurationError(ValueError):
     """Error controlado para configuraciones de series e identificadores."""
 
@@ -57,12 +60,12 @@ def parse_posting_date(posting_date_raw: date | str | None) -> date:
     if isinstance(posting_date_raw, date):
         return posting_date_raw
     if not posting_date_raw:
-        raise IdentifierConfigurationError("Debe indicar la fecha de contabilizacion.")
+        raise IdentifierConfigurationError(_("Debe indicar la fecha de contabilizacion."))
 
     try:
         return date.fromisoformat(str(posting_date_raw))
     except ValueError as exc:
-        raise IdentifierConfigurationError("La fecha de contabilizacion es invalida.") from exc
+        raise IdentifierConfigurationError(_("La fecha de contabilizacion es invalida.")) from exc
 
 
 def validate_accounting_period(company: str | None, posting_date: date, allow_closing: bool = False) -> None:
@@ -74,7 +77,7 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
     completar el cierre. Si el año fiscal está cerrado, no se permite ningún movimiento.
     """
     if not company:
-        raise IdentifierConfigurationError("Debe indicar la compania del documento.")
+        raise IdentifierConfigurationError(_("Debe indicar la compania del documento."))
 
     closed_fiscal_year = database.session.execute(
         database.select(FiscalYear)
@@ -84,7 +87,7 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
     ).scalar_one_or_none()
 
     if closed_fiscal_year and not allow_closing:
-        raise IdentifierConfigurationError("No puede registrar documentos en un año fiscal cerrado.")
+        raise IdentifierConfigurationError(_("No puede registrar documentos en un año fiscal cerrado."))
 
     period = (
         database.session.execute(
@@ -99,10 +102,10 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
     )
 
     if period and bool(period.is_closed) and not allow_closing:
-        raise IdentifierConfigurationError("No puede registrar documentos en un periodo contable cerrado.")
+        raise IdentifierConfigurationError(_("No puede registrar documentos en un periodo contable cerrado."))
 
     if period and not bool(period.enabled) and not allow_closing:
-        raise IdentifierConfigurationError("No puede registrar documentos en un periodo contable deshabilitado.")
+        raise IdentifierConfigurationError(_("No puede registrar documentos en un periodo contable deshabilitado."))
 
 
 def enforce_single_default_series(entity_type: str, company: str | None, exclude_id: str | None = None) -> None:
@@ -152,11 +155,11 @@ def _pick_naming_series(entity_type: str, company: str | None, naming_series_id:
     if naming_series_id:
         selected = database.session.get(NamingSeries, naming_series_id)
         if not selected or not selected.is_active:
-            raise IdentifierConfigurationError("La serie seleccionada no existe o esta inactiva.")
+            raise IdentifierConfigurationError(_("La serie seleccionada no existe o esta inactiva."))
         if selected.entity_type != entity_type:
-            raise IdentifierConfigurationError("La serie seleccionada no coincide con el tipo de documento.")
+            raise IdentifierConfigurationError(_("La serie seleccionada no coincide con el tipo de documento."))
         if selected.company not in (None, company):
-            raise IdentifierConfigurationError("La serie seleccionada no pertenece a la compania indicada.")
+            raise IdentifierConfigurationError(_("La serie seleccionada no pertenece a la compania indicada."))
         return selected
 
     candidates = get_active_naming_series(entity_type=entity_type, company=company)
@@ -384,7 +387,7 @@ def _pick_sequence_id(naming_series_id: str) -> str:
     )
 
     if not mapping:
-        raise IdentifierConfigurationError("La serie seleccionada no tiene una secuencia asociada.")
+        raise IdentifierConfigurationError(_("La serie seleccionada no tiene una secuencia asociada."))
 
     return mapping.sequence_id
 
@@ -452,9 +455,9 @@ def _get_explicit_counter(explicit_counter_id: str) -> ExternalCounter:
     """Obtiene un contador externo explícitamente seleccionado."""
     counter = database.session.get(ExternalCounter, explicit_counter_id)
     if not counter:
-        raise IdentifierConfigurationError("El contador externo indicado no existe.")
+        raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
     if not counter.is_active:
-        raise IdentifierConfigurationError("El contador externo indicado esta inactivo.")
+        raise IdentifierConfigurationError(_("El contador externo indicado esta inactivo."))
     return counter
 
 
@@ -598,7 +601,7 @@ def assign_document_identifier(
 
     if counter:
         if counter.company != company_code:
-            raise IdentifierConfigurationError("El contador externo no pertenece a la compania indicada.")
+            raise IdentifierConfigurationError(_("El contador externo no pertenece a la compania indicada."))
         ext_num = external_number or counter.next_suggested_formatted
         _validate_and_register_external_number(
             counter=counter,
@@ -706,7 +709,7 @@ def record_external_number_used(
     if not counter.is_active:
         raise IdentifierConfigurationError(EL_CONTADOR_EXTERNO_ESTA_INACTIVO)
     if number_used < 0:
-        raise IdentifierConfigurationError("El numero externo usado no puede ser negativo.")
+        raise IdentifierConfigurationError(_("El numero externo usado no puede ser negativo."))
 
     if number_used > (counter.last_used or 0):
         counter.last_used = number_used
@@ -737,9 +740,9 @@ def adjust_external_counter(
                                       o el motivo esta vacio
     """
     if not reason or not reason.strip():
-        raise IdentifierConfigurationError("Debe indicar el motivo del ajuste del contador externo.")
+        raise IdentifierConfigurationError(_("Debe indicar el motivo del ajuste del contador externo."))
     if new_last_used < 0:
-        raise IdentifierConfigurationError("El ultimo numero usado no puede ser negativo.")
+        raise IdentifierConfigurationError(_("El ultimo numero usado no puede ser negativo."))
 
     counter = database.session.get(ExternalCounter, external_counter_id)
     if not counter:

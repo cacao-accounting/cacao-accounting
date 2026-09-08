@@ -20,6 +20,9 @@ from cacao_accounting.database import (
 )
 
 
+from cacao_accounting.i18n import _
+
+
 def _request_values(form: Mapping[str, Any], key: str) -> list[str]:
     """Devuelve los valores de una clave repetible de formulario."""
     getter = getattr(form, "getlist", None)
@@ -436,7 +439,7 @@ def upsert_party_company_settings_rows(party_id: str, role: str, values: Mapping
         if not company:
             continue
         if company in seen:
-            raise ValueError("No se puede repetir la misma compañía en la configuración.")
+            raise ValueError(_("No se puede repetir la misma compañía en la configuración."))
         seen.add(company)
         params = PartyCompanySettingsParams(
             is_active=_truthy_row_value(fields["company_is_active"], index, default=True),
@@ -469,7 +472,7 @@ def _validate_account(company: str, account_id: str | None, expected_type: str) 
         return
     account = _account_for_company(company, account_id)
     if account is None:
-        raise ValueError("La cuenta seleccionada no pertenece a la compañía.")
+        raise ValueError(_("La cuenta seleccionada no pertenece a la compañía."))
     account_type = (account.account_type or "").strip().lower()
     if account_type and account_type != expected_type:
         raise ValueError(f"La cuenta {account.code} debe ser de tipo {expected_type}.")
@@ -480,9 +483,9 @@ def _validate_tax_template(company: str, tax_template_id: str | None) -> None:
         return
     template = _tax_template_by_id(tax_template_id)
     if template is None:
-        raise ValueError("La plantilla de impuestos seleccionada no existe.")
+        raise ValueError(_("La plantilla de impuestos seleccionada no existe."))
     if template.company not in (None, company):
-        raise ValueError("La plantilla de impuestos debe pertenecer a la misma compañía.")
+        raise ValueError(_("La plantilla de impuestos debe pertenecer a la misma compañía."))
 
 
 def _validate_tax_rule(company: str, rule_id: str | None, role: str) -> None:
@@ -490,14 +493,14 @@ def _validate_tax_rule(company: str, rule_id: str | None, role: str) -> None:
         return
     rule = _tax_rule_by_id(rule_id)
     if rule is None:
-        raise ValueError("La regla fiscal seleccionada no existe.")
+        raise ValueError(_("La regla fiscal seleccionada no existe."))
     if rule.company not in (None, company):
-        raise ValueError("La regla fiscal debe pertenecer a la misma compañía.")
+        raise ValueError(_("La regla fiscal debe pertenecer a la misma compañía."))
     expected_applies_to = "sales" if role == "customer" else "purchase"
     if rule.applies_to not in ("both", expected_applies_to):
-        raise ValueError("La regla fiscal no corresponde al tipo de tercero seleccionado.")
+        raise ValueError(_("La regla fiscal no corresponde al tipo de tercero seleccionado."))
     if not rule.is_active:
-        raise ValueError("La regla fiscal seleccionada no esta activa.")
+        raise ValueError(_("La regla fiscal seleccionada no esta activa."))
 
 
 def _price_list_for_company(company: str, price_list_id: str | None) -> PriceList | None:
@@ -514,13 +517,13 @@ def _validate_price_list(company: str, price_list_id: str | None, role: str) -> 
         return
     price_list = _price_list_for_company(company, price_list_id)
     if price_list is None:
-        raise ValueError("La lista de precio seleccionada no pertenece a la compañía.")
+        raise ValueError(_("La lista de precio seleccionada no pertenece a la compañía."))
     if not price_list.is_active:
-        raise ValueError("La lista de precio seleccionada no esta activa.")
+        raise ValueError(_("La lista de precio seleccionada no esta activa."))
     if role == "customer" and not price_list.is_selling:
-        raise ValueError("La lista de precio debe ser de ventas para clientes.")
+        raise ValueError(_("La lista de precio debe ser de ventas para clientes."))
     if role == "supplier" and not price_list.is_buying:
-        raise ValueError("La lista de precio debe ser de compras para proveedores.")
+        raise ValueError(_("La lista de precio debe ser de compras para proveedores."))
 
 
 def upsert_party_company_settings(

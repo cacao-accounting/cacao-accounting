@@ -128,8 +128,6 @@ from cacao_accounting.document_flow.context import company_currency, effective_c
 from cacao_accounting.document_flow.repository import has_active_source_relations
 
 
-from cacao_accounting.document_flow.status import _
-
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
 
@@ -224,6 +222,8 @@ from cacao_accounting.compras.services import (
     _get_import_landed_cost_charges,
     check_budget_control,
 )
+
+from cacao_accounting.i18n import _
 
 logger = getLogger(__name__)
 
@@ -401,7 +401,7 @@ def compras_solicitud_compra_nueva():
             _set_purchase_document_totals(solicitud, total)
             log_create(solicitud)
             database.session.commit()
-            flash("Solicitud de compra creada correctamente.", "success")
+            flash(_("Solicitud de compra creada correctamente."), "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=solicitud.id))
         except ValueError as exc:
             database.session.rollback()
@@ -474,7 +474,7 @@ def compras_solicitud_compra_close(request_id: str):
         label = (item.item_code or item.id) if item else item_id
         log_line_closure(registro, f"Cierre de línea {label}: {reason}")
     database.session.commit()
-    flash("Solicitud de Compra cerrada correctamente.", "success")
+    flash(_("Solicitud de Compra cerrada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
 
 
@@ -520,7 +520,7 @@ def compras_solicitud_compra_editar(request_id: str):
             after_state = _capture_purchase_state(registro)
             log_update(registro, before=before_state, after=after_state)
             database.session.commit()
-            flash("Solicitud de compra actualizada correctamente.", "success")
+            flash(_("Solicitud de compra actualizada correctamente."), "success")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=registro.id))
         except (IdentifierConfigurationError, DocumentFlowError) as exc:
             database.session.rollback()
@@ -608,7 +608,7 @@ def compras_solicitud_compra_duplicar(request_id: str):
     _set_purchase_document_totals(duplicada, total)
     log_create(duplicada)
     database.session.commit()
-    flash("Solicitud de compra duplicada como nuevo borrador.", "success")
+    flash(_("Solicitud de compra duplicada como nuevo borrador."), "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=duplicada.id))
 
 
@@ -656,7 +656,7 @@ def compras_solicitud_compra_submit(request_id: str):
         database.session.rollback()
         flash_error(exc)
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
-    flash("Solicitud de compra aprobada.", "success")
+    flash(_("Solicitud de compra aprobada."), "success")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
 
 
@@ -673,7 +673,9 @@ def compras_solicitud_compra_cancel(request_id: str):
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("purchase_request", request_id):
-        flash("No se puede cancelar la solicitud de compra porque tiene órdenes de compra o cotizaciones activas.", "danger")
+        flash(
+            _("No se puede cancelar la solicitud de compra porque tiene órdenes de compra o cotizaciones activas."), "danger"
+        )
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -691,7 +693,7 @@ def compras_solicitud_compra_cancel(request_id: str):
     revert_relations_for_target("purchase_request", request_id)
     refresh_source_caches_for_target("purchase_request", request_id)
     database.session.commit()
-    flash("Solicitud de compra cancelada.", "warning")
+    flash(_("Solicitud de compra cancelada."), "warning")
     return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
 
 
@@ -964,7 +966,7 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("supplier_quotation", quotation_id):
-        flash("No se puede cancelar la cotización de proveedor porque tiene solicitudes de cotización activas.", "danger")
+        flash(_("No se puede cancelar la cotización de proveedor porque tiene solicitudes de cotización activas."), "danger")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -1114,7 +1116,7 @@ def compras_comparativo_solicitud_abrir_ronda(comparison_id: str):
     try:
         open_negotiation_round(rfq.id, current_user.id)
         database.session.commit()
-        flash("Nueva ronda de negociación abierta para la Solicitud de Cotización.", "success")
+        flash(_("Nueva ronda de negociación abierta para la Solicitud de Cotización."), "success")
     except (PurchaseSourcingError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1195,7 +1197,7 @@ def compras_comparativo_ordenes_abrir_ronda(comparison_id: str):
     try:
         round_record = open_purchase_order_comparison_round(comparison, purchase_request, participant_ids, current_user.id)
         database.session.commit()
-        flash("Nueva ronda de negociación abierta.", "success")
+        flash(_("Nueva ronda de negociación abierta."), "success")
         return redirect(url_for(COMPRAS_COMPARATIVO_ORDENES, comparison_id=comparison.id, round_id=round_record.id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -1388,7 +1390,7 @@ def compras_comparativo_abrir_ronda(rfq_id: str):
     try:
         open_negotiation_round(rfq_id, current_user.id)
         database.session.commit()
-        flash("Nueva ronda de negociación abierta.", "success")
+        flash(_("Nueva ronda de negociación abierta."), "success")
     except PurchaseSourcingError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -2349,7 +2351,7 @@ def compras_solicitud_cotizacion_cancel(quotation_id: str):
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("purchase_quotation", quotation_id):
-        flash("No se puede cancelar la solicitud de cotización porque tiene órdenes de compra activas.", "danger")
+        flash(_("No se puede cancelar la solicitud de cotización porque tiene órdenes de compra activas."), "danger")
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -2414,7 +2416,7 @@ def compras_orden_compra_submit(order_id: str):
         database.session.rollback()
         flash_error(exc)
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
-    flash("Orden de compra aprobada.", "success")
+    flash(_("Orden de compra aprobada."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
 
 
@@ -2431,7 +2433,7 @@ def compras_orden_compra_cancel(order_id: str):
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("purchase_order", order_id):
-        flash("No se puede cancelar la orden de compra porque tiene recepciones o facturas activas.", "danger")
+        flash(_("No se puede cancelar la orden de compra porque tiene recepciones o facturas activas."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -2449,7 +2451,7 @@ def compras_orden_compra_cancel(order_id: str):
     revert_relations_for_target("purchase_order", order_id)
     refresh_source_caches_for_target("purchase_order", order_id)
     database.session.commit()
-    flash("Orden de compra cancelada.", "warning")
+    flash(_("Orden de compra cancelada."), "warning")
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
 
 
@@ -2802,7 +2804,7 @@ def compras_recepcion_submit(receipt_id: str):
         submit_document(registro)  # type: ignore[misc]
         log_submit(registro)
         database.session.commit()
-        flash("Recepcion de compra aprobada.", "success")
+        flash(_("Recepcion de compra aprobada."), "success")
     except (ValueError, BudgetError) as exc:
         database.session.rollback()
         flash_error(exc)
@@ -2826,7 +2828,7 @@ def compras_recepcion_cancel(receipt_id: str):
         flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
     if has_active_source_relations("purchase_receipt", receipt_id):
-        flash("No se puede cancelar la recepción de compra porque tiene facturas de compra activas.", "danger")
+        flash(_("No se puede cancelar la recepción de compra porque tiene facturas de compra activas."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -2854,7 +2856,7 @@ def compras_recepcion_cancel(receipt_id: str):
         refresh_source_caches_for_target("purchase_receipt", receipt_id)
         log_cancel(registro)
         database.session.commit()
-        flash("Recepción de compra cancelada.", "warning")
+        flash(_("Recepción de compra cancelada."), "warning")
     except PostingError as exc:  # type: ignore[misc]
         database.session.rollback()
         flash_error(exc)

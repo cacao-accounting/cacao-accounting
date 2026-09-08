@@ -21,6 +21,8 @@ from cacao_accounting.printing.settings import (
     save_external_validation_settings,
 )
 
+from cacao_accounting.i18n import _
+
 printing_admin = Blueprint("printing_admin", __name__, template_folder="templates")
 
 _ENDPOINT_LIST_TEMPLATES = "printing_admin.list_templates"
@@ -48,7 +50,7 @@ def validation_settings():
         enabled = request.form.get("external_document_validation_enabled") == "on"
         base_url = request.form.get("external_document_validation_base_url")
         save_external_validation_settings(enabled, base_url)
-        flash("Configuración de validación externa actualizada.", "success")
+        flash(_("Configuración de validación externa actualizada."), "success")
         return redirect(url_for("printing_admin.validation_settings"))
 
     return render_template(
@@ -80,7 +82,7 @@ def create_template():
         )
         database.session.add(template)
         database.session.commit()
-        flash("Plantilla creada exitosamente.", "success")
+        flash(_("Plantilla creada exitosamente."), "success")
         return redirect(url_for("printing_admin.edit_template", template_id=template.id))
     return _render_form(None)
 
@@ -92,7 +94,7 @@ def edit_template(template_id: int):
     _require_print_admin()
     template = _get_template(template_id)
     if template.is_system:
-        flash("Las plantillas de sistema no pueden editarse directamente.", "warning")
+        flash(_("Las plantillas de sistema no pueden editarse directamente."), "warning")
         return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
     if request.method == "POST":
         _update_template_from_form(template)
@@ -122,7 +124,7 @@ def duplicate_template(template_id: int):
     )
     database.session.add(copy)
     database.session.commit()
-    flash("Plantilla duplicada exitosamente.", "success")
+    flash(_("Plantilla duplicada exitosamente."), "success")
     return redirect(url_for("printing_admin.edit_template", template_id=copy.id))
 
 
@@ -142,7 +144,7 @@ def publish_template(template_id: int):
         template.status = "published"
         template.updated_by = _current_user_id()
         database.session.commit()
-        flash("Plantilla publicada.", "success")
+        flash(_("Plantilla publicada."), "success")
     except (TemplateValidationError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash(f"Error al publicar: {exc}", "danger")
@@ -156,13 +158,13 @@ def archive_template(template_id: int):
     _require_print_admin()
     template = _get_template(template_id)
     if template.is_system:
-        flash("Las plantillas de sistema no pueden archivarse.", "warning")
+        flash(_("Las plantillas de sistema no pueden archivarse."), "warning")
     else:
         template.status = "archived"
         template.is_default = False
         template.updated_by = _current_user_id()
         database.session.commit()
-        flash("Plantilla archivada.", "success")
+        flash(_("Plantilla archivada."), "success")
     return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
 
 
@@ -173,13 +175,13 @@ def set_default_template(template_id: int):
     _require_print_admin()
     template = _get_template(template_id)
     if template.status != "published":
-        flash("Solo las plantillas publicadas pueden ser predeterminadas.", "warning")
+        flash(_("Solo las plantillas publicadas pueden ser predeterminadas."), "warning")
         return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
     _clear_default(template)
     template.is_default = True
     template.updated_by = _current_user_id()
     database.session.commit()
-    flash("Plantilla marcada como predeterminada.", "success")
+    flash(_("Plantilla marcada como predeterminada."), "success")
     return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
 
 
@@ -234,7 +236,7 @@ def _update_template_from_form(template: PrintTemplate) -> None:
         template.version += 1
         template.updated_by = _current_user_id()
         database.session.commit()
-        flash("Plantilla actualizada exitosamente.", "success")
+        flash(_("Plantilla actualizada exitosamente."), "success")
     except (TemplateValidationError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash(f"Error al actualizar plantilla: {exc}", "danger")

@@ -21,6 +21,8 @@ from sqlalchemy.exc import OperationalError, InterfaceError, ProgrammingError, S
 from cacao_accounting.database import database
 from cacao_accounting.logs import log
 
+from cacao_accounting.i18n import _
+
 MAXIMO_RESULTADOS_EN_CONSULTA_PAGINADA = 10
 DB_CONNECTION_FAILED = "No se pudo establecer conexion a la base de datos."
 DB_RETRYING_CONNECTION = "Reintentando conectar a la base de datos."
@@ -540,7 +542,7 @@ def resolver_credenciales_iniciales() -> tuple[str, str]:
 
     if not usuario or not contrasena:
         if not is_dev:
-            raise ValueError("CACAO_USER and CACAO_PSWD must be set in environment")
+            raise ValueError(_("CACAO_USER and CACAO_PSWD must be set in environment"))
         usuario = usuario or "cacao"
         contrasena = contrasena or "cacao"
 
@@ -552,13 +554,13 @@ def check_hierarchy_cycle(node_class, node_id, proposed_parent_id) -> None:
     if not proposed_parent_id:
         return
     if proposed_parent_id == node_id:
-        raise ValueError("Un registro no puede ser padre de sí mismo.")
+        raise ValueError(_("Un registro no puede ser padre de sí mismo."))
 
     curr_id = proposed_parent_id
     visited = {node_id} if node_id else set()
     while curr_id:
         if curr_id in visited:
-            raise ValueError("No se permiten ciclos en la jerarquía (RN-003).")
+            raise ValueError(_("No se permiten ciclos en la jerarquía (RN-003)."))
         visited.add(curr_id)
         parent_node = database.session.get(node_class, curr_id)
         if parent_node:

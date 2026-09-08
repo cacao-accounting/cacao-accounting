@@ -5,7 +5,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.external_counter_list') }}" class="link-dark">Contadores Externos</a></li>
     <li class="breadcrumb-item active" aria-current="page">Ajustar Contador</li>
   </ol>
@@ -16,7 +16,7 @@
     <h5 class="ca-card-title"><i class="bi bi-pencil-square"></i> Ajustar Ultimo Numero Usado</h5>
     <div class="d-flex gap-2">
       <button class="btn btn-warning btn-sm" form="form-ajuste" type="submit"><i class="bi bi-floppy me-1"></i>Guardar Ajuste</button>
-      <a href="{{ url_for('contabilidad.external_counter_list') }}" class="btn btn-secondary btn-sm">Cancelar</a>
+      <a href="{{ url_for('contabilidad.external_counter_list') }}" class="btn btn-secondary btn-sm">{{ _("Cancelar") }}</a>
     </div>
   </div>
 

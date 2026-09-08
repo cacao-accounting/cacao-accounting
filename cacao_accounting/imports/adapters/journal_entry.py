@@ -14,6 +14,9 @@ from cacao_accounting.contabilidad.journal_service import create_journal_draft
 from cacao_accounting.imports.utils.validation import is_period_open
 
 
+from cacao_accounting.i18n import _
+
+
 class JournalEntryAdapter(BaseImportAdapter):
     """Adaptador para Comprobantes Contables."""
 
@@ -24,7 +27,7 @@ class JournalEntryAdapter(BaseImportAdapter):
         """Parsea un importe sin perder precisión ni aceptar valores no finitos."""
         amount = Decimal(str(value or "0").strip())
         if not amount.is_finite():
-            raise InvalidOperation("El importe debe ser finito")
+            raise InvalidOperation(_("El importe debe ser finito"))
         return amount
 
     columns = [
@@ -169,7 +172,7 @@ class JournalEntryAdapter(BaseImportAdapter):
                 select(Book).where(Book.entity == company_id, or_(Book.id == selected_book, Book.code == selected_book))
             ).scalar_one_or_none()
             if not book or book.entity != company_id:
-                raise ValueError("El libro contable no pertenece a la compañía seleccionada.")
+                raise ValueError(_("El libro contable no pertenece a la compañía seleccionada."))
             return [book.code]
 
         company_id = context.get("company_id")

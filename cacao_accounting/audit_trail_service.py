@@ -15,6 +15,8 @@ from flask_login import current_user
 
 from cacao_accounting.database import AuditTrail, database
 
+from cacao_accounting.i18n import _
+
 ALLOWED_ACTIONS = {
     "created",
     "updated",
@@ -119,7 +121,7 @@ def _doc_info(document: Any) -> tuple[str, str, str | None, str | None]:
     doc = _normalize_document(document)
     document_id = str(doc.get("id") or "")
     if not document_id:
-        raise AuditTrailServiceError("El documento debe incluir id para registrar auditoría.")
+        raise AuditTrailServiceError(_("El documento debe incluir id para registrar auditoría."))
     document_type = str(
         doc.get("document_type")
         or doc.get("voucher_type")

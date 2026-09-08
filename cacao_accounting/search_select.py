@@ -46,6 +46,8 @@ from cacao_accounting.database import (
     database,
 )
 
+from cacao_accounting.i18n import _
+
 _DEDUP_QUERY_LIMIT_MULTIPLIER = 5
 _DEDUP_QUERY_LIMIT_MIN = 25
 _STATIC_SEARCH_SELECT_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
@@ -729,7 +731,7 @@ def search_select(
         return _voucher_type_catalog(query, filters, limit)
     if doctype in _STATIC_SEARCH_SELECT_OPTIONS:
         if filters:
-            raise SearchSelectError("Filtros no permitidos para este tipo de seleccion.")
+            raise SearchSelectError(_("Filtros no permitidos para este tipo de seleccion."))
         return _search_static_options(doctype=doctype, query=query, limit=limit)
 
     spec = SEARCH_SELECT_REGISTRY.get(doctype)
@@ -807,7 +809,7 @@ def _normalize_limit(limit: int | None, default_limit: int) -> int:
     if limit is None:
         return default_limit
     if limit < 1:
-        raise SearchSelectError("El limite debe ser mayor que cero.")
+        raise SearchSelectError(_("El limite debe ser mayor que cero."))
     return min(limit, 50)
 
 
@@ -968,7 +970,7 @@ def _normalize_filter_value(value: str | bool) -> str | bool:
 def _column_for(model: type[Any], field: str) -> InstrumentedAttribute[Any]:
     column = getattr(model, field, None)
     if column is None:
-        raise SearchSelectError("Filtro no disponible para este tipo de seleccion.")
+        raise SearchSelectError(_("Filtro no disponible para este tipo de seleccion."))
     return column
 
 

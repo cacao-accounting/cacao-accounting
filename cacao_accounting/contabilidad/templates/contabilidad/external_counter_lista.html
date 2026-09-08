@@ -10,7 +10,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">Contadores Externos</li>
   </ol>
 </nav>
@@ -35,7 +35,7 @@
       </select>
     </div>
     <div class="col-auto">
-      <button type="submit" class="btn btn-secondary btn-sm"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+      <button type="submit" class="btn btn-secondary btn-sm"><i class="bi bi-funnel me-1"></i>{{ _("Filtrar") }}</button>
     </div>
   </form>
 
@@ -44,13 +44,13 @@
     <thead>
       <tr>
         <th scope="col">Compania</th>
-        <th scope="col">Nombre</th>
-        <th scope="col">Tipo</th>
+        <th scope="col">{{ _("Nombre") }}</th>
+        <th scope="col">{{ _("Tipo") }}</th>
         <th scope="col">Prefijo</th>
         <th scope="col">Ultimo Usado</th>
         <th scope="col">Siguiente Sugerido</th>
-        <th scope="col">Activo</th>
-        <th scope="col">Acciones</th>
+        <th scope="col">{{ _("Activo") }}</th>
+        <th scope="col">{{ _("Acciones") }}</th>
       </tr>
     </thead>
     <tbody>
@@ -64,9 +64,9 @@
         <td><strong>{{ item.next_suggested_formatted }}</strong></td>
         <td>
           {% if item.is_active %}
-          <span class="badge text-bg-success">Activo</span>
+          <span class="badge text-bg-success">{{ _("Activo") }}</span>
           {% else %}
-          <span class="badge text-bg-secondary">Inactivo</span>
+          <span class="badge text-bg-secondary">{{ _("Inactivo") }}</span>
           {% endif %}
         </td>
         <td>

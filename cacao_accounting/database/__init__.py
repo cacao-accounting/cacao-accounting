@@ -19,6 +19,8 @@ from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, UniqueConst
 from ulid import ULID
 from sqlalchemy.orm import synonym
 
+from cacao_accounting.i18n import _
+
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
@@ -1579,12 +1581,12 @@ def _reject_ledger_mutation(mapper, connection, target) -> None:
         attribute.key for attribute in state.attrs if attribute.key != "is_cancelled" and attribute.history.has_changes()
     ]
     if changed:
-        raise ValueError("Las líneas del ledger son inmutables; use una reversa append-only.")
+        raise ValueError(_("Las líneas del ledger son inmutables; use una reversa append-only."))
 
 
 def _reject_ledger_delete(mapper, connection, target) -> None:
     """Prevent physical deletion of financial or inventory ledger evidence."""
-    raise ValueError("Las líneas del ledger no se pueden eliminar; use una reversa.")
+    raise ValueError(_("Las líneas del ledger no se pueden eliminar; use una reversa."))
 
 
 event.listens_for(StockLedgerEntry, "before_update")(_reject_ledger_mutation)
@@ -3871,9 +3873,9 @@ def _validate_bank_transaction_amounts(mapper, connection, target: BankTransacti
     deposit = Decimal(str(target.deposit or 0))
     withdrawal = Decimal(str(target.withdrawal or 0))
     if deposit < 0 or withdrawal < 0:
-        raise ValueError("Los montos bancarios no pueden ser negativos.")
+        raise ValueError(_("Los montos bancarios no pueden ser negativos."))
     if (deposit > 0) == (withdrawal > 0):
-        raise ValueError("La transaccion bancaria requiere exactamente un deposito o retiro positivo.")
+        raise ValueError(_("La transaccion bancaria requiere exactamente un deposito o retiro positivo."))
 
 
 def _bank_transaction_identity(transaction: BankTransaction) -> str:
@@ -5853,7 +5855,7 @@ def _lock_item_default_uom_after_usage(_mapper, connection, target) -> None:
         return
     if not target.code or not _item_has_usage(connection, str(target.code)):
         return
-    raise ValueError("La unidad predeterminada no se puede cambiar cuando el item ya tiene registros.")
+    raise ValueError(_("La unidad predeterminada no se puede cambiar cuando el item ya tiene registros."))
 
 
 @event.listens_for(Item, "before_delete", propagate=True)

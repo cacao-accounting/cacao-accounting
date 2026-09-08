@@ -17,8 +17,9 @@ from cacao_accounting.database import (
     User,
     database,
 )
-from cacao_accounting.document_flow.status import _
 from cacao_accounting.logs import log
+
+from cacao_accounting.i18n import _
 
 OTP_TTL_MINUTES = 5
 OTP_MAX_ATTEMPTS = 5

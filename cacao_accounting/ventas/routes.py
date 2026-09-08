@@ -52,7 +52,6 @@ from cacao_accounting.document_flow.context import company_currency, effective_c
 
 from cacao_accounting.document_flow.repository import has_active_source_relations
 
-from cacao_accounting.document_flow.status import _
 
 from cacao_accounting.decorators import (  # noqa: F401
     exige_acceso_compania,
@@ -137,6 +136,8 @@ from cacao_accounting.ventas.services import (
     sales_order_is_ready_to_close,
     sales_order_line_closure_reasons,
 )
+
+from cacao_accounting.i18n import _
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
@@ -329,7 +330,7 @@ def _handle_delivery_note_new_post() -> ResponseReturnValue:
     source = _load_delivery_note_post_source(from_order, from_note)
     is_return = bool(request.form.get("is_return")) or bool(from_note)
     if from_note and (not source or source.docstatus != 1 or source.is_return or not is_return):
-        raise ValueError("La devolución debe referenciar una nota de entrega aprobada que no sea devolución.")
+        raise ValueError(_("La devolución debe referenciar una nota de entrega aprobada que no sea devolución."))
     from_order = from_order or getattr(source, "sales_order_id", None)
     company, source_currency = validate_immutable_header(
         source,
@@ -366,7 +367,7 @@ def _handle_delivery_note_new_post() -> ResponseReturnValue:
     _set_sales_document_totals(entrega, total)
     log_create(entrega)
     database.session.commit()
-    flash("Nota de entrega creada correctamente.", "success")
+    flash(_("Nota de entrega creada correctamente."), "success")
     return redirect(url_for(_ENDPOINT_ENTREGA, note_id=entrega.id))
 
 
@@ -470,7 +471,7 @@ def ventas_pedido_venta_nuevo():
             _total_qty, total = _save_sales_request_items(pedido.id)
             _set_sales_document_totals(pedido, total)
             database.session.commit()
-            flash("Pedido de venta creado correctamente.", "success")
+            flash(_("Pedido de venta creado correctamente."), "success")
             return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=pedido.id))
         except ValueError as exc:
             database.session.rollback()
@@ -667,7 +668,7 @@ def ventas_pedido_venta_submit(request_id: str):
         database.session.rollback()
         flash_error(exc)
         return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
-    flash("Pedido de venta aprobado.", "success")
+    flash(_("Pedido de venta aprobado."), "success")
     return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
 
 
@@ -684,7 +685,7 @@ def ventas_pedido_venta_cancel(request_id: str):
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("sales_request", request_id):
-        flash("No se puede cancelar el pedido de venta porque tiene cotizaciones u órdenes de venta activas.", "danger")
+        flash(_("No se puede cancelar el pedido de venta porque tiene cotizaciones u órdenes de venta activas."), "danger")
         return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -703,7 +704,7 @@ def ventas_pedido_venta_cancel(request_id: str):
     except SQLAlchemyError as exc:
         database.session.rollback()
         flash_error(exc)
-    flash("Pedido de venta cancelado.", "warning")
+    flash(_("Pedido de venta cancelado."), "warning")
     return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
 
 
@@ -1294,7 +1295,7 @@ def _create_sales_quotation_from_request(from_request_id: str | None, source: An
             _validate_sales_source_link(quotation, "sales_request", from_request_id, quotation_items)
         _set_sales_document_totals(quotation, total)
         database.session.commit()
-        flash("Cotización creada correctamente.", "success")
+        flash(_("Cotización creada correctamente."), "success")
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation.id))
     except ValueError as exc:
         database.session.rollback()
@@ -1549,7 +1550,7 @@ def ventas_cotizacion_submit(quotation_id: str):
         database.session.rollback()
         flash_error(exc)
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
-    flash("Cotizacion de venta aprobada.", "success")
+    flash(_("Cotizacion de venta aprobada."), "success")
     return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
 
@@ -1566,7 +1567,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("sales_quotation", quotation_id):
-        flash("No se puede cancelar la cotización de venta porque tiene órdenes de venta activas.", "danger")
+        flash(_("No se puede cancelar la cotización de venta porque tiene órdenes de venta activas."), "danger")
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -1585,7 +1586,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
     except SQLAlchemyError as exc:
         database.session.rollback()
         flash_error(exc)
-    flash("Cotización de venta cancelada.", "warning")
+    flash(_("Cotización de venta cancelada."), "warning")
     return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
 
@@ -1627,7 +1628,7 @@ def ventas_orden_venta_submit(order_id: str):
             registro.docstatus = 1
             log_submit(registro)
         database.session.commit()
-        flash("Orden de venta aprobada con reserva de inventario.", "success")
+        flash(_("Orden de venta aprobada con reserva de inventario."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1647,7 +1648,7 @@ def ventas_orden_venta_cancel(order_id: str):
     if registro.docstatus != 1:
         abort(400)
     if has_active_source_relations("sales_order", order_id):
-        flash("No se puede cancelar la orden de venta porque tiene notas de entrega o facturas activas.", "danger")
+        flash(_("No se puede cancelar la orden de venta porque tiene notas de entrega o facturas activas."), "danger")
         return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -1667,7 +1668,7 @@ def ventas_orden_venta_cancel(order_id: str):
     except SQLAlchemyError as exc:
         database.session.rollback()
         flash_error(exc)
-    flash("Orden de venta cancelada y reserva liberada.", "warning")
+    flash(_("Orden de venta cancelada y reserva liberada."), "warning")
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
 
@@ -1717,7 +1718,7 @@ def ventas_orden_venta_close(order_id: str):
         label = (item.item_code or item.id) if item else item_id
         log_update(registro, before={"line": label}, after={"closure_reason": reason})
     database.session.commit()
-    flash("Orden de Venta cerrada correctamente.", "success")
+    flash(_("Orden de Venta cerrada correctamente."), "success")
     return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
 
@@ -1972,7 +1973,7 @@ def ventas_entrega_submit(note_id: str):
         _release_reservation_for_delivery_note(registro)
         log_submit(registro)
         database.session.commit()
-        flash("Nota de entrega aprobada.", "success")
+        flash(_("Nota de entrega aprobada."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1996,7 +1997,7 @@ def ventas_entrega_cancel(note_id: str):
         flash(_("Debe indicar el motivo de la anulación."), "danger")
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
     if has_active_source_relations("delivery_note", note_id):
-        flash("No se puede cancelar la nota de entrega porque tiene facturas de venta activas.", "danger")
+        flash(_("No se puede cancelar la nota de entrega porque tiene facturas de venta activas."), "danger")
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -2018,7 +2019,7 @@ def ventas_entrega_cancel(note_id: str):
             actor_user_id=str(current_user.id),
             cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
         )
-        flash("Nota de entrega cancelada.", "warning")
+        flash(_("Nota de entrega cancelada."), "warning")
     except PostingError as exc:  # type: ignore[misc]
         database.session.rollback()
         flash_error(exc)
@@ -2223,9 +2224,7 @@ def ventas_factura_venta_editar(invoice_id: str):
     if request.method == "POST":
         return _handle_sales_invoice_edit_post(registro)
 
-    transaction_config = _build_sales_invoice_edit_config(
-        registro, items_disponibles, uoms_disponibles, bodegas_disponibles
-    )
+    transaction_config = _build_sales_invoice_edit_config(registro, items_disponibles, uoms_disponibles, bodegas_disponibles)
     document_type = registro.document_type or "sales_invoice"
     formulario.is_return.data = document_type == "sales_credit_note"
     return render_template(
@@ -2413,7 +2412,7 @@ def ventas_factura_venta_cancel(invoice_id: str):
         flash(_("Debe indicar el motivo de la anulación."), "danger")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
     if has_active_source_relations("sales_invoice", invoice_id):
-        flash("No se puede cancelar la factura de venta porque tiene documentos financieros activos.", "danger")
+        flash(_("No se puede cancelar la factura de venta porque tiene documentos financieros activos."), "danger")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine

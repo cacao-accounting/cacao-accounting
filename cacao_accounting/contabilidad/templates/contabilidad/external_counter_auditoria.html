@@ -6,7 +6,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.external_counter_list') }}" class="link-dark">Contadores Externos</a></li>
     <li class="breadcrumb-item active" aria-current="page">Bitacora de Auditoria</li>
   </ol>
@@ -15,7 +15,7 @@
 <div class="ca-card">
   <div class="ca-card-header">
     <h5 class="ca-card-title"><i class="bi bi-clock-history"></i> Bitacora de Auditoria — {{ counter.name }}</h5>
-    <a href="{{ url_for('contabilidad.external_counter_list') }}" class="btn btn-secondary btn-sm">Volver</a>
+    <a href="{{ url_for('contabilidad.external_counter_list') }}" class="btn btn-secondary btn-sm">{{ _("Volver") }}</a>
   </div>
 
   <div class="mb-3 p-2 bg-light rounded">
@@ -30,12 +30,12 @@
     <caption style="display: none;">Bitacora de ajustes del contador externo.</caption>
     <thead>
       <tr>
-        <th scope="col">Fecha</th>
+        <th scope="col">{{ _("Fecha") }}</th>
         <th scope="col">Valor Anterior</th>
         <th scope="col">Nuevo Valor</th>
         <th scope="col">Variacion</th>
         <th scope="col">Motivo</th>
-        <th scope="col">Usuario</th>
+        <th scope="col">{{ _("Usuario") }}</th>
       </tr>
     </thead>
     <tbody>

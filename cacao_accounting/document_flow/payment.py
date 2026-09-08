@@ -40,6 +40,8 @@ from cacao_accounting.database import (
 from cacao_accounting.document_flow.registry import normalize_doctype
 from cacao_accounting.document_flow.repository import decimal_or_zero
 
+from cacao_accounting.i18n import _
+
 if TYPE_CHECKING:
     from cacao_accounting.contabilidad.arap_allocation import AllocationLine
 
@@ -500,7 +502,7 @@ def payment_reference_candidates(
 ) -> list[dict[str, Any]]:
     """Devuelve documentos candidatos para la tabla de referencias de pago."""
     if not company or party_type not in {"supplier", "customer"} or not party_id:
-        raise _document_flow_error("Debe indicar compania, tipo de tercero y tercero.")
+        raise _document_flow_error(_("Debe indicar compania, tipo de tercero y tercero."))
     allowed_by_party = (
         {"purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_order"}
         if party_type == "supplier"
@@ -615,7 +617,7 @@ def payment_reconciliation_candidates(
 ) -> dict[str, list[dict[str, Any]]]:
     """Devuelve pagos abiertos y documentos pendientes para conciliacion AR/AP."""
     if not company or party_type not in {"supplier", "customer"}:
-        raise _document_flow_error("Debe indicar compania y tipo de tercero.")
+        raise _document_flow_error(_("Debe indicar compania y tipo de tercero."))
 
     payments = _candidate_payments(company, party_type, party_id, currency)
     documents = _candidate_documents(company, party_type, party_id, currency)
@@ -716,7 +718,7 @@ def _payment_reference_model(flow_source_type: str) -> type[PurchaseInvoice] | t
         return PurchaseInvoice
     if source_key in {"sales_invoice", "sales_credit_note", "sales_debit_note", "sales_return"}:
         return SalesInvoice
-    raise _document_flow_error("Tipo de referencia invalido.")
+    raise _document_flow_error(_("Tipo de referencia invalido."))
 
 
 def _payment_reference_party(document: Any, flow_source_type: str) -> tuple[str, str | None]:
@@ -756,13 +758,13 @@ def apply_payment_reconciliation(
 ) -> Reconciliation:
     """Aplica pagos existentes contra documentos AR/AP abiertos."""
     if not lines:
-        raise _document_flow_error("La conciliacion requiere al menos una linea.")
+        raise _document_flow_error(_("La conciliacion requiere al menos una linea."))
     if len(lines) > MAX_RECONCILIATION_LINES:
         raise _document_flow_error(
             "El numero de lineas excede el maximo permitido ({0}).".format(MAX_RECONCILIATION_LINES),
         )
     if not company or party_type not in {"supplier", "customer"} or not party_id:
-        raise _document_flow_error("Debe indicar compania, tipo de tercero y tercero.")
+        raise _document_flow_error(_("Debe indicar compania, tipo de tercero y tercero."))
     latest_allocation = database.session.execute(
         select(func.max(PaymentReference.allocation_date))
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
@@ -1680,7 +1682,7 @@ def _create_advance_settlement_lines(
     party_account = accounts.get(party_account_id)
     advance_account = accounts.get(advance_account_id)
     if not party_account or not advance_account:
-        raise _document_flow_error("Las cuentas de anticipo y del tercero no son válidas para la compañía.")
+        raise _document_flow_error(_("Las cuentas de anticipo y del tercero no son válidas para la compañía."))
 
     for book in books:
         party_value = _allocated_carrying_value(invoice, party_account_id, company, book, amount, allocation_date).quantize(
@@ -1718,7 +1720,7 @@ def _create_advance_settlement_lines(
         fx_account_id = exchange_gain_account_id if difference > 0 else exchange_loss_account_id
         fx_account = accounts.get(fx_account_id) if fx_account_id else None
         if not fx_account:
-            raise _document_flow_error("Falta la cuenta de diferencia cambiaria para netear el anticipo.")
+            raise _document_flow_error(_("Falta la cuenta de diferencia cambiaria para netear el anticipo."))
         _add_settlement_line(
             journal=journal,
             company=company,

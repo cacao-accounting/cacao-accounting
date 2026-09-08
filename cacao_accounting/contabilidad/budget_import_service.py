@@ -23,6 +23,9 @@ from cacao_accounting.database import (
 from cacao_accounting.contabilidad.budget_service import BudgetError
 from sqlalchemy.exc import SQLAlchemyError
 
+
+from cacao_accounting.i18n import _
+
 _LABEL_CENTRO_COSTO = "Centro de Costo"
 _LABEL_UNIDAD_NEGOCIO = "Unidad de Negocio"
 _LABEL_DESCRIPCION = "Descripción"
@@ -35,7 +38,7 @@ class BudgetImportService:
         """Define las columnas esperadas para la plantilla de importación."""
         budget = database.session.get(Budget, budget_id)
         if not budget:
-            raise BudgetError("Presupuesto no encontrado.")
+            raise BudgetError(_("Presupuesto no encontrado."))
 
         columns = [
             {"name": "Cuenta", "required": True, "type": "string"},
@@ -71,7 +74,7 @@ class BudgetImportService:
             case "ods":
                 return self._parse_ods(file_content)
             case _:
-                raise BudgetError("Formato de archivo no soportado.")
+                raise BudgetError(_("Formato de archivo no soportado."))
 
     def _parse_csv(self, file_content: bytes) -> List[Dict[str, str]]:
         """Parsea un archivo CSV."""
@@ -243,9 +246,9 @@ class BudgetImportService:
         rows = self.parse_file(filename, file_content)
         budget = database.session.get(Budget, budget_id)
         if not budget:
-            raise BudgetError("Presupuesto no encontrado.")
+            raise BudgetError(_("Presupuesto no encontrado."))
         if budget.status != "draft":
-            raise BudgetError("Solo se pueden importar líneas a presupuestos en borrador.")
+            raise BudgetError(_("Solo se pueden importar líneas a presupuestos en borrador."))
 
         import_batch = self._create_import_batch(budget_id, filename, len(rows), user_id)
         caches = self._build_caches(budget)
@@ -388,7 +391,7 @@ class BudgetImportService:
         """Transfiere líneas de staging a BudgetLine atómicamente."""
         batch = database.session.get(BudgetImport, import_id)
         if not batch or batch.status != "validated":
-            raise BudgetError("Lote de importación no válido o ya procesado.")
+            raise BudgetError(_("Lote de importación no válido o ya procesado."))
 
         try:
             staging_lines = self.get_staged_lines(import_id=import_id, limit=0)
