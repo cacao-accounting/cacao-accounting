@@ -40,16 +40,24 @@ cloud = [
 [project.scripts]
 cacaoctl="cacao_accounting:command"
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 version = {attr = "cacao_accounting.version.VERSION"}
 
 [tool.setuptools.packages.find]
+where = ["."]
 include = ["cacao_accounting", "cacao_accounting.*"]
+exclude = ["tests*", "docs*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-"cacao_accounting" = ["translations/*/LC_MESSAGES/*.po", "translations/*/LC_MESSAGES/*.mo"]
+"cacao_accounting" = [
+    "translations/*/LC_MESSAGES/*.po",
+    "translations/*/LC_MESSAGES/*.mo",
+]
 
 [build-system]
 requires = ["setuptools", "wheel"]
