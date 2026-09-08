@@ -42,7 +42,7 @@ def flash_error(exc, category="danger"):
     """
     from flask import flash
     from cacao_accounting.logs import log
-    from cacao_accounting.document_flow.status import _
+    from cacao_accounting.i18n import _
 
     log.error("Error en operación: {}", exc)
 

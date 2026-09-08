@@ -24,6 +24,8 @@ from cacao_accounting.database import (
     database,
 )
 
+from cacao_accounting.i18n import _
+
 ReconciliationMode = Literal["strict", "warn", "log"]
 AR_AP_ACCOUNT_TYPES = frozenset({"receivable", "payable", "customer_advance", "supplier_advance"})
 EXCHANGE_REVALUATION_VOUCHER_TYPE = "exchange_revaluation"
@@ -144,10 +146,10 @@ def resolve_arap_gl_policy(
         configured_tolerance = os.getenv("ARAP_GL_RECONCILIATION_TOLERANCE", "0.01")
     normalized_mode = str(configured_mode).strip().lower()
     if normalized_mode not in {"strict", "warn", "log"}:
-        raise ValueError("La política AR/AP contra GL debe ser strict, warn o log.")
+        raise ValueError(_("La política AR/AP contra GL debe ser strict, warn o log."))
     normalized_tolerance = _decimal(configured_tolerance, field="La tolerancia")
     if normalized_tolerance < 0:
-        raise ValueError("La tolerancia no puede ser negativa.")
+        raise ValueError(_("La tolerancia no puede ser negativa."))
     return normalized_mode, normalized_tolerance  # type: ignore[return-value]
 
 
@@ -297,7 +299,7 @@ def reconcile_arap_to_gl(
 ) -> ARAPGLReconciliationResult:
     """Build the company/book/party/currency matrix and enforce its policy."""
     if not company:
-        raise ValueError("La compañía es obligatoria para conciliar AR/AP contra GL.")
+        raise ValueError(_("La compañía es obligatoria para conciliar AR/AP contra GL."))
     resolved_mode, resolved_tolerance = resolve_arap_gl_policy(company=company, mode=mode, tolerance=tolerance)
     database.session.flush()
     normalized_ledger_ids = {str(value) for value in ledger_ids or () if value}

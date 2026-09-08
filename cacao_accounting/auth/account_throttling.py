@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from cacao_accounting.database import User, database
-from cacao_accounting.document_flow.status import _
+from cacao_accounting.i18n import _
 from cacao_accounting.logs import log
 
 LOCKOUT_THRESHOLDS: list[tuple[int, int]] = [

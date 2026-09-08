@@ -27,7 +27,8 @@ from cacao_accounting.bancos.cash_forecast_service import (
     get_cash_forecast_matrix,
     get_forecast_comparison,
 )
-from cacao_accounting.document_flow.status import _
+
+from cacao_accounting.i18n import _
 
 CASH_FORECAST_DETAIL_ENDPOINT = "bancos.cash_forecast_detail"
 BANCOS_PREFIX = "bancos.bancos_"
@@ -39,7 +40,7 @@ def _normalize_cash_forecast_entry_type(value: str | None) -> str:
     """Normalize and validate the type of a manual cash forecast entry."""
     normalized = str(value or "").strip().capitalize()
     if normalized not in CASH_FORECAST_ENTRY_TYPES:
-        raise ValueError("El tipo debe ser Income o Expense.")
+        raise ValueError(_("El tipo debe ser Income o Expense."))
     return normalized
 
 
@@ -59,7 +60,7 @@ def _safe_next_url(value: str | None) -> str | None:
 def _check_desktop_mode():
     """Check if desktop mode is active and redirect with a warning if so."""
     if is_desktop_mode():
-        flash("Proyección de flujo de caja no disponible en modo DESKTOP", "danger")
+        flash(_("Proyección de flujo de caja no disponible en modo DESKTOP"), "danger")
         return True
     return False
 
@@ -139,12 +140,12 @@ def _handle_cash_forecast_new_post(company: str):
     periodicity = request.form.get("periodicity")
 
     if not version or not fiscal_year_id or not periodicity:
-        flash("Todos los campos obligatorios deben ser completados.", "danger")
+        flash(_("Todos los campos obligatorios deben ser completados."), "danger")
         return None
 
     fiscal_year = database.session.get(FiscalYear, fiscal_year_id)
     if not fiscal_year or fiscal_year.entity != company:
-        flash("El año fiscal seleccionado no pertenece a la compañía indicada.", "danger")
+        flash(_("El año fiscal seleccionado no pertenece a la compañía indicada."), "danger")
         return None
 
     existing = (
@@ -165,7 +166,7 @@ def _handle_cash_forecast_new_post(company: str):
     )
     database.session.add(forecast)
     database.session.commit()
-    flash("Pronostico de flujo de caja creado correctamente.", "success")
+    flash(_("Pronostico de flujo de caja creado correctamente."), "success")
     return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
@@ -224,14 +225,14 @@ def cash_forecast_approve(forecast_id):
         abort(404)
     _require_forecast_access(forecast, "autorizar")
     if forecast.status != "Draft":
-        flash("Sólo los pronósticos en estado Borrador pueden ser aprobados.", "danger")
+        flash(_("Sólo los pronósticos en estado Borrador pueden ser aprobados."), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     forecast.status = "Approved"
     forecast.approved_by = getattr(current_user, "id", None)
     forecast.approved_at = database.func.now()
     database.session.commit()
-    flash("Pronóstico de flujo de caja aprobado con éxito.", "success")
+    flash(_("Pronóstico de flujo de caja aprobado con éxito."), "success")
     return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
@@ -248,12 +249,12 @@ def cash_forecast_close(forecast_id):
         abort(404)
     _require_forecast_access(forecast, "autorizar")
     if forecast.status != "Approved":
-        flash("Sólo los pronósticos en estado Aprobado pueden ser cerrados.", "danger")
+        flash(_("Sólo los pronósticos en estado Aprobado pueden ser cerrados."), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     forecast.status = "Closed"
     database.session.commit()
-    flash("Pronóstico de flujo de caja cerrado con éxito.", "success")
+    flash(_("Pronóstico de flujo de caja cerrado con éxito."), "success")
     return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
@@ -270,12 +271,12 @@ def cash_forecast_archive(forecast_id):
         abort(404)
     _require_forecast_access(forecast, "autorizar")
     if forecast.status not in ("Approved", "Closed"):
-        flash("Sólo los pronósticos Aprobados o Cerrados pueden ser archivados.", "danger")
+        flash(_("Sólo los pronósticos Aprobados o Cerrados pueden ser archivados."), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     forecast.status = "Archived"
     database.session.commit()
-    flash("Pronóstico de flujo de caja archivado con éxito.", "success")
+    flash(_("Pronóstico de flujo de caja archivado con éxito."), "success")
     return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
@@ -292,13 +293,13 @@ def cash_forecast_delete(forecast_id):
         abort(404)
     _require_forecast_access(forecast, "anular")
     if forecast.status != "Draft":
-        flash("Sólo los pronósticos en estado Borrador pueden ser eliminados.", "danger")
+        flash(_("Sólo los pronósticos en estado Borrador pueden ser eliminados."), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     company = forecast.company
     database.session.delete(forecast)
     database.session.commit()
-    flash("Pronóstico de flujo de caja eliminado con éxito.", "success")
+    flash(_("Pronóstico de flujo de caja eliminado con éxito."), "success")
     return redirect(url_for("bancos.cash_forecast_list", company=company))
 
 
@@ -327,7 +328,7 @@ def cash_forecast_entry_add(forecast_id):
         notes = request.form.get("notes", "").strip()
 
         if not concept or not currency or amount <= 0 or not estimated_date:
-            flash("Todos los campos obligatorios deben tener valores válidos.", "danger")
+            flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
         else:
             entry = CashForecastEntry(
                 forecast_id=forecast.id,
@@ -341,7 +342,7 @@ def cash_forecast_entry_add(forecast_id):
             )
             database.session.add(entry)
             database.session.commit()
-            flash("Proyección manual agregada correctamente.", "success")
+            flash(_("Proyección manual agregada correctamente."), "success")
     except (ValueError, ArithmeticError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash(f"Error al agregar proyección: {str(exc)}", "danger")
@@ -372,7 +373,7 @@ def cash_forecast_entry_delete(forecast_id, entry_id):
     if entry and entry.forecast_id == forecast.id:
         database.session.delete(entry)
         database.session.commit()
-        flash("Proyección manual eliminada correctamente.", "success")
+        flash(_("Proyección manual eliminada correctamente."), "success")
 
     next_url = _safe_next_url(request.args.get("next"))
     if next_url:
@@ -536,7 +537,7 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
         notes = request.form.get("notes", "").strip()
 
         if not concept or not currency or amount <= 0 or not estimated_date:
-            flash("Todos los campos obligatorios deben tener valores válidos.", "danger")
+            flash(_("Todos los campos obligatorios deben tener valores válidos."), "danger")
         else:
             entry.type = type_
             entry.concept = concept
@@ -545,7 +546,7 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
             entry.estimated_date = estimated_date
             entry.notes = notes
             database.session.commit()
-            flash("Proyección manual actualizada correctamente.", "success")
+            flash(_("Proyección manual actualizada correctamente."), "success")
     except (ValueError, ArithmeticError, SQLAlchemyError) as exc:
         database.session.rollback()
         flash(f"Error al actualizar la proyección: {str(exc)}", "danger")

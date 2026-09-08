@@ -9,7 +9,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Bancos</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">Listado de Bancos</li>
   </ol>
 </nav>
@@ -26,9 +26,9 @@
     <caption style="display: none;">Listado de bancos.</caption>
     <thead>
       <tr>
-        <th scope="col">Nombre</th>
+        <th scope="col">{{ _("Nombre") }}</th>
         <th scope="col">SWIFT</th>
-        <th scope="col">Activo</th>
+        <th scope="col">{{ _("Activo") }}</th>
       </tr>
     </thead>
     <tbody>

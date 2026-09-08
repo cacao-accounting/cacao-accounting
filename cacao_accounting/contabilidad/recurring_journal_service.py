@@ -24,6 +24,9 @@ from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
 
+from cacao_accounting.i18n import _
+
+
 class RecurringJournalError(Exception):
     """Error base para comprobantes recurrentes."""
 
@@ -89,10 +92,10 @@ def validate_template_balance(items: List[Dict[str, Any]]):
     total_credit = sum(Decimal(str(i.get("credit", 0))) for i in items)
 
     if total_debit != total_credit:
-        raise RecurringJournalError("La plantilla debe estar balanceada (Débito != Crédito).")
+        raise RecurringJournalError(_("La plantilla debe estar balanceada (Débito != Crédito)."))
 
     if len(items) < 2:
-        raise RecurringJournalError("La plantilla debe tener al menos dos líneas.")
+        raise RecurringJournalError(_("La plantilla debe tener al menos dos líneas."))
 
 
 def approve_recurring_template(template_id: str, user_id: str):
@@ -104,7 +107,7 @@ def approve_recurring_template(template_id: str, user_id: str):
     _validate_template_access(template, user_id, "autorizar")
 
     if template.status != "draft":
-        raise RecurringJournalError("Solo se pueden aprobar plantillas en borrador.")
+        raise RecurringJournalError(_("Solo se pueden aprobar plantillas en borrador."))
 
     template.status = "approved"
     template.docstatus = 1
@@ -165,11 +168,11 @@ def apply_recurring_template(
         raise RecurringJournalError(PLANTILLA_NO_ENCONTRADA)
     _validate_template_access(template, user_id, "autorizar")
     if company is not None and template.company != company:
-        raise RecurringJournalError("La plantilla recurrente no pertenece a la compañía del cierre.")
+        raise RecurringJournalError(_("La plantilla recurrente no pertenece a la compañía del cierre."))
     if template.status != "approved":
-        raise RecurringJournalError("Solo se pueden aplicar plantillas aprobadas.")
+        raise RecurringJournalError(_("Solo se pueden aplicar plantillas aprobadas."))
     if not template.start_date <= application_date <= template.end_date:
-        raise RecurringJournalError("La fecha de aplicación está fuera de la vigencia de la plantilla.")
+        raise RecurringJournalError(_("La fecha de aplicación está fuera de la vigencia de la plantilla."))
 
     # Verificar si ya fue aplicada
     existing = (
@@ -189,13 +192,13 @@ def apply_recurring_template(
 
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
     if not items:
-        raise RecurringJournalError("La plantilla aprobada no tiene líneas contables.")
+        raise RecurringJournalError(_("La plantilla aprobada no tiene líneas contables."))
 
     base_currency = database.session.execute(select(Entity.currency).filter_by(code=template.company)).scalar_one_or_none()
     transaction_currency = template.currency or base_currency
     primary_book = _book_for_reference(template.company, template.ledger_id)
     if primary_book is None or primary_book.entity != template.company:
-        raise RecurringJournalError("La plantilla recurrente referencia un libro inexistente.")
+        raise RecurringJournalError(_("La plantilla recurrente referencia un libro inexistente."))
 
     # Generar ComprobanteContable
     journal = ComprobanteContable(
@@ -265,19 +268,19 @@ def _normalize_account_code(company: str, account_value: Any) -> str:
     """Normaliza una cuenta recibida por id o por código hacia código contable."""
     account_text = str(account_value or "").strip()
     if not account_text:
-        raise RecurringJournalError("Cada línea debe tener una cuenta contable.")
+        raise RecurringJournalError(_("Cada línea debe tener una cuenta contable."))
 
     account = database.session.get(Accounts, account_text)
     if account is not None:
         if account.entity != company:
-            raise RecurringJournalError("La cuenta contable no pertenece a la compañía de la plantilla.")
+            raise RecurringJournalError(_("La cuenta contable no pertenece a la compañía de la plantilla."))
         return str(account.code)
 
     account = (
         database.session.execute(database.select(Accounts).filter_by(entity=company, code=account_text)).scalars().first()
     )
     if account is None:
-        raise RecurringJournalError("La cuenta contable indicada no existe para la compañía.")
+        raise RecurringJournalError(_("La cuenta contable indicada no existe para la compañía."))
     return str(account.code)
 
 
@@ -303,13 +306,13 @@ def _authorized_template_books(company: str, requested: Any, user_id: str, actio
     from cacao_accounting.database import User
 
     if database.session.get(User, user_id) is None:
-        raise RecurringJournalError("El usuario indicado no existe o no puede autorizar libros contables.")
+        raise RecurringJournalError(_("El usuario indicado no existe o no puede autorizar libros contables."))
     permissions = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=user_id)
     permission_name = {"autorizar": "autorizar", "anular": "anular", "consultar": "consultar", "listar": "consultar"}.get(
         action, "crear"
     )
     if not getattr(permissions, permission_name, False) or not permissions.tiene_acceso_compania(company):
-        raise RecurringJournalError("El usuario no tiene acceso a la compañía seleccionada.")
+        raise RecurringJournalError(_("El usuario no tiene acceso a la compañía seleccionada."))
     active = list(
         database.session.execute(
             database.select(Book)
@@ -320,13 +323,13 @@ def _authorized_template_books(company: str, requested: Any, user_id: str, actio
     )
     active_codes = [book.code for book in active]
     if not active_codes:
-        raise RecurringJournalError("La compañía no tiene libros contables activos.")
+        raise RecurringJournalError(_("La compañía no tiene libros contables activos."))
     selected = _normalize_requested_books(requested)
     if not selected:
         return active_codes
     invalid = [value for value in selected if value not in active_codes and not any(str(book.id) == value for book in active)]
     if invalid:
-        raise RecurringJournalError("La selección contiene libros inactivos o ajenos a la compañía.")
+        raise RecurringJournalError(_("La selección contiene libros inactivos o ajenos a la compañía."))
     return [book.code for book in active if book.code in selected or str(book.id) in selected]
 
 
@@ -339,7 +342,7 @@ def _normalize_requested_books(value: Any) -> list[str] | None:
     if isinstance(value, (list, tuple, set)):
         values = [str(item) for item in value if str(item)]
         return values or None
-    raise RecurringJournalError("La selección de libros no tiene un formato válido.")
+    raise RecurringJournalError(_("La selección de libros no tiene un formato válido."))
 
 
 def _validate_template_access(template: RecurringJournalTemplate, user_id: str, action: str) -> None:
@@ -357,7 +360,7 @@ def validate_recurring_template_access(
     if template.ledger_id and template.ledger_id not in selected:
         selected.append(str(template.ledger_id))
     if not selected:
-        raise RecurringJournalError("La plantilla no tiene una selección canónica de libros contables.")
+        raise RecurringJournalError(_("La plantilla no tiene una selección canónica de libros contables."))
     _authorized_template_books(template.company, selected, user_id, action)
 
 
@@ -412,5 +415,5 @@ def _deserialize_book_codes(value: str | None) -> list[str] | None:
     try:
         parsed = json.loads(value)
     except json.JSONDecodeError as exc:
-        raise RecurringJournalError("La selección persistida de libros no es válida.") from exc
+        raise RecurringJournalError(_("La selección persistida de libros no es válida.")) from exc
     return _normalize_requested_books(parsed)

@@ -9,7 +9,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">Inventario</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventario") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_bodega_lista') }}" class="link-dark">Bodegas</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
   </ol>
@@ -20,9 +20,9 @@
     <h5 class="ca-card-title"><i class="bi bi-building"></i> {{ registro.name }}</h5>
   </div>
   <dl class="row p-3">
-    <dt class="col-sm-3">Código</dt>
+    <dt class="col-sm-3">{{ _("Código") }}</dt>
     <dd class="col-sm-9">{{ registro.code }}</dd>
-    <dt class="col-sm-3">Nombre</dt>
+    <dt class="col-sm-3">{{ _("Nombre") }}</dt>
     <dd class="col-sm-9">{{ registro.name }}</dd>
   </dl>
   <div class="px-3 pb-3">

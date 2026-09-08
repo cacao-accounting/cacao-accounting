@@ -8,6 +8,8 @@ from typing import Any
 
 from cacao_accounting.database import Incoterm, database
 
+from cacao_accounting.i18n import _
+
 INCOTERM_CODES = ("EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF")
 LOGISTICS_FIELDS = ("incoterm_code", "incoterm_version", "delivery_date", "delivery_place")
 TERMS_FIELDS = frozenset(("purchase_terms", "sales_terms"))
@@ -19,7 +21,7 @@ def _normalize_logistics_value(field: str, value: Any) -> Any:
         try:
             value = date.fromisoformat(value) if value else None
         except ValueError as exc:
-            raise ValueError("La fecha de entrega no es válida.") from exc
+            raise ValueError(_("La fecha de entrega no es válida.")) from exc
     return value or None
 
 
@@ -82,7 +84,7 @@ def ensure_compatible_logistics(documents: Iterable[Any], *, terms_field: str) -
     """Reject a target document assembled from incompatible logistics terms."""
     signatures = {logistics_signature(document, terms_field=terms_field) for document in documents}
     if len(signatures) > 1:
-        raise ValueError("Las cotizaciones seleccionadas tienen condiciones logísticas incompatibles.")
+        raise ValueError(_("Las cotizaciones seleccionadas tienen condiciones logísticas incompatibles."))
 
 
 def incoterm_options() -> list[dict[str, str]]:

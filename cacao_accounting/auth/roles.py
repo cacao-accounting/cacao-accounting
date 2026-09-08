@@ -17,6 +17,9 @@
 from cacao_accounting.logs import log
 
 
+from cacao_accounting.i18n import _
+
+
 class RegistroRol:
     """Adminisración de Roles de Usuario."""
 
@@ -186,7 +189,7 @@ def asigna_rol_a_usuario(usuario: str, rol: str) -> None:
     ROL = database.session.execute(database.select(Roles).filter_by(name=rol)).scalar_one_or_none()
 
     if USUARIO is None or ROL is None:
-        raise ValueError("Usuario o rol no encontrado")
+        raise ValueError(_("Usuario o rol no encontrado"))
 
     existing_assignment = database.session.execute(
         database.select(RolesUser.id).filter_by(user_id=USUARIO.id, role_id=ROL.id)

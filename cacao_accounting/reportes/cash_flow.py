@@ -32,18 +32,20 @@ from cacao_accounting.database import (
     database,
 )
 
+from cacao_accounting.i18n import _
+
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
-    from flask_babel import gettext as _babel_gettext
+    from flask_babel import gettext as _fallback_gettext
 except ImportError:  # pragma: no cover
 
-    def _(value: str) -> str:
+    def _fallback_gettext(value: str) -> str:
         return value
 
 else:
 
-    def _(value: str) -> str:
+    def _fallback_gettext(value: str) -> str:
         try:
-            return _babel_gettext(value)
+            return _fallback_gettext(value)
         except (KeyError, RuntimeError):
             return value
 
@@ -205,7 +207,7 @@ def save_cash_flow_mappings(company: str, overrides: dict[str, str | None]) -> N
             select(Accounts).where(Accounts.id == account_id, Accounts.entity == company)
         ).scalar_one_or_none()
         if account is None:
-            raise ValueError("La cuenta indicada no pertenece a la compañía.")
+            raise ValueError(_("La cuenta indicada no pertenece a la compañía."))
         clean[account_id] = section
 
     existing = {
@@ -402,7 +404,7 @@ def get_cash_flow_statement(filters: Any) -> Any:
     )
 
     if not isinstance(filters, FinancialReportFilters):  # pragma: no cover - contrato interno
-        raise TypeError("get_cash_flow_statement espera FinancialReportFilters")
+        raise TypeError(_("get_cash_flow_statement espera FinancialReportFilters"))
     status = get_cash_flow_configuration_status(
         filters.company,
         filters.ledger,

@@ -15,6 +15,9 @@ from cacao_accounting.accounting_engine.common.context import TaxRuleContext
 from cacao_accounting.database import TaxRule, database
 
 
+from cacao_accounting.i18n import _
+
+
 class TaxRuleServiceError(ValueError):
     """Error controlado en la gestion de reglas fiscales."""
 
@@ -91,9 +94,9 @@ def _apply_tax_rule_values(rule: TaxRule, values: Mapping[str, str | None]) -> N
     name = (values.get("name") or "").strip()
     concept = (values.get("concept") or "").strip()
     if not name:
-        raise TaxRuleServiceError("El nombre de la regla fiscal es obligatorio.")
+        raise TaxRuleServiceError(_("El nombre de la regla fiscal es obligatorio."))
     if not concept:
-        raise TaxRuleServiceError("El concepto fiscal es obligatorio.")
+        raise TaxRuleServiceError(_("El concepto fiscal es obligatorio."))
     rule.company = _clean_text(values.get("company"))
     rule.name = name
     rule.applies_to = _clean_text(values.get("applies_to")) or "both"
@@ -176,7 +179,7 @@ def _int_value(value: str | None, *, default: int) -> int:
     try:
         return int(str(value).strip()) if value not in (None, "") else default
     except ValueError as exc:
-        raise TaxRuleServiceError("La secuencia de la regla fiscal debe ser un entero.") from exc
+        raise TaxRuleServiceError(_("La secuencia de la regla fiscal debe ser un entero.")) from exc
 
 
 def _decimal_value(value: object, *, default: str) -> Decimal:
@@ -188,7 +191,7 @@ def _decimal_value(value: object, *, default: str) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError) as exc:
-        raise TaxRuleServiceError("La tasa o monto de la regla fiscal es invalido.") from exc
+        raise TaxRuleServiceError(_("La tasa o monto de la regla fiscal es invalido.")) from exc
 
 
 def _date_value(value: str | None) -> date | None:
@@ -198,4 +201,4 @@ def _date_value(value: str | None) -> date | None:
     try:
         return date.fromisoformat(value)
     except ValueError as exc:
-        raise TaxRuleServiceError("La fecha de vigencia de la regla fiscal es invalida.") from exc
+        raise TaxRuleServiceError(_("La fecha de vigencia de la regla fiscal es invalida.")) from exc

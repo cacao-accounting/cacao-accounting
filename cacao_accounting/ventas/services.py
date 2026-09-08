@@ -62,7 +62,6 @@ from cacao_accounting.document_flow.context import company_currency, effective_c
 
 from cacao_accounting.document_flow.repository import consumed_qty_for_source
 
-from cacao_accounting.document_flow.status import _
 
 from cacao_accounting.decorators import (  # noqa: F401
     exige_acceso_compania,
@@ -111,6 +110,9 @@ from cacao_accounting.party_management import (  # noqa: F401
 from cacao_accounting.audit_trail_service import log_cancel, log_submit, log_update
 
 from cacao_accounting.logistics import copy_logistics, logistics_values
+
+
+from cacao_accounting.i18n import _
 
 
 def _raise_posting_error(message: str) -> NoReturn:
@@ -188,10 +190,10 @@ def _set_sales_document_totals(document: Any, total: Decimal) -> None:
 
     transaction_currency = getattr(document, "transaction_currency", None)
     if not transaction_currency:
-        raise ValueError("El documento de ventas requiere una moneda transaccional explicita antes de recalcular totales.")
+        raise ValueError(_("El documento de ventas requiere una moneda transaccional explicita antes de recalcular totales."))
     base_currency_value = company_functional_currency(document.company)
     if not base_currency_value:
-        raise ValueError("La compania requiere una moneda funcional configurada.")
+        raise ValueError(_("La compania requiere una moneda funcional configurada."))
     document.transaction_currency = transaction_currency
     document.base_currency = base_currency_value
     document.exchange_rate = _sales_exchange_rate(document.company, document.posting_date, transaction_currency)
@@ -936,13 +938,13 @@ def _form_line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | No
     percentage = _form_decimal(f"discount_percentage_{index}", "0")
     amount = _form_decimal(f"discount_amount_{index}", "0")
     if percentage < 0 or percentage > 100 or amount < 0:
-        raise ValueError("El descuento de línea debe estar entre 0% y 100% y no puede ser negativo.")
+        raise ValueError(_("El descuento de línea debe estar entre 0% y 100% y no puede ser negativo."))
     if percentage and amount:
-        raise ValueError("Indique descuento por porcentaje o por importe, no ambos.")
+        raise ValueError(_("Indique descuento por porcentaje o por importe, no ambos."))
     if percentage:
         amount = (gross_amount * percentage / Decimal("100")).quantize(Decimal("0.0001"))
     if amount > gross_amount:
-        raise ValueError("El descuento de línea no puede exceder el importe bruto.")
+        raise ValueError(_("El descuento de línea no puede exceder el importe bruto."))
     return percentage or None, amount or None, gross_amount - amount
 
 
@@ -954,7 +956,7 @@ def _line_discount(index: int, gross_amount: Decimal) -> tuple[Decimal | None, D
 def validate_sales_quotation_expiry(quotation: SalesQuotation, conversion_date: date) -> None:
     """Reject conversion after a quotation's inclusive validity date."""
     if quotation.valid_until and conversion_date > quotation.valid_until:
-        raise ValueError("No se puede convertir una cotización vencida.")
+        raise ValueError(_("No se puede convertir una cotización vencida."))
 
 
 def _create_line_relation(
@@ -991,7 +993,7 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una orden de venta desde el formulario."""
     order = database.session.get(SalesOrder, order_id)
     if order is None:
-        raise ValueError("La orden de venta no existe.")
+        raise ValueError(_("La orden de venta no existe."))
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -1043,7 +1045,7 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de un pedido de venta desde el formulario."""
     sales_request = database.session.get(SalesRequest, request_id)
     if sales_request is None:
-        raise ValueError("El pedido de venta no existe.")
+        raise ValueError(_("El pedido de venta no existe."))
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -1092,7 +1094,7 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una cotización de venta desde el formulario."""
     quotation = database.session.get(SalesQuotation, quotation_id)
     if quotation is None:
-        raise ValueError("La cotización de venta no existe.")
+        raise ValueError(_("La cotización de venta no existe."))
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -1136,7 +1138,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una nota de entrega desde el formulario."""
     delivery_note = database.session.get(DeliveryNote, note_id)
     if delivery_note is None:
-        raise ValueError("La nota de entrega no existe.")
+        raise ValueError(_("La nota de entrega no existe."))
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -1191,7 +1193,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una factura de venta desde el formulario."""
     invoice = database.session.get(SalesInvoice, invoice_id)
     if invoice is None:
-        raise ValueError("La factura de venta no existe.")
+        raise ValueError(_("La factura de venta no existe."))
     i = 0
     total_qty = Decimal("0")
     total = Decimal("0")
@@ -1243,7 +1245,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
     """
     items = database.session.execute(database.select(SalesInvoiceItem).filter_by(sales_invoice_id=invoice.id)).scalars().all()
     if not items:
-        raise PostingError("La factura no tiene ítems para crear la Nota de Entrega.")
+        raise PostingError(_("La factura no tiene ítems para crear la Nota de Entrega."))
 
     if not invoice.transaction_currency:
         raise PostingError(
@@ -1544,7 +1546,7 @@ def _validate_sales_catalog_rate(
         raise ValueError(f"No existe un precio vigente para el item {item_code} en la lista de precios aplicable.")
     expected_rate, _price_list = resolved
     if rate != expected_rate:
-        raise ValueError("Solo el Administrador del Sistema o el Gerente de Ventas puede modificar un precio de venta.")
+        raise ValueError(_("Solo el Administrador del Sistema o el Gerente de Ventas puede modificar un precio de venta."))
 
 
 def _resolve_catalog_sales_rate(invoice: SalesInvoice, item: SalesInvoiceItem) -> Decimal | None:
@@ -1680,16 +1682,16 @@ def _validate_sales_source_link(document: Any, source_type: str, source_id: str,
     if source_type == "sales_order" and source.status == "closed":
         raise ValueError(f"La Orden de Venta origen '{source_id}' está cerrada.")
     if source.company != document.company:
-        raise ValueError("El documento origen y el documento destino deben pertenecer a la misma compañía.")
+        raise ValueError(_("El documento origen y el documento destino deben pertenecer a la misma compañía."))
     customer_id = getattr(source, "customer_id", None)
     if customer_id and customer_id != document.customer_id:
-        raise ValueError("El documento origen y el documento destino deben pertenecer al mismo cliente.")
+        raise ValueError(_("El documento origen y el documento destino deben pertenecer al mismo cliente."))
     target_currency = getattr(document, "transaction_currency", None)
     if target_currency and effective_currency(source) != target_currency:
-        raise ValueError("El documento origen y el documento destino deben usar la misma moneda.")
+        raise ValueError(_("El documento origen y el documento destino deben usar la misma moneda."))
     if source_type == "delivery_note" and getattr(document, "sales_order_id", None):
         if getattr(source, "sales_order_id", None) != document.sales_order_id:
-            raise ValueError("La nota de entrega no pertenece a la orden de venta indicada.")
+            raise ValueError(_("La nota de entrega no pertenece a la orden de venta indicada."))
     if items is not None:
         target_types = {
             SalesQuotation: "sales_quotation",
@@ -1716,7 +1718,7 @@ def _validate_sales_invoice_source_links(invoice: SalesInvoice, items: Sequence[
     if invoice.delivery_note_id:
         delivery = _validate_sales_source_link(invoice, "delivery_note", invoice.delivery_note_id, items)
     if order is not None and delivery is not None and delivery.sales_order_id != order.id:
-        raise ValueError("La orden y la nota de entrega de la factura no pertenecen al mismo flujo.")
+        raise ValueError(_("La orden y la nota de entrega de la factura no pertenecen al mismo flujo."))
     return order or delivery
 
 
@@ -1746,7 +1748,7 @@ def _validate_sales_order_requirement(invoice: SalesInvoice, items: Sequence[Any
     ).scalar_one_or_none()
     if linked_order:
         return
-    raise ValueError("La factura debe estar vinculada a una Orden de Venta aprobada.")
+    raise ValueError(_("La factura debe estar vinculada a una Orden de Venta aprobada."))
 
 
 def _validate_sales_invoice_relation(relation: DocumentRelation, invoice_id: str | None = None) -> None:
@@ -1763,7 +1765,7 @@ def _validate_sales_invoice_relation(relation: DocumentRelation, invoice_id: str
     if not item:
         return
     if relation.source_type == "sales_invoice" and item.sales_invoice_id != relation.source_id:
-        raise ValueError("La línea de la factura origen no pertenece al documento indicado.")
+        raise ValueError(_("La línea de la factura origen no pertenece al documento indicado."))
     consumed = consumed_qty_for_source(
         relation.source_type,
         relation.source_id,
@@ -1903,7 +1905,7 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
             _validate_sales_source_link(orden, source_type, source_id, order_items)
         _set_sales_document_totals(orden, total)
         database.session.commit()
-        flash("Orden de venta creada correctamente.", "success")
+        flash(_("Orden de venta creada correctamente."), "success")
         return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=orden.id))
     except IdentifierConfigurationError as exc:
         database.session.rollback()
@@ -2132,7 +2134,7 @@ def _create_sales_invoice_from_form():
         _validate_sales_invoice_reversal_result(context["reversal_of"], factura, grand_total)
         _persist_sales_invoice_fiscal_snapshot(factura)
         database.session.commit()
-        flash("Factura de venta creada correctamente.", "success")
+        flash(_("Factura de venta creada correctamente."), "success")
         return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=factura.id))
     except ValueError as exc:
         database.session.rollback()

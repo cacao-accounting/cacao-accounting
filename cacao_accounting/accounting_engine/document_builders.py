@@ -55,20 +55,22 @@ from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate
 from cacao_accounting.fiscal_persistence_service import build_tax_rule_contexts_from_snapshot
 from cacao_accounting.tax_rule_service import build_tax_rule_context, build_tax_rule_contexts
 
+from cacao_accounting.i18n import _
+
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel.
-    from flask_babel import gettext as _babel_gettext
+    from flask_babel import gettext as _fallback_gettext
 except ImportError:  # pragma: no cover
 
-    def _(value: str) -> str:
+    def _fallback_gettext(value: str) -> str:
         """Fallback identity translation."""
         return value
 
 else:
 
-    def _(value: str) -> str:
+    def _fallback_gettext(value: str) -> str:
         """Translate user-facing text when Babel is available."""
         try:
-            return _babel_gettext(value)
+            return _fallback_gettext(value)
         except (KeyError, RuntimeError):  # pragma: no cover
             return value
 
@@ -139,7 +141,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         .all()
     )
     if not items:
-        raise CalculationContextBuilderError("La recepción de compra no contiene líneas para cálculo.")
+        raise CalculationContextBuilderError(_("La recepción de compra no contiene líneas para cálculo."))
     event_type = "purchase_receipt_confirmed"
     bridge_account_id = _require_account_id(
         getattr(defaults, "bridge_account_id", None),
@@ -398,7 +400,7 @@ def _build_purchase_invoice_context(document: PurchaseInvoice) -> CalculationCon
         .all()
     )
     if not items:
-        raise CalculationContextBuilderError("La factura de compra no contiene líneas para cálculo.")
+        raise CalculationContextBuilderError(_("La factura de compra no contiene líneas para cálculo."))
     event_type = "purchase_credit_note_confirmed" if _is_purchase_credit_note(document) else "purchase_invoice_confirmed"
     account_lines = _purchase_invoice_account_lines(document, items, company)
     item_contexts = [_item_context_from_purchase_invoice_item(item) for item in items]
@@ -476,7 +478,7 @@ def _build_sales_invoice_context(document: SalesInvoice) -> CalculationContext:
     company = _require_company(document.company)
     items = list(database.session.execute(select(SalesInvoiceItem).filter_by(sales_invoice_id=document.id)).scalars().all())
     if not items:
-        raise CalculationContextBuilderError("La factura de venta no contiene líneas para cálculo.")
+        raise CalculationContextBuilderError(_("La factura de venta no contiene líneas para cálculo."))
     event_type = "sales_credit_note_confirmed" if _is_sales_credit_note(document) else "sales_invoice_confirmed"
     side = "debit" if _is_sales_credit_note(document) else "credit"
     account_lines = [
@@ -566,7 +568,7 @@ def _build_landed_cost_item_contexts(
         database.session.execute(select(ImportLandedCostItem).filter_by(import_landed_cost_id=document.id)).scalars().all()
     )
     if not items:
-        raise CalculationContextBuilderError("El costo de importacion no contiene lineas para calculo.")
+        raise CalculationContextBuilderError(_("El costo de importacion no contiene lineas para calculo."))
 
     item_contexts: list[ItemContext] = []
     account_lines: list[AccountLineSpec] = []
@@ -768,7 +770,7 @@ def _payment_cash_amount(
     """Return cash amount, allowing zero only for a referenced settlement."""
     amount = _decimal_value(getattr(document, spec.amount_field, None))
     if amount < 0 or (amount == 0 and not settlement_references):
-        raise CalculationContextBuilderError("El monto del pago debe ser mayor que cero.")
+        raise CalculationContextBuilderError(_("El monto del pago debe ser mayor que cero."))
     return amount
 
 
@@ -1697,7 +1699,7 @@ def _line_amount(line: Any) -> Decimal:
 def _require_company(company: str | None) -> str:
     """Require a company code in the document."""
     if not company:
-        raise CalculationContextBuilderError("El documento no tiene compañía configurada.")
+        raise CalculationContextBuilderError(_("El documento no tiene compañía configurada."))
     return str(company)
 
 
@@ -1706,7 +1708,7 @@ def _require_account_id(account_id: str | None, message: str) -> str:
     if not account_id:
         raise CalculationContextBuilderError(message)
     if database.session.get(Accounts, account_id) is None:
-        raise CalculationContextBuilderError("La cuenta contable configurada no existe.")
+        raise CalculationContextBuilderError(_("La cuenta contable configurada no existe."))
     return str(account_id)
 
 
@@ -1729,7 +1731,7 @@ def _decimal_value(value: Any) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError) as exc:
-        raise CalculationContextBuilderError("Valor numérico inválido en el documento.") from exc
+        raise CalculationContextBuilderError(_("Valor numérico inválido en el documento.")) from exc
 
 
 def _event_label(event_type: str) -> str:

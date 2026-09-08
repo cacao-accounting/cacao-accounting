@@ -9,6 +9,9 @@ from sqlalchemy import select
 from cacao_accounting.database import Accounts, Book, GLEntry, LedgerMappingRule, database
 
 
+from cacao_accounting.i18n import _
+
+
 class LedgerMappingError(ValueError):
     """Error controlado al transformar una línea para un libro secundario."""
 
@@ -38,7 +41,7 @@ def create_ledger_mapping_rule(
         )
     ).scalar_one_or_none()
     if duplicate is not None:
-        raise LedgerMappingError("Ya existe una regla activa para la cuenta origen y el libro destino.")
+        raise LedgerMappingError(_("Ya existe una regla activa para la cuenta origen y el libro destino."))
     rule = LedgerMappingRule(
         source_book=source.code,
         target_book=target.code,
@@ -56,7 +59,7 @@ def deactivate_ledger_mapping_rule(rule_id: str) -> LedgerMappingRule:
     """Deactivate a rule without deleting accounting configuration history."""
     rule = database.session.get(LedgerMappingRule, rule_id)
     if rule is None:
-        raise LedgerMappingError("La regla de mapeo no existe.")
+        raise LedgerMappingError(_("La regla de mapeo no existe."))
     rule.is_active = False
     database.session.commit()
     return rule
@@ -83,11 +86,11 @@ def _validate_rule_references(
     source_account = database.session.get(Accounts, source_account_id)
     target_account = database.session.get(Accounts, target_account_id)
     if source is None or target is None or source_account is None or target_account is None:
-        raise LedgerMappingError("La regla requiere libros y cuentas existentes.")
+        raise LedgerMappingError(_("La regla requiere libros y cuentas existentes."))
     if source.entity != target.entity or source_account.entity != source.entity or target_account.entity != source.entity:
-        raise LedgerMappingError("Los libros y cuentas de la regla deben pertenecer a la misma compañía.")
+        raise LedgerMappingError(_("Los libros y cuentas de la regla deben pertenecer a la misma compañía."))
     if not source.is_primary or target.is_primary or source.code == target.code:
-        raise LedgerMappingError("La regla debe partir del libro primario y dirigirse a un libro secundario.")
+        raise LedgerMappingError(_("La regla debe partir del libro primario y dirigirse a un libro secundario."))
     return source, target, source_account, target_account
 
 
@@ -111,7 +114,7 @@ def apply_ledger_mappings(entries: Sequence[GLEntry]) -> list[GLEntry]:
             continue
         account = database.session.get(Accounts, target_account_id)
         if account is None or account.entity != entry.company:
-            raise LedgerMappingError("La cuenta destino de la regla no pertenece a la compañía del asiento.")
+            raise LedgerMappingError(_("La cuenta destino de la regla no pertenece a la compañía del asiento."))
         entry.account_id = account.id
         entry.account_code = account.code
     return list(entries)
@@ -150,12 +153,12 @@ def _active_rules(entries: Sequence[GLEntry], books: dict[str, Book]) -> dict[tu
         if target_book is None or primary_codes.get(str(target_book.entity)) != rule.source_book:
             continue
         if not rule.source_account_id or not rule.target_account_id:
-            raise LedgerMappingError("La regla de mapeo requiere cuenta origen y destino.")
+            raise LedgerMappingError(_("La regla de mapeo requiere cuenta origen y destino."))
         _validate_rule_references(
             str(rule.source_book), str(rule.target_book), str(rule.source_account_id), str(rule.target_account_id)
         )
         key = (str(target_book.entity), str(rule.target_book), str(rule.source_account_id))
         if key in resolved and resolved[key] != str(rule.target_account_id):
-            raise LedgerMappingError("Existen reglas de mapeo activas ambiguas para el mismo libro y cuenta.")
+            raise LedgerMappingError(_("Existen reglas de mapeo activas ambiguas para el mismo libro y cuenta."))
         resolved[key] = str(rule.target_account_id)
     return resolved

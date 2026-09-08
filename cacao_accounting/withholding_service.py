@@ -11,6 +11,9 @@ from sqlalchemy import select
 from cacao_accounting.database import Party, PaymentEntry, WithholdingCertificate, database
 
 
+from cacao_accounting.i18n import _
+
+
 def _decimal(value: Any) -> Decimal:
     """Convert a monetary value to Decimal without binary floating point."""
     return value if isinstance(value, Decimal) else Decimal(str(value or 0))
@@ -28,7 +31,7 @@ def create_withholding_certificate(payment: PaymentEntry, settlement: Any) -> Wi
         return existing
     supplier = database.session.get(Party, payment.party_id)
     if supplier is None:
-        raise ValueError("No existe el proveedor del certificado de retención.")
+        raise ValueError(_("No existe el proveedor del certificado de retención."))
     details = [
         {
             "concept": line.concept,

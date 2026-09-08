@@ -35,6 +35,9 @@ from cacao_accounting.audit_trail_service import (
 )
 from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
+
+from cacao_accounting.i18n import _
+
 balance_confirmations_bp = Blueprint("balance_confirmations", __name__)
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -135,16 +138,16 @@ def _handle_confirmation_creation(party_id: str, party_type: str):
     cutoff_date_str = request.form.get("cutoff_date")
     emails_raw = request.form.getlist("emails") or request.form.get("emails_text", "").split(",")
     if not company_id or not cutoff_date_str:
-        flash("Debe seleccionar una compañía y fecha de corte.", "danger")
+        flash(_("Debe seleccionar una compañía y fecha de corte."), "danger")
         return redirect(request.url)
     exige_acceso_compania("accounting", company_id, "crear")
     try:
         cutoff_date = date.fromisoformat(cutoff_date_str)
     except ValueError:
-        flash("Fecha de corte no válida.", "danger")
+        flash(_("Fecha de corte no válida."), "danger")
         return redirect(request.url)
     if cutoff_date > date.today():
-        flash("La fecha de corte no puede ser una fecha futura.", "danger")
+        flash(_("La fecha de corte no puede ser una fecha futura."), "danger")
         return redirect(request.url)
     emails = []
     for email in emails_raw:
@@ -152,7 +155,7 @@ def _handle_confirmation_creation(party_id: str, party_type: str):
         if clean_email and EMAIL_PATTERN.match(clean_email) and clean_email not in emails:
             emails.append(clean_email)
     if not emails:
-        flash("Debe indicar al menos una dirección de correo electrónico válida.", "danger")
+        flash(_("Debe indicar al menos una dirección de correo electrónico válida."), "danger")
         return redirect(request.url)
     try:
         confirmation = create_balance_confirmation(
@@ -164,7 +167,7 @@ def _handle_confirmation_creation(party_id: str, party_type: str):
             created_by_user_id=current_user.id,
         )
         database.session.commit()
-        flash("Borrador de confirmación de saldo creado correctamente.", "success")
+        flash(_("Borrador de confirmación de saldo creado correctamente."), "success")
         return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation.id))
     except Exception as exc:
         database.session.rollback()
@@ -182,7 +185,7 @@ def crear_confirmacion_form():
 
     party = database.session.get(Party, party_id) if party_id else None
     if not party:
-        flash("Debe seleccionar un cliente o proveedor válido.", "warning")
+        flash(_("Debe seleccionar un cliente o proveedor válido."), "warning")
         if party_type == "customer":
             return redirect(url_for("ventas.ventas_cliente_lista"))
         else:
@@ -259,7 +262,7 @@ def enviar_confirmacion(confirmation_id: str):
     exige_acceso_compania("accounting", confirmation.company, "autorizar")
 
     if confirmation.status not in ("draft", "sent"):
-        flash("La confirmación de saldo no se encuentra en un estado válido para envío.", "danger")
+        flash(_("La confirmación de saldo no se encuentra en un estado válido para envío."), "danger")
         return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
 
     invitations = (
@@ -319,7 +322,7 @@ Atentamente,
             comment="Solicitud de confirmación de saldo enviada por correo electrónico.",
         )
         database.session.commit()
-        flash("Solicitud de confirmación enviada correctamente.", "success")
+        flash(_("Solicitud de confirmación enviada correctamente."), "success")
 
     return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
 
@@ -337,7 +340,7 @@ def reenviar_confirmacion(confirmation_id: str):
     exige_acceso_compania("accounting", confirmation.company, "autorizar")
 
     if confirmation.status not in ("sent", "viewed"):
-        flash("Solo se pueden reenviar solicitudes ya enviadas o visualizadas.", "danger")
+        flash(_("Solo se pueden reenviar solicitudes ya enviadas o visualizadas."), "danger")
         return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
 
     invitations = (
@@ -397,7 +400,7 @@ Atentamente,
             comment="Solicitud de confirmación de saldo reenviada con nuevos tokens y códigos.",
         )
         database.session.commit()
-        flash("Solicitud de confirmación reenviada correctamente con nuevos códigos de acceso.", "success")
+        flash(_("Solicitud de confirmación reenviada correctamente con nuevos códigos de acceso."), "success")
 
     return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
 
@@ -415,7 +418,7 @@ def cancelar_confirmacion(confirmation_id: str):
     exige_acceso_compania("accounting", confirmation.company, "anular")
 
     if confirmation.status in ("confirmed", "disputed", "cancelled", "expired"):
-        flash("No se puede cancelar una solicitud que ya está cerrada, cancelada o expirada.", "danger")
+        flash(_("No se puede cancelar una solicitud que ya está cerrada, cancelada o expirada."), "danger")
         return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
 
     confirmation.status = "cancelled"
@@ -439,7 +442,7 @@ def cancelar_confirmacion(confirmation_id: str):
         comment="Solicitud de confirmación de saldo cancelada manualmente por el usuario.",
     )
     database.session.commit()
-    flash("Solicitud de confirmación cancelada correctamente.", "warning")
+    flash(_("Solicitud de confirmación cancelada correctamente."), "warning")
     return redirect(url_for(ENDPOINT_VER_CONFIRMACION, confirmation_id=confirmation_id))
 
 
@@ -533,12 +536,12 @@ def public_confirm_balance_verify(token: str):
 
     confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
     if not confirmation or confirmation.status in ("confirmed", "disputed", "cancelled"):
-        flash("La confirmación no se encuentra disponible.", "danger")
+        flash(_("La confirmación no se encuentra disponible."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Verificar fecha de expiración también en la verificación POST
     if _mark_expired(confirmation):
-        flash("Esta solicitud de confirmación de saldo ha expirado.", "danger")
+        flash(_("Esta solicitud de confirmación de saldo ha expirado."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     first_name = request.form.get("first_name", "").strip()
@@ -548,11 +551,11 @@ def public_confirm_balance_verify(token: str):
     authorized_checkbox = request.form.get("authorized") == "on"
 
     if not first_name or not last_name or not email_input or not code_input:
-        flash("Todos los campos de verificación son requeridos.", "danger")
+        flash(_("Todos los campos de verificación son requeridos."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     if not authorized_checkbox:
-        flash("Debe declarar bajo juramento que se encuentra autorizado para continuar.", "danger")
+        flash(_("Debe declarar bajo juramento que se encuentra autorizado para continuar."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Rate limiting / failed attempts check
@@ -566,7 +569,7 @@ def public_confirm_balance_verify(token: str):
     if not hmac.compare_digest(email_input, invitation.email or ""):
         invitation.failed_attempts += 1
         database.session.commit()
-        flash("La dirección de correo electrónico o el código ingresado son incorrectos.", "danger")
+        flash(_("La dirección de correo electrónico o el código ingresado son incorrectos."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Validar correspondencia del código de verificación
@@ -574,7 +577,7 @@ def public_confirm_balance_verify(token: str):
     if not hmac.compare_digest(hashed_code, invitation.verification_code_hash or ""):
         invitation.failed_attempts += 1
         database.session.commit()
-        flash("La dirección de correo electrónico o el código ingresado son incorrectos.", "danger")
+        flash(_("La dirección de correo electrónico o el código ingresado son incorrectos."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Verificación exitosa
@@ -614,10 +617,12 @@ def _validated_public_response() -> tuple[str, str] | None:
     response_type = request.form.get("response_type")
     response_comment = (request.form.get("response_comment") or request.form.get("response_comment_optional") or "").strip()
     if response_type not in ("confirmed", "disputed"):
-        flash("Tipo de respuesta no válido.", "danger")
+        flash(_("Tipo de respuesta no válido."), "danger")
         return None
     if response_type == "disputed" and (not response_comment or len(response_comment) < 10):
-        flash("Debe proporcionar una explicación detallada de las diferencias encontradas (mínimo 10 caracteres).", "danger")
+        flash(
+            _("Debe proporcionar una explicación detallada de las diferencias encontradas (mínimo 10 caracteres)."), "danger"
+        )
         return None
     return response_type, response_comment
 
@@ -635,23 +640,23 @@ def public_confirm_balance_respond(token: str):
 
     confirmation = database.session.get(BalanceConfirmation, invitation.balance_confirmation_id)
     if not confirmation or confirmation.status in ("confirmed", "disputed", "cancelled"):
-        flash("La confirmación no se encuentra disponible para responder.", "danger")
+        flash(_("La confirmación no se encuentra disponible para responder."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Verificar fecha de expiración también en la respuesta POST
     if _mark_expired(confirmation):
-        flash("Esta solicitud de confirmación de saldo ha expirado.", "danger")
+        flash(_("Esta solicitud de confirmación de saldo ha expirado."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Verificar la integridad del snapshot antes de aceptar una respuesta
     if not verify_snapshot_hash(confirmation):
-        flash("La solicitud presenta una inconsistencia de integridad y no puede responderse.", "danger")
+        flash(_("La solicitud presenta una inconsistencia de integridad y no puede responderse."), "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Verificar sesión de verificación
     session_key = f"verified_confirmation_{confirmation.id}"
     if session.get(session_key) != invitation.id:
-        flash("Debe completar el paso de verificación primero.", "warning")
+        flash(_("Debe completar el paso de verificación primero."), "warning")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     response_data = _validated_public_response()
@@ -686,7 +691,7 @@ def public_confirm_balance_respond(token: str):
     )
     if getattr(result, "rowcount", 0) == 0:
         database.session.rollback()
-        flash("La confirmación ya fue respondida o ya no se encuentra disponible.", "warning")
+        flash(_("La confirmación ya fue respondida o ya no se encuentra disponible."), "warning")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Cerrar la invitación actual y todas las demás asociadas a la misma confirmación

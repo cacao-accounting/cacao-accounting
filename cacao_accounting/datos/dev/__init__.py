@@ -57,6 +57,9 @@ from cacao_accounting.datos.dev.data import (
 from cacao_accounting.logs import log
 
 
+from cacao_accounting.i18n import _
+
+
 def asignar_usuario_a_roles():
     """Asigna roles a usuarios."""
     for r in USUARIO_ROLES:
@@ -203,7 +206,7 @@ def _demo_admin_user_id() -> str:
 
     user = database.session.execute(database.select(User).filter_by(user="admin")).scalars().first()
     if user is None:
-        raise RuntimeError("El usuario administrador de demostración no existe.")
+        raise RuntimeError(_("El usuario administrador de demostración no existe."))
     return str(user.id)
 
 
@@ -248,7 +251,7 @@ def cargar_bancos():
         .first()
     )
     if payment_series is None:
-        raise RuntimeError("No se pudo preparar la serie compartida de pagos para el seed.")
+        raise RuntimeError(_("No se pudo preparar la serie compartida de pagos para el seed."))
 
     bank_by_name = {
         bank.name: bank for bank in database.session.execute(database.select(Bank).order_by(Bank.name)).scalars().all()

@@ -27,6 +27,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from cacao_accounting.logs import log
 from cacao_accounting.version import APPNAME, VERSION
 
+from cacao_accounting.i18n import _
+
 # <---------------------------------------------------------------------------------------------> #
 # Constantes de presentación.
 NOMBRE_PROGRAMA = "cacaoctl"
@@ -256,7 +258,7 @@ def db_migrate(head: str, revision: str | None) -> None:
     with app.app_context():
         try:
             if not inspect(database.engine).has_table("user"):
-                raise RuntimeError("La base de datos no está inicializada; ejecute primero 'cacaoctl db init'.")
+                raise RuntimeError(_("La base de datos no está inicializada; ejecute primero 'cacaoctl db init'."))
             target = revision or head
             alembic.upgrade(target=target)
             _mensaje_exito("Migraciones aplicadas correctamente.")

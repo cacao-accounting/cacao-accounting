@@ -34,7 +34,6 @@ from cacao_accounting.document_flow import (
     validate_submit_prerequisites,
 )
 
-from cacao_accounting.document_flow.status import _
 
 from cacao_accounting.document_identifiers import assign_document_identifier
 
@@ -83,6 +82,8 @@ from cacao_accounting.inventario.services import (
     _render_stock_entry_edit_form,
     _render_stock_reconciliation_edit_form,
 )
+
+from cacao_accounting.i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -365,7 +366,7 @@ def inventario_articulo_nuevo():
                 database.session.rollback()
                 flash_error(exc)
         else:
-            flash("Revise los datos del formulario de artículo.", "danger")
+            flash(_("Revise los datos del formulario de artículo."), "danger")
 
     return render_template(
         "inventario/articulo_nuevo.html",
@@ -753,7 +754,7 @@ def inventario_entrada_nuevo():
     if request.method == "POST":
         if formulario.validate():
             return _handle_stock_entry_new_post(request.form)
-        flash("Revise los datos de la entrada de almacén.", "danger")
+        flash(_("Revise los datos de la entrada de almacén."), "danger")
 
     if purpose == "stock_reconciliation":
         return render_template(
@@ -879,7 +880,7 @@ def inventario_entrada_editar(entry_id: str):
     if request.method == "POST":
         if formulario.validate():
             return _handle_stock_entry_edit_post(registro)
-        flash("Revise los datos de la entrada de almacén.", "danger")
+        flash(_("Revise los datos de la entrada de almacén."), "danger")
 
     if registro.purpose == "stock_reconciliation":
         return _render_stock_reconciliation_edit_form(registro, items_disponibles, uoms_disponibles)

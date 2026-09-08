@@ -9,7 +9,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">Ventas</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">{{ _("Ventas") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">Listado de Ordenes de Venta</li>
   </ol>
 </nav>
@@ -28,10 +28,10 @@
     <thead>
       <tr>
         <th scope="col">Número</th>
-        <th scope="col">Cliente</th>
-        <th scope="col">Estado</th>
-        <th scope="col">Fecha</th>
-        <th scope="col">Total</th>
+        <th scope="col">{{ _("Cliente") }}</th>
+        <th scope="col">{{ _("Estado") }}</th>
+        <th scope="col">{{ _("Fecha") }}</th>
+        <th scope="col">{{ _("Total") }}</th>
       </tr>
     </thead>
     <tbody>

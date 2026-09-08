@@ -94,7 +94,6 @@ from cacao_accounting.document_flow.repository import consumed_qty_for_source
 
 from cacao_accounting.document_flow.service import _relation_qty_in_base_uom
 
-from cacao_accounting.document_flow.status import _
 
 from cacao_accounting.document_identifiers import IdentifierConfigurationError, assign_document_identifier
 
@@ -129,6 +128,8 @@ from cacao_accounting.party_settings import (
 
 
 from cacao_accounting.logistics import copy_logistics, logistics_values
+
+from cacao_accounting.i18n import _
 
 logger = getLogger(__name__)
 
@@ -227,18 +228,18 @@ def _landed_cost_snapshot(form: Any = None, source: Any = None) -> str | None:
     try:
         charges = json.loads(raw) if isinstance(raw, str) else raw
     except (TypeError, json.JSONDecodeError) as exc:
-        raise ValueError("Los landed costs estimados deben ser un JSON válido.") from exc
+        raise ValueError(_("Los landed costs estimados deben ser un JSON válido.")) from exc
     if not isinstance(charges, list):
-        raise ValueError("Los landed costs estimados deben ser una lista.")
+        raise ValueError(_("Los landed costs estimados deben ser una lista."))
     for charge in charges:
         if not isinstance(charge, dict) or not charge.get("concept"):
-            raise ValueError("Cada landed cost estimado requiere un concepto.")
+            raise ValueError(_("Cada landed cost estimado requiere un concepto."))
         try:
             amount = Decimal(str(charge.get("amount", "0")))
         except Exception as exc:
-            raise ValueError("El importe de un landed cost estimado no es válido.") from exc
+            raise ValueError(_("El importe de un landed cost estimado no es válido.")) from exc
         if amount < 0:
-            raise ValueError("Los landed costs estimados no pueden ser negativos.")
+            raise ValueError(_("Los landed costs estimados no pueden ser negativos."))
     return json.dumps(charges, ensure_ascii=False, separators=(",", ":"))
 
 
@@ -431,7 +432,7 @@ def _create_supplier_quotation_from_request():
         _set_purchase_document_totals(cotizacion, total)
         log_create(cotizacion)
         database.session.commit()
-        flash("Cotización de proveedor creada correctamente.", "success")
+        flash(_("Cotización de proveedor creada correctamente."), "success")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=cotizacion.id))
     except ValueError as exc:
         database.session.rollback()
@@ -552,13 +553,13 @@ def _handle_supplier_quotation_update(registro: SupplierQuotation, form: dict, q
     requested_company = form.get("company") or registro.company
     if requested_company != registro.company:
         database.session.rollback()
-        flash("La compañía de una cotización existente no puede cambiarse.", "danger")
+        flash(_("La compañía de una cotización existente no puede cambiarse."), "danger")
         return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
     if registro.purchase_quotation_id:
         source = database.session.get(PurchaseQuotation, registro.purchase_quotation_id)
         if source and source.company != requested_company:
             database.session.rollback()
-            flash("La compañía debe coincidir con la solicitud de cotización origen.", "danger")
+            flash(_("La compañía debe coincidir con la solicitud de cotización origen."), "danger")
             return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
     registro.company = requested_company
     registro.posting_date = _parse_date(form.get("posting_date"))
@@ -680,7 +681,7 @@ def _award_lines_by_supplier(award_id: str) -> dict[str, list[PurchaseQuotationA
         database.session.execute(database.select(PurchaseQuotationAwardItem).filter_by(award_id=award_id)).scalars().all()
     )
     if not award_lines:
-        raise PurchaseSourcingError("La adjudicación no contiene líneas.")
+        raise PurchaseSourcingError(_("La adjudicación no contiene líneas."))
     groups: dict[str, list[PurchaseQuotationAwardItem]] = {}
     for line in award_lines:
         groups.setdefault(line.supplier_quotation_id, []).append(line)
@@ -729,14 +730,14 @@ def _create_purchase_orders_from_award(award: PurchaseQuotationAward) -> list[Pu
         .values(status="used")
     )
     if getattr(claimed, "rowcount", 0) != 1:
-        raise PurchaseSourcingError("Solo un comparativo finalizado puede colocar Órdenes de Compra.")
+        raise PurchaseSourcingError(_("Solo un comparativo finalizado puede colocar Órdenes de Compra."))
     groups = _award_lines_by_supplier(award.id)
     orders: list[PurchaseOrder] = []
     rfq = database.session.get(PurchaseQuotation, award.purchase_quotation_id)
     for supplier_quotation_id, lines in groups.items():
         quotation = database.session.get(SupplierQuotation, supplier_quotation_id)
         if not quotation:
-            raise PurchaseSourcingError("La cotización adjudicada ya no existe.")
+            raise PurchaseSourcingError(_("La cotización adjudicada ya no existe."))
         order = PurchaseOrder(
             supplier_id=quotation.supplier_id,
             supplier_name=quotation.supplier_name,
@@ -1435,7 +1436,7 @@ def _create_purchase_order_from_request(form: dict):
         orden.base_total = (total * orden.exchange_rate).quantize(Decimal("0.0001"))
         log_create(orden)
         database.session.commit()
-        flash("Orden de compra creada correctamente.", "success")
+        flash(_("Orden de compra creada correctamente."), "success")
         if comparison_open:
             flash(
                 "Advertencia: la orden se creó desde una cotización de proveedor mientras el comparativo sigue abierto. ",
@@ -1475,7 +1476,7 @@ def _update_purchase_order_from_request(registro: PurchaseOrder):
     )
     if has_source and (requested_company != registro.company or requested_currency != registro.transaction_currency):
         database.session.rollback()
-        flash("La compañía y moneda de una orden derivada no pueden cambiarse.", "danger")
+        flash(_("La compañía y moneda de una orden derivada no pueden cambiarse."), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=registro.id))
     registro.company = requested_company
     registro.posting_date = _parse_date(request.form.get("posting_date"))
@@ -1595,7 +1596,7 @@ def _create_purchase_quotation_from_request():
         _set_purchase_document_totals(cotizacion, total)
         log_create(cotizacion)
         database.session.commit()
-        flash("Solicitud de cotización creada correctamente.", "success")
+        flash(_("Solicitud de cotización creada correctamente."), "success")
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=cotizacion.id))
     except ValueError as exc:
         database.session.rollback()
@@ -1627,7 +1628,7 @@ def _handle_purchase_quotation_edit_post(registro):
     source = database.session.get(PurchaseRequest, source_relation.source_id) if source_relation else None
     if requested_company != registro.company or (source and source.company != requested_company):
         database.session.rollback()
-        flash("La compañía debe permanecer alineada con el documento origen.", "danger")
+        flash(_("La compañía debe permanecer alineada con el documento origen."), "danger")
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=registro.id))
     registro.company = requested_company
     registro.posting_date = _parse_date(request.form.get("posting_date"))
@@ -1689,7 +1690,7 @@ def _create_purchase_receipt_from_form():
         _set_purchase_receipt_totals(receipt, total)
         log_create(receipt)
         database.session.commit()
-        flash("Recepción de compra creada correctamente.", "success")
+        flash(_("Recepción de compra creada correctamente."), "success")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt.id))
     except ValueError as exc:
         database.session.rollback()
@@ -1726,10 +1727,10 @@ def _set_purchase_receipt_totals(receipt: PurchaseReceipt, total: Decimal) -> No
 
     receipt.total = receipt.grand_total = total
     if not receipt.transaction_currency:
-        raise ValueError("La recepción requiere una moneda transaccional explicita antes de recalcular totales.")
+        raise ValueError(_("La recepción requiere una moneda transaccional explicita antes de recalcular totales."))
     base_currency_value = company_functional_currency(receipt.company)
     if not base_currency_value:
-        raise ValueError("La compania requiere una moneda funcional configurada.")
+        raise ValueError(_("La compania requiere una moneda funcional configurada."))
     receipt.base_currency = base_currency_value
     receipt.exchange_rate = _purchase_exchange_rate(receipt.company, receipt.posting_date, receipt.transaction_currency)
     receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
@@ -1743,10 +1744,10 @@ def _set_purchase_document_totals(document: Any, total: Decimal) -> None:
     if hasattr(document, "grand_total"):
         document.grand_total = total
     if not document.transaction_currency:
-        raise ValueError("El documento de compras requiere una moneda transaccional explicita antes de recalcular totales.")
+        raise ValueError(_("El documento de compras requiere una moneda transaccional explicita antes de recalcular totales."))
     base_currency_value = company_functional_currency(document.company)
     if not base_currency_value:
-        raise ValueError("La compania requiere una moneda funcional configurada.")
+        raise ValueError(_("La compania requiere una moneda funcional configurada."))
     document.base_currency = base_currency_value
     document.exchange_rate = _purchase_exchange_rate(document.company, document.posting_date, document.transaction_currency)
     document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))
@@ -1768,16 +1769,16 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
     if source.docstatus != 1:
         raise ValueError(f"El documento origen '{source_id}' debe estar aprobado.")
     if source.company != document.company:
-        raise ValueError("El documento origen y el documento destino deben pertenecer a la misma compañía.")
+        raise ValueError(_("El documento origen y el documento destino deben pertenecer a la misma compañía."))
     supplier_id = getattr(source, "supplier_id", None)
     if supplier_id and supplier_id != getattr(document, "supplier_id", None):
-        raise ValueError("El documento origen y el documento destino deben pertenecer al mismo proveedor.")
+        raise ValueError(_("El documento origen y el documento destino deben pertenecer al mismo proveedor."))
     target_currency = getattr(document, "transaction_currency", None)
     if target_currency and effective_currency(source) != target_currency:
-        raise ValueError("El documento origen y el documento destino deben usar la misma moneda.")
+        raise ValueError(_("El documento origen y el documento destino deben usar la misma moneda."))
     if source_type == "purchase_receipt" and getattr(document, "purchase_order_id", None):
         if getattr(source, "purchase_order_id", None) != document.purchase_order_id:
-            raise ValueError("La recepción no pertenece a la orden de compra indicada.")
+            raise ValueError(_("La recepción no pertenece a la orden de compra indicada."))
     if items is not None:
         # Solo PurchaseInvoice persiste document_type; el resto de destinos se
         # resuelven por su clase.
@@ -1966,7 +1967,7 @@ def _purchase_invoice_document_type(source_ids: dict[str, str | None], requested
     if requested in {PURCHASE_INVOICE, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE}:
         return requested
     if requested == "purchase_return":
-        raise ValueError("Las devoluciones físicas se crean como recepción de compra, no como factura.")
+        raise ValueError(_("Las devoluciones físicas se crean como recepción de compra, no como factura."))
     doc_type = PURCHASE_INVOICE
     if request.args.get("is_return") in ("true", "True", "1", True) or request.form.get("is_return") in (
         "true",
@@ -1974,7 +1975,7 @@ def _purchase_invoice_document_type(source_ids: dict[str, str | None], requested
         "1",
         True,
     ):
-        raise ValueError("Las devoluciones físicas se crean como recepción de compra, no como factura.")
+        raise ValueError(_("Las devoluciones físicas se crean como recepción de compra, no como factura."))
     if source_ids.get("from_invoice_id"):
         doc_type = PURCHASE_CREDIT_NOTE
     return doc_type
@@ -2130,20 +2131,20 @@ def _validate_supplier_invoice_flags(
     ).scalar_one_or_none()
     if settings is None:
         # S2P-09: Validar strictamente cuando CompanyParty es None
-        raise PostingError("No se encontró configuración de flags para el proveedor en la compañía.")  # type: ignore[misc]
+        raise PostingError(_("No se encontró configuración de flags para el proveedor en la compañía."))  # type: ignore[misc]
     has_order = bool(purchase_order_id)
     has_receipt = bool(purchase_receipt_id)
     if not has_order and not settings.allow_purchase_invoice_without_order:
-        raise ValueError("El proveedor no permite crear facturas de compra sin orden de compra.")
+        raise ValueError(_("El proveedor no permite crear facturas de compra sin orden de compra."))
     if not has_receipt and not settings.allow_purchase_invoice_without_receipt:
-        raise ValueError("El proveedor no permite crear facturas de compra sin recepción.")
+        raise ValueError(_("El proveedor no permite crear facturas de compra sin recepción."))
 
     if not has_order and document_type not in {PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE}:
         from cacao_accounting.compras.purchase_reconciliation_service import get_matching_config
 
         matching_config = get_matching_config(company)
         if matching_config.require_purchase_order:
-            raise ValueError("La configuración de la compañía requiere una orden de compra para las facturas de compra.")
+            raise ValueError(_("La configuración de la compañía requiere una orden de compra para las facturas de compra."))
 
 
 def _validate_supplier_company_membership(supplier_id: str | None, company: str | None) -> None:
@@ -2154,7 +2155,7 @@ def _validate_supplier_company_membership(supplier_id: str | None, company: str 
         database.select(CompanyParty).filter_by(party_id=supplier_id, company=company, is_active=True)
     ).scalar_one_or_none()
     if settings is None:
-        raise ValueError("El proveedor no está habilitado para la compañía seleccionada.")
+        raise ValueError(_("El proveedor no está habilitado para la compañía seleccionada."))
 
 
 def _validate_purchase_tax_template(company: str, template_id: str | None, currency: str | None) -> None:
@@ -2163,13 +2164,13 @@ def _validate_purchase_tax_template(company: str, template_id: str | None, curre
         return
     template = database.session.get(TaxTemplate, template_id)
     if template is None or not template.is_active:
-        raise ValueError("La plantilla de impuestos seleccionada no existe o está inactiva.")
+        raise ValueError(_("La plantilla de impuestos seleccionada no existe o está inactiva."))
     if template.company not in (None, company):
-        raise ValueError("La plantilla de impuestos debe pertenecer a la misma compañía.")
+        raise ValueError(_("La plantilla de impuestos debe pertenecer a la misma compañía."))
     if template.template_type != "buying":
-        raise ValueError("La plantilla seleccionada no corresponde a compras.")
+        raise ValueError(_("La plantilla seleccionada no corresponde a compras."))
     if template.currency and currency and template.currency != currency:
-        raise ValueError("La moneda de la plantilla no coincide con la moneda de la factura.")
+        raise ValueError(_("La moneda de la plantilla no coincide con la moneda de la factura."))
 
 
 def _validate_duplicate_supplier_invoice(
@@ -2188,7 +2189,7 @@ def _validate_duplicate_supplier_invoice(
 
     supplier = database.session.get(Party, supplier_id, with_for_update=True)
     if supplier is None:
-        raise ValueError("El proveedor indicado no existe.")
+        raise ValueError(_("El proveedor indicado no existe."))
 
     stmt = database.select(PurchaseInvoice).filter(
         PurchaseInvoice.supplier_id == supplier_id,
@@ -2397,7 +2398,7 @@ def _invoice_for_physical_return(receipt_id: str) -> str | None:
         .all()
     )
     if len(invoice_ids) > 1:
-        raise ValueError("La devolución física está asociada a más de una factura; seleccione la factura origen.")
+        raise ValueError(_("La devolución física está asociada a más de una factura; seleccione la factura origen."))
     return str(invoice_ids[0]) if invoice_ids else None
 
 
@@ -2423,7 +2424,7 @@ def _purchase_invoice_source_context() -> dict[str, Any]:
         source_ids["from_invoice_id"] = from_invoice
         source_invoice = database.session.get(PurchaseInvoice, from_invoice) if from_invoice else None
     if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) and source_invoice is None:
-        raise ValueError("La nota de compra requiere una factura origen aprobada.")
+        raise ValueError(_("La nota de compra requiere una factura origen aprobada."))
     if document_type in (PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE) and source_invoice is not None:
         from_order = from_order or source_invoice.purchase_order_id
         from_receipt = from_receipt or source_invoice.purchase_receipt_id
@@ -2444,11 +2445,11 @@ def _purchase_invoice_creation_context() -> dict[str, Any]:
     if context["document_type"] == PURCHASE_CREDIT_NOTE:
         credit_note_type = request.form.get("credit_note_type") or "commercial_adjustment"
         if credit_note_type not in {"commercial_adjustment", "physical_return"}:
-            raise ValueError("El tipo de nota de crédito no es válido.")
+            raise ValueError(_("El tipo de nota de crédito no es válido."))
         if credit_note_type == "physical_return":
             receipt = database.session.get(PurchaseReceipt, context["from_receipt"]) if context["from_receipt"] else None
             if receipt is None or not receipt.is_return:
-                raise ValueError("La nota por devolución física requiere una devolución de recepción.")
+                raise ValueError(_("La nota por devolución física requiere una devolución de recepción."))
         context["credit_note_type"] = credit_note_type
     else:
         context["credit_note_type"] = None
@@ -2565,7 +2566,7 @@ def _create_purchase_invoice_from_request():
         _validate_purchase_invoice_source(factura, invoice_items)
         _finalize_purchase_invoice(factura, total, context)
         database.session.commit()
-        flash("Factura de compra creada correctamente.", "success")
+        flash(_("Factura de compra creada correctamente."), "success")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=factura.id))
     except (ValueError, DocumentFlowError) as exc:
         database.session.rollback()
@@ -2584,7 +2585,7 @@ def _handle_purchase_invoice_edit_post(registro):
         if registro.document_type == PURCHASE_CREDIT_NOTE:
             credit_note_type = request.form.get("credit_note_type") or registro.credit_note_type or "commercial_adjustment"
             if credit_note_type not in {"commercial_adjustment", "physical_return"}:
-                raise ValueError("El tipo de nota de crédito no es válido.")
+                raise ValueError(_("El tipo de nota de crédito no es válido."))
             registro.credit_note_type = credit_note_type
         purchase_order_id = request.form.get("from_order") or getattr(registro, "purchase_order_id", None)
         purchase_receipt_id = request.form.get("from_receipt") or getattr(registro, "purchase_receipt_id", None)
@@ -2674,7 +2675,7 @@ def _save_import_landed_cost_items(registro: ImportLandedCost) -> Decimal:
         qty = Decimal(str(data.get("qty", "1")))
         rate = Decimal(str(data.get("rate", "0")))
         if qty < 0 or rate < 0:
-            raise ValueError("La cantidad y la tarifa de un costo de importación no pueden ser negativas.")
+            raise ValueError(_("La cantidad y la tarifa de un costo de importación no pueden ser negativas."))
         amount = qty * rate
         exchange_rate = Decimal(str(registro.exchange_rate or "1"))
         base_rate = (rate * exchange_rate).quantize(Decimal("0.0001"))
@@ -2707,7 +2708,7 @@ def _save_import_landed_cost_charges(registro: ImportLandedCost) -> Decimal:
             continue
         amount = Decimal(str(data.get("amount", "0")))
         if amount < 0:
-            raise ValueError("El importe de un cargo de importación no puede ser negativo.")
+            raise ValueError(_("El importe de un cargo de importación no puede ser negativo."))
         exchange_rate = Decimal(str(registro.exchange_rate or "1"))
         base_amount = (amount * exchange_rate).quantize(Decimal("0.0001"))
         total += amount

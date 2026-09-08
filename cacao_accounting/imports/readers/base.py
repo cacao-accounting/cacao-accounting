@@ -7,6 +7,9 @@ from dataclasses import dataclass, field
 from typing import List, Any
 
 
+from cacao_accounting.i18n import _
+
+
 @dataclass
 class NormalizedTable:
     """Representa una tabla de datos normalizada."""
@@ -21,4 +24,4 @@ class BaseReader:
 
     def read(self, file_path: str) -> NormalizedTable:
         """Lee un archivo y devuelve una NormalizedTable."""
-        raise NotImplementedError("Subclasses must implement read()")
+        raise NotImplementedError(_("Subclasses must implement read()"))

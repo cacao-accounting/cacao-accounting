@@ -9,7 +9,7 @@
       </a>
     </li>
     <li class="breadcrumb-item">
-      <a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a>
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a>
     </li>
     <li class="breadcrumb-item active" aria-current="page">Administración de Usuarios</li>
   </ol>
@@ -44,11 +44,11 @@
       <caption>{{ _("Administración de Usuarios del Sistema") }}</caption>
       <thead>
         <tr>
-          <th>Usuario</th>
-          <th>Correo</th>
-          <th>Roles</th>
-          <th>Estado</th>
-          <th class="text-end">Acciones</th>
+          <th>{{ _("Usuario") }}</th>
+          <th>{{ _("Correo") }}</th>
+          <th>{{ _("Roles") }}</th>
+          <th>{{ _("Estado") }}</th>
+          <th class="text-end">{{ _("Acciones") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -63,8 +63,8 @@
             </span>
           </td>
           <td class="text-end">
-            <a href="{{ url_for('admin.editar_usuario', user_id=usuario.id) }}" class="badge text-bg-primary text-decoration-none me-1">Editar</a>
-            <a href="{{ url_for('admin.usuario_roles', user_id=usuario.id) }}" class="badge text-bg-secondary text-decoration-none me-1">Roles</a>
+            <a href="{{ url_for('admin.editar_usuario', user_id=usuario.id) }}" class="badge text-bg-primary text-decoration-none me-1">{{ _("Editar") }}</a>
+            <a href="{{ url_for('admin.usuario_roles', user_id=usuario.id) }}" class="badge text-bg-secondary text-decoration-none me-1">{{ _("Roles") }}</a>
             {% if is_cloud_mode() and usuario.classification not in ('customer', 'supplier') %}
             <a href="{{ url_for('admin.usuario_companias', user_id=usuario.id) }}" class="badge text-bg-info text-decoration-none me-1">Compañías</a>
             {% endif %}

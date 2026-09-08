@@ -10,7 +10,7 @@
 # ---------------------------------------------------------------------------------------
 # Librerias de terceros
 # --------------------------------------------------------------------------------------
-from flask_babel import lazy_gettext
+from cacao_accounting.i18n import _l
 from flask_wtf import FlaskForm
 from wtforms import BooleanField, PasswordField, SelectField, SelectMultipleField, StringField, SubmitField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
@@ -28,103 +28,103 @@ class LoginForm(FlaskForm):
 class ProfileForm(FlaskForm):
     """Formulario para actualizar información personal."""
 
-    name = StringField(lazy_gettext("Nombre"), validators=[Optional()])
-    name2 = StringField(lazy_gettext("Segundo nombre"), validators=[Optional()])
-    last_name = StringField(lazy_gettext("Apellido"), validators=[Optional()])
-    last_name2 = StringField(lazy_gettext("Segundo apellido"), validators=[Optional()])
-    e_mail = StringField(lazy_gettext("Correo electrónico"), validators=[Optional(), Email()])
-    phone = StringField(lazy_gettext("Teléfono"), validators=[Optional()])
+    name = StringField(_l("Nombre"), validators=[Optional()])
+    name2 = StringField(_l("Segundo nombre"), validators=[Optional()])
+    last_name = StringField(_l("Apellido"), validators=[Optional()])
+    last_name2 = StringField(_l("Segundo apellido"), validators=[Optional()])
+    e_mail = StringField(_l("Correo electrónico"), validators=[Optional(), Email()])
+    phone = StringField(_l("Teléfono"), validators=[Optional()])
     language = SelectField(
-        lazy_gettext("Idioma"),
+        _l("Idioma"),
         choices=[
-            ("", lazy_gettext("Predeterminado del sistema")),
-            ("es", lazy_gettext("Español")),
+            ("", _l("Predeterminado del sistema")),
+            ("es", _l("Español")),
             ("en", "English"),
         ],
         validators=[Optional()],
     )
-    guardar_perfil = SubmitField(lazy_gettext("Guardar cambios"))
+    guardar_perfil = SubmitField(_l("Guardar cambios"))
 
 
 class PasswordChangeForm(FlaskForm):
     """Formulario para cambiar la contraseña del usuario."""
 
-    current_password = PasswordField(lazy_gettext("Contraseña actual"), validators=[DataRequired()])
-    new_password = PasswordField(lazy_gettext("Nueva contraseña"), validators=[DataRequired()])
+    current_password = PasswordField(_l("Contraseña actual"), validators=[DataRequired()])
+    new_password = PasswordField(_l("Nueva contraseña"), validators=[DataRequired()])
     confirm_password = PasswordField(
-        lazy_gettext("Confirmar contraseña"),
-        validators=[DataRequired(), EqualTo("new_password", message=lazy_gettext("Las contraseñas deben coincidir"))],
+        _l("Confirmar contraseña"),
+        validators=[DataRequired(), EqualTo("new_password", message=_l("Las contraseñas deben coincidir"))],
     )
-    cambiar_clave = SubmitField(lazy_gettext("Cambiar contraseña"))
+    cambiar_clave = SubmitField(_l("Cambiar contraseña"))
 
 
 class UserCreateForm(FlaskForm):
     """Formulario para crear usuarios."""
 
-    usuario = StringField(lazy_gettext("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
-    name = StringField(lazy_gettext("Nombre"), validators=[Optional()])
-    name2 = StringField(lazy_gettext("Segundo nombre"), validators=[Optional()])
-    last_name = StringField(lazy_gettext("Apellido"), validators=[Optional()])
-    last_name2 = StringField(lazy_gettext("Segundo apellido"), validators=[Optional()])
-    e_mail = StringField(lazy_gettext("Correo electrónico"), validators=[Optional(), Email()])
-    phone = StringField(lazy_gettext("Teléfono"), validators=[Optional()])
+    usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
+    name = StringField(_l("Nombre"), validators=[Optional()])
+    name2 = StringField(_l("Segundo nombre"), validators=[Optional()])
+    last_name = StringField(_l("Apellido"), validators=[Optional()])
+    last_name2 = StringField(_l("Segundo apellido"), validators=[Optional()])
+    e_mail = StringField(_l("Correo electrónico"), validators=[Optional(), Email()])
+    phone = StringField(_l("Teléfono"), validators=[Optional()])
     classification = SelectField(
-        lazy_gettext("Clasificación"),
+        _l("Clasificación"),
         choices=[
-            ("system", lazy_gettext("Sistema (System)")),
-            ("customer", lazy_gettext("Cliente (Customer)")),
-            ("supplier", lazy_gettext("Proveedor (Supplier)")),
+            ("system", _l("Sistema (System)")),
+            ("customer", _l("Cliente (Customer)")),
+            ("supplier", _l("Proveedor (Supplier)")),
         ],
         validators=[DataRequired()],
         default="system",
     )
-    party_id = SelectField(lazy_gettext("Tercero del portal"), choices=[], validators=[Optional()])
-    company = SelectField(lazy_gettext("Compañía del portal"), choices=[], validators=[Optional()])
-    active = BooleanField(lazy_gettext("Habilitado"), default=True)
-    password = PasswordField(lazy_gettext("Contraseña"), validators=[DataRequired(), Length(min=8)])
+    party_id = SelectField(_l("Tercero del portal"), choices=[], validators=[Optional()])
+    company = SelectField(_l("Compañía del portal"), choices=[], validators=[Optional()])
+    active = BooleanField(_l("Habilitado"), default=True)
+    password = PasswordField(_l("Contraseña"), validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
-        lazy_gettext("Confirmar contraseña"),
-        validators=[DataRequired(), EqualTo("password", message=lazy_gettext("Las contraseñas deben coincidir"))],
+        _l("Confirmar contraseña"),
+        validators=[DataRequired(), EqualTo("password", message=_l("Las contraseñas deben coincidir"))],
     )
-    crear_usuario = SubmitField(lazy_gettext("Crear usuario"))
+    crear_usuario = SubmitField(_l("Crear usuario"))
 
 
 class UserEditForm(FlaskForm):
     """Formulario para editar usuarios."""
 
-    usuario = StringField(lazy_gettext("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
-    name = StringField(lazy_gettext("Nombre"), validators=[Optional()])
-    name2 = StringField(lazy_gettext("Segundo nombre"), validators=[Optional()])
-    last_name = StringField(lazy_gettext("Apellido"), validators=[Optional()])
-    last_name2 = StringField(lazy_gettext("Segundo apellido"), validators=[Optional()])
-    e_mail = StringField(lazy_gettext("Correo electrónico"), validators=[Optional(), Email()])
-    phone = StringField(lazy_gettext("Teléfono"), validators=[Optional()])
+    usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
+    name = StringField(_l("Nombre"), validators=[Optional()])
+    name2 = StringField(_l("Segundo nombre"), validators=[Optional()])
+    last_name = StringField(_l("Apellido"), validators=[Optional()])
+    last_name2 = StringField(_l("Segundo apellido"), validators=[Optional()])
+    e_mail = StringField(_l("Correo electrónico"), validators=[Optional(), Email()])
+    phone = StringField(_l("Teléfono"), validators=[Optional()])
     classification = SelectField(
-        lazy_gettext("Clasificación"),
+        _l("Clasificación"),
         choices=[
-            ("system", lazy_gettext("Sistema (System)")),
-            ("customer", lazy_gettext("Cliente (Customer)")),
-            ("supplier", lazy_gettext("Proveedor (Supplier)")),
-            ("admin", lazy_gettext("Administrador (Admin)")),
+            ("system", _l("Sistema (System)")),
+            ("customer", _l("Cliente (Customer)")),
+            ("supplier", _l("Proveedor (Supplier)")),
+            ("admin", _l("Administrador (Admin)")),
         ],
         validators=[DataRequired()],
         default="system",
     )
-    party_id = SelectField(lazy_gettext("Tercero del portal"), choices=[], validators=[Optional()])
-    company = SelectField(lazy_gettext("Compañía del portal"), choices=[], validators=[Optional()])
-    active = BooleanField(lazy_gettext("Habilitado"))
-    guardar_usuario = SubmitField(lazy_gettext("Guardar usuario"))
+    party_id = SelectField(_l("Tercero del portal"), choices=[], validators=[Optional()])
+    company = SelectField(_l("Compañía del portal"), choices=[], validators=[Optional()])
+    active = BooleanField(_l("Habilitado"))
+    guardar_usuario = SubmitField(_l("Guardar usuario"))
 
 
 class UserPasswordForm(FlaskForm):
     """Formulario para cambiar contraseña de usuario desde administración."""
 
-    password = PasswordField(lazy_gettext("Nueva contraseña"), validators=[DataRequired(), Length(min=8)])
+    password = PasswordField(_l("Nueva contraseña"), validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
-        lazy_gettext("Confirmar contraseña"),
-        validators=[DataRequired(), EqualTo("password", message=lazy_gettext("Las contraseñas deben coincidir"))],
+        _l("Confirmar contraseña"),
+        validators=[DataRequired(), EqualTo("password", message=_l("Las contraseñas deben coincidir"))],
     )
-    cambiar_clave = SubmitField(lazy_gettext("Cambiar contraseña"))
+    cambiar_clave = SubmitField(_l("Cambiar contraseña"))
 
 
 class MultiCheckboxField(SelectMultipleField):
@@ -137,45 +137,45 @@ class MultiCheckboxField(SelectMultipleField):
 class UserRoleForm(FlaskForm):
     """Formulario para asignar roles a un usuario."""
 
-    roles = MultiCheckboxField(lazy_gettext("Roles"), validators=[Optional()], choices=[])
-    guardar_roles = SubmitField(lazy_gettext("Guardar roles"))
+    roles = MultiCheckboxField(_l("Roles"), validators=[Optional()], choices=[])
+    guardar_roles = SubmitField(_l("Guardar roles"))
 
 
 class UserCompanyAccessForm(FlaskForm):
     """Formulario para asignar compañías a un usuario interno."""
 
-    companies = MultiCheckboxField(lazy_gettext("Compañías"), validators=[Optional()], choices=[])
-    guardar_companias = SubmitField(lazy_gettext("Guardar compañías"))
+    companies = MultiCheckboxField(_l("Compañías"), validators=[Optional()], choices=[])
+    guardar_companias = SubmitField(_l("Guardar compañías"))
 
 
 class RoleForm(FlaskForm):
     """Formulario para crear o editar un rol."""
 
-    name = StringField(lazy_gettext("Nombre del rol"), validators=[DataRequired(), Length(min=3, max=50)])
-    note = StringField(lazy_gettext("Detalle"), validators=[Optional(), Length(max=100)])
-    guardar_rol = SubmitField(lazy_gettext("Guardar rol"))
+    name = StringField(_l("Nombre del rol"), validators=[DataRequired(), Length(min=3, max=50)])
+    note = StringField(_l("Detalle"), validators=[Optional(), Length(max=100)])
+    guardar_rol = SubmitField(_l("Guardar rol"))
 
 
 class OtpVerificationForm(FlaskForm):
     """Formulario para verificar un código OTP de 6 dígitos."""
 
-    code = StringField(lazy_gettext("Código de verificación"), validators=[DataRequired(), Length(min=6, max=6)])
-    verificar = SubmitField(lazy_gettext("Verificar"))
+    code = StringField(_l("Código de verificación"), validators=[DataRequired(), Length(min=6, max=6)])
+    verificar = SubmitField(_l("Verificar"))
 
 
 class ForgotPasswordForm(FlaskForm):
     """Formulario para solicitar recuperación de contraseña."""
 
-    email = StringField(lazy_gettext("Correo electrónico"), validators=[DataRequired(), Email()])
-    enviar = SubmitField(lazy_gettext("Enviar enlace de recuperación"))
+    email = StringField(_l("Correo electrónico"), validators=[DataRequired(), Email()])
+    enviar = SubmitField(_l("Enviar enlace de recuperación"))
 
 
 class ResetPasswordForm(FlaskForm):
     """Formulario para restablecer contraseña con token de recuperación."""
 
-    new_password = PasswordField(lazy_gettext("Nueva contraseña"), validators=[DataRequired(), Length(min=8)])
+    new_password = PasswordField(_l("Nueva contraseña"), validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
-        lazy_gettext("Confirmar contraseña"),
-        validators=[DataRequired(), EqualTo("new_password", message=lazy_gettext("Las contraseñas deben coincidir"))],
+        _l("Confirmar contraseña"),
+        validators=[DataRequired(), EqualTo("new_password", message=_l("Las contraseñas deben coincidir"))],
     )
-    restablecer = SubmitField(lazy_gettext("Restablecer contraseña"))
+    restablecer = SubmitField(_l("Restablecer contraseña"))

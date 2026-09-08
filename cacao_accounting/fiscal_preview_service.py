@@ -20,20 +20,23 @@ from cacao_accounting.accounting_engine.common.fiscal import affects_inventory_f
 from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts
 
+
+from cacao_accounting.i18n import _
+
 try:  # pragma: no cover - fallback para contextos sin Babel.
-    from flask_babel import gettext as _babel_gettext
+    from flask_babel import gettext as _fallback_gettext
 except ImportError:  # pragma: no cover
 
-    def _(value: str) -> str:
+    def _fallback_gettext(value: str) -> str:
         """Fallback identity translation."""
         return value
 
 else:
 
-    def _(value: str) -> str:
+    def _fallback_gettext(value: str) -> str:
         """Translate user-facing text when Babel is available."""
         try:
-            return _babel_gettext(value)
+            return _fallback_gettext(value)
         except (KeyError, RuntimeError):  # pragma: no cover
             return value
 

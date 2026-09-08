@@ -23,6 +23,9 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.party_settings import PartyCompanySettings, build_party_company_settings
 
+
+from cacao_accounting.i18n import _
+
 NATIONALITY_LABELS = {"national": "Nacional", "foreign": "Extranjero"}
 PERSON_TYPE_LABELS = {"natural": "Natural", "juridical": "Jurídica"}
 
@@ -75,14 +78,14 @@ def validate_party_group(group_id: str | None, role: str) -> PartyGroup | None:
     if not group_id:
         return None
     if role not in ("customer", "supplier"):
-        raise ValueError("El rol debe ser 'customer' o 'supplier'.")
+        raise ValueError(_("El rol debe ser 'customer' o 'supplier'."))
     group = database.session.get(PartyGroup, group_id)
     if not group:
-        raise ValueError("El tipo seleccionado no existe.")
+        raise ValueError(_("El tipo seleccionado no existe."))
     if group.group_type != role:
-        raise ValueError("El tipo seleccionado no corresponde al tercero.")
+        raise ValueError(_("El tipo seleccionado no corresponde al tercero."))
     if not group.is_active:
-        raise ValueError("El tipo seleccionado no esta activo.")
+        raise ValueError(_("El tipo seleccionado no esta activo."))
     return group
 
 
@@ -97,9 +100,9 @@ def apply_party_profile(party: Party, values: Mapping[str, str | None]) -> None:
     nationality_type = (values.get("nationality_type") or "").strip() or None
     person_type = (values.get("person_type") or "").strip() or None
     if nationality_type and nationality_type not in NATIONALITY_LABELS:
-        raise ValueError("La nacionalidad seleccionada no es valida.")
+        raise ValueError(_("La nacionalidad seleccionada no es valida."))
     if person_type and person_type not in PERSON_TYPE_LABELS:
-        raise ValueError("El tipo de persona seleccionada no es valido.")
+        raise ValueError(_("El tipo de persona seleccionada no es valido."))
 
     party.nationality_type = nationality_type
     party.person_type = person_type
@@ -138,7 +141,7 @@ def _parse_date(value: str | None) -> date | None:
     try:
         return date.fromisoformat(value)
     except ValueError as exc:  # pragma: no cover - validado en rutas
-        raise ValueError("La fecha de constitucion no es valida.") from exc
+        raise ValueError(_("La fecha de constitucion no es valida.")) from exc
 
 
 def _choice_label(labels: dict[str, str], value: str | None) -> str:
@@ -231,7 +234,7 @@ def create_party_contact(party_id: str, values: Mapping[str, str | None]) -> Con
         is_active=True,
     )
     if not contact.first_name:
-        raise ValueError("El nombre del contacto es obligatorio.")
+        raise ValueError(_("El nombre del contacto es obligatorio."))
     database.session.add(contact)
     database.session.flush()
     database.session.add(PartyContact(party_id=party_id, contact_id=contact.id, role=(values.get("role") or "") or None))
@@ -243,10 +246,10 @@ def update_party_contact(party_id: str, link_id: str, values: Mapping[str, str |
     link = _party_contact_link(party_id, link_id)
     contact = database.session.get(Contact, link.contact_id)
     if not contact:
-        raise ValueError("Contacto no encontrado.")
+        raise ValueError(_("Contacto no encontrado."))
     first_name = (values.get("first_name") or "").strip()
     if not first_name:
-        raise ValueError("El nombre del contacto es obligatorio.")
+        raise ValueError(_("El nombre del contacto es obligatorio."))
     contact.first_name = first_name
     contact.last_name = (values.get("last_name") or "").strip() or None
     contact.email = (values.get("email") or "").strip() or None
@@ -276,7 +279,7 @@ def create_party_address(party_id: str, values: Mapping[str, str | None]) -> Add
         is_active=True,
     )
     if not address.address_line1:
-        raise ValueError("La direccion es obligatoria.")
+        raise ValueError(_("La direccion es obligatoria."))
     database.session.add(address)
     database.session.flush()
     database.session.add(
@@ -295,10 +298,10 @@ def update_party_address(party_id: str, link_id: str, values: Mapping[str, str |
     link = _party_address_link(party_id, link_id)
     address = database.session.get(Address, link.address_id)
     if not address:
-        raise ValueError("Direccion no encontrada.")
+        raise ValueError(_("Direccion no encontrada."))
     line1 = (values.get("address_line1") or "").strip()
     if not line1:
-        raise ValueError("La direccion es obligatoria.")
+        raise ValueError(_("La direccion es obligatoria."))
     address.address_line1 = line1
     address.address_line2 = (values.get("address_line2") or "").strip() or None
     address.city = (values.get("city") or "").strip() or None
@@ -331,14 +334,14 @@ def party_account_labels(party_id: str, company: str) -> tuple[str, str]:
 def _party_contact_link(party_id: str, link_id: str) -> PartyContact:
     link = database.session.get(PartyContact, link_id)
     if not link or link.party_id != party_id:
-        raise ValueError("Contacto no encontrado.")
+        raise ValueError(_("Contacto no encontrado."))
     return link
 
 
 def _party_address_link(party_id: str, link_id: str) -> PartyAddress:
     link = database.session.get(PartyAddress, link_id)
     if not link or link.party_id != party_id:
-        raise ValueError("Direccion no encontrada.")
+        raise ValueError(_("Direccion no encontrada."))
     return link
 
 
@@ -374,13 +377,13 @@ def toggle_party_supplier_role(party_id: str, enable: bool, user_id: str | None 
     """
     party = database.session.get(Party, party_id)
     if party is None:
-        raise PartyRoleToggleError("El tercero no existe.")
+        raise PartyRoleToggleError(_("El tercero no existe."))
 
     if enable and party.is_supplier:
-        raise PartyRoleToggleError("El tercero ya es proveedor.")
+        raise PartyRoleToggleError(_("El tercero ya es proveedor."))
 
     if not enable and not party.is_supplier:
-        raise PartyRoleToggleError("El tercero no es proveedor.")
+        raise PartyRoleToggleError(_("El tercero no es proveedor."))
 
     if enable:
         party.is_supplier = True
@@ -408,13 +411,13 @@ def toggle_party_customer_role(party_id: str, enable: bool, user_id: str | None 
     """
     party = database.session.get(Party, party_id)
     if party is None:
-        raise PartyRoleToggleError("El tercero no existe.")
+        raise PartyRoleToggleError(_("El tercero no existe."))
 
     if enable and party.is_customer:
-        raise PartyRoleToggleError("El tercero ya es cliente.")
+        raise PartyRoleToggleError(_("El tercero ya es cliente."))
 
     if not enable and not party.is_customer:
-        raise PartyRoleToggleError("El tercero no es cliente.")
+        raise PartyRoleToggleError(_("El tercero no es cliente."))
 
     if enable:
         party.is_customer = True

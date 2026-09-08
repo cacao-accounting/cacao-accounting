@@ -14,6 +14,8 @@ from cacao_accounting.printing.settings import external_validation_enabled
 from cacao_accounting.printing.validation import ValidationService
 from cacao_accounting.runtime_mode import is_desktop_mode
 
+from cacao_accounting.i18n import _
+
 printing_public = Blueprint("printing_public", __name__)
 
 
@@ -66,7 +68,7 @@ def preview_document(document_type: str, document_id: str) -> str:
             company,
         )
         abort(404, str(exc))
-        raise RuntimeError("Flask abort returned unexpectedly")
+        raise RuntimeError(_("Flask abort returned unexpectedly"))
 
 
 @printing_public.route("/print/<document_type>/<document_id>/pdf")

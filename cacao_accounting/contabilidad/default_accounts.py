@@ -15,6 +15,9 @@ from sqlalchemy import select
 from cacao_accounting.database import Accounts, CompanyDefaultAccount, database
 
 
+from cacao_accounting.i18n import _
+
+
 class DefaultAccountError(ValueError):
     """Error de configuracion de cuentas predeterminadas."""
 
@@ -191,7 +194,7 @@ def load_catalog_default_mapping(catalog_file: str | Path) -> dict[str, str]:
     raw = json.loads(mapping_path.read_text(encoding="utf-8"))
     default_accounts = raw.get("default_accounts")
     if not isinstance(default_accounts, dict):
-        raise DefaultAccountError("El mapping JSON debe contener el objeto default_accounts.")
+        raise DefaultAccountError(_("El mapping JSON debe contener el objeto default_accounts."))
     missing = [field for field in DEFAULT_ACCOUNT_FIELDS if not default_accounts.get(field)]
     if missing:
         raise DefaultAccountError("Faltan cuentas predeterminadas en el mapping: " + ", ".join(missing))
@@ -225,7 +228,7 @@ def validate_default_account_assignment(company: str, field: str, account_id: st
     definition = DEFAULT_ACCOUNT_DEFINITION_BY_FIELD[field]
     account = _account_by_id(account_id)
     if not account or account.entity != company:
-        raise DefaultAccountError("La cuenta seleccionada no existe para la compania.")
+        raise DefaultAccountError(_("La cuenta seleccionada no existe para la compania."))
     account_type = (account.account_type or "").strip()
     if account_type and account_type not in definition.allowed_account_types:
         allowed = ", ".join(definition.allowed_account_types)
@@ -261,7 +264,7 @@ def validate_gl_account_usage(account_id: str, voucher_type: str | None) -> None
     """Valida restricciones estrictas de uso por tipo de cuenta."""
     account = _account_by_id(account_id)
     if not account:
-        raise DefaultAccountError("La cuenta contable configurada no existe.")
+        raise DefaultAccountError(_("La cuenta contable configurada no existe."))
     account_type = (account.account_type or "").strip()
     if not account_type:
         return

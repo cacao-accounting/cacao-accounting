@@ -34,6 +34,9 @@ from cacao_accounting.database import (
 )
 
 
+from cacao_accounting.i18n import _
+
+
 def _decimal(value: Any) -> Decimal:
     """Normaliza valores ORM y evita cálculos con ``None``."""
     return Decimal(str(value or "0"))
@@ -759,7 +762,7 @@ def _resolve_application_target_item(
                     economic_line_id=str(target_opening.economic_line_id or document.id),
                 )
     if target_cache is not None and amount > _decimal(target_cache.unallocated_amount):
-        raise ValueError("La aplicación excede el saldo pendiente del documento.")
+        raise ValueError(_("La aplicación excede el saldo pendiente del documento."))
     return target_opening, target_cache, new_movements
 
 
@@ -802,7 +805,7 @@ def _resolve_application_payment_item(
     payment_total = _decimal(payment.paid_amount or payment.received_amount)
     payment_sign = _payment_party_sign(payment)
     if consumed > payment_total:
-        raise ValueError("La aplicación excede el saldo nominal del pago.")
+        raise ValueError(_("La aplicación excede el saldo nominal del pago."))
     new_movements: list[ARAPLedgerEntry] = []
     if payment_opening is None:
         payment_opening = _new_movement(
@@ -835,7 +838,7 @@ def _resolve_application_payment_item(
                     unallocated_amount=payment_total,
                 )
     if payment_cache is not None and consumed > _decimal(payment_cache.unallocated_amount):
-        raise ValueError("La aplicación excede el saldo disponible del pago.")
+        raise ValueError(_("La aplicación excede el saldo disponible del pago."))
     return payment_opening, payment_cache, new_movements
 
 
@@ -955,12 +958,12 @@ def post_payment_application_ar_ap(
     amount = _decimal(document_amount)
     consumed = _decimal(payment_amount)
     if amount <= 0 or consumed <= 0:
-        raise ValueError("La aplicación AP/AR requiere importes positivos.")
+        raise ValueError(_("La aplicación AP/AR requiere importes positivos."))
     company = str(getattr(payment, "company", None) or getattr(document, "company", None) or "")
     party_type = str(getattr(payment, "party_type", None) or "").lower()
     party_id = str(getattr(payment, "party_id", None) or "")
     if not company or party_type not in {"customer", "supplier"} or not party_id:
-        raise ValueError("La aplicación AP/AR requiere compañía y tercero explícitos.")
+        raise ValueError(_("La aplicación AP/AR requiere compañía y tercero explícitos."))
 
     payment_type = "payment_entry"
     payment_id = str(payment.id)
@@ -968,19 +971,19 @@ def post_payment_application_ar_ap(
     document_type = _document_type(document)
     document_currency = str(_currency(document) or payment_currency)
     if not payment_currency or not document_currency:
-        raise ValueError("La aplicación AP/AR requiere monedas explícitas.")
+        raise ValueError(_("La aplicación AP/AR requiere monedas explícitas."))
 
     target_ledger_type = "AR" if party_type == "customer" else "AP"
     target_party_id = str(_party_id(document) or party_id)
     if target_party_id != party_id:
-        raise ValueError("El documento y el pago deben pertenecer al mismo tercero.")
+        raise ValueError(_("El documento y el pago deben pertenecer al mismo tercero."))
 
     movements: list[ARAPLedgerEntry] = []
     target_opening, target_cache, target_new_movements = _resolve_application_target_item(
         company, document, document_type, document_currency, party_type, party_id, target_ledger_type, amount, allocation_date
     )
     movements.extend(target_new_movements)
-    _, payment_cache, payment_new_movements = _resolve_application_payment_item(
+    _ignored, payment_cache, payment_new_movements = _resolve_application_payment_item(
         company,
         payment,
         payment_type,
@@ -1179,7 +1182,7 @@ def _apply_journal_open_item(
 ) -> ARAPLedgerEntry:
     """Registra la aplicación de una línea de diario a un open item."""
     if source_cache.direction == target.direction:
-        raise ValueError("La referencia AP/AR debe tener sentido contrario al movimiento del diario.")
+        raise ValueError(_("La referencia AP/AR debe tener sentido contrario al movimiento del diario."))
     target_delta = -amount if target.direction == "debit" else amount
     target_movement = _new_movement(
         document,
@@ -1254,7 +1257,7 @@ def _process_journal_line_reference(
     if not reference_type and not reference_name:
         return None
     if not reference_type or not reference_name:
-        raise ValueError("La referencia AP/AR requiere tipo y documento.")
+        raise ValueError(_("La referencia AP/AR requiere tipo y documento."))
     target = database.session.get(ARAPOpenItem, reference_name)
     if target is None:
         target = _find_target_open_item(
@@ -1266,20 +1269,20 @@ def _process_journal_line_reference(
             account_id=account_id,
         )
     if target is None:
-        raise ValueError("El documento de referencia AP/AR no tiene saldo abierto.")
+        raise ValueError(_("El documento de referencia AP/AR no tiene saldo abierto."))
     if target.party_type != party_type or str(target.party_id) != party_id:
-        raise ValueError("El documento de referencia no pertenece al tercero de la línea.")
+        raise ValueError(_("El documento de referencia no pertenece al tercero de la línea."))
     source_amount = abs(source_signed)
     if target.currency == currency:
         rate = Decimal("1")
     else:
         rate = _decimal(getattr(line, "reference_exchange_rate", None) or getattr(line, "exchange_rate", None))
         if rate <= 0:
-            raise ValueError("La referencia AP/AR requiere una tasa positiva entre monedas.")
+            raise ValueError(_("La referencia AP/AR requiere una tasa positiva entre monedas."))
     amount = min(_decimal(target.unallocated_amount), source_amount / rate)
     source_consumed = (amount * rate).quantize(Decimal("0.0001"))
     if amount <= 0 or source_consumed <= 0:
-        raise ValueError("El documento de referencia AP/AR no tiene saldo disponible.")
+        raise ValueError(_("El documento de referencia AP/AR no tiene saldo disponible."))
     return _apply_journal_open_item(
         document=document,
         line=line,
@@ -1347,7 +1350,7 @@ def _process_journal_party_line(
         return []
     currency = str(getattr(line, "currency_id", None) or document.transaction_currency or "")
     if not currency:
-        raise ValueError("La línea AP/AR requiere moneda documental explícita.")
+        raise ValueError(_("La línea AP/AR requiere moneda documental explícita."))
     economic_line_id = str(getattr(line, "economic_line_id", None) or line.id)
     reversal_source = None
     if getattr(document, "reversal_of", None):

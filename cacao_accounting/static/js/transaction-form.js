@@ -106,19 +106,20 @@
     'stock_entry',
   ]);
 
+  const i18n = globalThis.__TXF_I18N__ || {};
   const OPERATIONAL_DOCUMENT_LABELS = {
-    purchase_request: 'Solicitud de Compra',
-    purchase_quotation: 'Solicitud de Cotización',
-    supplier_quotation: 'Cotización de Proveedor',
-    purchase_order: 'Orden de Compra',
-    purchase_receipt: 'Recepción de Compra',
-    purchase_invoice: 'Factura de Compra',
-    sales_request: 'Pedido de Venta',
-    sales_quotation: 'Cotización de Venta',
-    sales_order: 'Orden de Venta',
-    delivery_note: 'Nota de Entrega',
-    sales_invoice: 'Factura de Venta',
-    stock_entry: 'Movimiento de Inventario',
+    purchase_request: i18n.purchaseRequest || 'Solicitud de Compra',
+    purchase_quotation: i18n.purchaseQuotation || 'Solicitud de Cotización',
+    supplier_quotation: i18n.supplierQuotation || 'Cotización de Proveedor',
+    purchase_order: i18n.purchaseOrder || 'Orden de Compra',
+    purchase_receipt: i18n.purchaseReceipt || 'Recepción de Compra',
+    purchase_invoice: i18n.purchaseInvoice || 'Factura de Compra',
+    sales_request: i18n.salesRequest || 'Pedido de Venta',
+    sales_quotation: i18n.salesQuotation || 'Cotización de Venta',
+    sales_order: i18n.salesOrder || 'Orden de Venta',
+    delivery_note: i18n.deliveryNote || 'Nota de Entrega',
+    sales_invoice: i18n.salesInvoice || 'Factura de Venta',
+    stock_entry: i18n.stockEntry || 'Movimiento de Inventario',
   };
 
   function normalizeAvailableSourceTypes(formKey, configuredTypes) {
@@ -245,23 +246,23 @@
   document.addEventListener('alpine:init', () => {
     Alpine.data('transactionForm', (config) => {
       const messages = {
-        itemCode: 'Código del item',
-        itemName: 'Descripción del item',
-        uom: 'Unidad de medida',
-        qty: 'Cantidad',
-        rate: 'Precio / Costo Unitario',
-        amount: 'Precio / Costo Total',
+        itemCode: i18n.itemCodeLabel || 'Código del item',
+        itemName: i18n.itemNameLabel || 'Descripción del item',
+        uom: i18n.uomLabel || 'Unidad de medida',
+        qty: i18n.qtyLabel || 'Cantidad',
+        rate: i18n.rateLabel || 'Precio / Costo Unitario',
+        amount: i18n.amountLabel || 'Precio / Costo Total',
         ...config.messages
       };
 
       const defaultCols = [
-        { field: 'item_code', label: 'Código', visible: true, width: 2, required: true },
-        { field: 'item_name', label: 'Descripción', visible: true, width: 3, required: false },
-        { field: 'uom', label: 'UOM', visible: true, width: 1, required: false },
-        { field: 'qty', label: 'Cantidad', visible: true, width: 1, required: false },
-        { field: 'rate', label: 'Precio', visible: true, width: 1, required: false },
+        { field: 'item_code', label: i18n.itemCodeLabel || 'Código', visible: true, width: 2, required: true },
+        { field: 'item_name', label: i18n.itemNameLabel || 'Descripción', visible: true, width: 3, required: false },
+        { field: 'uom', label: i18n.uomLabel || 'UOM', visible: true, width: 1, required: false },
+        { field: 'qty', label: i18n.qtyLabel || 'Cantidad', visible: true, width: 1, required: false },
+        { field: 'rate', label: i18n.rateLabel || 'Precio', visible: true, width: 1, required: false },
         { field: 'discount_percentage', label: 'Descuento %', visible: config.enableLineDiscounts === true, width: 1, required: false },
-        { field: 'amount', label: 'Monto', visible: true, width: 1, required: false },
+        { field: 'amount', label: i18n.amountLabel || 'Monto', visible: true, width: 1, required: false },
         { field: 'batch_id', label: 'Lote', visible: false, width: 1, required: false },
         { field: 'serial_no', label: 'Serie', visible: false, width: 1, required: false },
       ];
@@ -403,28 +404,30 @@
           this.submitError = '';
           this.syncLineInputs();
           if (this.sourceHydrationPending || this.loadingSource) {
-            this.submitError = 'Espere a que termine la carga del documento origen.';
+            this.submitError = i18n.errorLoadingSourceStep || 'Espere a que termine la carga del documento origen.';
             event.preventDefault();
             return;
           }
           if (!this.header.currency && !this.header.transaction_currency) {
-            this.submitError = 'La moneda transaccional es obligatoria.';
+            this.submitError = i18n.errorCurrencyRequired || 'La moneda transaccional es obligatoria.';
             event.preventDefault();
             return;
           }
           const requiresLines = Boolean(config.sourceApiUrl || config.requiresLines || config.initialSourceType);
           if (requiresLines && !this.lines.some((line) => String(line.item_code || '').trim())) {
-            this.submitError = 'El documento requiere al menos una línea.';
+            this.submitError = i18n.errorLinesRequired || 'El documento requiere al menos una línea.';
             event.preventDefault();
           }
+          const batchErrorTemplate = i18n.errorBatchRequired || 'El item {item_code} requiere lote.';
+          const serialErrorTemplate = i18n.errorSerialRequired || 'El item {item_code} requiere número de serie.';
           for (const line of this.lines) {
             if (line.item_code && line.has_batch && !line.batch_id) {
-              this.submitError = `El item ${line.item_code} requiere lote.`;
+              this.submitError = batchErrorTemplate.replace('{item_code}', line.item_code);
               event.preventDefault();
               return;
             }
             if (line.item_code && line.has_serial_no && !line.serial_no) {
-              this.submitError = `El item ${line.item_code} requiere número de serie.`;
+              this.submitError = serialErrorTemplate.replace('{item_code}', line.item_code);
               event.preventDefault();
               return;
             }
@@ -802,7 +805,7 @@
             const response = await this.requestTaxPreview();
             const data = await response.json();
             if (!response.ok) {
-              this.taxCharges.error = data?.message || 'No se pudo calcular.';
+              this.taxCharges.error = data?.message || i18n.errorTaxPreview || 'No se pudo calcular.';
               this.taxCharges.loading = false;
               return;
             }
@@ -814,7 +817,7 @@
 
         handleTaxPreviewError(err) {
           console.warn('transactionForm tax preview failed', err);
-          this.taxCharges.error = 'No se pudo calcular.';
+          this.taxCharges.error = i18n.errorTaxPreview || 'No se pudo calcular.';
           this.taxCharges.loading = false;
         },
 
@@ -861,7 +864,7 @@
 	            line_id: createUid(),
 	            source_rule_id: `MANUAL-${createUid()}`,
 	            manual: true,
-	            concept: 'Cargo manual',
+	            concept: i18n.manualTaxConcept || 'Cargo manual',
 	            type: 'charge',
 	            calculation_method: 'manual',
 	            base_mode: 'goods',
@@ -1021,7 +1024,7 @@
           } catch (err) {
             console.warn('Error al obtener source lines:', err);
             this.loadingSource = false;
-            this.sourceLoadError = 'No se pudieron cargar las líneas del documento origen.';
+            this.sourceLoadError = i18n.errorLoadingSource || 'No se pudieron cargar las líneas del documento origen.';
           } finally {
             this.sourceHydrationPending = false;
           }

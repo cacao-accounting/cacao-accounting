@@ -10,7 +10,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">Series de Numeracion</li>
   </ol>
 </nav>
@@ -35,7 +35,7 @@
       </select>
     </div>
     <div class="col-auto">
-      <button type="submit" class="btn btn-secondary btn-sm"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+      <button type="submit" class="btn btn-secondary btn-sm"><i class="bi bi-funnel me-1"></i>{{ _("Filtrar") }}</button>
     </div>
   </form>
 
@@ -43,7 +43,7 @@
     <caption style="display: none;">Listado de series de numeracion.</caption>
     <thead>
       <tr>
-        <th scope="col">Nombre</th>
+        <th scope="col">{{ _("Nombre") }}</th>
         <th scope="col">Tipo de Documento</th>
         <th scope="col">Compania</th>
         <th scope="col">Plantilla</th>
@@ -53,7 +53,7 @@
         <th scope="col">Contadores Externos</th>
         <th scope="col">Activa</th>
         <th scope="col">Predeterminada</th>
-        <th scope="col">Acciones</th>
+        <th scope="col">{{ _("Acciones") }}</th>
       </tr>
     </thead>
     <tbody>

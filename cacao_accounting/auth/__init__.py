@@ -20,7 +20,7 @@ from flask_login import LoginManager, current_user, login_required, login_user, 
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth import helpers
 from cacao_accounting.database import User, database
-from cacao_accounting.document_flow.status import _
+from cacao_accounting.i18n import _
 from cacao_accounting.limiter import limiter
 
 # <---------------------------------------------------------------------------------------------> #

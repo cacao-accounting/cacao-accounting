@@ -26,8 +26,8 @@
         <h4>Crear un Nuevo Comprobante de Diario.</h4>
     </div>
     <div>
-        <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
-        <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="btn btn-sm btn-danger" type="link">Cancelar</a>
+        <button class=" btn btn-sm btn-primary" type="submit">{{ _("Guardar") }}</button>
+        <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="btn btn-sm btn-danger" type="link">{{ _("Cancelar") }}</a>
     </div>
 </div>
 
@@ -452,8 +452,8 @@
         </div>
         <div>
             <p></p>
-            <button class=" btn btn-sm btn-primary" type="submit">Guardar</button>
-            <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="btn btn-sm btn-danger" type="link">Cancelar</a>
+            <button class=" btn btn-sm btn-primary" type="submit">{{ _("Guardar") }}</button>
+            <a href="{{ url_for("contabilidad.gl.gl_list") }}" class="btn btn-sm btn-danger" type="link">{{ _("Cancelar") }}</a>
         </div>
     </form>
 </div>

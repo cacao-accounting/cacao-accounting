@@ -144,7 +144,7 @@
       </li>
       {% else %}
       <li class="ca-no-access">
-        <span>Reportes</span>
+        <span>{{ _("Reportes") }}</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes', view_permission='reportes')) }}
       </li>
       {% endif %}

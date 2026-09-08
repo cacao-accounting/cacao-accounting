@@ -29,18 +29,21 @@ from cacao_accounting.reportes.services import (
 )
 from cacao_accounting.version import APPNAME
 
+
+from cacao_accounting.i18n import _
+
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
-    from flask_babel import gettext as _babel_gettext
+    from flask_babel import gettext as _fallback_gettext
 except ImportError:  # pragma: no cover
 
-    def _(value: str) -> str:
+    def _fallback_gettext(value: str) -> str:
         return value
 
 else:
 
-    def _(value: str) -> str:
+    def _fallback_gettext(value: str) -> str:
         try:
-            return _babel_gettext(value)
+            return _fallback_gettext(value)
         except (KeyError, RuntimeError):
             return value
 

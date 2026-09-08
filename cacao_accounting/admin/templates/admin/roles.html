@@ -9,9 +9,9 @@
       </a>
     </li>
     <li class="breadcrumb-item">
-      <a href="{{ url_for('admin.admin_') }}" class="link-dark">Configuración</a>
+      <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a>
     </li>
-    <li class="breadcrumb-item active" aria-current="page">Roles</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Roles") }}</li>
   </ol>
 </nav>
 
@@ -42,9 +42,9 @@
       <caption>{{ _("Lista de roles definidos en el sistema") }}</caption>
       <thead>
         <tr>
-          <th>Rol</th>
-          <th>Detalle</th>
-          <th class="text-end">Acciones</th>
+          <th>{{ _("Rol") }}</th>
+          <th>{{ _("Detalle") }}</th>
+          <th class="text-end">{{ _("Acciones") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -53,8 +53,8 @@
           <td><strong>{{ rol.name }}</strong></td>
           <td>{{ rol.note or "-" }}</td>
           <td class="text-end">
-            <a href="{{ url_for('admin.editar_rol', role_id=rol.id) }}" class="btn btn-sm btn-outline-primary me-1">Editar</a>
-            <a href="{{ url_for('admin.rol_permisos', role_id=rol.id) }}" class="btn btn-sm btn-outline-secondary">Permisos</a>
+            <a href="{{ url_for('admin.editar_rol', role_id=rol.id) }}" class="btn btn-sm btn-outline-primary me-1">{{ _("Editar") }}</a>
+            <a href="{{ url_for('admin.rol_permisos', role_id=rol.id) }}" class="btn btn-sm btn-outline-secondary">{{ _("Permisos") }}</a>
           </td>
         </tr>
         {% endfor %}

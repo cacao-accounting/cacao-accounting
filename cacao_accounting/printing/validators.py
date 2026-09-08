@@ -7,11 +7,14 @@ from typing import Optional
 from cacao_accounting.printing.exceptions import TemplateValidationError
 
 
+from cacao_accounting.i18n import _
+
+
 def validate_template_security(template_body: str) -> None:
     """Valida que la plantilla no contenga elementos prohibidos."""
     # Check for <script>
     if re.search(r"<script", template_body, re.IGNORECASE):
-        raise TemplateValidationError("Las plantillas no pueden contener etiquetas <script>.")
+        raise TemplateValidationError(_("Las plantillas no pueden contener etiquetas <script>."))
 
     # Check for inline events
     forbidden_events = [
@@ -34,4 +37,4 @@ def validate_css_safety(stylesheet_body: Optional[str]) -> None:
 
     # Basic check for expression() or other dynamic CSS
     if "expression(" in stylesheet_body.lower():
-        raise TemplateValidationError("Dynamic CSS expressions are not allowed.")
+        raise TemplateValidationError(_("Dynamic CSS expressions are not allowed."))

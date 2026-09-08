@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.mypy
     pkgs.python312Packages.flake8
     pkgs.ruff
     pkgs.python312Packages.black

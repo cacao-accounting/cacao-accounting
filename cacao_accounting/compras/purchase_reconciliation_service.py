@@ -41,6 +41,8 @@ from cacao_accounting.database import (
     database,
 )
 
+from cacao_accounting.i18n import _
+
 RECEIPT_LINE_NOT_FOUND_ERROR = "No existe linea de recepcion compatible para la linea de factura."
 
 # ---------------------------------------------------------------------------
@@ -206,7 +208,7 @@ def _line_amount(line: Any) -> Decimal:
 def _line_rate(line: Any) -> Decimal:
     qty = _line_qty(line)
     if qty <= 0:
-        raise PurchaseReconciliationError("La linea de conciliacion requiere cantidad positiva.")
+        raise PurchaseReconciliationError(_("La linea de conciliacion requiere cantidad positiva."))
     return _line_amount(line) / qty
 
 
@@ -342,7 +344,7 @@ def allocate_purchase_invoice_receipt_lines(
     for invoice in invoices:
         if invoice.transaction_currency and receipt.transaction_currency:
             if invoice.transaction_currency != receipt.transaction_currency:
-                raise PurchaseReconciliationError("La factura y la recepción deben usar la misma moneda.")
+                raise PurchaseReconciliationError(_("La factura y la recepción deben usar la misma moneda."))
         invoice_items = _invoice_items(invoice.id)
         for invoice_item in invoice_items:
             remaining_invoice_qty = _item_qty_in_base_uom(invoice_item) - _allocated_invoice_qty(invoice_item.id)
@@ -360,7 +362,7 @@ def allocate_purchase_invoice_receipt_lines(
                 receipt_qty_base = _item_qty_in_base_uom(receipt_item)
                 invoice_qty_base = _item_qty_in_base_uom(invoice_item)
                 if receipt_qty_base <= 0 or invoice_qty_base <= 0:
-                    raise PurchaseReconciliationError("Las líneas de factura y recepción deben tener cantidad positiva.")
+                    raise PurchaseReconciliationError(_("Las líneas de factura y recepción deben tener cantidad positiva."))
                 receipt_amount = _line_amount(receipt_item) * qty_base / receipt_qty_base
                 invoice_amount = _line_amount(invoice_item) * qty_base / invoice_qty_base
                 receipt_fx = _decimal_value(receipt.exchange_rate) or Decimal("1")
@@ -399,12 +401,12 @@ def create_purchase_receipt_return_allocations(receipt_id: str) -> list[Purchase
     if returned_receipt is None or not returned_receipt.is_return:
         return []
     if not returned_receipt.reversal_of:
-        raise PurchaseReconciliationError("La devolución requiere una recepción original.")
+        raise PurchaseReconciliationError(_("La devolución requiere una recepción original."))
     original = database.session.get(PurchaseReceipt, returned_receipt.reversal_of, with_for_update=True)
     if original is None or original.docstatus != 1:
-        raise PurchaseReconciliationError("La recepción original debe estar aprobada.")
+        raise PurchaseReconciliationError(_("La recepción original debe estar aprobada."))
     if original.company != returned_receipt.company or original.supplier_id != returned_receipt.supplier_id:
-        raise PurchaseReconciliationError("La devolución y la recepción original deben compartir compañía y proveedor.")
+        raise PurchaseReconciliationError(_("La devolución y la recepción original deben compartir compañía y proveedor."))
     original_items: dict[str, list[PurchaseReceiptItem]] = defaultdict(list)
     for item in _receipt_items(original.id):
         original_items[item.item_code].append(item)
@@ -425,7 +427,7 @@ def create_purchase_receipt_return_allocations(receipt_id: str) -> list[Purchase
             )
         ).scalar_one()
         if qty_in_base_uom + _decimal_value(already_returned) > _item_qty_in_base_uom(original_item):
-            raise PurchaseReconciliationError("La devolución excede la cantidad recibida original.")
+            raise PurchaseReconciliationError(_("La devolución excede la cantidad recibida original."))
         receipt_fx = _decimal_value(returned_receipt.exchange_rate) or Decimal("1")
         row = PurchaseReceiptReturnAllocation(
             original_receipt_item_id=original_item.id,
@@ -459,12 +461,12 @@ def create_purchase_credit_note_allocations(credit_note_id: str) -> list[Purchas
     if note is None or note.docstatus != 1 or note.document_type != "purchase_credit_note":
         return []
     if not note.reversal_of:
-        raise PurchaseReconciliationError("La nota de crédito requiere una factura origen.")
+        raise PurchaseReconciliationError(_("La nota de crédito requiere una factura origen."))
     source = database.session.get(PurchaseInvoice, note.reversal_of, with_for_update=True)
     if source is None or source.docstatus != 1:
-        raise PurchaseReconciliationError("La factura origen de la nota de crédito debe estar aprobada.")
+        raise PurchaseReconciliationError(_("La factura origen de la nota de crédito debe estar aprobada."))
     if source.company != note.company or source.supplier_id != note.supplier_id:
-        raise PurchaseReconciliationError("La nota y la factura origen deben compartir compañía y proveedor.")
+        raise PurchaseReconciliationError(_("La nota y la factura origen deben compartir compañía y proveedor."))
 
     source_items = _invoice_items(source.id)
     source_by_code: dict[str, list[PurchaseInvoiceItem]] = defaultdict(list)
@@ -476,7 +478,7 @@ def create_purchase_credit_note_allocations(credit_note_id: str) -> list[Purchas
     return_items_by_code: dict[str, list[PurchaseReceiptItem]] = defaultdict(list)
     if physical_return:
         if return_receipt is None or not return_receipt.is_return or return_receipt.docstatus != 1:
-            raise PurchaseReconciliationError("La nota física requiere una devolución de recepción aprobada.")
+            raise PurchaseReconciliationError(_("La nota física requiere una devolución de recepción aprobada."))
         for item in _receipt_items(return_receipt.id):
             return_items_by_code[item.item_code].append(item)
 
@@ -493,7 +495,9 @@ def create_purchase_credit_note_allocations(credit_note_id: str) -> list[Purchas
             continue
         candidates = source_by_code.get(note_item.item_code, [])
         if len(candidates) != 1:
-            raise PurchaseReconciliationError("La línea de la nota debe corresponder a una única línea de la factura origen.")
+            raise PurchaseReconciliationError(
+                _("La línea de la nota debe corresponder a una única línea de la factura origen.")
+            )
         source_item = candidates[0]
         amount = _line_amount(note_item)
         allocated_amount = database.session.execute(
@@ -504,7 +508,7 @@ def create_purchase_credit_note_allocations(credit_note_id: str) -> list[Purchas
         ).scalar_one()
         source_amount = _line_amount(source_item)
         if _decimal_value(allocated_amount) + amount > source_amount:
-            raise PurchaseReconciliationError("La nota de crédito excede el importe de la línea de la factura origen.")
+            raise PurchaseReconciliationError(_("La nota de crédito excede el importe de la línea de la factura origen."))
 
         return_item = None
         if physical_return:
@@ -521,7 +525,7 @@ def create_purchase_credit_note_allocations(credit_note_id: str) -> list[Purchas
                 )
             ).scalar_one_or_none()
             if return_allocation is None:
-                raise PurchaseReconciliationError("La devolución física no tiene asignación de recepción activa.")
+                raise PurchaseReconciliationError(_("La devolución física no tiene asignación de recepción activa."))
             invoice_allocation = database.session.execute(
                 select(PurchaseInvoiceReceiptAllocation).where(
                     PurchaseInvoiceReceiptAllocation.invoice_item_id == source_item.id,
@@ -530,9 +534,9 @@ def create_purchase_credit_note_allocations(credit_note_id: str) -> list[Purchas
                 )
             ).scalar_one_or_none()
             if invoice_allocation is None:
-                raise PurchaseReconciliationError("La devolución física no está vinculada a la factura origen.")
+                raise PurchaseReconciliationError(_("La devolución física no está vinculada a la factura origen."))
             if _item_qty_in_base_uom(note_item) > _item_qty_in_base_uom(return_item):
-                raise PurchaseReconciliationError("La nota física excede la cantidad de la devolución de recepción.")
+                raise PurchaseReconciliationError(_("La nota física excede la cantidad de la devolución de recepción."))
             return_invoice_amount = database.session.execute(
                 select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.invoice_amount), 0)).where(
                     PurchaseInvoiceReceiptAllocation.invoice_item_id == source_item.id,
@@ -541,7 +545,7 @@ def create_purchase_credit_note_allocations(credit_note_id: str) -> list[Purchas
                 )
             ).scalar_one()
             if amount > _decimal_value(return_invoice_amount):
-                raise PurchaseReconciliationError("La nota física excede el importe facturado de la devolución.")
+                raise PurchaseReconciliationError(_("La nota física excede el importe facturado de la devolución."))
 
         row = PurchaseCreditNoteAllocation(
             credit_note_item_id=note_item.id,
@@ -730,7 +734,7 @@ def _find_receipt_item_for_invoice_line(
     if not candidates:
         raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
     if len(candidates) > 1 and invoice_item.warehouse is None:
-        raise PurchaseReconciliationError("La linea de factura requiere almacen para conciliar sin ambiguedad.")
+        raise PurchaseReconciliationError(_("La linea de factura requiere almacen para conciliar sin ambiguedad."))
     return candidates[0]
 
 
@@ -739,7 +743,7 @@ def _find_order_item_for_invoice_line(order_items: list[Any], invoice_item: Purc
     if not candidates:
         raise PurchaseReconciliationError(f"No existe linea de OC compatible para el item {invoice_item.item_code}.")
     if len(candidates) > 1:
-        raise PurchaseReconciliationError("La linea de factura requiere una OC sin lineas duplicadas ambiguas.")
+        raise PurchaseReconciliationError(_("La linea de factura requiere una OC sin lineas duplicadas ambiguas."))
     return candidates[0]
 
 
@@ -1067,7 +1071,7 @@ def reconcile_purchase_invoice(
     # duplicate reconciliation for the same invoice.
     invoice = database.session.get(PurchaseInvoice, purchase_invoice_id, with_for_update=True)
     if not invoice:
-        raise PurchaseReconciliationError("La factura de compra no existe.")
+        raise PurchaseReconciliationError(_("La factura de compra no existe."))
 
     duplicate = database.session.execute(
         select(PurchaseReconciliation.id)
@@ -1076,7 +1080,7 @@ def reconcile_purchase_invoice(
         .limit(1)
     ).scalar_one_or_none()
     if duplicate:
-        raise PurchaseReconciliationError("La factura de compra ya tiene una conciliacion activa.")
+        raise PurchaseReconciliationError(_("La factura de compra ya tiene una conciliacion activa."))
 
     config = get_matching_config(str(invoice.company))
 
@@ -1125,7 +1129,7 @@ def _calculate_three_way_totals(
         if receipt_group is None:
             raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
         if invoice_group.qty <= 0:
-            raise PurchaseReconciliationError("La cantidad facturada debe ser positiva.")
+            raise PurchaseReconciliationError(_("La cantidad facturada debe ser positiva."))
         pending_qty = sum(
             (_line_qty(line) - _matched_qty_for_receipt_item(line.id) for line in receipt_group.lines),
             Decimal("0"),
@@ -1166,7 +1170,7 @@ def _persist_three_way_items(
             raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
         slices = _available_line_slices(receipt_group.lines, _line_qty(invoice_item), order_mode=False)
         if not slices:
-            raise PurchaseReconciliationError("No queda cantidad pendiente en la recepción para la factura.")
+            raise PurchaseReconciliationError(_("No queda cantidad pendiente en la recepción para la factura."))
         for receipt_item, matched_qty in slices:
             database.session.add(
                 _three_way_reconciliation_item(
@@ -1185,13 +1189,15 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     invoice_po_id = getattr(invoice, "purchase_order_id", None)
     receipt_po_id = getattr(receipt, "purchase_order_id", None)
     if config.require_purchase_order and not (invoice_po_id and receipt_po_id):
-        raise PurchaseReconciliationError("La configuración de la compañía requiere una orden de compra para la conciliación.")
+        raise PurchaseReconciliationError(
+            _("La configuración de la compañía requiere una orden de compra para la conciliación.")
+        )
     if invoice_po_id and receipt_po_id and invoice_po_id != receipt_po_id:
-        raise PurchaseReconciliationError("La factura y la recepción deben pertenecer a la misma orden de compra.")
+        raise PurchaseReconciliationError(_("La factura y la recepción deben pertenecer a la misma orden de compra."))
     receipt_items = _lock_receipt_items(receipt.id)
     invoice_items = _invoice_items(invoice.id)
     if not receipt_items or not invoice_items:
-        raise PurchaseReconciliationError("La conciliacion 3-way requiere lineas de recepcion y factura.")
+        raise PurchaseReconciliationError(_("La conciliacion 3-way requiere lineas de recepcion y factura."))
     receipt_groups = _aggregate_lines_by_item_and_uom(receipt_items)
     invoice_groups = _aggregate_lines_by_item_and_uom(invoice_items)
 
@@ -1234,7 +1240,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     order_items = _lock_purchase_order_items(purchase_order_id)
     invoice_items = _invoice_items(invoice.id)
     if not order_items or not invoice_items:
-        raise PurchaseReconciliationError("La conciliacion 2-way requiere lineas de OC y factura.")
+        raise PurchaseReconciliationError(_("La conciliacion 2-way requiere lineas de OC y factura."))
     order_groups = _aggregate_lines_by_item_and_uom(order_items)
     invoice_groups = _aggregate_lines_by_item_and_uom(invoice_items)
 
@@ -1266,7 +1272,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
             item_code, _uom, _warehouse = key
             raise PurchaseReconciliationError(f"No existe linea de OC compatible para el item {item_code}.")
         if invoice_group.qty <= 0:
-            raise PurchaseReconciliationError("La cantidad facturada debe ser positiva.")
+            raise PurchaseReconciliationError(_("La cantidad facturada debe ser positiva."))
         pending_qty = sum(
             (_line_qty(line) - _matched_qty_for_order_item(line.id) for line in order_group.lines),
             Decimal("0"),
@@ -1308,10 +1314,10 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
         for invoice_item in invoice_items:
             order_group = _compatible_group(order_groups, invoice_item)
             if order_group is None:
-                raise PurchaseReconciliationError("No existe linea de OC compatible para la linea de factura.")
+                raise PurchaseReconciliationError(_("No existe linea de OC compatible para la linea de factura."))
             slices = _available_line_slices(order_group.lines, _line_qty(invoice_item), order_mode=True)
             if not slices:
-                raise PurchaseReconciliationError("No queda cantidad pendiente en la orden de compra para la factura.")
+                raise PurchaseReconciliationError(_("No queda cantidad pendiente en la orden de compra para la factura."))
             for order_item, matched_qty in slices:
                 database.session.add(
                     _two_way_reconciliation_item(
@@ -1331,18 +1337,18 @@ def _load_purchase_order_for_invoice(invoice: PurchaseInvoice) -> tuple[str, Any
 
     purchase_order_id = getattr(invoice, "purchase_order_id", None)
     if not purchase_order_id:
-        raise PurchaseReconciliationError("Matching 2-way requiere que la factura referencie una orden de compra.")
+        raise PurchaseReconciliationError(_("Matching 2-way requiere que la factura referencie una orden de compra."))
     order = database.session.get(PurchaseOrder, purchase_order_id)
     if not order:
-        raise PurchaseReconciliationError("La orden de compra referenciada no existe.")
+        raise PurchaseReconciliationError(_("La orden de compra referenciada no existe."))
     if getattr(order, "company", None) != invoice.company:
-        raise PurchaseReconciliationError("La factura y la orden de compra deben pertenecer a la misma compania.")
+        raise PurchaseReconciliationError(_("La factura y la orden de compra deben pertenecer a la misma compania."))
     if getattr(order, "supplier_id", None) != getattr(invoice, "supplier_id", None):
-        raise PurchaseReconciliationError("La factura y la orden de compra deben pertenecer al mismo proveedor.")
+        raise PurchaseReconciliationError(_("La factura y la orden de compra deben pertenecer al mismo proveedor."))
     if getattr(order, "docstatus", 0) != 1:
-        raise PurchaseReconciliationError("La orden de compra debe estar aprobada para el matching 2-way.")
+        raise PurchaseReconciliationError(_("La orden de compra debe estar aprobada para el matching 2-way."))
     if getattr(order, "transaction_currency", None) != getattr(invoice, "transaction_currency", None):
-        raise PurchaseReconciliationError("La factura y la orden de compra deben estar en la misma moneda.")
+        raise PurchaseReconciliationError(_("La factura y la orden de compra deben estar en la misma moneda."))
     return purchase_order_id, order
 
 
@@ -1350,18 +1356,18 @@ def _load_purchase_receipt_for_invoice(invoice: PurchaseInvoice) -> PurchaseRece
     """Carga y valida la recepcion asociada a una factura 3-way."""
     purchase_receipt_id = getattr(invoice, "purchase_receipt_id", None)
     if not purchase_receipt_id:
-        raise PurchaseReconciliationError("Matching 3-way requiere que la factura referencie una recepcion de compra.")
+        raise PurchaseReconciliationError(_("Matching 3-way requiere que la factura referencie una recepcion de compra."))
     receipt = database.session.get(PurchaseReceipt, purchase_receipt_id)
     if not receipt:
-        raise PurchaseReconciliationError("La recepcion de compra referenciada no existe.")
+        raise PurchaseReconciliationError(_("La recepcion de compra referenciada no existe."))
     if receipt.company != invoice.company:
-        raise PurchaseReconciliationError("La factura y la recepcion deben pertenecer a la misma compania.")
+        raise PurchaseReconciliationError(_("La factura y la recepcion deben pertenecer a la misma compania."))
     if getattr(receipt, "supplier_id", None) != getattr(invoice, "supplier_id", None):
-        raise PurchaseReconciliationError("La factura y la recepcion deben pertenecer al mismo proveedor.")
+        raise PurchaseReconciliationError(_("La factura y la recepcion deben pertenecer al mismo proveedor."))
     if getattr(receipt, "docstatus", 0) != 1:
-        raise PurchaseReconciliationError("La recepcion de compra debe estar aprobada.")
+        raise PurchaseReconciliationError(_("La recepcion de compra debe estar aprobada."))
     if getattr(receipt, "transaction_currency", None) != getattr(invoice, "transaction_currency", None):
-        raise PurchaseReconciliationError("La factura y la recepcion deben estar en la misma moneda.")
+        raise PurchaseReconciliationError(_("La factura y la recepcion deben estar en la misma moneda."))
     return receipt
 
 

@@ -5,7 +5,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.fiscal_year_closing_list') }}" class="link-dark">Cierres de Año Fiscal</a></li>
     <li class="breadcrumb-item active" aria-current="page">Nuevo Cierre</li>
   </ol>
@@ -24,7 +24,7 @@
 
     <form method="POST" action="{{ url_for('contabilidad.fiscal_year_closing_new') }}" class="row g-3">
       <div class="col-md-6">
-        <label for="company" class="form-label">Compañía</label>
+        <label for="company" class="form-label">{{ _("Compañía") }}</label>
         <select name="company" id="company" class="form-select" required>
           <option value="">— Seleccione Compañía —</option>
           {% for e in entidades %}
@@ -48,7 +48,7 @@
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-check-circle me-1"></i>Ejecutar Cierre Contable
         </button>
-        <a href="{{ url_for('contabilidad.fiscal_year_closing_list') }}" class="btn btn-outline-secondary ms-2">Cancelar</a>
+        <a href="{{ url_for('contabilidad.fiscal_year_closing_list') }}" class="btn btn-outline-secondary ms-2">{{ _("Cancelar") }}</a>
       </div>
     </form>
   </div>

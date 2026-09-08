@@ -34,6 +34,9 @@ from cacao_accounting.printing.validation import ValidationService
 from cacao_accounting.printing.validators import validate_css_safety, validate_template_security
 
 
+from cacao_accounting.i18n import _
+
+
 @dataclass(frozen=True)
 class TemplateValidationResult:
     """Result returned by template validation."""
@@ -156,7 +159,7 @@ class PrintService:
             self._inject_validation_context(context, document_type, "sample", None)
             rendered = self.env.from_string(template_body).render(**context)
             if not rendered.strip():
-                raise TemplateValidationError("La plantilla renderizada esta vacia.")
+                raise TemplateValidationError(_("La plantilla renderizada esta vacia."))
             if "validation.qr_data_uri" in template_body:
                 ValidationService().get_qr_data_uri("https://cacaocontent.com/public/validate_doc/sample")
             if validate_pdf:
@@ -304,7 +307,7 @@ class PrintService:
             self._inject_validation_context(context, document_type, "sample", company_code)
             return context
         if not document_id:
-            raise ValueError("document_id is required for non-sample rendering.")
+            raise ValueError(_("document_id is required for non-sample rendering."))
         self._authorize_document(document_type, document_id, user, company_code, doc_def)
         context = doc_def["context_builder"](document_id, user, company_code)
         self._inject_audit_metadata(context, document_id, company_code)
@@ -392,30 +395,30 @@ class PrintService:
         }
         model = models.get(document_type)
         if model is None:
-            raise PrintPermissionError("Document type has no authorization policy.")
+            raise PrintPermissionError(_("Document type has no authorization policy."))
         document = database.session.get(model, document_id)
         if document is None:
-            raise PrintPermissionError("Document not found.")
+            raise PrintPermissionError(_("Document not found."))
         document_company = getattr(document, "company", None) or getattr(document, "entity", None)
         if str(document_company or "") != str(company_code):
-            raise PrintPermissionError("Document is not available for this company.")
+            raise PrintPermissionError(_("Document is not available for this company."))
 
         classification = str(getattr(user, "classification", "") or "").lower()
         party_id = getattr(user, "party_id", None)
         if classification == "customer":
             if not party_id or getattr(document, "customer_id", None) != party_id:
-                raise PrintPermissionError("Document is not available for this customer.")
+                raise PrintPermissionError(_("Document is not available for this customer."))
             return
         if classification == "supplier":
             if not party_id or getattr(document, "supplier_id", None) != party_id:
-                raise PrintPermissionError("Document is not available for this supplier.")
+                raise PrintPermissionError(_("Document is not available for this supplier."))
             return
 
         module_name = definition["permission"].split(".", 1)[0]
         try:
             exige_acceso_compania(module_name, company_code, "consultar")
         except HTTPException as exc:
-            raise PrintPermissionError("User has no permission to print this document.") from exc
+            raise PrintPermissionError(_("User has no permission to print this document.")) from exc
 
     def _resolve_template_by_id(
         self,
@@ -426,11 +429,11 @@ class PrintService:
     ) -> PrintTemplate:
         template = database.session.get(PrintTemplate, template_id)
         if template is None or template.document_type != document_type:
-            raise PrintTemplateNotFoundError("Template not found for requested document type.")
+            raise PrintTemplateNotFoundError(_("Template not found for requested document type."))
         if template.company_code not in (None, company_code):
-            raise PrintPermissionError("Template is not available for this company.")
+            raise PrintPermissionError(_("Template is not available for this company."))
         if template.status != "published" and not allow_draft:
-            raise PrintTemplateNotFoundError("Template is not published.")
+            raise PrintTemplateNotFoundError(_("Template is not published."))
         return template
 
     def _default_template(self, document_type: str, company_code: str | None) -> PrintTemplate | None:

@@ -6,17 +6,17 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">Contabilidad</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Cierres de Año Fiscal</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Cierres de Año Fiscal") }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-calendar-check"></i> Cierres de Año Fiscal</h5>
+    <h5 class="ca-card-title"><i class="bi bi-calendar-check"></i> {{ _("Cierres de Año Fiscal") }}</h5>
     {% if usuario.classification == "admin" %}
     <a class="btn btn-primary btn-sm" href="{{ url_for('contabilidad.fiscal_year_closing_new') }}" role="button">
-      <i class="bi bi-plus-lg me-1"></i>Nuevo Cierre
+      <i class="bi bi-plus-lg me-1"></i>{{ _("Nuevo Cierre") }}
     </a>
     {% endif %}
   </div>
@@ -24,16 +24,16 @@
   <div class="ca-card-body">
     <form class="row g-3 mb-4" method="GET" action="{{ url_for('contabilidad.fiscal_year_closing_list') }}">
       <div class="col-md-4">
-        <label for="company" class="form-label">Compañía</label>
+        <label for="company" class="form-label">{{ _("Compañía") }}</label>
         <select name="company" id="company" class="form-select form-select-sm">
-          <option value="">— Todas —</option>
+          <option value="">{{ _("— Todas —") }}</option>
           {% for e in entidades %}
           <option value="{{ e.code }}" {% if company_filter == e.code %}selected{% endif %}>{{ e.name }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="col-md-2 d-flex align-items-end">
-        <button type="submit" class="btn btn-secondary btn-sm">Filtrar</button>
+        <button type="submit" class="btn btn-secondary btn-sm">{{ _("Filtrar") }}</button>
       </div>
     </form>
 
@@ -42,13 +42,13 @@
         <caption>{{ _("Lista de comprobantes de cierre de año fiscal") }}</caption>
         <thead>
           <tr>
-            <th>Fecha</th>
-            <th>Comprobante</th>
-            <th>Compañía</th>
-            <th>Año Fiscal</th>
-            <th>Estado</th>
-            <th>Referencia</th>
-            <th class="text-end">Monto</th>
+             <th>{{ _("Fecha") }}</th>
+            <th>{{ _("Comprobante") }}</th>
+            <th>{{ _("Compañía") }}</th>
+            <th>{{ _("Año Fiscal") }}</th>
+            <th>{{ _("Estado") }}</th>
+            <th>{{ _("Referencia") }}</th>
+            <th class="text-end">{{ _("Monto") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -60,11 +60,11 @@
             <td>{{ journal.fiscal_year_id }}</td>
             <td>
               {% if journal.status == 'draft' %}
-                <span class="badge bg-secondary">Borrador</span>
+                <span class="badge bg-secondary">{{ _("Borrador") }}</span>
               {% elif journal.status == 'submitted' %}
-                <span class="badge bg-success">Aprobado</span>
+                <span class="badge bg-success">{{ _("Aprobado") }}</span>
               {% elif journal.status == 'cancelled' %}
-                <span class="badge bg-danger">Anulado</span>
+                <span class="badge bg-danger">{{ _("Anulado") }}</span>
               {% else %}
                 <span class="badge bg-light text-dark">{{ journal.status }}</span>
               {% endif %}

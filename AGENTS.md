@@ -1,6 +1,6 @@
 # Introducción
 
-Cacao Accouting es un software contable que busca dar cobertura completa y robusta a los siguientes
+Cacao Accounting es un software contable que busca dar cobertura completa y robusta a los siguientes
 flujo de negocio:
 
 - Order to Cash (O2C): Flujo completo del ciclo de venta.
@@ -181,7 +181,12 @@ de Jinja2 que será renderizado server side antes de llegar al cliente.
 
 ## Soporte multilang
 
-Todas las cadenas de texto visibles al usuario deben de marcarse para traducción.
+Todas las cadenas de texto visibles al usuario deben de marcarse para traducción, el idioma
+base de desarrollo es el español, las cadenas de texto visibles al usuario deben estar marcadas
+para traducción y traducidad correctamente.
+
+Siempre al agregar cadenas nuevas de texto visibles al usuario estan deben marcarse para traduccion
+e incorporar la traducción del español al ingles en cacao_accounting/translations/en/LC_MESSAGES/messages.po
 
 ## Dependencias
 

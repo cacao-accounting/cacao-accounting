@@ -48,6 +48,9 @@ from cacao_accounting.database import (
 from cacao_accounting.decorators import exige_acceso_compania
 
 
+from cacao_accounting.i18n import _
+
+
 class InventoryServiceError(ValueError):
     """Error controlado de servicios de inventario."""
 
@@ -58,9 +61,9 @@ def validate_default_warehouse(warehouse_code: str | None, action: str = "crear"
         return
     warehouse = database.session.execute(select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
     if warehouse is None:
-        raise InventoryServiceError("La bodega predeterminada no existe.")
+        raise InventoryServiceError(_("La bodega predeterminada no existe."))
     if not warehouse.is_active:
-        raise InventoryServiceError("La bodega predeterminada está inactiva.")
+        raise InventoryServiceError(_("La bodega predeterminada está inactiva."))
     exige_acceso_compania("inventory", warehouse.company, action)
 
 
@@ -134,7 +137,7 @@ def _decimal_value(value: Any) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError) as exc:
-        raise InventoryServiceError("La conversion UOM debe ser un numero valido.") from exc
+        raise InventoryServiceError(_("La conversion UOM debe ser un numero valido.")) from exc
 
 
 @dataclass(frozen=True)
@@ -162,16 +165,16 @@ def validate_batch_params(params: BatchParams) -> Item:
     if item is None:
         raise InventoryServiceError(f"El item '{params.item_code}' no existe.")
     if not item.is_stock_item or not (item.has_batch or item.has_expiry_date):
-        raise InventoryServiceError("Solo los artículos de inventario con control de lote admiten lotes.")
+        raise InventoryServiceError(_("Solo los artículos de inventario con control de lote admiten lotes."))
     if not batch_no:
-        raise InventoryServiceError("El número de lote es obligatorio.")
+        raise InventoryServiceError(_("El número de lote es obligatorio."))
     existing = database.session.execute(select(Batch).filter_by(item_code=item.code, batch_no=batch_no)).scalar_one_or_none()
     if existing is not None:
         raise InventoryServiceError(f"El lote '{batch_no}' ya existe para el item {item.code}.")
     if item.has_expiry_date and params.expiry_date is None:
-        raise InventoryServiceError("El item controla vencimiento: el lote requiere fecha de vencimiento.")
+        raise InventoryServiceError(_("El item controla vencimiento: el lote requiere fecha de vencimiento."))
     if params.manufacturing_date and params.expiry_date and params.expiry_date < params.manufacturing_date:
-        raise InventoryServiceError("La fecha de vencimiento no puede ser anterior a la fecha de fabricación.")
+        raise InventoryServiceError(_("La fecha de vencimiento no puede ser anterior a la fecha de fabricación."))
     return item
 
 
@@ -234,21 +237,21 @@ def convert_item_qty(item_code: str, qty: Decimal, from_uom: str, to_uom: str) -
     if inverse:
         factor = _decimal_value(inverse.conversion_factor)
         if factor == 0:
-            raise InventoryServiceError("La conversion de UOM no puede tener factor cero.")
+            raise InventoryServiceError(_("La conversion de UOM no puede tener factor cero."))
         return qty / factor
-    raise InventoryServiceError("No existe conversion UOM para el item.")
+    raise InventoryServiceError(_("No existe conversion UOM para el item."))
 
 
 def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None = None) -> None:
     batch_id = getattr(line, "batch_id", None)
     if not batch_id:
-        raise InventoryServiceError("El item requiere lote.")
+        raise InventoryServiceError(_("El item requiere lote."))
     batch = database.session.get(Batch, batch_id)
     if not batch or batch.item_code != item.code or not batch.is_active:
-        raise InventoryServiceError("El lote no existe, esta inactivo o no pertenece al item.")
+        raise InventoryServiceError(_("El lote no existe, esta inactivo o no pertenece al item."))
     if outgoing:
         if not warehouse:
-            raise InventoryServiceError("La salida por lote requiere bodega.")
+            raise InventoryServiceError(_("La salida por lote requiere bodega."))
         # Serializa la validación con la posterior actualización del bin en el
         # posting. Sin este bloqueo dos transacciones podían observar el mismo
         # saldo de lote y consumirlo simultáneamente.
@@ -275,15 +278,15 @@ def _validate_batch(line, item, *, outgoing: bool = False, warehouse: str | None
         if line_uom and base_uom and line_uom != base_uom:
             requested = convert_item_qty(item.code, requested, line_uom, base_uom)
         if Decimal(str(balance or 0)) < requested:
-            raise InventoryServiceError("El lote no tiene saldo suficiente en la bodega de salida.")
+            raise InventoryServiceError(_("El lote no tiene saldo suficiente en la bodega de salida."))
 
 
 def _validate_outgoing_serial(serial, warehouse) -> None:
     """Valida disponibilidad y bodega del serial que sale."""
     if not serial or serial.serial_status != "available":
-        raise InventoryServiceError("El serial no esta disponible para salida.")
+        raise InventoryServiceError(_("El serial no esta disponible para salida."))
     if warehouse and serial.warehouse != warehouse:
-        raise InventoryServiceError("El serial no se encuentra en la bodega de salida.")
+        raise InventoryServiceError(_("El serial no se encuentra en la bodega de salida."))
 
 
 def _validate_incoming_serial(serial, allow_transfer: bool, allow_return: bool) -> None:
@@ -292,22 +295,22 @@ def _validate_incoming_serial(serial, allow_transfer: bool, allow_return: bool) 
         return
     if allow_return:
         if serial.serial_status != "delivered":
-            raise InventoryServiceError("Solo se puede reingresar un serial entregado mediante una devolución.")
+            raise InventoryServiceError(_("Solo se puede reingresar un serial entregado mediante una devolución."))
     elif not allow_transfer:
-        raise InventoryServiceError("El serial ya existe y solo puede cambiar de bodega mediante una transferencia.")
+        raise InventoryServiceError(_("El serial ya existe y solo puede cambiar de bodega mediante una transferencia."))
 
 
 def _validate_serial(line, item, outgoing, warehouse=None, allow_transfer=False, allow_return=False):
     """Valida identificador, cantidad y transición permitida de un serial."""
     serial_no = getattr(line, "serial_no", None)
     if not serial_no:
-        raise InventoryServiceError("El item requiere numero de serie.")
+        raise InventoryServiceError(_("El item requiere numero de serie."))
     raw_quantity = getattr(line, "qty_in_base_uom", None)
     if raw_quantity is None:
         raw_quantity = getattr(line, "qty", None)
     quantity = _decimal_value(raw_quantity) if raw_quantity is not None else Decimal("1")
     if quantity != Decimal("1"):
-        raise InventoryServiceError("Cada linea de un item serializado debe mover exactamente una unidad.")
+        raise InventoryServiceError(_("Cada linea de un item serializado debe mover exactamente una unidad."))
     serial = database.session.execute(
         select(SerialNumber).filter_by(item_code=item.code, serial_no=serial_no)
     ).scalar_one_or_none()
@@ -338,10 +341,10 @@ def validate_batch_serial(
     if item.has_expiry_date:
         batch = database.session.get(Batch, getattr(line, "batch_id", None))
         if batch is None or batch.expiry_date is None:
-            raise InventoryServiceError("El lote requiere una fecha de vencimiento.")
+            raise InventoryServiceError(_("El lote requiere una fecha de vencimiento."))
         line.expiry_date = batch.expiry_date
         if posting_date and batch.expiry_date <= posting_date:
-            raise InventoryServiceError("El lote está vencido para la fecha de contabilización.")
+            raise InventoryServiceError(_("El lote está vencido para la fecha de contabilización."))
     if item.has_serial_no:
         _validate_serial(line, item, outgoing, warehouse, allow_transfer, allow_return)
 
@@ -650,7 +653,7 @@ def update_item_with_uoms(
     if item is None:
         raise InventoryServiceError(f"El item '{item_code}' no existe.")
     if not default_uom_change_allowed(item_code, params.default_uom):
-        raise InventoryServiceError("No se puede cambiar la UOM base si el item tiene transacciones.")
+        raise InventoryServiceError(_("No se puede cambiar la UOM base si el item tiene transacciones."))
     resolved_uom_rows = params.uom_rows or []
     resolved_account_rows = params.account_rows or []
     resolved_item_type = params.item_type or "goods"
@@ -665,7 +668,7 @@ def update_item_with_uoms(
             item.has_expiry_date != params.has_expiry_date,
         )
     ):
-        raise InventoryServiceError("No se pueden cambiar los controles de inventario después de usar el item.")
+        raise InventoryServiceError(_("No se pueden cambiar los controles de inventario después de usar el item."))
     validate_item_account_rows(
         resolved_item_type,
         resolved_stock_flag,
@@ -750,21 +753,21 @@ def parse_item_uom_rows(form: Mapping[str, Any]) -> list[ItemUOMRow]:
 def validate_item_uom_rows(default_uom: str, rows: list[ItemUOMRow]) -> None:
     """Valida que las conversiones UOM sean coherentes con la unidad base."""
     if not default_uom:
-        raise InventoryServiceError("La unidad de medida predeterminada es obligatoria.")
+        raise InventoryServiceError(_("La unidad de medida predeterminada es obligatoria."))
     if database.session.execute(select(UOM).filter_by(code=default_uom)).scalar_one_or_none() is None:
-        raise InventoryServiceError("La unidad de medida predeterminada no existe.")
+        raise InventoryServiceError(_("La unidad de medida predeterminada no existe."))
     seen: set[str] = set()
     for row in rows:
         if not row.uom_code:
-            raise InventoryServiceError("Todas las UOM adicionales deben tener una unidad seleccionada.")
+            raise InventoryServiceError(_("Todas las UOM adicionales deben tener una unidad seleccionada."))
         if row.uom_code == default_uom:
-            raise InventoryServiceError("La UOM adicional no puede ser la misma unidad predeterminada.")
+            raise InventoryServiceError(_("La UOM adicional no puede ser la misma unidad predeterminada."))
         if row.uom_code in seen:
-            raise InventoryServiceError("No se puede repetir la misma UOM adicional.")
+            raise InventoryServiceError(_("No se puede repetir la misma UOM adicional."))
         if database.session.execute(select(UOM).filter_by(code=row.uom_code)).scalar_one_or_none() is None:
             raise InventoryServiceError(f"La UOM '{row.uom_code}' no existe.")
         if row.conversion_factor <= 0:
-            raise InventoryServiceError("La conversión a la unidad predeterminada debe ser mayor que cero.")
+            raise InventoryServiceError(_("La conversión a la unidad predeterminada debe ser mayor que cero."))
         seen.add(row.uom_code)
 
 
@@ -917,9 +920,9 @@ def validate_item_account_rows(
 def _validate_single_item_account_row(row: ItemAccountRow, requires_expense: bool, seen_companies: set[str]) -> None:
     """Valida una fila contable individual del item."""
     if not row.company:
-        raise InventoryServiceError("Cada fila contable del item debe indicar una compañia.")
+        raise InventoryServiceError(_("Cada fila contable del item debe indicar una compañia."))
     if row.company in seen_companies:
-        raise InventoryServiceError("No se puede repetir la misma compañia en la configuracion contable del item.")
+        raise InventoryServiceError(_("No se puede repetir la misma compañia en la configuracion contable del item."))
     if database.session.execute(select(Entity).filter_by(code=row.company)).scalar_one_or_none() is None:
         raise InventoryServiceError(f"La compañia '{row.company}' no existe.")
     for account_id, account_type, label in (
@@ -967,7 +970,7 @@ def _validate_cost_center(company: str, cost_center_code: str | None) -> None:
         select(CostCenter).filter_by(entity=company, code=cost_center_code, active=True, enabled=True)
     ).scalar_one_or_none()
     if cost_center is None:
-        raise InventoryServiceError("El centro de costo no pertenece a la compañia seleccionada.")
+        raise InventoryServiceError(_("El centro de costo no pertenece a la compañia seleccionada."))
 
 
 def default_uom_change_allowed(item_code: str, new_default_uom: str) -> bool:

@@ -19,6 +19,8 @@ from sqlalchemy import select
 from cacao_accounting.database import Entity, database
 from cacao_accounting.printing.models import PublicDocumentValidation
 
+from cacao_accounting.i18n import _
+
 VALIDATION_STATUS_VALID = "valid"
 VALIDATION_STATUS_INVALID = "invalid"
 VALIDATION_STATUS_UNAVAILABLE = "unavailable"
@@ -228,7 +230,7 @@ class ValidationService:
         try:
             import segno
         except ImportError as exc:
-            raise RuntimeError("QR dependency missing: install segno to generate validation QR codes.") from exc
+            raise RuntimeError(_("QR dependency missing: install segno to generate validation QR codes.")) from exc
         qr = segno.make(url)
         output = io.BytesIO()
         qr.save(output, kind="png", scale=4)

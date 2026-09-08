@@ -24,6 +24,9 @@ from cacao_accounting.database import (
 from cacao_accounting.ledger_queries import primary_ledger_id
 
 
+from cacao_accounting.i18n import _
+
+
 class FiscalYearClosingError(ValueError):
     """Error en el proceso de cierre de año fiscal."""
 
@@ -234,10 +237,10 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     """Ejecuta el proceso de cierre de año fiscal."""
     fiscal_year = database.session.get(FiscalYear, fiscal_year_id, with_for_update=True)
     if not fiscal_year:
-        raise FiscalYearClosingError("Año fiscal no encontrado.")
+        raise FiscalYearClosingError(_("Año fiscal no encontrado."))
 
     if fiscal_year.entity != company:
-        raise FiscalYearClosingError("La compañía no coincide con la entidad del año fiscal.")
+        raise FiscalYearClosingError(_("La compañía no coincide con la entidad del año fiscal."))
 
     from cacao_accounting.database import AccountingPeriod
 
@@ -252,9 +255,9 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
         )
 
     if not fiscal_year.is_closed:
-        raise FiscalYearClosingError("El año fiscal debe estar cerrado administrativamente antes del cierre contable.")
+        raise FiscalYearClosingError(_("El año fiscal debe estar cerrado administrativamente antes del cierre contable."))
     if fiscal_year.financial_closed:
-        raise FiscalYearClosingError("El año fiscal ya tiene un cierre contable realizado.")
+        raise FiscalYearClosingError(_("El año fiscal ya tiene un cierre contable realizado."))
 
     reversal_pairs = _cross_year_reversal_pairs(company, fiscal_year)
     if reversal_pairs:
@@ -273,15 +276,15 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
         book_balances = calculate_closing_balances(company, fiscal_year, ledger_id=book.id)
         balances.extend({**balance, "book": book.code} for balance in book_balances)
     if not balances:
-        raise FiscalYearClosingError("No hay movimientos en cuentas de resultados para cerrar en este año fiscal.")
+        raise FiscalYearClosingError(_("No hay movimientos en cuentas de resultados para cerrar en este año fiscal."))
 
     defaults = database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalars().first()
     if not defaults or not defaults.retained_earnings_account_id:
-        raise FiscalYearClosingError("No se ha definido la cuenta de utilidades acumuladas en la configuración.")
+        raise FiscalYearClosingError(_("No se ha definido la cuenta de utilidades acumuladas en la configuración."))
 
     retained_earnings_account = database.session.get(Accounts, defaults.retained_earnings_account_id)
     if not retained_earnings_account:
-        raise FiscalYearClosingError("La cuenta de utilidades acumuladas configurada no existe.")
+        raise FiscalYearClosingError(_("La cuenta de utilidades acumuladas configurada no existe."))
 
     payload = _build_closing_voucher_payload(
         company=company,
@@ -310,9 +313,9 @@ def reverse_fiscal_year_closing(fiscal_year_id: str, user_id: str) -> None:
     """Revierte el cierre contable de un año fiscal."""
     fiscal_year = database.session.get(FiscalYear, fiscal_year_id, with_for_update=True)
     if not fiscal_year:
-        raise FiscalYearClosingError("Año fiscal no encontrado.")
+        raise FiscalYearClosingError(_("Año fiscal no encontrado."))
     if not fiscal_year.financial_closed or not fiscal_year.closing_voucher_id:
-        raise FiscalYearClosingError("El año fiscal no tiene un cierre contable que revertir.")
+        raise FiscalYearClosingError(_("El año fiscal no tiene un cierre contable que revertir."))
 
     journal = database.session.get(ComprobanteContable, fiscal_year.closing_voucher_id)
     if not journal:

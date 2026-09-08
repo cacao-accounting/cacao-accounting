@@ -34,10 +34,9 @@ from cacao_accounting.database import (
 from cacao_accounting.exceptions import flash_error
 
 
-from cacao_accounting.document_flow.status import _
-
-
 from cacao_accounting.runtime_mode import is_desktop_mode
+
+from cacao_accounting.i18n import _
 
 admin = Blueprint("admin", __name__, template_folder="templates")
 

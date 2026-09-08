@@ -40,9 +40,12 @@ Accounting") %}
     {% block test %}
     {% endblock %}
     {%- endif -%}
-    {% block contenido %}
-    {% endblock %}
-  </main>
+  {% block contenido %}
+  {% endblock %}
+</main>
+<script>
+  globalThis.__TXF_I18N__ = {{ transaction_form_i18n() | tojson }};
+</script>
 </body>
 
 </html>

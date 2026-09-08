@@ -73,6 +73,9 @@ from cacao_accounting.document_identifiers import IdentifierConfigurationError, 
 
 from cacao_accounting.tax_pricing_service import TaxCalculationResult, calculate_taxes
 
+
+from cacao_accounting.i18n import _
+
 JOURNAL_TRANSACTION_TYPE = "journal_entry"
 
 _ERROR_INVENTARIO_REQUIERE_ALMACEN = "La linea de inventario requiere almacen."
@@ -181,14 +184,14 @@ def _decimal_value(value: Any) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError) as exc:
-        raise PostingError("Valor numerico invalido para contabilizacion.") from exc
+        raise PostingError(_("Valor numerico invalido para contabilizacion.")) from exc
 
 
 def _validate_single_sided_amount(debit: Decimal, credit: Decimal) -> None:
     if debit < 0 or credit < 0:
-        raise PostingError("Los montos de debito y credito deben ser no negativos.")
+        raise PostingError(_("Los montos de debito y credito deben ser no negativos."))
     if not ((debit > 0 and credit == 0) or (debit == 0 and credit > 0)):
-        raise PostingError("Cada entrada GL debe tener un debito o un credito positivo, no ambos.")
+        raise PostingError(_("Cada entrada GL debe tener un debito o un credito positivo, no ambos."))
 
 
 def _resolve_currency_amount(specific_amount: Decimal | None, fallback_amount: Decimal, use_fallback: bool) -> Decimal | None:
@@ -248,7 +251,7 @@ def _active_books(company: str, ledger_code: str | Sequence[str] | None = None) 
     )
     books = database.session.execute(query.order_by(Book.is_primary.desc(), Book.code)).scalars().all()
     if not books:
-        raise PostingError("La compañía no tiene libro contable activo.")
+        raise PostingError(_("La compañía no tiene libro contable activo."))
     return list(books)
 
 
@@ -274,11 +277,11 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     transaction_currency = getattr(document, "transaction_currency", None)
     document_exchange_rate = getattr(document, "exchange_rate", None)
     if not transaction_currency:
-        raise PostingError("El documento requiere moneda transaccional antes de contabilizarse.")
+        raise PostingError(_("El documento requiere moneda transaccional antes de contabilizarse."))
     if not default_company_currency:
-        raise PostingError("La compañía requiere una moneda funcional configurada antes de contabilizarse.")
+        raise PostingError(_("La compañía requiere una moneda funcional configurada antes de contabilizarse."))
     if not document_base_currency:
-        raise PostingError("El documento requiere un snapshot explicito de base_currency antes de contabilizarse.")
+        raise PostingError(_("El documento requiere un snapshot explicito de base_currency antes de contabilizarse."))
     if document_base_currency != default_company_currency:
         raise PostingError(
             f"El snapshot de base_currency ({document_base_currency!r}) no coincide con la moneda "
@@ -348,7 +351,7 @@ def _ledger_exchange_rate(
     if ledger_currency == document_base_currency and document_exchange_rate is not None:
         rate = _decimal_value(document_exchange_rate)
         if rate <= 0:
-            raise InvalidExchangeRateError("El tipo de cambio debe ser mayor que cero.")
+            raise InvalidExchangeRateError(_("El tipo de cambio debe ser mayor que cero."))
         return rate
     try:
         return _lookup_exchange_rate(transaction_currency, ledger_currency, posting_date)
@@ -363,7 +366,7 @@ def _ledger_exchange_rate(
             else _lookup_exchange_rate(transaction_currency, document_base_currency, posting_date)
         )
         if transaction_to_base <= 0:
-            raise InvalidExchangeRateError("El tipo de cambio debe ser mayor que cero.")
+            raise InvalidExchangeRateError(_("El tipo de cambio debe ser mayor que cero."))
         base_to_ledger = _lookup_exchange_rate(document_base_currency, ledger_currency, posting_date)
         return transaction_to_base * base_to_ledger
 
@@ -377,7 +380,7 @@ def _require_account(account_id: str | None, message: str) -> str:
     if not account_id:
         raise PostingError(message)
     if not database.session.get(Accounts, account_id):
-        raise PostingError("La cuenta contable configurada no existe.")
+        raise PostingError(_("La cuenta contable configurada no existe."))
     return account_id
 
 
@@ -386,7 +389,7 @@ def _require_company_account(account_id: str | None, company: str, message: str)
     account_id = _require_account(account_id, message)
     account = database.session.get(Accounts, account_id)
     if account is None or account.entity != company:
-        raise PostingError("La cuenta contable debe pertenecer a la compañía del documento.")
+        raise PostingError(_("La cuenta contable debe pertenecer a la compañía del documento."))
     return account_id
 
 
@@ -461,7 +464,7 @@ def _account_id_for_comprobante_line(line: Any, company: str) -> str:
 
     account_code = getattr(line, "account", None)
     if not account_code:
-        raise PostingError("La línea del comprobante contable no tiene cuenta especificada.")
+        raise PostingError(_("La línea del comprobante contable no tiene cuenta especificada."))
 
     account = database.session.execute(select(Accounts).filter_by(entity=company, code=account_code)).scalars().first()
     if not account:
@@ -529,7 +532,7 @@ def _create_gl_entry(
     params: GLEntryParams,
 ) -> GLEntry:
     if not context.voucher_type or not context.voucher_type.strip():
-        raise PostingError("Toda entrada GL requiere un tipo de comprobante.")
+        raise PostingError(_("Toda entrada GL requiere un tipo de comprobante."))
     _validate_single_sided_amount(params.debit, params.credit)
 
     debit, credit, debit_in_ac, credit_in_ac, exchange_rate = _resolve_gl_amounts(context, params)
@@ -651,7 +654,7 @@ def _assert_ledger_balances(ledger_entries: list[GLEntry]) -> None:
     credit_total = sum((_decimal_value(entry.credit) for entry in ledger_entries), Decimal("0"))
     if abs(debit_total - credit_total) < Decimal("0.01"):
         return
-    raise PostingError("Las entradas GL generadas no balancean por libro contable.")
+    raise PostingError(_("Las entradas GL generadas no balancean por libro contable."))
 
 
 def _build_currency_groups(ledger_entries: list[GLEntry]) -> dict[str, list[GLEntry]]:
@@ -714,7 +717,7 @@ def _to_company_currency(amount: Decimal, exchange_rate: Decimal) -> Decimal:
     tolerancia adicional en la validacion de balance.
     """
     if exchange_rate == 0:
-        raise PostingError("El tipo de cambio no puede ser cero.")
+        raise PostingError(_("El tipo de cambio no puede ser cero."))
     return (amount * exchange_rate).quantize(Decimal("0.0001"))
 
 
@@ -741,7 +744,7 @@ def _inventory_value_in_functional_currency(document: Any, amount: Decimal) -> D
     functional_currency = _inventory_currency(document)
     transaction_currency = getattr(document, "transaction_currency", None)
     if not transaction_currency:
-        raise PostingError("El documento requiere moneda transaccional explicita para valorar inventario.")
+        raise PostingError(_("El documento requiere moneda transaccional explicita para valorar inventario."))
     if not functional_currency or transaction_currency == functional_currency:
         return amount
     document_rate = _decimal_value(getattr(document, "exchange_rate", None))
@@ -785,7 +788,7 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> D
             return None
         value = _decimal_value(rate.rate)
         if value <= 0:
-            raise InvalidExchangeRateError("El tipo de cambio debe ser mayor que cero.")
+            raise InvalidExchangeRateError(_("El tipo de cambio debe ser mayor que cero."))
         return value
 
     direct = latest_rate(origin, destination)
@@ -944,7 +947,7 @@ def _invoice_items_total(items: Sequence[Any], document: Any) -> Decimal:
     total = sum((_decimal_value(getattr(item, "amount", None)) for item in items), Decimal("0"))
     signed_total = _signed_amount(document, total)
     if signed_total == 0:
-        raise PostingError("El total del documento es cero y no puede contabilizarse.")
+        raise PostingError(_("El total del documento es cero y no puede contabilizarse."))
     return signed_total
 
 
@@ -1153,7 +1156,7 @@ def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
-        raise PostingError("Solo se puede contabilizar una factura de venta aprobada.")
+        raise PostingError(_("Solo se puede contabilizar una factura de venta aprobada."))
 
     company = _company_for(document)
     receivable_account_id = _require_account(
@@ -1162,7 +1165,7 @@ def post_sales_invoice(document: SalesInvoice, ledger_code: str | None = None) -
     )
     items = database.session.execute(select(SalesInvoiceItem).filter_by(sales_invoice_id=document.id)).scalars().all()
     if not items:
-        raise PostingError("La factura de venta no contiene lineas para contabilizar.")
+        raise PostingError(_("La factura de venta no contiene lineas para contabilizar."))
 
     result = _post_with_calculation_engine(document, ledger_code=ledger_code)
     if result is not None:
@@ -1244,7 +1247,7 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
-        raise PostingError("Solo se puede contabilizar una factura de compra aprobada.")
+        raise PostingError(_("Solo se puede contabilizar una factura de compra aprobada."))
 
     company = _company_for(document)
     payable_account_id = _require_account(
@@ -1257,7 +1260,7 @@ def post_purchase_invoice(document: PurchaseInvoice, ledger_code: str | None = N
         .all()
     )
     if not items:
-        raise PostingError("La factura de compra no contiene lineas para contabilizar.")
+        raise PostingError(_("La factura de compra no contiene lineas para contabilizar."))
 
     tax_result = _tax_result_for_document(document, items)
     item_amount_total = _invoice_items_total(items, document)
@@ -1327,10 +1330,10 @@ def post_import_landed_cost(document: ImportLandedCost, ledger_code: str | None 
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
-        raise PostingError("Solo se puede contabilizar un costo de importacion aprobado.")
+        raise PostingError(_("Solo se puede contabilizar un costo de importacion aprobado."))
     payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code)
     if payload is None:
-        raise PostingError("El motor de calculo no pudo procesar el costo de importacion.")
+        raise PostingError(_("El motor de calculo no pudo procesar el costo de importacion."))
     items = list(
         database.session.execute(select(ImportLandedCostItem).filter_by(import_landed_cost_id=document.id)).scalars().all()
     )
@@ -1427,13 +1430,13 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     if getattr(document, "docstatus", 0) != 1:
-        raise PostingError("Solo se puede contabilizar un pago aprobado.")
+        raise PostingError(_("Solo se puede contabilizar un pago aprobado."))
 
     company = _company_for(document)
     amount = _decimal_value(document.paid_amount or document.received_amount)
     payment_type = getattr(document, "payment_type", "").lower()
     if amount <= 0:
-        raise PostingError("El monto del pago debe ser mayor que cero.")
+        raise PostingError(_("El monto del pago debe ser mayor que cero."))
 
     if payment_type in {"pay", "receive"}:
         engine_payload = _post_with_calculation_engine_payload(document, ledger_code=ledger_code)
@@ -1445,7 +1448,7 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
                 create_withholding_certificate(document, settlement)
             return engine_payload.entries
         if _payment_has_realized_fx_difference(document.id):
-            raise PostingError("Los pagos aplicados con diferencia cambiaria requieren el motor de settlement.")
+            raise PostingError(_("Los pagos aplicados con diferencia cambiaria requieren el motor de settlement."))
     entries: list[GLEntry] = []
     for context in _document_contexts(document, ledger_code=ledger_code):
         if payment_type == "pay":
@@ -1459,7 +1462,7 @@ def post_payment_entry(document: PaymentEntry, ledger_code: str | None = None) -
         elif payment_type == "credit_note":
             entries.extend(_create_bank_credit_note_entries(context, document, company, amount))
         else:
-            raise PostingError("Tipo de pago no soportado para contabilizacion.")
+            raise PostingError(_("Tipo de pago no soportado para contabilizacion."))
 
     return _add_entries(entries)
 
@@ -1712,11 +1715,11 @@ def _create_payment_transfer_entries(
     source_bank = database.session.get(BankAccount, document.bank_account_id)
     target_bank = database.session.get(BankAccount, document.target_bank_account_id)
     if not source_bank or not target_bank:
-        raise PostingError("La transferencia interna requiere cuentas bancarias válidas.")
+        raise PostingError(_("La transferencia interna requiere cuentas bancarias válidas."))
     source_currency = source_bank.currency
     target_currency = target_bank.currency
     if not source_currency or not target_currency:
-        raise PostingError("Ambas cuentas bancarias deben tener moneda configurada.")
+        raise PostingError(_("Ambas cuentas bancarias deben tener moneda configurada."))
     company_currency = context.company_currency or source_currency
     source_rate = _lookup_exchange_rate(source_currency, company_currency, context.posting_date)
     target_rate = _lookup_exchange_rate(target_currency, company_currency, context.posting_date)
@@ -1814,9 +1817,9 @@ def _stock_item_for(line: Any) -> Item:
     if item is None:
         item = database.session.execute(select(Item).filter_by(code=line.item_code)).scalars().first()
     if not item:
-        raise PostingError("La linea de inventario referencia un item inexistente.")
+        raise PostingError(_("La linea de inventario referencia un item inexistente."))
     if item.item_type == "service" or not item.is_stock_item:
-        raise PostingError("Solo los bienes inventariables pueden generar Stock Ledger.")
+        raise PostingError(_("Solo los bienes inventariables pueden generar Stock Ledger."))
     return item
 
 
@@ -1832,10 +1835,10 @@ def _line_qty(line: StockEntryItem) -> Decimal:
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc
     if qty < 0 or raw_qty < 0:
-        raise PostingError("La cantidad de inventario no puede ser negativa.")
+        raise PostingError(_("La cantidad de inventario no puede ser negativa."))
     amount = _decimal_value(line.amount)
     if qty == 0 and amount == 0:
-        raise PostingError("La línea de inventario debe tener una cantidad o un monto mayor que cero.")
+        raise PostingError(_("La línea de inventario debe tener una cantidad o un monto mayor que cero."))
     line.qty_in_base_uom = qty
     return qty
 
@@ -1880,10 +1883,10 @@ def _line_qty_generic(line: Any) -> Decimal:
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc
     if qty < 0 or raw_qty < 0:
-        raise PostingError("La cantidad de inventario no puede ser negativa.")
+        raise PostingError(_("La cantidad de inventario no puede ser negativa."))
     amount = _decimal_value(getattr(line, "amount", None))
     if qty == 0 and amount == 0:
-        raise PostingError("La línea de inventario debe tener una cantidad o un monto mayor que cero.")
+        raise PostingError(_("La línea de inventario debe tener una cantidad o un monto mayor que cero."))
     if hasattr(line, "qty_in_base_uom"):
         line.qty_in_base_uom = qty
     return qty
@@ -1919,7 +1922,7 @@ def _valuation_method_for_company(company_code: str) -> str:
     if entity is None:
         entity = database.session.execute(select(Entity).filter_by(code=company_code)).scalars().first()
     if not entity:
-        raise PostingError("La compañía no existe.")
+        raise PostingError(_("La compañía no existe."))
     return (entity.valuation_method or "moving_average").lower()
 
 
@@ -2059,7 +2062,7 @@ def _valuation_queue(
     scheduled = _schedule_valuation_layers(layers)
     queue: list[list] = []
     negative_balance = Decimal("0")
-    for _, layer in scheduled:
+    for _ignored_layer, layer in scheduled:
         qty = _decimal_value(layer.qty)
         rate = _decimal_value(layer.rate)
         layer_value = _decimal_value(layer.stock_value_difference)
@@ -2137,16 +2140,18 @@ def _fifo_valuation(available: list, quantity: Decimal) -> tuple[Decimal, Decima
         if entry[0]:
             layer_id = str(entry[0])
             consumed_by_layer[layer_id] = consumed_by_layer.get(layer_id, Decimal("0")) + consume_qty
-            consumed_layers.append({
-                "layer_id": layer_id,
-                "qty": str(consume_qty),
-                "rate": str(entry[2]),
-            })
+            consumed_layers.append(
+                {
+                    "layer_id": layer_id,
+                    "qty": str(consume_qty),
+                    "rate": str(entry[2]),
+                }
+            )
         if entry[1] > 0:
             continue
         queue.pop(0)
     if remaining > 0:
-        raise PostingError("No hay suficiente inventario para calcular el costo real.")
+        raise PostingError(_("No hay suficiente inventario para calcular el costo real."))
     primary_source: str | None = None
     primary_qty = Decimal("0")
     for layer_id, consumed_qty in consumed_by_layer.items():
@@ -2226,28 +2231,28 @@ def _company_for(document: Any) -> str:
     if not company and isinstance(document, BankTransaction):
         company = _bank_transaction_company(document)
     if not company:
-        raise PostingError("El documento no tiene compania definida.")
+        raise PostingError(_("El documento no tiene compania definida."))
     return str(company)
 
 
 def _posting_date_for(document: Any) -> Any:
     posting_date = getattr(document, "posting_date", None) or getattr(document, "date", None)
     if not posting_date:
-        raise PostingError("El documento no tiene fecha de contabilizacion definida.")
+        raise PostingError(_("El documento no tiene fecha de contabilizacion definida."))
     return posting_date
 
 
 def _bank_transaction_account_id(document: BankTransaction) -> str:
     bank_account = database.session.get(BankAccount, document.bank_account_id)
     if not bank_account or not bank_account.gl_account_id:
-        raise PostingError("La transacción bancaria no tiene una cuenta GL bancaria configurada.")
+        raise PostingError(_("La transacción bancaria no tiene una cuenta GL bancaria configurada."))
     return bank_account.gl_account_id
 
 
 def _bank_transaction_company(document: BankTransaction) -> str:
     bank_account = database.session.get(BankAccount, document.bank_account_id)
     if not bank_account or not bank_account.company:
-        raise PostingError("La transacción bancaria no esta asociada a una compañía.")
+        raise PostingError(_("La transacción bancaria no esta asociada a una compañía."))
     return str(bank_account.company)
 
 
@@ -2255,7 +2260,7 @@ def _bank_transaction_offset_account_id(document: BankTransaction, credit: bool)
     company = _bank_transaction_company(document)
     defaults = _company_defaults(company)
     if not defaults:
-        raise PostingError("No existe configuración contable predeterminada para la compañía.")
+        raise PostingError(_("No existe configuración contable predeterminada para la compañía."))
     if credit:
         return _require_account(
             defaults.default_income,
@@ -2273,7 +2278,7 @@ def post_bank_transaction(document: BankTransaction, ledger_code: str | None = N
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     amount = _decimal_value(document.deposit if document.deposit is not None else document.withdrawal)
     if amount <= 0:
-        raise PostingError("La nota bancaria no tiene un monto valido.")
+        raise PostingError(_("La nota bancaria no tiene un monto valido."))
 
     bank_account_id = _bank_transaction_account_id(document)
     credit = document.deposit is not None
@@ -2348,7 +2353,7 @@ def _upsert_stock_bin(
     current_stock_value = _decimal_value(bin_row.stock_value)
     stock_value_after = current_stock_value + value_change
     if reject_negative_stock_value and stock_value_after < 0:
-        raise PostingError("El ajuste de valor no puede reducir el valor del inventario por debajo de cero.")
+        raise PostingError(_("El ajuste de valor no puede reducir el valor del inventario por debajo de cero."))
     bin_row.actual_qty = _decimal_value(bin_row.actual_qty) + qty_change
     bin_row.stock_value = stock_value_after
 
@@ -2415,7 +2420,7 @@ def _persist_landed_cost_allocations(
     if not allocations:
         return
     if _has_landed_cost_allocations(document):
-        raise PostingError("Este documento ya tiene prorrateos de costos capitalizables contabilizados.")
+        raise PostingError(_("Este documento ya tiene prorrateos de costos capitalizables contabilizados."))
 
     items_by_line_id = {str(item.id): item for item in items}
     for allocation in allocations:
@@ -2444,10 +2449,10 @@ def _persist_single_allocation(
         return
     item = items_by_line_id.get(str(allocation.item_line_id))
     if item is None:
-        raise PostingError("El prorrateo de costo capitalizable no coincide con una linea de factura.")
+        raise PostingError(_("El prorrateo de costo capitalizable no coincide con una linea de factura."))
     warehouse = getattr(item, "warehouse", None)
     if not warehouse:
-        raise PostingError("La linea con costo capitalizable requiere almacen para ajustar valuacion.")
+        raise PostingError(_("La linea con costo capitalizable requiere almacen para ajustar valuacion."))
 
     stock_layer_id = _create_valuation_layer_if_needed(
         document=document,
@@ -2479,7 +2484,7 @@ def _create_valuation_layer_if_needed(
 
     bin_row = _stock_bin_for(document.company, item.item_code, warehouse)
     if bin_row is None or _decimal_value(bin_row.actual_qty) <= 0:
-        raise PostingError("No hay inventario disponible para materializar el costo capitalizable.")
+        raise PostingError(_("No hay inventario disponible para materializar el costo capitalizable."))
 
     _upsert_stock_bin(
         company=document.company,
@@ -2492,7 +2497,7 @@ def _create_valuation_layer_if_needed(
     database.session.flush()
     updated_bin = _stock_bin_for(document.company, item.item_code, warehouse)
     if updated_bin is None:
-        raise PostingError("No se pudo actualizar la valuacion de inventario.")
+        raise PostingError(_("No se pudo actualizar la valuacion de inventario."))
 
     stock_layer = StockValuationLayer(
         item_code=item.item_code,
@@ -2662,7 +2667,7 @@ def _reconciliation_warehouse(document: StockEntry, line: StockEntryItem) -> str
     """Resolve the warehouse used by a stock reconciliation line."""
     warehouse = line.target_warehouse or line.source_warehouse or document.to_warehouse or document.from_warehouse
     if not warehouse:
-        raise PostingError("La conciliación requiere bodega.")
+        raise PostingError(_("La conciliación requiere bodega."))
     return warehouse
 
 
@@ -2697,17 +2702,17 @@ def _reconciliation_snapshot(
         except InventoryServiceError as exc:
             raise PostingError(str(exc)) from exc
     if line.target_valuation_rate is None and target_value != 0:
-        raise PostingError("La conciliación requiere tasa de valuación objetivo.")
+        raise PostingError(_("La conciliación requiere tasa de valuación objetivo."))
     target_rate = _decimal_value(line.target_valuation_rate)
     if abs(target_value - counted_qty * target_rate) > Decimal("0.01"):
-        raise PostingError("El valor objetivo de la conciliación no coincide con cantidad por tasa.")
+        raise PostingError(_("El valor objetivo de la conciliación no coincide con cantidad por tasa."))
     value_change = target_value - current_value
     if qty_change == 0 and value_change == 0:
         return None
     if counted_qty < 0 or target_value < 0:
-        raise PostingError("La conciliacion no permite cantidad o valor objetivo negativo.")
+        raise PostingError(_("La conciliacion no permite cantidad o valor objetivo negativo."))
     if current_qty <= 0 and counted_qty <= 0 and value_change != 0:
-        raise PostingError("No se puede ajustar valor sin stock positivo o cantidad contada positiva.")
+        raise PostingError(_("No se puede ajustar valor sin stock positivo o cantidad contada positiva."))
     _validate_reconciliation_value_direction(qty_change, value_change)
     if qty_change < 0 and value_change > 0:
         # A reduction can legitimately increase the remaining value when the
@@ -2923,17 +2928,17 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
 
 def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
     if _has_stock_ledger_entries(document):
-        raise PostingError("Este documento ya tiene movimientos de inventario contabilizados.")
+        raise PostingError(_("Este documento ya tiene movimientos de inventario contabilizados."))
 
     purpose = getattr(document, "purpose", "").lower()
     items = database.session.execute(select(StockEntryItem).filter_by(stock_entry_id=document.id)).scalars().all()
     if not items:
-        raise PostingError("La entrada de stock no contiene lineas para contabilizar.")
+        raise PostingError(_("La entrada de stock no contiene lineas para contabilizar."))
 
     movements = _create_stock_movements_for_items(document, items, purpose)
 
     if not movements:
-        raise PostingError("La conciliacion no contiene diferencias de cantidad o valuacion.")
+        raise PostingError(_("La conciliacion no contiene diferencias de cantidad o valuacion."))
     database.session.add_all(movements)
     return movements
 
@@ -3023,7 +3028,7 @@ def _consume_outflow_stock_valuation(
 def _movement_inflow_receipt(document: StockEntry, line: Any, purpose: str, qty: Decimal) -> list[StockLedgerEntry]:
     amount = _decimal_value(line.amount)
     if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount <= 0:
-        raise PostingError("Un ajuste de solo valor requiere un monto mayor a cero.")
+        raise PostingError(_("Un ajuste de solo valor requiere un monto mayor a cero."))
     if purpose in ("adjustment_positive", "stock_adjustment") and qty == 0 and amount > 0:
         valuation_rate = _decimal_value(line.valuation_rate or line.basic_rate)
         value = amount
@@ -3049,7 +3054,7 @@ def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> li
     source_warehouse = line.source_warehouse or document.from_warehouse
     if qty == 0:
         if _decimal_value(line.amount) <= 0:
-            raise PostingError("Un ajuste de solo valor requiere un monto mayor a cero.")
+            raise PostingError(_("Un ajuste de solo valor requiere un monto mayor a cero."))
         value = _inventory_value_in_functional_currency(document, _decimal_value(line.amount))
         fallback_rate = _decimal_value(line.valuation_rate or line.basic_rate)
         return [
@@ -3082,7 +3087,7 @@ def _movement_outflow_issue(document: StockEntry, line: Any, qty: Decimal) -> li
 
 def _movement_transfer(document: StockEntry, line: Any, qty: Decimal) -> list[StockLedgerEntry]:
     if qty == 0:
-        raise PostingError("Las transferencias de material requieren una cantidad mayor a cero.")
+        raise PostingError(_("Las transferencias de material requieren una cantidad mayor a cero."))
     source_warehouse = line.source_warehouse or document.from_warehouse
     target_warehouse = line.target_warehouse or document.to_warehouse
     cost_amount, cost_rate, source_layer_id, _consumed_layers = _consume_outflow_stock_valuation(
@@ -3121,7 +3126,7 @@ def _create_movement_for_purpose(document: StockEntry, line: Any, purpose: str) 
         case "material_transfer":
             return _movement_transfer(document, line, qty)
         case _:
-            raise PostingError("Proposito de inventario no soportado para Stock Ledger.")
+            raise PostingError(_("Proposito de inventario no soportado para Stock Ledger."))
 
 
 def _document_items(document: Any) -> list[Any]:
@@ -3135,17 +3140,17 @@ def _document_items(document: Any) -> list[Any]:
         )
     if isinstance(document, DeliveryNote):
         return list(database.session.execute(select(DeliveryNoteItem).filter_by(delivery_note_id=document.id)).scalars().all())
-    raise PostingError("El documento no contiene lineas de inventario compatibles.")
+    raise PostingError(_("El documento no contiene lineas de inventario compatibles."))
 
 
 def _delivery_return_source(document: DeliveryNote) -> DeliveryNote:
     """Load and validate the original delivery for a sales return."""
     source_id = getattr(document, "reversal_of", None)
     if not source_id:
-        raise PostingError("La devolución de venta requiere la nota de entrega origen.")
+        raise PostingError(_("La devolución de venta requiere la nota de entrega origen."))
     source = database.session.get(DeliveryNote, source_id)
     if not source or source.company != document.company or source.docstatus != 1 or source.is_return:
-        raise PostingError("La nota de entrega origen de la devolución no es válida.")
+        raise PostingError(_("La nota de entrega origen de la devolución no es válida."))
     return source
 
 
@@ -3283,7 +3288,7 @@ def _delivery_return_cost_composition(
             break
 
     if remaining > 0:
-        raise PostingError("La devolución excede la cantidad entregada pendiente de devolver.")
+        raise PostingError(_("La devolución excede la cantidad entregada pendiente de devolver."))
     return composition
 
 
@@ -3335,7 +3340,7 @@ def _delivery_return_cost_from_sle(
         if remaining <= 0:
             break
     if remaining > 0:
-        raise PostingError("La devolución excede la cantidad entregada pendiente de devolver.")
+        raise PostingError(_("La devolución excede la cantidad entregada pendiente de devolver."))
     return composition
 
 
@@ -3345,10 +3350,10 @@ def _purchase_return_source(document: Any) -> Any:
 
     source_id = getattr(document, "reversal_of", None)
     if not source_id:
-        raise PostingError("La devolución de compra requiere la recepción origen.")
+        raise PostingError(_("La devolución de compra requiere la recepción origen."))
     source = database.session.get(PurchaseReceipt, source_id)
     if not source or source.company != document.company or source.docstatus != 1 or source.is_return:
-        raise PostingError("La recepción origen de la devolución no es válida.")
+        raise PostingError(_("La recepción origen de la devolución no es válida."))
     return source
 
 
@@ -3400,7 +3405,7 @@ def _purchase_return_cost(document: Any, line: Any, warehouse: str, quantity: De
         .all()
     )
     if not incoming_layers:
-        raise PostingError("La recepción origen no tiene capas de valuación para la devolución.")
+        raise PostingError(_("La recepción origen no tiene capas de valuación para la devolución."))
     total_available = sum(_decimal_value(layer.remaining_qty) for layer in incoming_layers)
     if total_available < quantity:
         raise PostingError(
@@ -3426,7 +3431,7 @@ def _purchase_return_cost(document: Any, line: Any, warehouse: str, quantity: De
         if remaining <= 0:
             break
     if remaining > 0:
-        raise PostingError("La devolución excede la cantidad disponible en la recepción origen.")
+        raise PostingError(_("La devolución excede la cantidad disponible en la recepción origen."))
     primary_source: str | None = None
     primary_qty = Decimal("0")
     for layer_id, consumed_qty in consumed_by_layer.items():
@@ -3703,9 +3708,7 @@ def _create_delivery_return_movements(
     qty_change: Decimal,
 ) -> list[StockLedgerEntry]:
     composition = _delivery_return_cost_composition(document, line, warehouse, qty_change)
-    line._inventory_cost_amount = sum(
-        (entry["qty"] * entry["rate"]).quantize(Decimal("0.0001")) for entry in composition
-    )
+    line._inventory_cost_amount = sum((entry["qty"] * entry["rate"]).quantize(Decimal("0.0001")) for entry in composition)
     movements = []
     for entry in composition:
         entry_qty = entry["qty"]
@@ -3765,11 +3768,11 @@ def _create_stock_ledger_for_document_type(
     landed_cost_result: Any = None,
 ) -> list[StockLedgerEntry]:
     if _has_stock_ledger_entries(document):
-        raise PostingError("Este documento ya tiene movimientos de inventario contabilizados.")
+        raise PostingError(_("Este documento ya tiene movimientos de inventario contabilizados."))
 
     items = _document_items(document)
     if not items:
-        raise PostingError("El documento no contiene lineas de inventario para contabilizar.")
+        raise PostingError(_("El documento no contiene lineas de inventario para contabilizar."))
     document._inventory_posting_items = items
 
     allocations_by_line_id = _allocation_by_line_id(landed_cost_result)
@@ -3792,7 +3795,7 @@ def _receipt_total(document: PurchaseReceipt) -> Decimal:
         Decimal("0"),
     )
     if total <= 0:
-        raise PostingError("La recepción de compra no tiene monto conciliable.")
+        raise PostingError(_("La recepción de compra no tiene monto conciliable."))
     return total
 
 
@@ -3809,13 +3812,13 @@ def _validate_purchase_receipt_for_reconciliation(document: PurchaseInvoice, pur
     """Validate purchase receipt exists and is in valid state for reconciliation."""
     purchase_receipt = database.session.get(PurchaseReceipt, purchase_receipt_id)
     if not purchase_receipt:
-        raise PostingError("La recepción de compra referenciada no existe.")
+        raise PostingError(_("La recepción de compra referenciada no existe."))
     if purchase_receipt.company != document.company:
-        raise PostingError("La factura de compra y la recepción de compra deben pertenecer a la misma compañía.")
+        raise PostingError(_("La factura de compra y la recepción de compra deben pertenecer a la misma compañía."))
     if getattr(purchase_receipt, "docstatus", 0) != 1:
-        raise PostingError("La recepción de compra referenciada debe estar aprobada.")
+        raise PostingError(_("La recepción de compra referenciada debe estar aprobada."))
     if not _has_active_gl_entries(purchase_receipt) or not _has_stock_ledger_entries(purchase_receipt):
-        raise PostingError("La recepción de compra referenciada debe estar contabilizada antes de facturarse.")
+        raise PostingError(_("La recepción de compra referenciada debe estar contabilizada antes de facturarse."))
 
 
 def _record_purchase_reconciliation(document: PurchaseInvoice, matched_amount: Decimal) -> None:
@@ -4022,7 +4025,7 @@ def _build_purchase_receipt_ledger_entries(document, company, bridge_account_id,
 def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera Stock Ledger y GL para una recepción de compra aprobada."""
     if getattr(document, "docstatus", 0) != 1:
-        raise PostingError("Solo se puede contabilizar una recepción de compra aprobada.")
+        raise PostingError(_("Solo se puede contabilizar una recepción de compra aprobada."))
     if _has_active_gl_entries(document):
         raise PostingError(_DOCUMENTO_YA_CONTABILIZADO_MSG)
 
@@ -4052,7 +4055,7 @@ def post_purchase_receipt(document: PurchaseReceipt, ledger_code: str | None = N
     landed_cost_result = engine_payload.results.get("landed_cost") if engine_payload is not None else None
     movements = _create_stock_ledger_for_document_type(document, Decimal("1"), landed_cost_result=landed_cost_result)
     if not movements:
-        raise PostingError("No se generaron movimientos de inventario para esta recepción de compra.")
+        raise PostingError(_("No se generaron movimientos de inventario para esta recepción de compra."))
     if landed_cost_result is not None:
         _persist_landed_cost_allocations(
             document=document,
@@ -4159,14 +4162,14 @@ def _create_delivery_note_gl_entries(
 def post_delivery_note(document: DeliveryNote, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera Stock Ledger y GL para una nota de entrega aprobada."""
     if getattr(document, "docstatus", 0) != 1:
-        raise PostingError("Solo se puede contabilizar una nota de entrega aprobada.")
+        raise PostingError(_("Solo se puede contabilizar una nota de entrega aprobada."))
     if _has_active_gl_entries(document):
         raise PostingError(_DOCUMENTO_YA_CONTABILIZADO_MSG)
 
     company = _company_for(document)
     movements = _create_stock_ledger_for_document_type(document, Decimal("-1"))
     if not movements:
-        raise PostingError("No se generaron movimientos de inventario para esta nota de entrega.")
+        raise PostingError(_("No se generaron movimientos de inventario para esta nota de entrega."))
 
     entries = _create_delivery_note_gl_entries(document, company, ledger_code)
     return _add_entries(entries)
@@ -4191,14 +4194,14 @@ def _comprobante_line_value(
     book_currency = context.company_currency
     base_currency = base_context.document_base_currency
     if not base_currency:
-        raise PostingError("El comprobante requiere moneda base para convertir sus líneas.")
+        raise PostingError(_("El comprobante requiere moneda base para convertir sus líneas."))
     if line_currency == book_currency:
         line_context = context.__class__(**{**context.__dict__, "exchange_rate": Decimal("1")})
         return line_context, original_value
 
     header_currency = base_context.transaction_currency
     if not header_currency:
-        raise PostingError("El comprobante requiere moneda transaccional para convertir sus líneas.")
+        raise PostingError(_("El comprobante requiere moneda transaccional para convertir sus líneas."))
 
     if line_currency == header_currency:
         line_to_header_rate = Decimal("1")
@@ -4222,7 +4225,7 @@ def _comprobante_line_value(
 
     effective_rate = line_to_header_rate * header_to_book_rate
     if effective_rate <= 0:
-        raise InvalidExchangeRateError("El tipo de cambio debe ser mayor que cero.")
+        raise InvalidExchangeRateError(_("El tipo de cambio debe ser mayor que cero."))
     converted_value = _to_company_currency(original_value, effective_rate)
     line_context = context.__class__(**{**context.__dict__, "exchange_rate": effective_rate})
     return line_context, converted_value
@@ -4270,7 +4273,7 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
     company = _company_for(document)
     lines = _comprobante_lines(document)
     if not lines:
-        raise PostingError("El comprobante contable no contiene lineas.")
+        raise PostingError(_("El comprobante contable no contiene lineas."))
 
     entries: list[GLEntry] = []
     is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
@@ -4283,7 +4286,7 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
                 continue
             original_value = _decimal_value(getattr(line, "value", None))
             if original_value == 0:
-                raise PostingError("Las lineas del comprobante contable deben tener un valor distinto de cero.")
+                raise PostingError(_("Las lineas del comprobante contable deben tener un valor distinto de cero."))
 
             account_id = _account_id_for_comprobante_line(line, company)
             line_currency = getattr(line, "currency_id", None) or context.transaction_currency
@@ -4293,7 +4296,7 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
             params = _comprobante_entry_params(line_context, line, account_id, company_value, original_value, is_fy_closing)
             entries.append(_create_gl_entry(context=line_context, params=params))
         if total_value != 0:
-            raise PostingError("El comprobante contable no está balanceado en la moneda del libro.")
+            raise PostingError(_("El comprobante contable no está balanceado en la moneda del libro."))
 
     return _add_entries(entries)
 
@@ -4301,7 +4304,7 @@ def post_comprobante_contable(document: ComprobanteContable, ledger_code: str | 
 def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> list[GLEntry]:
     """Genera Stock Ledger y GL para movimientos de inventario valuado."""
     if getattr(document, "docstatus", 0) != 1:
-        raise PostingError("Solo se puede contabilizar una entrada de stock aprobada.")
+        raise PostingError(_("Solo se puede contabilizar una entrada de stock aprobada."))
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
 
@@ -4325,7 +4328,7 @@ def post_stock_entry(document: StockEntry, ledger_code: str | None = None) -> li
 
     _add_entries(entries)
     if not movements and not entries:
-        raise PostingError("No se generan movimientos para este documento de inventario.")
+        raise PostingError(_("No se generan movimientos para este documento de inventario."))
     return entries
 
 
@@ -4339,11 +4342,11 @@ def _validate_material_transfer_accounts(document: StockEntry, company: str) -> 
         source_warehouse = line.source_warehouse or document.from_warehouse
         target_warehouse = line.target_warehouse or document.to_warehouse
         if source_warehouse == target_warehouse:
-            raise PostingError("La transferencia de material requiere bodegas de origen y destino distintas.")
+            raise PostingError(_("La transferencia de material requiere bodegas de origen y destino distintas."))
         source_acc = warehouse_inventory_account_id(source_warehouse, company)
         target_acc = warehouse_inventory_account_id(target_warehouse, company)
         if not source_acc or not target_acc:
-            raise PostingError("La transferencia requiere cuenta de inventario en ambas bodegas.")
+            raise PostingError(_("La transferencia requiere cuenta de inventario en ambas bodegas."))
 
 
 def _is_cross_account_transfer(document: StockEntry, company: str) -> bool:
@@ -4596,7 +4599,7 @@ def post_document_to_gl(document: Any, ledger_code: str | None = None) -> list[G
     elif isinstance(document, ImportLandedCost):
         entries = post_import_landed_cost(document, ledger_code=ledger_code)
     else:
-        raise PostingError("Tipo de documento no soportado para posting contable.")
+        raise PostingError(_("Tipo de documento no soportado para posting contable."))
     _post_document_ar_ap(document, entries)
     return entries
 
@@ -4634,7 +4637,7 @@ def submit_document(document: Any, ledger_code: str | None = None) -> list[GLEnt
     """
     document = _lock_document_for_transition(document)
     if getattr(document, "docstatus", 0) != 0:
-        raise PostingError("Solo se puede aprobar un documento en borrador.")
+        raise PostingError(_("Solo se puede aprobar un documento en borrador."))
     if _has_active_gl_entries(document):
         raise PostingError(_ERROR_YA_TIENE_ENTRADAS_GL)
     with database.session.begin_nested():
@@ -4664,7 +4667,7 @@ def cancel_document(
     """
     document = _lock_document_for_transition(document)
     if getattr(document, "docstatus", 0) != 1:
-        raise PostingError("Solo se puede cancelar un documento aprobado.")
+        raise PostingError(_("Solo se puede cancelar un documento aprobado."))
 
     if getattr(document, "is_fiscal_year_closing", False):
         return _cancel_fiscal_year_closing_document(
@@ -4677,7 +4680,7 @@ def cancel_document(
 
     if type(document).__name__ == "ComprobanteContable":
         if getattr(document, "voucher_type", None) == "Capitalización Automática de Proyecto":
-            raise PostingError("No se puede anular un comprobante de capitalización automática.")
+            raise PostingError(_("No se puede anular un comprobante de capitalización automática."))
         if getattr(document, "capitalized_by_id", None) is not None:
             raise PostingError(
                 "No se puede anular una transacción que ya ha sido capitalizada. Bloquear anular pero permitir revertir."
@@ -4789,10 +4792,10 @@ def _cancel_fiscal_year_closing_document(
     """
     normalized_reason = str(reason or "").strip()
     if not normalized_reason:
-        raise PostingError("Debe indicar el motivo de la anulacion.")
+        raise PostingError(_("Debe indicar el motivo de la anulacion."))
     normalized_actor = str(actor_user_id or "").strip()
     if not normalized_actor:
-        raise PostingError("Debe indicar el usuario que ejecuta la anulacion.")
+        raise PostingError(_("Debe indicar el usuario que ejecuta la anulacion."))
 
     voucher_type = _get_voucher_type(document)
     voucher_id = _get_voucher_id(document)
@@ -4820,11 +4823,11 @@ def _lock_document_for_transition(document: Any) -> Any:
     """Lock and refresh a persistent document before a state transition."""
     document_id = getattr(document, "id", None)
     if not document_id:
-        raise PostingError("El documento debe estar persistido antes de cambiar su estado.")
+        raise PostingError(_("El documento debe estar persistido antes de cambiar su estado."))
     model = type(document)
     locked = database.session.execute(select(model).where(model.id == document_id).with_for_update()).scalar_one_or_none()
     if locked is None:
-        raise PostingError("El documento no existe.")
+        raise PostingError(_("El documento no existe."))
     return locked
 
 
@@ -4872,7 +4875,7 @@ def _get_original_gl_entries(company: str, voucher_type: str, voucher_id: str, d
         .all()
     )
     if not original_entries and not isinstance(document, StockEntry):
-        raise PostingError("El documento no tiene entradas GL para reversar.")
+        raise PostingError(_("El documento no tiene entradas GL para reversar."))
     return original_entries
 
 
@@ -4958,7 +4961,7 @@ def _cancel_stock_movements_if_needed(
         .all()
     )
     if not original_movements:
-        raise PostingError("El documento no tiene movimientos de inventario para reversar.")
+        raise PostingError(_("El documento no tiene movimientos de inventario para reversar."))
 
     _validate_stock_reversal_capacity(original_movements)
     stock_reversals: list[StockLedgerEntry] = []
@@ -4990,11 +4993,11 @@ def _cancel_landed_cost_valuations(
             continue
         layer = database.session.get(StockValuationLayer, allocation.stock_valuation_layer_id)
         if layer is None:
-            raise PostingError("El costo capitalizable no tiene capa de valoración para reversar.")
+            raise PostingError(_("El costo capitalizable no tiene capa de valoración para reversar."))
 
         bin_row = _stock_bin_for(company, allocation.item_code, allocation.warehouse)
         if bin_row is None:
-            raise PostingError("El costo capitalizable no tiene saldo de inventario para reversar.")
+            raise PostingError(_("El costo capitalizable no tiene saldo de inventario para reversar."))
         _upsert_stock_bin(
             company=company,
             item_code=allocation.item_code,

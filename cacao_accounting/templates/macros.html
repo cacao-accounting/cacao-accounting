@@ -87,10 +87,10 @@
       {% endif %}
     </a>
     {% endif %}
-    <a class="ca-nav-btn" href="{{ url_for('login.profile') }}" title="Mi perfil">
+    <a class="ca-nav-btn" href="{{ url_for('login.profile') }}" title="{{ _('Mi perfil') }}">
       <i class="bi bi-person-circle"></i>
     </a>
-    <a class="ca-nav-btn" href="{{ url_for('login.cerrar_sesion') }}" title="Cerrar sesión">
+    <a class="ca-nav-btn" href="{{ url_for('login.cerrar_sesion') }}" title="{{ _('Cerrar sesión') }}">
       <i class="bi bi-box-arrow-right"></i>
     </a>
   </div>
@@ -181,10 +181,10 @@
         {% set ap_count = pending_approval_count() %}
         {% if ap_count > 0 %}
         <span class="ca-approval-count" data-status="pending_approval"
-          title="{{ _('%(count)s registros pendientes de aprobaciÃ³n', count=ap_count) }}">
+          title="{{ _('%(count)s registros pendientes de aprobación', count=ap_count) }}">
           <i class="bi bi-clock-history" aria-hidden="true"></i>
           <span>{{ ap_count }}</span>
-          <span class="visually-hidden">{{ _('%(count)s registros pendientes de aprobaciÃ³n', count=ap_count) }}</span>
+          <span class="visually-hidden">{{ _('%(count)s registros pendientes de aprobación', count=ap_count) }}</span>
         </span>
         {% endif %}
       </a>
@@ -261,14 +261,14 @@
 {% endmacro %}
 
 {% macro rendizar_paginacion(consulta=None, vista=None, extra_params=None) %}
-<p class="ca-pagination">{{ consulta.total }} items encontrados.
+<p class="ca-pagination">{{ consulta.total }} {{ _('items encontrados') }}.
   <br>
   {% if consulta.has_prev %}
-  <a href="{{ url_for(vista, page=consulta.prev_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}"><i class="bi bi-arrow-left-short"></i> Anterior</a>
+  <a href="{{ url_for(vista, page=consulta.prev_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}"><i class="bi bi-arrow-left-short"></i> {{ _('Anterior') }}</a>
   {% endif %}
-  Página {{ consulta.page }} de {{ consulta.pages }}
+  {{ _('Página') }} {{ consulta.page }} {{ _('de') }} {{ consulta.pages }}
   {% if consulta.has_next %}
-  <a href="{{ url_for(vista, page=consulta.next_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}">Siguiente <i class="bi bi-arrow-right-short"></i></a>
+  <a href="{{ url_for(vista, page=consulta.next_num, search=request.args.get('search', ''), status=request.args.get('status', ''), **((extra_params or {}))) }}">{{ _('Siguiente') }} <i class="bi bi-arrow-right-short"></i></a>
   {% endif %}
 </p>
 {% endmacro %}
@@ -345,11 +345,11 @@
 {# ─── Docstatus Badge ──────────────────────────────────────────── #}
 {% macro docstatus_badge(docstatus) %}
   {% if docstatus == 0 %}
-    <span class="badge bg-secondary"><i class="bi bi-pencil-fill me-1"></i>Borrador</span>
+    <span class="badge bg-secondary"><i class="bi bi-pencil-fill me-1"></i>{{ _('Borrador') }}</span>
   {% elif docstatus == 1 %}
-    <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>Aprobado</span>
+    <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>{{ _('Aprobado') }}</span>
   {% elif docstatus == 2 %}
-    <span class="badge bg-danger"><i class="bi bi-x-circle-fill me-1"></i>Cancelado</span>
+    <span class="badge bg-danger"><i class="bi bi-x-circle-fill me-1"></i>{{ _('Cancelado') }}</span>
   {% endif %}
 {% endmacro %}
 
@@ -938,22 +938,22 @@
       </button>
       {% endif %}
       <button type="button" class="btn btn-sm btn-outline-primary" @click="addRow()">
-        <i class="bi bi-plus me-1"></i>Agregar Línea
+        <i class="bi bi-plus me-1"></i>{{ _('Agregar Línea') }}
       </button>
     </div>
   </div>
 
   <div class="table-responsive p-2">
     <table class="ca-table">
-      <caption class="visually-hidden">Líneas del documento</caption>
+      <caption class="visually-hidden">{{ _('Líneas del documento') }}</caption>
       <thead>
         <tr>
-          <th scope="col" style="width:22%">Artículo</th>
-          <th scope="col" style="width:22%">Descripción</th>
-          <th scope="col" style="width:10%">Cantidad</th>
+          <th scope="col" style="width:22%">{{ _('Artículo') }}</th>
+          <th scope="col" style="width:22%">{{ _('Descripción') }}</th>
+          <th scope="col" style="width:10%">{{ _('Cantidad') }}</th>
           <th scope="col" style="width:10%">UOM</th>
-          <th scope="col" style="width:12%">Precio Unit.</th>
-          <th scope="col" style="width:12%">Monto</th>
+          <th scope="col" style="width:12%">{{ _('Precio Unit.') }}</th>
+          <th scope="col" style="width:12%">{{ _('Monto') }}</th>
           <th scope="col" style="width:6%"></th>
         </tr>
       </thead>
@@ -975,7 +975,7 @@
               <input type="hidden" :name="'source_item_id_' + idx" :value="item.source_item_id">
             </td>
             <td><input type="text" :name="'item_name_display_' + idx" x-model="item.item_name"
-                       class="form-control form-control-sm" placeholder="Descripción"></td>
+                       class="form-control form-control-sm" placeholder="{{ _('Descripción') }}"></td>
             <td><input type="number" :name="'qty_' + idx" x-model.number="item.qty" min="0.0001"
                        step="0.0001" @input="calcAmount(idx)" class="form-control form-control-sm"></td>
             <td>
@@ -994,13 +994,13 @@
             </td>
             <td>
               <button type="button" class="btn btn-sm btn-outline-danger" @click="removeRow(idx)"
-                      title="Eliminar línea"><i class="bi bi-trash"></i></button>
+                      title="{{ _('Eliminar línea') }}"><i class="bi bi-trash"></i></button>
             </td>
           </tr>
         </template>
         <tr x-show="items.length === 0">
           <td colspan="7" class="text-center text-muted py-3" style="font-size:.85rem;">
-            Sin líneas. Use "Agregar Línea"{% if source_api_url %} o "Actualizar Elementos"{% endif %}.
+            {{ _('Sin líneas. Use "Agregar Línea"') }}{% if source_api_url %} {{ _('o "Actualizar Elementos"') }}{% endif %}.
           </td>
         </tr>
       </tbody>
@@ -1014,30 +1014,30 @@
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="modalAutofillLabel">
-            <i class="bi bi-table me-2"></i>Actualizar Elementos desde {{ source_label }}
+            <i class="bi bi-table me-2"></i>{{ _('Actualizar Elementos desde') }} {{ source_label }}
           </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Cerrar') }}"></button>
         </div>
         <div class="modal-body">
           <div x-show="loadingSource" class="text-center py-3">
             <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-            Cargando elementos…
+            {{ _('Cargando elementos…') }}
           </div>
           <div x-show="!loadingSource">
             <table class="ca-table">
-              <caption class="visually-hidden">Elementos del documento origen</caption>
+              <caption class="visually-hidden">{{ _('Elementos del documento origen') }}</caption>
               <thead>
                 <tr>
                   <th scope="col" style="width:5%"><input type="checkbox"
                     @change="sourceItems.forEach(i => i.selected = $event.target.checked)"></th>
-                  <th scope="col">Código</th>
-                  <th scope="col">Descripción</th>
-                  <th scope="col">Ordenado</th>
-                  <th scope="col">Consumido</th>
-                  <th scope="col">Pendiente</th>
-                  <th scope="col">Traer</th>
+                  <th scope="col">{{ _('Código') }}</th>
+                  <th scope="col">{{ _('Descripción') }}</th>
+                  <th scope="col">{{ _('Ordenado') }}</th>
+                  <th scope="col">{{ _('Consumido') }}</th>
+                  <th scope="col">{{ _('Pendiente') }}</th>
+                  <th scope="col">{{ _('Traer') }}</th>
                   <th scope="col">UOM</th>
-                  <th scope="col">Precio</th>
+                  <th scope="col">{{ _('Precio') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1059,16 +1059,16 @@
                   </tr>
                 </template>
                 <tr x-show="sourceItems.length === 0">
-                  <td colspan="9" class="text-center text-muted py-3">Sin elementos disponibles.</td>
+                  <td colspan="9" class="text-center text-muted py-3">{{ _('Sin elementos disponibles.') }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ _('Cancelar') }}</button>
           <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="applySource()">
-            <i class="bi bi-arrow-repeat me-1"></i>Actualizar
+            <i class="bi bi-arrow-repeat me-1"></i>{{ _('Actualizar') }}
           </button>
         </div>
       </div>

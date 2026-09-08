@@ -9,22 +9,22 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">Caja y Bancos</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Forecast de Entradas manuales</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Caja y Bancos") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Forecast de Entradas manuales") }}</li>
   </ol>
 </nav>
 
 <div class="card mb-4 shadow-sm border-0">
   <div class="card-header bg-white py-3 border-0">
-    <h4 class="mb-0 fw-bold"><i class="bi bi-pencil-square text-primary"></i> Forecast de Entradas manuales</h4>
-    <p class="text-muted mb-0 small">Gestione los ingresos y egresos proyectados manualmente para cada escenario de flujo de caja.</p>
+    <h4 class="mb-0 fw-bold"><i class="bi bi-pencil-square text-primary"></i> {{ _("Forecast de Entradas manuales") }}</h4>
+    <p class="text-muted mb-0 small">{{ _("Gestione los ingresos y egresos proyectados manualmente para cada escenario de flujo de caja.") }}</p>
   </div>
 
   <div class="p-3 bg-light border-top">
     <form method="GET" action="{{ url_for('bancos.cash_forecast_manual_entries') }}" class="row g-3 align-items-end">
       <div class="col-md-4">
-        <label for="companySelect" class="form-label small fw-bold">Compañía:</label>
+        <label for="companySelect" class="form-label small fw-bold">{{ _("Compañía:") }}</label>
         <select name="company" id="companySelect" class="form-select form-select-sm" onchange="this.form.submit()">
           {% for code, name in companies %}
           <option value="{{ code }}" {% if code == selected_company %}selected{% endif %}>{{ name }}</option>
@@ -33,9 +33,9 @@
       </div>
 
       <div class="col-md-4">
-        <label for="forecastSelect" class="form-label small fw-bold">Escenario / Pronóstico:</label>
+        <label for="forecastSelect" class="form-label small fw-bold">{{ _("Escenario / Pronóstico:") }}</label>
         <select name="forecast_id" id="forecastSelect" class="form-select form-select-sm" onchange="this.form.submit()">
-          <option value="">-- Seleccione un Escenario --</option>
+          <option value="">{{ _("-- Seleccione un Escenario --") }}</option>
           {% for f in forecasts %}
           <option value="{{ f.id }}" {% if selected_forecast and f.id == selected_forecast.id %}selected{% endif %}>{{ f.version }} ({{ f.status }})</option>
           {% endfor %}
@@ -51,11 +51,11 @@
   <div class="card-body bg-light">
     <div class="row g-3">
       <div class="col-md-3">
-        <span class="text-muted d-block small">Escenario</span>
+        <span class="text-muted d-block small">{{ _("Escenario") }}</span>
         <strong>{{ selected_forecast.version }}</strong>
       </div>
       <div class="col-md-3">
-        <span class="text-muted d-block small">Estado</span>
+        <span class="text-muted d-block small">{{ _("Estado") }}</span>
         <strong>
           {% if selected_forecast.status == "Draft" %}
           <span class="text-warning"><i class="bi bi-file-earmark-diff"></i> Borrador</span>
@@ -73,7 +73,7 @@
         <strong>{{ "Semanal" if selected_forecast.periodicity == "weekly" else "Mensual" }}</strong>
       </div>
       <div class="col-md-3">
-        <span class="text-muted d-block small">Descripción</span>
+        <span class="text-muted d-block small">{{ _("Descripción") }}</span>
         <p class="mb-0 text-muted small">{{ selected_forecast.description or "Sin descripción" }}</p>
       </div>
     </div>
@@ -121,7 +121,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <div class="col-md-3">
-        <label for="type" class="form-label small fw-bold">Tipo</label>
+        <label for="type" class="form-label small fw-bold">{{ _("Tipo") }}</label>
         <select name="type" id="type" class="form-select form-select-sm" required>
           <option value="Income">Ingreso (+)</option>
           <option value="Expense">Egreso (-)</option>
@@ -129,12 +129,12 @@
       </div>
 
       <div class="col-md-3">
-        <label for="concept" class="form-label small fw-bold">Concepto</label>
+        <label for="concept" class="form-label small fw-bold">{{ _("Concepto") }}</label>
         <input type="text" name="concept" id="concept" class="form-control form-control-sm" placeholder="Ej: Nómina, Préstamo, Impuestos" required>
       </div>
 
       <div class="col-md-2">
-        <label for="currency" class="form-label small fw-bold">Moneda</label>
+        <label for="currency" class="form-label small fw-bold">{{ _("Moneda") }}</label>
         <select name="currency" id="currency" class="form-select form-select-sm" required>
           {% for code, name in currencies %}
           <option value="{{ code }}" {% if code == selected_forecast.currency %}selected{% endif %}>{{ code }} - {{ name }}</option>
@@ -143,7 +143,7 @@
       </div>
 
       <div class="col-md-2">
-        <label for="amount" class="form-label small fw-bold">Monto</label>
+        <label for="amount" class="form-label small fw-bold">{{ _("Monto") }}</label>
         <input type="number" step="0.01" name="amount" id="amount" class="form-control form-control-sm" placeholder="0.00" required>
       </div>
 
@@ -176,13 +176,13 @@
       <thead class="table-light">
         <tr>
           <th scope="col">Fecha Estimada</th>
-          <th scope="col">Tipo</th>
-          <th scope="col">Concepto</th>
-          <th scope="col" class="text-end">Monto</th>
-          <th scope="col">Moneda</th>
+          <th scope="col">{{ _("Tipo") }}</th>
+          <th scope="col">{{ _("Concepto") }}</th>
+          <th scope="col" class="text-end">{{ _("Monto") }}</th>
+          <th scope="col">{{ _("Moneda") }}</th>
           <th scope="col">Notas</th>
           {% if selected_forecast.status == "Draft" %}
-          <th scope="col">Acciones</th>
+          <th scope="col">{{ _("Acciones") }}</th>
           {% endif %}
         </tr>
       </thead>
@@ -230,7 +230,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="modal-body text-start">
                       <div class="mb-3">
-                        <label for="type-{{ entry.id }}" class="form-label small fw-bold">Tipo</label>
+                        <label for="type-{{ entry.id }}" class="form-label small fw-bold">{{ _("Tipo") }}</label>
                         <select name="type" id="type-{{ entry.id }}" class="form-select form-select-sm" required>
                           <option value="Income" {% if entry.type == "Income" %}selected{% endif %}>Ingreso (+)</option>
                           <option value="Expense" {% if entry.type == "Expense" %}selected{% endif %}>Egreso (-)</option>
@@ -238,13 +238,13 @@
                       </div>
 
                       <div class="mb-3">
-                        <label for="concept-{{ entry.id }}" class="form-label small fw-bold">Concepto</label>
+                        <label for="concept-{{ entry.id }}" class="form-label small fw-bold">{{ _("Concepto") }}</label>
                         <input type="text" name="concept" id="concept-{{ entry.id }}" class="form-control form-control-sm" value="{{ entry.concept }}" required>
                       </div>
 
                       <div class="row g-2 mb-3">
                         <div class="col-6">
-                          <label for="currency-{{ entry.id }}" class="form-label small fw-bold">Moneda</label>
+                          <label for="currency-{{ entry.id }}" class="form-label small fw-bold">{{ _("Moneda") }}</label>
                           <select name="currency" id="currency-{{ entry.id }}" class="form-select form-select-sm" required>
                             {% for code, name in currencies %}
                             <option value="{{ code }}" {% if code == entry.currency %}selected{% endif %}>{{ code }}</option>
@@ -252,7 +252,7 @@
                           </select>
                         </div>
                         <div class="col-6">
-                          <label for="amount-{{ entry.id }}" class="form-label small fw-bold">Monto</label>
+                          <label for="amount-{{ entry.id }}" class="form-label small fw-bold">{{ _("Monto") }}</label>
                           <input type="number" step="0.01" name="amount" id="amount-{{ entry.id }}" class="form-control form-control-sm" value="{{ entry.amount }}" required>
                         </div>
                       </div>
@@ -268,7 +268,7 @@
                       </div>
                     </div>
                     <div class="modal-footer">
-                      <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                      <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{{ _("Cancelar") }}</button>
                       <button type="submit" class="btn btn-sm btn-primary">Guardar Cambios</button>
                     </div>
                   </form>

@@ -14,6 +14,8 @@ from werkzeug.utils import secure_filename
 from cacao_accounting.database import File, FileAttachment, Item, database
 from cacao_accounting.runtime_mode import is_desktop_mode
 
+from cacao_accounting.i18n import _
+
 MAX_FILE_SIZE = 16 * 1024 * 1024  # 16 MB
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
@@ -57,18 +59,18 @@ def validate_upload(
     """Read and validate an uploaded document before persisting it."""
     del max_pages, max_image_pixels  # Structural checks run asynchronously during normalization.
     if not upload or not getattr(upload, "filename", None):
-        raise AttachmentError("invalid_file")
+        raise AttachmentError(_("invalid_file"))
     data = upload.read()
     if not data or len(data) > max_bytes:
-        raise AttachmentError("file_too_large_or_empty")
+        raise AttachmentError(_("file_too_large_or_empty"))
     try:
         import magic
 
         mime_type = magic.from_buffer(data, mime=True)
     except Exception as exc:  # pragma: no cover - optional dependency failure
-        raise AttachmentError("invalid_file") from exc
+        raise AttachmentError(_("invalid_file")) from exc
     if mime_type not in allowed_mime_types:
-        raise AttachmentError("invalid_file")
+        raise AttachmentError(_("invalid_file"))
     return ValidatedUpload(
         data=data,
         filename=secure_filename(upload.filename) or "attachment",

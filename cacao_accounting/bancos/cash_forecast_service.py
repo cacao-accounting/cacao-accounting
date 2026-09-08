@@ -23,6 +23,9 @@ from cacao_accounting.contabilidad.posting import _lookup_exchange_rate
 from cacao_accounting.document_flow.payment import compute_outstanding_amount
 from cacao_accounting.ledger_queries import primary_ledger_id
 
+
+from cacao_accounting.i18n import _
+
 _EPOCH_DATE = date(1900, 1, 1)
 
 
@@ -394,11 +397,11 @@ def get_cash_forecast_matrix(company, forecast_id, today_date=None):
     if not forecast:
         return []
     if forecast.company != company:
-        raise ValueError("El pronóstico no pertenece a la compañía solicitada.")
+        raise ValueError(_("El pronóstico no pertenece a la compañía solicitada."))
 
     fiscal_year = database.session.get(FiscalYear, forecast.fiscal_year_id)
     if not fiscal_year or fiscal_year.entity != company:
-        raise ValueError("El año fiscal no pertenece a la compañía del pronóstico.")
+        raise ValueError(_("El año fiscal no pertenece a la compañía del pronóstico."))
 
     company_currency = _resolve_company_currency(company)
     periods = generate_periods(fiscal_year, forecast.periodicity)
@@ -491,7 +494,7 @@ def get_forecast_comparison(company, base_id, compare_id, today_date=None):
     if not base_forecast or not compare_forecast:
         return []
     if base_forecast.company != company or compare_forecast.company != company:
-        raise ValueError("Los pronósticos comparados deben pertenecer a la compañía solicitada.")
+        raise ValueError(_("Los pronósticos comparados deben pertenecer a la compañía solicitada."))
     base_matrix = get_cash_forecast_matrix(company, base_id, today_date)
     compare_matrix = get_cash_forecast_matrix(company, compare_id, today_date)
 

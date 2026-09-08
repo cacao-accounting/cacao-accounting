@@ -59,6 +59,9 @@ from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, exclude_cancelled_stock_entries, primary_ledger_id
 
 
+from cacao_accounting.i18n import _
+
+
 @dataclass(frozen=True)
 class SubledgerFilters:
     """Filtros para subledger AR/AP."""
@@ -363,7 +366,7 @@ def _subledger_document_query(filters: SubledgerFilters, effective_as_of: date) 
         if filters.party_id:
             query = query.filter_by(supplier_id=filters.party_id)
     else:
-        raise ValueError("El subledger solo soporta customer o supplier.")
+        raise ValueError(_("El subledger solo soporta customer o supplier."))
 
     query = query.where(document_model.posting_date <= effective_as_of)
     if not filters.include_returns:
@@ -945,7 +948,7 @@ def _load_party_payment_terms(company: str) -> dict[str, int]:
 def get_maturity_schedule(filters: MaturityFilters) -> PaginatedReport:
     """Calcula vencimientos de cartera usando términos de pago por tercero."""
     if filters.horizon_days < 0 or filters.horizon_days > 3650:
-        raise ValueError("horizon_days debe estar entre 0 y 3650")
+        raise ValueError(_("horizon_days debe estar entre 0 y 3650"))
     party_terms = _load_party_payment_terms(filters.company)
     documents = _fetch_maturity_documents(filters)
 
@@ -1258,7 +1261,7 @@ def get_slow_moving_items(
 ) -> PaginatedReport:
     """Lista existencias sin movimientos de salida durante el umbral indicado."""
     if inactivity_days < 1 or inactivity_days > 3650:
-        raise ValueError("inactivity_days debe estar entre 1 y 3650")
+        raise ValueError(_("inactivity_days debe estar entre 1 y 3650"))
     cutoff = as_of_date or filters.date_to or date.today()
     query = exclude_cancelled_stock_entries(select(StockLedgerEntry)).where(
         StockLedgerEntry.company == filters.company,
@@ -1342,7 +1345,7 @@ def _turnover_rows(
 def get_inventory_turnover(filters: OperationalReportFilters) -> PaginatedReport:
     """Calcula rotación por artículo/almacén como salidas sobre stock promedio reconstruido de forma cronológica."""
     if not filters.date_from or not filters.date_to or filters.date_to < filters.date_from:
-        raise ValueError("date_from y date_to válidos son obligatorios para calcular rotación")
+        raise ValueError(_("date_from y date_to válidos son obligatorios para calcular rotación"))
     query = exclude_cancelled_stock_entries(select(StockLedgerEntry)).where(
         StockLedgerEntry.company == filters.company,
         StockLedgerEntry.posting_date <= filters.date_to,
@@ -1958,7 +1961,7 @@ def get_monthly_withholding_report(company: str, year: int, month: int) -> Pagin
     withholding concept and its base, rate and amount.
     """
     if month < 1 or month > 12:
-        raise ValueError("El mes fiscal debe estar entre 1 y 12.")
+        raise ValueError(_("El mes fiscal debe estar entre 1 y 12."))
     start = date(year, month, 1)
     end = date(year + (month == 12), 1 if month == 12 else month + 1, 1)
     certificates = (

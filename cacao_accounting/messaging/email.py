@@ -23,6 +23,9 @@ from cacao_accounting.database import CacaoConfig, database
 from cacao_accounting.runtime_mode import is_desktop_mode
 
 
+from cacao_accounting.i18n import _
+
+
 class EmailError(Exception):
     """Excepción para errores relacionados con el envío de correos electrónicos."""
 
@@ -40,7 +43,7 @@ def _get_encryption_key(salt: bytes) -> bytes:
         key_base = os.environ.get("CACAO_SECRET_KEY") or os.environ.get("SECRET_KEY") or ""
 
     if not key_base:
-        raise EmailError("Configure SECRET_KEY o CACAO_SECRET_KEY para proteger la contraseña SMTP.")
+        raise EmailError(_("Configure SECRET_KEY o CACAO_SECRET_KEY para proteger la contraseña SMTP."))
 
     key_derivation = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -54,13 +57,13 @@ def _get_encryption_key(salt: bytes) -> bytes:
 def _get_or_create_password_salt() -> bytes:
     """Load the persistent SMTP-password salt, creating it on first use."""
     if not has_app_context():
-        raise EmailError("La contraseña SMTP requiere un contexto de aplicación para cifrarse.")
+        raise EmailError(_("La contraseña SMTP requiere un contexto de aplicación para cifrarse."))
     record = database.session.execute(database.select(CacaoConfig).filter_by(key=SMTP_PASSWORD_SALT_KEY)).scalar_one_or_none()
     if record and record.value:
         try:
             return base64.urlsafe_b64decode(record.value.encode("ascii"))
         except ValueError as exc:
-            raise EmailError("La sal de cifrado SMTP almacenada no es válida.") from exc
+            raise EmailError(_("La sal de cifrado SMTP almacenada no es válida.")) from exc
     salt = os.urandom(16)
     database.session.add(CacaoConfig(key=SMTP_PASSWORD_SALT_KEY, value=base64.urlsafe_b64encode(salt).decode("ascii")))
     database.session.flush()
@@ -85,9 +88,9 @@ def decrypt_smtp_pass(ciphertext: str) -> str:
         return Fernet(_get_encryption_key(_get_or_create_password_salt())).decrypt(ciphertext.encode("utf-8")).decode("utf-8")
     except InvalidToken as exc:
         LOGGER.error("No se pudo descifrar la contraseña SMTP; revise SECRET_KEY y su rotación.")
-        raise EmailError("No se pudo descifrar la contraseña SMTP configurada.") from exc
+        raise EmailError(_("No se pudo descifrar la contraseña SMTP configurada.")) from exc
     except (TypeError, ValueError) as exc:
-        raise EmailError("La contraseña SMTP almacenada no es válida.") from exc
+        raise EmailError(_("La contraseña SMTP almacenada no es válida.")) from exc
 
 
 def _get_db_value(key: str) -> str | None:
@@ -185,11 +188,11 @@ def retry_email_queue_item(queue_id: str) -> Any:
     from cacao_accounting.database import EmailQueue
 
     if is_desktop_mode():
-        raise EmailError("El reintento de envío de correos no está disponible en modo DESKTOP.")
+        raise EmailError(_("El reintento de envío de correos no está disponible en modo DESKTOP."))
 
     item = database.session.get(EmailQueue, queue_id)
     if not item:
-        raise EmailError("El registro de correo no existe.")
+        raise EmailError(_("El registro de correo no existe."))
 
     item.attempts = (item.attempts or 0) + 1
     try:
@@ -275,7 +278,7 @@ def get_document_default_recipient_email(document_type: str, document_id: str) -
 def send_email(to_email: str, subject: str, body: str, is_html: bool = False) -> None:
     """Envía un correo electrónico utilizando la configuración SMTP activa (Cloud-Only)."""
     if is_desktop_mode():
-        raise EmailError("La capacidad de envío de correos electrónicos no está disponible en modo DESKTOP.")
+        raise EmailError(_("La capacidad de envío de correos electrónicos no está disponible en modo DESKTOP."))
 
     server_host = get_smtp_setting("smtp_server")
     port_str = get_smtp_setting("smtp_port") or "587"
@@ -285,9 +288,9 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     from_email = get_smtp_setting("smtp_from_email")
 
     if not server_host:
-        raise EmailError("El servidor SMTP (smtp_server) no está configurado.")
+        raise EmailError(_("El servidor SMTP (smtp_server) no está configurado."))
     if not from_email:
-        raise EmailError("El remitente (smtp_from_email) no está configurado.")
+        raise EmailError(_("El remitente (smtp_from_email) no está configurado."))
 
     try:
         port = int(port_str)

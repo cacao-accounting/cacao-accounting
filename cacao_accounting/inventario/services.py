@@ -43,7 +43,6 @@ from cacao_accounting.document_flow import (
     create_document_relation,
 )
 
-from cacao_accounting.document_flow.status import _
 
 from cacao_accounting.document_flow.context import company_currency  # noqa: F401  - legacy import retained for downstream
 
@@ -63,6 +62,8 @@ from cacao_accounting.inventario.service import (
     parse_item_uom_rows,
     update_item_with_uoms,
 )
+
+from cacao_accounting.i18n import _
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +260,7 @@ def _item_params_from_form(form) -> ItemParams:
 def _process_item_edit(item, formulario):
     """Procesa el POST de edición de un artículo."""
     if not formulario.validate():
-        flash("Revise los datos del formulario de artículo.", "danger")
+        flash(_("Revise los datos del formulario de artículo."), "danger")
         return None
     try:
         update_item_with_uoms(item_code=item.code, params=_item_params_from_form(request.form))
@@ -273,7 +274,7 @@ def _process_item_edit(item, formulario):
             except Exception as exc:
                 flash(f"Imagen no actualizada: {exc}", "warning")
         database.session.commit()
-        flash("Artículo actualizado correctamente.", "success")
+        flash(_("Artículo actualizado correctamente."), "success")
         return redirect(url_for("inventario.inventario_articulo", item_id=item.code))
     except ValueError as exc:
         database.session.rollback()
@@ -708,7 +709,7 @@ def _validate_stock_entry_posting_date(form_data: Mapping[str, Any]) -> date:
     posting_date_raw = form_data.get("posting_date")
     posting_date = _parse_date(str(posting_date_raw).strip() if posting_date_raw is not None else "")
     if posting_date is None:
-        raise ValueError("La fecha de contabilización es obligatoria y debe tener formato YYYY-MM-DD.")
+        raise ValueError(_("La fecha de contabilización es obligatoria y debe tener formato YYYY-MM-DD."))
     return posting_date
 
 
@@ -716,7 +717,7 @@ def _validate_stock_entry_purpose(value: Any) -> str:
     """Validate the accounting treatment selected for a stock entry."""
     purpose = str(value or "").strip()
     if purpose not in STOCK_ENTRY_PURPOSES:
-        raise ValueError("El propósito de la entrada de almacén no es válido.")
+        raise ValueError(_("El propósito de la entrada de almacén no es válido."))
     return purpose
 
 
@@ -724,7 +725,7 @@ def _validate_stock_entry_company(value: Any, action: str) -> str:
     """Validate company presence and the user's inventory ACL."""
     company = str(value or "").strip()
     if not company:
-        raise ValueError("La compañía es obligatoria.")
+        raise ValueError(_("La compañía es obligatoria."))
     exige_acceso_compania("inventory", company, action)
     return company
 
@@ -738,10 +739,10 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
 
         base_currency_value = company_functional_currency(company)
         if not base_currency_value:
-            raise ValueError("La compania requiere una moneda funcional configurada.")
+            raise ValueError(_("La compania requiere una moneda funcional configurada."))
         raw_currency = form_data.get("transaction_currency") or form_data.get("currency") or ""
         if not raw_currency:
-            raise ValueError("La entrada de inventario requiere una moneda transaccional explicita.")
+            raise ValueError(_("La entrada de inventario requiere una moneda transaccional explicita."))
         entry = StockEntry(
             purpose=posted_purpose,
             company=company,
@@ -771,7 +772,7 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
             entry.total_amount = _save_stock_entry_items(entry)
         log_create(entry)
         database.session.commit()
-        flash("Entrada de almacén creada correctamente.", "success")
+        flash(_("Entrada de almacén creada correctamente."), "success")
         return redirect(url_for(INVENTARIO_INVENTARIO_ENTRADA, entry_id=entry.id))
     except ValueError as exc:
         database.session.rollback()
@@ -829,9 +830,9 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
     purpose = _validate_stock_entry_purpose(request.form.get("purpose") or registro.purpose)
     company = _validate_stock_entry_company(request.form.get("company"), "editar")
     if purpose != registro.purpose:
-        raise ValueError("No se puede cambiar el propósito de una entrada de almacén existente.")
+        raise ValueError(_("No se puede cambiar el propósito de una entrada de almacén existente."))
     if company != registro.company:
-        raise ValueError("No se puede cambiar la compañía de una entrada de almacén existente.")
+        raise ValueError(_("No se puede cambiar la compañía de una entrada de almacén existente."))
     registro.purpose = purpose
     registro.company = company
     registro.posting_date = _validate_stock_entry_posting_date(request.form)
@@ -844,14 +845,14 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
     registro.remarks = request.form.get("remarks")
     raw_currency = request.form.get("transaction_currency") or request.form.get("currency") or ""
     if not raw_currency and not registro.transaction_currency:
-        raise ValueError("La entrada de inventario requiere una moneda transaccional explicita.")
+        raise ValueError(_("La entrada de inventario requiere una moneda transaccional explicita."))
     if raw_currency:
         registro.transaction_currency = str(raw_currency).strip()
     from cacao_accounting.document_flow.currency_resolver import company_functional_currency
 
     base_currency_value = company_functional_currency(company)
     if not base_currency_value:
-        raise ValueError("La compania requiere una moneda funcional configurada.")
+        raise ValueError(_("La compania requiere una moneda funcional configurada."))
     registro.base_currency = base_currency_value
 
 

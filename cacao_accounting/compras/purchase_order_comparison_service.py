@@ -17,6 +17,9 @@ from cacao_accounting.database import (
 )
 
 
+from cacao_accounting.i18n import _
+
+
 def purchase_request_ids_for_order(order_id: str) -> set[str]:
     """Return active purchase-request origins for a purchase order."""
     rows = database.session.execute(
@@ -161,7 +164,7 @@ def create_purchase_order_comparison(
     candidates = {order.id: order for order in purchase_orders_for_request(purchase_request)}
     selected_ids = set(participant_ids) | {base_order.id}
     if not selected_ids.issubset(candidates):
-        raise ValueError("Solo se pueden comparar órdenes de compra del mismo origen y compañía.")
+        raise ValueError(_("Solo se pueden comparar órdenes de compra del mismo origen y compañía."))
 
     comparison = PurchaseOrderComparison(
         company=base_order.company,
@@ -222,7 +225,7 @@ def open_purchase_order_comparison_round(
     candidates = {order.id: order for order in purchase_orders_for_request(purchase_request)}
     selected_ids = set(participant_ids) | {comparison.base_purchase_order_id}
     if not selected_ids.issubset(candidates):
-        raise ValueError("Solo se pueden comparar órdenes de compra del mismo origen y compañía.")
+        raise ValueError(_("Solo se pueden comparar órdenes de compra del mismo origen y compañía."))
 
     latest = database.session.execute(
         database.select(PurchaseOrderComparisonRound)

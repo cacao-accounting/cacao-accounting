@@ -27,6 +27,9 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.ledger_queries import exclude_cancelled_gl_entries, primary_ledger_id
 
+
+from cacao_accounting.i18n import _
+
 UNSUPPORTED_TARGET_TYPE_ERROR = "Tipo de destino no soportado para conciliacion bancaria."
 BANK_TRANSACTION_NOT_FOUND_ERROR = "La transaccion bancaria no existe."
 
@@ -79,9 +82,9 @@ def _bank_amount(transaction: BankTransaction) -> Decimal:
     deposit = _decimal_value(transaction.deposit)
     withdrawal = _decimal_value(transaction.withdrawal)
     if deposit > 0 and withdrawal > 0:
-        raise BankReconciliationError("Una transaccion bancaria no puede tener deposito y retiro simultaneos.")
+        raise BankReconciliationError(_("Una transaccion bancaria no puede tener deposito y retiro simultaneos."))
     if deposit <= 0 and withdrawal <= 0:
-        raise BankReconciliationError("La transaccion bancaria requiere un monto positivo.")
+        raise BankReconciliationError(_("La transaccion bancaria requiere un monto positivo."))
     return deposit if deposit > 0 else withdrawal
 
 
@@ -89,7 +92,7 @@ def _bank_direction(transaction: BankTransaction) -> str | None:
     """Devuelve la dirección económica de una transacción bancaria."""
     if _decimal_value(transaction.deposit) > 0:
         if _decimal_value(transaction.withdrawal) > 0:
-            raise BankReconciliationError("Una transaccion bancaria no puede tener dos direcciones.")
+            raise BankReconciliationError(_("Una transaccion bancaria no puede tener dos direcciones."))
         return "deposit"
     if _decimal_value(transaction.withdrawal) > 0:
         return "withdrawal"
@@ -168,7 +171,7 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: date) -> 
             return None
         value = _decimal_value(row.rate)
         if value <= 0:
-            raise BankReconciliationError("El tipo de cambio debe ser mayor que cero.")
+            raise BankReconciliationError(_("El tipo de cambio debe ser mayor que cero."))
         return value
 
     direct = latest_rate(origin, destination)
@@ -197,7 +200,7 @@ def _convert_gl_amount_to_bank_currency(entry: GLEntry, bank_currency: str, comp
         return company_amount
 
     if not company_currency:
-        raise BankReconciliationError("La entrada GL no tiene moneda funcional para convertirla.")
+        raise BankReconciliationError(_("La entrada GL no tiene moneda funcional para convertirla."))
 
     # ``debit``/``credit`` are persisted in the company currency.  The
     # account-currency amount is only authoritative when the bank itself uses
@@ -213,7 +216,7 @@ def _convert_gl_amount_to_bank_currency(entry: GLEntry, bank_currency: str, comp
 def _bank_company(transaction: BankTransaction) -> str:
     bank_account = database.session.get(BankAccount, transaction.bank_account_id)
     if not bank_account:
-        raise BankReconciliationError("La transaccion bancaria no tiene cuenta bancaria valida.")
+        raise BankReconciliationError(_("La transaccion bancaria no tiene cuenta bancaria valida."))
     return str(bank_account.company)
 
 
@@ -430,14 +433,14 @@ def _target_payment_amount(
     """Resolve a payment amount in the bank transaction currency."""
     payment = database.session.get(PaymentEntry, target_id)
     if not payment:
-        raise BankReconciliationError("La entrada de pago a conciliar no existe.")
+        raise BankReconciliationError(_("La entrada de pago a conciliar no existe."))
     if getattr(payment, "docstatus", 0) != 1:
-        raise BankReconciliationError("La entrada de pago debe estar aprobada para conciliarse.")
+        raise BankReconciliationError(_("La entrada de pago debe estar aprobada para conciliarse."))
     payment_currency = str(payment.currency) if payment.currency else company_currency
     if not bank_currency or payment_currency == bank_currency:
         return _payment_amount(payment, bank_account_id)
     if bank_currency != company_currency:
-        raise BankReconciliationError("La moneda del pago no coincide con la cuenta bancaria.")
+        raise BankReconciliationError(_("La moneda del pago no coincide con la cuenta bancaria."))
     base_amount = _payment_base_amount(payment, bank_account_id)
     if base_amount is None:
         # Pierna receptora de una transferencia interna: ``base_received_amount``
@@ -455,7 +458,7 @@ def _target_gl_amount(target_id: str, bank_currency: str | None, company_currenc
     """
     entry = database.session.get(GLEntry, target_id)
     if not entry:
-        raise BankReconciliationError("La entrada GL a conciliar no existe.")
+        raise BankReconciliationError(_("La entrada GL a conciliar no existe."))
     _validate_gl_entry_eligibility(entry)
     if bank_currency:
         return _convert_gl_amount_to_bank_currency(entry, bank_currency, company_currency)
@@ -465,11 +468,11 @@ def _target_gl_amount(target_id: str, bank_currency: str | None, company_currenc
 def _validate_gl_entry_eligibility(entry: GLEntry) -> None:
     """Require an active entry from the primary ledger for bank matching."""
     if getattr(entry, "is_cancelled", False) or getattr(entry, "is_reversal", False):
-        raise BankReconciliationError("La entrada GL está cancelada o es una reversa.")
+        raise BankReconciliationError(_("La entrada GL está cancelada o es una reversa."))
     if hasattr(entry, "ledger_id"):
         primary_id = primary_ledger_id(str(entry.company))
         if primary_id and entry.ledger_id != primary_id:
-            raise BankReconciliationError("La entrada GL no pertenece al libro primario.")
+            raise BankReconciliationError(_("La entrada GL no pertenece al libro primario."))
 
 
 def _target_company(target_type: str, target_id: str) -> str:
@@ -477,14 +480,14 @@ def _target_company(target_type: str, target_id: str) -> str:
         case "payment_entry":
             payment = database.session.get(PaymentEntry, target_id)
             if not payment:
-                raise BankReconciliationError("La entrada de pago a conciliar no existe.")
+                raise BankReconciliationError(_("La entrada de pago a conciliar no existe."))
             if getattr(payment, "docstatus", 0) != 1:
-                raise BankReconciliationError("La entrada de pago debe estar aprobada para conciliarse.")
+                raise BankReconciliationError(_("La entrada de pago debe estar aprobada para conciliarse."))
             return str(payment.company)
         case "gl_entry":
             entry = database.session.get(GLEntry, target_id)
             if not entry:
-                raise BankReconciliationError("La entrada GL a conciliar no existe.")
+                raise BankReconciliationError(_("La entrada GL a conciliar no existe."))
             return str(entry.company)
         case _:
             raise BankReconciliationError(UNSUPPORTED_TARGET_TYPE_ERROR)
@@ -731,7 +734,7 @@ def find_bank_reconciliation_candidates(
     company = _bank_company(transaction)
     amount = _bank_amount(transaction)
     if amount <= 0:
-        raise BankReconciliationError("La transaccion bancaria no tiene monto conciliable.")
+        raise BankReconciliationError(_("La transaccion bancaria no tiene monto conciliable."))
 
     days_tolerance, amount_tolerance = _candidate_tolerances(transaction, company, days_tolerance, amount_tolerance)
 
@@ -773,7 +776,7 @@ def _populate_payment_entry_id(bank_transaction: BankTransaction | None, bank_tr
 def reconcile_bank_items(request: BankReconciliationRequest) -> Reconciliation:
     """Crea una conciliacion bancaria parcial o total."""
     if not request.matches:
-        raise BankReconciliationError("La conciliacion bancaria requiere al menos una linea.")
+        raise BankReconciliationError(_("La conciliacion bancaria requiere al menos una linea."))
 
     _lock_request_transactions(request)
     if existing := _matching_reconciliation_replay(request):
@@ -815,7 +818,7 @@ def _lock_request_transactions(request: BankReconciliationRequest) -> None:
         if transaction is None:
             raise BankReconciliationError(BANK_TRANSACTION_NOT_FOUND_ERROR)
         if _bank_company(transaction) != request.company:
-            raise BankReconciliationError("La transaccion bancaria pertenece a otra compania.")
+            raise BankReconciliationError(_("La transaccion bancaria pertenece a otra compania."))
 
 
 def _matching_reconciliation_replay(request: BankReconciliationRequest) -> Reconciliation | None:
@@ -862,9 +865,9 @@ def _add_reconciliation_match(
         existing_target_allocations=existing_target_allocations,
     )
     if match.allocated_amount > source_pending:
-        raise BankReconciliationError("El monto excede el saldo bancario pendiente de conciliar.")
+        raise BankReconciliationError(_("El monto excede el saldo bancario pendiente de conciliar."))
     if match.allocated_amount > target_pending:
-        raise BankReconciliationError("El monto excede el saldo pendiente del documento destino.")
+        raise BankReconciliationError(_("El monto excede el saldo pendiente del documento destino."))
     status = "reconciled" if match.allocated_amount == source_pending == target_pending else "partial"
     context = _allocation_context(transaction, request.company, request.reconciliation_date)
     database.session.add(
@@ -892,36 +895,36 @@ def _validate_gl_reconciliation_match(match: BankReconciliationMatch, transactio
     entry = database.session.get(GLEntry, match.target_id)
     bank_gl_account_id = _bank_gl_account_id(transaction)
     if not entry or not bank_gl_account_id or entry.account_id != bank_gl_account_id:
-        raise BankReconciliationError("La entrada GL no pertenece a la cuenta bancaria conciliada.")
+        raise BankReconciliationError(_("La entrada GL no pertenece a la cuenta bancaria conciliada."))
     if entry.bank_account_id and entry.bank_account_id != transaction.bank_account_id:
-        raise BankReconciliationError("La entrada GL pertenece a otra cuenta bancaria.")
+        raise BankReconciliationError(_("La entrada GL pertenece a otra cuenta bancaria."))
     _validate_gl_entry_eligibility(entry)
     if _gl_direction(entry) != _bank_direction(transaction):
-        raise BankReconciliationError("La entrada GL no coincide con la direccion bancaria.")
+        raise BankReconciliationError(_("La entrada GL no coincide con la direccion bancaria."))
 
 
 def _validate_payment_reconciliation_match(match: BankReconciliationMatch, transaction: BankTransaction) -> None:
     """Validate a payment entry against the reconciled bank account."""
     payment = database.session.get(PaymentEntry, match.target_id)
     if not payment or not _payment_belongs_to_bank(payment, transaction.bank_account_id):
-        raise BankReconciliationError("El pago no pertenece a la cuenta bancaria conciliada.")
+        raise BankReconciliationError(_("El pago no pertenece a la cuenta bancaria conciliada."))
     if _payment_direction(payment, transaction) != _bank_direction(transaction):
-        raise BankReconciliationError("El tipo de pago no coincide con la direccion bancaria.")
+        raise BankReconciliationError(_("El tipo de pago no coincide con la direccion bancaria."))
 
 
 def _validate_reconciliation_match(*, match: BankReconciliationMatch, company: str) -> BankTransaction:
     """Valida una linea de conciliacion y devuelve la transaccion bancaria."""
     if match.allocated_amount <= 0:
-        raise BankReconciliationError("El monto conciliado debe ser mayor que cero.")
+        raise BankReconciliationError(_("El monto conciliado debe ser mayor que cero."))
     # CAS-02: FOR UPDATE para prevenir duplicación concurrente
     transaction = database.session.get(BankTransaction, match.bank_transaction_id, with_for_update=True)
     if not transaction:
         raise BankReconciliationError(BANK_TRANSACTION_NOT_FOUND_ERROR)
     if _bank_company(transaction) != company:
-        raise BankReconciliationError("La transaccion bancaria pertenece a otra compania.")
+        raise BankReconciliationError(_("La transaccion bancaria pertenece a otra compania."))
     _lock_reconciliation_target(match.target_type, match.target_id)
     if _target_company(match.target_type, match.target_id) != company:
-        raise BankReconciliationError("El documento destino pertenece a otra compania.")
+        raise BankReconciliationError(_("El documento destino pertenece a otra compania."))
     if match.target_type == "gl_entry":
         _validate_gl_reconciliation_match(match, transaction)
     elif match.target_type == "payment_entry":
@@ -936,7 +939,7 @@ def _lock_reconciliation_target(target_type: str, target_id: str) -> None:
         raise BankReconciliationError(UNSUPPORTED_TARGET_TYPE_ERROR)
     target = database.session.get(model, target_id, with_for_update=True)
     if target is None:
-        raise BankReconciliationError("El documento destino no existe.")
+        raise BankReconciliationError(_("El documento destino no existe."))
 
 
 def _reconciliation_pending_amounts(
