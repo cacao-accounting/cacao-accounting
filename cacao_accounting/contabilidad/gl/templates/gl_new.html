@@ -8,12 +8,12 @@
     <ol class="breadcrumb lh-sm">
         <li class="breadcrumb-item active" aria-current="page">
             <a href="{{ url_for("cacao_app.pagina_inicio") }}" class="link-dark">
-                <i class="bi bi-house"></i>Inicio
+                <i class="bi bi-house"></i>{{ _("Inicio") }}
             </a>
         </li>
         <li class="breadcrumb-item active" aria-current="page">
             <a href="{{ url_for("contabilidad.conta") }}" class="link-dark">
-                Contabilidad
+                {{ _("Contabilidad") }}
             </a>
         </li>
     </ol>
@@ -23,7 +23,7 @@
 
 <div class="d-flex justify-content-between">
     <div>
-        <h4>Crear un Nuevo Comprobante de Diario.</h4>
+        <h4>{{ _("Crear un Nuevo Comprobante de Diario.") }}</h4>
     </div>
     <div>
         <button class=" btn btn-sm btn-primary" type="submit">{{ _("Guardar") }}</button>
@@ -37,53 +37,51 @@
         <div class="row" id="new-GL-HEADER">
             <div class="col">
                 <input type="hidden" id="gl-ID" name="gl-row-2-ID" value="" />
-                <label for="selectENTITY" class="form-label">Entidad:</label>
+                <label for="selectENTITY" class="form-label">{{ _("Entidad:") }}</label>
                 <select onchange="update_form_from_entity()" class="form-control" name="selectENTITY" id="selectENTITY"
                     required>
-                    <option value="">Seleccione una entidad...</option>
+                    <option value="">{{ _("Seleccione una entidad...") }}</option>
                     {% for entidad in entidades%}
                     <option value="{{entidad[0].codigo}}">{{entidad[0].razon_social}}</option>
                     {% endfor %}
                 </select>
                 <br>
-                <label for="selectSERIE" class="form-label">Serie:</label>
+                <label for="selectSERIE" class="form-label">{{ _("Serie:") }}</label>
                 <select class="form-control" name="selectSERIE" id="selectSERIE" required>
-                    <option value="">Seleccione una serie..</option>
+                    <option value="">{{ _("Seleccione una serie..") }}</option>
                 </select>
                 <br>
-                <label for="selectSERIE" class="form-book">Libro de Contabilidad:</label>
+                <label for="selectSERIE" class="form-book">{{ _("Libro de Contabilidad:") }}</label>
                 <select class="form-control" name="selectBOOK" id="selectBOOK" required>
-                    <option value="">Seleccione un libro de contabilidad..</option>
+                    <option value="">{{ _("Seleccione un libro de contabilidad..") }}</option>
                 </select>
             </div>
             <div class="col">
-                <label for="selectDATE" class="form-label">Fecha:</label>
+                <label for="selectDATE" class="form-label">{{ _("Fecha:") }}</label>
                 <input class="form-control" value="{{now().strftime(" %Y-%m-%d")}}" type="date" id="selectDATE"
                     name="selectDATE" {%if inicio_periodo%} min="{{inicio_periodo}}" {%endif%} />
                 <br>
-                <label for="insertREFERENCE" class="form-label">Referencia:</label>
+                <label for="insertREFERENCE" class="form-label">{{ _("Referencia:") }}</label>
                 <input class="form-control" id="insertREFERENCE" name="insertREFERENCE" />
             </div>
         </div>
         <div class="row" id="new-GL-MEMO">
             <div class="col">
                 <p></p>
-                <label for="insertMEMO" class="form-label">Concepto:</label>
+                <label for="insertMEMO" class="form-label">{{ _("Concepto:") }}</label>
                 <textarea class="form-control" id="insertMEMO" name="insertMEMO"></textarea>
                 <p></p>
             </div>
         </div>
         <div class="row">
             <div class="input-group">
-                <span class="input-group-addon col-sm-3" style="background-color: #addcbb"><strong>Cuenta
-                        Contable</strong></span>
-                <span class="input-group-addon col-sm-3" style="background-color: #addcbb"><strong>Centro de
-                        Costos</strong></span>
+                <span class="input-group-addon col-sm-3" style="background-color: #addcbb"><strong>{{ _("Cuenta Contable") }}</strong></span>
+                <span class="input-group-addon col-sm-3" style="background-color: #addcbb"><strong>{{ _("Centro de Costos") }}</strong></span>
                 <span class="input-group-addon col-sm-1"
-                    style="background-color: #addcbb"><strong>Debito</strong></span>
+                    style="background-color: #addcbb"><strong>{{ _("Debito") }}</strong></span>
                 <span class="input-group-addon col-sm-1"
-                    style="background-color: #addcbb"><strong>Credito</strong></span>
-                <span class="input-group-addon col-sm-2" style="background-color: #addcbb"><strong>Memo</strong></span>
+                    style="background-color: #addcbb"><strong>{{ _("Credito") }}</strong></span>
+                <span class="input-group-addon col-sm-2" style="background-color: #addcbb"><strong>{{ _("Memo") }}</strong></span>
                 <span class="input-group-addon col-sm-2" style="background-color: #addcbb"><strong></strong></span>
             </div>
             <div class="gl-row-container" id="new-GL-ROWS">
@@ -91,14 +89,14 @@
                     <div class="input-group" data-glrow="1">
                         <div class="col-sm-3">
                             <select class="form-control" id="gl-row-1-CTA" name="gl-row-1-CTA" data-live-search="true"
-                                title="Cuenta Contable">
-                                <option value="0">Seleccione</option>
+                                title="{{ _('Cuenta Contable') }}">
+                                <option value="0">{{ _("Seleccione") }}</option>
                             </select>
                         </div>
                         <div class="col-sm-3">
                             <select class="form-control" id="gl-row-1-CC" name="gl-row-1-CC" data-live-search="true"
-                                title="Centro de Costos">
-                                <option value="0">Seleccione</option>
+                                title="{{ _('Centro de Costos') }}">
+                                <option value="0">{{ _("Seleccione") }}</option>
                             </select>
                         </div>
                         <div class="col-sm-1">
@@ -113,7 +111,7 @@
                             <a data-bs-toggle="collapse" href="#gl-row-1-aditional-data" role="button"
                                 aria-expanded="false" aria-controls="collapseExample">
                                 <span class="badge text-bg-primary">
-                                    <ion-icon name="settings"></ion-icon> Detalles
+                                    <ion-icon name="settings"></ion-icon> {{ _("Detalles") }}
                                 </span>
                             </a>
                             <span class="badge text-bg-danger">
@@ -124,50 +122,48 @@
                         </div>
                     </div>
                     <div class="collapse" id="gl-row-1-aditional-data">
-                        <span><strong>Información Adicional:</strong></span>
+                        <span><strong>{{ _("Información Adicional:") }}</strong></span>
                         <input type="hidden" id="gl-row-1-ID" name="gl-row-1-ID" value="" />
                         <input type="hidden" id="gl-row-1-ORDER" name="gl-row-1-ORDER" value="1" />
                         <input type="hidden" id="gl-row-1-TIPO" name="gl-row-1-TIPO" value="JournalEntry" />
                         <div class="row">
                             <div class="col">
-                                <label for="gl-row-1-BUNIT" class="form-label">Unidad de Negocio:</label>
+                                <label for="gl-row-1-BUNIT" class="form-label">{{ _("Unidad de Negocio:") }}</label>
                                 <select class="form-control" name="gl-row-1-BUNIT" id="gl-row-1-BUNIT"></select>
                                 <br>
-                                <label for="gl-row-1-CURRENCY" class="form-label">Moneda:</label>
+                                <label for="gl-row-1-CURRENCY" class="form-label">{{ _("Moneda:") }}</label>
                                 <select class="form-control" name="gl-row-1-CURRENCY" id="gl-row-1-CURRENCY"></select>
                                 <br>
-                                <label for="gl-row-1-DEBITLOCAL" class="form-label">Debito en Moneda
-                                    Predeterminada:</label>
+                                <label for="gl-row-1-DEBITLOCAL" class="form-label">{{ _("Debito en Moneda Predeterminada:") }}</label>
                                 <input class="form-control" name="gl-row-1-DEBITLOCAL" id="gl-row-1-DEBITLOCAL">
                                 <br>
-                                <label for="gl-row-1-PARTYTYPE" class="form-label">Tipo de Tercero:</label>
+                                <label for="gl-row-1-PARTYTYPE" class="form-label">{{ _("Tipo de Tercero:") }}</label>
                                 <select class="form-control" name="gl-row-1-PARTYTYPE" id="gl-row-1-PARTYTYPE"></select>
                                 <br>
-                                <label for="gl-row-1-REFTYPE" class="form-label">Tipo de Referencia Interna:</label>
+                                <label for="gl-row-1-REFTYPE" class="form-label">{{ _("Tipo de Referencia Interna:") }}</label>
                                 <select class="form-control" name="gl-row-1-REFTYPE" id="gl-row-1-REFTYPE"></select>
                                 <br>
-                                <label for="gl-row-1-REF1" class="form-label">Referencia 1:</label>
+                                <label for="gl-row-1-REF1" class="form-label">{{ _("Referencia 1:") }}</label>
                                 <input class="form-control" name="gl-row-1-REF1" id="gl-row-1-REF1">
                                 <br>
                             </div>
                             <div class="col">
-                                <label for="gl-row-1-PROJECT" class="form-label">Proyecto:</label>
+                                <label for="gl-row-1-PROJECT" class="form-label">{{ _("Proyecto:") }}</label>
                                 <select class="form-control" name="gl-row-1-PROJECT" id="gl-row-1-PROJECT"></select>
                                 <br>
-                                <label for="gl-row-1-EXCHANGE" class="form-label">Tipo de Cambio:</label>
+                                <label for="gl-row-1-EXCHANGE" class="form-label">{{ _("Tipo de Cambio:") }}</label>
                                 <input class="form-control" name="gl-row-1-EXCHANGE" id="gl-row-1-EXCHANGE">
                                 <br>
-                                <label for="gl-row-1-CREDITLOCAL" class="form-label">Credito en Moneda
-                                    Predeterminada:</label>
+                                <label for="gl-row-1-CREDITLOCAL" class="form-label">{{ _("Credito en Moneda Predeterminada:") }}</label>
                                 <input class="form-control" name="gl-row-1-CREDITLOCAL" id="gl-row-1-CREDITLOCAL">
                                 <br>
-                                <label for="gl-row-1-THIRDTYPE" class="form-label">Tercero:</label>
+                                <label for="gl-row-1-THIRDTYPE" class="form-label">{{ _("Tercero:") }}</label>
                                 <select class="form-control" name="gl-row-1-THIRDTYPE" id="gl-row-1-THIRDTYPE"></select>
                                 <br>
-                                <label for="gl-row-1-REF" class="form-label">Referencia Interna:</label>
+                                <label for="gl-row-1-REF" class="form-label">{{ _("Referencia Interna:") }}</label>
                                 <select class="form-control" name="gl-row-2-REF" id="gl-row-1-REF"></select>
                                 <br>
-                                <label for="gl-row-1-REF2" class="form-label">Referencia 2:</label>
+                                <label for="gl-row-1-REF2" class="form-label">{{ _("Referencia 2:") }}</label>
                                 <input class="form-control" name="gl-row-1-REF2" id="gl-row-1-REF2">
                                 <br>
                             </div>
@@ -178,14 +174,14 @@
                     <div class="input-group" data-glrow="2">
                         <div class="col-sm-3">
                             <select class="form-control" id="gl-row-2-CTA" name="gl-row-2-CTA" data-live-search="true"
-                                title="Cuenta Contable">
-                                <option value="0">Seleccione</option>
+                                title="{{ _('Cuenta Contable') }}">
+                                <option value="0">{{ _("Seleccione") }}</option>
                             </select>
                         </div>
                         <div class="col-sm-3">
                             <select class="form-control" id="gl-row-2-CC" name="gl-row-2-CC" data-live-search="true"
-                                title="Centro de Costos">
-                                <option value="0">Seleccione</option>
+                                title="{{ _('Centro de Costos') }}">
+                                <option value="0">{{ _("Seleccione") }}</option>
                             </select>
                         </div>
                         <div class="col-sm-1">
@@ -200,7 +196,7 @@
                             <a data-bs-toggle="collapse" href="#gl-row-2-aditional-data" role="button"
                                 aria-expanded="false" aria-controls="collapseExample">
                                 <span class="badge text-bg-primary">
-                                    <ion-icon name="settings"></ion-icon> Detalles
+                                    <ion-icon name="settings"></ion-icon> {{ _("Detalles") }}
                                 </span>
                             </a>
                             <span class="badge text-bg-danger">
@@ -211,50 +207,48 @@
                         </div>
                     </div>
                     <div class="collapse" id="gl-row-2-aditional-data">
-                        <span><strong>Información Adicional:</strong></span>
+                        <span><strong>{{ _("Información Adicional:") }}</strong></span>
                         <input type="hidden" id="gl-row-2-ID" name="gl-row-2-ID" value="" />
                         <input type="hidden" id="gl-row-2-ORDER" name="gl-row-2-ORDER" value="1" />
                         <input type="hidden" id="gl-row-2-TIPO" name="gl-row-2-TIPO" value="JournalEntry" />
                         <div class="row">
                             <div class="col">
-                                <label for="gl-row-2-BUNIT" class="form-label">Unidad de Negocio:</label>
+                                <label for="gl-row-2-BUNIT" class="form-label">{{ _("Unidad de Negocio:") }}</label>
                                 <select class="form-control" name="gl-row-2-BUNIT" id="gl-row-2-BUNIT"></select>
                                 <br>
-                                <label for="gl-row-2-CURRENCY" class="form-label">Moneda:</label>
+                                <label for="gl-row-2-CURRENCY" class="form-label">{{ _("Moneda:") }}</label>
                                 <select class="form-control" name="gl-row-2-CURRENCY" id="gl-row-2-CURRENCY"></select>
                                 <br>
-                                <label for="gl-row-2-DEBITLOCAL" class="form-label">Debito en Moneda
-                                    Predeterminada:</label>
+                                <label for="gl-row-2-DEBITLOCAL" class="form-label">{{ _("Debito en Moneda Predeterminada:") }}</label>
                                 <input class="form-control" name="gl-row-2-DEBITLOCAL" id="gl-row-2-DEBITLOCAL">
                                 <br>
-                                <label for="gl-row-2-PARTYTYPE" class="form-label">Tipo de Tercero:</label>
+                                <label for="gl-row-2-PARTYTYPE" class="form-label">{{ _("Tipo de Tercero:") }}</label>
                                 <select class="form-control" name="gl-row-2-PARTYTYPE" id="gl-row-2-PARTYTYPE"></select>
                                 <br>
-                                <label for="gl-row-2-REFTYPE" class="form-label">Tipo de Referencia Interna:</label>
+                                <label for="gl-row-2-REFTYPE" class="form-label">{{ _("Tipo de Referencia Interna:") }}</label>
                                 <select class="form-control" name="gl-row-2-REFTYPE" id="gl-row-2-REFTYPE"></select>
                                 <br>
-                                <label for="gl-row-2-REF1" class="form-label">Referencia 1:</label>
+                                <label for="gl-row-2-REF1" class="form-label">{{ _("Referencia 1:") }}</label>
                                 <input class="form-control" name="gl-row-2-REF1" id="gl-row-2-REF1">
                                 <br>
                             </div>
                             <div class="col">
-                                <label for="gl-row-2-PROJECT" class="form-label">Proyecto:</label>
+                                <label for="gl-row-2-PROJECT" class="form-label">{{ _("Proyecto:") }}</label>
                                 <select class="form-control" name="gl-row-2-PROJECT" id="gl-row-2-PROJECT"></select>
                                 <br>
-                                <label for="gl-row-2-EXCHANGE" class="form-label">Tipo de Cambio:</label>
+                                <label for="gl-row-2-EXCHANGE" class="form-label">{{ _("Tipo de Cambio:") }}</label>
                                 <input class="form-control" name="gl-row-2-EXCHANGE" id="gl-row-2-EXCHANGE">
                                 <br>
-                                <label for="gl-row-2-CREDITLOCAL" class="form-label">Credito en Moneda
-                                    Predeterminada:</label>
+                                <label for="gl-row-2-CREDITLOCAL" class="form-label">{{ _("Credito en Moneda Predeterminada:") }}</label>
                                 <input class="form-control" name="gl-row-2-CREDITLOCAL" id="gl-row-2-CREDITLOCAL">
                                 <br>
-                                <label for="gl-row-2-THIRDTYPE" class="form-label">Tercero:</label>
+                                <label for="gl-row-2-THIRDTYPE" class="form-label">{{ _("Tercero:") }}</label>
                                 <select class="form-control" name="gl-row-2-THIRDTYPE" id="gl-row-2-THIRDTYPE"></select>
                                 <br>
-                                <label for="gl-row-2-REF" class="form-label">Referencia Interna:</label>
+                                <label for="gl-row-2-REF" class="form-label">{{ _("Referencia Interna:") }}</label>
                                 <select class="form-control" name="gl-row-2-REF" id="gl-row-2-REF"></select>
                                 <br>
-                                <label for="gl-row-2-REF2" class="form-label">Referencia 2:</label>
+                                <label for="gl-row-2-REF2" class="form-label">{{ _("Referencia 2:") }}</label>
                                 <input class="form-control" name="gl-row-2-REF2" id="gl-row-2-REF2">
                                 <br>
                             </div>
@@ -265,14 +259,14 @@
                     <div class="input-group" data-glrow="3">
                         <div class="col-sm-3">
                             <select class="form-control" id="gl-row-3-CTA" name="gl-row-3-CTA" data-live-search="true"
-                                title="Cuenta Contable">
-                                <option value="0">Seleccione</option>
+                                title="{{ _('Cuenta Contable') }}">
+                                <option value="0">{{ _("Seleccione") }}</option>
                             </select>
                         </div>
                         <div class="col-sm-3">
                             <select class="form-control" id="gl-row-3-CC" name="gl-row-3-CC" data-live-search="true"
-                                title="Centro de Costos">
-                                <option value="0">Seleccione</option>
+                                title="{{ _('Centro de Costos') }}">
+                                <option value="0">{{ _("Seleccione") }}</option>
                             </select>
                         </div>
                         <div class="col-sm-1">
@@ -287,7 +281,7 @@
                             <a data-bs-toggle="collapse" href="#gl-row-3-aditional-data" role="button"
                                 aria-expanded="false" aria-controls="collapseExample">
                                 <span class="badge text-bg-primary">
-                                    <ion-icon name="settings"></ion-icon> Detalles
+                                    <ion-icon name="settings"></ion-icon> {{ _("Detalles") }}
                                 </span>
                             </a>
                             <span class="badge text-bg-danger">
@@ -298,50 +292,48 @@
                         </div>
                     </div>
                     <div class="collapse" id="gl-row-3-aditional-data">
-                        <span><strong>Información Adicional:</strong></span>
+                        <span><strong>{{ _("Información Adicional:") }}</strong></span>
                         <input type="hidden" id="gl-row-3-ID" name="gl-row-3-ID" value="" />
                         <input type="hidden" id="gl-row-3-ORDER" name="gl-row-3-ORDER" value="1" />
                         <input type="hidden" id="gl-row-3-TIPO" name="gl-row-3-TIPO" value="JournalEntry" />
                         <div class="row">
                             <div class="col">
-                                <label for="gl-row-3-BUNIT" class="form-label">Unidad de Negocio:</label>
+                                <label for="gl-row-3-BUNIT" class="form-label">{{ _("Unidad de Negocio:") }}</label>
                                 <select class="form-control" name="gl-row-3-BUNIT" id="gl-row-3-BUNIT"></select>
                                 <br>
-                                <label for="gl-row-3-CURRENCY" class="form-label">Moneda:</label>
+                                <label for="gl-row-3-CURRENCY" class="form-label">{{ _("Moneda:") }}</label>
                                 <select class="form-control" name="gl-row-3-CURRENCY" id="gl-row-3-CURRENCY"></select>
                                 <br>
-                                <label for="gl-row-3-DEBITLOCAL" class="form-label">Debito en Moneda
-                                    Predeterminada:</label>
+                                <label for="gl-row-3-DEBITLOCAL" class="form-label">{{ _("Debito en Moneda Predeterminada:") }}</label>
                                 <input class="form-control" name="gl-row-3-DEBITLOCAL" id="gl-row-3-DEBITLOCAL">
                                 <br>
-                                <label for="gl-row-3-PARTYTYPE" class="form-label">Tipo de Tercero:</label>
+                                <label for="gl-row-3-PARTYTYPE" class="form-label">{{ _("Tipo de Tercero:") }}</label>
                                 <select class="form-control" name="gl-row-3-PARTYTYPE" id="gl-row-3-PARTYTYPE"></select>
                                 <br>
-                                <label for="gl-row-3-REFTYPE" class="form-label">Tipo de Referencia Interna:</label>
+                                <label for="gl-row-3-REFTYPE" class="form-label">{{ _("Tipo de Referencia Interna:") }}</label>
                                 <select class="form-control" name="gl-row-3-REFTYPE" id="gl-row-3-REFTYPE"></select>
                                 <br>
-                                <label for="gl-row-3-REF1" class="form-label">Referencia 1:</label>
+                                <label for="gl-row-3-REF1" class="form-label">{{ _("Referencia 1:") }}</label>
                                 <input class="form-control" name="gl-row-3-REF1" id="gl-row-3-REF1">
                                 <br>
                             </div>
                             <div class="col">
-                                <label for="gl-row-3-PROJECT" class="form-label">Proyecto:</label>
+                                <label for="gl-row-3-PROJECT" class="form-label">{{ _("Proyecto:") }}</label>
                                 <select class="form-control" name="gl-row-3-PROJECT" id="gl-row-3-PROJECT"></select>
                                 <br>
-                                <label for="gl-row-3-EXCHANGE" class="form-label">Tipo de Cambio:</label>
+                                <label for="gl-row-3-EXCHANGE" class="form-label">{{ _("Tipo de Cambio:") }}</label>
                                 <input class="form-control" name="gl-row-3-EXCHANGE" id="gl-row-3-EXCHANGE">
                                 <br>
-                                <label for="gl-row-3-CREDITLOCAL" class="form-label">Credito en Moneda
-                                    Predeterminada:</label>
+                                <label for="gl-row-3-CREDITLOCAL" class="form-label">{{ _("Credito en Moneda Predeterminada:") }}</label>
                                 <input class="form-control" name="gl-row-3-CREDITLOCAL" id="gl-row-3-CREDITLOCAL">
                                 <br>
-                                <label for="gl-row-3-THIRDTYPE" class="form-label">Tercero:</label>
+                                <label for="gl-row-3-THIRDTYPE" class="form-label">{{ _("Tercero:") }}</label>
                                 <select class="form-control" name="gl-row-3-THIRDTYPE" id="gl-row-3-THIRDTYPE"></select>
                                 <br>
-                                <label for="gl-row-3-REF" class="form-label">Referencia Interna:</label>
+                                <label for="gl-row-3-REF" class="form-label">{{ _("Referencia Interna:") }}</label>
                                 <select class="form-control" name="gl-row-3-REF" id="gl-row-3-REF"></select>
                                 <br>
-                                <label for="gl-row-3-REF2" class="form-label">Referencia 2:</label>
+                                <label for="gl-row-3-REF2" class="form-label">{{ _("Referencia 2:") }}</label>
                                 <input class="form-control" name="gl-row-3-REF2" id="gl-row-3-REF2">
                                 <br>
                             </div>
@@ -352,14 +344,14 @@
                     <div class="input-group" data-glrow="4">
                         <div class="col-sm-3">
                             <select class="form-control" id="gl-row-4-CTA" name="gl-row-4-CTA" data-live-search="true"
-                                title="Cuenta Contable">
-                                <option value="0">Seleccione</option>
+                                title="{{ _('Cuenta Contable') }}">
+                                <option value="0">{{ _("Seleccione") }}</option>
                             </select>
                         </div>
                         <div class="col-sm-3">
                             <select class="form-control" id="gl-row-4-CC" name="gl-row-4-CC" data-live-search="true"
-                                title="Centro de Costos">
-                                <option value="0">Seleccione</option>
+                                title="{{ _('Centro de Costos') }}">
+                                <option value="0">{{ _("Seleccione") }}</option>
                             </select>
                         </div>
                         <div class="col-sm-1">
@@ -374,7 +366,7 @@
                             <a data-bs-toggle="collapse" href="#gl-row-4-aditional-data" role="button"
                                 aria-expanded="false" aria-controls="collapseExample">
                                 <span class="badge text-bg-primary">
-                                    <ion-icon name="settings"></ion-icon> Detalles
+                                    <ion-icon name="settings"></ion-icon> {{ _("Detalles") }}
                                 </span>
                             </a>
                             <span class="badge text-bg-danger">
@@ -385,50 +377,48 @@
                         </div>
                     </div>
                     <div class="collapse" id="gl-row-4-aditional-data">
-                        <span><strong>Información Adicional:</strong></span>
+                        <span><strong>{{ _("Información Adicional:") }}</strong></span>
                         <input type="hidden" id="gl-row-4-ID" name="gl-row-4-ID" value="" />
                         <input type="hidden" id="gl-row-4-ORDER" name="gl-row-4-ORDER" value="1" />
                         <input type="hidden" id="gl-row-4-TIPO" name="gl-row-4-TIPO" value="JournalEntry" />
                         <div class="row">
                             <div class="col">
-                                <label for="gl-row-4-BUNIT" class="form-label">Unidad de Negocio:</label>
+                                <label for="gl-row-4-BUNIT" class="form-label">{{ _("Unidad de Negocio:") }}</label>
                                 <select class="form-control" name="gl-row-4-BUNIT" id="gl-row-4-BUNIT"></select>
                                 <br>
-                                <label for="gl-row-4-CURRENCY" class="form-label">Moneda:</label>
+                                <label for="gl-row-4-CURRENCY" class="form-label">{{ _("Moneda:") }}</label>
                                 <select class="form-control" name="gl-row-4-CURRENCY" id="gl-row-4-CURRENCY"></select>
                                 <br>
-                                <label for="gl-row-4-DEBITLOCAL" class="form-label">Debito en Moneda
-                                    Predeterminada:</label>
+                                <label for="gl-row-4-DEBITLOCAL" class="form-label">{{ _("Debito en Moneda Predeterminada:") }}</label>
                                 <input class="form-control" name="gl-row-4-DEBITLOCAL" id="gl-row-4-DEBITLOCAL">
                                 <br>
-                                <label for="gl-row-4-PARTYTYPE" class="form-label">Tipo de Tercero:</label>
+                                <label for="gl-row-4-PARTYTYPE" class="form-label">{{ _("Tipo de Tercero:") }}</label>
                                 <select class="form-control" name="gl-row-4-PARTYTYPE" id="gl-row-4-PARTYTYPE"></select>
                                 <br>
-                                <label for="gl-row-4-REFTYPE" class="form-label">Tipo de Referencia Interna:</label>
+                                <label for="gl-row-4-REFTYPE" class="form-label">{{ _("Tipo de Referencia Interna:") }}</label>
                                 <select class="form-control" name="gl-row-4-REFTYPE" id="gl-row-4-REFTYPE"></select>
                                 <br>
-                                <label for="gl-row-4-REF1" class="form-label">Referencia 1:</label>
+                                <label for="gl-row-4-REF1" class="form-label">{{ _("Referencia 1:") }}</label>
                                 <input class="form-control" name="gl-row-4-REF1" id="gl-row-4-REF1">
                                 <br>
                             </div>
                             <div class="col">
-                                <label for="gl-row-4-PROJECT" class="form-label">Proyecto:</label>
+                                <label for="gl-row-4-PROJECT" class="form-label">{{ _("Proyecto:") }}</label>
                                 <select class="form-control" name="gl-row-4-PROJECT" id="gl-row-4-PROJECT"></select>
                                 <br>
-                                <label for="gl-row-4-EXCHANGE" class="form-label">Tipo de Cambio:</label>
+                                <label for="gl-row-4-EXCHANGE" class="form-label">{{ _("Tipo de Cambio:") }}</label>
                                 <input class="form-control" name="gl-row-4-EXCHANGE" id="gl-row-4-EXCHANGE">
                                 <br>
-                                <label for="gl-row-4-CREDITLOCAL" class="form-label">Credito en Moneda
-                                    Predeterminada:</label>
+                                <label for="gl-row-4-CREDITLOCAL" class="form-label">{{ _("Credito en Moneda Predeterminada:") }}</label>
                                 <input class="form-control" name="gl-row-4-CREDITLOCAL" id="gl-row-4-CREDITLOCAL">
                                 <br>
-                                <label for="gl-row-4-THIRDTYPE" class="form-label">Tercero:</label>
+                                <label for="gl-row-4-THIRDTYPE" class="form-label">{{ _("Tercero:") }}</label>
                                 <select class="form-control" name="gl-row-4-THIRDTYPE" id="gl-row-4-THIRDTYPE"></select>
                                 <br>
-                                <label for="gl-row-4-REF" class="form-label">Referencia Interna:</label>
+                                <label for="gl-row-4-REF" class="form-label">{{ _("Referencia Interna:") }}</label>
                                 <select class="form-control" name="gl-row-4-REF" id="gl-row-4-REF"></select>
                                 <br>
-                                <label for="gl-row-4-REF2" class="form-label">Referencia 2:</label>
+                                <label for="gl-row-4-REF2" class="form-label">{{ _("Referencia 2:") }}</label>
                                 <input class="form-control" name="gl-row-4-REF2" id="gl-row-4-REF2">
                                 <br>
                             </div>
@@ -438,10 +428,10 @@
             </div>
         </div>
         <div>
-            <button type="button" class="btn btn-success btn-sm" onclick="add_new_gl_line()">Agregar Linea</button>
+            <button type="button" class="btn btn-success btn-sm" onclick="add_new_gl_line()">{{ _("Agregar Linea") }}</button>
         </div>
         <div id="new-GL-TOTAL" class="input-group">
-            <span class="input-group-addon col-sm-3" style="background-color: #addcbb"><strong>Totales</strong></span>
+            <span class="input-group-addon col-sm-3" style="background-color: #addcbb"><strong>{{ _("Totales") }}</strong></span>
             <span class="input-group-addon col-sm-3" style="background-color: #addcbb"><strong></strong></span>
             <span class="input-group-addon text-end col-sm-1" style="background-color: #addcbb"><strong>0.00</strong>
             </span>

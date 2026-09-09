@@ -187,7 +187,7 @@
                 <span class="badge bg-dark">{{ r.approval_level }}</span>
               </td>
               <td class="text-center">
-                <form method="post" onsubmit="return confirm('¿Está seguro de eliminar esta regla?');" class="d-inline">
+                <form method="post" onsubmit="return confirm('{{ _("¿Está seguro de eliminar esta regla?") }}');" class="d-inline">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="action" value="delete_rule">
                   <input type="hidden" name="rule_id" value="{{ r.id }}">

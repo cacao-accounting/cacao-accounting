@@ -8,17 +8,17 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Listado de Cuentas Bancarias</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Listado de Cuentas Bancarias') }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title"><i class="bi bi-credit-card"></i> Listado de Cuentas Bancarias.</h5>
+    <h5 class="ca-card-title"><i class="bi bi-credit-card"></i> {{ _('Listado de Cuentas Bancarias.') }}</h5>
     <a href="{{ url_for('bancos.bancos_cuenta_bancaria_nuevo') }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-circle me-1"></i>Nuevo
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
   </div>
   {{ macros.list_filters(show_status=False, placeholder=_("Buscar por nombre o referencia...")) }}
@@ -27,7 +27,7 @@
     <thead>
       <tr>
         <th scope="col">{{ _("Nombre") }}</th>
-        <th scope="col">Número de Cuenta</th>
+        <th scope="col">{{ _('Número de Cuenta') }}</th>
         <th scope="col">{{ _("Moneda") }}</th>
       </tr>
     </thead>

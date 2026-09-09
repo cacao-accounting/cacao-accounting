@@ -75,11 +75,11 @@
     </a>
   </div>
   <div class="ca-navbar-end">
-    <button class="ca-nav-btn" id="ca-theme-btn" onclick="caToggleTheme()" title="Cambiar tema" type="button">
+    <button class="ca-nav-btn" id="ca-theme-btn" onclick="caToggleTheme()" title="{{ _('Cambiar tema') }}" type="button">
       <i class="bi bi-moon-stars-fill" id="ca-theme-icon"></i>
     </button>
     {% if is_cloud_mode() %}
-    <a class="ca-nav-btn position-relative" href="{{ url_for('api.my_tasks') }}" title="Mis tareas">
+    <a class="ca-nav-btn position-relative" href="{{ url_for('api.my_tasks') }}" title="{{ _('Mis tareas') }}">
       <i class="bi bi-list-task"></i>
       {% set task_count = current_user_open_task_count() %}
       {% if task_count %}
@@ -125,7 +125,7 @@
     <li class="nav-item">
       <a href="{{ url_for('contabilidad.conta') }}" class="nav-link {% if request.blueprint == 'contabilidad' %}active{% endif %}">
         <i class="bi bi-book"></i>
-        Contabilidad
+        {{ _('Contabilidad') }}
       </a>
     </li>
     {%- endif %}
@@ -133,7 +133,7 @@
     <li class="nav-item">
       <a href="{{ url_for('bancos.bancos_') }}" class="nav-link {% if request.blueprint == 'bancos' %}active{% endif %}">
         <i class="bi bi-bank"></i>
-        Caja y Bancos
+        {{ _('Caja y Bancos') }}
       </a>
     </li>
     {%- endif %}
@@ -141,7 +141,7 @@
     <li class="nav-item">
       <a href="{{ url_for('compras.compras_') }}" class="nav-link {% if request.blueprint == 'compras' %}active{% endif %}">
         <i class="bi bi-cart4"></i>
-        Compras
+        {{ _('Compras') }}
       </a>
     </li>
     {%- endif %}
@@ -149,7 +149,7 @@
     <li class="nav-item">
       <a href="{{ url_for('inventario.inventario_') }}" class="nav-link {% if request.blueprint == 'inventario' %}active{% endif %}">
         <i class="bi bi-shop"></i>
-        Inventarios
+        {{ _('Inventarios') }}
       </a>
     </li>
     {%- endif %}
@@ -157,7 +157,7 @@
     <li class="nav-item">
       <a href="{{ url_for('ventas.ventas_') }}" class="nav-link {% if request.blueprint == 'ventas' %}active{% endif %}">
         <i class="bi bi-handbag"></i>
-        Ventas
+        {{ _('Ventas') }}
       </a>
     </li>
     {%- endif %}
@@ -177,7 +177,7 @@
     <li class="nav-item">
       <a href="{{ url_for('admin.admin_') }}" class="nav-link {% if request.blueprint == 'admin' %}active{% endif %}">
         <i class="bi bi-gear"></i>
-        Administración
+        {{ _('Administración') }}
         {% set ap_count = pending_approval_count() %}
         {% if ap_count > 0 %}
         <span class="ca-approval-count" data-status="pending_approval"
@@ -192,7 +192,7 @@
     {%- endif %}
     <li class="nav-item d-md-none">
       <a href="{{ url_for('login.cerrar_sesion') }}" class="nav-link">
-        <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+        <i class="bi bi-box-arrow-right"></i> {{ _('Cerrar Sesión') }}
       </a>
     </li>
   </ul>
@@ -276,7 +276,7 @@
 {% macro render_status(status=None, lista_status=None) %}
 {%- set normalized_status = status if status is not none else 'activo' -%}
 {%- set status_info = lista_status[normalized_status] if lista_status and normalized_status in lista_status else None -%}
-<span class="badge" title="{{ status_info.label if status_info else 'Activo' }}">
+<span class="badge" title="{{ status_info.label if status_info else _('Activo') }}">
   <i class="bi bi-circle-fill" style="color:{{ status_info.color if status_info else '#6c757d' }}"></i>
 </span>
 {% endmacro %}
@@ -314,25 +314,24 @@
     <img src="{{ url_for('static', filename='media/brand-mark.svg') }}" height="50" width="50"
       alt="Cacao Accounting Logo">
     <br>
-    <strong>Bienvenido a Cacao Accounting</strong>
+    <strong>{{ _('Bienvenido a Cacao Accounting') }}</strong>
   </p>
-  <p>Al parecer es la primera vez que accedes al sistema.</p>
-  <p>Para utilizar el sistema debes al menos haber creado una entidad a la que realizar registros:</p>
+  <p>{{ _('Al parecer es la primera vez que accedes al sistema.') }}</p>
+  <p>{{ _('Para utilizar el sistema debes al menos haber creado una entidad a la que realizar registros:') }}</p>
   <p>
     <a class="btn btn-success btn-sm" href="{{ url_for('contabilidad.nueva_entidad') }}" role="button"><i
-        class="bi bi-plus-circle-fill" aria-hidden="true"></i> Crear Nueva
-      Entidad</a>
+        class="bi bi-plus-circle-fill" aria-hidden="true"></i> {{ _('Crear Nueva Entidad') }}</a>
   </p>
   {% if is_cloud_mode() %}
-  <p>Los siguientes vínculos pueden ser de su interés:</p>
+  <p>{{ _('Los siguientes vínculos pueden ser de su interés:') }}</p>
 
   <div class="d-flex justify-content-center gap-2">
 
     <a class="btn btn-secondary btn-sm" href="https://cacao-accounting-manual.readthedocs.io/es/latest/"
-      role="button"><i class="bi bi-book-fill" aria-hidden="true"></i> Manual de Usuario</a>
+      role="button"><i class="bi bi-book-fill" aria-hidden="true"></i> {{ _('Manual de Usuario') }}</a>
 
     <a class="btn btn-secondary btn-sm" href="https://cacao-accounting-manual.readthedocs.io/es/latest/"
-      role="button"><i class="bi bi-chat-left-dots" aria-hidden="true"></i> Sala de Chat</a>
+      role="button"><i class="bi bi-chat-left-dots" aria-hidden="true"></i> {{ _('Sala de Chat') }}</a>
 
   </div>
 
@@ -532,7 +531,7 @@
                 <i class="bi bi-download"></i>
               </a>
               {% if is_cloud_mode() %}
-              <form method="post" action="{{ url_for('api.api_delete_attachment', file_id=att.file_id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar este archivo adjunto?');">
+              <form method="post" action="{{ url_for('api.api_delete_attachment', file_id=att.file_id) }}" class="d-inline" onsubmit="return confirm('{{ _("¿Eliminar este archivo adjunto?") }}');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="reference_type" value="{{ reference_type }}">
                 <input type="hidden" name="reference_id" value="{{ reference_id }}">
@@ -686,7 +685,7 @@
              this.infoLoaded = true;
              if (data.enabled) {
                this.recipients = data.default_recipient || '';
-               this.subject = data.subject || 'Notificación de documento';
+               this.subject = data.subject || '{{ _("Notificación de documento") }}';
                this.body = data.body || '';
              }
            })
@@ -751,7 +750,7 @@
 
         <div class="mb-3">
           <label class="form-label small fw-semibold" for="email-recipients">{{ _("Destinatarios (separados por coma)") }}</label>
-          <input type="text" class="form-control form-control-sm" id="email-recipients" x-model="recipients" placeholder="proveedor@ejemplo.com, cliente@ejemplo.com" :disabled="loading">
+          <input type="text" class="form-control form-control-sm" id="email-recipients" x-model="recipients" placeholder="{{ _('proveedor@ejemplo.com, cliente@ejemplo.com') }}" :disabled="loading">
           <div class="form-text text-muted">{{ _("Sugerido automáticamente desde la ficha del tercero. Puede modificar la lista.") }}</div>
         </div>
 
@@ -818,7 +817,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="reason" value="">
       <button type="submit" class="btn btn-sm btn-outline-danger"
-              onclick="return confirm('¿Cancelar este documento?')">
+              onclick="return confirm('{{ _("¿Cancelar este documento?") }}')">
         <i class="bi bi-arrow-counterclockwise me-1"></i>{{ cancel_label }}
       </button>
     </form>
@@ -856,7 +855,7 @@
 {#   uoms_disponibles:  list of {code, name}                      #}
 {#   source_api_url:    string or None — enables auto-fill modal   #}
 {#   source_label:      human-readable source doc label            #}
-{% macro lineas_items(items_disponibles, uoms_disponibles, source_api_url=None, source_label="documento origen") %}
+{% macro lineas_items(items_disponibles, uoms_disponibles, source_api_url=None, source_label=_("documento origen")) %}
 <div class="ca-card mt-3"
      x-data="{
        items: [],
@@ -928,13 +927,13 @@
        }
      }">
   <div class="ca-card-header">
-    <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>Productos / Servicios</h6>
+    <h6 class="ca-card-title mb-0"><i class="bi bi-table me-1"></i>{{ _('Productos / Servicios') }}</h6>
     <div class="d-flex gap-2">
       {% if source_api_url %}
       <button type="button" class="btn btn-sm btn-outline-secondary"
               data-bs-toggle="modal" data-bs-target="#modalAutofill"
               @click="fetchSource('{{ source_api_url }}')">
-        <i class="bi bi-arrow-repeat me-1"></i>Actualizar Elementos
+        <i class="bi bi-arrow-repeat me-1"></i>{{ _('Actualizar Elementos') }}
       </button>
       {% endif %}
       <button type="button" class="btn btn-sm btn-outline-primary" @click="addRow()">
@@ -951,7 +950,7 @@
           <th scope="col" style="width:22%">{{ _('Artículo') }}</th>
           <th scope="col" style="width:22%">{{ _('Descripción') }}</th>
           <th scope="col" style="width:10%">{{ _('Cantidad') }}</th>
-          <th scope="col" style="width:10%">UOM</th>
+          <th scope="col" style="width:10%">{{ _('UOM') }}</th>
           <th scope="col" style="width:12%">{{ _('Precio Unit.') }}</th>
           <th scope="col" style="width:12%">{{ _('Monto') }}</th>
           <th scope="col" style="width:6%"></th>
@@ -1036,7 +1035,7 @@
                   <th scope="col">{{ _('Consumido') }}</th>
                   <th scope="col">{{ _('Pendiente') }}</th>
                   <th scope="col">{{ _('Traer') }}</th>
-                  <th scope="col">UOM</th>
+                  <th scope="col">{{ _('UOM') }}</th>
                   <th scope="col">{{ _('Precio') }}</th>
                 </tr>
               </thead>

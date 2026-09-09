@@ -12,12 +12,11 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
-          class="bi bi-house"></i> Inicio</a></li>
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">{{ _("Ventas") }}</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_factura_venta_lista') }}" class="link-dark">Facturas
-        de Venta</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_factura_venta_lista') }}" class="link-dark">{{ _('Facturas de Venta') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">
-      {{ (registro.document_no or registro.id) if edit else 'Nueva Factura de Venta' }}</li>
+      {{ (registro.document_no or registro.id) if edit else _('Nueva Factura de Venta') }}</li>
   </ol>
 </nav>
 
@@ -34,10 +33,10 @@
   <input type="hidden" name="is_return" value="1">
   {% endif %}
   {{ tf_macros.transaction_form_header(
-      edit and 'Editar Factura de Venta'
-      or document_type == 'sales_credit_note' and 'Nota de Crédito de Venta'
-      or document_type == 'sales_debit_note' and 'Nota de Débito de Venta'
-      or 'Factura de Venta',
+      edit and _('Editar Factura de Venta')
+      or document_type == 'sales_credit_note' and _('Nota de Crédito de Venta')
+      or document_type == 'sales_debit_note' and _('Nota de Débito de Venta')
+      or _('Factura de Venta'),
       cancel_url=url_for('ventas.ventas_factura_venta_lista')
     ) }}
   <div class="ca-card p-3 mb-3">

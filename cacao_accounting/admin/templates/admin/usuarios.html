@@ -5,27 +5,27 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
-        <i class="bi bi-house"></i> Inicio
+        <i class="bi bi-house"></i> {{ _("Inicio") }}
       </a>
     </li>
     <li class="breadcrumb-item">
       <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a>
     </li>
-    <li class="breadcrumb-item active" aria-current="page">Administración de Usuarios</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Administración de Usuarios") }}</li>
   </ol>
 </nav>
 
 <div class="ca-page-header">
-  <h4><i class="bi bi-people me-2" style="color:#BB6A40"></i>Administración de Usuarios</h4>
+  <h4><i class="bi bi-people me-2" style="color:#BB6A40"></i>{{ _("Administración de Usuarios") }}</h4>
 </div>
 
 <div class="ca-card mb-4">
   <div class="d-flex justify-content-between align-items-center">
     <p class="mb-0" style="color:#64748b;font-size:.875rem;">
-      Administra usuarios del sistema, asigna roles y controla su estado de acceso.
+      {{ _("Administra usuarios del sistema, asigna roles y controla su estado de acceso.") }}
     </p>
     {% if can_create_user %}
-    <a href="{{ url_for('admin.crear_usuario') }}" class="btn btn-sm btn-primary">Nuevo Usuario</a>
+    <a href="{{ url_for('admin.crear_usuario') }}" class="btn btn-sm btn-primary">{{ _("Nuevo Usuario") }}</a>
     {% endif %}
   </div>
 </div>
@@ -56,19 +56,19 @@
         <tr>
           <td><strong>{{ usuario.user }}</strong></td>
           <td>{{ usuario.e_mail or "-" }}</td>
-          <td>{{ roles_por_usuario[usuario.id] or "Sin roles" }}</td>
+          <td>{{ roles_por_usuario[usuario.id] or _("Sin roles") }}</td>
           <td>
             <span class="badge bg-{{ 'success' if usuario.active else 'secondary' }}">
-              {{ 'Activo' if usuario.active else 'Inactivo' }}
+              {{ _('Activo') if usuario.active else _('Inactivo') }}
             </span>
           </td>
           <td class="text-end">
             <a href="{{ url_for('admin.editar_usuario', user_id=usuario.id) }}" class="badge text-bg-primary text-decoration-none me-1">{{ _("Editar") }}</a>
             <a href="{{ url_for('admin.usuario_roles', user_id=usuario.id) }}" class="badge text-bg-secondary text-decoration-none me-1">{{ _("Roles") }}</a>
             {% if is_cloud_mode() and usuario.classification not in ('customer', 'supplier') %}
-            <a href="{{ url_for('admin.usuario_companias', user_id=usuario.id) }}" class="badge text-bg-info text-decoration-none me-1">Compañías</a>
+            <a href="{{ url_for('admin.usuario_companias', user_id=usuario.id) }}" class="badge text-bg-info text-decoration-none me-1">{{ _("Compañías") }}</a>
             {% endif %}
-            <a href="{{ url_for('admin.usuario_password', user_id=usuario.id) }}" class="badge text-bg-warning text-dark text-decoration-none me-1">Contraseña</a>
+            <a href="{{ url_for('admin.usuario_password', user_id=usuario.id) }}" class="badge text-bg-warning text-dark text-decoration-none me-1">{{ _("Contraseña") }}</a>
             <form method="post" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="user_id" value="{{ usuario.id }}">
@@ -78,7 +78,7 @@
                 value="toggle"
                 class="badge border-0 bg-{{ 'danger' if usuario.active else 'success' }}"
               >
-                {{ 'Deshabilitar' if usuario.active else 'Habilitar' }}
+                {{ _('Deshabilitar') if usuario.active else _('Habilitar') }}
               </button>
             </form>
           </td>

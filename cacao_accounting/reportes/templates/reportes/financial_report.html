@@ -27,10 +27,10 @@
           <button class="btn btn-primary" type="submit">{{ _("Aplicar filtros") }}</button>
           <a class="btn btn-outline-secondary" href="{{ request.path }}">{{ _("Limpiar filtros") }}</a>
         </div>
-        {{ smart_select_field("Compañía", "company", "company", report_filters.company, "report-company") }}
-        {{ smart_select_field("Libro contable", "ledger", "book", report_filters.ledger or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ period_range_field("Periodo contable", period_from, period_to, period_from_label=period_from_label, period_to_label=period_to_label) }}
-        {{ smart_select_field("Cuenta contable", "account_code", "account_code", report_filters.account_code or '', "report-account-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field(_("Compañía"), "company", "company", report_filters.company, "report-company") }}
+        {{ smart_select_field(_("Libro contable"), "ledger", "book", report_filters.ledger or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ period_range_field(_("Periodo contable"), period_from, period_to, period_from_label=period_from_label, period_to_label=period_to_label) }}
+        {{ smart_select_field(_("Cuenta contable"), "account_code", "account_code", report_filters.account_code or '', "report-account-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         <label class="form-check">
           <input class="form-check-input" type="checkbox" name="include_descendants" value="1" {% if report_filters.include_descendants %}checked{% endif %}>
           <span class="form-check-label">{{ _("Incluir descendientes") }}</span>
@@ -60,15 +60,15 @@
               value="{{ report_filters.voucher_number or '' }}"
               placeholder="{{ _('Número visible del comprobante') }}">
           </label>
-          {{ smart_select_field("Rango cuenta desde", "account_from", "account_code", report_filters.account_from or '', "report-account-from", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-          {{ smart_select_field("Rango cuenta hasta", "account_to", "account_code", report_filters.account_to or '', "report-account-to", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-          {{ smart_select_field("Centro de costos", "cost_center_code", "cost_center", report_filters.cost_center_code or '', "report-cost-center", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-          {{ smart_select_field("Unidad de negocio", "unit_code", "unit", report_filters.unit_code or '', "report-unit", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-          {{ smart_select_field("Proyecto", "project_code", "project", report_filters.project_code or '', "report-project", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-          {{ smart_select_field("Tipo de tercero", "party_type", "party_type", report_filters.party_type or '', "report-party-type", 0) }}
-          {{ smart_select_field("Tercero", "party_id", "party", report_filters.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}, "party_type": {"selector": "#report-party-type"}}, ["#report-company", "#report-party-type"], ["company"]) }}
-          {{ smart_select_field("Tipo de comprobante", "voucher_type", "voucher_type", report_filters.voucher_type or '', "report-voucher-type", 0, {"company": {"selector": "#report-company"}, "ledger": {"selector": "#report-ledger"}}, ["#report-company", "#report-ledger"], ["company"]) }}
-          {{ smart_select_field("Estado", "status", "report_status", report_filters.status or 'submitted', "report-status") }}
+          {{ smart_select_field(_("Rango cuenta desde"), "account_from", "account_code", report_filters.account_from or '', "report-account-from", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Rango cuenta hasta"), "account_to", "account_code", report_filters.account_to or '', "report-account-to", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Centro de costos"), "cost_center_code", "cost_center", report_filters.cost_center_code or '', "report-cost-center", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Unidad de negocio"), "unit_code", "unit", report_filters.unit_code or '', "report-unit", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Proyecto"), "project_code", "project", report_filters.project_code or '', "report-project", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Tipo de tercero"), "party_type", "party_type", report_filters.party_type or '', "report-party-type", 0) }}
+          {{ smart_select_field(_("Tercero"), "party_id", "party", report_filters.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}, "party_type": {"selector": "#report-party-type"}}, ["#report-company", "#report-party-type"], ["company"]) }}
+          {{ smart_select_field(_("Tipo de comprobante"), "voucher_type", "voucher_type", report_filters.voucher_type or '', "report-voucher-type", 0, {"company": {"selector": "#report-company"}, "ledger": {"selector": "#report-ledger"}}, ["#report-company", "#report-ledger"], ["company"]) }}
+          {{ smart_select_field(_("Estado"), "status", "report_status", report_filters.status or 'submitted', "report-status") }}
           <label class="form-label mb-0">
             {{ _("Agrupar por") }}
             <select class="form-select" name="group_by">

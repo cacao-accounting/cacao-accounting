@@ -21,25 +21,25 @@
     </div>
     <div class="p-3" x-show="!collapsed">
       <form method="get" class="d-grid gap-2">
-        {{ smart_select_field("Compañía", "company", "company", filter_state.company or '', "report-company") }}
+        {{ smart_select_field(_("Compañía"), "company", "company", filter_state.company or '', "report-company") }}
 
         {% if filter_mode != "withholding_monthly" %}
-          {{ period_range_field("Periodo contable", period_from, period_to, period_from_label=period_from_label, period_to_label=period_to_label) }}
+          {{ period_range_field(_("Periodo contable"), period_from, period_to, period_from_label=period_from_label, period_to_label=period_to_label) }}
         {% endif %}
 
         {% if filter_mode in ("bank_movement", "bank_balance_summary") %}
-          {{ smart_select_field("Cuenta bancaria", "bank_account_id", "bank_account", filter_state.bank_account_id or '', "report-bank-account", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Cuenta bancaria"), "bank_account_id", "bank_account", filter_state.bank_account_id or '', "report-bank-account", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {% endif %}
 
         {% if filter_mode in ("kardex", "inventory_existence") %}
-          {{ smart_select_field("Artículo", "item_code", "item", filter_state.item_code or '', "report-item-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-          {{ smart_select_field("Bodega", "warehouse", "warehouse", filter_state.warehouse or '', "report-warehouse", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Artículo"), "item_code", "item", filter_state.item_code or '', "report-item-code", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Bodega"), "warehouse", "warehouse", filter_state.warehouse or '', "report-warehouse", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {% endif %}
 
         {% if filter_mode in ("accounts_payable", "ap_aging") %}
-          {{ smart_select_field("Proveedor", "party_id", "supplier", filter_state.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Proveedor"), "party_id", "supplier", filter_state.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {% elif filter_mode in ("accounts_receivable", "ar_aging") %}
-          {{ smart_select_field("Cliente", "party_id", "customer", filter_state.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+          {{ smart_select_field(_("Cliente"), "party_id", "customer", filter_state.party_id or '', "report-party-id", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
         {% endif %}
 
         {% if filter_mode == "withholding_monthly" %}

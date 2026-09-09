@@ -21,7 +21,7 @@
     <p>{{ _("Prepare un archivo CSV, XLS, XLSX o ODS con las siguientes columnas:") }}</p>
     <ul>
       {% for col in columns %}
-      <li><strong>{{ col.name }}</strong> ({{ col.type }}{{ ", obligatorio" if col.required else "" }})</li>
+      <li><strong>{{ col.name }}</strong> ({{ col.type }}{{ _(", obligatorio") if col.required else "" }})</li>
       {% endfor %}
     </ul>
 

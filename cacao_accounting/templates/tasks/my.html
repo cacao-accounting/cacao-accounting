@@ -3,7 +3,7 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ _('Mis tareas') }}</li>
   </ol>
 </nav>
@@ -20,8 +20,9 @@
         <label class="form-label small fw-semibold" for="status">{{ _('Estado') }}</label>
         <select class="form-select form-select-sm" id="status" name="status">
           <option value="">{{ _('Todos') }}</option>
+          {% set labels = {'open': _('open'), 'in_progress': _('in_progress'), 'completed': _('completed'), 'cancelled': _('cancelled')} %}
           {% for value in ['open', 'in_progress', 'completed', 'cancelled'] %}
-          <option value="{{ value }}" {% if request.args.get('status') == value %}selected{% endif %}>{{ value }}</option>
+          <option value="{{ value }}" {% if request.args.get('status') == value %}selected{% endif %}>{{ labels[value] }}</option>
           {% endfor %}
         </select>
       </div>
@@ -29,8 +30,9 @@
         <label class="form-label small fw-semibold" for="priority">{{ _('Prioridad') }}</label>
         <select class="form-select form-select-sm" id="priority" name="priority">
           <option value="">{{ _('Todas') }}</option>
+          {% set labels = {'low': _('low'), 'normal': _('normal'), 'high': _('high')} %}
           {% for value in ['low', 'normal', 'high'] %}
-          <option value="{{ value }}" {% if request.args.get('priority') == value %}selected{% endif %}>{{ value }}</option>
+          <option value="{{ value }}" {% if request.args.get('priority') == value %}selected{% endif %}>{{ labels[value] }}</option>
           {% endfor %}
         </select>
       </div>

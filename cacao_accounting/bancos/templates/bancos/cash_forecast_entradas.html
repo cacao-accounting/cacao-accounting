@@ -58,23 +58,23 @@
         <span class="text-muted d-block small">{{ _("Estado") }}</span>
         <strong>
           {% if selected_forecast.status == "Draft" %}
-          <span class="text-warning"><i class="bi bi-file-earmark-diff"></i> Borrador</span>
+          <span class="text-warning"><i class="bi bi-file-earmark-diff"></i> {{ _('Borrador') }}</span>
           {% elif selected_forecast.status == "Approved" %}
-          <span class="text-success"><i class="bi bi-check-all"></i> Aprobado</span>
+          <span class="text-success"><i class="bi bi-check-all"></i> {{ _('Aprobado') }}</span>
           {% elif selected_forecast.status == "Closed" %}
-          <span class="text-secondary"><i class="bi bi-lock"></i> Cerrado</span>
+          <span class="text-secondary"><i class="bi bi-lock"></i> {{ _('Cerrado') }}</span>
           {% else %}
           <span class="text-dark">{{ selected_forecast.status }}</span>
           {% endif %}
         </strong>
       </div>
       <div class="col-md-3">
-        <span class="text-muted d-block small">Periodicidad</span>
-        <strong>{{ "Semanal" if selected_forecast.periodicity == "weekly" else "Mensual" }}</strong>
+        <span class="text-muted d-block small">{{ _('Periodicidad') }}</span>
+        <strong>{{ _('Semanal') if selected_forecast.periodicity == "weekly" else _('Mensual') }}</strong>
       </div>
       <div class="col-md-3">
         <span class="text-muted d-block small">{{ _("Descripción") }}</span>
-        <p class="mb-0 text-muted small">{{ selected_forecast.description or "Sin descripción" }}</p>
+        <p class="mb-0 text-muted small">{{ selected_forecast.description or _('Sin descripción') }}</p>
       </div>
     </div>
   </div>
@@ -83,15 +83,15 @@
 <!-- Gestión de Proyecciones Manuales -->
 <div class="ca-card mb-4 shadow-sm border-0">
   <div class="ca-card-header bg-white py-3 d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title mb-0"><i class="bi bi-pencil-square"></i> Proyecciones Manuales</h5>
+    <h5 class="ca-card-title mb-0"><i class="bi bi-pencil-square"></i> {{ _('Proyecciones Manuales') }}</h5>
 
     {% if selected_forecast.status == "Draft" %}
     <div class="d-flex gap-2">
       <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#importEntryForm">
-        <i class="bi bi-file-earmark-arrow-up me-1"></i>Importar CSV / Excel
+        <i class="bi bi-file-earmark-arrow-up me-1"></i>{{ _('Importar CSV / Excel') }}
       </button>
       <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#newEntryForm">
-        <i class="bi bi-plus-circle me-1"></i>Añadir Proyección
+        <i class="bi bi-plus-circle me-1"></i>{{ _('Añadir Proyección') }}
       </button>
     </div>
     {% endif %}
@@ -116,21 +116,21 @@
   <!-- Formulario para agregar proyecciones manuales (colapsable) -->
   {% if selected_forecast.status == "Draft" %}
   <div class="collapse p-4 border-bottom bg-light" id="newEntryForm">
-    <h6 class="fw-bold mb-3">Nueva Proyección Manual</h6>
+    <h6 class="fw-bold mb-3">{{ _('Nueva Proyección Manual') }}</h6>
     <form method="POST" action="{{ url_for('bancos.cash_forecast_entry_add', forecast_id=selected_forecast.id, next=request.full_path) }}" class="row g-3">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <div class="col-md-3">
         <label for="type" class="form-label small fw-bold">{{ _("Tipo") }}</label>
         <select name="type" id="type" class="form-select form-select-sm" required>
-          <option value="Income">Ingreso (+)</option>
-          <option value="Expense">Egreso (-)</option>
+          <option value="Income">{{ _('Ingreso (+)') }}</option>
+          <option value="Expense">{{ _('Egreso (-)') }}</option>
         </select>
       </div>
 
       <div class="col-md-3">
         <label for="concept" class="form-label small fw-bold">{{ _("Concepto") }}</label>
-        <input type="text" name="concept" id="concept" class="form-control form-control-sm" placeholder="Ej: Nómina, Préstamo, Impuestos" required>
+        <input type="text" name="concept" id="concept" class="form-control form-control-sm" placeholder="{{ _('Ej: Nómina, Préstamo, Impuestos') }}" required>
       </div>
 
       <div class="col-md-2">
@@ -148,21 +148,21 @@
       </div>
 
       <div class="col-md-2">
-        <label for="estimated_date" class="form-label small fw-bold">Fecha Estimada</label>
+        <label for="estimated_date" class="form-label small fw-bold">{{ _('Fecha Estimada') }}</label>
         <input type="date" name="estimated_date" id="estimated_date" class="form-control form-control-sm" required>
       </div>
 
       <div class="col-12">
-        <label for="notes" class="form-label small fw-bold">Notas / Observaciones</label>
-        <textarea name="notes" id="notes" class="form-control form-control-sm" rows="2" placeholder="Notas adicionales..."></textarea>
+        <label for="notes" class="form-label small fw-bold">{{ _('Notas / Observaciones') }}</label>
+        <textarea name="notes" id="notes" class="form-control form-control-sm" rows="2" placeholder="{{ _('Notas adicionales...') }}"></textarea>
       </div>
 
       <div class="col-12 d-flex justify-content-end gap-2">
         <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#newEntryForm">
-          Cancelar
+          {{ _('Cancelar') }}
         </button>
         <button type="submit" class="btn btn-sm btn-primary">
-          <i class="bi bi-plus-circle me-1"></i>Guardar Proyección
+          <i class="bi bi-plus-circle me-1"></i>{{ _('Guardar Proyección') }}
         </button>
       </div>
     </form>
@@ -175,12 +175,12 @@
       <caption style="display: none;">Proyecciones manuales.</caption>
       <thead class="table-light">
         <tr>
-          <th scope="col">Fecha Estimada</th>
+          <th scope="col">{{ _('Fecha Estimada') }}</th>
           <th scope="col">{{ _("Tipo") }}</th>
           <th scope="col">{{ _("Concepto") }}</th>
           <th scope="col" class="text-end">{{ _("Monto") }}</th>
           <th scope="col">{{ _("Moneda") }}</th>
-          <th scope="col">Notas</th>
+          <th scope="col">{{ _('Notas') }}</th>
           {% if selected_forecast.status == "Draft" %}
           <th scope="col">{{ _("Acciones") }}</th>
           {% endif %}
@@ -192,9 +192,9 @@
           <td>{{ entry.estimated_date.strftime('%d/%m/%Y') }}</td>
           <td>
             {% if entry.type == "Income" %}
-            <span class="badge bg-success">Ingreso</span>
+            <span class="badge bg-success">{{ _('Ingreso') }}</span>
             {% else %}
-            <span class="badge bg-danger">Egreso</span>
+            <span class="badge bg-danger">{{ _('Egreso') }}</span>
             {% endif %}
           </td>
           <td>{{ entry.concept }}</td>
@@ -205,14 +205,14 @@
           <td>
             <div class="d-flex gap-2">
               <!-- Edit Button (triggers modal) -->
-              <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" data-bs-toggle="modal" data-bs-target="#editModal-{{ entry.id }}" title="Editar línea">
+              <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" data-bs-toggle="modal" data-bs-target="#editModal-{{ entry.id }}" title="{{ _('Editar línea') }}">
                 <i class="bi bi-pencil"></i>
               </button>
 
               <!-- Delete Form -->
-              <form method="POST" action="{{ url_for('bancos.cash_forecast_entry_delete', forecast_id=selected_forecast.id, entry_id=entry.id, next=request.full_path) }}" onsubmit="return confirm('¿Está seguro de eliminar esta proyección?')">
+              <form method="POST" action="{{ url_for('bancos.cash_forecast_entry_delete', forecast_id=selected_forecast.id, entry_id=entry.id, next=request.full_path) }}" onsubmit="return confirm('{{ _("¿Está seguro de eliminar esta proyección?") }}')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Eliminar línea">
+                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="{{ _('Eliminar línea') }}">
                   <i class="bi bi-trash"></i>
                 </button>
               </form>
@@ -223,7 +223,7 @@
               <div class="modal-dialog">
                 <div class="modal-content">
                   <div class="modal-header">
-                    <h5 class="modal-title" id="editModalLabel-{{ entry.id }}"><i class="bi bi-pencil-square"></i> Editar Proyección Manual</h5>
+                    <h5 class="modal-title" id="editModalLabel-{{ entry.id }}"><i class="bi bi-pencil-square"></i> {{ _('Editar Proyección Manual') }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                   </div>
                   <form method="POST" action="{{ url_for('bancos.cash_forecast_entry_edit', forecast_id=selected_forecast.id, entry_id=entry.id, next=request.full_path) }}">
@@ -232,8 +232,8 @@
                       <div class="mb-3">
                         <label for="type-{{ entry.id }}" class="form-label small fw-bold">{{ _("Tipo") }}</label>
                         <select name="type" id="type-{{ entry.id }}" class="form-select form-select-sm" required>
-                          <option value="Income" {% if entry.type == "Income" %}selected{% endif %}>Ingreso (+)</option>
-                          <option value="Expense" {% if entry.type == "Expense" %}selected{% endif %}>Egreso (-)</option>
+                          <option value="Income" {% if entry.type == "Income" %}selected{% endif %}>{{ _('Ingreso (+)') }}</option>
+                          <option value="Expense" {% if entry.type == "Expense" %}selected{% endif %}>{{ _('Egreso (-)') }}</option>
                         </select>
                       </div>
 
@@ -258,18 +258,18 @@
                       </div>
 
                       <div class="mb-3">
-                        <label for="estimated_date-{{ entry.id }}" class="form-label small fw-bold">Fecha Estimada</label>
+                        <label for="estimated_date-{{ entry.id }}" class="form-label small fw-bold">{{ _('Fecha Estimada') }}</label>
                         <input type="date" name="estimated_date" id="estimated_date-{{ entry.id }}" class="form-control form-control-sm" value="{{ entry.estimated_date.isoformat() }}" required>
                       </div>
 
                       <div class="mb-3">
-                        <label for="notes-{{ entry.id }}" class="form-label small fw-bold">Notas / Observaciones</label>
+                        <label for="notes-{{ entry.id }}" class="form-label small fw-bold">{{ _('Notas / Observaciones') }}</label>
                         <textarea name="notes" id="notes-{{ entry.id }}" class="form-control form-control-sm" rows="2">{{ entry.notes or "" }}</textarea>
                       </div>
                     </div>
                     <div class="modal-footer">
                       <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">{{ _("Cancelar") }}</button>
-                      <button type="submit" class="btn btn-sm btn-primary">Guardar Cambios</button>
+                      <button type="submit" class="btn btn-sm btn-primary">{{ _('Guardar Cambios') }}</button>
                     </div>
                   </form>
                 </div>
@@ -282,7 +282,7 @@
         {% else %}
         <tr>
           <td colspan="{% if selected_forecast.status == 'Draft' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">
-            No se han registrado proyecciones manuales para esta versión.
+            {{ _('No se han registrado proyecciones manuales para esta versión.') }}
           </td>
         </tr>
         {% endfor %}
@@ -293,7 +293,7 @@
 {% else %}
 <div class="p-5 text-center text-muted bg-white border rounded">
   <i class="bi bi-clipboard-x fs-1 d-block mb-3 text-secondary"></i>
-  Seleccione una compañía y un escenario/pronóstico de flujo de caja para gestionar sus entradas manuales.
+  {{ _('Seleccione una compañía y un escenario/pronóstico de flujo de caja para gestionar sus entradas manuales.') }}
 </div>
 {% endif %}
 

@@ -12,12 +12,11 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
-          class="bi bi-house"></i> Inicio</a></li>
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">{{ _("Ventas") }}</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_orden_venta_lista') }}" class="link-dark">Órdenes de
-        Venta</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_orden_venta_lista') }}" class="link-dark">{{ _('Órdenes de Venta') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">
-      {{ (registro.document_no or registro.id) if edit else 'Nueva Orden de Venta' }}</li>
+      {{ (registro.document_no or registro.id) if edit else _('Nueva Orden de Venta') }}</li>
   </ol>
 </nav>
 
@@ -29,7 +28,7 @@
   {% if from_quotation_id %}
   <input type="hidden" name="from_quotation" value="{{ from_quotation_id }}">
   {% endif %}
-  {{ tf_macros.transaction_form_header("Editar Orden de Venta" if edit else "Orden de Venta", cancel_url=url_for('ventas.ventas_orden_venta_lista')) }}
+  {{ tf_macros.transaction_form_header(_('Editar Orden de Venta') if edit else _('Orden de Venta'), cancel_url=url_for('ventas.ventas_orden_venta_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">

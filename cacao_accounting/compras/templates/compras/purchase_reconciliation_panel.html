@@ -131,9 +131,9 @@
             </td>
             <td>
               {% if rec.matching_type == "3-way" %}
-                <span class="badge bg-success-subtle text-success border border-success-subtle">3-way</span>
+                <span class="badge bg-success-subtle text-success border border-success-subtle">{{ _('3-way') }}</span>
               {% else %}
-                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">2-way</span>
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">{{ _('2-way') }}</span>
               {% endif %}
             </td>
             <td class="text-end">{{ rec.matched_amount or "—" }}</td>

@@ -245,12 +245,12 @@
 
       get visibleColumns() {
         return [
-          { field: 'account', label: 'Cuenta', width: 3 },
-          { field: 'cost_center', label: 'Centro de costos', width: 2 },
-          { field: 'party_type', label: 'Tipo de tercero', width: 1 },
-          { field: 'party', label: 'Tercero', width: 2 },
-          { field: 'debit', label: 'Debe', width: 2 },
-          { field: 'credit', label: 'Haber', width: 2 },
+          { field: 'account', label: '{{ _('Cuenta') }}', width: 3 },
+          { field: 'cost_center', label: '{{ _('Centro de costos') }}', width: 2 },
+          { field: 'party_type', label: '{{ _('Tipo de tercero') }}', width: 1 },
+          { field: 'party', label: '{{ _('Tercero') }}', width: 2 },
+          { field: 'debit', label: '{{ _('Debe') }}', width: 2 },
+          { field: 'credit', label: '{{ _('Haber') }}', width: 2 },
         ];
       },
 
@@ -1455,7 +1455,7 @@
               <div class="mb-3">
                 <label class="form-label">{{ _('Pegar líneas') }}</label>
                 <textarea class="form-control font-monospace" rows="8" x-model="importModal.pastedText"
-                  @input="onPasteAreaInput()" placeholder="Cuenta	Descripción	Débito	Crédito"></textarea>
+                  @input="onPasteAreaInput()" placeholder="{{ _('Cuenta	Descripción	Débito	Crédito') }}"></textarea>
               </div>
             </div>
             <div class="tab-pane fade" id="journal-import-upload" role="tabpanel">

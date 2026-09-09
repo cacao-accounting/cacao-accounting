@@ -12,12 +12,12 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
-          class="bi bi-house"></i> Inicio</a></li>
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_recepcion_lista') }}"
-        class="link-dark">Recepciones</a></li>
+        class="link-dark">{{ _('Recepciones') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">
-      {{ (registro.document_no or registro.id) if edit else 'Nueva Recepción de Compra' }}</li>
+      {{ (registro.document_no or registro.id) if edit else _('Nueva Recepción de Compra') }}</li>
   </ol>
 </nav>
 
@@ -26,7 +26,7 @@
   {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
   {% if from_receipt_id %}<input type="hidden" name="from_receipt" value="{{ from_receipt_id }}">{% endif %}
   {% if recepcion_origen %}<input type="hidden" name="is_return" value="1">{% endif %}
-  {{ tf_macros.transaction_form_header("Editar Recepción de Compra" if edit else "Recepción de Compra", cancel_url=url_for('compras.compras_recepcion_lista')) }}
+  {{ tf_macros.transaction_form_header(_("Editar Recepción de Compra") if edit else _("Recepción de Compra"), cancel_url=url_for('compras.compras_recepcion_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">

@@ -12,10 +12,10 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
-          class="bi bi-house"></i> Inicio</a></li>
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_import_landed_cost_lista') }}"
-        class="link-dark">Costos de Importacion</a></li>
+        class="link-dark">{{ _('Costos de Importacion') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.document_no or registro.id }}</li>
   </ol>
 </nav>
@@ -59,20 +59,20 @@
     'bi-truck'
 ) }}
 
-<h5 class="mt-4 mb-2"><i class="bi bi-box-seam me-1"></i> Articulos</h5>
+<h5 class="mt-4 mb-2"><i class="bi bi-box-seam me-1"></i> {{ _('Articulos') }}</h5>
 <div class="table-responsive">
   <table class="ca-table">
-    <caption class="visually-hidden">Articulos del costo de importacion</caption>
+    <caption class="visually-hidden">{{ _('Articulos del costo de importacion') }}</caption>
     <thead>
       <tr>
-        <th scope="col">Articulo</th>
+        <th scope="col">{{ _('Articulo') }}</th>
         <th scope="col">{{ _("Nombre") }}</th>
         <th scope="col">{{ _("Cantidad") }}</th>
-        <th scope="col">UOM</th>
-        <th scope="col">Tasa</th>
+        <th scope="col">{{ _('UOM') }}</th>
+        <th scope="col">{{ _('Tasa') }}</th>
         <th scope="col">{{ _("Monto") }}</th>
-        <th scope="col">Costo Asignado</th>
-        <th scope="col">Costo Final</th>
+        <th scope="col">{{ _('Costo Asignado') }}</th>
+        <th scope="col">{{ _('Costo Final') }}</th>
       </tr>
     </thead>
     <tbody>
@@ -92,16 +92,16 @@
   </table>
 </div>
 
-<h5 class="mt-4 mb-2"><i class="bi bi-receipt me-1"></i> Cargos</h5>
+<h5 class="mt-4 mb-2"><i class="bi bi-receipt me-1"></i> {{ _('Cargos') }}</h5>
 <div class="table-responsive">
   <table class="ca-table">
-    <caption class="visually-hidden">Cargos del costo de importacion</caption>
+    <caption class="visually-hidden">{{ _('Cargos del costo de importacion') }}</caption>
     <thead>
       <tr>
         <th scope="col">{{ _("Concepto") }}</th>
         <th scope="col">{{ _("Tipo") }}</th>
         <th scope="col">{{ _("Monto") }}</th>
-        <th scope="col">Cuenta</th>
+        <th scope="col">{{ _('Cuenta') }}</th>
       </tr>
     </thead>
     <tbody>

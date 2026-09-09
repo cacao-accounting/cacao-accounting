@@ -12,10 +12,10 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
-          class="bi bi-house"></i> Inicio</a></li>
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_cotizacion_proveedor_lista') }}"
-        class="link-dark">Cotizaciones de Proveedor</a></li>
+        class="link-dark">{{ _('Cotizaciones de Proveedor') }}</a></li>
     {% if solicitud_origen %}
     <li class="breadcrumb-item">
       <a href="{{ url_for('compras.compras_solicitud_compra', request_id=solicitud_origen.id) }}" class="link-dark">
@@ -30,13 +30,13 @@
     </li>
     {% endif %}
     <li class="breadcrumb-item active" aria-current="page">
-      {{ (registro.document_no or registro.id) if edit else 'Nueva Cotización de Proveedor' }}</li>
+      {{ (registro.document_no or registro.id) if edit else _('Nueva Cotización de Proveedor') }}</li>
   </ol>
 </nav>
 
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
-  {{ tf_macros.transaction_form_header("Editar Cotización de Proveedor" if edit else "Cotización de Proveedor", cancel_url=url_for('compras.compras_cotizacion_proveedor_lista')) }}
+  {{ tf_macros.transaction_form_header(_("Editar Cotización de Proveedor") if edit else _("Cotización de Proveedor"), cancel_url=url_for('compras.compras_cotizacion_proveedor_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -57,13 +57,13 @@
       <div class="col-md-6">
         {% if solicitud_origen %}
         <div class="alert alert-secondary mt-2 mb-0 py-2 px-3 small" role="alert">
-          <i class="bi bi-info-circle me-1"></i>Basado en Solicitud de Compra:
+          <i class="bi bi-info-circle me-1"></i>{{ _('Basado en Solicitud de Compra:') }}
           {{ solicitud_origen.document_no or solicitud_origen.id }}
         </div>
         <input type="hidden" name="from_request" value="{{ from_request_id }}" />
         {% elif rfq_origen %}
         <div class="alert alert-secondary mt-2 mb-0 py-2 px-3 small" role="alert">
-          <i class="bi bi-info-circle me-1"></i>Basado en Solicitud de Cotización:
+          <i class="bi bi-info-circle me-1"></i>{{ _('Basado en Solicitud de Cotización:') }}
           {{ rfq_origen.document_no or rfq_origen.id }}
         </div>
         <input type="hidden" name="from_rfq" value="{{ from_rfq_id }}" />

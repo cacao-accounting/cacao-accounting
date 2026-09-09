@@ -4,16 +4,16 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.external_counter_list') }}" class="link-dark">Contadores Externos</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{% if modo_edicion %}Editar Contador{% else %}Nuevo Contador{% endif %}</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.external_counter_list') }}" class="link-dark">{{ _("Contadores Externos") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{% if modo_edicion %}{{ _("Editar Contador") }}{% else %}{{ _("Nuevo Contador") }}{% endif %}</li>
   </ol>
 </nav>
 
 <div class="ca-card" style="max-width:700px;">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-123"></i> {% if modo_edicion %}Editar Contador Externo{% else %}Nuevo Contador Externo{% endif %}</h5>
+    <h5 class="ca-card-title"><i class="bi bi-123"></i> {% if modo_edicion %}{{ _("Editar Contador Externo") }}{% else %}{{ _("Nuevo Contador Externo") }}{% endif %}</h5>
     <div class="d-flex gap-2">
       <button class="btn btn-primary btn-sm" form="form-ext-counter" type="submit"><i class="bi bi-floppy me-1"></i>{{ _("Guardar") }}</button>
       <a href="{{ url_for('contabilidad.external_counter_list') }}" class="btn btn-secondary btn-sm">{{ _("Cancelar") }}</a>
@@ -23,7 +23,7 @@
     {{ form.csrf_token }}
     <div class="row g-2">
       <div class="col-md-6">
-        <label class="form-label" for="company">Compania <span class="text-danger">*</span></label>
+        <label class="form-label" for="company">{{ _("Compania") }} <span class="text-danger">*</span></label>
         {{ form.company(class="form-select form-select-sm", id="company") }}
       </div>
       <div class="col-md-6">
@@ -31,28 +31,28 @@
         {{ form.counter_type(class="form-select form-select-sm", id="counter-type") }}
       </div>
       <div class="col-md-12">
-        <label class="form-label" for="nombre">Nombre <span class="text-danger">*</span></label>
-        {{ form.nombre(class="form-control form-control-sm", id="nombre", placeholder="Ej: Chequera BANPRO 2026") }}
+        <label class="form-label" for="nombre">{{ _("Nombre") }} <span class="text-danger">*</span></label>
+        {{ form.nombre(class="form-control form-control-sm", id="nombre", placeholder="{{ _('Ej: Chequera BANPRO 2026') }}") }}
       </div>
       <div class="col-md-4">
-        <label class="form-label" for="prefix">Prefijo</label>
-        {{ form.prefix(class="form-control form-control-sm", id="prefix", placeholder="Ej: CHK-") }}
+        <label class="form-label" for="prefix">{{ _("Prefijo") }}</label>
+        {{ form.prefix(class="form-control form-control-sm", id="prefix", placeholder="{{ _('Ej: CHK-') }}") }}
       </div>
       <div class="col-md-4">
-        <label class="form-label" for="last-used">Ultimo Numero Usado</label>
+        <label class="form-label" for="last-used">{{ _("Ultimo Numero Usado") }}</label>
         {{ form.last_used(class="form-control form-control-sm", id="last-used") }}
       </div>
       <div class="col-md-4">
-        <label class="form-label" for="padding">Padding (digitos)</label>
+        <label class="form-label" for="padding">{{ _("Padding (digitos)") }}</label>
         {{ form.padding(class="form-control form-control-sm", id="padding") }}
       </div>
       <div class="col-md-12">
-        <label class="form-label" for="naming-series">Serie Interna Asociada</label>
+        <label class="form-label" for="naming-series">{{ _("Serie Interna Asociada") }}</label>
         {{ form.naming_series_id(class="form-select form-select-sm", id="naming-series") }}
-        <small class="text-muted">Opcional. Vincula este contador externo con una serie interna del sistema.</small>
+        <small class="text-muted">{{ _("Opcional. Vincula este contador externo con una serie interna del sistema.") }}</small>
       </div>
       <div class="col-md-12">
-        <label class="form-label" for="description">Descripcion</label>
+        <label class="form-label" for="description">{{ _("Descripcion") }}</label>
         {{ form.description(class="form-control form-control-sm", id="description", rows=3) }}
       </div>
       <div class="col-md-12 mt-1">

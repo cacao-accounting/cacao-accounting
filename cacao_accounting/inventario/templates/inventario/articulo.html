@@ -52,7 +52,7 @@
       <img src="{{ url_for('api.api_get_item_image', item_id=registro.code) }}" alt="{{ registro.name }}" class="img-thumbnail" style="max-height: 250px; object-fit: contain;">
     </div>
     {% if is_cloud_mode() %}
-    <form method="post" action="{{ url_for('api.api_delete_item_image', item_id=registro.code) }}" class="d-inline mb-2" onsubmit="return confirm('¿Eliminar la imagen del producto?');">
+    <form method="post" action="{{ url_for('api.api_delete_item_image', item_id=registro.code) }}" class="d-inline mb-2" onsubmit="return confirm('{{ _("¿Eliminar la imagen del producto?") }}');">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>{{ _('Eliminar imagen') }}</button>
     </form>

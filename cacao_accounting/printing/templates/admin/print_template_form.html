@@ -3,20 +3,20 @@
 {% block content %}
 <div class="container-fluid">
     <div class="pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">{% if template %}Editar{% else %}Nuevo{% endif %} formato de impresión</h1>
+        <h1 class="h2">{% if template %}{{ _('Editar') }}{% else %}{{ _('Nuevo') }}{% endif %} {{ _('formato de impresión') }}</h1>
     </div>
 
     <form method="POST">
         <div class="row">
             <div class="col-md-8">
                 <div class="card mb-4 shadow-sm">
-                    <div class="card-header bg-light">Cuerpo de la plantilla (HTML/Jinja2)</div>
+                    <div class="card-header bg-light">{{ _('Cuerpo de la plantilla (HTML/Jinja2)') }}</div>
                     <div class="card-body p-0">
                         <textarea name="template_body" class="form-control border-0" rows="20" style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 0.85rem;" required>{{ template.template_body if template else '' }}</textarea>
                     </div>
                 </div>
                 <div class="card mb-4 shadow-sm">
-                    <div class="card-header bg-light">Estilos (CSS)</div>
+                    <div class="card-header bg-light">{{ _('Estilos (CSS)') }}</div>
                     <div class="card-body p-0">
                         <textarea name="stylesheet_body" class="form-control border-0" rows="10" style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 0.85rem;">{{ template.stylesheet_body if template else '' }}</textarea>
                     </div>
@@ -27,7 +27,7 @@
                     <div class="card-header bg-light">{{ _("Configuración") }}</div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Tipo de documento</label>
+                            <label class="form-label small fw-bold">{{ _('Tipo de documento') }}</label>
                             <select name="document_type" class="form-select form-select-sm" {% if template %}disabled{% endif %}>
                                 {% for code, label in doc_types %}
                                 <option value="{{ code }}" {% if template and template.document_type == code %}selected{% endif %}>{{ label }}</option>
@@ -45,7 +45,7 @@
                         <div class="mb-3">
                             <label class="form-label small fw-bold">{{ _("Compañía") }}</label>
                             <select name="company_code" class="form-select form-select-sm" {% if template %}disabled{% endif %}>
-                                <option value="">Global (Todas)</option>
+                                <option value="">{{ _('Global (Todas)') }}</option>
                                 {% for company in companies %}
                                 <option value="{{ company.code }}" {% if template and template.company_code == company.code %}selected{% endif %}>{{ company.company_name }}</option>
                                 {% endfor %}
@@ -54,36 +54,36 @@
                         <div class="row">
                             <div class="col-6">
                                 <div class="mb-3">
-                                    <label class="form-label small fw-bold">Tamaño</label>
+                                    <label class="form-label small fw-bold">{{ _('Tamaño') }}</label>
                                     <select name="paper_size" class="form-select form-select-sm">
-                                        <option value="letter" {% if template and template.paper_size == 'letter' %}selected{% endif %}>Carta</option>
+                                        <option value="letter" {% if template and template.paper_size == 'letter' %}selected{% endif %}>{{ _('Carta') }}</option>
                                         <option value="a4" {% if template and template.paper_size == 'a4' %}selected{% endif %}>A4</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="mb-3">
-                                    <label class="form-label small fw-bold">Orientación</label>
+                                    <label class="form-label small fw-bold">{{ _('Orientación') }}</label>
                                     <select name="orientation" class="form-select form-select-sm">
-                                        <option value="portrait" {% if template and template.orientation == 'portrait' %}selected{% endif %}>Vertical</option>
-                                        <option value="landscape" {% if template and template.orientation == 'landscape' %}selected{% endif %}>Horizontal</option>
+                                        <option value="portrait" {% if template and template.orientation == 'portrait' %}selected{% endif %}>{{ _('Vertical') }}</option>
+                                        <option value="landscape" {% if template and template.orientation == 'landscape' %}selected{% endif %}>{{ _('Horizontal') }}</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
                         {% if template %}
                         <div class="mb-3">
-                            <label class="form-label small fw-bold">Nota de cambio (Versión {{ template.version }})</label>
-                            <input type="text" name="change_note" class="form-control form-control-sm" placeholder="¿Qué cambió?">
+                            <label class="form-label small fw-bold">{{ _('Nota de cambio') }} ({{ _('Versión') }} {{ template.version }})</label>
+                            <input type="text" name="change_note" class="form-control form-control-sm" placeholder="{{ _('¿Qué cambió?') }}">
                         </div>
                         {% endif %}
                         <hr>
                         <button type="submit" class="btn btn-primary btn-sm w-100 mb-2">
-                            <i class="bi bi-save me-1"></i>Guardar cambios
+                            <i class="bi bi-save me-1"></i>{{ _('Guardar cambios') }}
                         </button>
                         {% if template %}
                         <a href="{{ url_for('printing_admin.preview_template', template_id=template.id) }}" target="_blank" class="btn btn-outline-info btn-sm w-100">
-                            <i class="bi bi-eye me-1"></i>Vista previa
+                            <i class="bi bi-eye me-1"></i>{{ _('Vista previa') }}
                         </a>
                         {% endif %}
                     </div>

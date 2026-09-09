@@ -12,12 +12,11 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
-          class="bi bi-house"></i> Inicio</a></li>
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">{{ _("Ventas") }}</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_entrega_lista') }}" class="link-dark">Notas de
-        Entrega</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_entrega_lista') }}" class="link-dark">{{ _('Notas de Entrega') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">
-      {{ (registro.document_no or registro.id) if edit else 'Nueva Remisión de Mercadería Vendida' }}</li>
+      {{ (registro.document_no or registro.id) if edit else _('Nueva Remisión de Mercadería Vendida') }}</li>
   </ol>
 </nav>
 
@@ -25,7 +24,7 @@
   {{ form.csrf_token }}
   {% if from_order_id %}<input type="hidden" name="from_order" value="{{ from_order_id }}">{% endif %}
   {% if from_note_id %}<input type="hidden" name="from_note" value="{{ from_note_id }}">{% endif %}
-  {{ tf_macros.transaction_form_header("Editar Remisión de Mercadería Vendida" if edit else "Remisión de Mercadería Vendida", cancel_url=url_for('ventas.ventas_entrega_lista')) }}
+  {{ tf_macros.transaction_form_header(_('Editar Remisión de Mercadería Vendida') if edit else _('Remisión de Mercadería Vendida'), cancel_url=url_for('ventas.ventas_entrega_lista')) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">

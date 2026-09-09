@@ -21,26 +21,26 @@
     </div>
     <div class="p-3" x-show="!collapsed">
       <form method="post" class="d-grid gap-2">
-        {{ smart_select_field("Compañía", "company", "company", filters.company or '', "report-company") }}
-        {{ smart_select_field("Año Fiscal", "fiscal_year_id", "fiscal_year", filters.fiscal_year_id or '', "report-fiscal-year", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ smart_select_field("Libro Contable", "ledger_id", "book", filters.ledger_id or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ smart_select_field("Presupuesto", "budget_id", "budget", filters.budget_id or '', "report-budget", 1, {"company": {"selector": "#report-company"}, "fiscal_year_id": {"selector": "#report-fiscal-year"}, "ledger_id": {"selector": "#report-ledger"}, "status": "approved"}, ["#report-company", "#report-fiscal-year", "#report-ledger"], ["company", "fiscal_year_id", "ledger_id"]) }}
+        {{ smart_select_field(_("Compañía"), "company", "company", filters.company or '', "report-company") }}
+        {{ smart_select_field(_("Año Fiscal"), "fiscal_year_id", "fiscal_year", filters.fiscal_year_id or '', "report-fiscal-year", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field(_("Libro Contable"), "ledger_id", "book", filters.ledger_id or '', "report-ledger", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field(_("Presupuesto"), "budget_id", "budget", filters.budget_id or '', "report-budget", 1, {"company": {"selector": "#report-company"}, "fiscal_year_id": {"selector": "#report-fiscal-year"}, "ledger_id": {"selector": "#report-ledger"}, "status": "approved"}, ["#report-company", "#report-fiscal-year", "#report-ledger"], ["company", "fiscal_year_id", "ledger_id"]) }}
 
         <hr class="my-2">
         <h6>{{ _("Rango de Periodos") }}</h6>
-        {{ smart_select_field("Desde", "period_from_id", "accounting_period_id", filters.period_from_id or '', "report-period-from", 1, {"company": {"selector": "#report-company"}, "fiscal_year_id": {"selector": "#report-fiscal-year"}}, ["#report-company", "#report-fiscal-year"], ["company", "fiscal_year_id"]) }}
-        {{ smart_select_field("Hasta", "period_to_id", "accounting_period_id", filters.period_to_id or '', "report-period-to", 1, {"company": {"selector": "#report-company"}, "fiscal_year_id": {"selector": "#report-fiscal-year"}}, ["#report-company", "#report-fiscal-year"], ["company", "fiscal_year_id"]) }}
+        {{ smart_select_field(_("Desde"), "period_from_id", "accounting_period_id", filters.period_from_id or '', "report-period-from", 1, {"company": {"selector": "#report-company"}, "fiscal_year_id": {"selector": "#report-fiscal-year"}}, ["#report-company", "#report-fiscal-year"], ["company", "fiscal_year_id"]) }}
+        {{ smart_select_field(_("Hasta"), "period_to_id", "accounting_period_id", filters.period_to_id or '', "report-period-to", 1, {"company": {"selector": "#report-company"}, "fiscal_year_id": {"selector": "#report-fiscal-year"}}, ["#report-company", "#report-fiscal-year"], ["company", "fiscal_year_id"]) }}
 
         <hr class="my-2">
         <h6>{{ _("Rango de Cuentas") }}</h6>
-        {{ smart_select_field("Cuenta Desde", "account_from", "account_code", filters.account_from or '', "report-account-from", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ smart_select_field("Cuenta Hasta", "account_to", "account_code", filters.account_to or '', "report-account-to", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field(_("Cuenta Desde"), "account_from", "account_code", filters.account_from or '', "report-account-from", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field(_("Cuenta Hasta"), "account_to", "account_code", filters.account_to or '', "report-account-to", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
 
         <hr class="my-2">
         <h6>{{ _("Dimensiones") }}</h6>
-        {{ smart_select_field("Centro de Costos", "cost_center_id", "cost_center_id", filters.cost_center_id or '', "report-cost-center", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ smart_select_field("Unidad de Negocio", "business_unit_id", "unit_id", filters.business_unit_id or '', "report-unit", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
-        {{ smart_select_field("Proyecto", "project_id", "project_id", filters.project_id or '', "report-project", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field(_("Centro de Costos"), "cost_center_id", "cost_center_id", filters.cost_center_id or '', "report-cost-center", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field(_("Unidad de Negocio"), "business_unit_id", "unit_id", filters.business_unit_id or '', "report-unit", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
+        {{ smart_select_field(_("Proyecto"), "project_id", "project_id", filters.project_id or '', "report-project", 1, {"company": {"selector": "#report-company"}}, ["#report-company"], ["company"]) }}
 
         <label class="form-label mb-0 mt-2">{{ _("Vista") }}</label>
         <select name="granularity" class="form-select">
