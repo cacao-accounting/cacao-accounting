@@ -8,17 +8,17 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventario") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Listado de Articulos</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Listado de Articulos') }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title"><i class="bi bi-box"></i> Listado de Articulos.</h5>
+    <h5 class="ca-card-title"><i class="bi bi-box"></i> {{ _('Listado de Articulos.') }}</h5>
     <a href="{{ url_for('inventario.inventario_articulo_nuevo') }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-circle me-1"></i>Nuevo
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
   </div>
   {{ macros.list_filters(show_status=False, placeholder=_("Buscar por codigo o nombre...")) }}
@@ -26,12 +26,12 @@
     <caption style="display: none;">Listado de articulos.</caption>
     <thead>
       <tr>
-        <th scope="col">Codigo</th>
+        <th scope="col">{{ _('Codigo') }}</th>
         <th scope="col">{{ _("Nombre") }}</th>
-        <th scope="col">Categoria</th>
+        <th scope="col">{{ _('Categoria') }}</th>
         <th scope="col">{{ _("Tipo") }}</th>
-        <th scope="col">Comprable</th>
-        <th scope="col">Vendible</th>
+        <th scope="col">{{ _('Comprable') }}</th>
+        <th scope="col">{{ _('Vendible') }}</th>
         <th scope="col">{{ _("Activo") }}</th>
       </tr>
     </thead>

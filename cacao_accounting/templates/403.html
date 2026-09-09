@@ -3,7 +3,7 @@
 <html lang="es">
 <head>
   {{ macros.headertags() }}
-  <title>Permisos insuficientes.</title>
+  <title>{{ _('Permisos insuficientes.') }}</title>
 </head>
 <body style="background:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:100vh;">
   <div style="text-align:center;padding:2rem;">
@@ -13,9 +13,9 @@
     <div style="margin-top:2rem;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.07);padding:2.5rem 3rem;">
       <div style="font-size:4rem;color:#e67e22;"><i class="bi bi-slash-circle"></i></div>
       <h1 style="font-size:3rem;font-weight:700;color:#1e293b;margin:.5rem 0;">403</h1>
-      <p style="color:#64748b;font-size:1rem;margin-bottom:1.5rem;">Su usuario no tiene permisos para acceder al recurso solicitado.</p>
+      <p style="color:#64748b;font-size:1rem;margin-bottom:1.5rem;">{{ _('Su usuario no tiene permisos para acceder al recurso solicitado.') }}</p>
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="btn btn-primary btn-sm">
-        <i class="bi bi-house me-1"></i> Regresar al inicio
+        <i class="bi bi-house me-1"></i> {{ _('Regresar al inicio') }}
       </a>
     </div>
     <p style="margin-top:1.5rem;color:#94a3b8;font-size:.8rem;">&copy; Cacao Accounting</p>

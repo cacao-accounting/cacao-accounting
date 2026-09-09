@@ -8,17 +8,17 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('ventas.ventas_') }}" class="link-dark">{{ _("Ventas") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Listado de Ordenes de Venta</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Listado de Ordenes de Venta') }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title"><i class="bi bi-bag-check"></i> Listado de Ordenes de Venta.</h5>
+    <h5 class="ca-card-title"><i class="bi bi-bag-check"></i> {{ _('Listado de Ordenes de Venta.') }}</h5>
     <a href="{{ url_for('ventas.ventas_orden_venta_nuevo') }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-circle me-1"></i>Nuevo
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
   </div>
   {{ macros.list_filters(show_status=True, extra_params=consulta.period_extra_params) }}
@@ -27,7 +27,7 @@
     <caption style="display: none;">Listado de ordenes de venta.</caption>
     <thead>
       <tr>
-        <th scope="col">Número</th>
+        <th scope="col">{{ _('Número') }}</th>
         <th scope="col">{{ _("Cliente") }}</th>
         <th scope="col">{{ _("Estado") }}</th>
         <th scope="col">{{ _("Fecha") }}</th>

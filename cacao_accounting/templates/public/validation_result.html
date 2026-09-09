@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validación de Documento - Cacao Accounting</title>
+    <title>{{ _('Validación de Documento') }} - Cacao Accounting</title>
     <link rel="stylesheet" href="/static/css/cacaoaccounting.css">
     <style>
         body { background-color: #f8f9fa; padding-top: 50px; font-family: sans-serif; }
@@ -33,63 +33,63 @@
     <div class="container">
         <div class="validation-card">
             <div class="card-header">
-                <h4 class="mb-0 text-center">Validación de Documento</h4>
+                <h4 class="mb-0 text-center">{{ _('Validación de Documento') }}</h4>
             </div>
             <div class="card-body">
                 <div class="text-center mb-4">
                     {% if validation.status == 'valid' %}
-                        <div class="alert alert-success"><strong>Documento válido</strong></div>
+                        <div class="alert alert-success"><strong>{{ _('Documento válido') }}</strong></div>
                     {% elif validation.status == 'invalid' %}
                         <div class="alert alert-warning">
-                            <strong>Datos inconsistentes</strong><br>
-                            Los datos actuales del documento no coinciden con el registro validado.
+                            <strong>{{ _('Datos inconsistentes') }}</strong><br>
+                            {{ _('Los datos actuales del documento no coinciden con el registro validado.') }}
                         </div>
                     {% else %}
                         <div class="alert alert-secondary">
-                            <strong>Estado: {{ validation.status | replace('_', ' ') | upper }}</strong>
+                            <strong>{{ _('Estado:') }} {{ validation.status | replace('_', ' ') | upper }}</strong>
                         </div>
                     {% endif %}
                 </div>
 
                 <div class="row mb-3">
-                    <div class="col-sm-4 data-label">Empresa:</div>
+                    <div class="col-sm-4 data-label">{{ _('Empresa:') }}</div>
                     <div class="col-sm-8 data-value">{{ validation.company_name }}</div>
                 </div>
                 {% if validation.company_tax_id %}
                 <div class="row mb-3">
-                    <div class="col-sm-4 data-label">Identificación Fiscal:</div>
+                    <div class="col-sm-4 data-label">{{ _('Identificación Fiscal:') }}</div>
                     <div class="col-sm-8 data-value">{{ validation.company_tax_id }}</div>
                 </div>
                 {% endif %}
                 <div class="row mb-3">
-                    <div class="col-sm-4 data-label">Tipo de Documento:</div>
+                    <div class="col-sm-4 data-label">{{ _('Tipo de Documento:') }}</div>
                     <div class="col-sm-8 data-value">{{ validation.document_type.replace('_', ' ').title() }}</div>
                 </div>
                 <div class="row mb-3">
-                    <div class="col-sm-4 data-label">Número:</div>
+                    <div class="col-sm-4 data-label">{{ _('Número:') }}</div>
                     <div class="col-sm-8 data-value">{{ validation.document_number }}</div>
                 </div>
                 <div class="row mb-3">
-                    <div class="col-sm-4 data-label">Fecha:</div>
+                    <div class="col-sm-4 data-label">{{ _('Fecha:') }}</div>
                     <div class="col-sm-8 data-value">{{ validation.document_date or "-" }}</div>
                 </div>
                 <div class="row mb-3">
-                    <div class="col-sm-4 data-label">Moneda:</div>
+                    <div class="col-sm-4 data-label">{{ _('Moneda:') }}</div>
                     <div class="col-sm-8 data-value">{{ validation.currency or "-" }}</div>
                 </div>
                 <div class="row mb-3">
-                    <div class="col-sm-4 data-label">Total:</div>
+                    <div class="col-sm-4 data-label">{{ _('Total:') }}</div>
                     <div class="col-sm-8 data-value">{{ validation.total }}</div>
                 </div>
                 <div class="row mb-3">
-                    <div class="col-sm-4 data-label">Estado actual:</div>
+                    <div class="col-sm-4 data-label">{{ _('Estado actual:') }}</div>
                     <div class="col-sm-8 data-value">{{ validation.document_status }}</div>
                 </div>
                 <hr>
                 <p class="text-muted small text-center">
-                    Fecha de validación: {{ validation.validation_time.strftime('%Y-%m-%d %H:%M:%S') }}<br><br>
-                    Esta es una página de validación pública de Cacao Accounting.
-                    Verifique que la URL en su navegador sea la oficial de la empresa emisora.
+                    {{ _('Fecha de validación:') }} {{ validation.validation_time.strftime('%Y-%m-%d %H:%M:%S') }}<br><br>
+                    {{ _('Esta es una página de validación pública de Cacao Accounting.') }}
+                    {{ _('Verifique que la URL en su navegador sea la oficial de la empresa emisora.') }}
                 </p>
             </div>
             <div class="card-footer text-center">

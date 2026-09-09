@@ -8,17 +8,17 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Listado de Bancos</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Listado de Bancos') }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title"><i class="bi bi-bank"></i> Listado de Bancos.</h5>
+    <h5 class="ca-card-title"><i class="bi bi-bank"></i> {{ _('Listado de Bancos.') }}</h5>
     <a href="{{ url_for('bancos.bancos_banco_nuevo') }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-circle me-1"></i>Nuevo
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
   </div>
   {{ macros.list_filters(show_status=False, placeholder=_("Buscar por nombre o referencia...")) }}
@@ -36,7 +36,7 @@
       <tr>
         <td><a class="fw-bold" href="{{ url_for('bancos.bancos_banco', bank_id=item.id) }}">{{ item.name }}</a></td>
         <td>{{ item.swift_code or "" }}</td>
-        <td>{{ "Sí" if item.is_active else "No" }}</td>
+        <td>{{ _('Sí') if item.is_active else _('No') }}</td>
       </tr>
       {%- endfor %}
     </tbody>

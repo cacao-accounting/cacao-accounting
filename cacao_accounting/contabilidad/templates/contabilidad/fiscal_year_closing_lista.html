@@ -5,7 +5,7 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ _("Cierres de Año Fiscal") }}</li>
   </ol>
@@ -74,7 +74,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="7" class="text-center">No se encontraron comprobantes de cierre.</td>
+            <td colspan="7" class="text-center">{{ _("No se encontraron comprobantes de cierre.") }}</td>
           </tr>
           {% endfor %}
         </tbody>

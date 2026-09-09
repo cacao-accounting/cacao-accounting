@@ -4,10 +4,10 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.monedas') }}" class="link-dark">Monedas</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Nueva Moneda</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.monedas') }}" class="link-dark">{{ _("Monedas") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Nueva Moneda") }}</li>
   </ol>
 </nav>
 

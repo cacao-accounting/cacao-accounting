@@ -4,9 +4,9 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.libros') }}" class="link-dark">Libros de Contabilidad</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.libros') }}" class="link-dark">{{ _("Libros de Contabilidad") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
   </ol>
 </nav>
@@ -70,7 +70,7 @@
         <div class="ca-kv-item"><label>{{ _('Nombre') }}</label><p>{{ registro.name }}</p></div>
         <div class="ca-kv-item"><label>{{ _('Entidad') }}</label><p>{{ registro.entity }}</p></div>
         <div class="ca-kv-item"><label>{{ _('Moneda') }}</label><p>{{ registro.currency or '-' }}</p></div>
-        <div class="ca-kv-item"><label>{{ _('Estado') }}</label><p>{{ registro.status or 'activo' }}</p></div>
+        <div class="ca-kv-item"><label>{{ _('Estado') }}</label><p>{{ registro.status or _('activo') }}</p></div>
         <div class="ca-kv-item"><label>{{ _('Libro Primario') }}</label><p>{{ _('Sí') if registro.is_primary else _('No') }}</p></div>
     </div>
   </div>

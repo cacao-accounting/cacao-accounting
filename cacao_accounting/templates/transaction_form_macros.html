@@ -956,7 +956,7 @@
           <div class="tab-pane fade show active" id="paste-panel" role="tabpanel">
             <div class="mb-3">
               <label class="form-label">{{ _('Pegue aquí las celdas incluyendo el encabezado:') }}</label>
-              <textarea class="form-control font-monospace" rows="8" x-model="importModal.pastedText" @input="onPasteAreaInput()" placeholder="Item	Cantidad	Precio..."></textarea>
+              <textarea class="form-control font-monospace" rows="8" x-model="importModal.pastedText" @input="onPasteAreaInput()" placeholder="{{ _('Item\tCantidad\tPrecio...') }}"></textarea>
             </div>
           </div>
           <div class="tab-pane fade" id="upload-panel" role="tabpanel">

@@ -17,7 +17,7 @@
 </nav>
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
   {{ form.csrf_token }}
-  {{ tf_macros.transaction_form_header("Editar Movimiento de Inventario" if edit else "Movimiento de Inventario") }}
+  {{ tf_macros.transaction_form_header(_("Editar Movimiento de Inventario") if edit else _("Movimiento de Inventario")) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">

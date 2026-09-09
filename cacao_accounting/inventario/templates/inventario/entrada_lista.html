@@ -8,17 +8,17 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _("Inventario") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Listado de Entradas de Almacen</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Listado de Entradas de Almacen') }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title"><i class="bi bi-arrow-down-circle"></i> Listado de Entradas de Almacen.</h5>
+    <h5 class="ca-card-title"><i class="bi bi-arrow-down-circle"></i> {{ _('Listado de Entradas de Almacen.') }}</h5>
     <a href="{{ new_url if new_url else url_for('inventario.inventario_entrada_nuevo') }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-circle me-1"></i>Nuevo
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
   </div>
   {{ macros.list_filters(show_status=True, placeholder=_("Buscar por documento..."), extra_params=consulta.period_extra_params) }}
@@ -27,8 +27,8 @@
     <caption style="display: none;">Listado de entradas de almacen.</caption>
     <thead>
       <tr>
-        <th scope="col">Número</th>
-        <th scope="col">Propósito</th>
+        <th scope="col">{{ _('Número') }}</th>
+        <th scope="col">{{ _('Propósito') }}</th>
         <th scope="col">{{ _("Estado") }}</th>
         <th scope="col">{{ _("Fecha") }}</th>
         <th scope="col">{{ _("Total") }}</th>

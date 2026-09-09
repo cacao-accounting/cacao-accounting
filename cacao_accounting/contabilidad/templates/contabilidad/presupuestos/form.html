@@ -25,12 +25,12 @@
       <div class="col-md-6">
         <label class="form-label">{{ _("Año Fiscal") }}</label>
         {% from "smart_select_field.html" import smart_select_field %}
-        {{ smart_select_field("Año Fiscal", "fiscal_year_id", "fiscal_year", form.fiscal_year_id.data, "budget-fiscal-year", 1, {"company": {"selector": "#budget-company"}}, ["#budget-company"], ["company"]) }}
+        {{ smart_select_field(_("Año Fiscal"), "fiscal_year_id", "fiscal_year", form.fiscal_year_id.data, "budget-fiscal-year", 1, {"company": {"selector": "#budget-company"}}, ["#budget-company"], ["company"]) }}
       </div>
 
       <div class="col-md-6">
         <label class="form-label">{{ _("Libro Contable") }}</label>
-        {{ smart_select_field("Libro Contable", "ledger_id", "book", form.ledger_id.data, "budget-ledger", 1, {"company": {"selector": "#budget-company"}}, ["#budget-company"], ["company"]) }}
+        {{ smart_select_field(_("Libro Contable"), "ledger_id", "book", form.ledger_id.data, "budget-ledger", 1, {"company": {"selector": "#budget-company"}}, ["#budget-company"], ["company"]) }}
       </div>
       <div class="col-md-6">
         <label class="form-label">{{ _("Moneda") }}</label>
@@ -39,7 +39,7 @@
 
       <div class="col-md-4">
         <label class="form-label">{{ _("Código") }}</label>
-        {{ form.budget_code(class="form-control", placeholder="ej. PPTO-2026-BASE") }}
+        {{ form.budget_code(class="form-control", placeholder="{{ _('ej. PPTO-2026-BASE') }}") }}
       </div>
       <div class="col-md-8">
         <label class="form-label">{{ _("Nombre") }}</label>

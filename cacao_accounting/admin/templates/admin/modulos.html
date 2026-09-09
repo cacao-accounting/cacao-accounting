@@ -5,23 +5,23 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
-        <i class="bi bi-house"></i> Inicio
+        <i class="bi bi-house"></i> {{ _("Inicio") }}
       </a>
     </li>
     <li class="breadcrumb-item">
       <a href="{{ url_for('admin.admin_') }}" class="link-dark">{{ _("Configuración") }}</a>
     </li>
-    <li class="breadcrumb-item active" aria-current="page">Administración de Módulos</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Administración de Módulos") }}</li>
   </ol>
 </nav>
 
 <div class="ca-page-header">
-  <h4><i class="bi bi-puzzle me-2" style="color:#BB6A40"></i>Administración de Módulos</h4>
+  <h4><i class="bi bi-puzzle me-2" style="color:#BB6A40"></i>{{ _("Administración de Módulos") }}</h4>
 </div>
 
 <div class="ca-card mb-4">
   <p class="mb-0" style="color:#64748b;font-size:.875rem;">
-    Gestiona los módulos instalados y los plugins detectados. El estado definido aquí se utiliza para controlar el acceso a cada módulo.
+    {{ _("Gestiona los módulos instalados y los plugins detectados. El estado definido aquí se utiliza para controlar el acceso a cada módulo.") }}
   </p>
 </div>
 
@@ -41,7 +41,7 @@
         <tr>
           <th>{{ _("Nombre") }}</th>
           <th>{{ _("Tipo") }}</th>
-          <th>Predeterminado</th>
+          <th>{{ _("Predeterminado") }}</th>
           <th>{{ _("Estado") }}</th>
           <th>{{ _("Acción") }}</th>
         </tr>
@@ -56,10 +56,10 @@
             {% endif %}
           </td>
           <td>{{ modulo.type }}</td>
-          <td>{{ 'Sí' if modulo.default else 'No' }}</td>
+          <td>{{ _('Sí') if modulo.default else _('No') }}</td>
           <td>
             <span class="badge bg-{{ 'success' if modulo.enabled else 'secondary' }}">
-              {{ 'Activo' if modulo.enabled else 'Inactivo' }}
+              {{ _('Activo') if modulo.enabled else _('Inactivo') }}
             </span>
           </td>
           <td>
@@ -73,7 +73,7 @@
                 class="btn btn-sm btn-{{ 'outline-danger' if modulo.enabled else 'outline-success' }}"
                 {% if modulo.module == 'admin' %}disabled{% endif %}
               >
-                {{ 'Deshabilitar' if modulo.enabled else 'Habilitar' }}
+                {{ _('Deshabilitar') if modulo.enabled else _('Habilitar') }}
               </button>
             </form>
           </td>

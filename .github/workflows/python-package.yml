@@ -61,6 +61,8 @@ jobs:
       - name: Install JavaScript dependencies
         working-directory: cacao_accounting/static
         run: npm ci --ignore-scripts
+      - name: Compile translation catalogs
+        run: pybabel compile -d cacao_accounting/translations -D messages -f
       - name: Proyecto distribuible
         run: |
           python -m build

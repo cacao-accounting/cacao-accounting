@@ -5,7 +5,7 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
-        <i class="bi bi-house"></i> Inicio
+        <i class="bi bi-house"></i> {{ _("Inicio") }}
       </a>
     </li>
     <li class="breadcrumb-item">
@@ -14,12 +14,12 @@
     <li class="breadcrumb-item">
       <a href="{{ url_for('admin.lista_roles') }}" class="link-dark">{{ _("Roles") }}</a>
     </li>
-    <li class="breadcrumb-item active" aria-current="page">Permisos de {{ rol.name }}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Permisos de") }} {{ rol.name }}</li>
   </ol>
 </nav>
 
 <div class="ca-page-header">
-  <h4><i class="bi bi-grid-1x2-fill me-2" style="color:#BB6A40"></i>Permisos de {{ rol.name }}</h4>
+  <h4><i class="bi bi-grid-1x2-fill me-2" style="color:#BB6A40"></i>{{ _("Permisos de") }} {{ rol.name }}</h4>
 </div>
 
 <div class="ca-card p-4">
@@ -70,7 +70,7 @@
     </div>
 
     <div class="mt-4">
-      <button type="submit" class="btn btn-primary">Guardar permisos</button>
+      <button type="submit" class="btn btn-primary">{{ _("Guardar permisos") }}</button>
       <a href="{{ url_for('admin.lista_roles') }}" class="btn btn-outline-secondary ms-2">{{ _("Cancelar") }}</a>
     </div>
   </form>

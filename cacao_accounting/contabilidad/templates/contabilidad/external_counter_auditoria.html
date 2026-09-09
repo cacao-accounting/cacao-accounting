@@ -5,24 +5,24 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.external_counter_list') }}" class="link-dark">Contadores Externos</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Bitacora de Auditoria</li>
+    <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.external_counter_list') }}" class="link-dark">{{ _("Contadores Externos") }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Bitacora de Auditoria") }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-clock-history"></i> Bitacora de Auditoria — {{ counter.name }}</h5>
+    <h5 class="ca-card-title"><i class="bi bi-clock-history"></i> {{ _("Bitacora de Auditoria —") }} {{ counter.name }}</h5>
     <a href="{{ url_for('contabilidad.external_counter_list') }}" class="btn btn-secondary btn-sm">{{ _("Volver") }}</a>
   </div>
 
   <div class="mb-3 p-2 bg-light rounded">
-    <strong>Compania:</strong> {{ counter.company }} |
-    <strong>Tipo:</strong> {{ counter.counter_type or '—' }} |
-    <strong>Ultimo usado:</strong> {{ counter.last_used }} |
-    <strong>Siguiente sugerido:</strong> <code>{{ counter.next_suggested_formatted }}</code>
+    <strong>{{ _("Compania:") }}</strong> {{ counter.company }} |
+    <strong>{{ _("Tipo:") }}</strong> {{ counter.counter_type or '—' }} |
+    <strong>{{ _("Ultimo usado:") }}</strong> {{ counter.last_used }} |
+    <strong>{{ _("Siguiente sugerido:") }}</strong> <code>{{ counter.next_suggested_formatted }}</code>
   </div>
 
   {% if registros %}
@@ -31,10 +31,10 @@
     <thead>
       <tr>
         <th scope="col">{{ _("Fecha") }}</th>
-        <th scope="col">Valor Anterior</th>
-        <th scope="col">Nuevo Valor</th>
-        <th scope="col">Variacion</th>
-        <th scope="col">Motivo</th>
+        <th scope="col">{{ _("Valor Anterior") }}</th>
+        <th scope="col">{{ _("Nuevo Valor") }}</th>
+        <th scope="col">{{ _("Variacion") }}</th>
+        <th scope="col">{{ _("Motivo") }}</th>
         <th scope="col">{{ _("Usuario") }}</th>
       </tr>
     </thead>
@@ -61,7 +61,7 @@
     </tbody>
   </table>
   {% else %}
-  <p class="text-muted text-center mt-3">No hay ajustes registrados para este contador.</p>
+  <p class="text-muted text-center mt-3">{{ _("No hay ajustes registrados para este contador.") }}</p>
   {% endif %}
 </div>
 

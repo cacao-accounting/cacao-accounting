@@ -5,18 +5,18 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Comprobantes Contables</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Comprobantes Contables") }}</li>
   </ol>
 </nav>
 
 {% if entidades_creadas %}
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> Listado de Comprobantes Contables.</h5>
+    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> {{ _("Listado de Comprobantes Contables.") }}</h5>
     <a class="btn btn-primary btn-sm" href="{{ url_for('contabilidad.gl.gl_new') }}" role="button">
-      <i class="bi bi-plus-lg me-1"></i>Nuevo Comprobante
+      <i class="bi bi-plus-lg me-1"></i>{{ _("Nuevo Comprobante") }}
     </a>
   </div>
 </div>

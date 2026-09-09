@@ -8,18 +8,18 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('bancos.bancos_') }}" class="link-dark">{{ _("Bancos") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">{{ page_heading or "Listado de Transacciones Bancarias" }}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ page_heading or _('Listado de Transacciones Bancarias') }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header">
-    <h5 class="ca-card-title"><i class="bi bi-arrow-left-right"></i> {{ page_heading or "Listado de Transacciones Bancarias" }}.</h5>
+    <h5 class="ca-card-title"><i class="bi bi-arrow-left-right"></i> {{ page_heading or _('Listado de Transacciones Bancarias') }}.</h5>
     {% if new_url %}
     <a href="{{ new_url }}" class="btn btn-sm btn-primary">
-      <i class="bi bi-plus-circle me-1"></i>Nuevo
+      <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
     </a>
     {% endif %}
   </div>
@@ -31,8 +31,8 @@
       <tr>
         <th scope="col">{{ _("Fecha") }}</th>
         <th scope="col">{{ _("Descripción") }}</th>
-        <th scope="col">Depósito</th>
-        <th scope="col">Retiro</th>
+        <th scope="col">{{ _('Depósito') }}</th>
+        <th scope="col">{{ _('Retiro') }}</th>
       </tr>
     </thead>
     <tbody>

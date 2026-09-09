@@ -9,26 +9,26 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _("Inicio") }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('contabilidad.conta') }}" class="link-dark">{{ _("Contabilidad") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Contadores Externos</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Contadores Externos") }}</li>
   </ol>
 </nav>
 
 {% if entidades_creadas %}
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title"><i class="bi bi-123"></i> Contadores Externos</h5>
+    <h5 class="ca-card-title"><i class="bi bi-123"></i> {{ _("Contadores Externos") }}</h5>
     <a class="btn btn-sm btn-primary" href="{{ url_for('contabilidad.external_counter_new') }}">
-      <i class="bi bi-plus-lg me-1"></i>Nuevo Contador
+      <i class="bi bi-plus-lg me-1"></i>{{ _("Nuevo Contador") }}
     </a>
   </div>
 
   <form class="row g-2 align-items-end mb-3" method="get">
     <div class="col-auto">
-      <label class="form-label" for="company">Compania</label>
+      <label class="form-label" for="company">{{ _("Compania") }}</label>
       <select class="form-select form-select-sm" id="company" name="company" style="min-width:180px;">
-        <option value="">— Todas —</option>
+        <option value="">{{ _("— Todas —") }}</option>
         {% for e in entidades %}
         <option value="{{ e.code }}" {% if company_filter == e.code %}selected{% endif %}>{{ e.name }}</option>
         {% endfor %}
@@ -43,12 +43,12 @@
     <caption style="display: none;">Listado de contadores externos.</caption>
     <thead>
       <tr>
-        <th scope="col">Compania</th>
+        <th scope="col">{{ _("Compania") }}</th>
         <th scope="col">{{ _("Nombre") }}</th>
         <th scope="col">{{ _("Tipo") }}</th>
-        <th scope="col">Prefijo</th>
-        <th scope="col">Ultimo Usado</th>
-        <th scope="col">Siguiente Sugerido</th>
+        <th scope="col">{{ _("Prefijo") }}</th>
+        <th scope="col">{{ _("Ultimo Usado") }}</th>
+        <th scope="col">{{ _("Siguiente Sugerido") }}</th>
         <th scope="col">{{ _("Activo") }}</th>
         <th scope="col">{{ _("Acciones") }}</th>
       </tr>
@@ -72,21 +72,21 @@
         <td>
           <div class="d-flex gap-1">
             <a href="{{ url_for('contabilidad.external_counter_edit', counter_id=item.id) }}"
-               class="btn btn-xs btn-outline-primary" title="Editar contador">
+               class="btn btn-xs btn-outline-primary" title="{{ _('Editar contador') }}">
               <i class="bi bi-pencil"></i>
             </a>
             <a href="{{ url_for('contabilidad.external_counter_adjust', counter_id=item.id) }}"
-               class="btn btn-xs btn-outline-warning" title="Ajustar ultimo numero usado">
+               class="btn btn-xs btn-outline-warning" title="{{ _('Ajustar ultimo numero usado') }}">
               <i class="bi bi-pencil-square"></i>
             </a>
             <a href="{{ url_for('contabilidad.external_counter_audit_log', counter_id=item.id) }}"
-               class="btn btn-xs btn-outline-secondary" title="Ver bitacora de auditoria">
+               class="btn btn-xs btn-outline-secondary" title="{{ _('Ver bitacora de auditoria') }}">
               <i class="bi bi-clock-history"></i>
             </a>
             <form method="post" action="{{ url_for('contabilidad.external_counter_toggle_active', counter_id=item.id) }}"
                   class="d-inline" onsubmit="return confirm('{{ _("Cambiar estado del contador?") }}')">
               <button type="submit" class="btn btn-xs {% if item.is_active %}btn-outline-secondary{% else %}btn-outline-success{% endif %}"
-                      title="{% if item.is_active %}Desactivar{% else %}Activar{% endif %}">
+                      title="{% if item.is_active %}{{ _("Desactivar") }}{% else %}{{ _("Activar") }}{% endif %}">
                 <i class="bi {% if item.is_active %}bi-pause{% else %}bi-play{% endif %}"></i>
               </button>
             </form>
@@ -94,7 +94,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="8" class="text-muted text-center">No hay contadores externos registrados.</td></tr>
+      <tr><td colspan="8" class="text-muted text-center">{{ _("No hay contadores externos registrados.") }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

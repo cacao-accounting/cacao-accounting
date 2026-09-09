@@ -8,10 +8,10 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i
-          class="bi bi-house"></i> Inicio</a></li>
+          class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">
-      {{ (registro.document_no or registro.id) if edit else 'Nueva Orden' }}</li>
+      {{ (registro.document_no or registro.id) if edit else _('Nueva Orden') }}</li>
   </ol>
 </nav>
 <form method="post" id="form-main" x-data='transactionForm({{ transaction_config | tojson }})'>
@@ -20,8 +20,8 @@
   {% if from_rfq_id %}<input type="hidden" name="from_rfq" value="{{ from_rfq_id }}">{% endif %}
   {% if from_supplier_quotation_id %}<input type="hidden" name="from_supplier_quotation" value="{{ from_supplier_quotation_id }}">{% endif %}
   {% set source_origin = solicitud_origen or rfq_origen or supplier_quotation_origen %}
-  {% set title = "Orden de Compra" ~ ((" desde " ~ (source_origin.document_no or source_origin.id)) if source_origin else "") %}
-  {{ tf_macros.transaction_form_header('Editar Orden de Compra' if edit else title, include_currency=False) }}
+  {% set title = _("Orden de Compra") ~ ((_(" desde ") ~ (source_origin.document_no or source_origin.id)) if source_origin else "") %}
+  {{ tf_macros.transaction_form_header(_('Editar Orden de Compra') if edit else title, include_currency=False) }}
   <div class="ca-card p-3 mb-3">
     <div class="row g-3">
       <div class="col-md-6">
@@ -71,8 +71,8 @@
   {{ tf_macros.transaction_grid(items_disponibles, uoms_disponibles, source_api_url=source_api_url, source_label=source_label) }}
   {% if sourcing_config.require_comparison and is_purchase_manager %}
   <div class="alert alert-warning mt-3">
-    <label class="form-label fw-semibold" for="comparison_exception_reason">Excepción al comparativo</label>
-    <textarea class="form-control" id="comparison_exception_reason" name="comparison_exception_reason" placeholder="Justificación obligatoria"></textarea>
+    <label class="form-label fw-semibold" for="comparison_exception_reason">{{ _('Excepción al comparativo') }}</label>
+    <textarea class="form-control" id="comparison_exception_reason" name="comparison_exception_reason" placeholder="{{ _('Justificación obligatoria') }}"></textarea>
   </div>
   {% endif %}
 </form>

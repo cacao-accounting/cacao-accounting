@@ -20,17 +20,17 @@
 
         <div class="mb-3">
           <label for="smtp_server" class="form-label">{{ _("Servidor SMTP (Host)") }}</label>
-          <input type="text" class="form-control form-control-sm" id="smtp_server" name="smtp_server" value="{{ smtp_server }}" required placeholder="e.g. smtp.example.com">
+          <input type="text" class="form-control form-control-sm" id="smtp_server" name="smtp_server" value="{{ smtp_server }}" required placeholder="{{ _("e.g. smtp.example.com") }}">
         </div>
 
         <div class="mb-3">
           <label for="smtp_port" class="form-label">{{ _("Puerto SMTP") }}</label>
-          <input type="text" class="form-control form-control-sm" id="smtp_port" name="smtp_port" value="{{ smtp_port }}" required placeholder="e.g. 587 o 465">
+          <input type="text" class="form-control form-control-sm" id="smtp_port" name="smtp_port" value="{{ smtp_port }}" required placeholder="{{ _("e.g. 587 o 465") }}">
         </div>
 
         <div class="mb-3">
           <label for="smtp_user" class="form-label">{{ _("Usuario SMTP") }}</label>
-          <input type="text" class="form-control form-control-sm" id="smtp_user" name="smtp_user" value="{{ smtp_user }}" placeholder="e.g. user@example.com">
+          <input type="text" class="form-control form-control-sm" id="smtp_user" name="smtp_user" value="{{ smtp_user }}" placeholder="{{ _("e.g. user@example.com") }}">
         </div>
 
         <div class="mb-3">
@@ -46,7 +46,7 @@
 
         <div class="mb-4">
           <label for="smtp_from_email" class="form-label">{{ _("Remitente predeterminado (From Email)") }}</label>
-          <input type="email" class="form-control form-control-sm" id="smtp_from_email" name="smtp_from_email" value="{{ smtp_from_email }}" placeholder="e.g. noreply@example.com">
+          <input type="email" class="form-control form-control-sm" id="smtp_from_email" name="smtp_from_email" value="{{ smtp_from_email }}" placeholder="{{ _("e.g. noreply@example.com") }}">
         </div>
 
         <div class="form-check form-switch mb-4">
@@ -77,7 +77,7 @@
         <input type="hidden" name="action" value="test_email">
         <div class="mb-3">
           <label for="test_recipient" class="form-label">{{ _("Correo Destinatario") }}</label>
-          <input type="email" class="form-control form-control-sm" id="test_recipient" name="test_recipient" required placeholder="e.g. test@example.com">
+          <input type="email" class="form-control form-control-sm" id="test_recipient" name="test_recipient" required placeholder="{{ _("e.g. test@example.com") }}">
         </div>
         <button type="submit" class="btn btn-success btn-sm w-100"><i class="bi bi-send me-1"></i>{{ _("Enviar Correo de Prueba") }}</button>
       </form>

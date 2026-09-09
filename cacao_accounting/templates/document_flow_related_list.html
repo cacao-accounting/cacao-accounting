@@ -8,11 +8,11 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     {% if spec.list_endpoint %}
     <li class="breadcrumb-item"><a href="{{ url_for(spec.list_endpoint) }}" class="link-dark">{{ spec.label }}</a></li>
     {% endif %}
-    <li class="breadcrumb-item active" aria-current="page">Relacionados con {{ related_label }} {{ related_no }}</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Relacionados con') }} {{ related_label }} {{ related_no }}</li>
   </ol>
 </nav>
 
@@ -24,26 +24,26 @@
       </h5>
       <p class="mb-0 small text-muted">
         <i class="bi bi-funnel me-1"></i>
-        Relacionados con <strong>{{ related_label }}</strong>: <code>{{ related_no }}</code>
+        {{ _('Relacionados con') }} <strong>{{ related_label }}</strong>: <code>{{ related_no }}</code>
       </p>
     </div>
     {% if spec.list_endpoint %}
     <a href="{{ url_for(spec.list_endpoint) }}" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-x-circle me-1"></i>Quitar filtro
+      <i class="bi bi-x-circle me-1"></i>{{ _('Quitar filtro') }}
     </a>
     {% endif %}
   </div>
 
   {% if documents %}
   <table class="ca-table">
-    <caption class="visually-hidden">Documentos {{ spec.label }} relacionados con {{ related_label }} {{ related_no }}</caption>
+    <caption class="visually-hidden">{{ _('Documentos') }} {{ spec.label }} {{ _('relacionados con') }} {{ related_label }} {{ related_no }}</caption>
     <thead>
       <tr>
-        <th scope="col">N° Documento</th>
+        <th scope="col">{{ _('N° Documento') }}</th>
         <th scope="col">{{ _("Estado") }}</th>
         <th scope="col">{{ _("Fecha") }}</th>
         {% if spec.party_field %}
-        <th scope="col">Tercero</th>
+        <th scope="col">{{ _('Tercero') }}</th>
         {% endif %}
         {% if spec.total_field %}
         <th scope="col">{{ _("Total") }}</th>
@@ -70,7 +70,7 @@
           {% if spec.detail_endpoint %}
           <a href="{{ url_for(spec.detail_endpoint, **{spec.detail_arg: doc.id}) }}"
              class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-eye me-1"></i>Ver
+            <i class="bi bi-eye me-1"></i>{{ _('Ver') }}
           </a>
           {% endif %}
         </td>
@@ -81,7 +81,7 @@
   {% else %}
   <div class="p-4 text-center text-muted">
     <i class="bi bi-info-circle fs-4 mb-2 d-block"></i>
-    No se encontraron <strong>{{ spec.label }}</strong> relacionados con
+    {{ _('No se encontraron') }} <strong>{{ spec.label }}</strong> {{ _('relacionados con') }}
     <strong>{{ related_label }}</strong> <code>{{ related_no }}</code>.
   </div>
   {% endif %}

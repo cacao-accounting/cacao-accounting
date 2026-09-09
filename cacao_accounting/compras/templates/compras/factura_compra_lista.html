@@ -8,27 +8,27 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> Inicio</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('compras.compras_') }}" class="link-dark">{{ _("Compras") }}</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Listado de Facturas de Compra</li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _('Listado de Facturas de Compra') }}</li>
   </ol>
 </nav>
 
 <div class="ca-card">
   <div class="ca-card-header d-flex align-items-center justify-content-between">
-    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> Listado de Facturas de Compra.</h5>
+    <h5 class="ca-card-title"><i class="bi bi-receipt"></i> {{ _('Listado de Facturas de Compra.') }}</h5>
     <div class="btn-group">
       <a href="{{ url_for('compras.compras_factura_compra_nuevo', document_type='purchase_invoice') }}" class="btn btn-sm btn-primary">
-        <i class="bi bi-plus-circle me-1"></i>Nuevo
+        <i class="bi bi-plus-circle me-1"></i>{{ _('Nuevo') }}
       </a>
       <a href="{{ url_for('compras.compras_factura_compra_nota_debito_lista') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-down-left me-1"></i>Notas de Débito
+        <i class="bi bi-arrow-down-left me-1"></i>{{ _('Notas de Débito') }}
       </a>
       <a href="{{ url_for('compras.compras_factura_compra_nota_credito_lista') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-counterclockwise me-1"></i>Notas de Crédito
+        <i class="bi bi-arrow-counterclockwise me-1"></i>{{ _('Notas de Crédito') }}
       </a>
       <a href="{{ url_for('compras.compras_factura_compra_devolucion_lista') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-repeat me-1"></i>Devoluciones
+        <i class="bi bi-arrow-repeat me-1"></i>{{ _('Devoluciones') }}
       </a>
     </div>
   </div>
@@ -38,7 +38,7 @@
     <caption style="display: none;">Listado de facturas de compra.</caption>
     <thead>
       <tr>
-        <th scope="col">Número</th>
+        <th scope="col">{{ _('Número') }}</th>
         <th scope="col">{{ _("Proveedor") }}</th>
         <th scope="col">{{ _("Estado") }}</th>
         <th scope="col">{{ _("Fecha") }}</th>

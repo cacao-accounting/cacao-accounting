@@ -27,17 +27,17 @@
 
         <div class="mb-3">
           <label for="first_name" class="form-label fw-bold">{{ _('Nombre') }}</label>
-          <input type="text" class="form-control" id="first_name" name="first_name" required placeholder="Escriba su nombre">
+          <input type="text" class="form-control" id="first_name" name="first_name" required placeholder="{{ _('Escriba su nombre') }}">
         </div>
 
         <div class="mb-3">
           <label for="last_name" class="form-label fw-bold">{{ _('Apellido') }}</label>
-          <input type="text" class="form-control" id="last_name" name="last_name" required placeholder="Escriba su apellido">
+          <input type="text" class="form-control" id="last_name" name="last_name" required placeholder="{{ _('Escriba su apellido') }}">
         </div>
 
         <div class="mb-3">
           <label for="email" class="form-label fw-bold">{{ _('Correo Autorizado') }}</label>
-          <input type="email" class="form-control" id="email" name="email" required placeholder="ejemplo@empresa.com">
+          <input type="email" class="form-control" id="email" name="email" required placeholder="{{ _('ejemplo@empresa.com') }}">
           <div class="form-text small text-muted">{{ _('Debe ser exactamente el correo donde recibió la invitación.') }}</div>
         </div>
 
