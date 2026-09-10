@@ -316,8 +316,8 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             transaction_currency = source_currency
         else:
             raise ValueError(
-                "El documento importado requiere una moneda transaccional explicita en la primera fila "
-                "o un documento origen con moneda transaccional persistida."
+                _("El documento importado requiere una moneda transaccional explicita en la primera fila "
+                  "o un documento origen con moneda transaccional persistida.")
             )
         explicit_rate = first_row.get("tipo_cambio") or first_row.get("exchange_rate")
         if transaction_currency == base_currency:

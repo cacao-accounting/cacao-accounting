@@ -1686,7 +1686,7 @@ def ventas_orden_venta_close(order_id: str):
         abort(400)
     if not sales_order_is_ready_to_close(registro):
         flash(
-            "La Orden de Venta requiere Notas de Entrega o Facturas aprobadas para todas sus lineas.",
+            _("La Orden de Venta requiere Notas de Entrega o Facturas aprobadas para todas sus lineas."),
             "danger",
         )
         return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))

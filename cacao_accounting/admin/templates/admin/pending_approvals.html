@@ -67,7 +67,7 @@
             <strong>{{ item.amount|round(2) }}</strong>
           </td>
           <td class="text-center">
-            <span class="badge bg-dark">{{ item.request.current_level }} de {{ item.request.required_level }}</span>
+            <span class="badge bg-dark">{{ item.request.current_level }} {{ _("de") }} {{ item.request.required_level }}</span>
           </td>
           <td>
             <form method="post" class="d-flex align-items-center g-2" style="gap: 5px;">
