@@ -14,6 +14,7 @@ from cacao_accounting.accounting_engine.common.context import (
     FiscalLine,
 )
 from cacao_accounting.accounting_engine.common.rounding import RoundingManager
+from cacao_accounting.i18n import _
 
 VALID_ALLOCATION_METHODS = frozenset({"by_value", "by_current_value", "by_quantity", "by_weight", "by_volume", "equal"})
 
@@ -25,7 +26,7 @@ def validate_allocation_method(method: str) -> str:
     callers, so unknown values must not silently turn into zero shares.
     """
     if method not in VALID_ALLOCATION_METHODS:
-        raise ValueError(f"Método de prorrateo no soportado: {method}.")
+        raise ValueError(_("Método de prorrateo no soportado: %(method)s.") % {"method": method})
     return method
 
 
@@ -218,7 +219,7 @@ class LandedCostEngine:
             case "equal":
                 return self._ratio(Decimal("1"), total_count)
             case _:
-                raise ValueError(f"Método de prorrateo no soportado: {method}.")
+                raise ValueError(_("Método de prorrateo no soportado: %(method)s.") % {"method": method})
 
     def _current_value_share(
         self,
@@ -259,7 +260,9 @@ class LandedCostEngine:
             "equal": total_count,
         }
         if bases[method] <= 0:
-            raise ValueError(f"No existe una base positiva para prorratear el cargo mediante {method}.")
+            raise ValueError(
+                _("No existe una base positiva para prorratear el cargo mediante %(method)s.") % {"method": method}
+            )
 
     def _ratio(self, numerator: Decimal, denominator: Decimal) -> Decimal:
         """Return a safe Decimal ratio."""

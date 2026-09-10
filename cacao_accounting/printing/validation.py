@@ -384,4 +384,4 @@ def _as_decimal(value: Any) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError) as exc:
-        raise ValueError(f"Invalid financial amount: {value!r}") from exc
+        raise ValueError(_("Importe financiero inválido: %(value)s") % {"value": repr(value)}) from exc

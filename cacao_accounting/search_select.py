@@ -51,12 +51,12 @@ from cacao_accounting.i18n import _
 _DEDUP_QUERY_LIMIT_MULTIPLIER = 5
 _DEDUP_QUERY_LIMIT_MIN = 25
 _STATIC_SEARCH_SELECT_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
-    "report_status": (("submitted", "Contabilizado"), ("cancelled", "Cancelado")),
-    "party_type": (("customer", "Cliente"), ("supplier", "Proveedor")),
+    "report_status": (("submitted", _("Contabilizado")), ("cancelled", _("Cancelado"))),
+    "party_type": (("customer", _("Cliente")), ("supplier", _("Proveedor"))),
     "mode_of_payment": (
-        ("transfer", "Transferencia"),
-        ("check", "Cheque"),
-        ("cash", "Efectivo"),
+        ("transfer", _("Transferencia")),
+        ("check", _("Cheque")),
+        ("cash", _("Efectivo")),
     ),
 }
 
@@ -187,15 +187,15 @@ def _string_label(value: Any) -> str:
 def _price_list_label(price_list: PriceList) -> str:
     kinds: list[str] = []
     if price_list.is_selling:
-        kinds.append("Venta")
+        kinds.append(_("Venta"))
     if price_list.is_buying:
-        kinds.append("Compra")
-    kind_label = "/".join(kinds) if kinds else "General"
+        kinds.append(_("Compra"))
+    kind_label = "/".join(kinds) if kinds else _("General")
     return f"{price_list.name} ({kind_label})"
 
 
 def _tax_rule_label(rule: TaxRule) -> str:
-    applies_to = {"sales": "Ventas", "purchase": "Compras", "both": "Ambos"}.get(rule.applies_to or "", "General")
+    applies_to = {"sales": _("Ventas"), "purchase": _("Compras"), "both": _("Ambos")}.get(rule.applies_to or "", _("General"))
     return f"{rule.name} ({applies_to})"
 
 
@@ -212,11 +212,11 @@ def _voucher_type_catalog(query: str, filters: dict[str, list[str]], limit: int 
     allowed_filters = {"company", "ledger"}
     rejected = sorted(set(filters) - allowed_filters)
     if rejected:
-        raise SearchSelectError("Filtros no permitidos: " + ", ".join(rejected))
+        raise SearchSelectError(_("Filtros no permitidos: ") + ", ".join(rejected))
 
     from cacao_accounting.document_flow.registry import DOCUMENT_TYPES
 
-    automatic_project_capitalization = "Capitalización Automática de Proyecto"
+    automatic_project_capitalization = _("Capitalización Automática de Proyecto")
     ledger_types = {
         "sales_invoice",
         "purchase_invoice",
@@ -233,9 +233,9 @@ def _voucher_type_catalog(query: str, filters: dict[str, list[str]], limit: int 
     catalog = {key: (DOCUMENT_TYPES[key].label or key) for key in ledger_types if key in DOCUMENT_TYPES}
     catalog.update(
         {
-            "exchange_revaluation": "Revalorización cambiaria",
+            "exchange_revaluation": _("Revalorización cambiaria"),
             automatic_project_capitalization: automatic_project_capitalization,
-            "bank_transaction": "Transacción bancaria",
+            "bank_transaction": _("Transacción bancaria"),
         }
     )
 
@@ -736,13 +736,13 @@ def search_select(
 
     spec = SEARCH_SELECT_REGISTRY.get(doctype)
     if spec is None:
-        raise SearchSelectError("Tipo de seleccion no registrado.", 404)
+        raise SearchSelectError(_("Tipo de seleccion no registrado."), 404)
 
     normalized_filters, active_only = _normalize_active_filters(filters)
 
     rejected_filters = sorted(set(normalized_filters) - set(spec.allowed_filters))
     if rejected_filters:
-        raise SearchSelectError("Filtros no permitidos: " + ", ".join(rejected_filters))
+        raise SearchSelectError(_("Filtros no permitidos: ") + ", ".join(rejected_filters))
 
     max_results = _normalize_limit(limit, spec.limit)
     normalized_query = query.strip()

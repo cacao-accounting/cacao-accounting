@@ -397,9 +397,14 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             database.select(Batch).filter_by(item_code=item_code, batch_no=cleaned)
         ).scalar_one_or_none()
         if batch is None:
-            raise ValueError(f"El lote '{cleaned}' del item '{item_code}' no existe en el maestro de lotes.")
+            raise ValueError(
+                _("El lote '%(batch)s' del item '%(item)s' no existe en el maestro de lotes.")
+                % {"batch": cleaned, "item": item_code}
+            )
         if not batch.is_active:
-            raise ValueError(f"El lote '{cleaned}' del item '{item_code}' está inactivo.")
+            raise ValueError(
+                _("El lote '%(batch)s' del item '%(item)s' está inactivo.") % {"batch": cleaned, "item": item_code}
+            )
         return batch.id
 
 

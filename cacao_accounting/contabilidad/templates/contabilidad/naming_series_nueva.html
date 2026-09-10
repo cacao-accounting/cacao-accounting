@@ -40,7 +40,8 @@
         {{ form.prefix_template(class="form-control form-control-sm", id="prefix-template", placeholder="{{ _('Ej: *COMP*-SI-*YYYY*-*MM*-') }}") }}
         <small class="text-muted">
           {{ _("Tokens:") }} <code>*COMP*</code> (compania), <code>*YYYY*</code> (año), <code>*YY*</code> (año corto),
-          <code>*MMM*</code> (mes texto), <code>*MM*</code> (mes numero), <code>*DD*</code> (dia).
+          <code>*MMM*</code> {{ _('(mes texto)') }}, <code>*MM*</code> {{ _('(mes numero)') }},
+          <code>*DD*</code> {{ _('(dia)') }}.
         </small>
       </div>
       <div class="col-md-3">

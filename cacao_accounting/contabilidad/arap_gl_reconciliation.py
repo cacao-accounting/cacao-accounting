@@ -115,9 +115,9 @@ def _decimal(value: object, *, field: str) -> Decimal:
     try:
         result = Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError) as exc:
-        raise ValueError(f"{field} debe ser un número decimal válido.") from exc
+        raise ValueError(_("%(field)s debe ser un número decimal válido.") % {"field": field}) from exc
     if not result.is_finite():
-        raise ValueError(f"{field} debe ser finito.")
+        raise ValueError(_("%(field)s debe ser finito.") % {"field": field})
     return result
 
 

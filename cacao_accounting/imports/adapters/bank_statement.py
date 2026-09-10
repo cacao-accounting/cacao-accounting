@@ -117,7 +117,7 @@ class BankStatementAdapter(BaseImportAdapter):
                 try:
                     posting_date = date.fromisoformat(posting_date)
                 except ValueError as exc:
-                    raise ValueError(f"Fecha bancaria inválida: {posting_date}") from exc
+                    raise ValueError(_("Fecha bancaria inválida: %(date)s") % {"date": posting_date}) from exc
             transactions.append(
                 {
                     "bank_account_id": str(row.get("bank_account_id", "")),
@@ -140,7 +140,7 @@ class BankStatementAdapter(BaseImportAdapter):
         for tx_data in document:
             bank_account = database.session.get(BankAccount, tx_data["bank_account_id"])
             if bank_account is None:
-                raise ValueError(f"Cuenta bancaria no encontrada: {tx_data['bank_account_id']}")
+                raise ValueError(_("Cuenta bancaria no encontrada: %(account)s") % {"account": tx_data["bank_account_id"]})
             company_id = tx_data.get("company_id")
             if company_id and bank_account.company != company_id:
                 raise ValueError(

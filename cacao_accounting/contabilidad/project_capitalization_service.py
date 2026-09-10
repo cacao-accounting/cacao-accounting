@@ -63,7 +63,9 @@ def _resolve_capitalization_accounts(entry: GLEntry, proj: Project) -> tuple[str
     """Resuelve las cuentas de debito y credito y el monto para la capitalizacion."""
     cap_account = database.session.get(Accounts, proj.capitalization_account_id)
     if not cap_account:
-        raise ValueError(f"La cuenta de activo de capitalizacion para el proyecto {proj.code} no existe.")
+        raise ValueError(
+            _("La cuenta de activo de capitalizacion para el proyecto %(project)s no existe.") % {"project": proj.code}
+        )
 
     if not entry.is_reversal:
         value = entry.debit_in_account_currency if entry.debit_in_account_currency is not None else entry.debit

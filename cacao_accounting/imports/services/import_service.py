@@ -34,6 +34,7 @@ from cacao_accounting.imports.adapters.transaction_documents import (
     SupplierQuotationAdapter,
 )
 from cacao_accounting.imports.utils.validation import is_period_open
+from cacao_accounting.i18n import _
 
 IMPORT_SYNC_MAX_ROWS = 100
 
@@ -79,13 +80,13 @@ class ImportService:
     def _get_reader(self, format: str):
         reader_class = self.READERS.get(format.lower())
         if not reader_class:
-            raise ValueError(f"Formato no soportado: {format}")
+            raise ValueError(_("Formato no soportado: %(format)s") % {"format": format})
         return reader_class()
 
     def _get_adapter(self, record_type: str):
         adapter_class = self.ADAPTERS.get(record_type)
         if not adapter_class:
-            raise ValueError(f"Tipo de registro no soportado: {record_type}")
+            raise ValueError(_("Tipo de registro no soportado: %(record_type)s") % {"record_type": record_type})
         return adapter_class()
 
     def _normalize_rows(self, columns: List[str], rows: List[List[Any]]) -> List[Dict[str, Any]]:
@@ -295,9 +296,9 @@ class ImportService:
                 continue
             doc_date = self._parse_document_date(raw_date)
             if doc_date is None:
-                raise ValueError(f"Fecha de documento inválida: {raw_date}")
+                raise ValueError(_("Fecha de documento inválida: %(date)s") % {"date": raw_date})
             if not is_period_open(batch.company_id, doc_date):
-                raise ValueError(f"El periodo contable para la fecha {doc_date} está cerrado.")
+                raise ValueError(_("El periodo contable para la fecha %(date)s está cerrado.") % {"date": doc_date})
 
     def _extract_document_date(self, doc_obj: Any) -> Any:
         """Extrae la fecha de publicación del documento."""

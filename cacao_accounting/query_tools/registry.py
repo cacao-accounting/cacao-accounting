@@ -6,6 +6,7 @@ from typing import Any
 
 from cacao_accounting.query_tools.decorators import QueryTool
 from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
+from cacao_accounting.i18n import _
 
 
 class Registry:
@@ -18,10 +19,13 @@ class Registry:
     def register(self, tool: QueryTool) -> None:
         """Registra una herramienta validando que sea única y de solo lectura."""
         if tool.name in self._tools:
-            raise ValueError(f"Tool '{tool.name}' is already registered. " "Tool names must be unique.")
+            raise ValueError(
+                _("La herramienta '%(tool)s' ya está registrada. Los nombres deben ser únicos.") % {"tool": tool.name}
+            )
         if not tool.read_only:
             raise ValueError(
-                f"Tool '{tool.name}' must declare read_only=True. " "Write operations are not allowed in query_tools."
+                _("La herramienta '%(tool)s' debe declarar read_only=True. Las operaciones de escritura no están permitidas.")
+                % {"tool": tool.name}
             )
         self._tools[tool.name] = tool
 
@@ -31,7 +35,7 @@ class Registry:
         if tool is None:
             raise QueryToolError(
                 code=ErrorCode.TOOL_NOT_FOUND,
-                message=f"Tool '{name}' not found.",
+                message=_("Herramienta '%(name)s' no encontrada.") % {"name": name},
             )
         return tool
 

@@ -719,7 +719,9 @@ def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str) ->
     current = voucher.voucher_status or "borrador"
     allowed = _PETTY_CASH_VOUCHER_STATUS_FLOW.get(current, set())
     if new_status not in allowed:
-        raise ValueError(f"Transicion de estado no valida: {current} -> {new_status}")
+        raise ValueError(
+            _("Transicion de estado no valida: %(current)s -> %(new_status)s") % {"current": current, "new_status": new_status}
+        )
     if new_status == "liquidado":
         expense = database.session.get(PettyCashExpense, voucher.expense_id) if voucher.expense_id else None
         if expense is None or expense.voucher_id != voucher.id or expense.docstatus != 1 or not expense.journal_id:
@@ -1297,7 +1299,10 @@ def set_petty_cash_replenishment_status(
     current = replenishment.status or "borrador"
     transitions = {"borrador": {"solicitado"}, "solicitado": {"aprobado"}, "aprobado": {"reembolsado"}}
     if new_status not in transitions.get(current, set()):
-        raise ValueError(f"Transicion de reposicion no valida: {current} -> {new_status}")
+        raise ValueError(
+            _("Transicion de reposicion no valida: %(current)s -> %(new_status)s")
+            % {"current": current, "new_status": new_status}
+        )
     replenishment.status = new_status
     if new_status == "solicitado":
         replenishment.docstatus = 1

@@ -147,7 +147,7 @@ def publish_template(template_id: int):
         flash(_("Plantilla publicada."), "success")
     except (TemplateValidationError, SQLAlchemyError) as exc:
         database.session.rollback()
-        flash(f"Error al publicar: {exc}", "danger")
+        flash(_("Error al publicar: %(error)s") % {"error": exc}, "danger")
     return redirect(url_for(_ENDPOINT_LIST_TEMPLATES))
 
 
@@ -239,7 +239,7 @@ def _update_template_from_form(template: PrintTemplate) -> None:
         flash(_("Plantilla actualizada exitosamente."), "success")
     except (TemplateValidationError, SQLAlchemyError) as exc:
         database.session.rollback()
-        flash(f"Error al actualizar plantilla: {exc}", "danger")
+        flash(_("Error al actualizar plantilla: %(error)s") % {"error": exc}, "danger")
 
 
 def _render_form(template: PrintTemplate | None):

@@ -427,7 +427,7 @@ def _handle_budget_import_post(budget: Budget, budget_id: str):
             flash(_("Importación completada exitosamente."), "success")
             return redirect(url_for(_ENDPOINT_DETALLE, budget_id=budget_id))
         except (BudgetError, SQLAlchemyError) as e:
-            flash(f"Error al procesar la importación: {str(e)}", "danger")
+            flash(_("Error al procesar la importación: %(error)s") % {"error": e}, "danger")
     else:
         file = request.files.get("file")
         if not file:
@@ -450,7 +450,7 @@ def _handle_budget_import_post(budget: Budget, budget_id: str):
                         titulo="Previsualizar Importación - " + APPNAME,
                     )
                 except (BudgetError, ValueError, KeyError, SQLAlchemyError) as e:
-                    flash(f"Error al procesar el archivo: {str(e)}", "danger")
+                    flash(_("Error al procesar el archivo: %(error)s") % {"error": e}, "danger")
     return render_template(
         _TEMPLATE_PRESUPUESTO_IMPORTAR,
         budget=budget,
@@ -508,7 +508,7 @@ def reporte():
             try:
                 report_data = BudgetReportService().get_real_vs_budget_report(filters)
             except SQLAlchemyError as e:
-                flash(f"Error al generar reporte: {str(e)}", "danger")
+                flash(_("Error al generar reporte: %(error)s") % {"error": e}, "danger")
 
     return render_template(
         "contabilidad/presupuestos/real_vs_budget.html",

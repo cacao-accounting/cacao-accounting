@@ -225,19 +225,19 @@ class ApprovalEngine:
         req = cls.request_approval(document)
         if not req:
             flask_flash(
-                "No existe una regla de aprobación que cubra este monto. El documento permanece en borrador.",
+                _("No existe una regla de aprobación que cubra este monto. El documento permanece en borrador."),
                 "warning",
             )
             database.session.commit()
             return True
 
         if cls.can_approve(document, user):
-            cls.approve(document, user, "Aprobado por el remitente")
-            flask_flash(f"{label} aprobada.", "success")
+            cls.approve(document, user, _("Aprobado por el remitente"))
+            flask_flash(_("%(label)s aprobada.", label=label), "success")
         else:
             database.session.commit()
             flask_flash(
-                f"{label} enviada para aprobación (Pendiente de Aprobación).",
+                _("%(label)s enviada para aprobación (Pendiente de Aprobación).", label=label),
                 "info",
             )
         return True

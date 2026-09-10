@@ -20,9 +20,9 @@ from wtforms.widgets import CheckboxInput, ListWidget
 class LoginForm(FlaskForm):
     """Formulario de inicio de sesión."""
 
-    usuario = StringField(validators=[DataRequired()])
-    acceso = PasswordField(validators=[DataRequired()])
-    inicio_sesion = SubmitField()
+    usuario = StringField(_l("Usuario"), validators=[DataRequired()])
+    acceso = PasswordField(_l("Contraseña"), validators=[DataRequired()])
+    inicio_sesion = SubmitField(_l("Iniciar sesión"))
 
 
 class ProfileForm(FlaskForm):

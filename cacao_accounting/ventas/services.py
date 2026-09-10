@@ -180,7 +180,14 @@ def _sales_exchange_rate(company: str | None, posting_date: Any, transaction_cur
     # funcional y oculta una configuración cambiaria incompleta.
     exchange_rate = _lookup_exchange_rate(transaction_currency, base_currency, posting_date)
     if exchange_rate is None or Decimal(str(exchange_rate)) <= 0:
-        raise ValueError(f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}.")
+        raise ValueError(
+            _("No existe tipo de cambio para %(transaction_currency)s -> %(base_currency)s en %(posting_date)s.")
+            % {
+                "transaction_currency": transaction_currency,
+                "base_currency": base_currency,
+                "posting_date": posting_date,
+            }
+        )
     return Decimal(str(exchange_rate))
 
 
@@ -418,7 +425,9 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
 
         warehouse = _resolve_item_warehouse(item, item_obj)
         if not warehouse:
-            raise ValueError(f"El item {item.item_code} no tiene almacen asignado en la orden de venta.")
+            raise ValueError(
+                _("El item %(item_code)s no tiene almacen asignado en la orden de venta.") % {"item_code": item.item_code}
+            )
         _require_sales_warehouse(so.company, warehouse)
 
         bin_row = _stock_bin_or_create(company=so.company, item_code=item.item_code, warehouse=warehouse, for_update=True)
@@ -427,7 +436,8 @@ def _validate_and_reserve_stock_for_sales_order(so: SalesOrder) -> None:
         required_qty = _base_qty_for_sales_line(item, item_obj)
         if available < required_qty:
             raise ValueError(
-                f"Stock insuficiente para {item.item_code} en {warehouse}: disponible {available}, requerido {required_qty}."
+                _("Stock insuficiente para %(item_code)s en %(warehouse)s: disponible %(available)s, requerido %(required)s.")
+                % {"item_code": item.item_code, "warehouse": warehouse, "available": available, "required": required_qty}
             )
 
         bin_row.reserved_qty = Decimal(str(bin_row.reserved_qty or 0)) + required_qty
@@ -1003,7 +1013,9 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+                raise DocumentFlowError(
+                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
+                )
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1011,9 +1023,9 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
             uom = request.form.get(f"uom_{i}") or None
             item_obj = _item_by_code(item_code)
             if not item_obj:
-                raise ValueError(f"El item {item_code} no existe.")
+                raise ValueError(_("El item %(item_code)s no existe.") % {"item_code": item_code})
             if not item_obj.is_active or not item_obj.is_sale_item:
-                raise ValueError(f"El item {item_code} no está habilitado para venta.")
+                raise ValueError(_("El item %(item_code)s no está habilitado para venta.") % {"item_code": item_code})
             _validate_sales_catalog_rate(order, i, item_code, qty, uom, rate)
             qty_in_base_uom = convert_item_qty(item_code, qty, uom or item_obj.default_uom, item_obj.default_uom)
             linea = SalesOrderItem(
@@ -1055,7 +1067,9 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+                raise DocumentFlowError(
+                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
+                )
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1063,9 +1077,9 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
             uom = request.form.get(f"uom_{i}") or None
             item_obj = _item_by_code(item_code)
             if not item_obj:
-                raise ValueError(f"El item {item_code} no existe.")
+                raise ValueError(_("El item %(item_code)s no existe.") % {"item_code": item_code})
             if not item_obj.is_active or not item_obj.is_sale_item:
-                raise ValueError(f"El item {item_code} no está habilitado para venta.")
+                raise ValueError(_("El item %(item_code)s no está habilitado para venta.") % {"item_code": item_code})
             _validate_sales_catalog_rate(sales_request, i, item_code, qty, uom, rate)
             linea = SalesRequestItem(
                 sales_request_id=request_id,
@@ -1543,7 +1557,10 @@ def _validate_sales_catalog_rate(
         getattr(document, "posting_date", None),
     )
     if resolved is None:
-        raise ValueError(f"No existe un precio vigente para el item {item_code} en la lista de precios aplicable.")
+        raise ValueError(
+            _("No existe un precio vigente para el item %(item_code)s en la lista de precios aplicable.")
+            % {"item_code": item_code}
+        )
     expected_rate, _price_list = resolved
     if rate != expected_rate:
         raise ValueError(_("Solo el Administrador del Sistema o el Gerente de Ventas puede modificar un precio de venta."))
@@ -1658,10 +1675,11 @@ def _validate_sales_invoice_line_amounts(invoice: Any, items: Sequence[Any]) -> 
         gross_amount = qty * rate
         expected = _discounted_line_amount(item, gross_amount)
         if amount <= 0:
-            raise ValueError(f"La línea {item.item_code} debe tener un monto positivo.")
+            raise ValueError(_("La línea %(item)s debe tener un monto positivo.") % {"item": item.item_code})
         if abs(amount - expected) > tolerance:
             raise ValueError(
-                f"El monto de la línea {item.item_code} no coincide con cantidad por precio ({amount} frente a {expected})."
+                _("El monto de la línea %(item)s no coincide con cantidad por precio (%(amount)s frente a %(expected)s).")
+                % {"item": item.item_code, "amount": amount, "expected": expected}
             )
 
 
@@ -1676,11 +1694,11 @@ def _validate_sales_source_link(document: Any, source_type: str, source_id: str,
     source_model = source_models.get(source_type)
     source = database.session.get(source_model, source_id) if source_model else None
     if not source:
-        raise ValueError(f"El documento origen '{source_id}' no existe.")
+        raise ValueError(_("El documento origen '%(source)s' no existe.") % {"source": source_id})
     if source.docstatus != 1:
-        raise ValueError(f"El documento origen '{source_id}' debe estar aprobado.")
+        raise ValueError(_("El documento origen '%(source)s' debe estar aprobado.") % {"source": source_id})
     if source_type == "sales_order" and source.status == "closed":
-        raise ValueError(f"La Orden de Venta origen '{source_id}' está cerrada.")
+        raise ValueError(_("La Orden de Venta origen '%(source)s' está cerrada.") % {"source": source_id})
     if source.company != document.company:
         raise ValueError(_("El documento origen y el documento destino deben pertenecer a la misma compañía."))
     customer_id = getattr(source, "customer_id", None)
@@ -2479,13 +2497,13 @@ def _validate_reversal_of(
         source_query = source_query.with_for_update()
     source = database.session.execute(source_query).scalar_one_or_none()
     if not source:
-        raise ValueError(f"La factura origen '{reversal_of}' no existe.")
+        raise ValueError(_("La factura origen '%(source)s' no existe.") % {"source": reversal_of})
     if source.docstatus != 1:
-        raise ValueError(f"La factura origen '{reversal_of}' no esta aprobada.")
+        raise ValueError(_("La factura origen '%(source)s' no esta aprobada.") % {"source": reversal_of})
     if customer_id and source.customer_id != customer_id:
-        raise ValueError(f"La factura origen '{reversal_of}' no pertenece al mismo cliente.")
+        raise ValueError(_("La factura origen '%(source)s' no pertenece al mismo cliente.") % {"source": reversal_of})
     if company and source.company != company:
-        raise ValueError(f"La factura origen '{reversal_of}' no pertenece a la misma compania.")
+        raise ValueError(_("La factura origen '%(source)s' no pertenece a la misma compania.") % {"source": reversal_of})
     if document_type in {"sales_credit_note", "sales_return"} and note_amount is not None:
         from cacao_accounting.document_flow.payment import compute_outstanding_amount
 

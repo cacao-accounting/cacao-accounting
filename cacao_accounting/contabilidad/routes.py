@@ -2810,7 +2810,10 @@ def ejecutar_capitalizacion_cierre(identifier: str):
         )
     )
     database.session.commit()
-    flash(f"La capitalización automática de proyectos finalizó con {success_count} registros procesados.", "success")
+    flash(
+        _("La capitalización automática de proyectos finalizó con %(count)s registros procesados.") % {"count": success_count},
+        "success",
+    )
     if errors:
         for err in errors:
             flash(err, "danger")
@@ -2918,7 +2921,7 @@ def aplicar_recurrentes_cierre(identifier: str):
     database.session.commit()
 
     if success_count > 0:
-        flash(f"Se aplicaron {success_count} plantillas correctamente.", "success")
+        flash(_("Se aplicaron %(count)s plantillas correctamente.") % {"count": success_count}, "success")
     if errors:
         for err in errors:
             flash(err, "danger")

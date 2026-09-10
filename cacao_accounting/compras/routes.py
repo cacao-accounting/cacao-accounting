@@ -2394,7 +2394,7 @@ def compras_orden_compra_submit(order_id: str):
         for item in items:
             item_obj = database.session.execute(database.select(Item).filter_by(code=item.item_code)).scalar_one_or_none()
             if not item_obj or not item_obj.is_active or not item_obj.is_purchase_item:
-                raise ValueError(f"El item {item.item_code} no está habilitado para compra.")
+                raise ValueError(_("El item %(item)s no está habilitado para compra.") % {"item": item.item_code})
         validate_submit_prerequisites(registro, items=items, require_party=True, require_rate_positive=True)
         check_budget_control(
             company=registro.company,

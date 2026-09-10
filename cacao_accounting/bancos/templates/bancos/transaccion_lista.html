@@ -26,7 +26,7 @@
   {{ macros.list_filters(show_status=False, placeholder=_("Buscar por descripcion o referencia..."), extra_params=consulta.period_extra_params) }}
   {{ macros.period_list_filters(consulta) }}
   <table class="ca-table">
-    <caption style="display: none;">Listado de transacciones bancarias.</caption>
+    <caption style="display: none;">{{ _('Listado de transacciones bancarias.') }}</caption>
     <thead>
       <tr>
         <th scope="col">{{ _("Fecha") }}</th>

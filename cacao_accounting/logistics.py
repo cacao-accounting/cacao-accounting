@@ -28,7 +28,7 @@ def _normalize_logistics_value(field: str, value: Any) -> Any:
 def logistics_values(source: Any = None, form: Any = None, *, terms_field: str) -> dict[str, Any]:
     """Read and normalize logistics values from a document or form."""
     if terms_field not in TERMS_FIELDS:
-        raise ValueError(f"Campo de términos logísticos no permitido: {terms_field}.")
+        raise ValueError(_("Campo de términos logísticos no permitido: %(field)s.") % {"field": terms_field})
     values: dict[str, Any] = {}
     for field in (*LOGISTICS_FIELDS, terms_field):
         value = form.get(field) if form is not None else None
@@ -56,7 +56,7 @@ def validate_incoterm(values: dict[str, Any], allowed_codes: Iterable[str] | Non
     else:
         allowed = set(allowed_codes)
     if code not in allowed or version != "2020":
-        raise ValueError(f"El Incoterm {code} ({version}) no está disponible.")
+        raise ValueError(_("El Incoterm %(code)s (%(version)s) no está disponible.") % {"code": code, "version": version})
 
 
 def copy_logistics(
