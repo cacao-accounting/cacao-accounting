@@ -1445,7 +1445,7 @@ def _create_purchase_order_from_request(form: dict):
         flash(_("Orden de compra creada correctamente."), "success")
         if comparison_open:
             flash(
-                "Advertencia: la orden se creó desde una cotización de proveedor mientras el comparativo sigue abierto. ",
+                _("Advertencia: la orden se creó desde una cotización de proveedor mientras el comparativo sigue abierto."),
                 "warning",
             )
         return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=orden.id))
@@ -2254,9 +2254,11 @@ def _validate_purchase_reversal_of(
             .limit(1)
         ).scalar_one_or_none()
         if issued_withholding is not None:
-            raise ValueError(
-                "No se puede revertir una factura con retención emitida; ajuste o cancele primero el certificado de retención."
+            msg = _(
+                "No se puede revertir una factura con retención emitida; "
+                "ajuste o cancele primero el certificado de retención."
             )
+            raise ValueError(msg)
     if document_type == "purchase_credit_note" and note_amount is not None:
         # A credit note is a commercial reversal of the invoice, so its
         # capacity is independent of payments already applied to the source.

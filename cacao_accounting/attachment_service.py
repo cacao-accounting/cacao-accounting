@@ -130,7 +130,7 @@ def cleanup_uncommitted_attachment(attachment: StoredAttachment) -> None:
 
 def _ensure_cloud_mode() -> None:
     if is_desktop_mode():
-        raise AttachmentError("La subida de archivos no está disponible en modo escritorio.", 403)
+        raise AttachmentError(_("La subida de archivos no está disponible en modo escritorio."), 403)
 
 
 def _get_upload_folder() -> str:
@@ -152,14 +152,14 @@ def _prepare_upload(
     """Validate an upload request and return normalized metadata."""
     normalized_reference_type = str(reference_type).strip() if reference_type else ""
     if not normalized_reference_type:
-        raise AttachmentError("Tipo de referencia requerido.", 400)
+        raise AttachmentError(_("Tipo de referencia requerido."), 400)
 
     normalized_reference_id = str(reference_id).strip() if reference_id else ""
     if not normalized_reference_id:
-        raise AttachmentError("ID de referencia requerido.", 400)
+        raise AttachmentError(_("ID de referencia requerido."), 400)
 
     if not file_storage or not getattr(file_storage, "filename", None):
-        raise AttachmentError("No se proporcionó ningún archivo.", 400)
+        raise AttachmentError(_("No se proporcionó ningún archivo."), 400)
 
     original_filename = secure_filename(file_storage.filename) or "attachment"
     file_storage.seek(0, os.SEEK_END)
@@ -167,9 +167,9 @@ def _prepare_upload(
     file_storage.seek(0)
 
     if file_size <= 0:
-        raise AttachmentError("El archivo está vacío.", 400)
+        raise AttachmentError(_("El archivo está vacío."), 400)
     if file_size > MAX_FILE_SIZE:
-        raise AttachmentError("El archivo excede el tamaño máximo permitido (16 MB).", 400)
+        raise AttachmentError(_("El archivo excede el tamaño máximo permitido (16 MB)."), 400)
 
     return normalized_reference_type, normalized_reference_id, original_filename, file_size
 
@@ -269,9 +269,9 @@ def get_attachment_file(file_id: str) -> tuple[File, str]:
     """Retrieve File model and verified file path for download."""
     file_record = database.session.get(File, file_id)
     if file_record is None:
-        raise AttachmentError("Archivo no encontrado.", 404)
+        raise AttachmentError(_("Archivo no encontrado."), 404)
     if not file_record.file_path or not os.path.exists(file_record.file_path):
-        raise AttachmentError("El archivo físico no se encuentra en el servidor.", 404)
+        raise AttachmentError(_("El archivo físico no se encuentra en el servidor."), 404)
     return file_record, file_record.file_path
 
 
@@ -294,7 +294,7 @@ def delete_attachment(file_id: str, reference_type: str, reference_id: str, user
     )
 
     if attachment is None:
-        raise AttachmentError("Adjunto no encontrado.", 404)
+        raise AttachmentError(_("Adjunto no encontrado."), 404)
 
     database.session.delete(attachment)
     database.session.flush()
@@ -325,29 +325,29 @@ def upload_item_image(item_id: str, file_storage: Any, user_id: str | None = Non
     _ensure_cloud_mode()
 
     if not item_id or not str(item_id).strip():
-        raise AttachmentError("ID de artículo requerido.", 400)
+        raise AttachmentError(_("ID de artículo requerido."), 400)
 
     item = database.session.execute(
         database.select(Item).where((Item.code == str(item_id).strip()) | (Item.id == str(item_id).strip()))
     ).scalar_one_or_none()
 
     if item is None:
-        raise AttachmentError("Artículo no encontrado.", 404)
+        raise AttachmentError(_("Artículo no encontrado."), 404)
 
     if not file_storage or not getattr(file_storage, "filename", None):
-        raise AttachmentError("No se seleccionó una imagen.", 400)
+        raise AttachmentError(_("No se seleccionó una imagen."), 400)
 
     ext = os.path.splitext(file_storage.filename)[1].lower()
     content_type = getattr(file_storage, "content_type", "") or ""
 
     if ext not in ALLOWED_IMAGE_EXTENSIONS or not content_type.startswith("image/"):
-        raise AttachmentError("Formato de imagen no permitido. Use PNG, JPG, WEBP o GIF.", 400)
+        raise AttachmentError(_("Formato de imagen no permitido. Use PNG, JPG, WEBP o GIF."), 400)
 
     file_storage.seek(0)
     header = file_storage.read(4096)
     file_storage.seek(0)
     if not _has_valid_image_signature(header, ext):
-        raise AttachmentError("El contenido no corresponde a una imagen válida.", 400)
+        raise AttachmentError(_("El contenido no corresponde a una imagen válida."), 400)
 
     old_attachments = (
         database.session.execute(
@@ -405,7 +405,7 @@ def delete_item_image(item_id: str, user_id: str | None = None, ignore_missing: 
     if item is None:
         if ignore_missing:
             return False
-        raise AttachmentError("Artículo no encontrado.", 404)
+        raise AttachmentError(_("Artículo no encontrado."), 404)
 
     attachments = (
         database.session.execute(
