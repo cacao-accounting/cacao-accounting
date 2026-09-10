@@ -233,11 +233,11 @@ class ApprovalEngine:
 
         if cls.can_approve(document, user):
             cls.approve(document, user, _("Aprobado por el remitente"))
-            flask_flash(_("%(label)s aprobada.", label=label), "success")
+            flask_flash(_("%(label)s aprobada.") % {"label": label}, "success")
         else:
             database.session.commit()
             flask_flash(
-                _("%(label)s enviada para aprobación (Pendiente de Aprobación).", label=label),
+                _("%(label)s enviada para aprobación (Pendiente de Aprobación).") % {"label": label},
                 "info",
             )
         return True
