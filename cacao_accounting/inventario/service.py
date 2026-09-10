@@ -364,9 +364,9 @@ def validate_batch_serial_draft(lines: Sequence[Any]) -> None:
         if not item or not item.is_stock_item:
             continue
         if (item.has_batch or item.has_expiry_date) and not getattr(line, "batch_id", None):
-            raise ValueError(f"El item {item_code} requiere lote.")
+            raise ValueError(_("El item %(item)s requiere lote.") % {"item": item_code})
         if item.has_serial_no and not getattr(line, "serial_no", None):
-            raise ValueError(f"El item {item_code} requiere numero de serie.")
+            raise ValueError(_("El item %(item)s requiere numero de serie.") % {"item": item_code})
 
 
 def update_serial_state(line: Any, *, outgoing: bool, warehouse: str | None) -> None:

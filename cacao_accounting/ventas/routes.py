@@ -1607,7 +1607,7 @@ def ventas_orden_venta_submit(order_id: str):
         for item in items:
             item_obj = _item_by_code(item.item_code)
             if not item_obj or not item_obj.is_active or not item_obj.is_sale_item:
-                raise ValueError(f"El item {item.item_code} no está habilitado para venta.")
+                raise ValueError(_("El item %(item)s no está habilitado para venta.") % {"item": item.item_code})
         validate_submit_prerequisites(
             registro, items=items, require_party=True, require_rate_positive=True, require_amount_nonzero=True
         )

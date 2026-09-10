@@ -475,7 +475,9 @@ def _validate_account(company: str, account_id: str | None, expected_type: str) 
         raise ValueError(_("La cuenta seleccionada no pertenece a la compañía."))
     account_type = (account.account_type or "").strip().lower()
     if account_type and account_type != expected_type:
-        raise ValueError(f"La cuenta {account.code} debe ser de tipo {expected_type}.")
+        raise ValueError(
+            _("La cuenta %(account)s debe ser de tipo %(type)s.") % {"account": account.code, "type": expected_type}
+        )
 
 
 def _validate_tax_template(company: str, tax_template_id: str | None) -> None:

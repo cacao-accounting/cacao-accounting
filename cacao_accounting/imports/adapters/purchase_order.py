@@ -11,6 +11,7 @@ from cacao_accounting.imports.adapters.base import BaseImportAdapter
 from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, Party, Warehouse, database
 from cacao_accounting.document_flow.context import company_currency
 from cacao_accounting.document_identifiers import assign_document_identifier
+from cacao_accounting.i18n import _
 
 
 class PurchaseOrderAdapter(BaseImportAdapter):
@@ -138,7 +139,14 @@ class PurchaseOrderAdapter(BaseImportAdapter):
             )
             rate_dec = Decimal(str(resolved)) if resolved is not None else Decimal("0")
         if rate_dec <= 0:
-            raise ValueError(f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}.")
+            raise ValueError(
+                _("No existe tipo de cambio para %(transaction_currency)s -> %(base_currency)s en %(posting_date)s.")
+                % {
+                    "transaction_currency": transaction_currency,
+                    "base_currency": base_currency,
+                    "posting_date": posting_date,
+                }
+            )
         return transaction_currency, base_currency, rate_dec
 
     def persist_document(self, document: Any) -> None:

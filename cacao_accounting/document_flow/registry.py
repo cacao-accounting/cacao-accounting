@@ -6,6 +6,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from cacao_accounting.i18n import _
+
 from cacao_accounting.database import (
     ComprobanteContable,
     ComprobanteContableDetalle,
@@ -778,7 +780,7 @@ def get_document_type(value: str) -> DocumentType:
     try:
         return DOCUMENT_TYPES[key]
     except KeyError as exc:
-        raise ValueError(f"Unknown document type: {value}") from exc
+        raise ValueError(_("Tipo documental desconocido: %(value)s") % {"value": value}) from exc
 
 
 def get_flow(source_type: str, target_type: str) -> FlowSpec:

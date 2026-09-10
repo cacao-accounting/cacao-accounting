@@ -5,6 +5,7 @@
 
 from flask import Blueprint, abort, render_template, flash
 from flask_login import current_user, login_required
+from cacao_accounting.i18n import _
 from cacao_accounting.runtime_mode import is_desktop_mode
 from cacao_accounting.database import (
     database,
@@ -49,13 +50,13 @@ def check_portal_access(role_name: str) -> None:
     if role_name == "customer" and current_user.classification == "customer":
         if current_user.party_id and current_user.company:
             return
-        flash("Usuario de portal sin cliente asignado.", "danger")
+        flash(_("Usuario de portal sin cliente asignado."), "danger")
         abort(403)
 
     if role_name == "supplier" and current_user.classification == "supplier":
         if current_user.party_id and current_user.company:
             return
-        flash("Usuario de portal sin proveedor asignado.", "danger")
+        flash(_("Usuario de portal sin proveedor asignado."), "danger")
         abort(403)
 
     abort(403)

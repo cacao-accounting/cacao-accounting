@@ -174,7 +174,7 @@ def _validate_warehouse_assignments(items, warehouse_for_stock_items_only):
         )
         if not wh:
             item_code = getattr(item, "item_code", "desconocido")
-            raise ValueError(f"La linea del articulo {item_code} requiere un almacen asignado.")
+            raise ValueError(_("La linea del articulo %(item)s requiere un almacen asignado.") % {"item": item_code})
 
 
 def require_line_relations(*, target_type: str, target_id: str, source_type: str, source_id: str, items: list[Any]) -> None:

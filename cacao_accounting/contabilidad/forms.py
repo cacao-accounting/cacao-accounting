@@ -73,10 +73,10 @@ class FormularioEntidad(FlaskForm):
     un mapeo de la mayoria de sus campos.
     """
 
-    id = StringField(validators=[DataRequired()])
-    razon_social = StringField(validators=[DataRequired()])
-    nombre_comercial = StringField(validators=[])
-    id_fiscal = StringField(validators=[DataRequired()])
+    id = StringField(_l("Código"), validators=[DataRequired()])
+    razon_social = StringField(_l("Razón social"), validators=[DataRequired()])
+    nombre_comercial = StringField(_l("Nombre comercial"), validators=[])
+    id_fiscal = StringField(_l("Identificación fiscal"), validators=[DataRequired()])
     pais = SelectField(_l("País"), choices=COUNTRY_CHOICES, validators=[DataRequired()])
     idioma = SelectField(_l("Idioma"), choices=LANGUAGE_CHOICES, validators=[DataRequired()])
     moneda = SelectField(_l("Moneda Principal"), choices=[], validators=[DataRequired()])
@@ -87,11 +87,11 @@ class FormularioEntidad(FlaskForm):
     )
     catalogo_origen = SelectField(_l("Catálogo existente"), choices=[], validators=[])
     tipo_entidad = SelectField(_l("Tipo de Entidad"), choices=Entity.tipo_entidad_lista, validators=[DataRequired()])
-    correo_electronico = StringField(validators=[])
-    web = StringField(validators=[])
-    telefono1 = StringField(validators=[])
-    telefono2 = StringField(validators=[])
-    fax = StringField(validators=[])
+    correo_electronico = StringField(_l("Correo electrónico"), validators=[])
+    web = StringField(_l("Sitio web"), validators=[])
+    telefono1 = StringField(_l("Teléfono 1"), validators=[])
+    telefono2 = StringField(_l("Teléfono 2"), validators=[])
+    fax = StringField(_l("Fax"), validators=[])
     habilitado = BooleanField(_l("Habilitado"), default=True)
 
 
@@ -105,23 +105,23 @@ class FormularioUnidad(FlaskForm):
     un mapeo de la mayoria de sus campos.
     """
 
-    id = StringField(validators=[DataRequired()])
-    nombre = StringField(validators=[DataRequired()])
+    id = StringField(_l("Código"), validators=[DataRequired()])
+    nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"))
     parent_id = SelectField(_l("Unidad Padre"), choices=[], validators=[Optional()], validate_choice=False)
-    correo_electronico = StringField(validators=[])
-    web = StringField(validators=[])
-    telefono1 = StringField(validators=[])
-    telefono2 = StringField(validators=[])
-    fax = StringField(validators=[])
+    correo_electronico = StringField(_l("Correo electrónico"), validators=[])
+    web = StringField(_l("Sitio web"), validators=[])
+    telefono1 = StringField(_l("Teléfono 1"), validators=[])
+    telefono2 = StringField(_l("Teléfono 2"), validators=[])
+    fax = StringField(_l("Fax"), validators=[])
     habilitado = BooleanField(_l("Habilitado"), default=True)
 
 
 class FormularioLibro(FlaskForm):
     """Formulario base para la administración de libros de contabilidad."""
 
-    id = StringField(validators=[DataRequired()])
-    nombre = StringField(validators=[DataRequired()])
+    id = StringField(_l("Código"), validators=[DataRequired()])
+    nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     moneda = SelectField(_l("Moneda"), choices=[], validators=[DataRequired()])
     estado = SelectField(

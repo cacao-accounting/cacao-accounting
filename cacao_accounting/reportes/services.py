@@ -554,7 +554,10 @@ def _convert_to_ledger_currency(
         if inverse_value == 0:
             return Decimal("0")
         return amount / inverse_value
-    raise ValueError(f"No existe tipo de cambio de {source_currency} a {target_currency} en {as_of_date}.")
+    raise ValueError(
+        _("No existe tipo de cambio de %(source)s a %(target)s en %(date)s.")
+        % {"source": source_currency, "target": target_currency, "date": as_of_date}
+    )
 
 
 def _reconciliation_gl_amount(

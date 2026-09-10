@@ -35,11 +35,11 @@
 
       {% if acceso.configurar %}
       <li>
-        <a href="{{ url_for('inventario.inventario_articulo_lista') }}">Artículos / Productos</a>
+        <a href="{{ url_for('inventario.inventario_articulo_lista') }}">{{ _('Artículos / Productos') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
-        <a href="{{ url_for('inventario.inventario_bodega_lista') }}">Bodegas / Almacenes</a>
+        <a href="{{ url_for('inventario.inventario_bodega_lista') }}">{{ _('Bodegas / Almacenes') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar')) }}
       </li>
       <li>
@@ -52,15 +52,15 @@
       </li>
       {% else %}
       <li class="ca-no-access">
-        <span>Artículos / Productos</span>
+        <span>{{ _('Artículos / Productos') }}</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       <li class="ca-no-access">
-        <span>Bodegas / Almacenes</span>
+        <span>{{ _('Bodegas / Almacenes') }}</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       <li class="ca-no-access">
-        <span>Unidades de Medida</span>
+        <span>{{ _('Unidades de Medida') }}</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='configurar', view_permission='configurar')) }}
       </li>
       <li class="ca-no-access">
@@ -79,40 +79,40 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('inventario.inventario_material_receipt_lista') }}">Recepciones de Material</a>
+        <a href="{{ url_for('inventario.inventario_material_receipt_lista') }}">{{ _('Recepciones de Material') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('compras.compras_recepcion_lista') }}">Recepciones de Órdenes de Compra</a>
+        <a href="{{ url_for('compras.compras_recepcion_lista') }}">{{ _('Recepciones de Órdenes de Compra') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('ventas.ventas_entrega_lista') }}">Remisiones de Mercadería Vendida</a>
+        <a href="{{ url_for('ventas.ventas_entrega_lista') }}">{{ _('Remisiones de Mercadería Vendida') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('inventario.inventario_material_issue_lista') }}">Salidas de Material</a>
+        <a href="{{ url_for('inventario.inventario_material_issue_lista') }}">{{ _('Salidas de Material') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('inventario.inventario_entrada_lista') }}">Ajustes de Inventario</a>
+        <a href="{{ url_for('inventario.inventario_entrada_lista') }}">{{ _('Ajustes de Inventario') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('inventario.inventario_reconciliacion_lista') }}">Conciliaciones de Inventario</a>
+        <a href="{{ url_for('inventario.inventario_reconciliacion_lista') }}">{{ _('Conciliaciones de Inventario') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       <li>
-        <a href="{{ url_for('inventario.inventario_material_transfer_lista') }}">Traslados</a>
+        <a href="{{ url_for('inventario.inventario_material_transfer_lista') }}">{{ _('Traslados') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access')) }}
       </li>
       {% else %}
       <li class="ca-no-access">
-        <span>Entradas de Almacén</span>
+        <span>{{ _('Entradas de Almacén') }}</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       <li class="ca-no-access">
-        <span>Ajustes de Inventario</span>
+        <span>{{ _('Ajustes de Inventario') }}</span>
         {{ macros.module_status_badge(module_badge(access=acceso, required='access', view_permission='access')) }}
       </li>
       {% endif %}
@@ -127,27 +127,27 @@
 
       {% if acceso.autorizado %}
       <li>
-        <a href="{{ url_for('reportes.inventory_existence') }}">Existencia de Inventario</a>
+        <a href="{{ url_for('reportes.inventory_existence') }}">{{ _('Existencia de Inventario') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.stock_balance') }}">Balance de Stock</a>
+        <a href="{{ url_for('reportes.stock_balance') }}">{{ _('Balance de Stock') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.inventory_valuation') }}">Valorización de Inventario</a>
+        <a href="{{ url_for('reportes.inventory_valuation') }}">{{ _('Valorización de Inventario') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.kardex') }}">Kardex</a>
+        <a href="{{ url_for('reportes.kardex') }}">{{ _('Kardex') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.batches') }}">Lotes</a>
+        <a href="{{ url_for('reportes.batches') }}">{{ _('Lotes') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       <li>
-        <a href="{{ url_for('reportes.serials') }}">Seriales</a>
+        <a href="{{ url_for('reportes.serials') }}">{{ _('Seriales') }}</a>
         {{ macros.module_status_badge(module_badge(access=acceso, required='reportes')) }}
       </li>
       {% else %}

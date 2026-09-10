@@ -229,8 +229,8 @@ def lista_modulos():
         if action == "toggle":
             module.enabled = not module.enabled
             database.session.commit()
-            estado = "habilitado" if module.enabled else "deshabilitado"
-            flash(f"Módulo {module.module} {estado} correctamente.", "success")
+            estado = _("habilitado") if module.enabled else _("deshabilitado")
+            flash(_("Módulo %(module)s %(status)s correctamente.") % {"module": module.module, "status": estado}, "success")
             return redirect(url_for(LISTA_MODULOS))
 
     datos = listado_modulos()
@@ -1183,8 +1183,8 @@ def lista_usuarios():
         if action == "toggle":
             usuario.active = not bool(usuario.active)
             database.session.commit()
-            estado = "habilitado" if usuario.active else "deshabilitado"
-            flash(f"Usuario {usuario.user} {estado} correctamente.", "success")
+            estado = _("habilitado") if usuario.active else _("deshabilitado")
+            flash(_("Usuario %(user)s %(status)s correctamente.") % {"user": usuario.user, "status": estado}, "success")
             return redirect(url_for(LISTA_USUARIOS))
 
     usuarios = database.session.execute(database.select(User).order_by(User.user)).scalars().all()

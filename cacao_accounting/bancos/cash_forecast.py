@@ -152,7 +152,7 @@ def _handle_cash_forecast_new_post(company: str):
         database.session.query(CashForecast).filter_by(company=company, fiscal_year_id=fiscal_year_id, version=version).first()
     )
     if existing:
-        flash(f"La version '{version}' ya existe para este ao fiscal.", "danger")
+        flash(_("La version '%(version)s' ya existe para este ao fiscal.") % {"version": version}, "danger")
         return None
 
     forecast = CashForecast(
@@ -345,7 +345,7 @@ def cash_forecast_entry_add(forecast_id):
             flash(_("Proyección manual agregada correctamente."), "success")
     except (ValueError, ArithmeticError, SQLAlchemyError) as exc:
         database.session.rollback()
-        flash(f"Error al agregar proyección: {str(exc)}", "danger")
+        flash(_("Error al agregar proyección: %(error)s") % {"error": exc}, "danger")
 
     next_url = _safe_next_url(request.args.get("next"))
     if next_url:
@@ -549,7 +549,7 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
             flash(_("Proyección manual actualizada correctamente."), "success")
     except (ValueError, ArithmeticError, SQLAlchemyError) as exc:
         database.session.rollback()
-        flash(f"Error al actualizar la proyección: {str(exc)}", "danger")
+        flash(_("Error al actualizar la proyección: %(error)s") % {"error": exc}, "danger")
 
     next_url = _safe_next_url(request.args.get("next"))
     if next_url:

@@ -172,7 +172,7 @@
   <!-- Listado de Proyecciones Manuales -->
   <div class="table-responsive">
     <table class="ca-table text-nowrap align-middle">
-      <caption style="display: none;">Proyecciones manuales.</caption>
+      <caption style="display: none;">{{ _('Proyecciones manuales.') }}</caption>
       <thead class="table-light">
         <tr>
           <th scope="col">{{ _('Fecha Estimada') }}</th>
@@ -224,7 +224,7 @@
                 <div class="modal-content">
                   <div class="modal-header">
                     <h5 class="modal-title" id="editModalLabel-{{ entry.id }}"><i class="bi bi-pencil-square"></i> {{ _('Editar Proyección Manual') }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Close') }}"></button>
                   </div>
                   <form method="POST" action="{{ url_for('bancos.cash_forecast_entry_edit', forecast_id=selected_forecast.id, entry_id=entry.id, next=request.full_path) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

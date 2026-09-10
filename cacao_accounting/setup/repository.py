@@ -53,7 +53,7 @@ def create_default_entity(data: dict, status: str = "default", default: bool = T
 
     existing_entity = database.session.execute(database.select(Entity).filter_by(code=data["id"])).scalar_one_or_none()
     if existing_entity is not None:
-        raise ValueError(f"La entidad con código '{data['id']}' ya existe.")
+        raise ValueError(_("La entidad con código '%(code)s' ya existe.") % {"code": data["id"]})
 
     entity = Entity(
         code=data.get("id"),

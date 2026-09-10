@@ -354,7 +354,7 @@ def _comparison_draft_line(
     selected_id = selections.get(item.id) or None
     selected = candidates.get(selected_id) if selected_id else None
     if selected_id and selected is None:
-        raise ValueError(f"La oferta seleccionada no cubre la línea {item.item_code}.")
+        raise ValueError(_("La oferta seleccionada no cubre la línea %(item)s.") % {"item": item.item_code})
     recommended = row["recommended"]
     manual_override = bool(selected and (not recommended or selected["offer"].id != recommended["offer"].id))
     selected_line = selected["line"] if selected else None
@@ -429,9 +429,9 @@ def finalize_purchase_request_comparison(
         if not line or not line.selected_supplier_quotation_id:
             continue
         if line.selected_supplier_quotation_id not in row["by_offer"]:
-            raise ValueError(f"La oferta seleccionada para la línea {item.item_code} ya no está vigente.")
+            raise ValueError(_("La oferta seleccionada para la línea %(item)s ya no está vigente.") % {"item": item.item_code})
         if line.manual_override and not line.override_reason:
-            raise ValueError(f"La línea {item.item_code} requiere justificar el cambio de recomendación.")
+            raise ValueError(_("La línea %(item)s requiere justificar el cambio de recomendación.") % {"item": item.item_code})
         line.authorized_by = user_id
         selected_line_count += 1
     if selected_line_count == 0:

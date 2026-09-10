@@ -354,14 +354,16 @@ def _canonical_tax_line_payload(
     rule_id = _document_tax_line_rule_id(line_payload)
     is_manual = bool(line_payload.get("manual")) or str(rule_id or "").startswith("MANUAL-")
     if tax_rule is None and not is_manual:
-        raise ValueError(f"La regla fiscal '{rule_id or 'sin identificador'}' no es válida para la compañía.")
+        raise ValueError(
+            _("La regla fiscal '%(rule)s' no es válida para la compañía.") % {"rule": rule_id or _("sin identificador")}
+        )
 
     if tax_rule is not None:
         base_amount = _canonical_tax_rule_base(tax_rule, server_subtotal, concept_amounts, line_payload)
         rate = _to_decimal(tax_rule.rate)
         amount = _canonical_tax_rule_amount(tax_rule, base_amount, rate)
         if amount < 0:
-            raise ValueError(f"La regla fiscal '{tax_rule.id}' produjo un importe negativo.")
+            raise ValueError(_("La regla fiscal '%(rule)s' produjo un importe negativo.") % {"rule": tax_rule.id})
         return {
             "source_rule_id": tax_rule.id,
             "concept": tax_rule.concept,
@@ -413,7 +415,7 @@ def _canonical_tax_rule_base(
     else:
         base_amount = server_subtotal
     if base_amount < 0:
-        raise ValueError(f"La regla fiscal '{tax_rule.id}' produjo una base negativa.")
+        raise ValueError(_("La regla fiscal '%(rule)s' produjo una base negativa.") % {"rule": tax_rule.id})
     return base_amount
 
 

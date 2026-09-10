@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from cacao_accounting.i18n import _
+
 from decimal import Decimal
 from typing import Any
 
@@ -32,7 +34,7 @@ def _status(docstatus: int | None) -> str:
 def _resolve(document_type: str, document_id: str, company: str) -> tuple[Any, Any, str | None, str] | None:
     definition = _DOCUMENTS.get(document_type)
     if definition is None:
-        raise ValueError(f"Tipo de documento no permitido: {document_type}")
+        raise ValueError(_("Tipo de documento no permitido: %(document_type)s") % {"document_type": document_type})
     model, line_model, foreign_key, party_field = definition
     document = database.session.get(model, document_id)
     if document is None or document.company != company:

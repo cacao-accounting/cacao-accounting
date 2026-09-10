@@ -390,7 +390,7 @@ def _create_supplier_quotation_from_request():
     try:
         from_request_id, from_rfq_id = _supplier_quotation_origin_ids()
         if from_request_id and from_rfq_id:
-            raise DocumentFlowError("No se pueden combinar dos documentos origen.", 400)
+            raise DocumentFlowError(_("No se pueden combinar dos documentos origen."), 400)
         source = _supplier_quotation_origin(from_request_id, from_rfq_id)
         company, transaction_currency = _validate_supplier_quotation_header(source)
         exige_acceso_compania("purchases", company, "crear")
@@ -455,7 +455,7 @@ def _validate_supplier_quotation_origin(source: PurchaseRequest | PurchaseQuotat
     if source is None:
         return
     if source.docstatus != 1:
-        raise DocumentFlowError("El documento origen debe estar aprobado.", 400)
+        raise DocumentFlowError(_("El documento origen debe estar aprobado."), 400)
     _require_purchase_document_access(source, "consultar")
 
 
@@ -805,7 +805,7 @@ def _create_line_relation(
         "purchase_invoice": {"purchase_order", "purchase_receipt", "purchase_invoice"},
     }
     if source_type not in allowed_source_types.get(target_type, set()):
-        raise DocumentFlowError("El tipo de documento origen no es válido para este flujo.", 400)
+        raise DocumentFlowError(_("El tipo de documento origen no es válido para este flujo."), 400)
     target_models = {
         "purchase_order": PurchaseOrder,
         "purchase_quotation": PurchaseQuotation,
@@ -826,16 +826,16 @@ def _create_line_relation(
     source = database.session.get(source_model, source_id)
     source_item = database.session.get(source_item_model, source_item_id)
     if not target or not source or not source_item or getattr(source, "docstatus", 0) != 1:
-        raise DocumentFlowError("El documento origen y su línea deben existir y estar aprobados.", 400)
+        raise DocumentFlowError(_("El documento origen y su línea deben existir y estar aprobados."), 400)
     if getattr(source_item, source_parent_field) != source.id:
-        raise DocumentFlowError("La línea origen no pertenece al documento indicado.", 400)
+        raise DocumentFlowError(_("La línea origen no pertenece al documento indicado."), 400)
     if source.company != target.company:
-        raise DocumentFlowError("El documento origen debe pertenecer a la misma compañía.", 400)
+        raise DocumentFlowError(_("El documento origen debe pertenecer a la misma compañía."), 400)
     source_supplier_id = getattr(source, "supplier_id", None)
     if source_supplier_id and source_supplier_id != getattr(target, "supplier_id", None):
-        raise DocumentFlowError("El documento origen debe pertenecer al mismo proveedor.", 400)
+        raise DocumentFlowError(_("El documento origen debe pertenecer al mismo proveedor."), 400)
     if effective_currency(source) != effective_currency(target):
-        raise DocumentFlowError("El documento origen y destino deben usar la misma moneda.", 400)
+        raise DocumentFlowError(_("El documento origen y destino deben usar la misma moneda."), 400)
     create_document_relation(
         source_type=source_type,
         source_id=source_id,
@@ -908,12 +908,16 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
+                raise DocumentFlowError(
+                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
+                )
             item_obj = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
             if not item_obj:
-                raise DocumentFlowError(f"El item {item_code} no existe.", 400)
+                raise DocumentFlowError(_("El item %(item_code)s no existe.") % {"item_code": item_code}, 400)
             if not item_obj.is_active or not item_obj.is_purchase_item:
-                raise DocumentFlowError(f"El item {item_code} no está habilitado para compra.", 400)
+                raise DocumentFlowError(
+                    _("El item %(item_code)s no está habilitado para compra.") % {"item_code": item_code}, 400
+                )
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1125,16 +1129,18 @@ def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | Non
     """Valida la bodega indicada en una recepción."""
     item = database.session.get(Item, item_code) if item_code else None
     if not warehouse_code and item is not None and item.is_stock_item:
-        raise DocumentFlowError(f"El item de inventario '{item_code}' requiere una bodega.", 400)
+        raise DocumentFlowError(
+            _("El item de inventario '%(item_code)s' requiere una bodega.") % {"item_code": item_code}, 400
+        )
     if not warehouse_code:
         return
     from cacao_accounting.database import Warehouse
 
     warehouse = database.session.execute(database.select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
     if warehouse is None:
-        raise DocumentFlowError(f"Almacén '{warehouse_code}' no encontrado.", 404)
+        raise DocumentFlowError(_("Almacén '%(warehouse_code)s' no encontrado.") % {"warehouse_code": warehouse_code}, 404)
     if not warehouse.is_active:
-        raise DocumentFlowError(f"Almacén '{warehouse_code}' está inactivo.", 409)
+        raise DocumentFlowError(_("Almacén '%(warehouse_code)s' está inactivo.") % {"warehouse_code": warehouse_code}, 409)
     if company and warehouse.company != company:
         raise DocumentFlowError(f"Almacén '{warehouse_code}' no pertenece a la compañía de la recepción.", 400)
 
@@ -1765,9 +1771,9 @@ def _validate_purchase_source_link(document: Any, source_type: str, source_id: s
     source_model = source_models.get(source_type)
     source = database.session.get(source_model, source_id) if source_model else None
     if not source:
-        raise ValueError(f"El documento origen '{source_id}' no existe.")
+        raise ValueError(_("El documento origen '%(source)s' no existe.") % {"source": source_id})
     if source.docstatus != 1:
-        raise ValueError(f"El documento origen '{source_id}' debe estar aprobado.")
+        raise ValueError(_("El documento origen '%(source)s' debe estar aprobado.") % {"source": source_id})
     if source.company != document.company:
         raise ValueError(_("El documento origen y el documento destino deben pertenecer a la misma compañía."))
     supplier_id = getattr(source, "supplier_id", None)
@@ -2063,10 +2069,14 @@ def _purchase_exchange_rate(company: str | None, posting_date: Any, transaction_
         exchange_rate = _lookup_exchange_rate(transaction_currency, entity.currency, posting_date)
     except PostingError as exc:  # type: ignore[misc]
         raise ValueError(
-            f"No existe tipo de cambio para {transaction_currency} -> {entity.currency} en {posting_date}."
+            _("No existe tipo de cambio para %(source)s -> %(target)s en %(date)s.")
+            % {"source": transaction_currency, "target": entity.currency, "date": posting_date}
         ) from exc
     if exchange_rate <= 0:
-        raise ValueError(f"El tipo de cambio para {transaction_currency} -> {entity.currency} debe ser positivo.")
+        raise ValueError(
+            _("El tipo de cambio para %(source)s -> %(target)s debe ser positivo.")
+            % {"source": transaction_currency, "target": entity.currency}
+        )
     return exchange_rate
 
 
@@ -2224,13 +2234,13 @@ def _validate_purchase_reversal_of(
         source_query = source_query.with_for_update()
     source = database.session.execute(source_query).scalar_one_or_none()
     if not source:
-        raise ValueError(f"La factura origen '{reversal_of}' no existe.")
+        raise ValueError(_("La factura origen '%(source)s' no existe.") % {"source": reversal_of})
     if source.docstatus != 1:
-        raise ValueError(f"La factura origen '{reversal_of}' no esta aprobada.")
+        raise ValueError(_("La factura origen '%(source)s' no esta aprobada.") % {"source": reversal_of})
     if supplier_id and source.supplier_id != supplier_id:
-        raise ValueError(f"La factura origen '{reversal_of}' no pertenece al mismo proveedor.")
+        raise ValueError(_("La factura origen '%(source)s' no pertenece al mismo proveedor.") % {"source": reversal_of})
     if company and source.company != company:
-        raise ValueError(f"La factura origen '{reversal_of}' no pertenece a la misma compañía.")
+        raise ValueError(_("La factura origen '%(source)s' no pertenece a la misma compañía.") % {"source": reversal_of})
     if document_type == "purchase_credit_note":
         issued_withholding = database.session.execute(
             database.select(WithholdingCertificate.id)

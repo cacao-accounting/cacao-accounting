@@ -23,6 +23,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.document_flow.service import compute_outstanding_amount
 from cacao_accounting.ledger_queries import primary_ledger_id
+from cacao_accounting.i18n import _
 
 ALLOWED_METRICS = frozenset({"sales", "purchases", "income", "expenses", "gross_margin"})
 ALLOWED_DIMENSIONS = frozenset({"customer", "supplier", "item"})
@@ -101,7 +102,10 @@ def _convert_to_ledger_currency(
         if inv_value == 0:
             return Decimal("0")
         return amount / inv_value
-    raise ValueError(f"No existe tipo de cambio de {source_currency} a {target_currency} en {as_of_date}.")
+    raise ValueError(
+        _("No existe tipo de cambio de %(source)s a %(target)s en %(date)s.")
+        % {"source": source_currency, "target": target_currency, "date": as_of_date}
+    )
 
 
 def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = None) -> dict[str, Decimal]:
@@ -136,7 +140,7 @@ def _gl_totals(company: str, start: date, end: date, ledger_id: str | None = Non
 def metric_value(company: str, metric: str, start: date, end: date) -> Decimal:
     """Calculate one approved metric for a company and date range."""
     if metric not in ALLOWED_METRICS:
-        raise ValueError(f"Métrica no permitida: {metric}")
+        raise ValueError(_("Métrica no permitida: %(metric)s") % {"metric": metric})
     if metric == "sales":
         return _invoice_total(SalesInvoice, company, start, end)
     if metric == "purchases":
@@ -270,7 +274,7 @@ def compare_periods(
 def get_trend(company: str, metric: str, start: date, end: date) -> list[dict[str, Any]]:
     """Return monthly values for one approved metric."""
     if metric not in ALLOWED_METRICS:
-        raise ValueError(f"Métrica no permitida: {metric}")
+        raise ValueError(_("Métrica no permitida: %(metric)s") % {"metric": metric})
     buckets: list[tuple[date, date]] = []
     cursor = date(start.year, start.month, 1)
     while cursor <= end:
@@ -293,7 +297,7 @@ def get_trend(company: str, metric: str, start: date, end: date) -> list[dict[st
 def get_concentration(company: str, dimension: str, start: date, end: date, limit: int = 10) -> list[dict[str, Any]]:
     """Return the largest contributors for an approved dimension."""
     if dimension not in ALLOWED_DIMENSIONS:
-        raise ValueError(f"Dimensión no permitida: {dimension}")
+        raise ValueError(_("Dimensión no permitida: %(dimension)s") % {"dimension": dimension})
     totals = _concentration_totals(company, dimension, start, end)
     ordered = sorted(totals.items(), key=lambda pair: pair[1], reverse=True)
     grand_total = sum(totals.values(), Decimal("0"))

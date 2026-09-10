@@ -330,7 +330,7 @@ def _upload_item_image_if_available(item: Item) -> None:
 
         upload_item_image(item.code, image_file, user_id=str(current_user.id))
     except Exception as exc:
-        flash(f"Imagen no subida: {exc}", "warning")
+        flash(_("Imagen no subida: %(error)s") % {"error": exc}, "warning")
 
 
 @inventario.route("/item/new", methods=["GET", "POST"])

@@ -310,7 +310,7 @@ Atentamente,
             inv.sent_at = _utcnow()
             any_sent = True
         except EmailError as exc:
-            flash(f"Error al enviar correo a {inv.email}: {exc}", "danger")
+            flash(_("Error al enviar correo a %(email)s: %(error)s") % {"email": inv.email, "error": exc}, "danger")
 
     if any_sent:
         confirmation.status = "sent"
@@ -389,7 +389,7 @@ Atentamente,
             inv.sent_at = _utcnow()
             any_sent = True
         except EmailError as exc:
-            flash(f"Error al enviar correo a {inv.email}: {exc}", "danger")
+            flash(_("Error al enviar correo a %(email)s: %(error)s") % {"email": inv.email, "error": exc}, "danger")
 
     if any_sent:
         confirmation.status = "sent"

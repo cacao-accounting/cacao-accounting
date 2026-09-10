@@ -202,7 +202,7 @@ def save_cash_flow_mappings(company: str, overrides: dict[str, str | None]) -> N
         if not section:
             continue
         if section not in VALID_SECTIONS:
-            raise ValueError(f"Sección de flujo inválida: {section}")
+            raise ValueError(_("Sección de flujo inválida: %(section)s") % {"section": section})
         account = database.session.execute(
             select(Accounts).where(Accounts.id == account_id, Accounts.entity == company)
         ).scalar_one_or_none()

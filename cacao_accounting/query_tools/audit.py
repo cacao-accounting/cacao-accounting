@@ -9,6 +9,7 @@ from typing import Any
 
 from cacao_accounting.database import AuditTrail, database
 from cacao_accounting.query_tools.context import QueryContext
+from cacao_accounting.i18n import _
 
 ALLOWED_QUERY_ACTIONS = frozenset(
     {
@@ -54,7 +55,7 @@ def log_query_tool_event(
 ) -> None:
     """Registra un evento de auditoría para una herramienta de consulta."""
     if action not in ALLOWED_QUERY_ACTIONS:
-        raise ValueError(f"Acción de auditoría no permitida: {action}")
+        raise ValueError(_("Acción de auditoría no permitida: %(action)s") % {"action": action})
 
     entry = AuditTrail(
         document_type="query_tool",

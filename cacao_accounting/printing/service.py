@@ -301,7 +301,7 @@ class PrintService:
     ) -> dict[str, Any]:
         doc_def = get_printable_document(document_type)
         if doc_def is None:
-            raise ValueError(f"Document type {document_type} not registered.")
+            raise ValueError(_("Tipo de documento %(document_type)s no registrado.") % {"document_type": document_type})
         if sample:
             context = doc_def["sample_context_builder"](user=user, company=company_code)
             self._inject_validation_context(context, document_type, "sample", company_code)

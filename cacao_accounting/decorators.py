@@ -20,6 +20,7 @@ from werkzeug.exceptions import HTTPException
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
+from cacao_accounting.i18n import _
 from cacao_accounting.modulos import validar_modulo_activo
 
 
@@ -33,7 +34,7 @@ def modulo_activo(modulo):  # pragma: no cover
             if any(validar_modulo_activo(modulo_nombre) for modulo_nombre in modulos):
                 return func(*args, **kwargs)
             else:
-                flash("El modulo que intenta acceder se encuentra inactivo")
+                flash(_("El modulo que intenta acceder se encuentra inactivo"))
                 return abort(404)
 
         return wrapper
@@ -48,14 +49,14 @@ def verifica_acceso(modulo):  # pragma: no cover
         @wraps(func)
         def wrapper(*args, **kwargs):
             if not current_user.is_authenticated:
-                flash("No se encuentra autorizado a acceder al recurso solicitado.")
+                flash(_("No se encuentra autorizado a acceder al recurso solicitado."))
                 return abort(403)
             module_id = obtener_id_modulo_por_nombre(modulo)
             permisos = Permisos(modulo=module_id, usuario=current_user.id)
             if permisos.autorizado:
                 return func(*args, **kwargs)
             else:
-                flash("No se encuentra autorizado a acceder al recurso solicitado.")
+                flash(_("No se encuentra autorizado a acceder al recurso solicitado."))
                 return abort(403)
 
         return wrapper
@@ -70,13 +71,13 @@ def verifica_permiso(modulo: str, accion: str):
         @wraps(func)
         def wrapper(*args, **kwargs):
             if not current_user.is_authenticated:
-                flash("No se encuentra autorizado para ejecutar esta acción.")
+                flash(_("No se encuentra autorizado para ejecutar esta acción."))
                 return abort(403)
             module_id = obtener_id_modulo_por_nombre(modulo)
             permisos = Permisos(modulo=module_id, usuario=current_user.id)
             if getattr(permisos, accion, False):
                 return func(*args, **kwargs)
-            flash("No se encuentra autorizado para ejecutar esta acción.")
+            flash(_("No se encuentra autorizado para ejecutar esta acción."))
             return abort(403)
 
         return wrapper

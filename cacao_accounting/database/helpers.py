@@ -302,7 +302,7 @@ def get_next_sequence_value(sequence_id: str) -> int:
     seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id).with_for_update()).scalar_one_or_none()
 
     if seq is None:
-        raise ValueError(f"Secuencia con id '{sequence_id}' no encontrada.")
+        raise ValueError(_("Secuencia con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
 
     seq.current_value = (seq.current_value or 0) + seq.increment
     database.session.flush()
@@ -362,7 +362,7 @@ def generate_identifier(
         series = database.session.execute(database.select(NamingSeries).filter_by(id=naming_series_id)).scalar_one_or_none()
 
         if series is None:
-            raise ValueError(f"NamingSeries con id '{naming_series_id}' no encontrada.")
+            raise ValueError(_("NamingSeries con id '%(series)s' no encontrada.") % {"series": naming_series_id})
 
         prefix = resolve_naming_series_prefix(series.prefix_template, posting_date, company)
 
@@ -370,7 +370,7 @@ def generate_identifier(
         seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
 
         if seq is None:
-            raise ValueError(f"Sequence con id '{sequence_id}' no encontrada.")
+            raise ValueError(_("Sequence con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
 
         if should_reset_sequence(sequence_id, posting_date):
             reset_sequence(sequence_id)
@@ -514,7 +514,7 @@ def reset_sequence(sequence_id: str) -> None:
     seq = database.session.execute(database.select(Sequence).filter_by(id=sequence_id)).scalar_one_or_none()
 
     if seq is None:
-        raise ValueError(f"Secuencia con id '{sequence_id}' no encontrada.")
+        raise ValueError(_("Secuencia con id '%(sequence)s' no encontrada.") % {"sequence": sequence_id})
 
     seq.current_value = 0
     database.session.flush()

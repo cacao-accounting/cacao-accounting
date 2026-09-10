@@ -19,7 +19,7 @@ from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, UniqueConst
 from ulid import ULID
 from sqlalchemy.orm import synonym
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -457,12 +457,12 @@ class Entity(database.Model, BaseTabla):  # type: ignore[name-defined]
     country = database.Column(database.String(2), nullable=True)
     entity_type = database.Column(database.String(50))
     tipo_entidad_lista = [
-        "Asociación",
-        "Compañia Limitada",
-        "Cooperativa",
-        "Sociedad Anonima",
-        "Organización sin Fines de Lucro",
-        "Persona Natural",
+        _l("Asociación"),
+        _l("Compañia Limitada"),
+        _l("Cooperativa"),
+        _l("Sociedad Anonima"),
+        _l("Organización sin Fines de Lucro"),
+        _l("Persona Natural"),
     ]
     e_mail = database.Column(database.String(150))
     web = database.Column(database.String(50))
