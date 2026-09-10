@@ -26,6 +26,7 @@ from typing import Any, Sequence
 
 from cacao_accounting.database import Entity, database
 from cacao_accounting.document_flow import DocumentFlowError
+from cacao_accounting.i18n import _
 
 
 @dataclass(frozen=True)
@@ -75,7 +76,7 @@ def source_transaction_currencies(sources: Sequence[Any] | None) -> list[str]:
         currency = getattr(source, "transaction_currency", None)
         if not currency:
             raise DocumentFlowError(
-                "El documento origen no tiene moneda transaccional explicita; no se permite inferirla desde la compania.",
+                _("El documento origen no tiene moneda transaccional explicita; no se permite inferirla desde la compania."),
                 400,
             )
         currencies.append(str(currency))
@@ -96,9 +97,11 @@ def validate_flow_currency_homogeneity(sources: Sequence[Any] | None) -> str | N
     for index, currency in enumerate(currencies[1:], start=1):
         if currency != first:
             raise DocumentFlowError(
-                "Los documentos origen usan monedas distintas "
-                f"({first!r} vs {currency!r} en el origen #{index + 1}); "
-                "no se permite crear el documento derivado.",
+                _(
+                    "Los documentos origen usan monedas distintas "
+                    "({0} vs {1} en el origen #{2}); "
+                    "no se permite crear el documento derivado."
+                ).format(first, currency, index + 1),
                 400,
             )
     return first
