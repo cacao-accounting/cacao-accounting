@@ -456,7 +456,7 @@ def compras_solicitud_compra_close(request_id: str):
         abort(400)
     if not purchase_request_is_ready_to_close(registro):
         flash(
-            "La Solicitud de Compra requiere comparativos cerrados u órdenes de compra activas para todas sus líneas.",
+            _("La Solicitud de Compra requiere comparativos cerrados u órdenes de compra activas para todas sus líneas."),
             "danger",
         )
         return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
@@ -729,7 +729,7 @@ def compras_cotizacion_proveedor_nueva():
             return response
     from_request_id, from_rfq_id = _supplier_quotation_origin_ids()
     if from_request_id and from_rfq_id:
-        abort(400, "No se pueden combinar dos documentos origen.")
+        abort(400, _("No se pueden combinar dos documentos origen."))
     negotiation_round = current_negotiation_round(from_rfq_id) if from_rfq_id else None
     if negotiation_round and negotiation_round.status != "open":
         negotiation_round = None

@@ -468,16 +468,16 @@ def public_confirm_balance(token: str):
     if confirmation.status == "cancelled":
         return render_template(
             TEMPLATE_CONFIRM_BALANCE_STATUS,
-            title="Cancelada",
-            message="Esta solicitud de confirmación de saldo ha sido cancelada por el solicitante.",
+            title=_("Cancelada"),
+            message=_("Esta solicitud de confirmación de saldo ha sido cancelada por el solicitante."),
         )
 
     # Verificar fecha de expiración
     if _mark_expired(confirmation):
         return render_template(
             TEMPLATE_CONFIRM_BALANCE_STATUS,
-            title="Expirada",
-            message="Esta solicitud de confirmación de saldo ha expirado y ya no se permiten respuestas.",
+            title=_("Expirada"),
+            message=_("Esta solicitud de confirmación de saldo ha expirado y ya no se permiten respuestas."),
         )
 
     if confirmation.status in ("confirmed", "disputed"):
@@ -489,7 +489,7 @@ def public_confirm_balance(token: str):
         )
         return render_template(
             TEMPLATE_CONFIRM_BALANCE_STATUS,
-            title="Cerrada",
+            title=_("Cerrada"),
             message=msg,
         )
 
@@ -508,8 +508,8 @@ def public_confirm_balance(token: str):
     if not verify_snapshot_hash(confirmation):
         return render_template(
             TEMPLATE_CONFIRM_BALANCE_STATUS,
-            title="Error interno",
-            message=(
+            title=_("Error interno"),
+            message=_(
                 "El snapshot de esta solicitud no superó la verificación de integridad. Por favor contacte al solicitante."
             ),
         )
@@ -560,9 +560,8 @@ def public_confirm_balance_verify(token: str):
 
     # Rate limiting / failed attempts check
     if invitation.failed_attempts >= 5:
-        flash(
-            "Se ha excedido el número de intentos permitidos para este enlace. Por favor contacte al administrador.", "danger"
-        )
+        msg = _("Se ha excedido el número de intentos permitidos para este enlace. Por favor contacte al administrador.")
+        flash(msg, "danger")
         return redirect(url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=token))
 
     # Validar correspondencia exacta de correo
