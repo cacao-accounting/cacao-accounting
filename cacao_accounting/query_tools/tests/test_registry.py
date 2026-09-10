@@ -27,7 +27,7 @@ def test_register_duplicate_name():
     tool1 = QueryTool(name="test.dup", description="First", read_only=True)
     tool2 = QueryTool(name="test.dup", description="Second", read_only=True)
     r.register(tool1)
-    with pytest.raises(ValueError, match="already registered"):
+    with pytest.raises(ValueError, match="ya está registrada"):
         r.register(tool2)
 
 
