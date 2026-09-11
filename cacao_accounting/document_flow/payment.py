@@ -849,7 +849,7 @@ def _parse_reconciliation_line(raw_line: dict[str, Any]) -> _ReconciliationLineV
 def _validate_reconciliation_line(values: _ReconciliationLineValues, processed: set[tuple[str, str, str]]) -> None:
     """Validate amounts and prevent duplicate payment/document applications."""
     if values.allocated <= 0:
-        raise _document_flow_error(MSG_MONTO_MAYOR_CERO, 409)
+        raise _document_flow_error(_MSG_MONTO_MAYOR_CERO, 409)
     if values.discount + values.gain_loss >= values.allocated:
         raise _document_flow_error(
             _("El descuento + diferencia de cambio ({0}) no puede ser igual o mayor al monto asignado ({1}).").format(
@@ -884,7 +884,7 @@ def _discount_allocation_line(
             raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
     consumed = _cash_consumed(values.allocated, values.discount, values.gain_loss) * effective_rate
     if consumed > available + Decimal("0.01"):
-        raise _document_flow_error(MSG_PAGO_EXCEDE_SALDO, 409)
+        raise _document_flow_error(_MSG_PAGO_EXCEDE_SALDO, 409)
     return AllocationLine(
         document_id=values.document_id,
         document_type=values.flow_source_type,
@@ -1068,7 +1068,7 @@ def _plan_reconciliation_allocation(
         effective_rate = Decimal("1")
     else:
         if requested_rate is None:
-            raise _document_flow_error(MSG_TASA_PAGO_POSITIVA, 409)
+            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
         effective_rate = decimal_or_zero(requested_rate)
     resolver = OpenItemResolver(
         [
@@ -1101,7 +1101,7 @@ def _plan_reconciliation_allocation(
         raise _document_flow_error(message, 409) from exc
     line = plan.lines[0]
     if line.source_amount > available + Decimal("0.01"):
-        raise _document_flow_error(MSG_PAGO_EXCEDE_SALDO, 409)
+        raise _document_flow_error(_MSG_PAGO_EXCEDE_SALDO, 409)
     return line
 
 
