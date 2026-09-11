@@ -6513,7 +6513,7 @@ msgstr "Could not determine the bank account currency."
 #: cacao_accounting/bancos/templates/bancos/pago.html:41
 #: cacao_accounting/templates/macros.html:136
 msgid "Caja y Bancos"
-msgstr "Caja and Banks"
+msgstr "Cash Management"
 
 #: cacao_accounting/bancos/templates/bancos.html:25
 msgid "Gestiona cuentas, pagos, transferencias y conciliaciones."
