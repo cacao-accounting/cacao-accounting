@@ -13763,3 +13763,74 @@ msgstr "Partially Billed"
 #: cacao_accounting/document_flow/status.py:286
 msgid "Pendiente Facturar"
 msgstr "Pending Billing"
+
+#: cacao_accounting/admin/routes.py
+msgid "Debe seleccionar una compania."
+msgstr "You must select a company."
+
+
+#: cacao_accounting/contabilidad/services.py
+msgid "La entidad indicada no existe."
+msgstr "The specified entity does not exist."
+
+
+#: cacao_accounting/document_flow/service.py
+msgid "Linea origen no encontrada."
+msgstr "Source line not found."
+
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "entradas GL"
+msgstr "GL entries"
+
+
+#: cacao_accounting/contabilidad/routes.py
+msgid "movimientos de inventario"
+msgstr "inventory movements"
+
+
+#: cacao_accounting/ventas/services.py
+msgid "La compañía de un documento existente no puede cambiarse."
+msgstr "The company of an existing document cannot be changed."
+
+
+#: cacao_accounting/imports/routes.py
+msgid "Contabilidad y Maestros"
+msgstr "Accounting and Master Data"
+
+
+#: cacao_accounting/imports/routes.py
+msgid "Extractos Bancarios"
+msgstr "Bank Statements"
+
+
+#: cacao_accounting/imports/routes.py
+msgid "Entradas de Pronóstico de Caja"
+msgstr "Cash Forecast Entries"
+
+
+#: cacao_accounting/imports/routes.py
+msgid "Source to Pay"
+msgstr "Source to Pay"
+
+
+#: cacao_accounting/imports/routes.py
+msgid "Order to Cash"
+msgstr "Order to Cash"
+
+
+#: cacao_accounting/ventas/services.py
+msgid "la Lista de Precios"
+msgstr "the Price List"
+
+
+#: cacao_accounting/ventas/services.py
+msgid ""
+"El precio del item {item_code} (${rate}) difiere del precio en {reference} "
+"(${source_rate}) en {variance}{unit}. Tolerancia permitida: "
+"{tolerance}{unit}."
+msgstr ""
+"The price of item {item_code} (${rate}) differs from the price in "
+"{reference} (${source_rate}) by {variance}{unit}. Allowed tolerance: "
+"{tolerance}{unit}."
+
