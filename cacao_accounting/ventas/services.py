@@ -881,7 +881,7 @@ def _sales_source_line_reference(index: int) -> tuple[str, str, str] | None:
     if not any(source_values):
         return None
     if not all(source_values):
-        raise DocumentFlowError("La referencia de documento fuente está incompleta.", 400)
+        raise DocumentFlowError(_("La referencia de documento fuente está incompleta."), 400)
     return cast(tuple[str, str, str], source_values)
 
 
@@ -896,7 +896,7 @@ def _sales_source_line_model(source_type: str) -> tuple[type[Any], str]:
     }
     model_data = models.get(source_type)
     if model_data is None:
-        raise DocumentFlowError("El tipo de documento fuente no es válido para ventas.", 400)
+        raise DocumentFlowError(_("El tipo de documento fuente no es válido para ventas."), 400)
     return model_data
 
 
@@ -909,7 +909,7 @@ def _source_line_rate(index: int, submitted_rate: Decimal) -> Decimal:
     model, document_id_field = _sales_source_line_model(source_type)
     source_item: Any = database.session.get(model, source_item_id)
     if source_item is None or getattr(source_item, document_id_field) != source_id:
-        raise DocumentFlowError("La línea de documento fuente no existe o no corresponde al documento indicado.", 400)
+        raise DocumentFlowError(_("La línea de documento fuente no existe o no corresponde al documento indicado."), 400)
     return Decimal(str(source_item.rate or "0"))
 
 
