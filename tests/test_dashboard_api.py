@@ -361,6 +361,73 @@ def test_dashboard_handles_null_month_and_posting_dates(app, client):
     assert "sections" in data
 
 
+def test_dashboard_labels_default_to_spanish(client):
+    """Sin idioma de usuario las etiquetas del payload salen en el idioma base."""
+    _login(client, "admin")
+    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+
+    assert response.status_code == 200
+    sections = response.get_json()["sections"]
+    assert sections["accounting"]["title"] == "Contabilidad"
+    assert sections["accounting"]["subtitle"] == "Resumen financiero del periodo seleccionado."
+    assert sections["accounting"]["kpis"]["profit"]["label"] == "Utilidad"
+
+
+def test_dashboard_labels_follow_user_language(app, client):
+    """El payload del dashboard se traduce con Flask-Babel segun el idioma del usuario."""
+    _login(client, "admin")
+    with app.app_context():
+        user = database.session.get(User, "USER-ADMIN")
+        user.language = "en"
+        database.session.commit()
+
+    response = client.get("/api/dashboard/data?company=COMP-ID&period=PER-COMP")
+
+    assert response.status_code == 200
+    sections = response.get_json()["sections"]
+    assert sections["accounting"]["title"] == "Accounting"
+    assert sections["accounting"]["subtitle"] == "Financial summary for the selected period."
+    assert sections["accounting"]["kpis"]["profit"]["label"] == "Profit"
+    assert sections["accounting"]["tables"]["summary"][3]["label"] == "Journal entries for the period"
+    assert sections["accounting"]["actions"][0]["label"] == "New Journal Entry"
+    assert sections["banks"]["kpis"]["balance"]["label"] == "Bank balance"
+    assert sections["purchases"]["empty_state"] == "There are no purchases in the selected period."
+    assert sections["sales"]["actions"][0]["label"] == "New invoice"
+    assert sections["inventory"]["empty_state"] == "There is no stock or inventory movement."
+
+
+def test_dashboard_error_messages_follow_user_language(app, client):
+    """Los mensajes de error del API tambien respetan el idioma del usuario."""
+    _login(client, "admin")
+    with app.app_context():
+        user = database.session.get(User, "USER-ADMIN")
+        user.language = "en"
+        database.session.commit()
+
+    response = client.get("/api/dashboard/data?company=missing")
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Company not found"
+
+
+def test_hidden_section_labels_follow_user_language(app):
+    """Las etiquetas de una seccion oculta por permisos se traducen con el locale activo."""
+    from flask_login import login_user
+
+    from cacao_accounting.api.dashboard import _hidden_section
+
+    with app.test_request_context("/api/dashboard/data"):
+        user = database.session.get(User, "USER-ADMIN")
+        user.language = "en"
+        database.session.commit()
+        login_user(user)
+
+        section = _hidden_section("Contabilidad", "resumen")
+
+        assert section["badge"] == "Hidden by permissions"
+        assert section["empty_state"] == "You do not have permission to view this section."
+
+
 def _seed_dashboard_data() -> None:
     """Inserta datos mínimos para métricas y permisos del dashboard."""
     _seed_modules()

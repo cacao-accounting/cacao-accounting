@@ -1401,11 +1401,17 @@ def _validate_single_item_price(
         return None
 
     unit = "%" if tolerance_type == "percentage" else ""
-    msg = (
-        f"El precio del item {si_item.item_code} (${si_rate}) "
-        f"difiere del precio en {reference_label} (${so_rate}) "
-        f"en {variance:.2f}{unit}. "
-        f"Tolerancia permitida: {tolerance_value}{unit}."
+    msg = _(
+        "El precio del item {item_code} (${rate}) difiere del precio en {reference} "
+        "(${source_rate}) en {variance}{unit}. Tolerancia permitida: {tolerance}{unit}."
+    ).format(
+        item_code=si_item.item_code,
+        rate=si_rate,
+        reference=reference_label,
+        source_rate=so_rate,
+        variance=f"{variance:.2f}",
+        unit=unit,
+        tolerance=tolerance_value,
     )
     if allow_diff:
         return msg
@@ -1435,7 +1441,7 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
         reference_label = _LABEL_ORDEN_VENTA
         if so_rate is None:
             so_rate = _resolve_catalog_sales_rate(invoice, si_item)
-            reference_label = "la Lista de Precios"
+            reference_label = _("la Lista de Precios")
         if so_rate is None:
             continue
 

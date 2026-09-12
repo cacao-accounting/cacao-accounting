@@ -1166,7 +1166,7 @@ msgid "Buscar"
 msgstr "Search"
 
 msgid "Buscar por destinatario, asunto o documento..."
-msgstr "Search by destinatario, asunto or document..."
+msgstr "Search by recipient, subject, or document..."
 
 msgid "Estado"
 msgstr "Status"
@@ -1247,7 +1247,7 @@ msgid "Usar TLS (STARTTLS)"
 msgstr "Use TLS (STARTTLS)"
 
 msgid "Remitente predeterminado (From Email)"
-msgstr "Remitente default (From Email)"
+msgstr "Default sender (From Email)"
 
 msgid "e.g. noreply@example.com"
 msgstr "e.g. noreply@example.com"
@@ -1465,7 +1465,7 @@ msgid "Número/ID"
 msgstr "Number/ID"
 
 msgid "Solicitado por"
-msgstr "Solicitado by"
+msgstr "Requested by"
 
 msgid "Monto"
 msgstr "Amount"
@@ -1528,7 +1528,7 @@ msgid "Tipo de Matching"
 msgstr "Matching Type"
 
 msgid "3-way — OC + Recepción + Factura (recomendado)"
-msgstr "3-way — OC + Receipt + Invoice (recomendado)"
+msgstr "3-way — PO + Receipt + Invoice (recommended)"
 
 msgid "2-way — OC + Factura"
 msgstr "2-way — OC + Invoice"
@@ -1694,7 +1694,7 @@ msgstr ""
 "tolerances per company. 3-way mode is the strictest and is the default."
 
 msgid "3-way — OV + Nota de Entrega + Factura (recomendado)"
-msgstr "3-way — OV + Delivery Note + Invoice (recomendado)"
+msgstr "3-way — SO + Delivery Note + Invoice (recommended)"
 
 msgid "2-way — OV + Factura"
 msgstr "2-way — OV + Invoice"
@@ -1918,16 +1918,16 @@ msgid "Afecta total"
 msgstr "Affects total"
 
 msgid "Afecta pago/cobro"
-msgstr "Afecta payment/collection"
+msgstr "Affects payment/collection"
 
 msgid "Participa en base posterior"
-msgstr "Participa in base posterior"
+msgstr "Participates in next base"
 
 msgid "Nueva regla"
 msgstr "New rule"
 
 msgid "Lista de reglas fiscales configuradas"
-msgstr "List of reglas fiscales configuradas"
+msgstr "List of configured tax rules"
 
 msgid "Ámbito"
 msgstr "Scope"
@@ -1942,7 +1942,7 @@ msgid "Líneas de Plantilla"
 msgstr "Template Lines"
 
 msgid "Documento neto"
-msgstr "Document neto"
+msgstr "Net document"
 
 msgid "Total previo"
 msgstr "Previous total"
@@ -1960,7 +1960,7 @@ msgid "Agregar"
 msgstr "Add value"
 
 msgid "Líneas que componen la plantilla de impuestos"
-msgstr "Lines that compose the plantilla of taxes"
+msgstr "Lines that make up the tax template"
 
 msgid "Secuencia"
 msgstr "Sequence"
@@ -2071,7 +2071,7 @@ msgid "No se pudo calcular el preview fiscal."
 msgstr "The tax preview could not be calculated."
 
 msgid "Revise los datos enviados."
-msgstr "Revise the datos enviados."
+msgstr "Check the submitted data."
 
 msgid "El envío de correos no está disponible."
 msgstr "Mailing is not available."
@@ -2098,7 +2098,7 @@ msgid "Archivo adjuntado exitosamente."
 msgstr "File attached successfully."
 
 msgid "Adjunto eliminado."
-msgstr "Adjunto deleted."
+msgstr "Attachment deleted."
 
 msgid "Imagen del producto actualizada."
 msgstr "Product image updated."
@@ -2909,7 +2909,7 @@ msgid "Listado de Notas de Crédito Bancario"
 msgstr "Bank Credit Notes List"
 
 msgid "Transacciones bancarias conciliadas correctamente."
-msgstr "Transacciones bancarias conciliadas successfully."
+msgstr "Bank transactions reconciled successfully."
 
 msgid "Una o mas transacciones ya estan reconciliadas."
 msgstr "One or more transactions are already reconciled."
@@ -2958,13 +2958,13 @@ msgstr "The specified bank account does not exist."
 
 #, python-brace-format
 msgid "Regla ejecutada: {count} transacciones evaluadas."
-msgstr "Rule ejecutada: {count} transacciones evaluadas."
+msgstr "Rule executed: {count} transactions evaluated."
 
 msgid "Nueva Nota de Débito Bancario"
-msgstr "New Debit Note Bancario"
+msgstr "New Bank Debit Note"
 
 msgid "Nueva Nota de Crédito Bancario"
-msgstr "New Credit Note Bancario"
+msgstr "New Bank Credit Note"
 
 msgid "Nueva Transferencia Bancaria"
 msgstr "New Bank Transfer"
@@ -2979,7 +2979,7 @@ msgid "Cobro de Cliente"
 msgstr "Customer Collection"
 
 msgid "Transferencia Interna"
-msgstr "Transfer Interna"
+msgstr "Internal Transfer"
 
 msgid "Nota de Debito"
 msgstr "Debit Note"
@@ -3447,7 +3447,7 @@ msgid "Bancos"
 msgstr "Banks"
 
 msgid "Cuentas Bancarias"
-msgstr "Accounts Bancarias"
+msgstr "Bank Accounts"
 
 msgid "Reglas de Matching"
 msgstr "Matching Rules"
@@ -3489,7 +3489,7 @@ msgid "Transacciones Bancarias"
 msgstr "Bank Transactions"
 
 msgid "Importar Extracto Bancario"
-msgstr "Import Extracto Bancario"
+msgstr "Import Bank Statement"
 
 msgid "Conciliación Bancaria"
 msgstr "Bank Reconciliation"
@@ -3637,7 +3637,7 @@ msgid "Chequera"
 msgstr "Checkbook"
 
 msgid "Buscar chequera"
-msgstr "Search chequera"
+msgstr "Search checkbook"
 
 msgid "Listado de Bancos"
 msgstr "Bank List"
@@ -3776,7 +3776,7 @@ msgid "Beneficiario / Proveedor"
 msgstr "Beneficiary / Supplier"
 
 msgid "Cuenta de gasto"
-msgstr "Account of gasto"
+msgstr "Expense account"
 
 msgid "Centro de costo"
 msgstr "Cost Center"
@@ -4185,7 +4185,7 @@ msgid "Seleccione..."
 msgstr "Select..."
 
 msgid "No hay transacciones pendientes de conciliación."
-msgstr "There are no transacciones pending of reconciliation."
+msgstr "There are no transactions pending reconciliation."
 
 msgid "Conciliar seleccionados"
 msgstr "Reconcile selected"
@@ -4233,7 +4233,7 @@ msgid "Seleccione"
 msgstr "Select"
 
 msgid "Agregue aplicaciones para registrar la conciliación."
-msgstr "Agregue aplicaciones for registrar the reconciliation."
+msgstr "Add allocations to record the reconciliation."
 
 msgid "No se pudieron cargar candidatos."
 msgstr "Could not load candidates."
@@ -4253,7 +4253,7 @@ msgstr ""
 "which offers downloadable template, preview and validation."
 
 msgid "Volver a Transacciones"
-msgstr "Volver to Transacciones"
+msgstr "Back to Transactions"
 
 msgid "Por favor complete los campos obligatorios."
 msgstr "Please complete the required fields."
@@ -4301,7 +4301,7 @@ msgid "No. documento..."
 msgstr "No. document..."
 
 msgid "Descripción / Concepto"
-msgstr "Description / Concepto"
+msgstr "Description / Concept"
 
 msgid "Recibir"
 msgstr "Receive"
@@ -4340,7 +4340,7 @@ msgid "Fecha de referencia"
 msgstr "Reference Date"
 
 msgid "Contador externo"
-msgstr "Contador external"
+msgstr "External accountant"
 
 msgid "Número de cheque"
 msgstr "Check Number"
@@ -4367,7 +4367,7 @@ msgid "Asientos Contables"
 msgstr "Accounting Entries"
 
 msgid "Entradas GL generadas por el pago"
-msgstr "Entradas GL generadas by the payment"
+msgstr "GL entries generated by the payment"
 
 msgid "Libro"
 msgstr "Book"
@@ -4412,13 +4412,13 @@ msgid "Forma de pago..."
 msgstr "Mode of payment..."
 
 msgid "Buscar chequera..."
-msgstr "Search chequera..."
+msgstr "Search checkbook..."
 
 msgid "Número de cheque a emitir"
 msgstr "Check Number to Issue"
 
 msgid "Definido por el contador externo"
-msgstr "Definido by the contador external"
+msgstr "Defined by the external accountant"
 
 msgid "Pago de / a"
 msgstr "Payment of / to"
@@ -4433,7 +4433,7 @@ msgid "Nombre de Parte"
 msgstr "Name Party"
 
 msgid "Cantidad Pagada"
-msgstr "Quantity Pagada"
+msgstr "Quantity Paid"
 
 msgid "Cargar pendientes"
 msgstr "Load pending"
@@ -4544,7 +4544,7 @@ msgid "Fijo"
 msgstr "Fixed"
 
 msgid "Cuenta separada"
-msgstr "Account separada"
+msgstr "Separate account"
 
 msgid "Capitalizable a inventario"
 msgstr "Capitalizable to inventory"
@@ -4633,10 +4633,10 @@ msgid "Banco Origen"
 msgstr "Source Bank"
 
 msgid "Seleccionar origen..."
-msgstr "Select origen..."
+msgstr "Select source..."
 
 msgid "Monto a Transferir"
-msgstr "Amount to Transferir"
+msgstr "Amount to Transfer"
 
 msgid "Cuenta de Destino"
 msgstr "Account Destination"
@@ -4645,13 +4645,13 @@ msgid "Banco Destino"
 msgstr "Target Bank"
 
 msgid "Seleccionar destino..."
-msgstr "Select destino..."
+msgstr "Select destination..."
 
 msgid "Tipo de Cambio"
 msgstr "Type Change"
 
 msgid "Monto esperado en destino"
-msgstr "Amount esperado in destino"
+msgstr "Expected amount at destination"
 
 msgid ""
 "Si las monedas son distintas, se aplicará el tipo de cambio del sistema "
@@ -5793,7 +5793,7 @@ msgid "Total Cargos"
 msgstr "Total Charges"
 
 msgid "Valor Inventario"
-msgstr "Valor Inventory"
+msgstr "Inventory Value"
 
 msgid "Articulos"
 msgstr "Items"
@@ -5909,7 +5909,7 @@ msgid "Código"
 msgstr "Code"
 
 msgid "Nombre comercial"
-msgstr "Name comercial"
+msgstr "Trade name"
 
 msgid "Nombre fiscal"
 msgstr "Name fiscal"
@@ -5969,7 +5969,7 @@ msgid "Listado de proveedores."
 msgstr "List of suppliers."
 
 msgid "Nombre Comercial"
-msgstr "Name Comercial"
+msgstr "Trade Name"
 
 msgid "RUC / ID Fiscal"
 msgstr "Tax ID / Fiscal ID"
@@ -6005,7 +6005,7 @@ msgid "Facturas sin Recepción (En Tránsito)"
 msgstr "Invoices without Receipt (In Transit)"
 
 msgid "Recepciones sin Factura"
-msgstr "Recepciones without Invoice"
+msgstr "Receipts without Invoice"
 
 msgid ""
 "Monitoreo del estatus físico (recepción) y financiero (facturación) de "
@@ -6080,7 +6080,7 @@ msgid "Total Recepción"
 msgstr "Total Receipt"
 
 msgid "No hay recepciones pendientes de facturar."
-msgstr "There are no recepciones pending of facturar."
+msgstr "There are no receipts pending invoicing."
 
 msgid "Detalle por Línea de Recepción Pendiente"
 msgstr "Detail by Line Receipt Pending"
@@ -6131,7 +6131,7 @@ msgid "Tipo matching"
 msgstr "Type matching"
 
 msgid "Monto conciliado"
-msgstr "Amount conciliado"
+msgstr "Reconciled amount"
 
 msgid "3-way"
 msgstr "3-way"
@@ -6161,7 +6161,7 @@ msgid "Solicitudes de Compra"
 msgstr "Purchase Requests"
 
 msgid "Estado de proceso"
-msgstr "Status of proceso"
+msgstr "Process status"
 
 msgid "Listado de Solicitudes de Compra"
 msgstr "Purchase Request List"
@@ -7870,7 +7870,7 @@ msgid "Primario"
 msgstr "Primary"
 
 msgid "Volver al Listado"
-msgstr "Volver to the List"
+msgstr "Back to the List"
 
 msgid "Entidad"
 msgstr "Entity"
@@ -7879,7 +7879,7 @@ msgid "activo"
 msgstr "active"
 
 msgid "Libro Primario"
-msgstr "Book Primario"
+msgstr "Primary Book"
 
 msgid "Nuevo Libro de Contabilidad"
 msgstr "New Accounting Book"
@@ -7894,7 +7894,7 @@ msgid "Guardar Libro"
 msgstr "Save Book"
 
 msgid "Buscar entidad"
-msgstr "Search entidad"
+msgstr "Search entity"
 
 msgid "Nuevo Libro"
 msgstr "New Book"
@@ -7921,7 +7921,7 @@ msgid "Centro de Detalle"
 msgstr "Detail Center"
 
 msgid "Centro Padre"
-msgstr "Center Padre"
+msgstr "Parent Center"
 
 msgid "Habilitado"
 msgstr "Enabled"
@@ -7960,7 +7960,7 @@ msgid "Tipo de Cuenta"
 msgstr "Account Type"
 
 msgid "Cuenta Padre"
-msgstr "Account Padre"
+msgstr "Parent Account"
 
 msgid "Moneda de la Compañía"
 msgstr "Currency of the Companies"
@@ -7981,7 +7981,7 @@ msgid "Nombre de la Cuenta"
 msgstr "Name of the Account"
 
 msgid "Buscar cuenta de grupo"
-msgstr "Search account of grupo"
+msgstr "Search group account"
 
 msgid "Es cuenta de grupo"
 msgstr "Is Group Account"
@@ -8008,7 +8008,7 @@ msgid "ID Fiscal"
 msgstr "Tax ID"
 
 msgid "Datos de Contacto"
-msgstr "Datos Contact"
+msgstr "Contact Details"
 
 msgid "Página Web"
 msgstr "Website"
@@ -8023,13 +8023,13 @@ msgid "Fax"
 msgstr "Fax"
 
 msgid "Nueva Entidad"
-msgstr "New Entidad"
+msgstr "New Entity"
 
 msgid "Crear Nueva Entidad"
-msgstr "Create New Entidad"
+msgstr "Create New Entity"
 
 msgid "Guardar Entidad"
-msgstr "Save Entidad"
+msgstr "Save Entity"
 
 msgid "Información Básica"
 msgstr "Basic Information"
@@ -8065,7 +8065,7 @@ msgid "Número Fax"
 msgstr "Fax Number"
 
 msgid "Editar Entidad"
-msgstr "Edit Entidad"
+msgstr "Edit Entity"
 
 msgid "Entidad activa"
 msgstr "Active entity"
@@ -8074,7 +8074,7 @@ msgid "Listado de Entidades"
 msgstr "List Entities"
 
 msgid "Listado de entidades"
-msgstr "List of entidades"
+msgstr "List of entities"
 
 msgid "Período contable"
 msgstr "Accounting Period"
@@ -8083,10 +8083,10 @@ msgid "Periodo"
 msgstr "Permission"
 
 msgid "Documentos procesados"
-msgstr "Documents procesados"
+msgstr "Processed documents"
 
 msgid "Documentos afectados"
-msgstr "Documents afectados"
+msgstr "Affected documents"
 
 msgid "Ganancia"
 msgstr "Gain"
@@ -8107,7 +8107,7 @@ msgid "Ledger destino"
 msgstr "Target Ledger"
 
 msgid "Moneda origen"
-msgstr "Currency origen"
+msgstr "Source currency"
 
 msgid "Saldo original"
 msgstr "Original Balance"
@@ -8276,7 +8276,7 @@ msgid "Ver bitacora de auditoria"
 msgstr "View audit log"
 
 msgid "Cambiar estado del contador?"
-msgstr "Cambiar counter status?"
+msgstr "Change counter status?"
 
 msgid "No hay contadores externos registrados."
 msgstr "There are no external counters recorded."
@@ -8373,7 +8373,7 @@ msgid "Fecha Fin"
 msgstr "Date Fin"
 
 msgid "Buscar por nombre o entidad..."
-msgstr "Search by name or entidad..."
+msgstr "Search by name or entity..."
 
 msgid "Listado de Años Fiscales"
 msgstr "Fiscal Years List"
@@ -8388,7 +8388,7 @@ msgid "Comprobante manual"
 msgstr "Manual Entry"
 
 msgid "Editar borrador"
-msgstr "Edit borrador"
+msgstr "Edit draft"
 
 msgid "Contabilizar"
 msgstr "Post"
@@ -8660,7 +8660,7 @@ msgid "Seleccione archivo XLSX:"
 msgstr "Select XLSX file:"
 
 msgid "Descargar Plantilla"
-msgstr "Download Plantilla"
+msgstr "Download Template"
 
 msgid ""
 "Use el asistente de importación compartido para cargar comprobantes "
@@ -8670,7 +8670,7 @@ msgstr ""
 "or ODS with downloadable template and validation."
 
 msgid "Vista previa de datos"
-msgstr "Preview of datos"
+msgstr "Data preview"
 
 msgid "líneas"
 msgstr "lines"
@@ -8685,7 +8685,7 @@ msgid "Fila"
 msgstr "Row"
 
 msgid "Datos validados correctamente. Listo para insertar."
-msgstr "Datos validados successfully. Listo for insertar."
+msgstr "Data validated successfully. Ready to insert."
 
 msgid "Validar datos"
 msgstr "Validate data"
@@ -8767,7 +8767,7 @@ msgid "Aplicada"
 msgstr "Applied"
 
 msgid "No hay plantillas recurrentes aplicables."
-msgstr "There are no plantillas recurrentes aplicables."
+msgstr "There are no applicable recurring templates."
 
 msgid "Paso 2: revalorización cambiaria"
 msgstr "Step 2: exchange revaluation"
@@ -9051,7 +9051,7 @@ msgid "Plantilla activa para aplicar por periodo."
 msgstr "Active template to apply by period."
 
 msgid "Inactivo; conserva historial y requiere motivo."
-msgstr "Inactive; conserva history and requiere motivo."
+msgstr "Inactive; keeps history and requires a reason."
 
 msgid "Finalizado al aplicar el ultimo periodo definido."
 msgstr "Completed when applying the last defined period."
@@ -9105,7 +9105,7 @@ msgid "Última aplicación"
 msgstr "Last application"
 
 msgid "Líneas de la plantilla"
-msgstr "Lines the plantilla"
+msgstr "Template lines"
 
 msgid "Asientos contables definidos en la plantilla"
 msgstr "Journal entries defined in the template"
@@ -9120,7 +9120,7 @@ msgid "Sin aplicaciones registradas."
 msgstr "No applications recorded."
 
 msgid "Cancelar Plantilla"
-msgstr "Cancel Plantilla"
+msgstr "Cancel Template"
 
 msgid "Confirmar"
 msgstr "Confirm"
@@ -9129,7 +9129,7 @@ msgid "Moneda base"
 msgstr "Currency base"
 
 msgid "Moneda destino"
-msgstr "Currency destino"
+msgstr "Destination currency"
 
 msgid "Nueva Tasa de Cambio"
 msgstr "New Rate Change"
@@ -9138,10 +9138,10 @@ msgid "Guardar Tasa"
 msgstr "Save Rate"
 
 msgid "Moneda Origen"
-msgstr "Currency Origen"
+msgstr "Source Currency"
 
 msgid "Moneda Destino"
-msgstr "Currency Destino"
+msgstr "Destination Currency"
 
 msgid "Tasa de Cambio"
 msgstr "Exchange Rate"
@@ -9291,7 +9291,7 @@ msgid ", obligatorio"
 msgstr ", required"
 
 msgid "Validar y Previsualizar"
-msgstr "Validar and Previsualizar"
+msgstr "Validate and Preview"
 
 msgid "Previsualizar e Insertar"
 msgstr "Preview and Insert"
@@ -9365,7 +9365,7 @@ msgid "Expandir"
 msgstr "Expand"
 
 msgid "Rango de Periodos"
-msgstr "Rango Permissions"
+msgstr "Period Range"
 
 msgid "Desde"
 msgstr "From"
@@ -9374,7 +9374,7 @@ msgid "Hasta"
 msgstr "To"
 
 msgid "Rango de Cuentas"
-msgstr "Rango Accounts"
+msgstr "Account Range"
 
 msgid "Cuenta Desde"
 msgstr "Account From"
@@ -9395,7 +9395,7 @@ msgid "Anual"
 msgstr "Annual"
 
 msgid "Generar Reporte"
-msgstr "Generar Report"
+msgstr "Generate Report"
 
 msgid ""
 "Este reporte contrasta la ejecución real con el presupuesto por período, "
@@ -9429,7 +9429,7 @@ msgid "Variación Total"
 msgstr "Total Variance"
 
 msgid "Seleccione los filtros y presione 'Generar Reporte'."
-msgstr "Select the filtros and presione 'Generar Report'."
+msgstr "Select the filters and press 'Generate Report'."
 
 msgid "Las líneas del ledger son inmutables; use una reversa append-only."
 msgstr "Ledger lines are immutable; use an append-only reversal."
@@ -9698,7 +9698,7 @@ msgid "El documento debe tener al menos una linea de detalle."
 msgstr "The document must have at least one detail line."
 
 msgid "Error interno al procesar la solicitud."
-msgstr "Error interno to the procesar the request."
+msgstr "Internal error while processing the request."
 
 msgid "Debe seleccionar compañía y tipo de registro."
 msgstr "You must select company and record type."
@@ -9800,7 +9800,7 @@ msgid "El periodo contable para la fecha %(date)s está cerrado."
 msgstr "The accounting period for date %(date)s is closed."
 
 msgid "Lote de Importación"
-msgstr "Lote Import"
+msgstr "Import Batch"
 
 msgid "Información del Lote"
 msgstr "Batch Information"
@@ -9812,16 +9812,16 @@ msgid "Archivo cargado"
 msgstr "File uploaded"
 
 msgid "Validado con errores"
-msgstr "Validado with errores"
+msgstr "Validated with errors"
 
 msgid "Listo para importar"
-msgstr "Listo for importar"
+msgstr "Ready to import"
 
 msgid "Procesando"
 msgstr "Processing"
 
 msgid "Completado con errores"
-msgstr "Completado with errores"
+msgstr "Completed with errors"
 
 msgid "Tipo de Registro"
 msgstr "Type Record"
@@ -9854,10 +9854,10 @@ msgid "documentos detectados"
 msgstr "documents detected"
 
 msgid "Vista previa de los datos a importar"
-msgstr "Preview of the datos to importar"
+msgstr "Preview of data to import"
 
 msgid "Lotes de Importación"
-msgstr "Lotes Import"
+msgstr "Import Batches"
 
 msgid "Nueva Importación"
 msgstr "New Import"
@@ -9882,13 +9882,13 @@ msgid "No hay lotes de importación"
 msgstr "There are no import lots"
 
 msgid "Cree un lote para cargar plantillas CSV, XLSX, XLS u ODS."
-msgstr "Cree to lote for cargar plantillas CSV, XLSX, XLS u ODS."
+msgstr "Create a batch to load CSV, XLSX, XLS, or ODS templates."
 
 msgid "Importaciones"
 msgstr "Imports"
 
 msgid "Crear Lote"
-msgstr "Create Lote"
+msgstr "Create Batch"
 
 #, python-format
 msgid "Imagen no subida: %(error)s"
@@ -10152,7 +10152,7 @@ msgid "Entradas de Almacén"
 msgstr "Warehouse Entries"
 
 msgid "Existencia de Inventario"
-msgstr "Inventory Existencia"
+msgstr "Inventory Stock"
 
 msgid "Balance de Stock"
 msgstr "Stock Balance"
@@ -10194,13 +10194,13 @@ msgid "Modelo"
 msgstr "Model"
 
 msgid "Imagen del producto"
-msgstr "Image the producto"
+msgstr "Product image"
 
 msgid "¿Eliminar la imagen del producto?"
 msgstr "Delete the product image?"
 
 msgid "Eliminar imagen"
-msgstr "Delete imagen"
+msgstr "Delete image"
 
 msgid "Este artículo no tiene imagen."
 msgstr "This item has no image."
@@ -10212,7 +10212,7 @@ msgid "Cambiar imagen"
 msgstr "Change image"
 
 msgid "Clasificacion y flags"
-msgstr "Clasificacion and flags"
+msgstr "Classification and flags"
 
 msgid "Es item de inventario"
 msgstr "Is inventory item"
@@ -10224,7 +10224,7 @@ msgid "Es vendible"
 msgstr "Is sellable"
 
 msgid "Control por lote"
-msgstr "Control by lote"
+msgstr "Batch control"
 
 msgid "Control por serie"
 msgstr "Control by series"
@@ -10248,7 +10248,7 @@ msgid "Stock maximo"
 msgstr "Maximum stock"
 
 msgid "Punto de reorden"
-msgstr "Punto of reorden"
+msgstr "Reorder point"
 
 msgid "Precio base"
 msgstr "Price base"
@@ -10266,7 +10266,7 @@ msgid "La unidad base es la referencia para todas las conversiones del item."
 msgstr "The base unit is the reference for all conversions of the item."
 
 msgid "Conversiones UOM del item"
-msgstr "Conversiones UOM of the item"
+msgstr "Item UOM conversions"
 
 msgid "UOM origen"
 msgstr "Source UOM"
@@ -10278,7 +10278,7 @@ msgid "Factor"
 msgstr "Factor"
 
 msgid "No hay conversiones UOM configuradas."
-msgstr "There are no conversiones UOM configuradas."
+msgstr "There are no UOM conversions configured."
 
 msgid "Configuracion contable por compania"
 msgstr "Accounting configuration by company"
@@ -10326,13 +10326,13 @@ msgid "Datos basicos"
 msgstr "Basic data"
 
 msgid "Buscar categoria"
-msgstr "Search categoria"
+msgstr "Search category"
 
 msgid "Seleccione una opcion valida"
-msgstr "Select opcion valida"
+msgstr "Select a valid option"
 
 msgid "Tipo y clasificacion"
-msgstr "Type and clasificacion"
+msgstr "Type and classification"
 
 msgid "Maneja fecha de vencimiento"
 msgstr "Manage expiration date"
@@ -10353,7 +10353,7 @@ msgid "Control de inventario"
 msgstr "Control of inventory"
 
 msgid "Conversiones de UOM"
-msgstr "Conversiones UOM"
+msgstr "UOM Conversions"
 
 msgid "Anadir UOM"
 msgstr "Add UOM"
@@ -10386,7 +10386,7 @@ msgid "Configuracion contable del item por compania"
 msgstr "Accounting configuration of the item by company"
 
 msgid "Cuenta de ingresos"
-msgstr "Account of ingresos"
+msgstr "Income account"
 
 msgid "Cuenta COGS"
 msgstr "Account COGS"
@@ -10395,10 +10395,10 @@ msgid "Buscar compania"
 msgstr "Search company"
 
 msgid "Buscar cuenta de gasto"
-msgstr "Search account of gasto"
+msgstr "Search expense account"
 
 msgid "Buscar cuenta de ingresos"
-msgstr "Search account of ingresos"
+msgstr "Search income account"
 
 msgid "Buscar cuenta COGS"
 msgstr "Search account COGS"
@@ -10465,7 +10465,7 @@ msgid "Listado de entradas de almacen."
 msgstr "List of warehouse entries."
 
 msgid "Nuevo Movimiento"
-msgstr "New Movimiento"
+msgstr "New Movement"
 
 msgid "Editar Movimiento de Inventario"
 msgstr "Edit Stock Movement"
@@ -10480,7 +10480,7 @@ msgid "Número de lote"
 msgstr "Batch Number"
 
 msgid "Fecha de vencimiento"
-msgstr "Date of vencimiento"
+msgstr "Due date"
 
 msgid "Fecha de fabricación"
 msgstr "Manufacturing Date"
@@ -10528,19 +10528,19 @@ msgid "Stock Reconciliation"
 msgstr "Stock Reconciliation"
 
 msgid "Cantidad actual"
-msgstr "Quantity actual"
+msgstr "Current quantity"
 
 msgid "Cantidad contada"
-msgstr "Quantity contada"
+msgstr "Counted quantity"
 
 msgid "Diferencia cantidad"
 msgstr "Quantity difference"
 
 msgid "Tasa actual"
-msgstr "Rate actual"
+msgstr "Current rate"
 
 msgid "Tasa objetivo"
-msgstr "Rate objetivo"
+msgstr "Target rate"
 
 msgid "Valor actual"
 msgstr "Current value"
@@ -10678,7 +10678,7 @@ msgid "No se encontraron órdenes de compra."
 msgstr "No purchase orders were found."
 
 msgid "Recepciones de Compra"
-msgstr "Recepciones Purchase"
+msgstr "Purchase Receipts"
 
 msgid "No se encontraron recepciones."
 msgstr "No receipts found."
@@ -11088,10 +11088,10 @@ msgid "Incluir descendientes"
 msgstr "Include descendants"
 
 msgid "Mostrar anulaciones y reversas"
-msgstr "Mostrar anulaciones and reversas"
+msgstr "Show cancellations and reversals"
 
 msgid "Incluir Registro de Cierre"
-msgstr "Incluir Record Closing"
+msgstr "Include Closing Entry"
 
 msgid "Mostrar filtros avanzados"
 msgstr "Show advanced filters"
@@ -11133,7 +11133,7 @@ msgid "Advertencia"
 msgstr "Warning"
 
 msgid "No hay registros para los filtros seleccionados."
-msgstr "There are no records for the filtros seleccionados."
+msgstr "There are no records for the selected filters."
 
 msgid "Mes fiscal"
 msgstr "Fiscal month"
@@ -11303,16 +11303,16 @@ msgid "Colaboracion"
 msgstr "Collaboration"
 
 msgid "Crear tarea"
-msgstr "Create tarea"
+msgstr "Create task"
 
 msgid "Comentar"
 msgstr "Comment"
 
 msgid "Nueva tarea"
-msgstr "New tarea"
+msgstr "New task"
 
 msgid "Asignar a"
-msgstr "Asignar to"
+msgstr "Assign to"
 
 msgid "Normal"
 msgstr "Normal"
@@ -11327,32 +11327,30 @@ msgid "Vencimiento"
 msgstr "Expiration"
 
 msgid "Tareas del documento"
-msgstr "Tareas of the document"
+msgstr "Document tasks"
 
 msgid ""
 "Detalle de tareas vinculadas al documento, con prioridad, estado y "
 "vencimiento."
-msgstr ""
-"Detail of tareas vinculadas to the document, with prioridad, status and "
-"vencimiento."
+msgstr "Detail of tasks linked to the document, with priority, status, and due date."
 
 msgid "Titulo"
 msgstr "Title"
 
 msgid "No hay tareas para este documento."
-msgstr "There are no tareas for this document."
+msgstr "There are no tasks for this document."
 
 msgid "Archivos adjuntos"
 msgstr "Attachments"
 
 msgid "Observaciones / Descripción"
-msgstr "Observaciones / Description"
+msgstr "Notes / Description"
 
 msgid "Subir adjunto"
 msgstr "Upload attachment"
 
 msgid "Fecha de subida"
-msgstr "Date of subida"
+msgstr "Upload date"
 
 msgid "Descargar"
 msgstr "Download"
@@ -11361,7 +11359,7 @@ msgid "¿Eliminar este archivo adjunto?"
 msgstr "Delete this attachment?"
 
 msgid "No hay archivos adjuntos."
-msgstr "There are no archivos adjuntos."
+msgstr "There are no attachments."
 
 msgid "Flujo documental"
 msgstr "Document flow"
@@ -11439,7 +11437,7 @@ msgid "Mensaje / Contenido"
 msgstr "Message / Content"
 
 msgid "Redacte el mensaje..."
-msgstr "Redacte the mensaje..."
+msgstr "Write the message..."
 
 msgid "Enviar Correo"
 msgstr "Send Email"
@@ -11451,7 +11449,7 @@ msgid "Imprimir"
 msgstr "Print"
 
 msgid "Imprimir / Vista previa"
-msgstr "Print / Vista previa"
+msgstr "Print / Preview"
 
 msgid "Descargar PDF"
 msgstr "Download PDF"
@@ -11466,7 +11464,7 @@ msgid "Productos / Servicios"
 msgstr "Products / Services"
 
 msgid "Actualizar Elementos"
-msgstr "Update Elementos"
+msgstr "Refresh Items"
 
 msgid "Precio Unit."
 msgstr "Unit Price"
@@ -11586,7 +11584,7 @@ msgid "Regla Fiscal"
 msgstr "Rule Fiscal"
 
 msgid "Plantilla de impuestos"
-msgstr "Plantilla of taxes"
+msgstr "Tax template"
 
 msgid "Sin OC"
 msgstr "Without PO"
@@ -11607,7 +11605,7 @@ msgid "Buscar regla fiscal"
 msgstr "Search tax rule"
 
 msgid "Buscar plantilla de impuestos"
-msgstr "Search plantilla of taxes"
+msgstr "Search tax template"
 
 msgid "Datos básicos"
 msgstr "Basic Data"
@@ -11616,7 +11614,7 @@ msgid "Nacionalidad"
 msgstr "Nationality"
 
 msgid "Tipo de persona"
-msgstr "Type of persona"
+msgstr "Person type"
 
 msgid "Teléfono principal"
 msgstr "Phone primary"
@@ -11637,13 +11635,13 @@ msgid "Representante legal"
 msgstr "Legal representative"
 
 msgid "Documento del representante"
-msgstr "Document of the representante"
+msgstr "Representative document"
 
 msgid "Cargo del representante"
-msgstr "Charge of the representante"
+msgstr "Representative position"
 
 msgid "Correo del representante"
-msgstr "Email of the representante"
+msgstr "Representative email"
 
 msgid "Teléfono del representante"
 msgstr "Representative Phone"
@@ -11664,7 +11662,7 @@ msgid "Observaciones legales"
 msgstr "Legal remarks"
 
 msgid "Secciones del tercero"
-msgstr "Secciones of the party"
+msgstr "Party sections"
 
 msgid "Configuracion por compania"
 msgstr "Configuration by company"
@@ -11682,7 +11680,7 @@ msgid "Movil"
 msgstr "Mobile"
 
 msgid "Contactos del tercero"
-msgstr "Contactos of the party"
+msgstr "Party contacts"
 
 msgid "No hay contactos registrados."
 msgstr "No contacts registered."
@@ -11694,7 +11692,7 @@ msgid "Ciudad"
 msgstr "City"
 
 msgid "Estado / Provincia"
-msgstr "Status / Provincia"
+msgstr "State / Province"
 
 msgid "Pais"
 msgstr "Country"
@@ -11703,7 +11701,7 @@ msgid "Principal"
 msgstr "Main"
 
 msgid "Direcciones del tercero"
-msgstr "Direcciones of the party"
+msgstr "Party addresses"
 
 msgid "No hay direcciones registradas."
 msgstr "No addresses registered."
@@ -11823,7 +11821,7 @@ msgid "Vista previa de las filas importadas antes de agregarlas al detalle."
 msgstr "Preview of the imported rows before adding them to the detail."
 
 msgid "Vista previa de datos importados"
-msgstr "Preview of datos importados"
+msgstr "Preview of imported data"
 
 msgid "Mostrando solo las primeras 50 líneas."
 msgstr "Showing only the first 50 lines."
@@ -11841,13 +11839,13 @@ msgid "Fecha de Expiración"
 msgstr "Date Expiration"
 
 msgid "Evidencia de Respuesta"
-msgstr "Evidencia Response"
+msgstr "Response Evidence"
 
 msgid "Respondiente"
 msgstr "Respondent"
 
 msgid "Fecha / Hora"
-msgstr "Date / Hora"
+msgstr "Date / Time"
 
 msgid "IP / User-Agent"
 msgstr "IP / Users-Agent"
@@ -11856,16 +11854,16 @@ msgid "Comentario / Explicación"
 msgstr "Comment / Explanation"
 
 msgid "Hash del Snapshot Confirmado"
-msgstr "Hash of the Snapshot Confirmado"
+msgstr "Confirmed Snapshot Hash"
 
 msgid "Partidas Incluidas en Snapshot"
-msgstr "Partidas Incluidas in Snapshot"
+msgstr "Items Included in Snapshot"
 
 msgid "Importe Original"
 msgstr "Original Amount"
 
 msgid "Totales por Moneda"
-msgstr "Totales by Currency"
+msgstr "Totals by Currency"
 
 msgid "Total Pendiente"
 msgstr "Total Pending"
@@ -11900,13 +11898,13 @@ msgid "Cancelar Solicitud"
 msgstr "Validate Request"
 
 msgid "Regresar al Cliente"
-msgstr "Regresar to the Customer"
+msgstr "Back to Customer"
 
 msgid "Regresar al Proveedor"
-msgstr "Regresar to the Supplier"
+msgstr "Back to Supplier"
 
 msgid "Destinatarios Autorizados"
-msgstr "Recipients Autorizados"
+msgstr "Authorized Recipients"
 
 msgid "Respondió"
 msgstr "Answered"
@@ -11954,7 +11952,7 @@ msgid "La compañía determina los documentos y saldos que serán incluidos."
 msgstr "The company determines the documents and balances that will be included."
 
 msgid "Fecha de corte"
-msgstr "Date of corte"
+msgstr "Cut-off date"
 
 msgid ""
 "Representa la fecha para la cual se desea confirmar el saldo. Partidas "
@@ -11970,7 +11968,7 @@ msgid "Debe indicar al menos una dirección de correo electrónico."
 msgstr "You must provide at least one email address."
 
 msgid "Crear Borrador"
-msgstr "Create Borrador"
+msgstr "Create Draft"
 
 msgid ""
 "Si tiene alguna duda o considera que es un error, por favor comuníquese "
@@ -11994,7 +11992,7 @@ msgid "Referencia de confirmación"
 msgstr "Confirmation Reference"
 
 msgid "Fecha de respuesta"
-msgstr "Date of respuesta"
+msgstr "Response date"
 
 msgid ""
 "Gracias por ayudarnos a mantener la integridad de nuestra información "
@@ -12022,7 +12020,7 @@ msgid "Escriba su apellido"
 msgstr "Enter your last name"
 
 msgid "Correo Autorizado"
-msgstr "Email Autorizado"
+msgstr "Authorized Email"
 
 msgid "ejemplo@empresa.com"
 msgstr "example@company.com"
@@ -12037,7 +12035,7 @@ msgid "Ingrese el código de 6 dígitos que se le envió por correo."
 msgstr "Enter the 6-digit code sent to you in the mail."
 
 msgid "Declaro que estoy autorizado"
-msgstr "Declaro that estoy autorizado"
+msgstr "I declare that I am authorized"
 
 msgid ""
 "por la organización para consultar y responder esta solicitud de "
@@ -12047,7 +12045,7 @@ msgstr ""
 "request."
 
 msgid "Verificar y Continuar"
-msgstr "Verificar and Continuar"
+msgstr "Verify and Continue"
 
 msgid "Solicitud de Confirmación de Saldo"
 msgstr "Request Confirmation Balance"
@@ -12062,7 +12060,7 @@ msgid "Relación / Organización"
 msgstr "Relationship / Organization"
 
 msgid "Detalle de Partidas Abiertas al Corte"
-msgstr "Detail Items Abiertas to the Corte"
+msgstr "Detail of Open Items at Cut-off"
 
 msgid "Saldos Totales por Moneda"
 msgstr "Total Balances by Currency"
@@ -12117,7 +12115,7 @@ msgstr ""
 "and cannot be modified or sent again."
 
 msgid "Enviar Respuesta Definitiva"
-msgstr "Send Respuesta Definitiva"
+msgstr "Send Final Response"
 
 msgid "Validación de Documento"
 msgstr "Document Validation"
@@ -12200,19 +12198,19 @@ msgid "high"
 msgstr "High"
 
 msgid "Asignado por"
-msgstr "Asignado by"
+msgstr "Assigned by"
 
 msgid "Accion"
 msgstr "Action"
 
 msgid "Marcar en proceso"
-msgstr "Marcar in proceso"
+msgstr "Mark as in progress"
 
 msgid "Marcar completada"
 msgstr "Mark as completed"
 
 msgid "No hay tareas."
-msgstr "There are no tareas."
+msgstr "There are no tasks."
 
 msgid ""
 "La devolución debe referenciar una nota de entrega aprobada que no sea "
@@ -12656,7 +12654,7 @@ msgid "Listado de pedidos de venta."
 msgstr "List of sales requests."
 
 msgid "Nuevo Pedido"
-msgstr "New Pedido"
+msgstr "New Order"
 
 msgid "Editar Pedido de Venta"
 msgstr "Edit Sales Request"
@@ -13468,3 +13466,300 @@ msgstr "Edit Sales Quotation"
 msgid "Editar Nota de Entrega"
 msgstr "Edit Delivery Note"
 
+
+#: cacao_accounting/api/dashboard.py:252
+msgid "Asientos del periodo"
+msgstr "Journal entries for the period"
+
+#: cacao_accounting/api/dashboard.py:258
+msgid "Balance general"
+msgstr "Balance sheet"
+
+#: cacao_accounting/api/dashboard.py:364
+msgid "Bodegas activas"
+msgstr "Active warehouses"
+
+#: cacao_accounting/api/dashboard.py:400
+msgid "Clientes activos"
+msgstr "Active customers"
+
+#: cacao_accounting/api/dashboard.py:69
+msgid "Compañía no encontrada"
+msgstr "Company not found"
+
+#: cacao_accounting/api/dashboard.py:301
+msgid "Conciliar bancos"
+msgstr "Reconcile banks"
+
+#: cacao_accounting/api/dashboard.py:282
+msgid "Cuentas activas"
+msgstr "Active accounts"
+
+#: cacao_accounting/api/dashboard.py:410
+msgid "Cuentas por cobrar"
+msgstr "Accounts receivable"
+
+#: cacao_accounting/api/dashboard.py:342
+msgid "Cuentas por pagar"
+msgstr "Accounts payable"
+
+#: cacao_accounting/api/dashboard.py:257
+msgid "Estado de resultados"
+msgstr "Income statement"
+
+#: cacao_accounting/api/dashboard.py:166
+msgid "Existencias, bodegas y movimientos recientes."
+msgstr "Stock, warehouses, and recent movements."
+
+#: cacao_accounting/api/dashboard.py:173
+msgid "Facturación, cobranza y comportamiento comercial."
+msgstr "Invoicing, collections, and sales behavior."
+
+#: cacao_accounting/api/dashboard.py:399
+msgid "Facturas emitidas"
+msgstr "Invoices issued"
+
+#: cacao_accounting/api/dashboard.py:159
+msgid "Facturas, órdenes abiertas y cuentas por pagar."
+msgstr "Invoices, open orders, and accounts payable."
+
+#: cacao_accounting/api/dashboard.py:259
+msgid "Flujo de efectivo"
+msgstr "Cash flow"
+
+#: cacao_accounting/api/dashboard.py:374
+msgid "Movimiento"
+msgstr "Movement"
+
+#: cacao_accounting/api/dashboard.py:559
+msgid "Movimiento bancario"
+msgstr "Bank movement"
+
+#: cacao_accounting/api/dashboard.py:366
+msgid "Movimientos"
+msgstr "Movements"
+
+#: cacao_accounting/api/dashboard.py:344
+msgid "No hay compras en el periodo seleccionado."
+msgstr "There are no purchases in the selected period."
+
+#: cacao_accounting/api/dashboard.py:304
+msgid "No hay cuentas bancarias activas para esta compañía."
+msgstr "There are no active bank accounts for this company."
+
+#: cacao_accounting/api/dashboard.py:378
+msgid "No hay existencias o movimientos de inventario."
+msgstr "There is no stock or inventory movement."
+
+#: cacao_accounting/api/dashboard.py:261
+msgid "No hay movimientos contables en el periodo seleccionado."
+msgstr "There are no accounting entries in the selected period."
+
+#: cacao_accounting/api/dashboard.py:412
+msgid "No hay ventas en el periodo seleccionado."
+msgstr "There are no sales in the selected period."
+
+#: cacao_accounting/api/dashboard.py:72
+msgid "No tiene acceso a la compañía seleccionada"
+msgstr "You do not have access to the selected company"
+
+#: cacao_accounting/api/dashboard.py:219
+msgid "No tiene permisos para ver esta sección."
+msgstr "You do not have permission to view this section."
+
+#: cacao_accounting/api/dashboard.py:340
+#: cacao_accounting/api/dashboard.py:408
+msgid "Nueva factura"
+msgstr "New invoice"
+
+#: cacao_accounting/api/dashboard.py:341
+#: cacao_accounting/api/dashboard.py:409
+msgid "Nueva orden"
+msgstr "New order"
+
+#: cacao_accounting/api/dashboard.py:300
+msgid "Nuevo pago"
+msgstr "New payment"
+
+#: cacao_accounting/api/dashboard.py:214
+msgid "Oculto por permisos"
+msgstr "Hidden by permissions"
+
+#: cacao_accounting/api/dashboard.py:284
+msgid "Pagos pendientes"
+msgstr "Pending payments"
+
+#: cacao_accounting/api/dashboard.py:244
+msgid "Pendientes"
+msgstr "Pending"
+
+#: cacao_accounting/api/dashboard.py:76
+msgid "Periodo contable no encontrado para la compañía"
+msgstr "Accounting period not found for the company"
+
+#: cacao_accounting/api/dashboard.py:398
+msgid "Por cobrar"
+msgstr "Receivable"
+
+#: cacao_accounting/api/dashboard.py:330
+msgid "Por pagar"
+msgstr "Payable"
+
+#: cacao_accounting/api/dashboard.py:332
+msgid "Proveedores activos"
+msgstr "Active suppliers"
+
+#: cacao_accounting/api/dashboard.py:302
+msgid "Resumen bancario"
+msgstr "Bank summary"
+
+#: cacao_accounting/api/dashboard.py:145
+msgid "Resumen financiero del periodo seleccionado."
+msgstr "Financial summary for the selected period."
+
+#: cacao_accounting/api/dashboard.py:281
+msgid "Saldo bancario"
+msgstr "Bank balance"
+
+#: cacao_accounting/api/dashboard.py:152
+msgid "Saldos, conciliaciones y pagos en proceso."
+msgstr "Balances, reconciliations, and payments in process."
+
+#: cacao_accounting/api/dashboard.py:65
+msgid "Se requiere el parámetro 'company'"
+msgstr "The 'company' parameter is required"
+
+#: cacao_accounting/api/dashboard.py:283
+msgid "Sin conciliar"
+msgstr "Unreconciled"
+
+#: cacao_accounting/api/dashboard.py:243
+#: cacao_accounting/api/dashboard.py:251
+msgid "Utilidad"
+msgstr "Profit"
+
+#: cacao_accounting/api/dashboard.py:363
+msgid "Valor inventario"
+msgstr "Inventory value"
+
+#: cacao_accounting/api/dashboard.py:376
+msgid "Valuación"
+msgstr "Valuation"
+
+#: cacao_accounting/api/dashboard.py:365
+msgid "Ítems con existencia"
+msgstr "Items in stock"
+
+#: cacao_accounting/api/dashboard.py:331
+msgid "Órdenes abiertas"
+msgstr "Open orders"
+
+#: cacao_accounting/api/__init__.py:1051
+msgid "La política debe ser strict, warn o log."
+msgstr "The policy must be strict, warn, or log."
+
+
+#: cacao_accounting/api/__init__.py:1055
+msgid "La tolerancia debe ser decimal."
+msgstr "The tolerance must be a decimal."
+
+
+#: cacao_accounting/api/__init__.py:1057
+msgid "La tolerancia debe ser finita y no negativa."
+msgstr "The tolerance must be finite and non-negative."
+
+
+#: cacao_accounting/api/__init__.py:1075
+msgid "La fecha de corte no es válida."
+msgstr "The cutoff date is not valid."
+
+
+#: cacao_accounting/api/__init__.py:457 cacao_accounting/api/__init__.py:535
+msgid "Notificación de documento #{document_no}"
+msgstr "Document notification #{document_no}"
+
+
+#: cacao_accounting/api/__init__.py:459
+msgid ""
+"Estimado(a),\n"
+"\n"
+"Le compartimos la información correspondiente al documento #{document_no}.\n"
+"\n"
+"Saludos cordiales,\n"
+"{company}"
+msgstr ""
+"Dear Sir/Madam,\n"
+"\n"
+"Please find the information corresponding to document #{document_no}.\n"
+"\n"
+"Best regards,\n"
+"{company}"
+
+
+#: cacao_accounting/api/__init__.py:539
+msgid ""
+"Estimado(a),\n"
+"\n"
+"Se le notifica la emisión del documento #{document_no}.\n"
+"\n"
+"Atentamente,\n"
+"{company}"
+msgstr ""
+"Dear Sir/Madam,\n"
+"\n"
+"This is to notify you of the issuance of document #{document_no}.\n"
+"\n"
+"Sincerely,\n"
+"{company}"
+
+#: cacao_accounting/document_flow/status.py:83
+msgid "Requiere Atención"
+msgstr "Requires Attention"
+
+#: cacao_accounting/document_flow/status.py:92
+msgid "Pendiente de Aprobación"
+msgstr "Pending Approval"
+
+#: cacao_accounting/document_flow/status.py:94
+msgid "Anulación Pendiente"
+msgstr "Pending Cancellation"
+
+#: cacao_accounting/document_flow/status.py:148
+msgid "Pagado"
+msgstr "Paid"
+
+#: cacao_accounting/document_flow/status.py:166
+msgid "Pagado Parcialmente"
+msgstr "Partially Paid"
+
+#: cacao_accounting/document_flow/status.py:168
+msgid "Pendiente Pagar"
+msgstr "Pending Payment"
+
+#: cacao_accounting/document_flow/status.py:169
+msgid "Pendiente Cobrar"
+msgstr "Pending Collection"
+
+#: cacao_accounting/document_flow/status.py:272
+msgid "Recibido Parcialmente"
+msgstr "Partially Received"
+
+#: cacao_accounting/document_flow/status.py:274
+msgid "Pendiente Recibir"
+msgstr "Pending Receipt"
+
+#: cacao_accounting/document_flow/status.py:278
+msgid "Entregado Parcialmente"
+msgstr "Partially Delivered"
+
+#: cacao_accounting/document_flow/status.py:280
+msgid "Pendiente Entregar"
+msgstr "Pending Delivery"
+
+#: cacao_accounting/document_flow/status.py:284
+msgid "Facturado Parcialmente"
+msgstr "Partially Billed"
+
+#: cacao_accounting/document_flow/status.py:286
+msgid "Pendiente Facturar"
+msgstr "Pending Billing"

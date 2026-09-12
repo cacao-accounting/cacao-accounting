@@ -156,40 +156,40 @@ def new():
 
     record_type_groups = [
         {
-            "label": "Source to Pay",
+            "label": _("Source to Pay"),
             "items": [
-                {"value": "purchase_request", "label": "Solicitud de Compra"},
-                {"value": "purchase_quotation", "label": "Solicitud de Cotización"},
-                {"value": "supplier_quotation", "label": "Cotización de Proveedor"},
-                {"value": "purchase_order", "label": "Orden de Compra"},
-                {"value": "purchase_receipt", "label": "Recepción de Compra"},
-                {"value": "purchase_invoice", "label": "Factura de Compra"},
+                {"value": "purchase_request", "label": _("Solicitud de Compra")},
+                {"value": "purchase_quotation", "label": _("Solicitud de Cotización")},
+                {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
+                {"value": "purchase_order", "label": _("Orden de Compra")},
+                {"value": "purchase_receipt", "label": _("Recepción de Compra")},
+                {"value": "purchase_invoice", "label": _("Factura de Compra")},
             ],
         },
         {
-            "label": "Order to Cash",
+            "label": _("Order to Cash"),
             "items": [
-                {"value": "sales_request", "label": "Pedido de Venta"},
-                {"value": "sales_quotation", "label": "Cotización de Venta"},
-                {"value": "sales_order", "label": "Orden de Venta"},
-                {"value": "delivery_note", "label": "Nota de Entrega"},
-                {"value": "sales_invoice", "label": "Factura de Venta"},
+                {"value": "sales_request", "label": _("Pedido de Venta")},
+                {"value": "sales_quotation", "label": _("Cotización de Venta")},
+                {"value": "sales_order", "label": _("Orden de Venta")},
+                {"value": "delivery_note", "label": _("Nota de Entrega")},
+                {"value": "sales_invoice", "label": _("Factura de Venta")},
             ],
         },
         {
-            "label": "Contabilidad y Maestros",
+            "label": _("Contabilidad y Maestros"),
             "items": [
-                {"value": "journal_entry", "label": "Comprobantes Contables"},
-                {"value": "chart_of_accounts", "label": "Catálogo de Cuentas"},
-                {"value": "customer", "label": "Clientes"},
-                {"value": "vendor", "label": "Proveedores"},
+                {"value": "journal_entry", "label": _("Comprobantes Contables")},
+                {"value": "chart_of_accounts", "label": _("Catálogo de Cuentas")},
+                {"value": "customer", "label": _("Clientes")},
+                {"value": "vendor", "label": _("Proveedores")},
             ],
         },
         {
-            "label": "Caja y Bancos",
+            "label": _("Caja y Bancos"),
             "items": [
-                {"value": "bank_statement", "label": "Extractos Bancarios"},
-                {"value": "cash_forecast_entry", "label": "Entradas de Pronóstico de Caja"},
+                {"value": "bank_statement", "label": _("Extractos Bancarios")},
+                {"value": "cash_forecast_entry", "label": _("Entradas de Pronóstico de Caja")},
             ],
         },
     ]

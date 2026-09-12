@@ -454,11 +454,11 @@ def api_document_email_info(document_type: str, document_id: str):
             "enabled": True,
             "default_recipient": default_recipient,
             "document_no": doc_no,
-            "subject": f"Notificación de documento #{doc_no}",
-            "body": (
-                f"Estimado(a),\n\nLe compartimos la información correspondiente "
-                f"al documento #{doc_no}.\n\nSaludos cordiales,\n{company}"
-            ),
+            "subject": _("Notificación de documento #{document_no}").format(document_no=doc_no),
+            "body": _(
+                "Estimado(a),\n\nLe compartimos la información correspondiente "
+                "al documento #{document_no}.\n\nSaludos cordiales,\n{company}"
+            ).format(document_no=doc_no, company=company),
         }
     )
 
@@ -532,11 +532,12 @@ def api_document_send_email(document_type: str, document_id: str):
 
     doc_no = getattr(doc, "document_no", None) or document_id
     company = getattr(doc, "company", None) or ""
-    subject = str(payload.get("subject") or "").strip() or f"Notificación de documento #{doc_no}"
-    body = (
-        str(payload.get("body") or payload.get("message") or "").strip()
-        or f"Estimado(a),\n\nSe le notifica la emisión del documento #{doc_no}.\n\nAtentamente,\n{company}"
+    subject = str(payload.get("subject") or "").strip() or _("Notificación de documento #{document_no}").format(
+        document_no=doc_no
     )
+    body = str(payload.get("body") or payload.get("message") or "").strip() or _(
+        "Estimado(a),\n\nSe le notifica la emisión del documento #{document_no}.\n\nAtentamente,\n{company}"
+    ).format(document_no=doc_no, company=company)
     sent_recipients, errors = _send_document_emails(document_type, document_id, recipient_list, subject, body)
 
     if sent_recipients:
@@ -1040,20 +1041,20 @@ def api_accounting_arap_reconciliation():
         payload = request.get_json(silent=True) or {}
         company = str(payload.get("company") or payload.get("company_id") or company).strip()
     if not company:
-        return jsonify({"error": "La compañía es obligatoria."}), 400
+        return jsonify({"error": _("La compañía es obligatoria.")}), 400
     exige_acceso_compania("accounting", company, "autorizar" if request.method == "POST" else "consultar")
 
     if request.method == "POST":
         payload = request.get_json(silent=True) or {}
         mode = str(payload.get("mode") or "strict").strip().lower()
         if mode not in {"strict", "warn", "log"}:
-            return jsonify({"error": "La política debe ser strict, warn o log."}), 400
+            return jsonify({"error": _("La política debe ser strict, warn o log.")}), 400
         try:
             tolerance = Decimal(str(payload.get("tolerance", "0.01")))
         except Exception:  # noqa: BLE001
-            return jsonify({"error": "La tolerancia debe ser decimal."}), 400
+            return jsonify({"error": _("La tolerancia debe ser decimal.")}), 400
         if not tolerance.is_finite() or tolerance < 0:
-            return jsonify({"error": "La tolerancia debe ser finita y no negativa."}), 400
+            return jsonify({"error": _("La tolerancia debe ser finita y no negativa.")}), 400
         row = database.session.execute(
             database.select(ArApReconciliationPolicy).where(ArApReconciliationPolicy.company == company)
         ).scalar_one_or_none()
@@ -1071,7 +1072,7 @@ def api_accounting_arap_reconciliation():
     try:
         cutoff = date.fromisoformat(request.args.get("as_of_date") or date.today().isoformat())
     except ValueError:
-        return jsonify({"error": "La fecha de corte no es válida."}), 400
+        return jsonify({"error": _("La fecha de corte no es válida.")}), 400
     try:
         result = reconcile_arap_to_gl(company=company, as_of_date=cutoff)
     except ARAPGLReconciliationError as exc:
