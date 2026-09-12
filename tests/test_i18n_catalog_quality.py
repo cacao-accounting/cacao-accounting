@@ -17,7 +17,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import polib
+try:
+    import polib
+except ImportError:
+    polib = None
+
 import pytest
 from babel.support import Translations
 
@@ -108,6 +112,8 @@ def test_reported_spanglish_strings_are_translated(english_catalog, msgid, expec
 
 def test_catalog_has_no_spanish_leftovers():
     """Ningún msgstr en inglés conserva palabras que sólo existen en español."""
+    if polib is None:
+        pytest.skip("polib is not installed")
     word = re.compile(r"[A-Za-zÁÉÍÓÚÜáéíóúüÑñ]{4,}")
     offenders = []
     for entry in polib.pofile(str(PO_PATH)):
