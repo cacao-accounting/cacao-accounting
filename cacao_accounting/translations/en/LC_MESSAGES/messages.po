@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-12 06:35+0000\n"
+"POT-Creation-Date: 2026-09-12 07:28+0000\n"
 "PO-Revision-Date: 2026-08-23 16:28+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -749,6 +749,7 @@ msgstr "The price list must be a sales list for customers."
 msgid "La lista de precio debe ser de compras para proveedores."
 msgstr "The price list must be a purchase list for suppliers."
 
+#: cacao_accounting/document_flow/status.py:129
 #: cacao_accounting/reportes/helpers.py:300
 #: cacao_accounting/reportes/helpers.py:335
 #: cacao_accounting/search_select.py:54
@@ -759,6 +760,8 @@ msgstr "Posted"
 #: cacao_accounting/bancos/templates/bancos/caja_chica_vale_lista.html:53
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:59
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:117
+#: cacao_accounting/document_flow/status.py:131
+#: cacao_accounting/document_flow/status.py:140
 #: cacao_accounting/imports/templates/imports/detail.html:30
 #: cacao_accounting/imports/templates/imports/index.html:46
 #: cacao_accounting/reportes/helpers.py:297
@@ -8031,6 +8034,8 @@ msgstr "Voided"
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:55
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:107
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_nuevo.html:176
+#: cacao_accounting/document_flow/status.py:127
+#: cacao_accounting/document_flow/status.py:138
 #: cacao_accounting/inventario/templates/inventario/stock_reconciliation_nuevo.html:24
 #: cacao_accounting/templates/admin/balance_confirmation_detail.html:32
 #: cacao_accounting/templates/macros.html:222
@@ -11624,6 +11629,8 @@ msgstr "Total Amount"
 #: cacao_accounting/compras/templates/compras/purchase_reconciliation.html:101
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:61
 #: cacao_accounting/contabilidad/templates/contabilidad/recurring_journal_lista.html:122
+#: cacao_accounting/document_flow/status.py:266
+#: cacao_accounting/document_flow/status.py:295
 #: cacao_accounting/imports/templates/imports/detail.html:27
 #: cacao_accounting/imports/templates/imports/index.html:43
 msgid "Completado"
@@ -11713,6 +11720,8 @@ msgstr "Warehouse"
 #: cacao_accounting/contabilidad/templates/contabilidad/periodo_crear.html:91
 #: cacao_accounting/contabilidad/templates/contabilidad/periodo_lista.html:76
 #: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:19
+#: cacao_accounting/document_flow/status.py:116
+#: cacao_accounting/document_flow/status.py:295
 msgid "Abierto"
 msgstr "Open"
 
@@ -17108,6 +17117,63 @@ msgstr "The quantity to close exceeds the available outstanding balance."
 msgid "Debe indicar destino, compania, fecha y lineas."
 msgstr "You must provide target, company, date and lines."
 
+#: cacao_accounting/document_flow/status.py:83
+#: cacao_accounting/document_flow/status.py:117
+msgid "Requiere Atención"
+msgstr "Requires Attention"
+
+#: cacao_accounting/document_flow/status.py:92
+#: cacao_accounting/document_flow/status.py:125
+msgid "Pendiente de Aprobación"
+msgstr "Pending Approval"
+
+#: cacao_accounting/document_flow/status.py:94
+msgid "Anulación Pendiente"
+msgstr "Pending Cancellation"
+
+#: cacao_accounting/document_flow/status.py:148
+#: cacao_accounting/document_flow/status.py:163
+msgid "Pagado"
+msgstr "Paid"
+
+#: cacao_accounting/document_flow/status.py:166
+#: cacao_accounting/document_flow/status.py:290
+msgid "Pagado Parcialmente"
+msgstr "Partially Paid"
+
+#: cacao_accounting/document_flow/status.py:168
+#: cacao_accounting/document_flow/status.py:292
+msgid "Pendiente Pagar"
+msgstr "Pending Payment"
+
+#: cacao_accounting/document_flow/status.py:169
+msgid "Pendiente Cobrar"
+msgstr "Pending Collection"
+
+#: cacao_accounting/document_flow/status.py:272
+msgid "Recibido Parcialmente"
+msgstr "Partially Received"
+
+#: cacao_accounting/document_flow/status.py:274
+msgid "Pendiente Recibir"
+msgstr "Pending Receipt"
+
+#: cacao_accounting/document_flow/status.py:278
+msgid "Entregado Parcialmente"
+msgstr "Partially Delivered"
+
+#: cacao_accounting/document_flow/status.py:280
+msgid "Pendiente Entregar"
+msgstr "Pending Delivery"
+
+#: cacao_accounting/document_flow/status.py:284
+msgid "Facturado Parcialmente"
+msgstr "Partially Billed"
+
+#: cacao_accounting/document_flow/status.py:286
+msgid "Pendiente Facturar"
+msgstr "Pending Billing"
+
 #: cacao_accounting/document_flow/validation.py:131
 msgid "El documento debe tener una compania."
 msgstr "The document must have a company."
@@ -21719,45 +21785,6 @@ msgstr "New Order"
 
 #~ msgid "Válida hasta"
 #~ msgstr "Valid until"
-
-#~ msgid "Requiere Atención"
-#~ msgstr "Requires Attention"
-
-#~ msgid "Pendiente de Aprobación"
-#~ msgstr "Pending Approval"
-
-#~ msgid "Anulación Pendiente"
-#~ msgstr "Pending Cancellation"
-
-#~ msgid "Pagado"
-#~ msgstr "Paid"
-
-#~ msgid "Pagado Parcialmente"
-#~ msgstr "Partially Paid"
-
-#~ msgid "Pendiente Pagar"
-#~ msgstr "Pending Payment"
-
-#~ msgid "Pendiente Cobrar"
-#~ msgstr "Pending Collection"
-
-#~ msgid "Recibido Parcialmente"
-#~ msgstr "Partially Received"
-
-#~ msgid "Pendiente Recibir"
-#~ msgstr "Pending Receipt"
-
-#~ msgid "Entregado Parcialmente"
-#~ msgstr "Partially Delivered"
-
-#~ msgid "Pendiente Entregar"
-#~ msgstr "Pending Delivery"
-
-#~ msgid "Facturado Parcialmente"
-#~ msgstr "Partially Billed"
-
-#~ msgid "Pendiente Facturar"
-#~ msgstr "Pending Billing"
 
 #~ msgid "Debe seleccionar una compania."
 #~ msgstr "You must select a company."

@@ -67,8 +67,8 @@ def _status(code: str, label: str, tone: str, full_label: str | None = None) -> 
     """Construye un estado de documento consistente para templates y API."""
     return DocumentStatusInfo(
         code=code,
-        label=_(label),
-        full_label=_(full_label or label),
+        label=label,
+        full_label=full_label or label,
         tone=tone,
         badge_class=BADGE_CLASSES[tone],
         icon=BADGE_ICONS[tone],
@@ -80,7 +80,7 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
     doctype = normalize_doctype(document_type)
     document = document_or_id if not isinstance(document_or_id, str) else get_document(doctype, document_or_id)
     if document is None:
-        return _status("requires_attention", "Requiere Atención", "red")
+        return _status("requires_attention", _("Requiere Atención"), "red")
 
     from cacao_accounting.database import ApprovalRequest, database
 
@@ -89,11 +89,11 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
     ).scalar_one_or_none()
     if req and req.status.startswith("Pending"):
         if req.status == "Pending Approval":
-            return _status("pending_approval", "Pendiente de Aprobación", "orange")
+            return _status("pending_approval", _("Pendiente de Aprobación"), "orange")
         elif req.status == "Pending Cancellation" or req.status.startswith("Pending Cancel"):
-            return _status("pending_cancellation", "Anulación Pendiente", "orange")
+            return _status("pending_cancellation", _("Anulación Pendiente"), "orange")
         else:
-            return _status("pending_approval", req.status, "orange")
+            return _status("pending_approval", _(req.status), "orange")
 
     docstatus = getattr(document, "docstatus", None)
     journal_status = _journal_entry_status(doctype=doctype, document=document, docstatus=docstatus)
@@ -113,8 +113,8 @@ def calculate_document_status(document_type: str, document_or_id: Any) -> Docume
         return _status_from_progress(progress)
 
     if docstatus == 1:
-        return _status("open", "Abierto", "blue")
-    return _status("requires_attention", "Requiere Atención", "red")
+        return _status("open", _("Abierto"), "blue")
+    return _status("requires_attention", _("Requiere Atención"), "red")
 
 
 def _journal_entry_status(doctype: str, document: Any, docstatus: Any) -> DocumentStatusInfo | None:
@@ -122,22 +122,22 @@ def _journal_entry_status(doctype: str, document: Any, docstatus: Any) -> Docume
         return None
     status = str(getattr(document, "status", "") or "").lower()
     if status == "pending approval":
-        return _status("pending_approval", "Pendiente de Aprobación", "orange")
+        return _status("pending_approval", _("Pendiente de Aprobación"), "orange")
     if status in {"draft", "rejected"}:
-        return _status("draft", "Borrador", "gray")
+        return _status("draft", _("Borrador"), "gray")
     if status == "submitted":
-        return _status("open", "Contabilizado", "blue")
+        return _status("open", _("Contabilizado"), "blue")
     if status == "cancelled":
-        return _status("cancelled", "Cancelado", "gray")
+        return _status("cancelled", _("Cancelado"), "gray")
     return None
 
 
 def _status_from_docstatus(docstatus: Any) -> DocumentStatusInfo | None:
     match docstatus:
         case 0:
-            return _status("draft", "Borrador", "gray")
+            return _status("draft", _("Borrador"), "gray")
         case 2:
-            return _status("cancelled", "Cancelado", "gray")
+            return _status("cancelled", _("Cancelado"), "gray")
         case _:
             return None
 
@@ -145,7 +145,7 @@ def _status_from_docstatus(docstatus: Any) -> DocumentStatusInfo | None:
 def _payment_status(doctype: str, document: Any) -> DocumentStatusInfo | None:
     """Calcula estados de pago para facturas y pagos."""
     if doctype == "payment_entry":
-        return _status("paid", "Pagado", "green")
+        return _status("paid", _("Pagado"), "green")
 
     if doctype not in {
         "purchase_invoice",
@@ -160,13 +160,13 @@ def _payment_status(doctype: str, document: Any) -> DocumentStatusInfo | None:
     if grand_total <= 0:
         return None
     if outstanding <= 0:
-        return _status("paid", "Pagado", "green")
+        return _status("paid", _("Pagado"), "green")
     paid = grand_total - outstanding
     if paid > 0:
-        return _status("partially_paid", "Pagado Parcialmente", "blue")
+        return _status("partially_paid", _("Pagado Parcialmente"), "blue")
     if doctype in {"purchase_invoice", "purchase_credit_note", "purchase_debit_note"}:
-        return _status("pending_payment", "Pendiente Pagar", "blue")
-    return _status("pending_collection", "Pendiente Cobrar", "blue")
+        return _status("pending_payment", _("Pendiente Pagar"), "blue")
+    return _status("pending_collection", _("Pendiente Cobrar"), "blue")
 
 
 def _primary_flow_progress(doctype: str, document: Any) -> FlowProgress | None:
@@ -263,36 +263,37 @@ def _flow_progress(source_type: str, source_id: str, target_type: str) -> FlowPr
 def _status_from_progress(progress: FlowProgress) -> DocumentStatusInfo:
     """Mapea avance operativo a un estado visible unico."""
     if progress.pending_qty == 0:
-        return _status("completed", "Completado", "green")
+        return _status("completed", _("Completado"), "green")
 
     partial = progress.processed_qty > 0 or progress.closed_qty > 0
     match progress.relation_type:
         case "receipt":
             return (
-                _status("partially_received", "Recibido Parcialmente", "blue")
+                _status("partially_received", _("Recibido Parcialmente"), "blue")
                 if partial
-                else _status("pending_receipt", "Pendiente Recibir", "blue")
+                else _status("pending_receipt", _("Pendiente Recibir"), "blue")
             )
         case "delivery":
             return (
-                _status("partially_delivered", "Entregado Parcialmente", "blue")
+                _status("partially_delivered", _("Entregado Parcialmente"), "blue")
                 if partial
-                else _status("pending_delivery", "Pendiente Entregar", "blue")
+                else _status("pending_delivery", _("Pendiente Entregar"), "blue")
             )
         case "billing":
             return (
-                _status("partially_billed", "Facturado Parcialmente", "blue")
+                _status("partially_billed", _("Facturado Parcialmente"), "blue")
                 if partial
-                else _status("pending_billing", "Pendiente Facturar", "blue")
+                else _status("pending_billing", _("Pendiente Facturar"), "blue")
             )
         case "payment":
             return (
-                _status("partially_paid", "Pagado Parcialmente", "blue")
+                _status("partially_paid", _("Pagado Parcialmente"), "blue")
                 if partial
-                else _status("pending_payment", "Pendiente Pagar", "blue")
+                else _status("pending_payment", _("Pendiente Pagar"), "blue")
             )
         case _:
-            return _status("completed" if not progress.pending_qty else "open", "Abierto", "blue")
+            label = _("Completado") if not progress.pending_qty else _("Abierto")
+            return _status("completed" if not progress.pending_qty else "open", label, "blue")
 
 
 def document_status_payload(document_type: str, document_or_id: Any) -> dict[str, str]:
