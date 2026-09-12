@@ -305,7 +305,7 @@ def monedas():
         count=True,
     )
 
-    TITULO = "Contabilidad | Monedas - " + APPNAME
+    TITULO = _("Contabilidad | Monedas") + " - " + APPNAME
     return render_template(
         "contabilidad/moneda_lista.html",
         consulta=CONSULTA,
@@ -323,7 +323,7 @@ def nueva_moneda():
     from cacao_accounting.database import Currency
 
     formulario = FormularioMoneda()
-    TITULO = "Contabilidad | Nueva Moneda - " + APPNAME
+    TITULO = _("Contabilidad | Nueva Moneda") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         DATA = Currency(
@@ -360,7 +360,7 @@ def moneda(code):
     return render_template(
         "contabilidad/moneda.html",
         registro=registro,
-        titulo=f"Contabilidad | Moneda {registro.code} - {APPNAME}",
+        titulo=_("Contabilidad | Moneda") + f" {registro.code} - " + APPNAME,
     )
 
 
@@ -398,7 +398,7 @@ def editar_moneda(code):
             flash_error(error)
             return render_template(
                 CONTABILIDAD_MONEDA_CREAR_TEMPLATE,
-                titulo=f"Contabilidad | Editar Moneda {registro.code} - {APPNAME}",
+                titulo=_("Contabilidad | Editar Moneda") + f" {registro.code} - " + APPNAME,
                 form=formulario,
                 edit=True,
             )
@@ -407,7 +407,7 @@ def editar_moneda(code):
 
     return render_template(
         CONTABILIDAD_MONEDA_CREAR_TEMPLATE,
-        titulo=f"Contabilidad | Editar Moneda {registro.code} - {APPNAME}",
+        titulo=_("Contabilidad | Editar Moneda") + f" {registro.code} - " + APPNAME,
         form=formulario,
         edit=True,
     )
@@ -446,7 +446,7 @@ def currency_toggle_active(code):
 @verifica_acceso("accounting")
 def conta():
     """Pantalla principal del modulo contabilidad."""
-    TITULO = "Módulo Contabilidad - " + APPNAME
+    TITULO = _("Módulo Contabilidad") + " - " + APPNAME
     return render_template(
         "contabilidad.html",
         titulo=TITULO,
@@ -478,7 +478,7 @@ def entidades():
         max_per_page=10,
         count=True,
     )
-    TITULO = "Contabilidad | Entidades - " + APPNAME
+    TITULO = _("Contabilidad | Entidades") + " - " + APPNAME
     return render_template(
         "contabilidad/entidad_lista.html",
         titulo=TITULO,
@@ -503,7 +503,7 @@ def entidad(entidad_id):
     return render_template(
         "contabilidad/entidad.html",
         registro=registro,
-        titulo=f"Contabilidad | Entidad {registro.code} - {APPNAME}",
+        titulo=_("Contabilidad | Entidad") + f" {registro.code} - " + APPNAME,
     )
 
 
@@ -519,7 +519,7 @@ def nueva_entidad():
     formulario.moneda.choices = obtener_lista_monedas()
     formulario.catalogo_origen.choices = [("", "Seleccione un catálogo existente")] + available_catalog_files()
 
-    TITULO = "Contabilidad | Nueva Entidad - " + APPNAME
+    TITULO = _("Contabilidad | Nueva Entidad") + " - " + APPNAME
     if formulario.validate_on_submit():
         try:
             ENTIDAD = create_company(
@@ -612,7 +612,7 @@ def editar_entidad(id_entidad):
             "contabilidad/entidad_editar.html",
             entidad=ENTIDAD,
             form=formulario,
-            titulo=f"Contabilidad | Editar Entidad {ENTIDAD.code} - {APPNAME}",
+            titulo=_("Contabilidad | Editar Entidad") + f" {ENTIDAD.code} - " + APPNAME,
         )
 
 
@@ -744,7 +744,7 @@ def unidades():
         get_url_func=lambda n: url_for("contabilidad.unidad", id_unidad=n.code),
     )
 
-    TITULO = "Contabilidad | Unidades de Negocio - " + APPNAME
+    TITULO = _("Contabilidad | Unidades de Negocio") + " - " + APPNAME
     return render_template(
         "contabilidad/unidad_lista.html",
         titulo=TITULO,
@@ -768,7 +768,7 @@ def unidad(id_unidad):
     return render_template(
         "contabilidad/unidad.html",
         registro=REGISTRO[0],
-        titulo=f"Contabilidad | Unidad {REGISTRO[0].code} - {APPNAME}",
+        titulo=_("Contabilidad | Unidad") + f" {REGISTRO[0].code} - " + APPNAME,
     )
 
 
@@ -817,7 +817,7 @@ def nueva_unidad():
         (u.id, f"{u.code} - {u.name}")
         for u in database.session.execute(database.select(Unit).order_by(Unit.code)).scalars().all()
     ]
-    TITULO = "Contabilidad | Nueva Unidad de Negocio - " + APPNAME
+    TITULO = _("Contabilidad | Nueva Unidad de Negocio") + " - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
         try:
             _validate_active_entity_submission(request.form.get("entidad", ""))
@@ -892,7 +892,7 @@ def editar_unidad(id_unidad):
             flash_error(error)
             return render_template(
                 _TPL_UNIDAD_CREAR,
-                titulo="Editar Unidad de Negocio - " + APPNAME,
+                titulo=_("Editar Unidad de Negocio") + " - " + APPNAME,
                 form=formulario,
                 edit=True,
                 entity_initial_label=entity_initial_label,
@@ -907,7 +907,7 @@ def editar_unidad(id_unidad):
 
     return render_template(
         _TPL_UNIDAD_CREAR,
-        titulo="Editar Unidad de Negocio - " + APPNAME,
+        titulo=_("Editar Unidad de Negocio") + " - " + APPNAME,
         form=formulario,
         edit=True,
         entity_initial_label=entity_initial_label,
@@ -934,7 +934,7 @@ def libros():
         count=True,
     )
 
-    TITULO = "Contabilidad | Libros de Contabilidad - " + APPNAME
+    TITULO = _("Contabilidad | Libros de Contabilidad") + " - " + APPNAME
     return render_template(
         "contabilidad/book_lista.html",
         titulo=TITULO,
@@ -955,7 +955,7 @@ def libro(id_unidad):
     return render_template(
         "contabilidad/book.html",
         registro=REGISTRO[0],
-        titulo=f"Contabilidad | Libro {REGISTRO[0].code} - {APPNAME}",
+        titulo=_("Contabilidad | Libro") + f" {REGISTRO[0].code} - " + APPNAME,
     )
 
 
@@ -1032,7 +1032,7 @@ def editar_libro(id_libro):
         formulario.moneda.data = libro.currency
         formulario.estado.data = libro.status or "activo"
     entity_initial_label = _company_label(libro.entity) if libro.entity else ""
-    TITULO = "Contabilidad | Editar Libro de Contabilidad - " + APPNAME
+    TITULO = _("Contabilidad | Editar Libro de Contabilidad") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
@@ -1135,7 +1135,7 @@ def nuevo_libro():
     formulario = FormularioLibro()
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.moneda.choices = obtener_lista_monedas_activas()
-    TITULO = "Crear Nuevo Libro de Contabilidad - " + APPNAME
+    TITULO = _("Crear Nuevo Libro de Contabilidad") + " - " + APPNAME
     if formulario.validate_on_submit():
         try:
             _validate_active_entity_submission(formulario.entidad.data)
@@ -1227,7 +1227,7 @@ def journal_books():
 @verifica_acceso("accounting")
 def cuentas():
     """Catalogo de cuentas contables."""
-    TITULO = "Catalogo de Cuentas Contables - " + APPNAME
+    TITULO = _("Catalogo de Cuentas Contables") + " - " + APPNAME
 
     entidad_arg = request.args.get("entidad", None)
     arbol = obtener_arbol_cuentas(entidad_=entidad_arg)
@@ -1268,7 +1268,7 @@ def cuenta(entity, id_cta):
         "contabilidad/cuenta.html",
         registro=registro,
         statusweb=STATUS,
-        titulo=f"Contabilidad | Cuenta {registro.code} - {APPNAME}",
+        titulo=_("Contabilidad | Cuenta") + f" {registro.code} - " + APPNAME,
     )
 
 
@@ -1293,7 +1293,7 @@ def nueva_cuenta():
             _parent_code, parent_initial_label = _resolve_account_parent(formulario.entidad.data, request.form["padre"])
         except ValueError:
             parent_initial_label = request.form["padre"]
-    TITULO = "Contabilidad | Nueva Cuenta Contable - " + APPNAME
+    TITULO = _("Contabilidad | Nueva Cuenta Contable") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
@@ -1361,7 +1361,7 @@ def editar_cuenta(entity, id_cta):
         return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
 
     formulario, entity_initial_label, parent_initial_label = _build_account_edit_form(registro, entity)
-    TITULO = "Contabilidad | Editar Cuenta Contable - " + APPNAME
+    TITULO = _("Contabilidad | Editar Cuenta Contable") + " - " + APPNAME
 
     if not formulario.validate_on_submit():
         return render_template(
@@ -1418,7 +1418,7 @@ def editar_cuenta(entity, id_cta):
 @verifica_acceso("accounting")
 def ccostos():
     """Catalogo de centros de costos."""
-    TITULO = "Catalogo de Centros de Costos - " + APPNAME
+    TITULO = _("Catalogo de Centros de Costos") + " - " + APPNAME
 
     entidad_arg = request.args.get("entidad", None)
     arbol = obtener_arbol_ccostos(entidad_=entidad_arg)
@@ -1461,7 +1461,7 @@ def nuevo_centro_costo():
             _parent_code, parent_initial_label = _resolve_cost_center_parent(formulario.entidad.data, request.form["padre"])
         except ValueError:
             parent_initial_label = request.form["padre"]
-    TITULO = "Contabilidad | Nuevo Centro de Costos - " + APPNAME
+    TITULO = _("Contabilidad | Nuevo Centro de Costos") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         entity = request.form.get("entidad", formulario.entidad.data)
@@ -1524,7 +1524,7 @@ def editar_centro_costo(id_cc):
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
     formulario, entity_initial_label, parent_initial_label = _build_cost_center_edit_form(registro)
-    TITULO = "Contabilidad | Editar Centro de Costos - " + APPNAME
+    TITULO = _("Contabilidad | Editar Centro de Costos") + " - " + APPNAME
 
     if not formulario.validate_on_submit():
         return render_template(
@@ -1592,7 +1592,7 @@ def centro_costo(id_cc: str):
         "contabilidad/centro-costo.html",
         registro=registro,
         statusweb=STATUS,
-        titulo=f"Contabilidad | Centro de Costos {registro.code} - {APPNAME}",
+        titulo=_("Contabilidad | Centro de Costos") + f" {registro.code} - " + APPNAME,
     )
 
 
@@ -1646,7 +1646,7 @@ def proyectos():
         tree_all=tree_all,
         entidades=obtener_entidades(),
         entidad=obtener_entidad(ent=entidad_arg),
-        titulo="Listado de Proyectos - " + APPNAME,
+        titulo=_("Listado de Proyectos") + " - " + APPNAME,
         statusweb=STATUS,
     )
 
@@ -1669,7 +1669,7 @@ def nuevo_proyecto():
         (a.id, f"{a.code} - {a.name}")
         for a in database.session.execute(database.select(Accounts).order_by(Accounts.code)).scalars().all()
     ]
-    TITULO = "Contabilidad | Nuevo Proyecto - " + APPNAME
+    TITULO = _("Contabilidad | Nuevo Proyecto") + " - " + APPNAME
 
     if formulario.validate_on_submit() or request.method == "POST":
         try:
@@ -1738,7 +1738,7 @@ def proyecto(project_id):
         "contabilidad/proyecto.html",
         registro=registro,
         statusweb=STATUS,
-        titulo=f"Contabilidad | Proyecto {registro.code} - {APPNAME}",
+        titulo=_("Contabilidad | Proyecto") + f" {registro.code} - " + APPNAME,
     )
 
 
@@ -1761,7 +1761,7 @@ def editar_proyecto(project_id):
         _populate_project_edit_form(formulario, proyecto)
 
     entity_initial_label = _company_label(proyecto.entity) if proyecto.entity else ""
-    TITULO = "Contabilidad | Editar Proyecto - " + APPNAME
+    TITULO = _("Contabilidad | Editar Proyecto") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
@@ -1833,7 +1833,7 @@ def fiscal_year_list():
 
     return render_template(
         "contabilidad/fiscal_year_lista.html",
-        titulo="Contabilidad | Años Fiscales - " + APPNAME,
+        titulo=_("Contabilidad | Años Fiscales") + " - " + APPNAME,
         consulta=CONSULTA,
         statusweb=STATUS,
     )
@@ -1850,7 +1850,7 @@ def fiscal_year_new():
 
     formulario = FormularioFiscalYear()
     formulario.entidad.choices = _accounting_entity_choices("crear")
-    TITULO = "Contabilidad | Nuevo Año Fiscal - " + APPNAME
+    TITULO = _("Contabilidad | Nuevo Año Fiscal") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         DATA = FiscalYear(
@@ -1895,7 +1895,7 @@ def fiscal_year_edit(fy_id):
         formulario.fin.data = fiscal_year.year_end_date
         formulario.cerrado.data = bool(fiscal_year.is_closed)
     entity_initial_label = _company_label(fiscal_year.entity) if fiscal_year.entity else ""
-    TITULO = "Contabilidad | Editar Año Fiscal - " + APPNAME
+    TITULO = _("Contabilidad | Editar Año Fiscal") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
@@ -1950,7 +1950,7 @@ def fiscal_year_detail(fy_id):
     return render_template(
         "contabilidad/fiscal_year.html",
         registro=registro,
-        titulo=f"Contabilidad | Año Fiscal {registro.name} - {APPNAME}",
+        titulo=_("Contabilidad | Año Fiscal") + f" {registro.name} - " + APPNAME,
     )
 
 
@@ -2006,7 +2006,7 @@ def accounting_period_new():
     )
     formulario.fiscal_year.choices += [(fy.id, fy.name) for fy in fiscal_years]
     no_fiscal_years = len(fiscal_years) == 0
-    TITULO = "Contabilidad | Nuevo Período Contable - " + APPNAME
+    TITULO = _("Contabilidad | Nuevo Período Contable") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
@@ -2077,7 +2077,7 @@ def accounting_period_edit(period_id):
         formulario.inicio.data = period.start
         formulario.fin.data = period.end
     entity_initial_label = _company_label(period.entity) if period.entity else ""
-    TITULO = "Contabilidad | Editar Período Contable - " + APPNAME
+    TITULO = _("Contabilidad | Editar Período Contable") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
@@ -2208,7 +2208,7 @@ def accounting_period_detail(period_id):
     return render_template(
         "contabilidad/periodo.html",
         registro=registro,
-        titulo=f"Contabilidad | Período {registro.name} - {APPNAME}",
+        titulo=_("Contabilidad | Período") + f" {registro.name} - " + APPNAME,
     )
 
 
@@ -2231,7 +2231,7 @@ def tasa_cambio():
         max_per_page=10,
         count=True,
     )
-    TITULO = "Contabilidad | Tasas de Cambio - " + APPNAME
+    TITULO = _("Contabilidad | Tasas de Cambio") + " - " + APPNAME
 
     return render_template(
         "contabilidad/tc_lista.html",
@@ -2253,7 +2253,7 @@ def nueva_tasa_cambio():
     monedas_choices = obtener_lista_monedas_activas()
     formulario.origin.choices = monedas_choices
     formulario.destination.choices = monedas_choices
-    TITULO = "Contabilidad | Nueva Tasa de Cambio - " + APPNAME
+    TITULO = _("Contabilidad | Nueva Tasa de Cambio") + " - " + APPNAME
 
     if formulario.validate_on_submit():
         try:
@@ -2323,7 +2323,7 @@ def tipo_cambio(rate_id):
     return render_template(
         "contabilidad/tc.html",
         registro=registro,
-        titulo=f"Contabilidad | Tasa {registro.origin}-{registro.destination} - {APPNAME}",
+        titulo=_("Contabilidad | Tasa") + f" {registro.origin}-{registro.destination} - " + APPNAME,
     )
 
 
@@ -2391,7 +2391,7 @@ def editar_tasa_cambio(rate_id):
 
     return render_template(
         _TPL_TC_CREAR,
-        titulo="Editar Tasa de Cambio - " + APPNAME,
+        titulo=_("Editar Tasa de Cambio") + " - " + APPNAME,
         form=formulario,
         monedas=monedas_choices,
         edit=True,
@@ -2406,7 +2406,7 @@ def importar_tasas_cambio():
     """Importación masiva de tasas de cambio desde hoja de cálculo."""
     from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportError, ExchangeRateImportService
 
-    TITULO = "Contabilidad | Importar Tasas de Cambio - " + APPNAME
+    TITULO = _("Contabilidad | Importar Tasas de Cambio") + " - " + APPNAME
 
     if request.method == "POST":
         archivo = request.files.get("file")
@@ -2457,7 +2457,7 @@ def periodo_contable():
         count=True,
     )
 
-    TITULO = "Contabilidad | Períodos Contables - " + APPNAME
+    TITULO = _("Contabilidad | Períodos Contables") + " - " + APPNAME
 
     return render_template(
         "contabilidad/periodo_lista.html",
@@ -2514,7 +2514,7 @@ def listar_comprobantes():
     return render_template(
         "contabilidad/journal_lista.html",
         consulta=consulta,
-        titulo="Comprobantes Contables - " + APPNAME,
+        titulo=_("Comprobantes Contables") + " - " + APPNAME,
         periods=periods,
         period_from=active_from,
         period_to=active_to or active_from,
@@ -2555,7 +2555,7 @@ def comprobantes_recurrentes():
     return render_template(
         "contabilidad/recurring_journal_lista.html",
         consulta=consulta,
-        titulo="Comprobantes Recurrentes - " + APPNAME,
+        titulo=_("Comprobantes Recurrentes") + " - " + APPNAME,
     )
 
 
@@ -2611,7 +2611,7 @@ def nuevo_comprobante_recurrente():
     return render_template(
         "contabilidad/recurring_journal_nuevo.html",
         form=formulario,
-        titulo="Nueva Plantilla Recurrente - " + APPNAME,
+        titulo=_("Nueva Plantilla Recurrente") + " - " + APPNAME,
     )
 
 
@@ -2650,7 +2650,7 @@ def ver_plantilla_recurrente(identifier: str):
         plantilla=plantilla,
         lineas=lineas,
         aplicaciones=aplicaciones,
-        titulo="Detalle de Plantilla Recurrente - " + APPNAME,
+        titulo=_("Detalle de Plantilla Recurrente") + " - " + APPNAME,
         audit_timeline=audit_timeline,
     )
 
@@ -2728,7 +2728,7 @@ def asistente_cierre_mensual():
 
     return render_template(
         "contabilidad/monthly_close_assistant.html",
-        titulo="Asistente de Cierre Mensual - " + APPNAME,
+        titulo=_("Asistente de Cierre Mensual") + " - " + APPNAME,
         runs=runs,
         periods=periods,
         period_by_id=period_by_id,
@@ -2875,7 +2875,7 @@ def ver_cierre_mensual(identifier: str):
 
     return render_template(
         "contabilidad/monthly_close_assistant.html",
-        titulo="Asistente de Cierre Mensual - " + APPNAME,
+        titulo=_("Asistente de Cierre Mensual") + " - " + APPNAME,
         close_run=close_run,
         selected_period=period,
         templates=templates,
@@ -3036,7 +3036,7 @@ def revalorizaciones_cambiarias():
     )
     return render_template(
         "contabilidad/exchange_revaluation_lista.html",
-        titulo="Revalorizacion cambiaria - " + APPNAME,
+        titulo=_("Revalorizacion cambiaria") + " - " + APPNAME,
         consulta=database.paginate(
             query,
             page=request.args.get("page", default=1, type=int),
@@ -3063,7 +3063,7 @@ def nueva_revalorizacion_cambiaria():
     companies = database.session.execute(database.select(Entity).order_by(Entity.code)).scalars().all()
     return render_template(
         "contabilidad/exchange_revaluation_nueva.html",
-        titulo="Nueva revalorizacion cambiaria - " + APPNAME,
+        titulo=_("Nueva revalorizacion cambiaria") + " - " + APPNAME,
         companies=companies,
     )
 
@@ -3120,7 +3120,7 @@ def ver_revalorizacion_cambiaria(identifier: str):
     audit_timeline = format_document_timeline("exchange_revaluation", run.id)
     return render_template(
         "contabilidad/exchange_revaluation.html",
-        titulo="Revalorizacion cambiaria - " + APPNAME,
+        titulo=_("Revalorizacion cambiaria") + " - " + APPNAME,
         run=run,
         lines=lines,
         accounts=accounts,
@@ -3181,7 +3181,7 @@ def nuevo_comprobante():
             flash(_("Comprobante contable guardado como borrador."), "success")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
 
-    TITULO = "Nuevo Comprobante Contable - " + APPNAME
+    TITULO = _("Nuevo Comprobante Contable") + " - " + APPNAME
     is_closing = request.args.get("isclosing", "").lower() in {"1", "true", "yes", "on"}
     initial_journal = {"is_closing": True} if is_closing else None
     return render_template(
@@ -3373,7 +3373,7 @@ def ver_comprobante(identifier: str):
         creator_nickname=creator_nickname,
         audit_timeline=audit_timeline,
         display_name=display_name,
-        titulo="Comprobante Contable - " + APPNAME,
+        titulo=_("Comprobante Contable") + " - " + APPNAME,
     )
 
 
@@ -3472,7 +3472,7 @@ def editar_comprobante(identifier: str):
             flash(_("Comprobante contable actualizado."), "success")
             return redirect(url_for(CONTABILIDAD_VER_COMPROBANTE, identifier=journal.id))
 
-    TITULO = "Editar Comprobante Contable - " + APPNAME
+    TITULO = _("Editar Comprobante Contable") + " - " + APPNAME
     return render_template(
         "contabilidad/journal_nuevo.html",
         titulo=TITULO,
@@ -3530,7 +3530,7 @@ def naming_series_list():
         external_counter_counts=external_counter_counts,
         series_sequences=series_sequences,
         company_filter=company_filter,
-        titulo="Series de Numeracion - " + APPNAME,
+        titulo=_("Series de Numeracion") + " - " + APPNAME,
     )
 
 
@@ -3594,7 +3594,7 @@ def naming_series_new():
     return render_template(
         "contabilidad/naming_series_nueva.html",
         form=form,
-        titulo="Nueva Serie de Numeracion - " + APPNAME,
+        titulo=_("Nueva Serie de Numeracion") + " - " + APPNAME,
     )
 
 
@@ -3656,7 +3656,7 @@ def naming_series_edit(series_id: str):
         return render_template(
             "contabilidad/naming_series_nueva.html",
             form=form,
-            titulo="Editar Serie de Numeracion - " + APPNAME,
+            titulo=_("Editar Serie de Numeracion") + " - " + APPNAME,
             edit=True,
         )
 
@@ -3775,7 +3775,7 @@ def external_counter_list():
         consulta=consulta,
         entidades=entidades,
         company_filter=company_filter,
-        titulo="Contadores Externos - " + APPNAME,
+        titulo=_("Contadores Externos") + " - " + APPNAME,
     )
 
 
@@ -3829,7 +3829,7 @@ def external_counter_new():
     return render_template(
         "contabilidad/external_counter_nuevo.html",
         form=form,
-        titulo="Nuevo Contador Externo - " + APPNAME,
+        titulo=_("Nuevo Contador Externo") + " - " + APPNAME,
     )
 
 
@@ -3872,7 +3872,7 @@ def external_counter_adjust(counter_id: str):
         "contabilidad/external_counter_ajuste.html",
         form=form,
         counter=counter,
-        titulo="Ajustar Contador Externo - " + APPNAME,
+        titulo=_("Ajustar Contador Externo") + " - " + APPNAME,
     )
 
 
@@ -3902,7 +3902,7 @@ def external_counter_audit_log(counter_id: str):
         "contabilidad/external_counter_auditoria.html",
         counter=counter,
         registros=registros,
-        titulo="Auditoria de Contador Externo - " + APPNAME,
+        titulo=_("Auditoria de Contador Externo") + " - " + APPNAME,
     )
 
 
@@ -3955,7 +3955,7 @@ def external_counter_edit(counter_id: str):
         "contabilidad/external_counter_nuevo.html",
         form=form,
         counter=counter,
-        titulo="Editar Contador Externo - " + APPNAME,
+        titulo=_("Editar Contador Externo") + " - " + APPNAME,
         modo_edicion=True,
     )
 
@@ -3986,7 +3986,7 @@ def fiscal_year_closing_list():
 
     return render_template(
         "contabilidad/fiscal_year_closing_lista.html",
-        titulo="Cierres de Año Fiscal - " + APPNAME,
+        titulo=_("Cierres de Año Fiscal") + " - " + APPNAME,
         consulta=consulta,
         entidades=entidades,
         company_filter=company_filter,
@@ -4030,7 +4030,7 @@ def fiscal_year_closing_new():
 
     return render_template(
         "contabilidad/fiscal_year_closing_nuevo.html",
-        titulo="Nuevo Cierre de Año Fiscal - " + APPNAME,
+        titulo=_("Nuevo Cierre de Año Fiscal") + " - " + APPNAME,
         entidades=entidades,
         fiscal_years=fiscal_years,
     )
@@ -4090,7 +4090,7 @@ def cash_flow_config(company):
     if not selected_company:
         return render_template(
             "contabilidad_cash_flow_config.html",
-            titulo=f"Contabilidad | Clasificación EFE - {APPNAME}",
+            titulo=_("Contabilidad | Clasificación EFE") + " - " + APPNAME,
             companies=[],
             selected_company=None,
             overview=None,
@@ -4115,7 +4115,7 @@ def cash_flow_config(company):
 
     return render_template(
         "contabilidad_cash_flow_config.html",
-        titulo=f"Contabilidad | Clasificación EFE - {APPNAME}",
+        titulo=_("Contabilidad | Clasificación EFE") + " - " + APPNAME,
         companies=companies,
         selected_company=selected_company,
         overview=get_cash_flow_config_overview(selected_company),

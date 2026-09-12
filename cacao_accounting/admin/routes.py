@@ -1224,7 +1224,7 @@ def crear_usuario():
     return render_template(
         "admin/usuario_form.html",
         form=form,
-        titulo="Crear Usuario",
+        titulo=_("Crear Usuario"),
         accion="Nuevo Usuario",
         tiene_clave=True,
     )
@@ -1251,7 +1251,7 @@ def editar_usuario(user_id: str):
     return render_template(
         "admin/usuario_form.html",
         form=form,
-        titulo="Editar Usuario",
+        titulo=_("Editar Usuario"),
         accion="Actualizar Usuario",
         usuario=usuario,
         tiene_clave=False,
@@ -1400,7 +1400,7 @@ def crear_rol():
     return render_template(
         "admin/rol_form.html",
         form=form,
-        titulo="Crear Rol",
+        titulo=_("Crear Rol"),
         accion="Guardar rol",
     )
 
@@ -1433,7 +1433,7 @@ def editar_rol(role_id: str):
     return render_template(
         "admin/rol_form.html",
         form=form,
-        titulo="Editar Rol",
+        titulo=_("Editar Rol"),
         accion="Actualizar rol",
         rol=rol,
     )

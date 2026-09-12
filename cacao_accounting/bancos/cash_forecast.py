@@ -94,7 +94,7 @@ def cash_forecast_list():
         forecasts=forecasts,
         companies=companies,
         selected_company=company,
-        titulo="Pronósticos de Flujo de Caja",
+        titulo=_("Pronósticos de Flujo de Caja"),
     )
 
 
@@ -127,7 +127,7 @@ def cash_forecast_new():
         companies=companies,
         selected_company=company,
         fiscal_years=fiscal_years,
-        titulo="Nuevo Pronóstico de Flujo de Caja",
+        titulo=_("Nuevo Pronóstico de Flujo de Caja"),
     )
 
 
@@ -208,7 +208,7 @@ def cash_forecast_detail(forecast_id):
         currencies=currencies,
         matrix=matrix,
         entries=entries,
-        titulo=f"Pronóstico de Flujo de Caja: {forecast.version}",
+        titulo=_("Pronóstico de Flujo de Caja:") + " " + forecast.version,
     )
 
 
@@ -452,7 +452,7 @@ def cash_forecast_compare():
         base_forecast=base_forecast,
         compare_forecast=compare_forecast,
         comparison=comparison,
-        titulo="Comparación de Escenarios de Flujo de Caja",
+        titulo=_("Comparación de Escenarios de Flujo de Caja"),
     )
 
 
@@ -504,7 +504,7 @@ def cash_forecast_manual_entries():
         selected_forecast=selected_forecast,
         entries=entries,
         currencies=currencies,
-        titulo="Forecast de Entradas manuales",
+        titulo=_("Forecast de Entradas manuales"),
     )
 
 

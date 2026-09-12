@@ -1339,7 +1339,7 @@ def document_flow_related_list(doctype: str):
         related_id=related_id,
         related_no=related_no,
         related_label=related_label,
-        titulo=f"Documentos relacionados — {spec.label}",
+        titulo=_("Documentos relacionados") + f" — {spec.label}",
     )
 
 

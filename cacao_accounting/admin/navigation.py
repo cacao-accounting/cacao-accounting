@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cacao_accounting.i18n import _
+
 
 @dataclass(frozen=True, slots=True)
 class ConfigurationLink:
@@ -31,102 +33,102 @@ class ConfigurationSection:
 
 CONFIGURATION_SECTIONS: tuple[ConfigurationSection, ...] = (
     ConfigurationSection(
-        label="Configuración General",
+        label=_("Configuración General"),
         icon="bi bi-sliders",
         links=(
-            ConfigurationLink("admin.lista_modulos", "Módulos"),
+            ConfigurationLink("admin.lista_modulos", _("Módulos")),
             ConfigurationLink(
-                "imports.index", "Importaciones", module="imports", required_permission="importar", cloud_only=True
+                "imports.index", _("Importaciones"), module="imports", required_permission="importar", cloud_only=True
             ),
-            ConfigurationLink("admin.configuracion_idioma", "Idioma del sistema"),
-            ConfigurationLink("admin.external_document_validation_settings", "Validación externa de documentos"),
-            ConfigurationLink("admin.lista_grupos_terceros", "Tipos de terceros"),
+            ConfigurationLink("admin.configuracion_idioma", _("Idioma del sistema")),
+            ConfigurationLink("admin.external_document_validation_settings", _("Validación externa de documentos")),
+            ConfigurationLink("admin.lista_grupos_terceros", _("Tipos de terceros")),
         ),
     ),
     ConfigurationSection(
-        label="Correo Electrónico",
+        label=_("Correo Electrónico"),
         icon="bi bi-envelope",
         links=(
-            ConfigurationLink("admin.email_settings", "Correo electrónico", cloud_only=True),
-            ConfigurationLink("admin.email_log", "Bitácora de correos", cloud_only=True),
+            ConfigurationLink("admin.email_settings", _("Correo electrónico"), cloud_only=True),
+            ConfigurationLink("admin.email_log", _("Bitácora de correos"), cloud_only=True),
         ),
     ),
     ConfigurationSection(
-        label="Precios",
+        label=_("Precios"),
         icon="bi bi-tags",
         links=(
-            ConfigurationLink("admin.lista_precios", "Listas de precios"),
-            ConfigurationLink("admin.precios_item", "Precios por artículo"),
+            ConfigurationLink("admin.lista_precios", _("Listas de precios")),
+            ConfigurationLink("admin.precios_item", _("Precios por artículo")),
         ),
     ),
     ConfigurationSection(
-        label="Compras",
+        label=_("Compras"),
         icon="bi bi-cart-check",
         links=(
-            ConfigurationLink("admin.config_conciliacion_compras", "Conciliación y anticipos"),
-            ConfigurationLink("admin.config_abastecimiento_compras", "Comparativo de ofertas"),
+            ConfigurationLink("admin.config_conciliacion_compras", _("Conciliación y anticipos")),
+            ConfigurationLink("admin.config_abastecimiento_compras", _("Comparativo de ofertas")),
         ),
     ),
     ConfigurationSection(
-        label="Ventas",
+        label=_("Ventas"),
         icon="bi bi-receipt",
-        links=(ConfigurationLink("admin.config_conciliacion_ventas", "Conciliación de ventas"),),
+        links=(ConfigurationLink("admin.config_conciliacion_ventas", _("Conciliación de ventas")),),
     ),
     ConfigurationSection(
-        label="Contabilidad",
+        label=_("Contabilidad"),
         icon="bi bi-journal-check",
         links=(
-            ConfigurationLink("admin.cuentas_predeterminadas", "Cuentas predeterminadas"),
-            ConfigurationLink("admin.lista_reglas_mapeo_libros", "Mapeo entre libros"),
-            ConfigurationLink("admin.config_control_presupuestario", "Control presupuestario"),
-            ConfigurationLink("admin.config_approval_matrix", "Matriz de aprobaciones"),
-            ConfigurationLink("admin.lista_dimensiones", "Dimensiones analíticas"),
+            ConfigurationLink("admin.cuentas_predeterminadas", _("Cuentas predeterminadas")),
+            ConfigurationLink("admin.lista_reglas_mapeo_libros", _("Mapeo entre libros")),
+            ConfigurationLink("admin.config_control_presupuestario", _("Control presupuestario")),
+            ConfigurationLink("admin.config_approval_matrix", _("Matriz de aprobaciones")),
+            ConfigurationLink("admin.lista_dimensiones", _("Dimensiones analíticas")),
         ),
     ),
     ConfigurationSection(
-        label="Inventario",
+        label=_("Inventario"),
         icon="bi bi-box-seam",
-        links=(ConfigurationLink("admin.configuracion_valuacion_inventario", "Valuación de inventarios"),),
+        links=(ConfigurationLink("admin.configuracion_valuacion_inventario", _("Valuación de inventarios")),),
     ),
     ConfigurationSection(
-        label="Bancos",
+        label=_("Bancos"),
         icon="bi bi-bank",
-        links=(ConfigurationLink("bancos.bancos_reglas_matching", "Reglas de matching bancario"),),
+        links=(ConfigurationLink("bancos.bancos_reglas_matching", _("Reglas de matching bancario")),),
     ),
     ConfigurationSection(
-        label="Series e Identificadores",
+        label=_("Series e Identificadores"),
         icon="bi bi-hash",
         links=(
-            ConfigurationLink("contabilidad.naming_series_list", "Series de numeración"),
-            ConfigurationLink("contabilidad.external_counter_list", "Contadores externos"),
+            ConfigurationLink("contabilidad.naming_series_list", _("Series de numeración")),
+            ConfigurationLink("contabilidad.external_counter_list", _("Contadores externos")),
         ),
     ),
     ConfigurationSection(
-        label="Impuestos y Cargos",
+        label=_("Impuestos y Cargos"),
         icon="bi bi-percent",
         links=(
-            ConfigurationLink("admin.lista_impuestos", "Impuestos y cargos"),
-            ConfigurationLink("admin.lista_plantillas_impuesto", "Plantillas de impuestos"),
-            ConfigurationLink("admin.lista_reglas_fiscales", "Reglas fiscales"),
+            ConfigurationLink("admin.lista_impuestos", _("Impuestos y cargos")),
+            ConfigurationLink("admin.lista_plantillas_impuesto", _("Plantillas de impuestos")),
+            ConfigurationLink("admin.lista_reglas_fiscales", _("Reglas fiscales")),
         ),
     ),
     ConfigurationSection(
-        label="Seguridad de Sesión",
+        label=_("Seguridad de Sesión"),
         icon="bi bi-shield-lock",
         links=(
             ConfigurationLink(
                 "admin.session_security_settings",
-                "Protección de orígenes",
+                _("Protección de orígenes"),
                 cloud_only=True,
             ),
         ),
     ),
     ConfigurationSection(
-        label="Usuarios y Permisos",
+        label=_("Usuarios y Permisos"),
         icon="bi bi-people",
         links=(
-            ConfigurationLink("admin.lista_usuarios", "Usuarios"),
-            ConfigurationLink("admin.lista_roles", "Roles y permisos"),
+            ConfigurationLink("admin.lista_usuarios", _("Usuarios")),
+            ConfigurationLink("admin.lista_roles", _("Roles y permisos")),
         ),
     ),
 )

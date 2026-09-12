@@ -981,7 +981,7 @@ def _render_stock_reconciliation_edit_form(
     return render_template(
         "inventario/stock_reconciliation_nuevo.html",
         form=formulario,
-        titulo="Editar Conciliación de Inventario - " + APPNAME,
+        titulo=_("Editar Conciliación de Inventario") + " - " + APPNAME,
         items_disponibles=items_disponibles,
         uoms_disponibles=uoms_disponibles,
         reconciliation_config=reconciliation_config,

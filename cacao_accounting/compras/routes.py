@@ -294,8 +294,6 @@ IMPORT_LANDED_COST = "import_landed_cost"
 
 IMPORT_LANDED_COST_LABEL = "Costo de Importación"
 
-COMPARATIVO_OFERTAS_TITULO = "Comparativo de Ofertas - "
-
 COMPRAS_COMPARATIVO_ORDENES = "compras.compras_comparativo_ordenes"
 
 CANCELLATION_REASON_REQUIRED_MSG = "Debe indicar el motivo de la anulacion."
@@ -328,7 +326,7 @@ def compras_orden_compra_lista():
         (PurchaseOrder.document_no, PurchaseOrder.supplier_name, PurchaseOrder.supplier_invoice_no, PurchaseOrder.remarks),
         access_modules=("purchases", "inventory"),
     )
-    titulo = "Listado de Ordenes de Compra - " + APPNAME
+    titulo = _("Listado de Ordenes de Compra") + " - " + APPNAME
     return render_template("compras/orden_compra_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -341,7 +339,7 @@ def compras_solicitud_compra_lista():
         PurchaseRequest,
         (PurchaseRequest.document_no, PurchaseRequest.requested_by, PurchaseRequest.remarks),
     )
-    titulo = "Listado de Solicitudes de Compra - " + APPNAME
+    titulo = _("Listado de Solicitudes de Compra") + " - " + APPNAME
     return render_template("compras/solicitud_compra_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -365,7 +363,7 @@ def compras_solicitud_compra_nueva():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
-    titulo = "Nueva Solicitud de Compra - " + APPNAME
+    titulo = _("Nueva Solicitud de Compra") + " - " + APPNAME
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_REQUEST,
         "viewKey": "draft",
@@ -553,7 +551,7 @@ def compras_solicitud_compra_editar(request_id: str):
     return render_template(
         "compras/solicitud_compra_nueva.html",
         form=formulario,
-        titulo="Editar Solicitud de Compra - " + APPNAME,
+        titulo=_("Editar Solicitud de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
         items_disponibles=items_disponibles,
@@ -706,7 +704,7 @@ def compras_cotizacion_proveedor_lista():
         SupplierQuotation,
         (SupplierQuotation.document_no, SupplierQuotation.supplier_name, SupplierQuotation.remarks),
     )
-    titulo = "Listado de Cotizaciones de Proveedor - " + APPNAME
+    titulo = _("Listado de Cotizaciones de Proveedor") + " - " + APPNAME
     return render_template("compras/cotizacion_proveedor_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -736,7 +734,7 @@ def compras_cotizacion_proveedor_nueva():
     solicitud_origen, rfq_origen = _supplier_quotation_sources(from_request_id, from_rfq_id)
     _validate_supplier_quotation_origin(solicitud_origen or rfq_origen)
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
-    titulo = "Nueva Cotización de Proveedor - " + APPNAME
+    titulo = _("Nueva Cotización de Proveedor") + " - " + APPNAME
     transaction_config = _supplier_quotation_transaction_config(
         form_key=FORMKEY_SUPPLIER_QUOTATION,
         items=items_disponibles,
@@ -851,7 +849,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     return render_template(
         "compras/cotizacion_proveedor_nueva.html",
         form=formulario,
-        titulo="Editar Cotizacion de Proveedor - " + APPNAME,
+        titulo=_("Editar Cotizacion de Proveedor") + " - " + APPNAME,
         edit=True,
         registro=registro,
         rfq_origen=None,
@@ -1008,7 +1006,7 @@ def compras_comparativo_ofertas_lista():
         ).scalars()
         for comparison in comparisons:
             comparisons_by_request.setdefault(comparison.purchase_request_id, comparison)
-    titulo = COMPARATIVO_OFERTAS_TITULO + APPNAME
+    titulo = _("Comparativo de Ofertas") + " - " + APPNAME
     return render_template(
         "compras/comparativo_ofertas_lista.html",
         consulta=consulta,
@@ -1058,7 +1056,7 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
         "compras/comparativo_ordenes_seleccionar.html",
         purchase_request=purchase_request,
         candidates=candidates,
-        titulo="Crear comparativo de ofertas - " + APPNAME,
+        titulo=_("Crear comparativo de ofertas") + " - " + APPNAME,
     )
 
 
@@ -1242,7 +1240,7 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         comparison_lines=comparison_lines,
         negotiation_rfqs=negotiation_rfqs,
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
-        titulo=COMPARATIVO_OFERTAS_TITULO + (request_comparison.document_no or request_comparison.id or ""),
+        titulo=_("Comparativo de Ofertas") + " - " + (request_comparison.document_no or request_comparison.id or ""),
     )
 
 
@@ -1314,7 +1312,7 @@ def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested
         participant_order_ids=participant_order_ids,
         rounds=rounds,
         selected_round=selected_round,
-        titulo=COMPARATIVO_OFERTAS_TITULO + (comparison.id or ""),
+        titulo=_("Comparativo de Ofertas") + " - " + (comparison.id or ""),
     )
 
 
@@ -1360,7 +1358,7 @@ def compras_comparativo_ofertas(rfq_id: str):
         if award
         else []
     )
-    titulo = COMPARATIVO_OFERTAS_TITULO + (registro.document_no or rfq_id)
+    titulo = _("Comparativo de Ofertas") + " - " + (registro.document_no or rfq_id)
     return render_template(
         "compras/comparativo_ofertas.html",
         registro=registro,
@@ -1483,7 +1481,7 @@ def compras_recepcion_lista():
         (PurchaseReceipt.document_no, PurchaseReceipt.supplier_name, PurchaseReceipt.remarks),
         access_modules=("purchases", "inventory"),
     )
-    titulo = "Listado de Recepciones de Compra - " + APPNAME
+    titulo = _("Listado de Recepciones de Compra") + " - " + APPNAME
     return render_template(
         "compras/recepcion_lista.html",
         consulta=consulta,
@@ -1503,7 +1501,7 @@ def compras_factura_compra_devolucion_lista():
         database.select(PurchaseReceipt).filter(PurchaseReceipt.is_return.is_(True)),
         access_modules=("purchases", "inventory"),
     )
-    titulo = "Listado de Devoluciones de Compra - " + APPNAME
+    titulo = _("Listado de Devoluciones de Compra") + " - " + APPNAME
     return render_template(
         "compras/recepcion_lista.html",
         consulta=consulta,
@@ -1527,7 +1525,7 @@ def compras_factura_compra_lista():
         ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_INVOICE),
     )
-    titulo = "Listado de Facturas de Compra - " + APPNAME
+    titulo = _("Listado de Facturas de Compra") + " - " + APPNAME
     return render_template("compras/factura_compra_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -1546,7 +1544,7 @@ def compras_factura_compra_nota_debito_lista():
         ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_DEBIT_NOTE),
     )
-    titulo = "Listado de Notas de Débito de Compra - " + APPNAME
+    titulo = _("Listado de Notas de Débito de Compra") + " - " + APPNAME
     return render_template(
         COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
         consulta=consulta,
@@ -1573,7 +1571,7 @@ def compras_factura_compra_nota_credito_lista():
         ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_CREDIT_NOTE),
     )
-    titulo = "Listado de Notas de Crédito de Compra - " + APPNAME
+    titulo = _("Listado de Notas de Crédito de Compra") + " - " + APPNAME
     return render_template(
         COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
         consulta=consulta,
@@ -1612,7 +1610,7 @@ def compras_proveedor_lista():
         database.select(Party).filter(Party.is_supplier.is_(True)),
         include_status=False,
     )
-    titulo = "Listado de Proveedores - " + APPNAME
+    titulo = _("Listado de Proveedores") + " - " + APPNAME
     return render_template("compras/proveedor_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -1665,7 +1663,7 @@ def compras_proveedor_nuevo():
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     formulario = FormularioProveedor()
-    titulo = "Nuevo Proveedor - " + APPNAME
+    titulo = _("Nuevo Proveedor") + " - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
 
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
@@ -1733,7 +1731,7 @@ def compras_proveedor_editar(supplier_id: str):
     if not proveedor:
         abort(404)
     formulario = FormularioProveedor(obj=proveedor)
-    titulo = f"Editar Proveedor - {APPNAME}"
+    titulo = _("Editar Proveedor") + " - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(proveedor.id, selected_company, role="supplier")
@@ -1871,7 +1869,7 @@ def compras_orden_compra_nuevo():
     supplier_quotation_origen = (
         database.session.get(SupplierQuotation, from_supplier_quotation_id) if from_supplier_quotation_id else None
     )
-    titulo = "Nueva Orden de Compra - " + APPNAME
+    titulo = _("Nueva Orden de Compra") + " - " + APPNAME
     if request.method == "POST":
         response = _create_purchase_order_from_request(request.form)
         if response is not None:
@@ -1959,7 +1957,7 @@ def compras_orden_compra_editar(order_id: str):
     return render_template(
         "compras/orden_compra_nuevo.html",
         form=formulario,
-        titulo="Editar Orden de Compra - " + APPNAME,
+        titulo=_("Editar Orden de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
         from_request_id=None,
@@ -2091,7 +2089,7 @@ def compras_solicitud_cotizacion_lista():
         PurchaseQuotation,
         (PurchaseQuotation.document_no, PurchaseQuotation.supplier_name, PurchaseQuotation.remarks),
     )
-    titulo = "Listado de Solicitudes de Cotización - " + APPNAME
+    titulo = _("Listado de Solicitudes de Cotización") + " - " + APPNAME
     return render_template("compras/solicitud_cotizacion_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -2112,7 +2110,7 @@ def compras_solicitud_cotizacion_nueva():
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
     source_currency = effective_currency(solicitud_origen) if solicitud_origen else None
     items_disponibles, uoms_disponibles = _purchase_quotation_catalogs()
-    titulo = "Nueva Solicitud de Cotización - " + APPNAME
+    titulo = _("Nueva Solicitud de Cotización") + " - " + APPNAME
     transaction_config = _purchase_quotation_transaction_config(
         items=items_disponibles,
         uoms=uoms_disponibles,
@@ -2233,7 +2231,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     return render_template(
         "compras/solicitud_cotizacion_nuevo.html",
         form=formulario,
-        titulo="Editar Solicitud de Cotizacion - " + APPNAME,
+        titulo=_("Editar Solicitud de Cotizacion") + " - " + APPNAME,
         edit=True,
         registro=registro,
         from_request_id=None,
@@ -2501,7 +2499,7 @@ def compras_recepcion_nuevo():
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
     is_return = bool(recepcion_origen) or request.args.get("is_return") in {"1", "true", "True"}
-    titulo = ("Nueva Devolución de Recepción" if is_return else "Nueva Recepción de Compra") + " - " + APPNAME
+    titulo = (_("Nueva Devolución de Recepción") if is_return else _("Nueva Recepción de Compra")) + " - " + APPNAME
     company_id = (
         (recepcion_origen.company if recepcion_origen else None)
         or (orden_origen.company if orden_origen else None)
@@ -2683,7 +2681,7 @@ def compras_recepcion_editar(receipt_id: str):
     return render_template(
         "compras/recepcion_nuevo.html",
         form=formulario,
-        titulo="Editar Recepcion de Compra - " + APPNAME,
+        titulo=_("Editar Recepcion de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -2889,7 +2887,7 @@ def compras_factura_compra_nuevo():
     orden_origen, recepcion_origen, factura_origen = _purchase_invoice_sources(source_ids)
     document_title = DOCUMENT_TYPE_LABELS.get(document_type, FACTURA_DE_COMPRA)
     items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
-    titulo = f"Nueva {document_title} - {APPNAME}"
+    titulo = _("Nueva") + " " + _(document_title) + " - " + APPNAME
     company_id = (
         (orden_origen.company if orden_origen else None)
         or (recepcion_origen.company if recepcion_origen else None)
@@ -3051,7 +3049,7 @@ def compras_factura_compra_editar(invoice_id: str):
     return render_template(
         "compras/factura_compra_nuevo.html",
         form=formulario,
-        titulo="Editar Factura de Compra - " + APPNAME,
+        titulo=_("Editar Factura de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -3304,7 +3302,7 @@ def compras_import_landed_cost_lista():
         ImportLandedCost,
         (ImportLandedCost.document_no, ImportLandedCost.supplier_name, ImportLandedCost.remarks),
     )
-    titulo = "Listado de Costos de Importacion - " + APPNAME
+    titulo = _("Listado de Costos de Importacion") + " - " + APPNAME
     return render_template("compras/import_landed_cost_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -3329,7 +3327,7 @@ def compras_import_landed_cost_nuevo():
     if from_invoice_id:
         invoice_origen = database.session.get(PurchaseInvoice, from_invoice_id)
 
-    titulo = f"Nuevo Costo de Importacion - {APPNAME}"
+    titulo = _("Nuevo Costo de Importacion") + " - " + APPNAME
     items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
 
     transaction_config = {
@@ -3376,7 +3374,7 @@ def compras_import_landed_cost(landed_cost_id: str):
     _require_purchase_document_access(registro)
     items = _get_import_landed_cost_items(landed_cost_id)
     cargos = _get_import_landed_cost_charges(landed_cost_id)
-    titulo = f"Costo de Importacion {registro.document_no or registro.id} - {APPNAME}"
+    titulo = _("Costo de Importacion") + f" {registro.document_no or registro.id} - " + APPNAME
     audit_timeline = format_document_timeline("import_landed_cost", registro.id)
     return render_template(
         "compras/import_landed_cost.html",

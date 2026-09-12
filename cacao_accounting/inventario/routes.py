@@ -126,7 +126,7 @@ def inventario_articulo_lista():
         max_per_page=10,
         count=True,
     )
-    titulo = "Listado de Articulos - " + APPNAME
+    titulo = _("Listado de Articulos") + " - " + APPNAME
     return render_template("inventario/articulo_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -141,7 +141,7 @@ def inventario_uom_lista():
         max_per_page=10,
         count=True,
     )
-    titulo = "Listado de Unidades de Medida - " + APPNAME
+    titulo = _("Listado de Unidades de Medida") + " - " + APPNAME
     return render_template("inventario/uom_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -156,7 +156,7 @@ def inventario_bodega_lista():
         max_per_page=10,
         count=True,
     )
-    titulo = "Listado de Bodegas - " + APPNAME
+    titulo = _("Listado de Bodegas") + " - " + APPNAME
     return render_template("inventario/bodega_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -166,7 +166,7 @@ def inventario_bodega_lista():
 def inventario_entrada_lista():
     """Listado de entradas de almacen."""
     consulta = _paginate_list(StockEntry, (StockEntry.document_no,))
-    titulo = "Listado de Movimientos de Inventario - " + APPNAME
+    titulo = _("Listado de Movimientos de Inventario") + " - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO)
     return render_template(
         INVENTARIO_ENTRADA_LISTA_HTML,
@@ -187,7 +187,7 @@ def inventario_material_receipt_lista():
         (StockEntry.document_no,),
         _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_receipt"),
     )
-    titulo = "Listado de Recepciones de Material - " + APPNAME
+    titulo = _("Listado de Recepciones de Material") + " - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_receipt")
     return render_template(
         INVENTARIO_ENTRADA_LISTA_HTML,
@@ -206,7 +206,7 @@ def inventario_material_issue_lista():
     consulta = _paginate_list(
         StockEntry, (StockEntry.document_no,), _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_issue")
     )
-    titulo = "Listado de Salidas de Material - " + APPNAME
+    titulo = _("Listado de Salidas de Material") + " - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_issue")
     return render_template(
         INVENTARIO_ENTRADA_LISTA_HTML,
@@ -227,7 +227,7 @@ def inventario_material_transfer_lista():
         (StockEntry.document_no,),
         _inventory_company_scoped_select(StockEntry).filter_by(purpose="material_transfer"),
     )
-    titulo = "Listado de Transferencias de Material - " + APPNAME
+    titulo = _("Listado de Transferencias de Material") + " - " + APPNAME
     new_url = url_for(INVENTARIO_INVENTARIO_ENTRADA_NUEVO, purpose="material_transfer")
     return render_template(
         INVENTARIO_ENTRADA_LISTA_HTML,
@@ -248,7 +248,7 @@ def inventario_ajuste_lista():
         (StockEntry.document_no,),
         _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_adjustment"),
     )
-    titulo = "Listado de Ajustes de Inventario - " + APPNAME
+    titulo = _("Listado de Ajustes de Inventario") + " - " + APPNAME
     new_url = url_for("inventario.inventario_ajuste_nuevo")
     return render_template(
         INVENTARIO_ENTRADA_LISTA_HTML,
@@ -269,7 +269,7 @@ def inventario_reconciliacion_lista():
         (StockEntry.document_no,),
         _inventory_company_scoped_select(StockEntry).filter_by(purpose="stock_reconciliation"),
     )
-    titulo = "Listado de Conciliaciones de Inventario - " + APPNAME
+    titulo = _("Listado de Conciliaciones de Inventario") + " - " + APPNAME
     new_url = url_for("inventario.inventario_reconciliacion_nueva")
     return render_template(
         INVENTARIO_ENTRADA_LISTA_HTML,
@@ -290,7 +290,7 @@ def inventario_ajuste_positivo_lista():
         (StockEntry.document_no,),
         _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_positive"),
     )
-    titulo = "Listado de Ajustes Positivos - " + APPNAME
+    titulo = _("Listado de Ajustes Positivos") + " - " + APPNAME
     return render_template(
         INVENTARIO_ENTRADA_LISTA_HTML,
         consulta=consulta,
@@ -310,7 +310,7 @@ def inventario_salida_inventario_lista():
         (StockEntry.document_no,),
         _inventory_company_scoped_select(StockEntry).filter_by(purpose="adjustment_negative"),
     )
-    titulo = "Listado de Salidas de Inventario - " + APPNAME
+    titulo = _("Listado de Salidas de Inventario") + " - " + APPNAME
     return render_template(
         INVENTARIO_ENTRADA_LISTA_HTML,
         consulta=consulta,
@@ -345,7 +345,7 @@ def inventario_articulo_nuevo():
     formulario.default_uom.choices = _uom_choices()
     formulario.item_category_id.choices = _item_category_choices()
     formulario.currency.choices = _currency_choices()
-    titulo = "Nuevo Artículo - " + APPNAME
+    titulo = _("Nuevo Artículo") + " - " + APPNAME
     uom_rows = [{"uom_code": "", "conversion_factor": ""}]
     account_rows = [{"company": "", "expense_account_id": "", "cost_center_code": ""}]
 
@@ -400,7 +400,7 @@ def inventario_articulo_editar(item_id):
     formulario.default_uom.choices = _uom_choices()
     formulario.item_category_id.choices = _item_category_choices()
     formulario.currency.choices = _currency_choices()
-    titulo = f"Editar {item.name} - " + APPNAME
+    titulo = _("Editar") + f" {item.name} - " + APPNAME
 
     existing_uom_rows = [
         {"uom_code": c.from_uom, "conversion_factor": str(c.conversion_factor)} for c in list_item_uom_conversions(item.code)
@@ -499,7 +499,7 @@ def inventario_uom_nuevo():
     from cacao_accounting.inventario.forms import FormularioUOM
 
     formulario = FormularioUOM()
-    titulo = "Nueva Unidad de Medida - " + APPNAME
+    titulo = _("Nueva Unidad de Medida") + " - " + APPNAME
     if formulario.validate_on_submit() or request.method == "POST":
         uom = UOM(
             code=request.form.get("code"),
@@ -534,7 +534,7 @@ def inventario_bodega_nuevo():
     from cacao_accounting.inventario.forms import FormularioBodega
 
     formulario = FormularioBodega()
-    titulo = "Nueva Bodega - " + APPNAME
+    titulo = _("Nueva Bodega") + " - " + APPNAME
     warehouse_company_rows = [{"company": "", "company_label": "", "inventory_account_id": "", "inventory_account_label": ""}]
     if formulario.validate_on_submit() or request.method == "POST":
         warehouse_company_rows = _warehouse_company_rows_for_template(request.form)
@@ -622,7 +622,7 @@ def inventario_lote_lista():
         max_per_page=10,
         count=True,
     )
-    titulo = "Listado de Lotes - " + APPNAME
+    titulo = _("Listado de Lotes") + " - " + APPNAME
     return render_template("inventario/lote_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -636,7 +636,7 @@ def inventario_lote_nuevo():
 
     formulario = FormularioLote()
     formulario.item_code.choices = _lote_item_choices()
-    titulo = "Nuevo Lote - " + APPNAME
+    titulo = _("Nuevo Lote") + " - " + APPNAME
     if request.method == "POST":
         if formulario.validate():
             try:

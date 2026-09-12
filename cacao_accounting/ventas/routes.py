@@ -390,7 +390,7 @@ def ventas_orden_venta_lista():
         SalesOrder,
         (SalesOrder.document_no, SalesOrder.customer_name, SalesOrder.remarks),
     )
-    titulo = "Listado de Ordenes de Venta - " + APPNAME
+    titulo = _("Listado de Ordenes de Venta") + " - " + APPNAME
     return render_template("ventas/orden_venta_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -403,7 +403,7 @@ def ventas_pedido_venta_lista():
         SalesRequest,
         (SalesRequest.document_no, SalesRequest.customer_name, SalesRequest.remarks),
     )
-    titulo = "Listado de Pedidos de Venta - " + APPNAME
+    titulo = _("Listado de Pedidos de Venta") + " - " + APPNAME
     return render_template("ventas/solicitud_venta_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -430,7 +430,7 @@ def ventas_pedido_venta_nuevo():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
-    titulo = "Nuevo Pedido de Venta - " + APPNAME
+    titulo = _("Nuevo Pedido de Venta") + " - " + APPNAME
     transaction_config = {
         "formKey": _FORMKEY_SALES_REQUEST,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
@@ -572,7 +572,7 @@ def ventas_pedido_venta_editar(request_id: str):
     return render_template(
         "ventas/solicitud_venta_nuevo.html",
         form=formulario,
-        titulo="Editar Pedido de Venta - " + APPNAME,
+        titulo=_("Editar Pedido de Venta") + " - " + APPNAME,
         edit=True,
         registro=registro,
         items_disponibles=items_disponibles,
@@ -718,7 +718,7 @@ def ventas_entrega_lista():
         (DeliveryNote.document_no, DeliveryNote.customer_name, DeliveryNote.remarks),
         access_modules=("sales", "inventory"),
     )
-    titulo = "Listado de Remisiones de Mercadería Vendida - " + APPNAME
+    titulo = _("Listado de Remisiones de Mercadería Vendida") + " - " + APPNAME
     return render_template(
         "ventas/entrega_lista.html",
         consulta=consulta,
@@ -737,7 +737,7 @@ def ventas_factura_venta_lista():
         (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
         database.select(SalesInvoice).filter_by(document_type="sales_invoice"),
     )
-    titulo = "Listado de Facturas de Venta - " + APPNAME
+    titulo = _("Listado de Facturas de Venta") + " - " + APPNAME
     return render_template("ventas/factura_venta_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -751,7 +751,7 @@ def ventas_factura_venta_nota_debito_lista():
         (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
         database.select(SalesInvoice).filter_by(document_type="sales_debit_note"),
     )
-    titulo = "Listado de Notas de Débito de Venta - " + APPNAME
+    titulo = _("Listado de Notas de Débito de Venta") + " - " + APPNAME
     return render_template(
         "ventas/factura_venta_devolucion_lista.html",
         consulta=consulta,
@@ -773,7 +773,7 @@ def ventas_factura_venta_devolucion_lista():
         (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
         database.select(SalesInvoice).filter(SalesInvoice.document_type.in_(["sales_credit_note", "sales_return"])),
     )
-    titulo = "Listado de Devoluciones de Venta - " + APPNAME
+    titulo = _("Listado de Devoluciones de Venta") + " - " + APPNAME
     return render_template(
         "ventas/factura_venta_devolucion_lista.html",
         consulta=consulta,
@@ -812,7 +812,7 @@ def ventas_cliente_lista():
         database.select(Party).filter(Party.is_customer.is_(True)),
         include_status=False,
     )
-    titulo = "Listado de Clientes - " + APPNAME
+    titulo = _("Listado de Clientes") + " - " + APPNAME
     return render_template("ventas/cliente_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -825,7 +825,7 @@ def ventas_cliente_nuevo():
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     formulario = FormularioCliente()
-    titulo = "Nuevo Cliente - " + APPNAME
+    titulo = _("Nuevo Cliente") + " - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(None, selected_company, role="customer")
@@ -898,7 +898,7 @@ def ventas_cliente_editar(customer_id: str):
     if not cliente:
         abort(404)
     formulario = FormularioCliente(obj=cliente)
-    titulo = f"Editar Cliente - {APPNAME}"
+    titulo = _("Editar Cliente") + " - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(cliente.id, selected_company, role="customer")
@@ -1041,7 +1041,7 @@ def ventas_orden_venta_nuevo():
         {"code": w[0].code, "name": w[0].name}
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
-    titulo = "Nueva Orden de Venta - " + APPNAME
+    titulo = _("Nueva Orden de Venta") + " - " + APPNAME
     initial_source_type = _sales_order_initial_source_type(from_request_id, from_quotation_id)
     source_origen = solicitud_origen or cotizacion_origen
     transaction_config = _build_sales_order_transaction_config(
@@ -1173,7 +1173,7 @@ def ventas_orden_venta_editar(order_id: str):
     return render_template(
         "ventas/orden_venta_nuevo.html",
         form=formulario,
-        titulo="Editar Orden de Venta - " + APPNAME,
+        titulo=_("Editar Orden de Venta") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -1248,7 +1248,7 @@ def ventas_cotizacion_lista():
         SalesQuotation,
         (SalesQuotation.document_no, SalesQuotation.customer_name, SalesQuotation.remarks),
     )
-    titulo = "Listado de Cotizaciones de Venta - " + APPNAME
+    titulo = _("Listado de Cotizaciones de Venta") + " - " + APPNAME
     return render_template("ventas/cotizacion_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -1329,7 +1329,7 @@ def ventas_cotizacion_nueva():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
-    titulo = "Nueva Cotización - " + APPNAME
+    titulo = _("Nueva Cotización") + " - " + APPNAME
     transaction_config = {
         "formKey": _FORMKEY_SALES_QUOTATION,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
@@ -1448,7 +1448,7 @@ def ventas_cotizacion_editar(quotation_id: str):
     return render_template(
         "ventas/cotizacion_nuevo.html",
         form=formulario,
-        titulo="Editar Cotización de Venta - " + APPNAME,
+        titulo=_("Editar Cotización de Venta") + " - " + APPNAME,
         edit=True,
         registro=registro,
         solicitud_origen=None,
@@ -1857,7 +1857,7 @@ def ventas_entrega_editar(note_id: str):
     return render_template(
         "ventas/entrega_nuevo.html",
         form=formulario,
-        titulo="Editar Nota de Entrega - " + APPNAME,
+        titulo=_("Editar Nota de Entrega") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -2048,7 +2048,7 @@ def ventas_factura_venta_nuevo():
 
     src = _sales_invoice_sources_and_type(formulario)
     items_disponibles, uoms_disponibles = _sales_invoice_catalogs()
-    titulo = "Nueva Factura de Venta - " + APPNAME
+    titulo = _("Nueva Factura de Venta") + " - " + APPNAME
 
     company_id = (
         next((o.company for o in (src["orden_origen"], src["entrega_origen"], src["factura_origen"]) if o), None)
@@ -2230,7 +2230,7 @@ def ventas_factura_venta_editar(invoice_id: str):
     return render_template(
         "ventas/factura_venta_nuevo.html",
         form=formulario,
-        titulo="Editar Factura de Venta - " + APPNAME,
+        titulo=_("Editar Factura de Venta") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
