@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-10 21:56+0000\n"
+"POT-Creation-Date: 2026-09-10 23:31+0000\n"
 "PO-Revision-Date: 2026-08-23 16:28+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -4826,6 +4826,7 @@ msgid "Se requiere una tasa para monedas distintas."
 msgstr "A rate is required for different currencies."
 
 #: cacao_accounting/api/line_import.py:1049
+#: cacao_accounting/document_flow/payment.py:1223
 msgid "El monto aplicado excede el saldo pendiente del documento."
 msgstr "The applied amount exceeds the document's outstanding balance."
 
@@ -6296,6 +6297,7 @@ msgid "No existe una tasa de cambio positiva para aplicar el documento."
 msgstr "There is no positive exchange rate to apply the document."
 
 #: cacao_accounting/bancos/services.py:2009
+#: cacao_accounting/document_flow/payment.py:862
 msgid "No se puede aplicar la misma factura dos veces en un pago."
 msgstr "The same invoice cannot be applied twice in one payment."
 
@@ -6304,6 +6306,7 @@ msgid "El monto asignado no puede ser negativo."
 msgstr "The allocated amount cannot be negative."
 
 #: cacao_accounting/bancos/services.py:2019
+#: cacao_accounting/document_flow/payment.py:855
 #, python-brace-format
 msgid ""
 "El descuento + diferencia de cambio ({0}) no puede ser igual o mayor al "
@@ -6384,6 +6387,7 @@ msgid "La cuenta bancaria destino está inactiva."
 msgstr "The destination bank account is inactive."
 
 #: cacao_accounting/bancos/services.py:2356
+#: cacao_accounting/document_flow/payment.py:1808
 msgid "La cuenta bancaria de origen y destino deben ser distintas."
 msgstr "The origin and destination bank account must be different."
 
@@ -6509,7 +6513,7 @@ msgstr "Could not determine the bank account currency."
 #: cacao_accounting/bancos/templates/bancos/pago.html:41
 #: cacao_accounting/templates/macros.html:136
 msgid "Caja y Bancos"
-msgstr "Caja and Banks"
+msgstr "Cash Management"
 
 #: cacao_accounting/bancos/templates/bancos.html:25
 msgid "Gestiona cuentas, pagos, transferencias y conciliaciones."
@@ -9820,7 +9824,7 @@ msgstr ""
 "Cannot reverse an invoice with an issued withholding certificate; adjust "
 "or cancel the withholding certificate first."
 
-#: cacao_accounting/compras/services.py:2411
+#: cacao_accounting/compras/services.py:2413
 msgid ""
 "La devolución física está asociada a más de una factura; seleccione la "
 "factura origen."
@@ -9828,54 +9832,54 @@ msgstr ""
 "The physical return is associated with more than one invoice; select the "
 "source invoice."
 
-#: cacao_accounting/compras/services.py:2437
+#: cacao_accounting/compras/services.py:2439
 msgid "La nota de compra requiere una factura origen aprobada."
 msgstr "The purchase note requires an approved source invoice."
 
-#: cacao_accounting/compras/services.py:2458
-#: cacao_accounting/compras/services.py:2598
+#: cacao_accounting/compras/services.py:2460
+#: cacao_accounting/compras/services.py:2600
 msgid "El tipo de nota de crédito no es válido."
 msgstr "The credit note type is not valid."
 
-#: cacao_accounting/compras/services.py:2462
+#: cacao_accounting/compras/services.py:2464
 msgid "La nota por devolución física requiere una devolución de recepción."
 msgstr "The physical return note requires a receipt return."
 
-#: cacao_accounting/compras/services.py:2579
+#: cacao_accounting/compras/services.py:2581
 msgid "Factura de compra creada correctamente."
 msgstr "Purchase invoice created successfully."
 
-#: cacao_accounting/compras/services.py:2643
+#: cacao_accounting/compras/services.py:2645
 msgid "Factura de compra actualizada correctamente."
 msgstr "Purchase Invoice updated successfully."
 
-#: cacao_accounting/compras/services.py:2688
+#: cacao_accounting/compras/services.py:2690
 msgid ""
 "La cantidad y la tarifa de un costo de importación no pueden ser "
 "negativas."
 msgstr "The quantity and rate of an import cost cannot be negative."
 
-#: cacao_accounting/compras/services.py:2721
+#: cacao_accounting/compras/services.py:2723
 msgid "El importe de un cargo de importación no puede ser negativo."
 msgstr "The amount of an import charge cannot be negative."
 
-#: cacao_accounting/compras/services.py:2797
+#: cacao_accounting/compras/services.py:2799
 msgid "Compania y fecha son obligatorios."
 msgstr "Company and date are required."
 
-#: cacao_accounting/compras/services.py:2810
+#: cacao_accounting/compras/services.py:2812
 msgid "La factura de compra seleccionada no existe."
 msgstr "The selected purchase invoice does not exist."
 
-#: cacao_accounting/compras/services.py:2813
+#: cacao_accounting/compras/services.py:2815
 msgid "La factura de compra no pertenece a la compañía indicada."
 msgstr "The purchase invoice does not belong to the indicated company."
 
-#: cacao_accounting/compras/services.py:2816
+#: cacao_accounting/compras/services.py:2818
 msgid "La factura de compra debe estar aprobada para capitalizar costos."
 msgstr "The purchase invoice must be approved to capitalize costs."
 
-#: cacao_accounting/compras/services.py:2884
+#: cacao_accounting/compras/services.py:2886
 msgid "Costo de importacion creado exitosamente."
 msgstr "Import cost created successfully."
 
@@ -11369,7 +11373,7 @@ msgid "La confirmación no se encuentra disponible."
 msgstr "The confirmation is not available."
 
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:544
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:648
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:647
 msgid "Esta solicitud de confirmación de saldo ha expirado."
 msgstr "This balance confirmation request has expired."
 
@@ -11381,7 +11385,7 @@ msgstr "All verification fields are required."
 msgid "Debe declarar bajo juramento que se encuentra autorizado para continuar."
 msgstr "You must declare under oath that you are authorized to continue."
 
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:564
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:563
 msgid ""
 "Se ha excedido el número de intentos permitidos para este enlace. Por "
 "favor contacte al administrador."
@@ -11389,16 +11393,16 @@ msgstr ""
 "Maximum allowed attempts for this link exceeded. Please contact "
 "administrator."
 
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:572
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:580
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:571
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:579
 msgid "La dirección de correo electrónico o el código ingresado son incorrectos."
 msgstr "The email address or code entered is incorrect."
 
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:620
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:619
 msgid "Tipo de respuesta no válido."
 msgstr "Invalid response type."
 
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:624
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:623
 msgid ""
 "Debe proporcionar una explicación detallada de las diferencias "
 "encontradas (mínimo 10 caracteres)."
@@ -11406,11 +11410,11 @@ msgstr ""
 "You must provide a detailed explanation of the differences found (minimum"
 " 10 characters)."
 
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:643
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:642
 msgid "La confirmación no se encuentra disponible para responder."
 msgstr "The confirmation is not available to respond."
 
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:653
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:652
 msgid ""
 "La solicitud presenta una inconsistencia de integridad y no puede "
 "responderse."
@@ -11418,11 +11422,11 @@ msgstr ""
 "The request presents an integrity inconsistency and cannot be responded "
 "to."
 
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:659
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:658
 msgid "Debe completar el paso de verificación primero."
 msgstr "You must complete the verification step first."
 
-#: cacao_accounting/contabilidad/balance_confirmation_bp.py:694
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:693
 msgid "La confirmación ya fue respondida o ya no se encuentra disponible."
 msgstr "The confirmation has already been responded to or is no longer available."
 
@@ -12124,6 +12128,7 @@ msgid "Tipo de pago no soportado para contabilizacion."
 msgstr "Payment type not supported for posting."
 
 #: cacao_accounting/contabilidad/posting_service.py:1718
+#: cacao_accounting/document_flow/payment.py:1806
 msgid "La transferencia interna requiere cuentas bancarias válidas."
 msgstr "The internal transfer requires valid bank accounts."
 
@@ -15979,6 +15984,33 @@ msgstr "The demo administrator user does not exist."
 msgid "No se pudo preparar la serie compartida de pagos para el seed."
 msgstr "Could not prepare the shared payment series for the seed."
 
+#: cacao_accounting/document_flow/context.py:50
+#: cacao_accounting/document_flow/currency_resolver.py:79
+#, fuzzy
+msgid ""
+"El documento origen no tiene moneda transaccional explicita; no se "
+"permite inferirla desde la compania."
+msgstr "The document requires an explicit transaction currency to value inventory."
+
+#: cacao_accounting/document_flow/context.py:54
+#, fuzzy
+msgid "La compania debe coincidir con el documento origen."
+msgstr "The company must remain aligned with the source document."
+
+#: cacao_accounting/document_flow/context.py:56
+#, fuzzy
+msgid "La moneda debe coincidir con el documento origen."
+msgstr "The company must remain aligned with the source document."
+
+#: cacao_accounting/document_flow/currency_resolver.py:101
+#, fuzzy, python-brace-format, python-format
+msgid ""
+"Los documentos origen usan monedas distintas ({0} vs {1} en el origen "
+"#{2}); no se permite crear el documento derivado."
+msgstr ""
+"The source documents use different currencies (%(first)s vs %(currency)s "
+"in source #%(index)s); creating the derived document is not allowed."
+
 #: cacao_accounting/document_flow/payment.py:505
 #: cacao_accounting/document_flow/payment.py:767
 msgid "Debe indicar compania, tipo de tercero y tercero."
@@ -15996,18 +16028,258 @@ msgstr "Invalid reference type."
 msgid "La conciliacion requiere al menos una linea."
 msgstr "The reconciliation requires at least one line."
 
-#: cacao_accounting/document_flow/payment.py:1685
+#: cacao_accounting/document_flow/payment.py:764
+#, fuzzy, python-brace-format
+msgid "El numero de lineas excede el maximo permitido ({0})."
+msgstr "File exceeds the maximum allowed size (16 MB)."
+
+#: cacao_accounting/document_flow/payment.py:1063
+#, fuzzy
+msgid "La conciliacion requiere moneda explicita en el pago."
+msgstr "The AP/AR application requires explicit currencies."
+
+#: cacao_accounting/document_flow/payment.py:1163
+#, fuzzy
+msgid "El pago debe existir y estar aprobado."
+msgstr "The source document and its line must exist and be approved."
+
+#: cacao_accounting/document_flow/payment.py:1165
+#, fuzzy
+msgid "El pago no coincide con la compania o tercero de la conciliacion."
+msgstr "The payment currency does not match the bank account."
+
+#: cacao_accounting/document_flow/payment.py:1167
+#, fuzzy
+msgid "El tipo de pago no corresponde con el documento referenciado."
+msgstr "The third party in the payment does not match the referenced document."
+
+#: cacao_accounting/document_flow/payment.py:1174
+#, fuzzy
+msgid "El documento referenciado debe existir y estar aprobado."
+msgstr "The referenced document must be approved."
+
+#: cacao_accounting/document_flow/payment.py:1176
+#, fuzzy
+msgid "El documento referenciado no pertenece a la misma compania."
+msgstr "The referenced document does not belong to the same company."
+
+#: cacao_accounting/document_flow/payment.py:1179
+#, fuzzy
+msgid "El documento referenciado no coincide con el tercero."
+msgstr "The reference document does not match the payment party."
+
+#: cacao_accounting/document_flow/payment.py:1194
+#, fuzzy, python-brace-format, python-format
+msgid ""
+"La moneda del pago ({0}) no coincide con la moneda del documento "
+"referenciado ({1}). No se permiten aplicaciones cruzadas de moneda."
+msgstr ""
+"The payment currency (%(payment_currency)s) does not match the referenced"
+" document currency (%(document_currency)s). Cross-currency applications "
+"are not allowed."
+
+#: cacao_accounting/document_flow/payment.py:1215
+#, fuzzy
+msgid "El documento ya esta aplicado a este pago."
+msgstr "Documents aplicados or trazados by this payment"
+
+#: cacao_accounting/document_flow/payment.py:1221
+#, fuzzy
+msgid "El documento referenciado no tiene saldo pendiente."
+msgstr "The AP/AR reference document has no open balance."
+
+#: cacao_accounting/document_flow/payment.py:1322
+#, fuzzy
+msgid "La factura no existe."
+msgstr "The sales invoice does not exist."
+
+#: cacao_accounting/document_flow/payment.py:1324
+#, fuzzy
+msgid "La factura debe estar aprobada para aplicar un anticipo."
+msgstr "The purchase invoice must be approved to capitalize costs."
+
+#: cacao_accounting/document_flow/payment.py:1351
+#, fuzzy
+msgid "El anticipo y la factura pertenecen a companias distintas."
+msgstr "The forecast does not belong to the requested company."
+
+#: cacao_accounting/document_flow/payment.py:1353
+#, fuzzy
+msgid "El anticipo pertenece a otro tercero."
+msgstr "The tax template belongs to another company."
+
+#: cacao_accounting/document_flow/payment.py:1370
+#, fuzzy
+msgid "El monto excede el remanente del anticipo."
+msgstr "The amount exceeds the outstanding balance of the target document."
+
+#: cacao_accounting/document_flow/payment.py:1372
+#, fuzzy
+msgid "El monto excede el saldo pendiente de la factura."
+msgstr "The amount exceeds the outstanding balance of the target document."
+
+#: cacao_accounting/document_flow/payment.py:1374
+#, fuzzy
+msgid "El monto excede el saldo pendiente vigente de la factura."
+msgstr "The amount exceeds the outstanding balance of the target document."
+
+#: cacao_accounting/document_flow/payment.py:1388
+#, fuzzy
+msgid "El pago/anticipo no existe."
+msgstr "The project does not exist."
+
+#: cacao_accounting/document_flow/payment.py:1390
+#, fuzzy
+msgid "El pago/anticipo debe estar aprobado."
+msgstr "The source document must be approved."
+
+#: cacao_accounting/document_flow/payment.py:1687
 msgid "Las cuentas de anticipo y del tercero no son válidas para la compañía."
 msgstr "The advance and party accounts are not valid for the company."
 
-#: cacao_accounting/document_flow/payment.py:1723
+#: cacao_accounting/document_flow/payment.py:1725
 msgid "Falta la cuenta de diferencia cambiaria para netear el anticipo."
 msgstr "The exchange difference account to net the advance is missing."
+
+#: cacao_accounting/document_flow/payment.py:1810
+#, fuzzy
+msgid "Las cuentas bancarias deben pertenecer a la compañía del pago."
+msgstr "The bank account does not belong to the same payment company."
+
+#: cacao_accounting/document_flow/payment.py:1815
+#, fuzzy
+msgid "Ambas cuentas bancarias deben tener una cuenta contable configurada."
+msgstr "Both bank accounts must have a configured currency."
+
+#: cacao_accounting/document_flow/payment.py:1817
+#, fuzzy
+msgid "La cuenta contable de origen no coincide con la cuenta bancaria."
+msgstr "The payment currency does not match the bank account."
+
+#: cacao_accounting/document_flow/payment.py:1819
+#, fuzzy
+msgid "La cuenta contable de destino no coincide con la cuenta bancaria."
+msgstr "The payment currency does not match the bank account."
+
+#: cacao_accounting/document_flow/payment.py:1858
+#, fuzzy
+msgid "Factura origen no encontrada."
+msgstr "Resource not found."
+
+#: cacao_accounting/document_flow/payment.py:1860
+#: cacao_accounting/document_flow/service.py:773
+#, fuzzy
+msgid "No se pueden mezclar companias incompatibles."
+msgstr "Only approved templates can be applied."
+
+#: cacao_accounting/document_flow/payment.py:1862
+#, fuzzy
+msgid "La factura origen debe estar aprobada."
+msgstr "The source document must be approved."
+
+#: cacao_accounting/document_flow/payment.py:1865
+#, fuzzy
+msgid "La factura origen no coincide con el tercero del pago."
+msgstr "The reference document does not match the payment party."
+
+#: cacao_accounting/document_flow/payment.py:1867
+#, fuzzy
+msgid "El tipo de pago no corresponde con la factura origen."
+msgstr "The type of payment does not correspond to the type of referenced note."
+
+#: cacao_accounting/document_flow/payment.py:1899
+#, fuzzy
+msgid "No se puede repetir la misma factura en un solo pago."
+msgstr "The same invoice cannot be applied twice in one payment."
+
+#: cacao_accounting/document_flow/payment.py:1917
+#, fuzzy
+msgid "El monto aplicado excede el saldo pendiente."
+msgstr "The applied amount exceeds the document's outstanding balance."
 
 #: cacao_accounting/document_flow/registry.py:783
 #, python-format
 msgid "Tipo documental desconocido: %(value)s"
 msgstr "Unknown document type: %(value)s"
+
+#: cacao_accounting/document_flow/service.py:180
+#, fuzzy
+msgid "Documento origen no encontrado."
+msgstr "Attachment not found."
+
+#: cacao_accounting/document_flow/service.py:199
+msgid "El parametro source debe usar formato doctype:id."
+msgstr "The source parameter must use the doctype:id format."
+
+#: cacao_accounting/document_flow/service.py:248
+#, fuzzy
+msgid "El documento origen y destino pertenecen a companias distintas."
+msgstr "The target document belongs to another company."
+
+#: cacao_accounting/document_flow/service.py:440
+#, fuzzy
+msgid "La cantidad relacionada debe ser mayor que cero."
+msgstr "The quantity must be greater than zero."
+
+#: cacao_accounting/document_flow/service.py:455
+#, fuzzy
+msgid "La cantidad relacionada excede el pendiente disponible."
+msgstr "The allocations exceed the available cash."
+
+#: cacao_accounting/document_flow/service.py:503
+#, fuzzy
+msgid "Linea destino no encontrada."
+msgstr "Budget line not found."
+
+#: cacao_accounting/document_flow/service.py:505
+#, fuzzy
+msgid "La linea origen no pertenece al documento indicado."
+msgstr "The source line does not belong to the specified document."
+
+#: cacao_accounting/document_flow/service.py:507
+#, fuzzy
+msgid "La linea destino no pertenece al documento indicado."
+msgstr "The source line does not belong to the specified document."
+
+#: cacao_accounting/document_flow/service.py:511
+msgid ""
+"La linea destino usa un articulo distinto al de la linea origen de la "
+"relacion."
+msgstr ""
+"The target line uses a different item than the source line in the "
+"relation."
+
+#: cacao_accounting/document_flow/service.py:520
+#, fuzzy
+msgid ""
+"El documento origen debe estar aprobado (docstatus=1) para crear la "
+"relacion."
+msgstr "The source document must be approved."
+
+#: cacao_accounting/document_flow/service.py:522
+#, fuzzy
+msgid "No se puede crear una relacion hacia un documento cancelado (docstatus=2)."
+msgstr "Only an approved document can be cancelled."
+
+#: cacao_accounting/document_flow/service.py:633
+#, fuzzy
+msgid "Debe indicar el motivo del cierre de saldo."
+msgstr "You must provide the reason for reopening the period."
+
+#: cacao_accounting/document_flow/service.py:643
+#, fuzzy
+msgid "La cantidad a cerrar debe ser mayor que cero."
+msgstr "The quantity must be greater than zero."
+
+#: cacao_accounting/document_flow/service.py:645
+#, fuzzy
+msgid "La cantidad a cerrar excede el pendiente disponible."
+msgstr "The applied amount exceeds the available payment balance."
+
+#: cacao_accounting/document_flow/service.py:880
+#, fuzzy
+msgid "Debe indicar destino, compania, fecha y lineas."
+msgstr "You must provide the document's company."
 
 #: cacao_accounting/document_flow/validation.py:131
 msgid "El documento debe tener una compania."
@@ -19766,6 +20038,22 @@ msgstr "Sales Order updated successfully."
 msgid "El campo {} debe contener un número válido."
 msgstr "The field {} must contain a valid number."
 
+#: cacao_accounting/ventas/services.py:884
+msgid "La referencia de documento fuente está incompleta."
+msgstr "The source document reference is incomplete."
+
+#: cacao_accounting/ventas/services.py:899
+#, fuzzy
+msgid "El tipo de documento fuente no es válido para ventas."
+msgstr "The source document type is not valid for this flow."
+
+#: cacao_accounting/ventas/services.py:912
+#, fuzzy
+msgid ""
+"La línea de documento fuente no existe o no corresponde al documento "
+"indicado."
+msgstr "The source invoice line does not belong to the specified document."
+
 #: cacao_accounting/ventas/services.py:951
 msgid "El descuento de línea debe estar entre 0% y 100% y no puede ser negativo."
 msgstr "The line discount must be between 0% and 100% and cannot be negative."
@@ -20135,3 +20423,4 @@ msgstr "New Pedido"
 #: cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html:16
 msgid "Editar Pedido de Venta"
 msgstr "Edit Sales Request"
+
