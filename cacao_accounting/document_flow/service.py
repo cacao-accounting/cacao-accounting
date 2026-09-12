@@ -174,7 +174,7 @@ def get_source_items(source_type: str, source_id: str, target_type: str | None =
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type) if target_type else None
     if target_key and not is_allowed_flow(source_key, target_key):
-        raise DocumentFlowError(f"Relacion no permitida: {source_key} -> {target_key}", 400)
+        raise DocumentFlowError(_(f"Relacion no permitida: {source_key} -> {target_key}"), 400)
     source = get_document(source_key, source_id)
     if not source:
         raise DocumentFlowError(_("Documento origen no encontrado."), 404)
@@ -402,8 +402,10 @@ def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: 
         return convert_item_qty(item_code, qty, from_uom, base_uom)
     except InventoryServiceError as exc:
         raise DocumentFlowError(
-            f"No se pudo convertir {qty} {from_uom} a {base_uom} para el artículo {item_code}. "
-            "Configure la conversión de UOM antes de relacionar las líneas.",
+            _(
+                f"No se pudo convertir {qty} {from_uom} a {base_uom} para el artículo {item_code}. "
+                "Configure la conversión de UOM antes de relacionar las líneas."
+            ),
             409,
         ) from exc
 
@@ -494,7 +496,7 @@ def _validate_relation_documents(source_key, source_id, source_item_id, target_k
     harían inconsistente la trazabilidad de cantidades del flujo documental.
     """
     if not is_allowed_flow(source_key, target_key):
-        raise DocumentFlowError(f"Relacion no permitida: {source_key} -> {target_key}", 400)
+        raise DocumentFlowError(_(f"Relacion no permitida: {source_key} -> {target_key}"), 400)
     source_item = get_document_item(source_key, source_item_id) if source_item_id else None
     target_item = get_document_item(target_key, target_item_id) if target_item_id else None
     if source_item_id and not source_item:

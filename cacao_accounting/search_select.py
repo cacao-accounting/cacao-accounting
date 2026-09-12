@@ -894,7 +894,7 @@ def _apply_role_filter(statement: Select[tuple[Any]], values: Sequence[str | boo
         elif sv == "supplier":
             conditions.append(Party.is_supplier.is_(True))
         else:
-            raise SearchSelectError(f"Tipo de tercero o rol no soportado: {sv}")
+            raise SearchSelectError(_(f"Tipo de tercero o rol no soportado: {sv}"))
     if conditions:
         statement = statement.where(or_(*conditions))
     return statement

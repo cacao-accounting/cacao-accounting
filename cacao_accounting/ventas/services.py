@@ -147,15 +147,15 @@ _FORMKEY_SALES_INVOICE = "sales.sales_invoice"
 
 _FORMKEY_DELIVERY_NOTE = "sales.delivery_note"
 
-_LABEL_PEDIDO_VENTA = "Pedido de Venta"
+_LABEL_PEDIDO_VENTA = _("Pedido de Venta")
 
-_LABEL_ORDEN_VENTA = "Orden de Venta"
+_LABEL_ORDEN_VENTA = _("Orden de Venta")
 
-DOCUMENT_COMPANY_IMMUTABLE_MSG = "La compañía de un documento existente no puede cambiarse."
+DOCUMENT_COMPANY_IMMUTABLE_MSG = _("La compañía de un documento existente no puede cambiarse.")
 
-DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
+DOCUMENT_REQUIRES_LINE_MSG = _("El documento requiere al menos una línea.")
 
-SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
+SOLICITUD_CANCELACION_PENDIENTE_MSG = _("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
 
 
 def _sales_logistics_values(source: Any = None, form: Any = None) -> dict[str, Any]:
@@ -1118,7 +1118,7 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+                raise DocumentFlowError(_(f"El item {item_code} no puede repetirse en el documento."), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1162,7 +1162,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+                raise DocumentFlowError(_(f"El item {item_code} no puede repetirse en el documento."), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1176,7 +1176,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
                 or None
             )
             if not warehouse:
-                raise DocumentFlowError(f"El item {item_code} requiere un almacén de origen.", 400)
+                raise DocumentFlowError(_(f"El item {item_code} requiere un almacén de origen."), 400)
             linea = DeliveryNoteItem(
                 delivery_note_id=note_id,
                 item_code=item_code,
@@ -1217,7 +1217,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+                raise DocumentFlowError(_(f"El item {item_code} no puede repetirse en el documento."), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1263,7 +1263,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
 
     if not invoice.transaction_currency:
         raise PostingError(
-            "La factura origen no tiene moneda transaccional explicita; no se puede derivar la Nota de Entrega."
+            _("La factura origen no tiene moneda transaccional explicita; no se puede derivar la Nota de Entrega.")
         )
     if not invoice.base_currency:
         from cacao_accounting.document_flow.currency_resolver import company_functional_currency
@@ -1271,7 +1271,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         base_currency_value = company_functional_currency(invoice.company)
         if not base_currency_value:
             raise PostingError(
-                "La compañía de la factura no tiene moneda funcional configurada; no se puede derivar la Nota de Entrega."
+                _("La compañía de la factura no tiene moneda funcional configurada; no se puede derivar la Nota de Entrega.")
             )
     else:
         base_currency_value = invoice.base_currency
@@ -1303,8 +1303,10 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         warehouse = si_item.warehouse or (item_obj.default_warehouse_id if item_obj else None)
         if not warehouse:
             raise PostingError(
-                f"El ítem {si_item.item_code} no tiene bodega predeterminada. "
-                "Configure la bodega del ítem o cree la nota de entrega manualmente."
+                _(
+                    f"El ítem {si_item.item_code} no tiene bodega predeterminada. "
+                    "Configure la bodega del ítem o cree la nota de entrega manualmente."
+                )
             )
         _require_sales_warehouse(invoice.company, warehouse)
         dn_item = DeliveryNoteItem(
@@ -2364,9 +2366,11 @@ def _validate_credit_limit_and_overdue(
         if exposure > limit:
             base_currency = company_currency(company) or ""
             raise ValueError(
-                f"El límite de crédito para el cliente ha sido excedido. Límite: {limit}, "
-                f"Saldo actual: {outstanding + order_exposure}, Monto del documento: {current_doc_base}, "
-                f"Exposición total: {exposure}. Moneda base: {base_currency}."
+                _(
+                    f"El límite de crédito para el cliente ha sido excedido. Límite: {limit}, "
+                    f"Saldo actual: {outstanding + order_exposure}, Monto del documento: {current_doc_base}, "
+                    f"Exposición total: {exposure}. Moneda base: {base_currency}."
+                )
             )
 
 
@@ -2406,8 +2410,10 @@ def _sales_base_amount(document: Any, amount: Decimal, *, use_stored_total: bool
     exchange_rate = getattr(document, "exchange_rate", None)
     if exchange_rate is None or Decimal(str(exchange_rate)) <= 0:
         raise ValueError(
-            f"El documento {getattr(document, 'document_no', None) or getattr(document, 'id', '')} "
-            f"no tiene una tasa válida para {transaction_currency} -> {base_currency}."
+            _(
+                f"El documento {getattr(document, 'document_no', None) or getattr(document, 'id', '')} "
+                f"no tiene una tasa válida para {transaction_currency} -> {base_currency}."
+            )
         )
     return (Decimal(str(amount)) * Decimal(str(exchange_rate))).quantize(Decimal("0.0001"))
 
@@ -2476,8 +2482,10 @@ def _reject_overdue_invoices(invoices, payment_terms_id, outstanding_getter) -> 
         due_date = invoice.posting_date + timedelta(days=due_days)
         if today > due_date:
             raise ValueError(
-                f"El cliente tiene facturas vencidas y su configuración bloquea nuevas ventas. "
-                f"Factura vencida: {invoice.document_no or invoice.id} (Vencimiento: {due_date})."
+                _(
+                    f"El cliente tiene facturas vencidas y su configuración bloquea nuevas ventas. "
+                    f"Factura vencida: {invoice.document_no or invoice.id} (Vencimiento: {due_date})."
+                )
             )
 
 
@@ -2518,7 +2526,7 @@ def _validate_reversal_of(
         outstanding = compute_outstanding_amount(source)
         if note_amount > outstanding:
             raise ValueError(
-                f"La nota de credito ({note_amount}) excede el saldo pendiente de la factura origen ({outstanding})."
+                _(f"La nota de credito ({note_amount}) excede el saldo pendiente de la factura origen ({outstanding}).")
             )
 
 

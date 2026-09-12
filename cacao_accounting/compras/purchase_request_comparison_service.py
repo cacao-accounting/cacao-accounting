@@ -254,7 +254,7 @@ def _comparison_line_base_rate(
         )
     except PostingError as exc:
         raise ValueError(
-            f"No existe tipo de cambio para comparar una oferta en {transaction_currency} contra {base_currency}."
+            _(f"No existe tipo de cambio para comparar una oferta en {transaction_currency} contra {base_currency}.")
         ) from exc
     return (rate * exchange_rate).quantize(Decimal("0.0001"))
 

@@ -104,7 +104,7 @@ class ExchangeRateImportService:
         headers = set(first_row.keys())
         missing = _EXPECTED_HEADERS - headers
         if missing:
-            raise ExchangeRateImportError(f"Columnas faltantes: {', '.join(sorted(missing))}.")
+            raise ExchangeRateImportError(_(f"Columnas faltantes: {', '.join(sorted(missing))}."))
 
     def _load_active_currencies(self) -> set:
         """Carga los códigos de monedas activas."""

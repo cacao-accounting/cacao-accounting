@@ -211,12 +211,11 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
     )
     fully_reconciled = allocated >= transaction_amount
     event_action = "reconciled" if fully_reconciled else "partially_reconciled"
-    event_prefix = "Conciliación automática aplicada" if fully_reconciled else "Conciliación automática parcial aplicada"
+    event_prefix = _("Conciliación automática aplicada") if fully_reconciled else _("Conciliación automática parcial aplicada")
     log_task_event(
         transaction,
         event_action,
-        "{0} por la regla de matching '{1}' contra {2} {3} "
-        "por {4} (conciliación {5}).".format(
+        _("{0} por la regla de matching '{1}' contra {2} {3} " "por {4} (conciliación {5}).").format(
             event_prefix,
             best_rule.name if best_rule else "",
             candidate.reference_type,
@@ -258,7 +257,7 @@ def _decimal_value(value: Any) -> Decimal:
     try:
         return Decimal(normalized)
     except InvalidOperation as exc:
-        raise BankStatementError(f"El monto del extracto no es válido: {value}") from exc
+        raise BankStatementError(_(f"El monto del extracto no es válido: {value}")) from exc
 
 
 def _parse_date(value: str) -> date:

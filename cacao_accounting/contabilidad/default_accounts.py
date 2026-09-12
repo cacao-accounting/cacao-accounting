@@ -190,7 +190,7 @@ def load_catalog_default_mapping(catalog_file: str | Path) -> dict[str, str]:
     """Carga y valida el mapping de cuentas predeterminadas de un catalogo."""
     mapping_path = default_account_json_path(catalog_file)
     if not mapping_path.is_file():
-        raise DefaultAccountError(f"El catalogo {Path(catalog_file).name} no tiene mapping JSON de cuentas.")
+        raise DefaultAccountError(_(f"El catalogo {Path(catalog_file).name} no tiene mapping JSON de cuentas."))
     raw = json.loads(mapping_path.read_text(encoding="utf-8"))
     default_accounts = raw.get("default_accounts")
     if not isinstance(default_accounts, dict):
@@ -232,7 +232,7 @@ def validate_default_account_assignment(company: str, field: str, account_id: st
     account_type = (account.account_type or "").strip()
     if account_type and account_type not in definition.allowed_account_types:
         allowed = ", ".join(definition.allowed_account_types)
-        raise DefaultAccountError(f"La cuenta {account.code} debe ser de tipo: {allowed}.")
+        raise DefaultAccountError(_(f"La cuenta {account.code} debe ser de tipo: {allowed}."))
 
 
 def upsert_company_default_accounts(company: str, values: dict[str, str | None]) -> CompanyDefaultAccount:
@@ -255,7 +255,7 @@ def apply_catalog_default_mapping(company: str, catalog_file: str | Path) -> Com
     for field, account_code in code_mapping.items():
         account = _account_by_code(company, account_code)
         if not account:
-            raise DefaultAccountError(f"La cuenta {account_code} no existe en la compania {company}.")
+            raise DefaultAccountError(_(f"La cuenta {account_code} no existe en la compania {company}."))
         values[field] = account.id
     return upsert_company_default_accounts(company, values)
 
@@ -270,13 +270,13 @@ def validate_gl_account_usage(account_id: str, voucher_type: str | None) -> None
         return
     is_manual_voucher = voucher_type == "journal_entry"
     if is_manual_voucher and account_type in MANUAL_BLOCKED_ACCOUNT_TYPES:
-        raise DefaultAccountError(f"La cuenta {account.code} de tipo {account_type} no permite afectacion manual.")
+        raise DefaultAccountError(_(f"La cuenta {account.code} de tipo {account_type} no permite afectacion manual."))
     if is_manual_voucher:
         return
     allowed_vouchers = ACCOUNT_TYPE_ALLOWED_VOUCHERS.get(account_type)
     if allowed_vouchers and voucher_type not in allowed_vouchers:
         raise DefaultAccountError(
-            f"La cuenta {account.code} de tipo {account_type} no puede afectarse desde {voucher_type or 'este origen'}."
+            _(f"La cuenta {account.code} de tipo {account_type} no puede afectarse desde {voucher_type or 'este origen'}.")
         )
 
 

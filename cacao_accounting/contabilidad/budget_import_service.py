@@ -317,7 +317,7 @@ class BudgetImportService:
         first_row_headers = set(rows[0].keys())
         for header in first_row_headers:
             if header and header not in allowed_headers:
-                raise BudgetError(f"Columna desconocida detectada: '{header}'.")
+                raise BudgetError(_(f"Columna desconocida detectada: '{header}'."))
 
     def _get_existing_line_combos(self, budget_id: str) -> set:
         """Get existing budget line combinations to detect duplicates."""
@@ -419,7 +419,7 @@ class BudgetImportService:
             if failed_batch:
                 failed_batch.status = "failed"
             database.session.commit()
-            raise BudgetError(f"Error atómico en inserción: {str(e)}")
+            raise BudgetError(_(f"Error atómico en inserción: {str(e)}"))
 
     def _parse_period_amount(self, row: dict, period_name: str) -> tuple[Decimal | None, str | None]:
         raw_value = row.get(period_name, "").strip()

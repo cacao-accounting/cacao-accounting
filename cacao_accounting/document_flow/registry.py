@@ -42,15 +42,15 @@ from cacao_accounting.database import (
 )
 
 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO = "compras.compras_factura_compra_nuevo"
-CREAR_FACTURA = "Crear Factura"
-CREAR_REEMBOLSO_LABEL = "Crear Reembolso"
+CREAR_FACTURA = _("Crear Factura")
+CREAR_REEMBOLSO_LABEL = _("Crear Reembolso")
 VENTAS_VENTAS_FACTURA_VENTA_NUEVO = "ventas.ventas_factura_venta_nuevo"
 
-_ACTION_CREAR_PAGO = "Crear Pago"
-_ACTION_CREAR_NOTA_CREDITO = "Crear Nota de Crédito"
-_ACTION_CREAR_NOTA_DEBITO = "Crear Nota de Débito"
-_ACTION_CREAR_ORDEN_COMPRA = "Crear Orden de Compra"
-_ACTION_CREAR_COMPARATIVO_OFERTAS = "Crear Comparativo de Ofertas"
+_ACTION_CREAR_PAGO = _("Crear Pago")
+_ACTION_CREAR_NOTA_CREDITO = _("Crear Nota de Crédito")
+_ACTION_CREAR_NOTA_DEBITO = _("Crear Nota de Débito")
+_ACTION_CREAR_ORDEN_COMPRA = _("Crear Orden de Compra")
+_ACTION_CREAR_COMPARATIVO_OFERTAS = _("Crear Comparativo de Ofertas")
 _ENDPOINT_PAGO_NUEVO = "bancos.bancos_pago_nuevo"
 _ENDPOINT_ORDEN_COMPRA_NUEVO = "compras.compras_orden_compra_nuevo"
 _ENDPOINT_COMPARATIVO_OFERTAS = "compras.compras_comparativo_ordenes_seleccionar"
@@ -111,9 +111,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=PurchaseOrderItem,
         parent_field="purchase_order_id",
         party_field="supplier_id",
-        label="Orden de Compra",
+        label=_("Orden de Compra"),
         module="purchases",
-        module_label="Compras",
+        module_label=_("Compras"),
         permission_module="purchases",
         list_endpoint="compras.compras_orden_compra_lista",
         detail_endpoint="compras.compras_orden_compra",
@@ -121,7 +121,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         total_field="grand_total",
         filter_fields=("document_no", "company", "supplier_id", "supplier_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
-            DocumentAction("Crear Recepción", "purchase_receipt", "compras.compras_recepcion_nuevo", "from_order"),
+            DocumentAction(_("Crear Recepción"), "purchase_receipt", "compras.compras_recepcion_nuevo", "from_order"),
             DocumentAction(CREAR_FACTURA, "purchase_invoice", COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, "from_order"),
             DocumentAction(_ACTION_CREAR_PAGO, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_purchase_order"),
             DocumentAction(
@@ -141,7 +141,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 model_target_type="purchase_invoice",
             ),
             DocumentAction(
-                "Crear devolución física",
+                _("Crear devolución física"),
                 "purchase_receipt",
                 "compras.compras_recepcion_nuevo",
                 "from_receipt",
@@ -154,9 +154,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         header_model=PurchaseRequest,
         item_model=PurchaseRequestItem,
         parent_field="purchase_request_id",
-        label="Solicitud de Compra",
+        label=_("Solicitud de Compra"),
         module="purchases",
-        module_label="Compras",
+        module_label=_("Compras"),
         permission_module="purchases",
         list_endpoint="compras.compras_solicitud_compra_lista",
         detail_endpoint="compras.compras_solicitud_compra",
@@ -165,13 +165,13 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         filter_fields=("document_no", "company", "requested_by", "posting_date", "grand_total", "docstatus"),
         create_actions=(
             DocumentAction(
-                "Crear Solicitud de Cotización",
+                _("Crear Solicitud de Cotización"),
                 "purchase_quotation",
                 "compras.compras_solicitud_cotizacion_nueva",
                 "from_request",
             ),
             DocumentAction(
-                "Crear Cotización de Proveedor",
+                _("Crear Cotización de Proveedor"),
                 "supplier_quotation",
                 "compras.compras_cotizacion_proveedor_nueva",
                 "from_request",
@@ -191,9 +191,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=PurchaseQuotationItem,
         parent_field="purchase_quotation_id",
         party_field="supplier_id",
-        label="Solicitud de Cotización",
+        label=_("Solicitud de Cotización"),
         module="purchases",
-        module_label="Compras",
+        module_label=_("Compras"),
         permission_module="purchases",
         list_endpoint="compras.compras_solicitud_cotizacion_lista",
         detail_endpoint="compras.compras_solicitud_cotizacion",
@@ -202,7 +202,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         filter_fields=("document_no", "company", "supplier_id", "supplier_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
             DocumentAction(
-                "Crear Cotización de Proveedor",
+                _("Crear Cotización de Proveedor"),
                 "supplier_quotation",
                 "compras.compras_cotizacion_proveedor_nueva",
                 "from_rfq",
@@ -216,9 +216,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=SupplierQuotationItem,
         parent_field="supplier_quotation_id",
         party_field="supplier_id",
-        label="Cotización de Proveedor",
+        label=_("Cotización de Proveedor"),
         module="purchases",
-        module_label="Compras",
+        module_label=_("Compras"),
         permission_module="purchases",
         list_endpoint="compras.compras_cotizacion_proveedor_lista",
         detail_endpoint="compras.compras_cotizacion_proveedor",
@@ -237,9 +237,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=PurchaseReceiptItem,
         parent_field="purchase_receipt_id",
         party_field="supplier_id",
-        label="Recepción de Compra",
+        label=_("Recepción de Compra"),
         module="inventory",
-        module_label="Inventario",
+        module_label=_("Inventario"),
         permission_module="inventory",
         list_endpoint="compras.compras_recepcion_lista",
         detail_endpoint="compras.compras_recepcion",
@@ -271,7 +271,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 model_target_type="purchase_invoice",
             ),
             DocumentAction(
-                "Crear devolución física",
+                _("Crear devolución física"),
                 "purchase_receipt",
                 "compras.compras_recepcion_nuevo",
                 "from_receipt",
@@ -285,9 +285,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=PurchaseInvoiceItem,
         parent_field="purchase_invoice_id",
         party_field="supplier_id",
-        label="Factura de Compra",
+        label=_("Factura de Compra"),
         module="purchases",
-        module_label="Compras",
+        module_label=_("Compras"),
         permission_module="purchases",
         list_endpoint="compras.compras_factura_compra_lista",
         detail_endpoint=_ENDPOINT_FACTURA_COMPRA,
@@ -306,7 +306,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         create_actions=(
             DocumentAction(_ACTION_CREAR_PAGO, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_purchase_invoice"),
             DocumentAction(
-                "Crear Costo de Importación",
+                _("Crear Costo de Importación"),
                 "import_landed_cost",
                 "compras.compras_import_landed_cost_nuevo",
                 "from_invoice",
@@ -335,9 +335,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=ImportLandedCostItem,
         parent_field="import_landed_cost_id",
         party_field="supplier_id",
-        label="Costo de Importación",
+        label=_("Costo de Importación"),
         module="purchases",
-        module_label="Compras",
+        module_label=_("Compras"),
         permission_module="purchases",
         list_endpoint="compras.compras_import_landed_cost_lista",
         detail_endpoint="compras.compras_import_landed_cost",
@@ -351,9 +351,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=PurchaseInvoiceItem,
         parent_field="purchase_invoice_id",
         party_field="supplier_id",
-        label="Nota de Crédito de Compra",
+        label=_("Nota de Crédito de Compra"),
         module="purchases",
-        module_label="Compras",
+        module_label=_("Compras"),
         permission_module="purchases",
         list_endpoint="compras.compras_factura_compra_nota_credito_lista",
         detail_endpoint=_ENDPOINT_FACTURA_COMPRA,
@@ -379,9 +379,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=PurchaseInvoiceItem,
         parent_field="purchase_invoice_id",
         party_field="supplier_id",
-        label="Nota de Débito de Compra",
+        label=_("Nota de Débito de Compra"),
         module="purchases",
-        module_label="Compras",
+        module_label=_("Compras"),
         permission_module="purchases",
         list_endpoint="compras.compras_factura_compra_nota_debito_lista",
         detail_endpoint=_ENDPOINT_FACTURA_COMPRA,
@@ -407,9 +407,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=SalesOrderItem,
         parent_field="sales_order_id",
         party_field="customer_id",
-        label="Orden de Venta",
+        label=_("Orden de Venta"),
         module="sales",
-        module_label="Ventas",
+        module_label=_("Ventas"),
         permission_module="sales",
         list_endpoint="ventas.ventas_orden_venta_lista",
         detail_endpoint="ventas.ventas_orden_venta",
@@ -418,7 +418,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         filter_fields=("document_no", "company", "customer_id", "customer_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
             DocumentAction(
-                "Crear Remisión de Mercadería Vendida",
+                _("Crear Remisión de Mercadería Vendida"),
                 "delivery_note",
                 "ventas.ventas_entrega_nuevo",
                 "from_order",
@@ -433,9 +433,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=SalesRequestItem,
         parent_field="sales_request_id",
         party_field="customer_id",
-        label="Pedido de Venta",
+        label=_("Pedido de Venta"),
         module="sales",
-        module_label="Ventas",
+        module_label=_("Ventas"),
         permission_module="sales",
         list_endpoint="ventas.ventas_pedido_venta_lista",
         detail_endpoint="ventas.ventas_pedido_venta",
@@ -443,8 +443,8 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         total_field="grand_total",
         filter_fields=("document_no", "company", "customer_id", "customer_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
-            DocumentAction("Crear Cotización", "sales_quotation", "ventas.ventas_cotizacion_nueva", "from_request"),
-            DocumentAction("Crear Orden de Venta", "sales_order", "ventas.ventas_orden_venta_nuevo", "from_request"),
+            DocumentAction(_("Crear Cotización"), "sales_quotation", "ventas.ventas_cotizacion_nueva", "from_request"),
+            DocumentAction(_("Crear Orden de Venta"), "sales_order", "ventas.ventas_orden_venta_nuevo", "from_request"),
         ),
     ),
     "sales_quotation": DocumentType(
@@ -453,9 +453,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=SalesQuotationItem,
         parent_field="sales_quotation_id",
         party_field="customer_id",
-        label="Cotización de Venta",
+        label=_("Cotización de Venta"),
         module="sales",
-        module_label="Ventas",
+        module_label=_("Ventas"),
         permission_module="sales",
         list_endpoint="ventas.ventas_cotizacion_lista",
         detail_endpoint="ventas.ventas_cotizacion",
@@ -463,7 +463,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         total_field="grand_total",
         filter_fields=("document_no", "company", "customer_id", "customer_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
-            DocumentAction("Crear Orden de Venta", "sales_order", "ventas.ventas_orden_venta_nuevo", "from_quotation"),
+            DocumentAction(_("Crear Orden de Venta"), "sales_order", "ventas.ventas_orden_venta_nuevo", "from_quotation"),
         ),
     ),
     "delivery_note": DocumentType(
@@ -472,9 +472,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=DeliveryNoteItem,
         parent_field="delivery_note_id",
         party_field="customer_id",
-        label="Remisión de Mercadería Vendida",
+        label=_("Remisión de Mercadería Vendida"),
         module="inventory",
-        module_label="Inventario",
+        module_label=_("Inventario"),
         permission_module="inventory",
         list_endpoint="ventas.ventas_entrega_lista",
         detail_endpoint="ventas.ventas_entrega",
@@ -500,14 +500,14 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
                 model_target_type="sales_invoice",
             ),
             DocumentAction(
-                "Crear Movimiento de Inventario",
+                _("Crear Movimiento de Inventario"),
                 "stock_entry",
                 _ENDPOINT_ENTRADA_NUEVO,
                 "source_id",
                 {"source_type": "delivery_note"},
             ),
             DocumentAction(
-                "Crear Devolución de Venta",
+                _("Crear Devolución de Venta"),
                 "delivery_note",
                 "ventas.ventas_entrega_nuevo",
                 "from_note",
@@ -521,9 +521,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=SalesInvoiceItem,
         parent_field="sales_invoice_id",
         party_field="customer_id",
-        label="Factura de Venta",
+        label=_("Factura de Venta"),
         module="sales",
-        module_label="Ventas",
+        module_label=_("Ventas"),
         permission_module="sales",
         list_endpoint="ventas.ventas_factura_venta_lista",
         detail_endpoint=_ENDPOINT_FACTURA_VENTA,
@@ -565,9 +565,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=SalesInvoiceItem,
         parent_field="sales_invoice_id",
         party_field="customer_id",
-        label="Nota de Crédito de Venta",
+        label=_("Nota de Crédito de Venta"),
         module="sales",
-        module_label="Ventas",
+        module_label=_("Ventas"),
         permission_module="sales",
         list_endpoint="ventas.ventas_factura_venta_nota_credito_lista",
         detail_endpoint=_ENDPOINT_FACTURA_VENTA,
@@ -593,9 +593,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=SalesInvoiceItem,
         parent_field="sales_invoice_id",
         party_field="customer_id",
-        label="Nota de Débito de Venta",
+        label=_("Nota de Débito de Venta"),
         module="sales",
-        module_label="Ventas",
+        module_label=_("Ventas"),
         permission_module="sales",
         list_endpoint="ventas.ventas_factura_venta_nota_debito_lista",
         detail_endpoint=_ENDPOINT_FACTURA_VENTA,
@@ -611,7 +611,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             "outstanding_amount",
             "docstatus",
         ),
-        create_actions=(DocumentAction("Crear Cobro", "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_debit_note"),),
+        create_actions=(DocumentAction(_("Crear Cobro"), "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_sales_debit_note"),),
     ),
     "sales_return": DocumentType(
         key="sales_return",
@@ -619,9 +619,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=SalesInvoiceItem,
         parent_field="sales_invoice_id",
         party_field="customer_id",
-        label="Devolución de Venta",
+        label=_("Devolución de Venta"),
         module="sales",
-        module_label="Ventas",
+        module_label=_("Ventas"),
         permission_module="sales",
         list_endpoint="ventas.ventas_factura_venta_devolucion_lista",
         detail_endpoint=_ENDPOINT_FACTURA_VENTA,
@@ -645,9 +645,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         item_model=PaymentReference,
         parent_field="payment_id",
         party_field="party_id",
-        label="Pago",
+        label=_("Pago"),
         module="cash",
-        module_label="Bancos",
+        module_label=_("Bancos"),
         permission_module="cash",
         list_endpoint="bancos.bancos_pago_lista",
         detail_endpoint="bancos.bancos_pago",
@@ -670,9 +670,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         header_model=StockEntry,
         item_model=StockEntryItem,
         parent_field="stock_entry_id",
-        label="Movimiento de Inventario",
+        label=_("Movimiento de Inventario"),
         module="inventory",
-        module_label="Inventario",
+        module_label=_("Inventario"),
         permission_module="inventory",
         list_endpoint="inventario.inventario_entrada_lista",
         detail_endpoint="inventario.inventario_entrada",
@@ -681,7 +681,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         filter_fields=("document_no", "company", "purpose", "posting_date", "total_amount", "docstatus"),
         create_actions=(
             DocumentAction(
-                "Crear Reuso Interno",
+                _("Crear Reuso Interno"),
                 "stock_entry",
                 _ENDPOINT_ENTRADA_NUEVO,
                 "source_id",
@@ -694,9 +694,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         header_model=ComprobanteContable,
         item_model=ComprobanteContableDetalle,
         parent_field="transaction_id",
-        label="Comprobante Contable",
+        label=_("Comprobante Contable"),
         module="accounting",
-        module_label="Contabilidad",
+        module_label=_("Contabilidad"),
         permission_module="accounting",
         list_endpoint="contabilidad.listar_comprobantes",
         detail_endpoint="contabilidad.ver_comprobante",

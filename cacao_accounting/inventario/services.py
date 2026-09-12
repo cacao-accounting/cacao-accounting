@@ -551,7 +551,7 @@ def _save_stock_entry_items(entry: StockEntry) -> Decimal:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(_("El documento requiere al menos una línea."), 400)
     return total
 
 
@@ -654,7 +654,7 @@ def _save_stock_reconciliation_items(entry: StockEntry) -> Decimal:
             line_count += 1
         i += 1
     if line_count == 0:
-        raise DocumentFlowError("El documento requiere al menos una línea.", 400)
+        raise DocumentFlowError(_("El documento requiere al menos una línea."), 400)
     return total_difference
 
 

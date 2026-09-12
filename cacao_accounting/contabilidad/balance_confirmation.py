@@ -225,11 +225,11 @@ def compute_applied_credit_document_amount(document: Any, as_of_date: date) -> D
 def _document_type_label(document: Any, default_label: str) -> str:
     """Return the display label for an invoice or return document."""
     labels = {
-        "sales_credit_note": "Nota de Crédito",
-        "purchase_credit_note": "Nota de Crédito",
-        "sales_debit_note": "Nota de Débito",
-        "purchase_debit_note": "Nota de Débito",
-        "sales_return": "Devolución",
+        "sales_credit_note": _("Nota de Crédito"),
+        "purchase_credit_note": _("Nota de Crédito"),
+        "sales_debit_note": _("Nota de Débito"),
+        "purchase_debit_note": _("Nota de Débito"),
+        "sales_return": _("Devolución"),
     }
     return labels.get(document.document_type, default_label)
 

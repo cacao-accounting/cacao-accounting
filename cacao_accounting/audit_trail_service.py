@@ -150,7 +150,7 @@ def _log(
     exclude_fields: set[str] | None = None,
 ) -> AuditTrail:
     if action not in ALLOWED_ACTIONS:
-        raise AuditTrailServiceError(f"Acción de auditoría no permitida: {action}")
+        raise AuditTrailServiceError(_(f"Acción de auditoría no permitida: {action}"))
     document_type, document_id, document_no, company = _doc_info(document)
     actor_user_id, actor_name = _current_actor()
     before_map = _normalize_document(before, exclude_fields=exclude_fields) if before is not None else None

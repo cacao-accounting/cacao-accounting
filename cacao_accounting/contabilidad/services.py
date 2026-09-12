@@ -119,9 +119,9 @@ CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE = "contabilidad/fiscal_year_crear.html"
 
 CONTABILIDAD_TASA_CAMBIO = "contabilidad.tasa_cambio"
 
-CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = "Periodo no encontrado."
+CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = _("Periodo no encontrado.")
 
-CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = "Cierre mensual no encontrado."
+CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = _("Cierre mensual no encontrado.")
 
 ENTIDAD_NO_EXISTE_MSG = "La entidad indicada no existe."
 

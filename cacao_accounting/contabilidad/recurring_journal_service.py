@@ -188,7 +188,7 @@ def apply_recurring_template(
     )
 
     if existing and existing.status in {"pending", "applied"}:
-        raise RecurringJournalError(f"La plantilla ya fue aplicada al periodo {period_name}.")
+        raise RecurringJournalError(_(f"La plantilla ya fue aplicada al periodo {period_name}."))
 
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
     if not items:
@@ -207,7 +207,7 @@ def apply_recurring_template(
         book_codes=template.book_codes,
         naming_series_id=template.naming_series_id,
         date=application_date,
-        memo=f"Generado automáticamente desde plantilla recurrente: {template.name}",
+        memo=_("Generado automáticamente desde plantilla recurrente: %(template)s") % {"template": template.name},
         status="draft",
         user_id=user_id,
         is_recurrent=True,

@@ -86,8 +86,10 @@ def validate_currency_contract(registro: Any, *, context: str = "documento") -> 
         document_currency = str(getattr(registro, "transaction_currency", "") or "")
         if inherited and inherited != document_currency:
             raise DocumentFlowError(
-                f"La moneda del {context} ({document_currency!r}) no coincide con la moneda "
-                f"heredada de Document Flow ({inherited!r}).",
+                _(
+                    f"La moneda del {context} ({document_currency!r}) no coincide con la moneda "
+                    f"heredada de Document Flow ({inherited!r})."
+                ),
                 400,
             )
 
@@ -119,8 +121,10 @@ def assert_currency_contract_or_raise(
         document_currency = str(getattr(registro, "transaction_currency", "") or "")
         if inherited and inherited != document_currency:
             raise DocumentFlowError(
-                f"La moneda del {context} ({document_currency!r}) no coincide con la moneda "
-                f"heredada de Document Flow ({inherited!r}).",
+                _(
+                    f"La moneda del {context} ({document_currency!r}) no coincide con la moneda "
+                    f"heredada de Document Flow ({inherited!r})."
+                ),
                 400,
             )
 
@@ -196,7 +200,7 @@ def require_line_relations(*, target_type: str, target_id: str, source_type: str
     relation_item_ids = {str(relation.target_item_id) for relation in relations if relation.target_item_id}
     if len(relations) != len(items) or relation_item_ids != expected_item_ids:
         raise ValueError(
-            "Cada línea debe conservar una relación activa con el documento origen " f"({source_type}:{source_id})."
+            _("Cada línea debe conservar una relación activa con el documento origen " f"({source_type}:{source_id}).")
         )
 
 

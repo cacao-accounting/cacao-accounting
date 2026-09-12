@@ -35,6 +35,7 @@ from cacao_accounting.document_flow import (
     refresh_source_caches_for_target,
 )
 from cacao_accounting.document_identifiers import assign_document_identifier
+from cacao_accounting.i18n import _
 
 MONEY_QUANTUM = Decimal("0.0001")
 PURCHASE_INVOICE = "purchase_invoice"
@@ -105,7 +106,7 @@ def _require_actor_can_create(actor_id: str, company_id: str) -> None:
     ):
         raise PurchaseInvoiceDraftError(
             "AUTHORIZATION_REVOKED",
-            "El usuario ya no puede crear facturas en la compañía.",
+            _("El usuario ya no puede crear facturas en la compañía."),
         )
 
 
@@ -116,9 +117,9 @@ def _validate_header(
     company = database.session.execute(database.select(Entity).where(Entity.code == command.company_id)).scalar_one_or_none()
     supplier = database.session.get(Party, command.supplier_id)
     if company is None or not company.enabled:
-        raise PurchaseInvoiceDraftError("AUTHORIZATION_REVOKED", "La compañía no está activa.")
+        raise PurchaseInvoiceDraftError("AUTHORIZATION_REVOKED", _("La compañía no está activa."))
     if supplier is None or not supplier.is_active or not supplier.is_supplier:
-        raise PurchaseInvoiceDraftError("SUPPLIER_UNRESOLVED", "El proveedor no está activo.")
+        raise PurchaseInvoiceDraftError("SUPPLIER_UNRESOLVED", _("El proveedor no está activo."))
     settings = database.session.execute(
         database.select(CompanyParty).where(
             CompanyParty.company == command.company_id,
@@ -127,14 +128,14 @@ def _validate_header(
         )
     ).scalar_one_or_none()
     if settings is None:
-        raise PurchaseInvoiceDraftError("SUPPLIER_UNRESOLVED", "El proveedor no está habilitado para la compañía.")
+        raise PurchaseInvoiceDraftError("SUPPLIER_UNRESOLVED", _("El proveedor no está habilitado para la compañía."))
     currency = database.session.execute(
         database.select(Currency).where(Currency.code == command.transaction_currency, Currency.active.is_not(False))
     ).scalar_one_or_none()
     if currency is None:
-        raise PurchaseInvoiceDraftError("ORDER_CURRENCY_MISMATCH", "La moneda de la factura no está activa.")
+        raise PurchaseInvoiceDraftError("ORDER_CURRENCY_MISMATCH", _("La moneda de la factura no está activa."))
     if not command.supplier_invoice_no.strip():
-        raise PurchaseInvoiceDraftError("DUPLICATE_INVOICE", "La factura requiere número de proveedor.")
+        raise PurchaseInvoiceDraftError("DUPLICATE_INVOICE", _("La factura requiere número de proveedor."))
     closed = database.session.execute(
         database.select(AccountingPeriod.id).where(
             AccountingPeriod.entity == command.company_id,
@@ -144,7 +145,7 @@ def _validate_header(
         )
     ).scalar_one_or_none()
     if closed:
-        raise PurchaseInvoiceDraftError("CLOSED_ACCOUNTING_PERIOD", "El período contable está cerrado.")
+        raise PurchaseInvoiceDraftError("CLOSED_ACCOUNTING_PERIOD", _("El período contable está cerrado."))
     return company, supplier, settings
 
 
@@ -158,7 +159,7 @@ def _validate_duplicate(command: PurchaseInvoiceDraftCommand) -> None:
         )
     ).scalar_one_or_none()
     if duplicate:
-        raise PurchaseInvoiceDraftError("DUPLICATE_INVOICE", "La factura del proveedor ya existe.")
+        raise PurchaseInvoiceDraftError("DUPLICATE_INVOICE", _("La factura del proveedor ya existe."))
 
 
 def _validate_idempotency_replay(existing: PurchaseInvoice, command: PurchaseInvoiceDraftCommand) -> PurchaseInvoice:
@@ -171,7 +172,7 @@ def _validate_idempotency_replay(existing: PurchaseInvoice, command: PurchaseInv
     if existing.company != command.company_id or existing.supplier_id != command.supplier_id:
         raise PurchaseInvoiceDraftError(
             "IDEMPOTENCY_KEY_CONFLICT",
-            "La clave de idempotencia ya pertenece a otra factura.",
+            _("La clave de idempotencia ya pertenece a otra factura."),
         )
     return existing
 
@@ -183,35 +184,35 @@ def _validate_sources(command: PurchaseInvoiceDraftCommand, settings: CompanyPar
         if order or not settings.allow_purchase_invoice_without_order:
             raise PurchaseInvoiceDraftError(
                 "PURCHASE_ORDER_REQUIRED",
-                "La política del proveedor exige orden de compra.",
+                _("La política del proveedor exige orden de compra."),
             )
         if receipt or not settings.allow_purchase_invoice_without_receipt:
             raise PurchaseInvoiceDraftError(
                 "RECEIPT_REQUIRED",
-                "La política del proveedor exige recepción.",
+                _("La política del proveedor exige recepción."),
             )
         return
     if order is None or order.docstatus != 1:
         raise PurchaseInvoiceDraftError(
             "PURCHASE_ORDER_NOT_FOUND",
-            "La orden de compra no está disponible para facturación.",
+            _("La orden de compra no está disponible para facturación."),
         )
     if order.company != command.company_id or order.supplier_id != command.supplier_id:
         raise PurchaseInvoiceDraftError(
             "PURCHASE_ORDER_NOT_FOUND",
-            "La orden no corresponde a compañía y proveedor.",
+            _("La orden no corresponde a compañía y proveedor."),
         )
     if order.transaction_currency and order.transaction_currency != command.transaction_currency:
-        raise PurchaseInvoiceDraftError("ORDER_CURRENCY_MISMATCH", "La moneda no coincide con la orden.")
+        raise PurchaseInvoiceDraftError("ORDER_CURRENCY_MISMATCH", _("La moneda no coincide con la orden."))
     if command.matching_mode == "THREE_WAY_MATCH":
         if receipt is None or receipt.docstatus != 1:
-            raise PurchaseInvoiceDraftError("RECEIPT_MISSING", "La recepción requerida no está disponible.")
+            raise PurchaseInvoiceDraftError("RECEIPT_MISSING", _("La recepción requerida no está disponible."))
         if (
             receipt.company != command.company_id
             or receipt.supplier_id != command.supplier_id
             or receipt.purchase_order_id != order.id
         ):
-            raise PurchaseInvoiceDraftError("RECEIPT_MISSING", "La recepción no corresponde a la orden y proveedor.")
+            raise PurchaseInvoiceDraftError("RECEIPT_MISSING", _("La recepción no corresponde a la orden y proveedor."))
 
 
 def _exchange_rate(company: Entity, command: PurchaseInvoiceDraftCommand) -> Decimal:
@@ -225,21 +226,21 @@ def _exchange_rate(company: Entity, command: PurchaseInvoiceDraftCommand) -> Dec
     try:
         return _lookup_exchange_rate(command.transaction_currency, company.currency, command.posting_date)
     except PostingError as exc:
-        raise PurchaseInvoiceDraftError("ORDER_CURRENCY_MISMATCH", "No existe tasa de cambio para la fecha.") from exc
+        raise PurchaseInvoiceDraftError("ORDER_CURRENCY_MISMATCH", _("No existe tasa de cambio para la fecha.")) from exc
 
 
 def _validate_line(line: PurchaseInvoiceDraftLine) -> Item:
     item = database.session.execute(database.select(Item).where(Item.code == line.item_code)).scalar_one_or_none()
     if item is None or not item.is_purchase_item:
-        raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", f"El ítem '{line.item_code}' no es comprable.")
+        raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _(f"El ítem '{line.item_code}' no es comprable."))
     if line.uom:
         uom = database.session.execute(database.select(UOM).where(UOM.code == line.uom)).scalar_one_or_none()
         if uom is None or not uom.is_active:
-            raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", "La unidad de medida no es válida.")
+            raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _("La unidad de medida no es válida."))
     if line.quantity <= 0 or line.rate < 0 or line.amount < 0:
-        raise PurchaseInvoiceDraftError("MATH_MISMATCH", "Cantidad, precio e importe inválidos.")
+        raise PurchaseInvoiceDraftError("MATH_MISMATCH", _("Cantidad, precio e importe inválidos."))
     if abs(_decimal(line.quantity * line.rate) - _decimal(line.amount)) > Decimal("0.02"):
-        raise PurchaseInvoiceDraftError("MATH_MISMATCH", "El importe de línea no coincide con cantidad y precio.")
+        raise PurchaseInvoiceDraftError("MATH_MISMATCH", _("El importe de línea no coincide con cantidad y precio."))
     return item
 
 
@@ -255,7 +256,7 @@ def _resolve_tax_total(command: PurchaseInvoiceDraftCommand, line_total: Decimal
         if observed != Decimal("0"):
             raise PurchaseInvoiceDraftError(
                 "TAX_MISMATCH",
-                "Hay impuesto observado sin una plantilla fiscal resuelta.",
+                _("Hay impuesto observado sin una plantilla fiscal resuelta."),
             )
         return Decimal("0")
 
@@ -271,7 +272,7 @@ def _resolve_tax_total(command: PurchaseInvoiceDraftCommand, line_total: Decimal
     ):
         raise PurchaseInvoiceDraftError(
             "TAX_MISMATCH",
-            "La plantilla fiscal no es aplicable a esta factura de compra.",
+            _("La plantilla fiscal no es aplicable a esta factura de compra."),
         )
     tax_document = SimpleNamespace(
         company=command.company_id,
@@ -281,9 +282,9 @@ def _resolve_tax_total(command: PurchaseInvoiceDraftCommand, line_total: Decimal
     try:
         calculated = _decimal(calculate_taxes(tax_document, command.tax_template_id).payable_delta)
     except TaxPricingError as exc:
-        raise PurchaseInvoiceDraftError("TAX_MISMATCH", "La plantilla fiscal configurada no puede aplicarse.") from exc
+        raise PurchaseInvoiceDraftError("TAX_MISMATCH", _("La plantilla fiscal configurada no puede aplicarse.")) from exc
     if abs(observed - calculated) > Decimal("0.02"):
-        raise PurchaseInvoiceDraftError("TAX_MISMATCH", "El impuesto observado no coincide con la plantilla fiscal.")
+        raise PurchaseInvoiceDraftError("TAX_MISMATCH", _("El impuesto observado no coincide con la plantilla fiscal."))
     return calculated
 
 
@@ -306,7 +307,7 @@ def create_purchase_invoice_draft(
         _validate_duplicate(command)
         _validate_sources(command, settings)
         if not command.lines:
-            raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", "La factura requiere al menos una línea.")
+            raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _("La factura requiere al menos una línea."))
         validated = [_validate_line(line) for line in command.lines]
         line_total = sum((_decimal(line.amount) for line in command.lines), Decimal("0"))
         rate = _exchange_rate(company, command)
@@ -315,7 +316,7 @@ def create_purchase_invoice_draft(
         if command.expected_total is not None and abs(_decimal(command.expected_total) - grand_total) > Decimal("0.02"):
             raise PurchaseInvoiceDraftError(
                 "MATH_MISMATCH",
-                "El total extraído no coincide con las líneas resueltas.",
+                _("El total extraído no coincide con las líneas resueltas."),
             )
         invoice = PurchaseInvoice(
             company=command.company_id,
@@ -368,7 +369,7 @@ def create_purchase_invoice_draft(
             database.session.flush()
             if command.matching_mode == "THREE_WAY_MATCH":
                 if not line.purchase_receipt_item_id:
-                    raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", "Falta la recepción de una línea 3-way.")
+                    raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _("Falta la recepción de una línea 3-way."))
                 create_document_relation(
                     source_type="purchase_receipt",
                     source_id=str(command.purchase_receipt_id),
@@ -383,7 +384,7 @@ def create_purchase_invoice_draft(
                 )
             elif command.matching_mode == "TWO_WAY_MATCH":
                 if not line.purchase_order_item_id:
-                    raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", "Falta la orden de una línea 2-way.")
+                    raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _("Falta la orden de una línea 2-way."))
                 create_document_relation(
                     source_type="purchase_order",
                     source_id=str(command.purchase_order_id),
@@ -409,7 +410,7 @@ def create_purchase_invoice_draft(
         if commit:
             database.session.rollback()
         code = "QUANTITY_EXCEEDS_RECEIPT" if command.matching_mode == "THREE_WAY_MATCH" else "QUANTITY_EXCEEDS_ORDER"
-        raise PurchaseInvoiceDraftError(code, "La cantidad facturada excede el saldo disponible.") from exc
+        raise PurchaseInvoiceDraftError(code, _("La cantidad facturada excede el saldo disponible.")) from exc
     except Exception:
         if commit:
             database.session.rollback()

@@ -212,7 +212,7 @@ def _validate_award_authorization(
     insufficient = len(offers) < minimum_offers
     authorizer = is_purchase_sourcing_authorizer(user_id)
     if insufficient and not authorizer:
-        raise PurchaseSourcingError(f"Se requieren al menos {minimum_offers} ofertas; solo existen {len(offers)}.")
+        raise PurchaseSourcingError(_(f"Se requieren al menos {minimum_offers} ofertas; solo existen {len(offers)}."))
     if insufficient and not reason:
         raise PurchaseSourcingError(_("La autorización de oferta única requiere una justificación."))
     if reason and not authorizer:
@@ -232,7 +232,7 @@ def _find_manual_override_items(
         quotation = next((offer for offer in offers if offer.id == quotation_id), None)
         selected_line = offer_line_for_item(quotation.id, item, rfq_items) if quotation else None
         if not quotation or not selected_line:
-            raise PurchaseSourcingError(f"La oferta seleccionada no cubre el artículo {item.item_code}.")
+            raise PurchaseSourcingError(_(f"La oferta seleccionada no cubre el artículo {item.item_code}."))
         rates = [line.rate or Decimal("0") for offer in offers if (line := offer_line_for_item(offer.id, item, rfq_items))]
         if rates and (selected_line.rate or Decimal("0")) > min(rates):
             overrides.add(item.id)
@@ -271,7 +271,7 @@ def create_purchase_quotation_award(
             continue
         offer_line = offer_line_for_item(quotation_id, item, items)
         if not offer_line:
-            raise PurchaseSourcingError(f"La oferta seleccionada no cubre el artículo {item.item_code}.")
+            raise PurchaseSourcingError(_(f"La oferta seleccionada no cubre el artículo {item.item_code}."))
         qty = min(Decimal(str(item.qty)), Decimal(str(offer_line.qty)))
         database.session.add(
             PurchaseQuotationAwardItem(

@@ -24,6 +24,7 @@ from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
+from cacao_accounting.i18n import _
 
 _PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
 _PERM_INVENTORY_REPORTS_READ = "inventory.reports.read"
@@ -54,7 +55,7 @@ _SCHEMA: dict[str, Any] = {
 
 @query_tool(
     "ledgers.list",
-    "Lista libros contables autorizados de una compañía.",
+    _("Lista libros contables autorizados de una compañía."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_SCHEMA,
@@ -81,7 +82,7 @@ def list_ledgers(
 
 @query_tool(
     "parties.search",
-    "Busca clientes y proveedores activos de una compañía.",
+    _("Busca clientes y proveedores activos de una compañía."),
     required_module="accounting",
     required_permission="documents.reports.read",
     parameters_schema={
@@ -123,7 +124,7 @@ def search_parties(
 
 @query_tool(
     "items.search",
-    "Busca artículos activos por código o nombre.",
+    _("Busca artículos activos por código o nombre."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_SCHEMA,
@@ -153,7 +154,7 @@ def search_items(
 
 @query_tool(
     "warehouses.list",
-    "Lista almacenes activos de una compañía.",
+    _("Lista almacenes activos de una compañía."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_SCHEMA,
@@ -180,7 +181,7 @@ def list_warehouses(
 
 @query_tool(
     "bank_accounts.search",
-    "Busca cuentas bancarias activas de una compañía.",
+    _("Busca cuentas bancarias activas de una compañía."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_SCHEMA,
@@ -212,7 +213,7 @@ def search_bank_accounts(
 
 @query_tool(
     "currencies.list",
-    "Lista monedas configuradas.",
+    _("Lista monedas configuradas."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
@@ -238,7 +239,7 @@ def list_currencies(*, context: QueryContext, company_id: str, page: int = 1, pa
 
 @query_tool(
     "dimensions.list",
-    "Lista tipos de dimensión analítica activos.",
+    _("Lista tipos de dimensión analítica activos."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_SCHEMA,
@@ -258,7 +259,7 @@ def list_dimensions(
 
 @query_tool(
     "dimension_values.search",
-    "Busca valores de una dimensión por compañía.",
+    _("Busca valores de una dimensión por compañía."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
@@ -300,7 +301,7 @@ def search_dimension_values(
 
 @query_tool(
     "cost_centers.list",
-    "Lista centros de costo activos de una compañía.",
+    _("Lista centros de costo activos de una compañía."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_SCHEMA,
@@ -320,7 +321,7 @@ def list_cost_centers(
 
 @query_tool(
     "uoms.list",
-    "Lista unidades de medida activas.",
+    _("Lista unidades de medida activas."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_SCHEMA,

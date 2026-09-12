@@ -238,7 +238,7 @@ CONTABILIDAD_MONEDAS = "contabilidad.monedas"
 
 CONTABILIDAD_MONEDA_CREAR_TEMPLATE = "contabilidad/moneda_crear.html"
 
-CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE = "La moneda indicada no existe."
+CONTABILIDAD_MONEDA_NO_EXISTE_MESSAGE = _("La moneda indicada no existe.")
 
 CONTABILIDAD_UNIDADES = "contabilidad.unidades"
 
@@ -246,16 +246,16 @@ CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE = "contabilidad/fiscal_year_crear.html"
 
 CONTABILIDAD_TASA_CAMBIO = "contabilidad.tasa_cambio"
 
-CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = "Periodo no encontrado."
+CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = _("Periodo no encontrado.")
 
-CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = "Cierre mensual no encontrado."
+CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = _("Cierre mensual no encontrado.")
 
-ENTIDAD_NO_EXISTE_MSG = "La entidad indicada no existe."
+ENTIDAD_NO_EXISTE_MSG = _("La entidad indicada no existe.")
 
 CONTABILIDAD_CUENTAS_ENDPOINT = "contabilidad.cuentas"
 CONTABILIDAD_ENTIDAD_ENDPOINT = "contabilidad.entidad"
-ENTRADAS_GL_LABEL = "entradas GL"
-MOVIMIENTOS_INVENTARIO_LABEL = "movimientos de inventario"
+ENTRADAS_GL_LABEL = _("entradas GL")
+MOVIMIENTOS_INVENTARIO_LABEL = _("movimientos de inventario")
 
 _TPL_UNIDAD_CREAR = "contabilidad/unidad_crear.html"
 
@@ -278,8 +278,10 @@ def _reject_delete_with_dependencies(label: str, checks: list[tuple[str, Any]]) 
     if not dependencies:
         return False
     flash(
-        f"No se puede eliminar {label}: existen dependencias ({', '.join(dependencies)}). "
-        "Desactive el registro para conservar la trazabilidad.",
+        _(
+            f"No se puede eliminar {label}: existen dependencias ({', '.join(dependencies)}). "
+            "Desactive el registro para conservar la trazabilidad."
+        ),
         "danger",
     )
     return True
@@ -1285,7 +1287,7 @@ def nueva_cuenta():
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
     entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
-    parent_initial_label = ""
+    parent_initial_label = _("")
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
         entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
@@ -1453,7 +1455,7 @@ def nuevo_centro_costo():
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
     entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
-    parent_initial_label = ""
+    parent_initial_label = _("")
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
         entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""

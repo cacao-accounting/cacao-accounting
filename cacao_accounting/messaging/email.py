@@ -77,7 +77,7 @@ def encrypt_smtp_pass(plaintext: str) -> str:
     try:
         return Fernet(_get_encryption_key(_get_or_create_password_salt())).encrypt(plaintext.encode("utf-8")).decode("utf-8")
     except (TypeError, ValueError) as exc:
-        raise EmailError(f"Error al cifrar contraseña: {exc}") from exc
+        raise EmailError(_(f"Error al cifrar contraseña: {exc}")) from exc
 
 
 def decrypt_smtp_pass(ciphertext: str) -> str:
@@ -223,7 +223,7 @@ def retry_email_queue_item(queue_id: str) -> Any:
         item.status = "failed"
         item.error_message = str(exc)
         database.session.commit()
-        raise EmailError(f"Error al reintentar envío: {exc}") from exc
+        raise EmailError(_(f"Error al reintentar envío: {exc}")) from exc
 
 
 def can_send_transaction_emails() -> bool:
@@ -295,7 +295,7 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     try:
         port = int(port_str)
     except ValueError as exc:
-        raise EmailError(f"Puerto SMTP no válido: {port_str}") from exc
+        raise EmailError(_(f"Puerto SMTP no válido: {port_str}")) from exc
 
     use_tls = use_tls_str.lower() in ("true", "1", "yes", "y", "on")
 
@@ -313,4 +313,4 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False) ->
     try:
         _send_smtp_message(smtp_config, message)
     except (OSError, smtplib.SMTPException, ValueError) as exc:
-        raise EmailError(f"Error al enviar correo electrónico: {exc}") from exc
+        raise EmailError(_(f"Error al enviar correo electrónico: {exc}")) from exc

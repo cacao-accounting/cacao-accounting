@@ -1,3 +1,5 @@
+from cacao_accounting.i18n import _
+
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +17,7 @@
 
 # <-------------------------------------------------------------------------> #
 # Aquí definimos un listado de los mensajes de error utilizados en la aplicacion
-ERROR1 = "No se proporcionaron datos."
-ERROR2 = "Instancia de Flask requerida"
-ERROR3 = "No se ha establecido una tabla para operacion."
-ERROR4 = "Tipo de Acción no Implementada."
+ERROR1 = _("No se proporcionaron datos.")
+ERROR2 = _("Instancia de Flask requerida")
+ERROR3 = _("No se ha establecido una tabla para operación.")
+ERROR4 = _("Tipo de acción no implementada.")

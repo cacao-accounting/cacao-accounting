@@ -44,7 +44,7 @@ LISTA_MODULOS = "admin.lista_modulos"
 
 CUENTAS_PREDETERMINADAS = "admin.cuentas_predeterminadas"
 
-USUARIO_NO_ENCONTRADO = "Usuario no encontrado."
+USUARIO_NO_ENCONTRADO = _("Usuario no encontrado.")
 
 LISTA_USUARIOS = "admin.lista_usuarios"
 
@@ -52,7 +52,7 @@ LISTA_ROLES = "admin.lista_roles"
 
 ADMIN_LISTA_GRUPOS_TERCEROS = "admin.lista_grupos_terceros"
 
-DESKTOP_SINGLE_ADMIN_MESSAGE = "En modo escritorio solo se permite un usuario administrador."
+DESKTOP_SINGLE_ADMIN_MESSAGE = _("En modo escritorio solo se permite un usuario administrador.")
 
 LISTA_VALUACION_INVENTARIO = "admin.configuracion_valuacion_inventario"
 

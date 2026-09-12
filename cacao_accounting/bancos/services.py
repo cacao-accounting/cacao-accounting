@@ -173,11 +173,11 @@ def _validate_naming_series_default(
     """Valida una serie predeterminada reutilizando el mismo patrón de negocio."""
     series = database.session.get(NamingSeries, naming_series_id)
     if not series or not series.is_active:
-        raise IdentifierConfigurationError(f"{error_prefix} seleccionada no existe o está inactiva.")
+        raise IdentifierConfigurationError(_(f"{error_prefix} seleccionada no existe o está inactiva."))
     if series.entity_type != entity_type:
         raise IdentifierConfigurationError(entity_type_error)
     if series.company not in (None, company):
-        raise IdentifierConfigurationError(f"{error_prefix} no pertenece a la compañía indicada.")
+        raise IdentifierConfigurationError(_(f"{error_prefix} no pertenece a la compañía indicada."))
     return naming_series_id
 
 

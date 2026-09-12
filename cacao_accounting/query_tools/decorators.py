@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Callable
+from cacao_accounting.i18n import _
 
 _DEFAULT_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
-    "description": "Resultado de consulta de solo lectura; el contenido puede incluir paginación y procedencia.",
+    "description": _("Resultado de consulta de solo lectura; el contenido puede incluir paginación y procedencia."),
     "properties": {
         "items": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
         "summary": {"type": "object", "additionalProperties": True},
@@ -37,7 +38,8 @@ class QueryTool:
 def _validate_read_only(tool: QueryTool) -> None:
     if not tool.read_only:
         raise ValueError(
-            f"Tool '{tool.name}' must declare read_only=True. " "Write operations are not allowed in query_tools."
+            _("Tool '%(name)s' must declare read_only=True. Write operations are not allowed in query_tools.")
+            % {"name": tool.name}
         )
 
 

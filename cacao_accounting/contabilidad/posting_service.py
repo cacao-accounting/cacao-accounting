@@ -284,8 +284,10 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
         raise PostingError(_("El documento requiere un snapshot explicito de base_currency antes de contabilizarse."))
     if document_base_currency != default_company_currency:
         raise PostingError(
-            f"El snapshot de base_currency ({document_base_currency!r}) no coincide con la moneda "
-            f"funcional vigente ({default_company_currency!r}); el documento requiere revalidacion."
+            _(
+                f"El snapshot de base_currency ({document_base_currency!r}) no coincide con la moneda "
+                f"funcional vigente ({default_company_currency!r}); el documento requiere revalidacion."
+            )
         )
     contexts: list[LedgerContext] = []
     is_fy_closing = bool(getattr(document, "is_fiscal_year_closing", False))
@@ -293,7 +295,7 @@ def _document_contexts(document: Any, ledger_code: str | Sequence[str] | None = 
     for book in _active_books(company, ledger_code):
         book_currency = getattr(book, "currency", None)
         if not book_currency:
-            raise PostingError(f"El libro contable {book.code} requiere una moneda funcional configurada.")
+            raise PostingError(_(f"El libro contable {book.code} requiere una moneda funcional configurada."))
         company_currency = book_currency
         try:
             exchange_rate = _ledger_exchange_rate(
@@ -468,7 +470,7 @@ def _account_id_for_comprobante_line(line: Any, company: str) -> str:
 
     account = database.session.execute(select(Accounts).filter_by(entity=company, code=account_code)).scalars().first()
     if not account:
-        raise PostingError(f"La cuenta contable '{account_code}' no existe para la compañía.")
+        raise PostingError(_(f"La cuenta contable '{account_code}' no existe para la compañía."))
     return account.id
 
 
@@ -618,7 +620,7 @@ def _entry_exchange_rate(context: LedgerContext, exchange_rate: Decimal | None) 
     try:
         return _lookup_exchange_rate(context.transaction_currency, context.company_currency, context.posting_date)
     except (PostingError, SQLAlchemyError) as exc:
-        raise PostingError(f"No se pudo determinar el tipo de cambio para multimoneda: {str(exc)}") from exc
+        raise PostingError(_(f"No se pudo determinar el tipo de cambio para multimoneda: {str(exc)}")) from exc
 
 
 def _ledger_amount(
@@ -798,7 +800,7 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> D
     if inverse is not None:
         return Decimal("1") / inverse
 
-    raise PostingError(f"No existe tipo de cambio registrado para {origin} -> {destination} en la fecha {posting_date}.")
+    raise PostingError(_(f"No existe tipo de cambio registrado para {origin} -> {destination} en la fecha {posting_date}."))
 
 
 def _add_entries(entries: list[GLEntry]) -> list[GLEntry]:
@@ -1854,7 +1856,7 @@ def _line_rate(line: StockEntryItem) -> Decimal:
     raw_qty = _decimal_value(line.qty)
     amount = _decimal_value(line.amount)
     if amount > 0 and qty_in_base_uom <= 0:
-        raise PostingError(f"La linea de inventario {line.item_code} requiere cantidad para valorar el monto.")
+        raise PostingError(_(f"La linea de inventario {line.item_code} requiere cantidad para valorar el monto."))
     if rate > 0 and raw_qty > 0 and raw_qty != qty_in_base_uom:
         rate = rate * raw_qty / qty_in_base_uom
     if amount > 0 and qty_in_base_uom > 0:
@@ -1862,7 +1864,7 @@ def _line_rate(line: StockEntryItem) -> Decimal:
     if rate <= 0 and amount > 0 and qty_in_base_uom > 0:
         rate = amount / qty_in_base_uom
     if rate <= 0:
-        raise PostingError(f"La linea de inventario {line.item_code} requiere tasa de valuacion.")
+        raise PostingError(_(f"La linea de inventario {line.item_code} requiere tasa de valuacion."))
     return rate
 
 
@@ -1904,7 +1906,7 @@ def _line_rate_generic(line: Any) -> Decimal:
     amount = _decimal_value(getattr(line, "amount", None))
     if amount > 0 and qty_in_base_uom <= 0:
         item_code = getattr(line, "item_code", "desconocido")
-        raise PostingError(f"La linea de inventario {item_code} requiere cantidad para valorar el monto.")
+        raise PostingError(_(f"La linea de inventario {item_code} requiere cantidad para valorar el monto."))
     if rate > 0 and raw_qty > 0 and raw_qty != qty_in_base_uom:
         rate = rate * raw_qty / qty_in_base_uom
     if amount > 0 and qty_in_base_uom > 0:
@@ -1913,7 +1915,7 @@ def _line_rate_generic(line: Any) -> Decimal:
         rate = amount / qty_in_base_uom
     if rate <= 0:
         item_code = getattr(line, "item_code", "desconocido")
-        raise PostingError(f"La linea de inventario {item_code} requiere tasa de valuacion.")
+        raise PostingError(_(f"La linea de inventario {item_code} requiere tasa de valuacion."))
     return rate
 
 
@@ -2171,7 +2173,7 @@ def _consume_stock_valuation_layers(
     """Consume capas y retorna ``(costo, tasa, capa_origen_predominante, composicion_capas)``."""
     if quantity <= 0:
         raise PostingError(
-            f"La cantidad de consumo debe ser mayor que cero para el artículo {item_code} en la bodega {warehouse}."
+            _(f"La cantidad de consumo debe ser mayor que cero para el artículo {item_code} en la bodega {warehouse}.")
         )
     # Serialize valuation against every StockBin mutation. The lock stays held
     # through the later `_upsert_stock_bin` in the same transaction, so two
@@ -2181,7 +2183,10 @@ def _consume_stock_valuation_layers(
     total_available: Decimal = sum((entry[1] for entry in available), Decimal("0"))
     if total_available < quantity:
         raise PostingError(
-            f"No hay suficiente inventario para calcular el costo real para el artículo {item_code} en la bodega {warehouse}."
+            _(
+                f"No hay suficiente inventario para calcular el costo real para el artículo {item_code} "
+                f"en la bodega {warehouse}."
+            )
         )
 
     valuation_method = _valuation_method_for_company(company)
@@ -2597,7 +2602,7 @@ def _create_stock_movement(
             line._consumed_layers = consumed_layers
         except PostingError:
             if not item.allow_negative_stock:
-                raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
+                raise PostingError(_(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}."))
             cost_rate = _consume_available_layers_for_negative_stock(
                 company=document.company,
                 item_code=line.item_code,
@@ -2627,7 +2632,7 @@ def _create_stock_movement(
     if qty_after < 0:
         item = _stock_item_for(line)
         if not item.allow_negative_stock:
-            raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
+            raise PostingError(_(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}."))
     database.session.add(
         StockValuationLayer(
             item_code=line.item_code,
@@ -2732,8 +2737,10 @@ def _reconciliation_snapshot(
         ).scalar_one_or_none()
         if source_layer is None:
             raise PostingError(
-                "La conciliación no puede reducir cantidad mientras aumenta el valor; "
-                "registre el ajuste de valor por separado."
+                _(
+                    "La conciliación no puede reducir cantidad mientras aumenta el valor; "
+                    "registre el ajuste de valor por separado."
+                )
             )
     return current_qty, counted_qty, current_value, target_value, qty_change, value_change
 
@@ -2749,7 +2756,7 @@ def _validate_reconciliation_value_direction(qty_change: Decimal, value_change: 
     """
     if qty_change > 0 and value_change < 0:
         raise PostingError(
-            "La conciliación no puede aumentar cantidad mientras reduce el valor; registre el ajuste de valor por separado."
+            _("La conciliación no puede aumentar cantidad mientras reduce el valor; registre el ajuste de valor por separado.")
         )
 
 
@@ -2910,7 +2917,7 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
         line._consumed_layers = consumed_layers
     except PostingError:
         if not item.allow_negative_stock:
-            raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
+            raise PostingError(_(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}."))
         rate = _consume_available_layers_for_negative_stock(
             company=document.company,
             item_code=line.item_code,
@@ -2971,9 +2978,9 @@ def _validate_stock_entry_warehouses(document: StockEntry, line: StockEntryItem)
     for warehouse_code in filter(None, warehouse_codes):
         warehouse = database.session.execute(select(Warehouse).filter_by(code=warehouse_code)).scalar_one_or_none()
         if not warehouse or warehouse.company != document.company:
-            raise PostingError(f"La bodega {warehouse_code} no pertenece a la compañía {document.company}.")
+            raise PostingError(_(f"La bodega {warehouse_code} no pertenece a la compañía {document.company}."))
         if not warehouse.is_active:
-            raise PostingError(f"La bodega {warehouse_code} está inactiva.")
+            raise PostingError(_(f"La bodega {warehouse_code} está inactiva."))
 
 
 def _should_skip_non_stock_line(line: Any) -> bool:
@@ -3008,7 +3015,7 @@ def _consume_outflow_stock_valuation(
         )
     except PostingError:
         if not item.allow_negative_stock:
-            raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {source_warehouse}.")
+            raise PostingError(_(f"El artículo {item.name} no permite stock negativo en la bodega {source_warehouse}."))
         cost_rate = _consume_available_layers_for_negative_stock(
             company=document.company,
             item_code=line.item_code,
@@ -3409,7 +3416,7 @@ def _purchase_return_cost(document: Any, line: Any, warehouse: str, quantity: De
     total_available = sum(_decimal_value(layer.remaining_qty) for layer in incoming_layers)
     if total_available < quantity:
         raise PostingError(
-            f"La devolución ({quantity}) excede la cantidad disponible en la recepción origen ({total_available})."
+            _(f"La devolución ({quantity}) excede la cantidad disponible en la recepción origen ({total_available}).")
         )
     remaining_to_skip = _decimal_value(already_returned)
     remaining = quantity
@@ -3657,7 +3664,7 @@ def _create_stock_ledger_for_document(
         preserve_reserved_qty=isinstance(document, DeliveryNote) and bool(document.sales_order_id),
     )
     if qty_after < 0 and not item.allow_negative_stock:
-        raise PostingError(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}.")
+        raise PostingError(_(f"El artículo {item.name} no permite stock negativo en la bodega {warehouse}."))
     stock_layer = StockValuationLayer(
         item_code=line.item_code,
         warehouse=warehouse,
@@ -3981,13 +3988,15 @@ def _validate_stock_reversal_capacity(movements: Sequence[StockLedgerEntry]) -> 
             if item is None:
                 item = database.session.execute(select(Item).filter_by(code=movement.item_code)).scalar_one_or_none()
             if item is None:
-                raise PostingError(f"El artículo {movement.item_code} no existe.")
+                raise PostingError(_(f"El artículo {movement.item_code} no existe."))
             items[key] = item
         projected[key] -= _decimal_value(movement.qty_change)
         if projected[key] < 0 and not items[key].allow_negative_stock:
             raise PostingError(
-                f"No se puede cancelar el movimiento de {items[key].name}: "
-                f"la bodega {movement.warehouse} quedaría con stock negativo."
+                _(
+                    f"No se puede cancelar el movimiento de {items[key].name}: "
+                    f"la bodega {movement.warehouse} quedaría con stock negativo."
+                )
             )
 
 
@@ -4520,7 +4529,7 @@ def _validate_stock_reconciliation_dimensions(document: StockEntry, company: str
             select(model.id).where(model.entity == company, model.code == code)
         ).scalar_one_or_none()
         if exists is None:
-            raise PostingError(f"El {label} de la conciliación no pertenece a la compañía del documento.")
+            raise PostingError(_(f"El {label} de la conciliación no pertenece a la compañía del documento."))
 
 
 def _get_dimension_kwargs(document: StockEntry) -> dict[str, Any]:
@@ -4683,7 +4692,7 @@ def cancel_document(
             raise PostingError(_("No se puede anular un comprobante de capitalización automática."))
         if getattr(document, "capitalized_by_id", None) is not None:
             raise PostingError(
-                "No se puede anular una transacción que ya ha sido capitalizada. Bloquear anular pero permitir revertir."
+                _("No se puede anular una transacción que ya ha sido capitalizada. Bloquear anular pero permitir revertir.")
             )
 
     voucher_type = _get_voucher_type(document)

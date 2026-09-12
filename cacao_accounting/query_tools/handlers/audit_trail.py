@@ -16,11 +16,12 @@ from cacao_accounting.query_tools.pagination import (
     paginate,
 )
 from cacao_accounting.query_tools.permissions import validate_permission
+from cacao_accounting.i18n import _
 
 
 @query_tool(
     name="audit.get_document_timeline",
-    description="Obtiene la auditoría de un documento específico.",
+    description=_("Obtiene la auditoría de un documento específico."),
     required_permission="audit.reports.read",
     parameters_schema={
         "type": "object",
@@ -85,7 +86,7 @@ def get_document_timeline_handler(
 
 @query_tool(
     name="audit.get_user_activity_summary",
-    description="Resume eventos de auditoría por usuario y acción, sin exponer payloads internos.",
+    description=_("Resume eventos de auditoría por usuario y acción, sin exponer payloads internos."),
     required_permission="audit.reports.read",
     parameters_schema={
         "type": "object",

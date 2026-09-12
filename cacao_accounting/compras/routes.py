@@ -236,7 +236,7 @@ PURCHASE_DEBIT_NOTE = "purchase_debit_note"
 PURCHASE_CREDIT_NOTE = "purchase_credit_note"
 
 
-FACTURA_COMPRA_LABEL = "Factura de Compra"
+FACTURA_COMPRA_LABEL = _("Factura de Compra")
 
 COMPRAS_IMPORT_LANDED_COST_ENDPOINT = "compras.compras_import_landed_cost"
 
@@ -244,9 +244,9 @@ COMPRAS_PROVEEDOR_ENDPOINT = "compras.compras_proveedor"
 
 COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT = "compras.compras_comparativo_ofertas"
 
-DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
+DOCUMENT_REQUIRES_LINE_MSG = _("El documento requiere al menos una línea.")
 
-SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
+SOLICITUD_CANCELACION_PENDIENTE_MSG = _("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
 
 FACTURA_DE_COMPRA = FACTURA_COMPRA_LABEL
 
@@ -282,21 +282,21 @@ ROUTE_COMPRAS_COTIZACION_PROVEEDOR = "compras.compras_cotizacion_proveedor"
 
 ROUTE_COMPRAS_PROVEEDOR = COMPRAS_PROVEEDOR_ENDPOINT
 
-LABEL_SOLICITUD_COMPRA = "Solicitud de Compra"
+LABEL_SOLICITUD_COMPRA = _("Solicitud de Compra")
 
-LABEL_SOLICITUD_COTIZACION = "Solicitud de Cotización"
+LABEL_SOLICITUD_COTIZACION = _("Solicitud de Cotización")
 
-LABEL_ORDEN_COMPRA = "Orden de Compra"
+LABEL_ORDEN_COMPRA = _("Orden de Compra")
 
 LABEL_FACTURA_COMPRA_LONG = FACTURA_COMPRA_LABEL
 
 IMPORT_LANDED_COST = "import_landed_cost"
 
-IMPORT_LANDED_COST_LABEL = "Costo de Importación"
+IMPORT_LANDED_COST_LABEL = _("Costo de Importación")
 
 COMPRAS_COMPARATIVO_ORDENES = "compras.compras_comparativo_ordenes"
 
-CANCELLATION_REASON_REQUIRED_MSG = "Debe indicar el motivo de la anulacion."
+CANCELLATION_REASON_REQUIRED_MSG = _("Debe indicar el motivo de la anulación.")
 
 DOCUMENT_TYPE_LABELS: dict[str, str] = {
     PURCHASE_INVOICE: FACTURA_DE_COMPRA,
@@ -1549,9 +1549,9 @@ def compras_factura_compra_nota_debito_lista():
         COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
-        page_heading="Listado de Notas de Débito de Compra",
-        new_button_label="Nueva Nota de Débito",
-        page_caption="Listado de notas de débito de compra.",
+        page_heading=_("Listado de Notas de Débito de Compra"),
+        new_button_label=_("Nueva Nota de Débito"),
+        page_caption=_("Listado de notas de débito de compra."),
         new_document_type=PURCHASE_DEBIT_NOTE,
     )
 
@@ -1576,9 +1576,9 @@ def compras_factura_compra_nota_credito_lista():
         COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
-        page_heading="Listado de Notas de Crédito de Compra",
-        new_button_label="Nueva Nota de Crédito",
-        page_caption="Listado de notas de crédito de compra.",
+        page_heading=_("Listado de Notas de Crédito de Compra"),
+        new_button_label=_("Nueva Nota de Crédito"),
+        page_caption=_("Listado de notas de crédito de compra."),
         new_document_type=PURCHASE_CREDIT_NOTE,
     )
 

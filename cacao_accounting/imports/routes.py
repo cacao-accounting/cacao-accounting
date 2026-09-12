@@ -58,7 +58,7 @@ imports = Blueprint("imports", __name__, template_folder="templates")
 
 _ENDPOINT_IMPORTS_DETAIL = "imports.detail"
 _ENDPOINT_IMPORTS_NEW = "imports.new"
-_INVALID_FILE_TYPE_MSG = "Error al validar el tipo de archivo"
+_INVALID_FILE_TYPE_MSG = _("Error al validar el tipo de archivo")
 
 
 def check_desktop_mode():

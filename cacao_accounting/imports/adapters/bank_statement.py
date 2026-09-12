@@ -144,8 +144,10 @@ class BankStatementAdapter(BaseImportAdapter):
             company_id = tx_data.get("company_id")
             if company_id and bank_account.company != company_id:
                 raise ValueError(
-                    f"La cuenta bancaria {bank_account.id} pertenece a la compañía {bank_account.company}, "
-                    f"no a {company_id}."
+                    _(
+                        f"La cuenta bancaria {bank_account.id} pertenece a la compañía {bank_account.company}, "
+                        f"no a {company_id}."
+                    )
                 )
             existing = (
                 database.session.execute(

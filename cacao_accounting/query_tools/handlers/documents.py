@@ -22,7 +22,7 @@ from cacao_accounting.i18n import _
 
 @query_tool(
     name="documents.get_flow",
-    description="Obtiene las relaciones documentales de un documento.",
+    description=_("Obtiene las relaciones documentales de un documento."),
     required_permission="documents.reports.read",
     parameters_schema={
         "type": "object",
@@ -102,7 +102,7 @@ def get_document_flow(
 
 @query_tool(
     name="documents.get_related_documents",
-    description="Obtiene documentos relacionados y sus líneas de flujo.",
+    description=_("Obtiene documentos relacionados y sus líneas de flujo."),
     required_permission="documents.reports.read",
     parameters_schema={
         "type": "object",
@@ -141,7 +141,7 @@ def _document_context(context: QueryContext, company_id: str) -> None:
 
 @query_tool(
     "documents.get_details",
-    "Obtiene un DTO controlado de una factura o pago.",
+    _("Obtiene un DTO controlado de una factura o pago."),
     required_permission="documents.reports.read",
     parameters_schema=_DOCUMENT_SCHEMA,
 )
@@ -155,7 +155,7 @@ def get_document_details_handler(
 
 @query_tool(
     "documents.get_lines",
-    "Obtiene líneas controladas de una factura; los pagos no tienen líneas.",
+    _("Obtiene líneas controladas de una factura; los pagos no tienen líneas."),
     required_permission="documents.reports.read",
     parameters_schema=_DOCUMENT_SCHEMA,
 )
@@ -174,7 +174,7 @@ def get_document_lines_handler(
 
 @query_tool(
     "documents.get_status",
-    "Obtiene el estado contable controlado de una factura o pago.",
+    _("Obtiene el estado contable controlado de una factura o pago."),
     required_permission="documents.reports.read",
     parameters_schema=_DOCUMENT_SCHEMA,
 )

@@ -208,7 +208,7 @@ def _convert_gl_amount_to_bank_currency(entry: GLEntry, bank_currency: str, comp
     rate = _lookup_exchange_rate(company_currency, bank_currency, entry.posting_date)
     if rate is None:
         raise BankReconciliationError(
-            f"No existe tipo de cambio para {company_currency} -> {bank_currency} en {entry.posting_date}."
+            _(f"No existe tipo de cambio para {company_currency} -> {bank_currency} en {entry.posting_date}.")
         )
     return (company_amount * rate).quantize(Decimal("0.0001"))
 
@@ -406,8 +406,10 @@ def _validate_target_allocation_currency(
             resolved = _bank_currency(source) if source else None
         if resolved and resolved != current_currency:
             raise BankReconciliationError(
-                "El destino ya tiene asignaciones en otra moneda bancaria; "
-                "convierta o revierta la asignación anterior antes de continuar."
+                _(
+                    "El destino ya tiene asignaciones en otra moneda bancaria; "
+                    "convierta o revierta la asignación anterior antes de continuar."
+                )
             )
 
 

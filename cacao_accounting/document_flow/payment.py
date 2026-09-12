@@ -777,7 +777,7 @@ def apply_payment_reconciliation(
     ).scalar_one()
     if latest_allocation and allocation_date < latest_allocation:
         raise _document_flow_error(
-            f"La fecha de conciliación no puede ser anterior a una aplicación existente ({latest_allocation})."
+            _(f"La fecha de conciliación no puede ser anterior a una aplicación existente ({latest_allocation}).")
         )
 
     reconciliation = Reconciliation(

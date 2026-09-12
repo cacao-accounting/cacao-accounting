@@ -32,7 +32,7 @@ from cacao_accounting.i18n import _
 
 CASH_FORECAST_DETAIL_ENDPOINT = "bancos.cash_forecast_detail"
 BANCOS_PREFIX = "bancos.bancos_"
-PRONOSTICO_NO_MODIFICABLE_MSG = "No se pueden modificar pronósticos aprobados o cerrados."
+PRONOSTICO_NO_MODIFICABLE_MSG = _("No se pueden modificar pronósticos aprobados o cerrados.")
 CASH_FORECAST_ENTRY_TYPES = {"Income", "Expense"}
 
 

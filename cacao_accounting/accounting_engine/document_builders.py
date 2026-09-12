@@ -145,7 +145,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
     event_type = "purchase_receipt_confirmed"
     bridge_account_id = _require_account_id(
         getattr(defaults, "bridge_account_id", None),
-        "Falta la cuenta puente configurada para la compañía.",
+        _("Falta la cuenta puente configurada para la compañía."),
     )
     late_two_way_amounts = {} if getattr(document, "is_return", False) else _late_two_way_invoice_amounts(document)
     allocated_late_amounts = _invoice_before_receipt_allocated_amounts(document)
@@ -165,7 +165,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         )
         inventory_account_id = _require_account_id(
             inventory_account_id_for_document_line(document, item, company),
-            "Falta la cuenta de inventario para una línea de recepción de compra.",
+            _("Falta la cuenta de inventario para una línea de recepción de compra."),
         )
         description = getattr(item, "item_name", None) or item.item_code
         account_lines.append(
@@ -186,7 +186,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         if reclassified_amount > 0:
             expense_account_id = _require_account_id(
                 _item_account_for_line(item, company, "expense"),
-                "Falta la cuenta de gasto para compensar una factura 2-way contabilizada.",
+                _("Falta la cuenta de gasto para compensar una factura 2-way contabilizada."),
             )
             account_lines.append(
                 AccountLineSpec(
@@ -201,7 +201,7 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
             if variance:
                 if not variance_account_id:
                     raise CalculationContextBuilderError(
-                        "Falta la cuenta de variaciones de liquidación de compras para compensar una factura 2-way."
+                        _("Falta la cuenta de variaciones de liquidación de compras para compensar una factura 2-way.")
                     )
                 account_lines.append(
                     AccountLineSpec(
@@ -485,7 +485,7 @@ def _build_sales_invoice_context(document: SalesInvoice) -> CalculationContext:
         AccountLineSpec(
             account_id=_require_account_id(
                 _item_account_for_line(item, company, "income"),
-                "Falta la cuenta de ingresos para una línea de factura de venta.",
+                _("Falta la cuenta de ingresos para una línea de factura de venta."),
             ),
             amount=_line_amount(item),
             side=side,
@@ -1163,7 +1163,7 @@ def _purchase_invoice_account_lines(
         if use_bridge_account and has_allocation:
             account_id = _require_account_id(
                 getattr(_company_defaults(company), "bridge_account_id", None),
-                "Falta la cuenta puente para liquidar una factura de compra.",
+                _("Falta la cuenta puente para liquidar una factura de compra."),
             )
             line_amount = allocated_receipt_amount
         else:
@@ -1171,7 +1171,7 @@ def _purchase_invoice_account_lines(
                 _item_account_for_line(item, company, account_type)
                 or variance_account_id
                 or _item_account_for_line(item, company, "expense"),
-                "Falta la cuenta de gasto, variaciones o cuenta puente para una línea de factura de compra.",
+                _("Falta la cuenta de gasto, variaciones o cuenta puente para una línea de factura de compra."),
             )
             line_amount = _line_amount(item) if not use_bridge_account or not has_allocation else Decimal("0")
         if line_amount > 0:
@@ -1188,7 +1188,7 @@ def _purchase_invoice_account_lines(
             if remaining_amount > 0:
                 expense_account_id = _require_account_id(
                     _item_account_for_line(item, company, "expense"),
-                    "Falta la cuenta de gasto para la porción de factura aún no recibida.",
+                    _("Falta la cuenta de gasto para la porción de factura aún no recibida."),
                 )
                 specs.append(
                     AccountLineSpec(
@@ -1202,7 +1202,7 @@ def _purchase_invoice_account_lines(
             if variance:
                 if not variance_account_id:
                     raise CalculationContextBuilderError(
-                        "Falta la cuenta de variaciones de liquidación de compras para liquidar la factura."
+                        _("Falta la cuenta de variaciones de liquidación de compras para liquidar la factura.")
                     )
                 specs.append(
                     AccountLineSpec(

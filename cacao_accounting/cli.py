@@ -88,22 +88,22 @@ class CacaoGroup(click.Group):
 
 def _mensaje_exito(mensaje: str) -> None:
     """Imprime un mensaje de éxito con formato visual."""
-    click.secho(f"[OK] {mensaje}", fg=COLOR_EXITO)
+    click.secho(_(f"[OK] {mensaje}"), fg=COLOR_EXITO)
 
 
 def _mensaje_advertencia(mensaje: str) -> None:
     """Imprime un mensaje de advertencia con formato visual."""
-    click.secho(f"[WARN] {mensaje}", fg=COLOR_ADVERTENCIA)
+    click.secho(_(f"[WARN] {mensaje}"), fg=COLOR_ADVERTENCIA)
 
 
 def _mensaje_error(mensaje: str) -> None:
     """Imprime un mensaje de error con formato visual."""
-    click.secho(f"[ERROR] {mensaje}", fg=COLOR_ERROR)
+    click.secho(_(f"[ERROR] {mensaje}"), fg=COLOR_ERROR)
 
 
 def _mensaje_info(mensaje: str) -> None:
     """Imprime un mensaje informativo con formato visual."""
-    click.secho(f"[INFO] {mensaje}", fg=COLOR_INFO)
+    click.secho(_(f"[INFO] {mensaje}"), fg=COLOR_INFO)
 
 
 def _obtener_aplicacion():
@@ -134,27 +134,29 @@ def _entorno_actual() -> str:
     cls=CacaoGroup,
     invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help"]},
-    help="CLI oficial para administrar Cacao Accounting.",
+    help=_("CLI oficial para administrar Cacao Accounting."),
     epilog=(
-        "Ejemplos:\n\n"
-        "  cacaoctl run\n"
-        "  cacaoctl serve\n"
-        "  cacaoctl db init\n"
-        "  cacaoctl db migrate\n"
-        "  cacaoctl db reset\n"
-        "  cacaoctl status\n"
-        "  cacaoctl version\n"
+        _(
+            "Ejemplos:\n\n"
+            "  cacaoctl run\n"
+            "  cacaoctl serve\n"
+            "  cacaoctl db init\n"
+            "  cacaoctl db migrate\n"
+            "  cacaoctl db reset\n"
+            "  cacaoctl status\n"
+            "  cacaoctl version\n"
+        )
     ),
 )
 @click.option(
     "--env",
     type=click.Choice(["dev", "test", "prod"], case_sensitive=False),
     default=None,
-    help="Entorno de ejecución (dev, test, prod).",
+    help=_("Entorno de ejecución (dev, test, prod)."),
 )
-@click.option("--verbose", is_flag=True, help="Muestra información detallada de la ejecución.")
-@click.option("--quiet", is_flag=True, help="Reduce la salida de la herramienta.")
-@click.version_option(version=VERSION, prog_name=NOMBRE_PROGRAMA, message="%(prog)s %(version)s")
+@click.option("--verbose", is_flag=True, help=_("Muestra información detallada de la ejecución."))
+@click.option("--quiet", is_flag=True, help=_("Reduce la salida de la herramienta."))
+@click.version_option(version=VERSION, prog_name=NOMBRE_PROGRAMA, message=_("%(prog)s %(version)s"))
 @click.pass_context
 def linea_comandos(ctx: click.Context, env: str | None, verbose: bool, quiet: bool) -> None:
     """Punto de entrada de la linea de comandos."""
@@ -180,14 +182,14 @@ def linea_comandos(ctx: click.Context, env: str | None, verbose: bool, quiet: bo
 
 def _mostrar_banner() -> None:
     """Imprime un encabezado visual para la herramienta."""
-    click.secho(f"{APPNAME} CLI", fg=COLOR_TITULO, bold=True)
-    click.secho("Administración del sistema", fg=COLOR_INFO)
-    click.echo("")
+    click.secho(_(f"{APPNAME} CLI"), fg=COLOR_TITULO, bold=True)
+    click.secho(_("Administración del sistema"), fg=COLOR_INFO)
+    click.echo(_(""))
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Comandos de base de datos agrupados bajo el subcomando ``db``.
-@click.group(help="Administración de la base de datos.")
+@click.group(help=_("Administración de la base de datos."))
 def db() -> None:
     """Comandos relacionados con la base de datos."""
 
@@ -196,9 +198,9 @@ db.group = "Database"  # type: ignore[attr-defined,method-assign,assignment]
 linea_comandos.add_command(db)
 
 
-@db.command(name="init", help="Crea o verifica la base de datos (idempotente).")
-@click.option("--force", is_flag=True, help="Elimina una base existente antes de crear la nueva.")
-@click.option("--seed", is_flag=True, help="Inserta datos de ejemplo después de crear la base.")
+@db.command(name="init", help=_("Crea o verifica la base de datos (idempotente)."))
+@click.option("--force", is_flag=True, help=_("Elimina una base existente antes de crear la nueva."))
+@click.option("--seed", is_flag=True, help=_("Inserta datos de ejemplo después de crear la base."))
 def db_init(force: bool, seed: bool) -> None:
     """Crea el esquema de base de datos e inserta los datos base.
 
@@ -223,25 +225,25 @@ def db_init(force: bool, seed: bool) -> None:
     with app.app_context():
         base_lista = usuarios_creados()
         if force and base_lista:
-            _mensaje_advertencia("La base de datos existente será reemplazada.")
+            _mensaje_advertencia(_("La base de datos existente será reemplazada."))
             database.drop_all()
         elif base_lista and not force:
-            _mensaje_info("La base de datos ya existe, nada que hacer.")
+            _mensaje_info(_("La base de datos ya existe, nada que hacer."))
             raise click.exceptions.Exit(0)
 
         if usuario == "cacao" and contrasena == "cacao":
-            _mensaje_advertencia("Se están usando usuario y contraseña predeterminados para el setup inicial.")
+            _mensaje_advertencia(_("Se están usando usuario y contraseña predeterminados para el setup inicial."))
 
         if inicia_base_de_datos(app=app, user=usuario, passwd=contrasena, with_examples=seed):
-            _mensaje_exito("Base de datos creada.")
+            _mensaje_exito(_("Base de datos creada."))
         else:
-            _mensaje_error("No fue posible crear la base de datos.")
+            _mensaje_error(_("No fue posible crear la base de datos."))
             raise click.exceptions.Exit(1)
 
 
-@db.command(name="migrate", help="Aplica migraciones pendientes de Alembic (idempotente).")
-@click.option("--head", default="head", help="Revisión destino (por defecto: head).")
-@click.option("--revision", default=None, help="Revisión específica a aplicar.")
+@db.command(name="migrate", help=_("Aplica migraciones pendientes de Alembic (idempotente)."))
+@click.option("--head", default="head", help=_("Revisión destino (por defecto: head)."))
+@click.option("--revision", default=None, help=_("Revisión específica a aplicar."))
 def db_migrate(head: str, revision: str | None) -> None:
     """Aplica migraciones pendientes de Alembic de forma idempotente.
 
@@ -261,15 +263,15 @@ def db_migrate(head: str, revision: str | None) -> None:
                 raise RuntimeError(_("La base de datos no está inicializada; ejecute primero 'cacaoctl db init'."))
             target = revision or head
             alembic.upgrade(target=target)
-            _mensaje_exito("Migraciones aplicadas correctamente.")
+            _mensaje_exito(_("Migraciones aplicadas correctamente."))
         except Exception as exc:
-            _mensaje_error(f"No fue posible aplicar las migraciones: {exc}")
+            _mensaje_error(_(f"No fue posible aplicar las migraciones: {exc}"))
             raise click.exceptions.Exit(1)
 
 
-@db.command(name="reset", help="Recrea completamente la base de datos.")
-@click.option("--force", is_flag=True, help="Omite la confirmación de la operación destructiva.")
-@click.option("--seed", is_flag=True, help="Inserta datos de ejemplo después de recrear la base.")
+@db.command(name="reset", help=_("Recrea completamente la base de datos."))
+@click.option("--force", is_flag=True, help=_("Omite la confirmación de la operación destructiva."))
+@click.option("--seed", is_flag=True, help=_("Inserta datos de ejemplo después de recrear la base."))
 def db_reset(force: bool, seed: bool) -> None:
     """Elimina y vuelve a crear toda la base de datos."""
     from cacao_accounting.database import database
@@ -291,25 +293,25 @@ def db_reset(force: bool, seed: bool) -> None:
         existe = entidades_creadas() or usuarios_creados()
 
     if existe and not force:
-        click.echo("Esta operación eliminará toda la base de datos.")
-        if not click.confirm("¿Desea continuar?"):
-            _mensaje_advertencia("Operación cancelada por el usuario.")
+        click.echo(_("Esta operación eliminará toda la base de datos."))
+        if not click.confirm(_("¿Desea continuar?")):
+            _mensaje_advertencia(_("Operación cancelada por el usuario."))
             raise click.exceptions.Exit(1)
 
     with app.app_context():
         database.drop_all()
-        _mensaje_advertencia("Base de datos eliminada.")
+        _mensaje_advertencia(_("Base de datos eliminada."))
         if usuario == "cacao" and contrasena == "cacao":
-            _mensaje_advertencia("Se están usando usuario y contraseña predeterminados para el setup inicial.")
+            _mensaje_advertencia(_("Se están usando usuario y contraseña predeterminados para el setup inicial."))
         if inicia_base_de_datos(app=app, user=usuario, passwd=contrasena, with_examples=seed):
-            _mensaje_exito("Base de datos recreada correctamente.")
+            _mensaje_exito(_("Base de datos recreada correctamente."))
         else:
-            _mensaje_error("No fue posible recrear la base de datos.")
+            _mensaje_error(_("No fue posible recrear la base de datos."))
             raise click.exceptions.Exit(1)
 
 
-@db.command(name="clean", help="Elimina la base de datos (solo desarrollo).")
-@click.option("--force", is_flag=True, help="Omite la confirmación y permite ejecutarlo fuera de desarrollo.")
+@db.command(name="clean", help=_("Elimina la base de datos (solo desarrollo)."))
+@click.option("--force", is_flag=True, help=_("Omite la confirmación y permite ejecutarlo fuera de desarrollo."))
 def db_clean(force: bool) -> None:
     """Elimina toda la base de datos; disponible principalmente para desarrollo."""
     from cacao_accounting.config import TESTING_MODE
@@ -320,7 +322,7 @@ def db_clean(force: bool) -> None:
     )
 
     if not TESTING_MODE and not force:
-        _mensaje_error("Este comando solo está disponible en entornos de desarrollo o con --force.")
+        _mensaje_error(_("Este comando solo está disponible en entornos de desarrollo o con --force."))
         raise click.exceptions.Exit(1)
 
     app = _obtener_aplicacion()
@@ -328,17 +330,17 @@ def db_clean(force: bool) -> None:
         existe = entidades_creadas() or usuarios_creados()
 
     if existe and not force:
-        click.echo("Esta operación eliminará toda la base de datos.")
-        if not click.confirm("¿Desea continuar?"):
-            _mensaje_advertencia("Operación cancelada por el usuario.")
+        click.echo(_("Esta operación eliminará toda la base de datos."))
+        if not click.confirm(_("¿Desea continuar?")):
+            _mensaje_advertencia(_("Operación cancelada por el usuario."))
             raise click.exceptions.Exit(1)
 
     with app.app_context():
         database.drop_all()
-        _mensaje_exito("Base de datos eliminada.")
+        _mensaje_exito(_("Base de datos eliminada."))
 
 
-@db.command(name="seed", help="Inserta datos de ejemplo en la base de datos.")
+@db.command(name="seed", help=_("Inserta datos de ejemplo en la base de datos."))
 def db_seed() -> None:
     """Carga datos de ejemplo en una base de datos existente."""
     from cacao_accounting.datos.dev import dev_data
@@ -347,33 +349,33 @@ def db_seed() -> None:
     with app.app_context():
         try:
             dev_data()
-            _mensaje_exito("Datos de ejemplo insertados.")
+            _mensaje_exito(_("Datos de ejemplo insertados."))
         except SQLAlchemyError as exc:
             log.exception("Error al insertar datos de ejemplo.")
-            _mensaje_error(f"No fue posible insertar los datos de ejemplo: {exc}")
+            _mensaje_error(_(f"No fue posible insertar los datos de ejemplo: {exc}"))
             raise click.exceptions.Exit(1)
 
 
 # <---------------------------------------------------------------------------------------------> #
 # Comandos de servidor.
-@linea_comandos.command(name="run", help="Inicia el servidor de desarrollo.")
-@click.option("--host", default="127.0.0.1", show_default=True, help="Dirección de escucha.")
-@click.option("--port", default=None, help="Puerto de escucha (por defecto el de configuración).")
-@click.option("--debug/--no-debug", default=True, help="Activa el depurador de Werkzeug.")
+@linea_comandos.command(name="run", help=_("Inicia el servidor de desarrollo."))
+@click.option("--host", default="127.0.0.1", show_default=True, help=_("Dirección de escucha."))
+@click.option("--port", default=None, help=_("Puerto de escucha (por defecto el de configuración)."))
+@click.option("--debug/--no-debug", default=True, help=_("Activa el depurador de Werkzeug."))
 def run(host: str, port: str | None, debug: bool) -> None:
     """Ejecuta el servidor de desarrollo de Flask."""
     from cacao_accounting.config import PORT
 
     app = _obtener_aplicacion()
     puerto = int(port) if port else int(PORT)
-    _mensaje_info(f"Iniciando servidor de desarrollo en http://{host}:{puerto}")
+    _mensaje_info(_(f"Iniciando servidor de desarrollo en http://{host}:{puerto}"))
     app.run(host=host, port=puerto, debug=debug, use_reloader=debug, use_debugger=debug)
 
 
 run.group = "Server"  # type: ignore[attr-defined]
 
 
-@linea_comandos.command(name="serve", help="Inicia el servidor de producción (Waitress).")
+@linea_comandos.command(name="serve", help=_("Inicia el servidor de producción (Waitress)."))
 def serve() -> None:
     """Ejecuta la aplicación con Waitress como servidor WSGI."""
     from cacao_accounting.server import server
@@ -381,7 +383,7 @@ def serve() -> None:
     try:
         server()
     except (OSError, ValueError, ImportError, SQLAlchemyError) as exc:
-        _mensaje_error(f"No fue posible iniciar el servidor: {exc}")
+        _mensaje_error(_(f"No fue posible iniciar el servidor: {exc}"))
         raise click.exceptions.Exit(1)
 
 
@@ -392,7 +394,7 @@ serve.group = "Server"  # type: ignore[attr-defined]
 # Comandos de desarrollo.
 @linea_comandos.command(
     name="shell",
-    help="Abre una consola interactiva con el contexto de la aplicación.",
+    help=_("Abre una consola interactiva con el contexto de la aplicación."),
 )
 def shell() -> None:
     """Abre una shell de Python con la aplicación ya en contexto."""
@@ -425,7 +427,7 @@ shell.group = "Development"  # type: ignore[attr-defined]
 
 @linea_comandos.command(
     name="routes",
-    help="Lista las rutas registradas en la aplicación.",
+    help=_("Lista las rutas registradas en la aplicación."),
 )
 def routes() -> None:
     """Muestra la tabla de rutas de la aplicación."""
@@ -439,10 +441,10 @@ def routes() -> None:
             ancho = max(len(str(r.rule)) for r in reglas)
         for regla in sorted(reglas, key=lambda r: str(r.rule)):
             metodos = ",".join(sorted(m for m in regla.methods if m not in ("HEAD", "OPTIONS")))
-            click.echo(f"{str(regla.rule).ljust(ancho)}  {metodos}")
+            click.echo(_(f"{str(regla.rule).ljust(ancho)}  {metodos}"))
         try:
-            click.echo("")
-            click.secho(f"Motor: {db_version()}", fg=COLOR_INFO)
+            click.echo(_(""))
+            click.secho(_(f"Motor: {db_version()}"), fg=COLOR_INFO)
         except SQLAlchemyError:
             pass
 
@@ -452,7 +454,7 @@ routes.group = "Development"  # type: ignore[attr-defined]
 
 # <---------------------------------------------------------------------------------------------> #
 # Comandos de sistema.
-@linea_comandos.command(name="version", help="Muestra la versión instalada.")
+@linea_comandos.command(name="version", help=_("Muestra la versión instalada."))
 def version() -> None:
     """Imprime la versión de la aplicación."""
     click.echo(VERSION)
@@ -461,7 +463,7 @@ def version() -> None:
 version.group = "System"  # type: ignore[attr-defined]
 
 
-@linea_comandos.command(name="status", help="Muestra el estado general del sistema.")
+@linea_comandos.command(name="status", help=_("Muestra el estado general del sistema."))
 def status() -> None:
     """Reporta el estado de la aplicación y sus dependencias."""
     from cacao_accounting.config import configuracion
@@ -486,13 +488,13 @@ def status() -> None:
         ("Server", "Waitress"),
     ]
     for etiqueta, valor in filas:
-        click.echo(f"{etiqueta.ljust(12)} : {valor}")
+        click.echo(_(f"{etiqueta.ljust(12)} : {valor}"))
 
 
 status.group = "System"  # type: ignore[attr-defined]
 
 
-@linea_comandos.command(name="config", help="Muestra la configuración activa.")
+@linea_comandos.command(name="config", help=_("Muestra la configuración activa."))
 def config() -> None:
     """Imprime un resumen de la configuración actual del sistema."""
     from cacao_accounting.config import (
@@ -516,7 +518,7 @@ def config() -> None:
         ("Cache", str(configuracion.get("CACHE_TYPE", ""))),
     ]
     for etiqueta, valor in filas:
-        click.echo(f"{etiqueta.ljust(12)} : {valor}")
+        click.echo(_(f"{etiqueta.ljust(12)} : {valor}"))
 
 
 config.group = "System"  # type: ignore[attr-defined]
@@ -526,7 +528,7 @@ config.group = "System"  # type: ignore[attr-defined]
 # Comando de autocompletado para shell.
 @linea_comandos.command(
     name="completion",
-    help="Genera script de autocompletado para el shell.",
+    help=_("Genera script de autocompletado para el shell."),
     hidden=True,
 )
 @click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]), default="bash")
@@ -536,23 +538,23 @@ def completion(ctx: click.Context, shell: str) -> None:
     comando = f'eval "$(_CACAOCTL_COMPLETE={shell}_source cacaoctl)"'
     archivo = {"bash": "~/.bashrc", "zsh": "~/.zshrc", "fish": "~/.config/fish/completions/cacaoctl.fish"}
 
-    click.echo("")
+    click.echo(_(""))
     if shell == "fish":
-        click.echo(f"  {comando}")
-        click.echo("")
-        click.echo(f"  Agrega la linea anterior a {archivo[shell]}:")
-        click.echo(f"  echo '{comando}' >> {archivo[shell]}")
+        click.echo(_(f"  {comando}"))
+        click.echo(_(""))
+        click.echo(_(f"  Agrega la linea anterior a {archivo[shell]}:"))
+        click.echo(_(f"  echo '{comando}' >> {archivo[shell]}"))
     else:
-        click.echo(f"  Agrega la siguiente linea a tu {archivo[shell]}:")
-        click.echo("")
-        click.echo(f"  {comando}")
-    click.echo("")
-    click.echo("  Vuelve a cargar tu configuracion o reinicia el terminal.")
-    click.echo(f"  source {archivo[shell]}")
+        click.echo(_(f"  Agrega la siguiente linea a tu {archivo[shell]}:"))
+        click.echo(_(""))
+        click.echo(_(f"  {comando}"))
+    click.echo(_(""))
+    click.echo(_("  Vuelve a cargar tu configuracion o reinicia el terminal."))
+    click.echo(_(f"  source {archivo[shell]}"))
 
     # Muestra tambien las opciones de shell disponibles.
-    click.echo("")
-    click.echo("  Shells disponibles: bash, zsh, fish")
+    click.echo(_(""))
+    click.echo(_("  Shells disponibles: bash, zsh, fish"))
 
 
 completion.group = "System"  # type: ignore[attr-defined]

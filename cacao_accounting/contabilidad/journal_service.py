@@ -931,7 +931,7 @@ def _validate_line_books(company: str, books: list[str] | None, lines: list[Jour
     book_ids = {value: book.id for book in company_books for value in (book.id, book.code)}
     invalid = requested - book_ids.keys()
     if invalid:
-        raise JournalValidationError(f"Libro contable no válido para la compañía: {sorted(invalid)[0]}.")
+        raise JournalValidationError(_(f"Libro contable no válido para la compañía: {sorted(invalid)[0]}."))
     selected_ids = {book_ids[value] for value in (books or []) if value in book_ids}
     requested_ids = {book_ids[value] for value in requested}
     if selected_ids and not requested_ids.issubset(selected_ids):

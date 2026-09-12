@@ -92,7 +92,7 @@ def _payment_items(rows: list[PaymentEntry] | Sequence[PaymentEntry]) -> list[di
 
 @query_tool(
     "payments.search",
-    "Busca pagos y cobros de una compañía por fecha, tercero y tipo.",
+    _("Busca pagos y cobros de una compañía por fecha, tercero y tipo."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_PAYMENT_SCHEMA,
@@ -142,7 +142,7 @@ def search_payments(
 
 @query_tool(
     "payments.get_unapplied",
-    "Obtiene pagos y cobros con importe todavía no aplicado.",
+    _("Obtiene pagos y cobros con importe todavía no aplicado."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_PAYMENT_SCHEMA,
@@ -198,7 +198,7 @@ def get_unapplied_payments(
 
 @query_tool(
     "payments.get_applications",
-    "Obtiene las aplicaciones de un pago o de un documento.",
+    _("Obtiene las aplicaciones de un pago o de un documento."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={
@@ -267,7 +267,7 @@ def get_payment_applications(
 
 @query_tool(
     "documents.search_relations",
-    "Busca relaciones documentales por compañía, documento o tipo de relación.",
+    _("Busca relaciones documentales por compañía, documento o tipo de relación."),
     required_permission="documents.reports.read",
     parameters_schema={
         "type": "object",
@@ -329,7 +329,7 @@ def search_document_relations(
 
 @query_tool(
     "audit.search_events",
-    "Busca eventos de auditoría por compañía, documento, acción y fecha.",
+    _("Busca eventos de auditoría por compañía, documento, acción y fecha."),
     required_permission="audit.reports.read",
     parameters_schema={
         "type": "object",
@@ -402,7 +402,7 @@ def search_audit_events(
 
 @query_tool(
     "accounting.get_revaluations",
-    "Consulta ejecuciones de revalorización cambiaria y sus ganancias o pérdidas.",
+    _("Consulta ejecuciones de revalorización cambiaria y sus ganancias o pérdidas."),
     required_module="accounting",
     required_permission="accounting.reports.read",
     parameters_schema={

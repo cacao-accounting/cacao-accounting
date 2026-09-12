@@ -163,14 +163,14 @@ def validate_batch_params(params: BatchParams) -> Item:
     batch_no = (params.batch_no or "").strip()
     item = database.session.execute(select(Item).filter_by(code=params.item_code)).scalar_one_or_none()
     if item is None:
-        raise InventoryServiceError(f"El item '{params.item_code}' no existe.")
+        raise InventoryServiceError(_(f"El item '{params.item_code}' no existe."))
     if not item.is_stock_item or not (item.has_batch or item.has_expiry_date):
         raise InventoryServiceError(_("Solo los artículos de inventario con control de lote admiten lotes."))
     if not batch_no:
         raise InventoryServiceError(_("El número de lote es obligatorio."))
     existing = database.session.execute(select(Batch).filter_by(item_code=item.code, batch_no=batch_no)).scalar_one_or_none()
     if existing is not None:
-        raise InventoryServiceError(f"El lote '{batch_no}' ya existe para el item {item.code}.")
+        raise InventoryServiceError(_(f"El lote '{batch_no}' ya existe para el item {item.code}."))
     if item.has_expiry_date and params.expiry_date is None:
         raise InventoryServiceError(_("El item controla vencimiento: el lote requiere fecha de vencimiento."))
     if params.manufacturing_date and params.expiry_date and params.expiry_date < params.manufacturing_date:
@@ -651,7 +651,7 @@ def update_item_with_uoms(
     """
     item = database.session.execute(select(Item).filter_by(code=item_code)).scalar_one_or_none()
     if item is None:
-        raise InventoryServiceError(f"El item '{item_code}' no existe.")
+        raise InventoryServiceError(_(f"El item '{item_code}' no existe."))
     if not default_uom_change_allowed(item_code, params.default_uom):
         raise InventoryServiceError(_("No se puede cambiar la UOM base si el item tiene transacciones."))
     resolved_uom_rows = params.uom_rows or []
@@ -765,7 +765,7 @@ def validate_item_uom_rows(default_uom: str, rows: list[ItemUOMRow]) -> None:
         if row.uom_code in seen:
             raise InventoryServiceError(_("No se puede repetir la misma UOM adicional."))
         if database.session.execute(select(UOM).filter_by(code=row.uom_code)).scalar_one_or_none() is None:
-            raise InventoryServiceError(f"La UOM '{row.uom_code}' no existe.")
+            raise InventoryServiceError(_(f"La UOM '{row.uom_code}' no existe."))
         if row.conversion_factor <= 0:
             raise InventoryServiceError(_("La conversión a la unidad predeterminada debe ser mayor que cero."))
         seen.add(row.uom_code)
@@ -907,7 +907,7 @@ def validate_item_account_rows(
     requires_expense_by_company = item_type == "service" or not is_stock_item
     if requires_expense_by_company and not rows:
         raise InventoryServiceError(
-            "Los servicios y artículos no inventariables requieren cuenta de gasto predeterminada por compañia."
+            _("Los servicios y artículos no inventariables requieren cuenta de gasto predeterminada por compañia.")
         )
 
     seen_companies: set[str] = set()
@@ -924,7 +924,7 @@ def _validate_single_item_account_row(row: ItemAccountRow, requires_expense: boo
     if row.company in seen_companies:
         raise InventoryServiceError(_("No se puede repetir la misma compañia en la configuración contable del item."))
     if database.session.execute(select(Entity).filter_by(code=row.company)).scalar_one_or_none() is None:
-        raise InventoryServiceError(f"La compañia '{row.company}' no existe.")
+        raise InventoryServiceError(_(f"La compañia '{row.company}' no existe."))
     for account_id, account_type, label in (
         (row.expense_account_id, "expense", "gasto"),
         (row.income_account_id, "income", "ingreso"),
@@ -935,11 +935,11 @@ def _validate_single_item_account_row(row: ItemAccountRow, requires_expense: boo
     _validate_cost_center(row.company, row.cost_center_code)
     if requires_expense and not row.expense_account_id:
         raise InventoryServiceError(
-            "Los servicios y artículos no inventariables requieren cuenta de gasto predeterminada por compañia."
+            _("Los servicios y artículos no inventariables requieren cuenta de gasto predeterminada por compañia.")
         )
     if requires_expense and not row.cost_center_code:
         raise InventoryServiceError(
-            "Los servicios y artículos no inventariables requieren centro de costo predeterminado por compañia."
+            _("Los servicios y artículos no inventariables requieren centro de costo predeterminado por compañia.")
         )
 
 
@@ -949,7 +949,7 @@ def _validate_item_account(company: str, account_id: str | None, expected_type: 
         return
     account = database.session.get(Accounts, account_id)
     if account is None or account.entity != company:
-        raise InventoryServiceError(f"La cuenta de {label} no pertenece a la compañia seleccionada.")
+        raise InventoryServiceError(_(f"La cuenta de {label} no pertenece a la compañia seleccionada."))
     account_type = (account.account_type or "").strip().lower()
     expected_aliases = {
         "expense": {"expense", "cogs"},
@@ -959,7 +959,7 @@ def _validate_item_account(company: str, account_id: str | None, expected_type: 
         "stock_adjustment": {"expense", "income"},
     }[expected_type]
     if account_type not in expected_aliases:
-        raise InventoryServiceError(f"La cuenta de {label} debe ser valida para {label} en la compañia.")
+        raise InventoryServiceError(_(f"La cuenta de {label} debe ser valida para {label} en la compañia."))
 
 
 def _validate_cost_center(company: str, cost_center_code: str | None) -> None:

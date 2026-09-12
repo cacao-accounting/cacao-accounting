@@ -27,7 +27,7 @@ def validate_template_security(template_body: str) -> None:
     ]
     for event in forbidden_events:
         if re.search(rf"\b{event}\s*=", template_body, re.IGNORECASE):
-            raise TemplateValidationError(f"El atributo '{event}' no está permitido.")
+            raise TemplateValidationError(_(f"El atributo '{event}' no está permitido."))
 
 
 def validate_css_safety(stylesheet_body: Optional[str]) -> None:

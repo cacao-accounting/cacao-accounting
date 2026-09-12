@@ -626,7 +626,7 @@ class ExchangeRevaluationService:
             debit_in_account_currency=amount if not monetary_debit else None,
             credit_in_account_currency=amount if not monetary_credit else None,
             account_currency=draft.ledger.currency,
-            remarks=f"Resultado cambiario {journal.document_no or run.document_no}",
+            remarks=_("Resultado cambiario %(document)s") % {"document": journal.document_no or run.document_no},
         )
         return monetary, offset
 
@@ -882,7 +882,7 @@ class ExchangeRevaluationService:
         if rate_val is not None:
             return (Decimal("1") / rate_val).quantize(Decimal("0.000000001"))
 
-        raise ExchangeRevaluationError(f"Falta tasa de cierre para {origin} -> {destination} en {closing_date}.")
+        raise ExchangeRevaluationError(_(f"Falta tasa de cierre para {origin} -> {destination} en {closing_date}."))
 
     def _party_account(self, party_id: str | None, company: str, *, receivable: bool) -> str | None:
         if party_id:

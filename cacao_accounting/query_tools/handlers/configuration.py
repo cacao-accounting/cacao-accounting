@@ -11,6 +11,7 @@ from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
+from cacao_accounting.i18n import _
 
 _ALLOWED_PREFIXES = ("cacao_ai_", "cacao_mcp_", "cacao_reporting_", "budget_control_")
 _SENSITIVE_MARKERS = ("key", "token", "secret", "password", "credential")
@@ -25,7 +26,7 @@ def _is_admin(context: QueryContext) -> bool:
 
 @query_tool(
     "admin.configuration.list",
-    "Lista configuración permitida con valores sensibles siempre redactados.",
+    _("Lista configuración permitida con valores sensibles siempre redactados."),
     required_permission="admin.config.read",
     parameters_schema={
         "type": "object",

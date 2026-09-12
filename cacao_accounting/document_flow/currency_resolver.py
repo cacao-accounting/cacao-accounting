@@ -57,7 +57,7 @@ def _require_explicit_currency(code: str | None, *, context: str) -> str:
     """Falla si la moneda es vacia o no es una cadena valida."""
     if not code or not isinstance(code, str) or not code.strip():
         raise DocumentFlowError(
-            f"La {context} requiere una moneda transaccional explicita antes de persistirse.",
+            _(f"La {context} requiere una moneda transaccional explicita antes de persistirse."),
             400,
         )
     return code.strip()
@@ -140,7 +140,7 @@ def resolve_transaction_currency(
     base_currency = company_functional_currency(company)
     if not base_currency:
         raise DocumentFlowError(
-            f"La compania {company!r} requiere una moneda funcional configurada antes de crear {context}.",
+            _(f"La compania {company!r} requiere una moneda funcional configurada antes de crear {context}."),
             400,
         )
 
@@ -148,8 +148,10 @@ def resolve_transaction_currency(
         inherited = validate_flow_currency_homogeneity(sources)
         if inherited and user_selection and user_selection != inherited:
             raise DocumentFlowError(
-                f"La moneda del {context} no puede diferir de la heredada por Document Flow "
-                f"({inherited!r} vs {user_selection!r}).",
+                _(
+                    f"La moneda del {context} no puede diferir de la heredada por Document Flow "
+                    f"({inherited!r} vs {user_selection!r})."
+                ),
                 400,
             )
         return ResolvedCurrency(
@@ -194,11 +196,11 @@ def assert_currency_explicit(
     a aprobado.
     """
     if document is None:
-        raise DocumentFlowError(f"{context.capitalize()} no encontrado.", 404)
+        raise DocumentFlowError(_(f"{context.capitalize()} no encontrado."), 404)
     value = getattr(document, field, None)
     if not value or not isinstance(value, str) or not value.strip():
         raise DocumentFlowError(
-            f"El {context} requiere una {field} explicita antes de contabilizarse.",
+            _(f"El {context} requiere una {field} explicita antes de contabilizarse."),
             400,
         )
     return value.strip()
@@ -217,23 +219,25 @@ def assert_base_currency_snapshot(
     revalidacion; en caso de no existir, se rechaza.
     """
     if document is None:
-        raise DocumentFlowError(f"{context.capitalize()} no encontrado.", 404)
+        raise DocumentFlowError(_(f"{context.capitalize()} no encontrado."), 404)
     expected = company_functional_currency(company)
     if not expected:
         raise DocumentFlowError(
-            f"La compania {company!r} requiere una moneda funcional configurada.",
+            _(f"La compania {company!r} requiere una moneda funcional configurada."),
             400,
         )
     snapshot = getattr(document, "base_currency", None)
     if not snapshot or not isinstance(snapshot, str) or not snapshot.strip():
         raise DocumentFlowError(
-            f"El {context} requiere un snapshot de base_currency explicito antes de contabilizarse.",
+            _(f"El {context} requiere un snapshot de base_currency explicito antes de contabilizarse."),
             400,
         )
     if snapshot != expected:
         raise DocumentFlowError(
-            f"El snapshot de base_currency del {context} ({snapshot!r}) no coincide con la "
-            f"moneda funcional vigente ({expected!r}); el documento requiere revalidacion.",
+            _(
+                f"El snapshot de base_currency del {context} ({snapshot!r}) no coincide con la "
+                f"moneda funcional vigente ({expected!r}); el documento requiere revalidacion."
+            ),
             400,
         )
     return expected

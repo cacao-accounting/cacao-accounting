@@ -26,8 +26,8 @@ from cacao_accounting.party_settings import PartyCompanySettings, build_party_co
 
 from cacao_accounting.i18n import _
 
-NATIONALITY_LABELS = {"national": "Nacional", "foreign": "Extranjero"}
-PERSON_TYPE_LABELS = {"natural": "Natural", "juridical": "Jurídica"}
+NATIONALITY_LABELS = {"national": _("Nacional"), "foreign": _("Extranjero")}
+PERSON_TYPE_LABELS = {"natural": _("Natural"), "juridical": _("Jurídica")}
 
 
 @dataclass(frozen=True)

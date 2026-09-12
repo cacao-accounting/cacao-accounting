@@ -165,15 +165,15 @@ _FORMKEY_SALES_INVOICE = "sales.sales_invoice"
 
 _FORMKEY_DELIVERY_NOTE = "sales.delivery_note"
 
-_LABEL_PEDIDO_VENTA = "Pedido de Venta"
+_LABEL_PEDIDO_VENTA = _("Pedido de Venta")
 
-_LABEL_ORDEN_VENTA = "Orden de Venta"
+_LABEL_ORDEN_VENTA = _("Orden de Venta")
 
-_LABEL_NOTA_ENTREGA = "Nota de Entrega"
+_LABEL_NOTA_ENTREGA = _("Nota de Entrega")
 
-DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
+DOCUMENT_REQUIRES_LINE_MSG = _("El documento requiere al menos una línea.")
 
-SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
+SOLICITUD_CANCELACION_PENDIENTE_MSG = _("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
 
 
 @dataclass(frozen=True)
@@ -756,9 +756,9 @@ def ventas_factura_venta_nota_debito_lista():
         "ventas/factura_venta_devolucion_lista.html",
         consulta=consulta,
         titulo=titulo,
-        page_heading="Listado de Notas de Débito de Venta",
-        new_button_label="Nueva Nota de Débito",
-        page_caption="Listado de notas de débito de venta.",
+        page_heading=_("Listado de Notas de Débito de Venta"),
+        new_button_label=_("Nueva Nota de Débito"),
+        page_caption=_("Listado de notas de débito de venta."),
         new_document_type="sales_debit_note",
     )
 
@@ -778,9 +778,9 @@ def ventas_factura_venta_devolucion_lista():
         "ventas/factura_venta_devolucion_lista.html",
         consulta=consulta,
         titulo=titulo,
-        page_heading="Listado de Devoluciones de Venta",
-        new_button_label="Nueva Devolución",
-        page_caption="Listado de devoluciones y notas de crédito de venta.",
+        page_heading=_("Listado de Devoluciones de Venta"),
+        new_button_label=_("Nueva Devolución"),
+        page_caption=_("Listado de devoluciones y notas de crédito de venta."),
         new_document_type="sales_return",
     )
 

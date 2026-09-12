@@ -42,6 +42,7 @@ from cacao_accounting.reportes.services import (
     get_sales_by_item,
     get_stock_balance,
 )
+from cacao_accounting.i18n import _
 
 _PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
 _PERM_INVENTORY_REPORTS_READ = "inventory.reports.read"
@@ -151,7 +152,7 @@ _FINANCIAL_SCHEMA: dict[str, Any] = {
 
 @query_tool(
     "accounting.get_income_statement",
-    "Obtiene el estado de resultados acumulado.",
+    _("Obtiene el estado de resultados acumulado."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_FINANCIAL_SCHEMA,
@@ -171,7 +172,7 @@ def get_income_statement(
 
 @query_tool(
     "accounting.get_balance_sheet",
-    "Obtiene el balance general por clasificación.",
+    _("Obtiene el balance general por clasificación."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_FINANCIAL_SCHEMA,
@@ -191,7 +192,7 @@ def get_balance_sheet(
 
 @query_tool(
     "accounting.get_account_summary",
-    "Obtiene el resumen de movimientos por cuenta.",
+    _("Obtiene el resumen de movimientos por cuenta."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_FINANCIAL_SCHEMA,
@@ -211,7 +212,7 @@ def get_account_summary(
 
 @query_tool(
     "accounting.get_account_movement_detail",
-    "Obtiene el detalle de asientos de una cuenta con saldo acumulado opcional.",
+    _("Obtiene el detalle de asientos de una cuenta con saldo acumulado opcional."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
@@ -258,7 +259,7 @@ def get_account_movement_detail_handler(
 
 @query_tool(
     "accounting.get_budget_variance",
-    "Compara presupuesto aprobado contra ejecución real por cuenta y período.",
+    _("Compara presupuesto aprobado contra ejecución real por cuenta y período."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
@@ -385,7 +386,7 @@ def _inventory_query(
 
 @query_tool(
     "inventory.get_kardex",
-    "Consulta movimientos de inventario por artículo y almacén.",
+    _("Consulta movimientos de inventario por artículo y almacén."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_INVENTORY_SCHEMA,
@@ -406,7 +407,7 @@ def get_inventory_kardex(
 
 @query_tool(
     "inventory.get_existence",
-    "Obtiene existencia histórica o actual de inventario.",
+    _("Obtiene existencia histórica o actual de inventario."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_INVENTORY_SCHEMA,
@@ -445,7 +446,7 @@ def _inventory_operational(
 
 @query_tool(
     "inventory.get_batches",
-    "Lista lotes de inventario.",
+    _("Lista lotes de inventario."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_INVENTORY_SCHEMA,
@@ -466,7 +467,7 @@ def get_inventory_batches(
 
 @query_tool(
     "inventory.get_serials",
-    "Lista números de serie de inventario.",
+    _("Lista números de serie de inventario."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_INVENTORY_SCHEMA,
@@ -487,7 +488,7 @@ def get_inventory_serials(
 
 @query_tool(
     "inventory.get_negative_stock",
-    "Detecta existencias negativas por artículo y almacén.",
+    _("Detecta existencias negativas por artículo y almacén."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_operational_schema(),
@@ -518,7 +519,7 @@ def get_inventory_negative_stock(
 
 @query_tool(
     "inventory.get_reorder_alerts",
-    "Detecta artículos por debajo del mínimo o punto de reorden configurado.",
+    _("Detecta artículos por debajo del mínimo o punto de reorden configurado."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_operational_schema(),
@@ -549,7 +550,7 @@ def get_inventory_reorder_alerts(
 
 @query_tool(
     "inventory.get_transfers",
-    "Consulta traslados de material entre almacenes.",
+    _("Consulta traslados de material entre almacenes."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema=_operational_schema(),
@@ -582,7 +583,7 @@ def get_inventory_transfer_report(
 
 @query_tool(
     "inventory.get_slow_moving_items",
-    "Lista inventario con existencias y sin salidas durante un umbral.",
+    _("Lista inventario con existencias y sin salidas durante un umbral."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema={
@@ -621,7 +622,7 @@ def get_inventory_slow_moving_items(
 
 @query_tool(
     "inventory.get_turnover",
-    "Calcula rotación de inventario por artículo y almacén.",
+    _("Calcula rotación de inventario por artículo y almacén."),
     required_module="inventory",
     required_permission=_PERM_INVENTORY_REPORTS_READ,
     parameters_schema={
@@ -657,7 +658,7 @@ def get_inventory_turnover_report(
 
 @query_tool(
     "banking.get_balance_summary",
-    "Obtiene saldos bancarios consolidados.",
+    _("Obtiene saldos bancarios consolidados."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_operational_schema(),
@@ -687,7 +688,7 @@ def get_banking_balance_summary(
 
 @query_tool(
     "banking.get_reconciliation_status",
-    "Obtiene el estado de conciliaciones bancarias y pendientes de compras.",
+    _("Obtiene el estado de conciliaciones bancarias y pendientes de compras."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={
@@ -717,7 +718,7 @@ def get_banking_reconciliation_status(
 
 @query_tool(
     "banking.get_unreconciled_transactions",
-    "Lista movimientos de extracto pendientes de conciliación.",
+    _("Lista movimientos de extracto pendientes de conciliación."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_operational_schema(),
@@ -783,7 +784,7 @@ def _subledger(
 
 @query_tool(
     "receivables.get_subledger",
-    "Obtiene el subledger detallado de clientes.",
+    _("Obtiene el subledger detallado de clientes."),
     required_module="sales",
     required_permission=_PERM_RECEIVABLES_REPORTS_READ,
     parameters_schema=_SUBLEDGER_SCHEMA,
@@ -803,7 +804,7 @@ def get_receivables_subledger(
 
 @query_tool(
     "payables.get_subledger",
-    "Obtiene el subledger detallado de proveedores.",
+    _("Obtiene el subledger detallado de proveedores."),
     required_module="purchases",
     required_permission=_PERM_PAYABLES_REPORTS_READ,
     parameters_schema=_SUBLEDGER_SCHEMA,

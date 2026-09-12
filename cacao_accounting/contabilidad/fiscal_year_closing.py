@@ -140,7 +140,7 @@ def _closing_line_payload(
         "currency": book_currency,
         "debit": str(debit) if debit > 0 else "",
         "credit": str(credit) if credit > 0 else "",
-        "remarks": f"Cierre año fiscal {fiscal_year_name}",
+        "remarks": _("Cierre año fiscal %(year)s") % {"year": fiscal_year_name},
     }
 
 
@@ -167,7 +167,7 @@ def _closing_retain_earnings_payload(
         "currency": book_currency,
         "debit": str(debit) if debit > 0 else "",
         "credit": str(credit) if credit > 0 else "",
-        "remarks": f"Resultado neto año fiscal {fiscal_year_name}",
+        "remarks": _("Resultado neto año fiscal %(year)s") % {"year": fiscal_year_name},
     }
 
 
@@ -225,7 +225,7 @@ def _build_closing_voucher_payload(
         ],
         "posting_date": fiscal_year.year_end_date.isoformat(),
         "reference": f"CIERRE-{fiscal_year.name}",
-        "memo": f"Cierre contable automático del año fiscal {fiscal_year.name}",
+        "memo": _("Cierre contable automático del año fiscal %(year)s") % {"year": fiscal_year.name},
         "is_closing": True,
         "is_fiscal_year_closing": True,
         "fiscal_year_id": fiscal_year.id,
@@ -251,7 +251,7 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     ).all()
     if open_periods:
         raise FiscalYearClosingError(
-            f"No se puede cerrar el año fiscal: hay {len(open_periods)} período(s) contable(s) abierto(s)."
+            _(f"No se puede cerrar el año fiscal: hay {len(open_periods)} período(s) contable(s) abierto(s).")
         )
 
     if not fiscal_year.is_closed:
@@ -263,7 +263,7 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     if reversal_pairs:
         details = ", ".join(f"{original} → {reversal}" for original, reversal in reversal_pairs)
         raise FiscalYearClosingError(
-            f"No se puede cerrar el año fiscal: existen reversas publicadas posteriormente ({details})."
+            _(f"No se puede cerrar el año fiscal: existen reversas publicadas posteriormente ({details}).")
         )
 
     books = list(
