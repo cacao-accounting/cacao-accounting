@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSIO\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-12 10:59-0600\n"
+"POT-Creation-Date: 2026-09-12 11:43-0600\n"
 "PO-Revision-Date: 2026-08-23 16:28+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -35,21 +35,25 @@ msgstr "completed a task"
 msgid "canceló una tarea"
 msgstr "cancelled a task"
 
-#: cacao_accounting/__init__.py:378
+#: cacao_accounting/__init__.py:378 cacao_accounting/compras/routes.py:285
+#: cacao_accounting/compras/services.py:191
 #: cacao_accounting/compras/templates/compras.html:74
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas_lista.html:48
 #: cacao_accounting/compras/templates/compras/solicitud_compra.html:51
 #: cacao_accounting/compras/templates/compras/solicitud_compra_nueva.html:15
 #: cacao_accounting/contabilidad/forms.py:158
+#: cacao_accounting/document_flow/registry.py:157
 #: cacao_accounting/imports/routes.py:161
 msgid "Solicitud de Compra"
 msgstr "Purchase Request"
 
-#: cacao_accounting/__init__.py:379
+#: cacao_accounting/__init__.py:379 cacao_accounting/compras/routes.py:287
+#: cacao_accounting/compras/services.py:193
 #: cacao_accounting/compras/templates/compras.html:78
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:25
 #: cacao_accounting/compras/templates/compras/solicitud_cotizacion.html:49
 #: cacao_accounting/compras/templates/compras/solicitud_cotizacion_nuevo.html:27
+#: cacao_accounting/document_flow/registry.py:194
 #: cacao_accounting/imports/routes.py:162
 msgid "Solicitud de Cotización"
 msgstr "Purchase Quotation"
@@ -60,11 +64,14 @@ msgstr "Purchase Quotation"
 #: cacao_accounting/compras/templates/compras/comparativo_ordenes_seleccionar.html:43
 #: cacao_accounting/compras/templates/compras/cotizacion_proveedor.html:49
 #: cacao_accounting/compras/templates/compras/cotizacion_proveedor_nueva.html:39
+#: cacao_accounting/document_flow/registry.py:219
 #: cacao_accounting/imports/routes.py:163
 msgid "Cotización de Proveedor"
 msgstr "Supplier Quotation"
 
 #: cacao_accounting/__init__.py:381 cacao_accounting/bancos/services.py:2127
+#: cacao_accounting/compras/routes.py:289
+#: cacao_accounting/compras/services.py:195
 #: cacao_accounting/compras/templates/compras/factura_compra.html:66
 #: cacao_accounting/compras/templates/compras/orden_compra.html:53
 #: cacao_accounting/compras/templates/compras/orden_compra_nuevo.html:23
@@ -73,6 +80,7 @@ msgstr "Supplier Quotation"
 #: cacao_accounting/compras/templates/compras/purchase_reconciliation.html:191
 #: cacao_accounting/compras/templates/compras/recepcion.html:62
 #: cacao_accounting/contabilidad/forms.py:156
+#: cacao_accounting/document_flow/registry.py:114
 #: cacao_accounting/imports/routes.py:164
 #: cacao_accounting/portal/templates/portal/order_detail.html:24
 msgid "Orden de Compra"
@@ -83,6 +91,7 @@ msgstr "Purchase Order"
 #: cacao_accounting/compras/templates/compras/recepcion.html:54
 #: cacao_accounting/compras/templates/compras/recepcion_nuevo.html:29
 #: cacao_accounting/contabilidad/forms.py:157
+#: cacao_accounting/document_flow/registry.py:240
 #: cacao_accounting/imports/routes.py:165
 #: cacao_accounting/inventario/routes.py:749
 #: cacao_accounting/inventario/services.py:909
@@ -91,44 +100,55 @@ msgid "Recepción de Compra"
 msgstr "Purchase Receipt"
 
 #: cacao_accounting/__init__.py:383 cacao_accounting/compras/forms.py:138
+#: cacao_accounting/compras/routes.py:239
+#: cacao_accounting/compras/services.py:145
 #: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html:36
 #: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html:37
 #: cacao_accounting/contabilidad/forms.py:153
+#: cacao_accounting/document_flow/registry.py:288
 #: cacao_accounting/imports/routes.py:166
 #: cacao_accounting/portal/templates/portal/invoice_detail.html:24
 msgid "Factura de Compra"
 msgstr "Purchase Invoice"
 
 #: cacao_accounting/__init__.py:384 cacao_accounting/contabilidad/forms.py:162
-#: cacao_accounting/imports/routes.py:172
+#: cacao_accounting/document_flow/registry.py:436
+#: cacao_accounting/imports/routes.py:172 cacao_accounting/ventas/routes.py:168
+#: cacao_accounting/ventas/services.py:150
 #: cacao_accounting/ventas/templates/ventas/solicitud_venta.html:47
 #: cacao_accounting/ventas/templates/ventas/solicitud_venta_nuevo.html:16
 msgid "Pedido de Venta"
 msgstr "Sales Request"
 
-#: cacao_accounting/__init__.py:385 cacao_accounting/imports/routes.py:173
+#: cacao_accounting/__init__.py:385
+#: cacao_accounting/document_flow/registry.py:456
+#: cacao_accounting/imports/routes.py:173
 #: cacao_accounting/portal/templates/portal/quotation_detail.html:24
 #: cacao_accounting/ventas/routes.py:1149
-#: cacao_accounting/ventas/services.py:1861
+#: cacao_accounting/ventas/services.py:1863
 #: cacao_accounting/ventas/templates/ventas/cotizacion.html:47
 msgid "Cotización de Venta"
 msgstr "Sales Quotation"
 
 #: cacao_accounting/__init__.py:386 cacao_accounting/bancos/services.py:2135
 #: cacao_accounting/contabilidad/forms.py:161
+#: cacao_accounting/document_flow/registry.py:410
 #: cacao_accounting/imports/routes.py:174
 #: cacao_accounting/portal/templates/portal/order_detail.html:24
+#: cacao_accounting/ventas/routes.py:170
+#: cacao_accounting/ventas/services.py:152
 #: cacao_accounting/ventas/templates/ventas/orden_venta.html:54
 #: cacao_accounting/ventas/templates/ventas/orden_venta_nuevo.html:31
 msgid "Orden de Venta"
 msgstr "Sales Order"
 
 #: cacao_accounting/__init__.py:387 cacao_accounting/contabilidad/forms.py:164
-#: cacao_accounting/imports/routes.py:175
+#: cacao_accounting/imports/routes.py:175 cacao_accounting/ventas/routes.py:172
 msgid "Nota de Entrega"
 msgstr "Delivery Note"
 
 #: cacao_accounting/__init__.py:388 cacao_accounting/contabilidad/forms.py:152
+#: cacao_accounting/document_flow/registry.py:524
 #: cacao_accounting/imports/routes.py:176
 #: cacao_accounting/portal/templates/portal/invoice_detail.html:21
 #: cacao_accounting/ventas/routes.py:2086
@@ -139,6 +159,7 @@ msgid "Factura de Venta"
 msgstr "Sales Invoice"
 
 #: cacao_accounting/__init__.py:389 cacao_accounting/contabilidad/forms.py:155
+#: cacao_accounting/document_flow/registry.py:673
 #: cacao_accounting/inventario/templates/inventario/entrada.html:47
 #: cacao_accounting/inventario/templates/inventario/entrada_nuevo.html:20
 msgid "Movimiento de Inventario"
@@ -195,8 +216,12 @@ msgstr "Could not load source document lines."
 msgid "La moneda transaccional es obligatoria."
 msgstr "Transaction currency is required."
 
-#: cacao_accounting/__init__.py:400 cacao_accounting/inventario/services.py:554
+#: cacao_accounting/__init__.py:400 cacao_accounting/compras/routes.py:247
+#: cacao_accounting/compras/services.py:153
+#: cacao_accounting/inventario/services.py:554
 #: cacao_accounting/inventario/services.py:657
+#: cacao_accounting/ventas/routes.py:174
+#: cacao_accounting/ventas/services.py:156
 msgid "El documento requiere al menos una línea."
 msgstr "The document requires at least one line."
 
@@ -280,9 +305,10 @@ msgstr ""
 
 #: cacao_accounting/approval_engine.py:678
 #: cacao_accounting/bancos/routes.py:1732
+#: cacao_accounting/compras/routes.py:299
 #: cacao_accounting/contabilidad/cancellation_service.py:121
-#: cacao_accounting/contabilidad/posting_service.py:4795
-#: cacao_accounting/contabilidad/routes.py:3288
+#: cacao_accounting/contabilidad/posting_service.py:4804
+#: cacao_accounting/contabilidad/routes.py:3290
 #: cacao_accounting/inventario/routes.py:1022
 #: cacao_accounting/ventas/routes.py:1997
 #: cacao_accounting/ventas/routes.py:2412
@@ -381,9 +407,220 @@ msgstr "Content does not correspond to a valid image."
 msgid "El documento debe incluir id para registrar auditoría."
 msgstr "The document must include an id to record the audit trail."
 
-#: cacao_accounting/cli.py:261
+#: cacao_accounting/cli.py:137
+msgid "CLI oficial para administrar Cacao Accounting."
+msgstr "Official CLI for administering Cacao Accounting."
+
+#: cacao_accounting/cli.py:140
+msgid ""
+"Ejemplos:\n"
+"\n"
+"  cacaoctl run\n"
+"  cacaoctl serve\n"
+"  cacaoctl db init\n"
+"  cacaoctl db migrate\n"
+"  cacaoctl db reset\n"
+"  cacaoctl status\n"
+"  cacaoctl version\n"
+msgstr ""
+"Examples:\n"
+"\n"
+"  cacaoctl run\n"
+"  cacaoctl serve\n"
+"  cacaoctl db init\n"
+"  cacaoctl db migrate\n"
+"  cacaoctl db reset\n"
+"  cacaoctl status\n"
+"  cacaoctl version\n"
+
+#: cacao_accounting/cli.py:155
+msgid "Entorno de ejecución (dev, test, prod)."
+msgstr "Execution environment (dev, test, prod)."
+
+#: cacao_accounting/cli.py:157
+msgid "Muestra información detallada de la ejecución."
+msgstr "Show detailed execution information."
+
+#: cacao_accounting/cli.py:158
+msgid "Reduce la salida de la herramienta."
+msgstr "Reduce tool output."
+
+#: cacao_accounting/cli.py:159
+#, python-format
+msgid "%(prog)s %(version)s"
+msgstr "%(prog)s %(version)s"
+
+#: cacao_accounting/cli.py:186
+msgid "Administración del sistema"
+msgstr "System administration."
+
+#: cacao_accounting/cli.py:192
+msgid "Administración de la base de datos."
+msgstr "Database administration."
+
+#: cacao_accounting/cli.py:201
+msgid "Crea o verifica la base de datos (idempotente)."
+msgstr "Create or verify the database (idempotent)."
+
+#: cacao_accounting/cli.py:202
+msgid "Elimina una base existente antes de crear la nueva."
+msgstr "Delete an existing database before creating the new one."
+
+#: cacao_accounting/cli.py:203
+msgid "Inserta datos de ejemplo después de crear la base."
+msgstr "Insert example data after creating the database."
+
+#: cacao_accounting/cli.py:228
+msgid "La base de datos existente será reemplazada."
+msgstr "The existing database will be replaced."
+
+#: cacao_accounting/cli.py:231
+msgid "La base de datos ya existe, nada que hacer."
+msgstr "The database already exists; nothing to do."
+
+#: cacao_accounting/cli.py:235 cacao_accounting/cli.py:305
+msgid ""
+"Se están usando usuario y contraseña predeterminados para el setup "
+"inicial."
+msgstr "Default username and password are being used for initial setup."
+
+#: cacao_accounting/cli.py:238
+msgid "Base de datos creada."
+msgstr "Database created."
+
+#: cacao_accounting/cli.py:240
+msgid "No fue posible crear la base de datos."
+msgstr "Unable to create the database."
+
+#: cacao_accounting/cli.py:244
+msgid "Aplica migraciones pendientes de Alembic (idempotente)."
+msgstr "Apply pending Alembic migrations (idempotent)."
+
+#: cacao_accounting/cli.py:245
+msgid "Revisión destino (por defecto: head)."
+msgstr "Target revision (default: head)."
+
+#: cacao_accounting/cli.py:246
+msgid "Revisión específica a aplicar."
+msgstr "Specific revision to apply."
+
+#: cacao_accounting/cli.py:263
 msgid "La base de datos no está inicializada; ejecute primero 'cacaoctl db init'."
 msgstr "The database is not initialized; run 'cacaoctl db init' first."
+
+#: cacao_accounting/cli.py:266
+msgid "Migraciones aplicadas correctamente."
+msgstr "Migrations applied successfully."
+
+#: cacao_accounting/cli.py:272
+msgid "Recrea completamente la base de datos."
+msgstr "Recreate the database completely."
+
+#: cacao_accounting/cli.py:273
+msgid "Omite la confirmación de la operación destructiva."
+msgstr "Skip confirmation of the destructive operation."
+
+#: cacao_accounting/cli.py:274
+msgid "Inserta datos de ejemplo después de recrear la base."
+msgstr "Insert example data after recreating the database."
+
+#: cacao_accounting/cli.py:296 cacao_accounting/cli.py:333
+msgid "Esta operación eliminará toda la base de datos."
+msgstr "This operation will delete the entire database."
+
+#: cacao_accounting/cli.py:297 cacao_accounting/cli.py:334
+msgid "¿Desea continuar?"
+msgstr "Do you want to continue?"
+
+#: cacao_accounting/cli.py:298 cacao_accounting/cli.py:335
+msgid "Operación cancelada por el usuario."
+msgstr "Operation canceled by the user."
+
+#: cacao_accounting/cli.py:303 cacao_accounting/cli.py:340
+msgid "Base de datos eliminada."
+msgstr "Database deleted."
+
+#: cacao_accounting/cli.py:307
+msgid "Base de datos recreada correctamente."
+msgstr "Database recreated successfully."
+
+#: cacao_accounting/cli.py:309
+msgid "No fue posible recrear la base de datos."
+msgstr "Unable to recreate the database."
+
+#: cacao_accounting/cli.py:313
+msgid "Elimina la base de datos (solo desarrollo)."
+msgstr "Delete the database (development only)."
+
+#: cacao_accounting/cli.py:314
+msgid "Omite la confirmación y permite ejecutarlo fuera de desarrollo."
+msgstr "Skip confirmation and allow execution outside development."
+
+#: cacao_accounting/cli.py:325
+msgid "Este comando solo está disponible en entornos de desarrollo o con --force."
+msgstr ""
+"This command is only available in development environments or with "
+"--force."
+
+#: cacao_accounting/cli.py:343
+msgid "Inserta datos de ejemplo en la base de datos."
+msgstr "Insert example data into the database."
+
+#: cacao_accounting/cli.py:352
+msgid "Datos de ejemplo insertados."
+msgstr "Example data inserted."
+
+#: cacao_accounting/cli.py:361
+msgid "Inicia el servidor de desarrollo."
+msgstr "Start the development server."
+
+#: cacao_accounting/cli.py:362
+msgid "Dirección de escucha."
+msgstr "Listen address."
+
+#: cacao_accounting/cli.py:363
+msgid "Puerto de escucha (por defecto el de configuración)."
+msgstr "Listen port (defaults to the configured port)."
+
+#: cacao_accounting/cli.py:364
+msgid "Activa el depurador de Werkzeug."
+msgstr "Enable the Werkzeug debugger."
+
+#: cacao_accounting/cli.py:378
+msgid "Inicia el servidor de producción (Waitress)."
+msgstr "Start the production server (Waitress)."
+
+#: cacao_accounting/cli.py:397
+msgid "Abre una consola interactiva con el contexto de la aplicación."
+msgstr "Open an interactive console with the application context."
+
+#: cacao_accounting/cli.py:430
+msgid "Lista las rutas registradas en la aplicación."
+msgstr "List the routes registered in the application."
+
+#: cacao_accounting/cli.py:457
+msgid "Muestra la versión instalada."
+msgstr "Show the installed version."
+
+#: cacao_accounting/cli.py:466
+msgid "Muestra el estado general del sistema."
+msgstr "Show the general system status."
+
+#: cacao_accounting/cli.py:497
+msgid "Muestra la configuración activa."
+msgstr "Show the active configuration."
+
+#: cacao_accounting/cli.py:531
+msgid "Genera script de autocompletado para el shell."
+msgstr "Generate a shell completion script."
+
+#: cacao_accounting/cli.py:552
+msgid "  Vuelve a cargar tu configuracion o reinicia el terminal."
+msgstr ""
+
+#: cacao_accounting/cli.py:557
+msgid "  Shells disponibles: bash, zsh, fish"
+msgstr "  Available shells: bash, zsh, fish"
 
 #: cacao_accounting/collaboration_service.py:109
 #, fuzzy
@@ -534,15 +771,15 @@ msgstr "The specified external counter is inactive."
 msgid "El contador externo no pertenece a la compañía indicada."
 msgstr "The external counter does not belong to the specified company."
 
-#: cacao_accounting/document_identifiers.py:712
+#: cacao_accounting/document_identifiers.py:714
 msgid "El numero externo usado no puede ser negativo."
 msgstr "The external number used cannot be negative."
 
-#: cacao_accounting/document_identifiers.py:743
+#: cacao_accounting/document_identifiers.py:745
 msgid "Debe indicar el motivo del ajuste del contador externo."
 msgstr "You must provide the reason for the external counter adjustment."
 
-#: cacao_accounting/document_identifiers.py:745
+#: cacao_accounting/document_identifiers.py:747
 msgid "El ultimo numero usado no puede ser negativo."
 msgstr "The last number used cannot be negative."
 
@@ -586,19 +823,23 @@ msgid "tax_summary_payload inválido."
 msgstr "tax_summary_payload invalid."
 
 #: cacao_accounting/fiscal_preview_service.py:61
+#: cacao_accounting/printing/registry.py:228
 msgid "Solicitud de compra"
 msgstr "Purchase Request"
 
 #: cacao_accounting/fiscal_preview_service.py:71
+#: cacao_accounting/printing/registry.py:195
 msgid "Orden de compra"
 msgstr "Purchase Order"
 
 #: cacao_accounting/accounting_engine/document_builders.py:1740
 #: cacao_accounting/fiscal_preview_service.py:81
+#: cacao_accounting/printing/registry.py:261
 msgid "Recepción de compra"
 msgstr "Purchase Receipt"
 
 #: cacao_accounting/fiscal_preview_service.py:91
+#: cacao_accounting/printing/registry.py:162
 msgid "Factura de compra"
 msgstr "Purchase Invoice"
 
@@ -607,22 +848,27 @@ msgid "Costo de importación"
 msgstr "Landed Cost"
 
 #: cacao_accounting/fiscal_preview_service.py:111
+#: cacao_accounting/printing/registry.py:217
 msgid "Solicitud de venta"
 msgstr "Sales Request"
 
 #: cacao_accounting/fiscal_preview_service.py:121
+#: cacao_accounting/printing/registry.py:206
 msgid "Orden de venta"
 msgstr "Sales Order"
 
 #: cacao_accounting/fiscal_preview_service.py:131
+#: cacao_accounting/printing/registry.py:283
 msgid "Nota de entrega"
 msgstr "Delivery Note"
 
 #: cacao_accounting/fiscal_preview_service.py:141
+#: cacao_accounting/printing/registry.py:118
 msgid "Factura de venta"
 msgstr "Sales Invoice"
 
 #: cacao_accounting/fiscal_preview_service.py:151
+#: cacao_accounting/printing/registry.py:294
 msgid "Movimiento de inventario"
 msgstr "Inventory Movement"
 
@@ -630,6 +876,7 @@ msgstr "Inventory Movement"
 #: cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html:103
 #: cacao_accounting/bancos/templates/bancos/conciliacion_facturas_pagos.html:138
 #: cacao_accounting/contabilidad/forms.py:154
+#: cacao_accounting/document_flow/registry.py:648
 #: cacao_accounting/fiscal_preview_service.py:161
 msgid "Pago"
 msgstr "Payment"
@@ -723,6 +970,26 @@ msgstr "There is a situation that requires attention"
 #, python-format
 msgid "%(count)s registro(s) pendiente(s) de aprobación"
 msgstr "%(count)s record(s) pending approval"
+
+#: cacao_accounting/compras/forms.py:27 cacao_accounting/party_management.py:29
+#: cacao_accounting/ventas/forms.py:28
+msgid "Nacional"
+msgstr "Domestic"
+
+#: cacao_accounting/compras/forms.py:28 cacao_accounting/party_management.py:29
+#: cacao_accounting/ventas/forms.py:29
+msgid "Extranjero"
+msgstr "Foreign"
+
+#: cacao_accounting/compras/forms.py:36 cacao_accounting/party_management.py:30
+#: cacao_accounting/ventas/forms.py:37
+msgid "Natural"
+msgstr "Natural"
+
+#: cacao_accounting/compras/forms.py:37 cacao_accounting/party_management.py:30
+#: cacao_accounting/ventas/forms.py:38
+msgid "Jurídica"
+msgstr "Legal"
 
 #: cacao_accounting/party_management.py:81
 msgid "El rol debe ser 'customer' o 'supplier'."
@@ -1005,6 +1272,13 @@ msgstr "General"
 #: cacao_accounting/admin/navigation.py:73
 #: cacao_accounting/api/dashboard.py:172 cacao_accounting/api/dashboard.py:397
 #: cacao_accounting/app/templates/app.html:143
+#: cacao_accounting/document_flow/registry.py:412
+#: cacao_accounting/document_flow/registry.py:438
+#: cacao_accounting/document_flow/registry.py:458
+#: cacao_accounting/document_flow/registry.py:526
+#: cacao_accounting/document_flow/registry.py:570
+#: cacao_accounting/document_flow/registry.py:598
+#: cacao_accounting/document_flow/registry.py:624
 #: cacao_accounting/reportes/routes.py:760
 #: cacao_accounting/reportes/routes.py:790
 #: cacao_accounting/search_select.py:198
@@ -1069,6 +1343,14 @@ msgstr "Sales"
 #: cacao_accounting/compras/templates/compras/solicitud_cotizacion.html:12
 #: cacao_accounting/compras/templates/compras/solicitud_cotizacion_lista.html:12
 #: cacao_accounting/compras/templates/compras/solicitud_cotizacion_nuevo.html:16
+#: cacao_accounting/document_flow/registry.py:116
+#: cacao_accounting/document_flow/registry.py:159
+#: cacao_accounting/document_flow/registry.py:196
+#: cacao_accounting/document_flow/registry.py:221
+#: cacao_accounting/document_flow/registry.py:290
+#: cacao_accounting/document_flow/registry.py:340
+#: cacao_accounting/document_flow/registry.py:356
+#: cacao_accounting/document_flow/registry.py:384
 #: cacao_accounting/reportes/routes.py:386
 #: cacao_accounting/reportes/routes.py:697
 #: cacao_accounting/reportes/routes.py:735
@@ -1166,6 +1448,18 @@ msgstr "The withholding certificate supplier does not exist."
 msgid "La recepción de compra no contiene líneas para cálculo."
 msgstr "The purchase receipt does not contain lines for calculation."
 
+#: cacao_accounting/accounting_engine/document_builders.py:148
+msgid "Falta la cuenta puente configurada para la compañía."
+msgstr ""
+
+#: cacao_accounting/accounting_engine/document_builders.py:168
+msgid "Falta la cuenta de inventario para una línea de recepción de compra."
+msgstr ""
+
+#: cacao_accounting/accounting_engine/document_builders.py:189
+msgid "Falta la cuenta de gasto para compensar una factura 2-way contabilizada."
+msgstr ""
+
 #: cacao_accounting/accounting_engine/document_builders.py:196
 msgid "Recepción posterior a factura 2-way"
 msgstr "Receipt after 2-way invoice"
@@ -1195,6 +1489,10 @@ msgstr "The purchase invoice does not contain lines for calculation."
 msgid "La factura de venta no contiene líneas para cálculo."
 msgstr "The sales invoice does not contain lines for calculation."
 
+#: cacao_accounting/accounting_engine/document_builders.py:488
+msgid "Falta la cuenta de ingresos para una línea de factura de venta."
+msgstr ""
+
 #: cacao_accounting/accounting_engine/document_builders.py:571
 msgid "El costo de importacion no contiene lineas para calculo."
 msgstr "The import cost does not contain lines for calculation."
@@ -1205,9 +1503,23 @@ msgstr "Import charges - Clearing account"
 
 #: cacao_accounting/accounting_engine/document_builders.py:773
 #: cacao_accounting/bancos/services.py:2326
-#: cacao_accounting/contabilidad/posting_service.py:1439
+#: cacao_accounting/contabilidad/posting_service.py:1441
 msgid "El monto del pago debe ser mayor que cero."
 msgstr "The payment amount must be greater than zero."
+
+#: cacao_accounting/accounting_engine/document_builders.py:1166
+msgid "Falta la cuenta puente para liquidar una factura de compra."
+msgstr ""
+
+#: cacao_accounting/accounting_engine/document_builders.py:1174
+msgid ""
+"Falta la cuenta de gasto, variaciones o cuenta puente para una línea de "
+"factura de compra."
+msgstr ""
+
+#: cacao_accounting/accounting_engine/document_builders.py:1191
+msgid "Falta la cuenta de gasto para la porción de factura aún no recibida."
+msgstr ""
 
 #: cacao_accounting/accounting_engine/document_builders.py:1198
 msgid "Porción no recibida"
@@ -1225,7 +1537,7 @@ msgstr "The document has no company configured."
 
 #: cacao_accounting/accounting_engine/document_builders.py:1711
 #: cacao_accounting/contabilidad/default_accounts.py:267
-#: cacao_accounting/contabilidad/posting_service.py:383
+#: cacao_accounting/contabilidad/posting_service.py:385
 msgid "La cuenta contable configurada no existe."
 msgstr "The configured accounting account does not exist."
 
@@ -1241,7 +1553,7 @@ msgstr "The pro-forma entry does not balance and cannot be posted."
 msgid "Falta una cuenta contable requerida para contabilizar el asiento."
 msgstr "A required accounting account is missing to post the entry."
 
-#: cacao_accounting/accounting_engine/gl_posting_builder.py:120
+#: cacao_accounting/accounting_engine/gl_posting_builder.py:121
 #, fuzzy
 msgid "El asiento pro-forma no balancea en la moneda funcional del libro "
 msgstr "The pro-forma entry does not balance and cannot be posted."
@@ -1392,6 +1704,7 @@ msgstr "Sales Reconciliation"
 #: cacao_accounting/contabilidad/templates/contabilidad/unidad_crear.html:8
 #: cacao_accounting/contabilidad/templates/contabilidad/unidad_lista.html:10
 #: cacao_accounting/contabilidad/templates/contabilidad_cash_flow_config.html:6
+#: cacao_accounting/document_flow/registry.py:699
 #: cacao_accounting/reportes/templates/reportes/cash_flow_blocked.html:6
 #: cacao_accounting/reportes/templates/reportes/financial_report.html:8
 #: cacao_accounting/templates/macros.html:128
@@ -1421,6 +1734,9 @@ msgstr "Analytical Dimensions"
 #: cacao_accounting/admin/navigation.py:89
 #: cacao_accounting/api/dashboard.py:165
 #: cacao_accounting/contabilidad/forms.py:44
+#: cacao_accounting/document_flow/registry.py:242
+#: cacao_accounting/document_flow/registry.py:477
+#: cacao_accounting/document_flow/registry.py:675
 #: cacao_accounting/inventario/templates/inventario.html:18
 #: cacao_accounting/inventario/templates/inventario.html:24
 #: cacao_accounting/inventario/templates/inventario/articulo.html:11
@@ -1473,6 +1789,7 @@ msgstr "Inventory Valuation"
 #: cacao_accounting/bancos/templates/bancos/pago_nuevo.html:119
 #: cacao_accounting/bancos/templates/bancos/transaccion_lista.html:12
 #: cacao_accounting/bancos/templates/bancos/transferencia_nueva.html:12
+#: cacao_accounting/document_flow/registry.py:650
 #: cacao_accounting/reportes/routes.py:625
 #: cacao_accounting/reportes/routes.py:660
 msgid "Bancos"
@@ -1542,6 +1859,14 @@ msgstr "Users"
 #: cacao_accounting/admin/navigation.py:131
 msgid "Roles y permisos"
 msgstr "Roles and Permissions"
+
+#: cacao_accounting/admin/routes.py:173 cacao_accounting/admin/services.py:47
+msgid "Usuario no encontrado."
+msgstr ""
+
+#: cacao_accounting/admin/routes.py:181 cacao_accounting/admin/services.py:55
+msgid "En modo escritorio solo se permite un usuario administrador."
+msgstr ""
 
 #: cacao_accounting/admin/routes.py:222
 msgid "Módulo no encontrado."
@@ -4921,7 +5246,7 @@ msgstr "Is a charge"
 
 #: cacao_accounting/admin/templates/admin/taxes.html:26
 #: cacao_accounting/contabilidad/forms.py:306
-#: cacao_accounting/contabilidad/routes.py:1640
+#: cacao_accounting/contabilidad/routes.py:1642
 #: cacao_accounting/contabilidad/templates/contabilidad/proyecto.html:48
 #: cacao_accounting/contabilidad/templates/contabilidad/proyecto_crear.html:91
 msgid "Capitalizable"
@@ -5540,10 +5865,10 @@ msgstr "Debit/credit cannot be negative."
 #: cacao_accounting/api/line_import.py:586
 #: cacao_accounting/bancos/reconciliation_service.py:174
 #: cacao_accounting/contabilidad/journal_service.py:669
-#: cacao_accounting/contabilidad/posting_service.py:354
-#: cacao_accounting/contabilidad/posting_service.py:369
-#: cacao_accounting/contabilidad/posting_service.py:791
-#: cacao_accounting/contabilidad/posting_service.py:4228
+#: cacao_accounting/contabilidad/posting_service.py:356
+#: cacao_accounting/contabilidad/posting_service.py:371
+#: cacao_accounting/contabilidad/posting_service.py:793
+#: cacao_accounting/contabilidad/posting_service.py:4237
 msgid "El tipo de cambio debe ser mayor que cero."
 msgstr "The exchange rate must be greater than zero."
 
@@ -6474,6 +6799,10 @@ msgstr "Not Allowed"
 msgid "Código de 6 dígitos"
 msgstr "6-digit code"
 
+#: cacao_accounting/bancos/cash_forecast.py:35
+msgid "No se pueden modificar pronósticos aprobados o cerrados."
+msgstr ""
+
 #: cacao_accounting/bancos/cash_forecast.py:43
 msgid "El tipo debe ser Income o Expense."
 msgstr "The type must be Income or Expense."
@@ -6593,20 +6922,20 @@ msgstr "Manual projection updated successfully."
 msgid "Error al actualizar la proyección: %(error)s"
 msgstr "Error updating forecast: %(error)s"
 
-#: cacao_accounting/bancos/cash_forecast_service.py:287
+#: cacao_accounting/bancos/cash_forecast_service.py:290
 #, fuzzy
 msgid "El documento no tiene moneda transaccional explicita; "
 msgstr "The document requires an explicit transaction currency to value inventory."
 
-#: cacao_accounting/bancos/cash_forecast_service.py:400
+#: cacao_accounting/bancos/cash_forecast_service.py:404
 msgid "El pronóstico no pertenece a la compañía solicitada."
 msgstr "The forecast does not belong to the requested company."
 
-#: cacao_accounting/bancos/cash_forecast_service.py:404
+#: cacao_accounting/bancos/cash_forecast_service.py:408
 msgid "El año fiscal no pertenece a la compañía del pronóstico."
 msgstr "The fiscal year does not belong to the forecast's company."
 
-#: cacao_accounting/bancos/cash_forecast_service.py:497
+#: cacao_accounting/bancos/cash_forecast_service.py:501
 msgid "Los pronósticos comparados deben pertenecer a la compañía solicitada."
 msgstr "The compared forecasts must belong to the requested company."
 
@@ -6922,7 +7251,7 @@ msgstr "The GL entry has no functional currency to convert it."
 msgid "La transacción bancaria no tiene cuenta bancaria valida."
 msgstr "The bank transaction does not have a valid bank account."
 
-#: cacao_accounting/bancos/reconciliation_service.py:409
+#: cacao_accounting/bancos/reconciliation_service.py:410
 msgid ""
 "El destino ya tiene asignaciones en otra moneda bancaria; convierta o "
 "revierta la asignación anterior antes de continuar."
@@ -6930,89 +7259,89 @@ msgstr ""
 "The destination already has allocations in another bank currency; convert"
 " or reverse the previous allocation before continuing."
 
-#: cacao_accounting/bancos/reconciliation_service.py:436
-#: cacao_accounting/bancos/reconciliation_service.py:483
+#: cacao_accounting/bancos/reconciliation_service.py:438
+#: cacao_accounting/bancos/reconciliation_service.py:485
 msgid "La entrada de pago a conciliar no existe."
 msgstr "The payment entry to reconcile does not exist."
 
-#: cacao_accounting/bancos/reconciliation_service.py:438
-#: cacao_accounting/bancos/reconciliation_service.py:485
+#: cacao_accounting/bancos/reconciliation_service.py:440
+#: cacao_accounting/bancos/reconciliation_service.py:487
 msgid "La entrada de pago debe estar aprobada para conciliarse."
 msgstr "The payment entry must be approved to be reconciled."
 
-#: cacao_accounting/bancos/reconciliation_service.py:443
+#: cacao_accounting/bancos/reconciliation_service.py:445
 msgid "La moneda del pago no coincide con la cuenta bancaria."
 msgstr "The payment currency does not match the bank account."
 
-#: cacao_accounting/bancos/reconciliation_service.py:461
-#: cacao_accounting/bancos/reconciliation_service.py:490
+#: cacao_accounting/bancos/reconciliation_service.py:463
+#: cacao_accounting/bancos/reconciliation_service.py:492
 msgid "La entrada GL a conciliar no existe."
 msgstr "The GL entry to reconcile does not exist."
 
-#: cacao_accounting/bancos/reconciliation_service.py:471
+#: cacao_accounting/bancos/reconciliation_service.py:473
 msgid "La entrada GL está cancelada o es una reversa."
 msgstr "The GL entry is cancelled or a reversal."
 
-#: cacao_accounting/bancos/reconciliation_service.py:475
+#: cacao_accounting/bancos/reconciliation_service.py:477
 msgid "La entrada GL no pertenece al libro primario."
 msgstr "The GL entry does not belong to the primary book."
 
-#: cacao_accounting/bancos/reconciliation_service.py:737
+#: cacao_accounting/bancos/reconciliation_service.py:739
 #, fuzzy
 msgid "La transacción bancaria no tiene monto conciliable."
 msgstr "The bank transaction has no reconcilable amount."
 
-#: cacao_accounting/bancos/reconciliation_service.py:779
+#: cacao_accounting/bancos/reconciliation_service.py:781
 #, fuzzy
 msgid "La conciliación bancaria requiere al menos una linea."
 msgstr "The bank reconciliation requires at least one line."
 
-#: cacao_accounting/bancos/reconciliation_service.py:821
-#: cacao_accounting/bancos/reconciliation_service.py:924
+#: cacao_accounting/bancos/reconciliation_service.py:823
+#: cacao_accounting/bancos/reconciliation_service.py:926
 #, fuzzy
 msgid "La transacción bancaria pertenece a otra compañía."
 msgstr "The bank transaction belongs to another company."
 
-#: cacao_accounting/bancos/reconciliation_service.py:868
+#: cacao_accounting/bancos/reconciliation_service.py:870
 msgid "El monto excede el saldo bancario pendiente de conciliar."
 msgstr "The amount exceeds the outstanding bank balance to reconcile."
 
-#: cacao_accounting/bancos/reconciliation_service.py:870
+#: cacao_accounting/bancos/reconciliation_service.py:872
 msgid "El monto excede el saldo pendiente del documento destino."
 msgstr "The amount exceeds the outstanding balance of the target document."
 
-#: cacao_accounting/bancos/reconciliation_service.py:898
+#: cacao_accounting/bancos/reconciliation_service.py:900
 msgid "La entrada GL no pertenece a la cuenta bancaria conciliada."
 msgstr "The GL entry does not belong to the reconciled bank account."
 
-#: cacao_accounting/bancos/reconciliation_service.py:900
+#: cacao_accounting/bancos/reconciliation_service.py:902
 msgid "La entrada GL pertenece a otra cuenta bancaria."
 msgstr "The GL entry belongs to another bank account."
 
-#: cacao_accounting/bancos/reconciliation_service.py:903
+#: cacao_accounting/bancos/reconciliation_service.py:905
 #, fuzzy
 msgid "La entrada GL no coincide con la dirección bancaria."
 msgstr "The GL entry does not match the bank direction."
 
-#: cacao_accounting/bancos/reconciliation_service.py:910
+#: cacao_accounting/bancos/reconciliation_service.py:912
 msgid "El pago no pertenece a la cuenta bancaria conciliada."
 msgstr "The payment does not belong to the reconciled bank account."
 
-#: cacao_accounting/bancos/reconciliation_service.py:912
+#: cacao_accounting/bancos/reconciliation_service.py:914
 #, fuzzy
 msgid "El tipo de pago no coincide con la dirección bancaria."
 msgstr "The payment type does not match the bank direction."
 
-#: cacao_accounting/bancos/reconciliation_service.py:918
+#: cacao_accounting/bancos/reconciliation_service.py:920
 msgid "El monto conciliado debe ser mayor que cero."
 msgstr "The reconciled amount must be greater than zero."
 
-#: cacao_accounting/bancos/reconciliation_service.py:927
+#: cacao_accounting/bancos/reconciliation_service.py:929
 #, fuzzy
 msgid "El documento destino pertenece a otra compañía."
 msgstr "The target document belongs to another company."
 
-#: cacao_accounting/bancos/reconciliation_service.py:942
+#: cacao_accounting/bancos/reconciliation_service.py:944
 msgid "El documento destino no existe."
 msgstr "The target document does not exist."
 
@@ -7322,8 +7651,12 @@ msgid "Pago aprobado y contabilizado."
 msgstr "Payment approved and posted."
 
 #: cacao_accounting/bancos/routes.py:1744
-#: cacao_accounting/contabilidad/routes.py:3299
+#: cacao_accounting/compras/routes.py:249
+#: cacao_accounting/compras/services.py:155
+#: cacao_accounting/contabilidad/routes.py:3301
 #: cacao_accounting/inventario/routes.py:1034
+#: cacao_accounting/ventas/routes.py:176
+#: cacao_accounting/ventas/services.py:158
 msgid ""
 "Solicitud de cancelación enviada para aprobación (Pendiente de "
 "Cancelación)."
@@ -7701,24 +8034,29 @@ msgstr "Orders can only be referenced in down payment flow."
 
 #: cacao_accounting/bancos/services.py:2143
 #: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html:34
+#: cacao_accounting/document_flow/registry.py:354
 msgid "Nota de Crédito de Compra"
 msgstr "Purchase Credit Note"
 
 #: cacao_accounting/bancos/services.py:2153
 #: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html:35
+#: cacao_accounting/document_flow/registry.py:382
 msgid "Nota de Débito de Compra"
 msgstr "Purchase Debit Note"
 
 #: cacao_accounting/bancos/services.py:2163
+#: cacao_accounting/document_flow/registry.py:568
 #: cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html:37
 msgid "Nota de Crédito de Venta"
 msgstr "Sales Credit Note"
 
 #: cacao_accounting/bancos/services.py:2173
+#: cacao_accounting/document_flow/registry.py:622
 msgid "Devolución de Venta"
 msgstr "Sales Return"
 
 #: cacao_accounting/bancos/services.py:2183
+#: cacao_accounting/document_flow/registry.py:596
 #: cacao_accounting/ventas/templates/ventas/factura_venta_nuevo.html:38
 msgid "Nota de Débito de Venta"
 msgstr "Sales Debit Note"
@@ -7818,64 +8156,79 @@ msgid "El monto aplicado no puede ser mayor al monto total del pago."
 msgstr "The amount applied cannot be greater than the total payment amount."
 
 #: cacao_accounting/bancos/statement_service.py:142
-#: cacao_accounting/bancos/statement_service.py:316
+#: cacao_accounting/bancos/statement_service.py:315
 msgid "La cuenta bancaria no existe."
 msgstr "The bank account does not exist."
 
-#: cacao_accounting/bancos/statement_service.py:254
-#: cacao_accounting/bancos/statement_service.py:257
+#: cacao_accounting/bancos/statement_service.py:214
+msgid "Conciliación automática aplicada"
+msgstr "Automatic reconciliation applied"
+
+#: cacao_accounting/bancos/statement_service.py:214
+msgid "Conciliación automática parcial aplicada"
+msgstr "Partial automatic reconciliation applied"
+
+#: cacao_accounting/bancos/statement_service.py:218
+#, python-brace-format
+msgid ""
+"{0} por la regla de matching '{1}' contra {2} {3} por {4} (conciliación "
+"{5})."
+msgstr "{0} by matching rule '{1}' against {2} {3} for {4} (reconciliation {5})."
+
+#: cacao_accounting/bancos/statement_service.py:253
+#: cacao_accounting/bancos/statement_service.py:256
 #: cacao_accounting/imports/adapters/bank_statement.py:44
 #: cacao_accounting/imports/adapters/bank_statement.py:47
 msgid "Separador de miles ambiguo"
 msgstr "Ambiguous thousands separator"
 
-#: cacao_accounting/bancos/statement_service.py:272
+#: cacao_accounting/bancos/statement_service.py:271
 msgid "La fecha del extracto no tiene un formato soportado."
 msgstr "The statement date does not have a supported format."
 
-#: cacao_accounting/bancos/statement_service.py:318
+#: cacao_accounting/bancos/statement_service.py:317
 msgid "La cuenta bancaria no pertenece a la compañía indicada."
 msgstr "The bank account does not belong to the specified company."
 
-#: cacao_accounting/bancos/statement_service.py:398
+#: cacao_accounting/bancos/statement_service.py:397
 msgid "La regla de matching no existe o esta inactiva."
 msgstr "The matching rule does not exist or is inactive."
 
-#: cacao_accounting/bancos/statement_service.py:427
+#: cacao_accounting/bancos/statement_service.py:426
 msgid "Cada fila debe tener deposito o retiro."
 msgstr "Each row must have a deposit or withdrawal."
 
-#: cacao_accounting/bancos/statement_service.py:429
+#: cacao_accounting/bancos/statement_service.py:428
 msgid "Cada fila debe tener deposito o retiro, no ambos."
 msgstr "Each row must have a deposit or withdrawal, not both."
 
-#: cacao_accounting/bancos/statement_service.py:451
+#: cacao_accounting/bancos/statement_service.py:450
 #, fuzzy
 msgid "La conciliación no existe."
 msgstr "The reconciliation does not exist."
 
-#: cacao_accounting/bancos/statement_service.py:462
+#: cacao_accounting/bancos/statement_service.py:461
 msgid "Falta cuenta de diferencia bancaria configurada."
 msgstr "Missing configured bank difference account."
 
-#: cacao_accounting/bancos/statement_service.py:465
+#: cacao_accounting/bancos/statement_service.py:464
 msgid "La cuenta de diferencia bancaria no pertenece a la compañía."
 msgstr "The bank difference account does not belong to the company."
 
-#: cacao_accounting/bancos/statement_service.py:479
+#: cacao_accounting/bancos/statement_service.py:478
 #, fuzzy
 msgid "La conciliación no identifica una transacción bancaria unica."
 msgstr "The reconciliation does not identify a single bank transaction."
 
-#: cacao_accounting/bancos/statement_service.py:488
+#: cacao_accounting/bancos/statement_service.py:487
 msgid "No se encontro cuenta bancaria GL para balancear el ajuste."
 msgstr "No bank GL account was found to balance the adjustment."
 
-#: cacao_accounting/bancos/statement_service.py:498
+#: cacao_accounting/bancos/statement_service.py:497
 msgid "La cuenta bancaria GL no pertenece a la compañía."
 msgstr "The bank GL account does not belong to the company."
 
-#: cacao_accounting/bancos/statement_service.py:507
+#: cacao_accounting/bancos/statement_service.py:506
 msgid "No se pudo determinar la moneda de la cuenta bancaria."
 msgstr "Could not determine the bank account currency."
 
@@ -10055,25 +10408,9 @@ msgstr "Tax ID"
 msgid "Nacionalidad"
 msgstr "Nationality"
 
-#: cacao_accounting/compras/forms.py:27 cacao_accounting/ventas/forms.py:28
-msgid "Nacional"
-msgstr "Domestic"
-
-#: cacao_accounting/compras/forms.py:28 cacao_accounting/ventas/forms.py:29
-msgid "Extranjero"
-msgstr "Foreign"
-
 #: cacao_accounting/compras/forms.py:33 cacao_accounting/ventas/forms.py:34
 msgid "Tipo de Persona"
 msgstr "Person Type"
-
-#: cacao_accounting/compras/forms.py:36 cacao_accounting/ventas/forms.py:37
-msgid "Natural"
-msgstr "Natural"
-
-#: cacao_accounting/compras/forms.py:37 cacao_accounting/ventas/forms.py:38
-msgid "Jurídica"
-msgstr "Legal"
 
 #: cacao_accounting/compras/forms.py:41
 #: cacao_accounting/templates/party_detail_sections.html:10
@@ -10265,74 +10602,120 @@ msgstr "By Volume"
 msgid "Equitativo"
 msgstr "Equal"
 
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:108
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:109
+msgid "El usuario ya no puede crear facturas en la compañía."
+msgstr ""
+
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:120
-#, fuzzy
-msgid "AUTHORIZATION_REVOKED"
-msgstr "Authorize"
+msgid "La compañía no está activa."
+msgstr ""
 
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:122
+msgid "El proveedor no está activo."
+msgstr ""
+
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:131
-msgid "SUPPLIER_UNRESOLVED"
+msgid "El proveedor no está habilitado para la compañía."
 msgstr ""
 
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:136
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:206
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:229
-msgid "ORDER_CURRENCY_MISMATCH"
+msgid "La moneda de la factura no está activa."
 msgstr ""
 
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:138
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:162
-msgid "DUPLICATE_INVOICE"
+msgid "La factura requiere número de proveedor."
 msgstr ""
 
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:148
-msgid "CLOSED_ACCOUNTING_PERIOD"
+msgid "El período contable está cerrado."
 msgstr ""
 
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:174
-msgid "IDEMPOTENCY_KEY_CONFLICT"
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:162
+msgid "La factura del proveedor ya existe."
 msgstr ""
 
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:186
-msgid "PURCHASE_ORDER_REQUIRED"
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:175
+msgid "La clave de idempotencia ya pertenece a otra factura."
 msgstr ""
 
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:191
-#, fuzzy
-msgid "RECEIPT_REQUIRED"
-msgstr "Preprinted Receipt"
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:187
+msgid "La política del proveedor exige orden de compra."
+msgstr ""
 
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:197
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:202
-msgid "PURCHASE_ORDER_NOT_FOUND"
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:192
+msgid "La política del proveedor exige recepción."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:198
+msgid "La orden de compra no está disponible para facturación."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:203
+msgid "La orden no corresponde a compañía y proveedor."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:206
+msgid "La moneda no coincide con la orden."
 msgstr ""
 
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:209
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:215
-msgid "RECEIPT_MISSING"
+msgid "La recepción requerida no está disponible."
 msgstr ""
 
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:235
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:215
+msgid "La recepción no corresponde a la orden y proveedor."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:229
+msgid "No existe tasa de cambio para la fecha."
+msgstr ""
+
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:239
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:310
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:372
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:387
-msgid "LINE_UNRESOLVED"
+msgid "La unidad de medida no es válida."
 msgstr ""
 
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:241
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:243
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:318
-msgid "MATH_MISMATCH"
+msgid "Cantidad, precio e importe inválidos."
 msgstr ""
 
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:258
-#: cacao_accounting/compras/purchase_invoice_draft_service.py:274
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:243
+msgid "El importe de línea no coincide con cantidad y precio."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:259
+msgid "Hay impuesto observado sin una plantilla fiscal resuelta."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:275
+msgid "La plantilla fiscal no es aplicable a esta factura de compra."
+msgstr ""
+
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:285
+msgid "La plantilla fiscal configurada no puede aplicarse."
+msgstr ""
+
 #: cacao_accounting/compras/purchase_invoice_draft_service.py:287
-msgid "TAX_MISMATCH"
+msgid "El impuesto observado no coincide con la plantilla fiscal."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:310
+msgid "La factura requiere al menos una línea."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:319
+msgid "El total extraído no coincide con las líneas resueltas."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:372
+msgid "Falta la recepción de una línea 3-way."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:387
+msgid "Falta la orden de una línea 2-way."
+msgstr ""
+
+#: cacao_accounting/compras/purchase_invoice_draft_service.py:413
+msgid "La cantidad facturada excede el saldo disponible."
 msgstr ""
 
 #: cacao_accounting/compras/purchase_order_comparison_service.py:167
@@ -10512,7 +10895,7 @@ msgid "Matching 3-way requiere que la factura referencie una recepción de compr
 msgstr "3-way matching requires the invoice to reference a purchase receipt."
 
 #: cacao_accounting/compras/purchase_reconciliation_service.py:1362
-#: cacao_accounting/contabilidad/posting_service.py:3815
+#: cacao_accounting/contabilidad/posting_service.py:3822
 msgid "La recepción de compra referenciada no existe."
 msgstr "The referenced purchase receipt does not exist."
 
@@ -10666,6 +11049,12 @@ msgstr "Manual closing of the comparison requires a justification."
 msgid "La solicitud de cotización ya tiene el comparativo cerrado."
 msgstr "The quotation request already has the comparison closed."
 
+#: cacao_accounting/compras/routes.py:295
+#: cacao_accounting/compras/services.py:201
+#: cacao_accounting/document_flow/registry.py:338
+msgid "Costo de Importación"
+msgstr "Import Cost"
+
 #: cacao_accounting/compras/routes.py:329
 #: cacao_accounting/compras/templates/compras/orden_compra_lista.html:13
 msgid "Listado de Ordenes de Compra"
@@ -10817,13 +11206,37 @@ msgid "Listado de Facturas de Compra"
 msgstr "Purchase Invoice List"
 
 #: cacao_accounting/compras/routes.py:1547
+#: cacao_accounting/compras/routes.py:1552
 msgid "Listado de Notas de Débito de Compra"
 msgstr "Purchase Debit Notes List"
 
+#: cacao_accounting/compras/routes.py:1553
+#: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html:20
+#: cacao_accounting/ventas/routes.py:760
+msgid "Nueva Nota de Débito"
+msgstr "New Debit Note"
+
+#: cacao_accounting/compras/routes.py:1554
+msgid "Listado de notas de débito de compra."
+msgstr "List of purchase debit notes."
+
 #: cacao_accounting/compras/routes.py:1574
+#: cacao_accounting/compras/routes.py:1579
 #: cacao_accounting/compras/templates/compras/factura_compra_devolucion_lista.html:13
 msgid "Listado de Notas de Crédito de Compra"
 msgstr "Purchase Credit Note List"
+
+#: cacao_accounting/compras/routes.py:1580
+#: cacao_accounting/compras/templates/compras/factura_compra_devolucion_lista.html:21
+#: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html:20
+#: cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html:21
+msgid "Nueva Nota de Crédito"
+msgstr "New Credit Note"
+
+#: cacao_accounting/compras/routes.py:1581
+#: cacao_accounting/compras/templates/compras/factura_compra_devolucion_lista.html:27
+msgid "Listado de notas de crédito de compra."
+msgstr "List of purchase credit notes."
 
 #: cacao_accounting/compras/routes.py:1613
 #: cacao_accounting/compras/templates/compras/proveedor_lista.html:13
@@ -11233,19 +11646,19 @@ msgstr ""
 "recalculating totals."
 
 #: cacao_accounting/compras/services.py:1774
-#: cacao_accounting/ventas/services.py:1703
+#: cacao_accounting/ventas/services.py:1705
 #, python-format
 msgid "El documento origen '%(source)s' no existe."
 msgstr "Source document '%(source)s' does not exist."
 
 #: cacao_accounting/compras/services.py:1776
-#: cacao_accounting/ventas/services.py:1705
+#: cacao_accounting/ventas/services.py:1707
 #, python-format
 msgid "El documento origen '%(source)s' debe estar aprobado."
 msgstr "Source document '%(source)s' must be approved."
 
 #: cacao_accounting/compras/services.py:1778
-#: cacao_accounting/ventas/services.py:1709
+#: cacao_accounting/ventas/services.py:1711
 msgid ""
 "El documento origen y el documento destino deben pertenecer a la misma "
 "compañía."
@@ -11262,7 +11675,7 @@ msgstr ""
 "supplier."
 
 #: cacao_accounting/compras/services.py:1784
-#: cacao_accounting/ventas/services.py:1715
+#: cacao_accounting/ventas/services.py:1717
 msgid "El documento origen y el documento destino deben usar la misma moneda."
 msgstr "The source document and the target document must use the same currency."
 
@@ -11284,7 +11697,7 @@ msgid ""
 msgstr "Over-receipt: received quantity {} exceeds the ordered {} for item {}."
 
 #: cacao_accounting/compras/services.py:1902
-#: cacao_accounting/ventas/services.py:1808
+#: cacao_accounting/ventas/services.py:1810
 #, python-brace-format
 msgid "Sobre-facturación: cantidad facturada {} excede la {} para el artículo {}."
 msgstr "Over-invoicing: invoiced quantity {} exceeds the {} for item {}."
@@ -11372,13 +11785,13 @@ msgstr ""
 "another active invoice."
 
 #: cacao_accounting/compras/services.py:2237
-#: cacao_accounting/ventas/services.py:2506
+#: cacao_accounting/ventas/services.py:2514
 #, python-format
 msgid "La factura origen '%(source)s' no existe."
 msgstr "Source invoice '%(source)s' does not exist."
 
 #: cacao_accounting/compras/services.py:2239
-#: cacao_accounting/ventas/services.py:2508
+#: cacao_accounting/ventas/services.py:2516
 #, python-format
 msgid "La factura origen '%(source)s' no esta aprobada."
 msgstr "Source invoice '%(source)s' is not approved."
@@ -11389,7 +11802,7 @@ msgid "La factura origen '%(source)s' no pertenece al mismo proveedor."
 msgstr "Source invoice '%(source)s' does not belong to the same supplier."
 
 #: cacao_accounting/compras/services.py:2243
-#: cacao_accounting/ventas/services.py:2512
+#: cacao_accounting/ventas/services.py:2520
 #, python-format
 msgid "La factura origen '%(source)s' no pertenece a la misma compañía."
 msgstr "Source invoice '%(source)s' does not belong to the same company."
@@ -11935,16 +12348,6 @@ msgstr "Receipt"
 msgid "Listado de Notas de Crédito de Compra."
 msgstr "Purchase credit note list."
 
-#: cacao_accounting/compras/templates/compras/factura_compra_devolucion_lista.html:21
-#: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html:20
-#: cacao_accounting/ventas/templates/ventas/factura_venta_devolucion_lista.html:21
-msgid "Nueva Nota de Crédito"
-msgstr "New Credit Note"
-
-#: cacao_accounting/compras/templates/compras/factura_compra_devolucion_lista.html:27
-msgid "Listado de notas de crédito de compra."
-msgstr "List of purchase credit notes."
-
 #: cacao_accounting/compras/templates/compras/factura_compra_lista.html:19
 msgid "Listado de Facturas de Compra."
 msgstr "Purchase invoice list."
@@ -11965,10 +12368,6 @@ msgstr "Search by document, supplier or reference..."
 #: cacao_accounting/compras/templates/compras/factura_compra_lista.html:38
 msgid "Listado de facturas de compra."
 msgstr "List of purchase invoices."
-
-#: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html:20
-msgid "Nueva Nota de Débito"
-msgstr "New Debit Note"
 
 #: cacao_accounting/compras/templates/compras/factura_compra_nuevo.html:20
 msgid "Nueva Factura de Compra"
@@ -12766,6 +13165,24 @@ msgstr "The AP/AR reference document has no available balance."
 msgid "La línea AP/AR requiere moneda documental explícita."
 msgstr "The AP/AR line requires an explicit document currency."
 
+#: cacao_accounting/contabilidad/balance_confirmation.py:228
+#: cacao_accounting/contabilidad/balance_confirmation.py:229
+#: cacao_accounting/portal/templates/portal/invoice_detail.html:22
+#: cacao_accounting/portal/templates/portal/supplier_dashboard.html:154
+msgid "Nota de Crédito"
+msgstr "Credit Note"
+
+#: cacao_accounting/contabilidad/balance_confirmation.py:230
+#: cacao_accounting/contabilidad/balance_confirmation.py:231
+#: cacao_accounting/portal/templates/portal/invoice_detail.html:23
+#: cacao_accounting/portal/templates/portal/supplier_dashboard.html:156
+msgid "Nota de Débito"
+msgstr "Debit Note"
+
+#: cacao_accounting/contabilidad/balance_confirmation.py:232
+msgid "Devolución"
+msgstr "Return"
+
 #: cacao_accounting/contabilidad/balance_confirmation.py:420
 msgid "Compañía o tercero no válido."
 msgstr "Invalid company or party."
@@ -12806,11 +13223,39 @@ msgstr "You must select a valid customer or supplier."
 msgid "La confirmación de saldo no se encuentra en un estado válido para envío."
 msgstr "The balance confirmation is not in a valid status for sending."
 
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:291
+#, python-format
+msgid ""
+"Estimado cliente/proveedor,\n"
+"\n"
+"La empresa %(company)s le solicita la confirmación externa del saldo de "
+"su cuenta al %(cutoff_date)s.\n"
+"\n"
+"Relación: %(party)s\n"
+"Código de verificación: %(code)s\n"
+"\n"
+"Para ver el detalle de los documentos y responder a esta solicitud, "
+"ingrese al siguiente enlace seguro:\n"
+"%(link)s\n"
+"\n"
+"Atentamente,\n"
+"%(company)s\n"
+msgstr ""
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:307
+#, python-format
+msgid "Solicitud de Confirmación de Saldo - %(company)s"
+msgstr "Balance Confirmation Request - %(company)s"
+
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:313
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:392
 #, python-format
 msgid "Error al enviar correo a %(email)s: %(error)s"
 msgstr "Error sending email to %(email)s: %(error)s"
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:322
+msgid "Solicitud de confirmación de saldo enviada por correo electrónico."
+msgstr "Balance confirmation request sent by email."
 
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:325
 msgid "Solicitud de confirmación enviada correctamente."
@@ -12819,6 +13264,34 @@ msgstr "Confirmation request sent successfully."
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:343
 msgid "Solo se pueden reenviar solicitudes ya enviadas o visualizadas."
 msgstr "Only already sent or viewed requests can be resent."
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:370
+#, python-format
+msgid ""
+"Estimado cliente/proveedor,\n"
+"\n"
+"Le reenviamos la solicitud de confirmación de saldo de %(company)s al "
+"%(cutoff_date)s.\n"
+"\n"
+"Relación: %(party)s\n"
+"Nuevo código de verificación: %(code)s\n"
+"\n"
+"Para ver el detalle de los documentos y responder a esta solicitud, "
+"ingrese al siguiente enlace seguro:\n"
+"%(link)s\n"
+"\n"
+"Atentamente,\n"
+"%(company)s\n"
+msgstr ""
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:386
+#, python-format
+msgid "Reenvío de Solicitud de Confirmación de Saldo - %(company)s"
+msgstr "Balance Confirmation Request Resent - %(company)s"
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:400
+msgid "Solicitud de confirmación de saldo reenviada con nuevos tokens y códigos."
+msgstr "Balance confirmation request resent with new tokens and codes."
 
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:403
 msgid ""
@@ -12833,6 +13306,10 @@ msgid ""
 msgstr ""
 "A request that is already closed, cancelled or expired cannot be "
 "cancelled."
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:442
+msgid "Solicitud de confirmación de saldo cancelada manualmente por el usuario."
+msgstr "Balance confirmation request manually canceled by the user."
 
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:445
 msgid "Solicitud de confirmación cancelada correctamente."
@@ -12925,6 +13402,15 @@ msgstr "You must complete the verification step first."
 #: cacao_accounting/contabilidad/balance_confirmation_bp.py:693
 msgid "La confirmación ya fue respondida o ya no se encuentra disponible."
 msgstr "The confirmation has already been responded to or is no longer available."
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:715
+#, python-format
+msgid "Confirmación respondida como %(response_type)s. Comentario: %(comment)s."
+msgstr "Confirmation responded to as %(response_type)s. Comment: %(comment)s."
+
+#: cacao_accounting/contabilidad/balance_confirmation_bp.py:716
+msgid "Sin comentario"
+msgstr "No comment"
 
 #: cacao_accounting/contabilidad/budget_import_service.py:41
 #: cacao_accounting/contabilidad/budget_import_service.py:249
@@ -13037,18 +13523,18 @@ msgid "Ya existe una línea para esta combinación de dimensiones y período."
 msgstr "A line already exists for this combination of dimensions and period."
 
 #: cacao_accounting/contabilidad/cancellation_service.py:103
-#: cacao_accounting/contabilidad/posting_service.py:4670
+#: cacao_accounting/contabilidad/posting_service.py:4679
 msgid "Solo se puede cancelar un documento aprobado."
 msgstr "Only an approved document can be cancelled."
 
 #: cacao_accounting/contabilidad/cancellation_service.py:113
-#: cacao_accounting/contabilidad/posting_service.py:2234
+#: cacao_accounting/contabilidad/posting_service.py:2239
 #, fuzzy
 msgid "El documento no tiene compañía definida."
 msgstr "The document has no company defined."
 
 #: cacao_accounting/contabilidad/cancellation_service.py:124
-#: cacao_accounting/contabilidad/posting_service.py:4798
+#: cacao_accounting/contabilidad/posting_service.py:4807
 #, fuzzy
 msgid "Debe indicar el usuario que ejecuta la anulación."
 msgstr "You must specify the user performing the cancellation."
@@ -13084,7 +13570,7 @@ msgid "El documento ya tiene una anulación o una reversion registrada."
 msgstr "The document already has a cancellation or reversal recorded."
 
 #: cacao_accounting/contabilidad/cancellation_service.py:274
-#: cacao_accounting/contabilidad/posting_service.py:2241
+#: cacao_accounting/contabilidad/posting_service.py:2246
 msgid "El documento no tiene fecha de contabilizacion definida."
 msgstr "The document has no posting date defined."
 
@@ -13098,6 +13584,7 @@ msgid "La moneda es obligatoria."
 msgstr "Currency is required."
 
 #: cacao_accounting/contabilidad/currency_guard.py:34
+#: cacao_accounting/contabilidad/routes.py:241
 msgid "La moneda indicada no existe."
 msgstr "The specified currency does not exist."
 
@@ -13207,6 +13694,11 @@ msgstr "No unrealized exchange loss account is configured."
 msgid "No existen libros contables activos para la compañía."
 msgstr "There are no active accounting books for the company."
 
+#: cacao_accounting/contabilidad/exchange_revaluation_service.py:629
+#, python-format
+msgid "Resultado cambiario %(document)s"
+msgstr "Currency result %(document)s"
+
 #: cacao_accounting/contabilidad/exchange_revaluation_service.py:648
 msgid "No existe cuenta de resultado cambiario configurada."
 msgstr "No exchange result account is configured."
@@ -13236,9 +13728,24 @@ msgstr "The revaluation has no accounting date."
 msgid "Valor numerico inválido en revalorizacion."
 msgstr "Invalid numeric value in revaluation."
 
+#: cacao_accounting/contabilidad/fiscal_year_closing.py:143
+#, python-format
+msgid "Cierre año fiscal %(year)s"
+msgstr "Fiscal year closing %(year)s"
+
+#: cacao_accounting/contabilidad/fiscal_year_closing.py:170
+#, python-format
+msgid "Resultado neto año fiscal %(year)s"
+msgstr "Net result for fiscal year %(year)s"
+
+#: cacao_accounting/contabilidad/fiscal_year_closing.py:228
+#, python-format
+msgid "Cierre contable automático del año fiscal %(year)s"
+msgstr "Automatic accounting close for fiscal year %(year)s"
+
 #: cacao_accounting/contabilidad/fiscal_year_closing.py:240
 #: cacao_accounting/contabilidad/fiscal_year_closing.py:316
-#: cacao_accounting/contabilidad/routes.py:4058
+#: cacao_accounting/contabilidad/routes.py:4060
 msgid "Año fiscal no encontrado."
 msgstr "Fiscal year not found."
 
@@ -13782,7 +14289,7 @@ msgid "El comprobante ya tiene una reversión registrada."
 msgstr "The entry already has a reversal recorded."
 
 #: cacao_accounting/contabilidad/journal_service.py:446
-#: cacao_accounting/contabilidad/routes.py:3422
+#: cacao_accounting/contabilidad/routes.py:3424
 msgid "Debe indicar el motivo de la reversión."
 msgstr "You must indicate the reason for the reversal."
 
@@ -13805,7 +14312,7 @@ msgid "El cierre fiscal debe revertirse desde el flujo de cierre fiscal."
 msgstr "The fiscal close must be reversed from the fiscal closing flow."
 
 #: cacao_accounting/contabilidad/journal_service.py:502
-#: cacao_accounting/contabilidad/routes.py:3463
+#: cacao_accounting/contabilidad/routes.py:3465
 msgid "Solo se puede editar un comprobante en borrador."
 msgstr "Only an entry in draft can be edited."
 
@@ -14015,177 +14522,177 @@ msgid ""
 "contabilizarse."
 msgstr "The document requires an explicit base_currency snapshot before posting."
 
-#: cacao_accounting/contabilidad/posting_service.py:392
+#: cacao_accounting/contabilidad/posting_service.py:394
 msgid "La cuenta contable debe pertenecer a la compañía del documento."
 msgstr "The accounting account must belong to the document's company."
 
-#: cacao_accounting/contabilidad/posting_service.py:467
+#: cacao_accounting/contabilidad/posting_service.py:469
 msgid "La línea del comprobante contable no tiene cuenta especificada."
 msgstr "The accounting entry line has no account specified."
 
-#: cacao_accounting/contabilidad/posting_service.py:535
+#: cacao_accounting/contabilidad/posting_service.py:537
 msgid "Toda entrada GL requiere un tipo de comprobante."
 msgstr "Every GL entry requires a voucher type."
 
-#: cacao_accounting/contabilidad/posting_service.py:657
+#: cacao_accounting/contabilidad/posting_service.py:659
 msgid "Las entradas GL generadas no balancean por libro contable."
 msgstr "The generated GL entries do not balance per accounting book."
 
-#: cacao_accounting/contabilidad/posting_service.py:720
+#: cacao_accounting/contabilidad/posting_service.py:722
 msgid "El tipo de cambio no puede ser cero."
 msgstr "The exchange rate cannot be zero."
 
-#: cacao_accounting/contabilidad/posting_service.py:747
+#: cacao_accounting/contabilidad/posting_service.py:749
 msgid ""
 "El documento requiere moneda transaccional explicita para valorar "
 "inventario."
 msgstr "The document requires an explicit transaction currency to value inventory."
 
-#: cacao_accounting/contabilidad/posting_service.py:950
+#: cacao_accounting/contabilidad/posting_service.py:952
 msgid "El total del documento es cero y no puede contabilizarse."
 msgstr "The document total is zero and cannot be posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:1159
+#: cacao_accounting/contabilidad/posting_service.py:1161
 msgid "Solo se puede contabilizar una factura de venta aprobada."
 msgstr "Only an approved sales invoice can be posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:1168
+#: cacao_accounting/contabilidad/posting_service.py:1170
 msgid "La factura de venta no contiene lineas para contabilizar."
 msgstr "The sales invoice does not contain lines to post."
 
-#: cacao_accounting/contabilidad/posting_service.py:1250
+#: cacao_accounting/contabilidad/posting_service.py:1252
 msgid "Solo se puede contabilizar una factura de compra aprobada."
 msgstr "Only an approved purchase invoice can be posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:1263
+#: cacao_accounting/contabilidad/posting_service.py:1265
 msgid "La factura de compra no contiene lineas para contabilizar."
 msgstr "The purchase invoice does not contain lines to post."
 
-#: cacao_accounting/contabilidad/posting_service.py:1333
+#: cacao_accounting/contabilidad/posting_service.py:1335
 msgid "Solo se puede contabilizar un costo de importacion aprobado."
 msgstr "Only an approved import cost can be posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:1336
+#: cacao_accounting/contabilidad/posting_service.py:1338
 msgid "El motor de calculo no pudo procesar el costo de importacion."
 msgstr "The calculation engine could not process the import cost."
 
-#: cacao_accounting/contabilidad/posting_service.py:1433
+#: cacao_accounting/contabilidad/posting_service.py:1435
 msgid "Solo se puede contabilizar un pago aprobado."
 msgstr "Only an approved payment can be posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:1451
+#: cacao_accounting/contabilidad/posting_service.py:1453
 msgid ""
 "Los pagos aplicados con diferencia cambiaria requieren el motor de "
 "settlement."
 msgstr "Payments applied with exchange difference require the settlement engine."
 
-#: cacao_accounting/contabilidad/posting_service.py:1465
+#: cacao_accounting/contabilidad/posting_service.py:1467
 msgid "Tipo de pago no soportado para contabilizacion."
 msgstr "Payment type not supported for posting."
 
-#: cacao_accounting/contabilidad/posting_service.py:1718
+#: cacao_accounting/contabilidad/posting_service.py:1720
 #: cacao_accounting/document_flow/payment.py:1806
 msgid "La transferencia interna requiere cuentas bancarias válidas."
 msgstr "The internal transfer requires valid bank accounts."
 
-#: cacao_accounting/contabilidad/posting_service.py:1722
+#: cacao_accounting/contabilidad/posting_service.py:1724
 msgid "Ambas cuentas bancarias deben tener moneda configurada."
 msgstr "Both bank accounts must have a configured currency."
 
-#: cacao_accounting/contabilidad/posting_service.py:1820
+#: cacao_accounting/contabilidad/posting_service.py:1822
 msgid "La linea de inventario referencia un item inexistente."
 msgstr "The inventory line references a non-existent item."
 
-#: cacao_accounting/contabilidad/posting_service.py:1822
+#: cacao_accounting/contabilidad/posting_service.py:1824
 msgid "Solo los bienes inventariables pueden generar Stock Ledger."
 msgstr "Only inventory goods can generate Stock Ledger."
 
-#: cacao_accounting/contabilidad/posting_service.py:1838
-#: cacao_accounting/contabilidad/posting_service.py:1886
+#: cacao_accounting/contabilidad/posting_service.py:1840
+#: cacao_accounting/contabilidad/posting_service.py:1888
 msgid "La cantidad de inventario no puede ser negativa."
 msgstr "The inventory quantity cannot be negative."
 
-#: cacao_accounting/contabilidad/posting_service.py:1841
-#: cacao_accounting/contabilidad/posting_service.py:1889
+#: cacao_accounting/contabilidad/posting_service.py:1843
+#: cacao_accounting/contabilidad/posting_service.py:1891
 msgid "La línea de inventario debe tener una cantidad o un monto mayor que cero."
 msgstr "The inventory line must have a quantity or amount greater than zero."
 
-#: cacao_accounting/contabilidad/posting_service.py:1925
+#: cacao_accounting/contabilidad/posting_service.py:1927
 msgid "La compañía no existe."
 msgstr "The company does not exist."
 
-#: cacao_accounting/contabilidad/posting_service.py:2154
+#: cacao_accounting/contabilidad/posting_service.py:2156
 msgid "No hay suficiente inventario para calcular el costo real."
 msgstr "There is not enough inventory to calculate the actual cost."
 
-#: cacao_accounting/contabilidad/posting_service.py:2248
+#: cacao_accounting/contabilidad/posting_service.py:2253
 msgid "La transacción bancaria no tiene una cuenta GL bancaria configurada."
 msgstr "The bank transaction has no bank GL account configured."
 
-#: cacao_accounting/contabilidad/posting_service.py:2255
+#: cacao_accounting/contabilidad/posting_service.py:2260
 msgid "La transacción bancaria no esta asociada a una compañía."
 msgstr "The bank transaction is not associated with a company."
 
-#: cacao_accounting/contabilidad/posting_service.py:2263
+#: cacao_accounting/contabilidad/posting_service.py:2268
 msgid "No existe configuración contable predeterminada para la compañía."
 msgstr "There is no default accounting configuration for the company."
 
-#: cacao_accounting/contabilidad/posting_service.py:2281
+#: cacao_accounting/contabilidad/posting_service.py:2286
 msgid "La nota bancaria no tiene un monto valido."
 msgstr "The bank note does not have a valid amount."
 
-#: cacao_accounting/contabilidad/posting_service.py:2356
+#: cacao_accounting/contabilidad/posting_service.py:2361
 msgid ""
 "El ajuste de valor no puede reducir el valor del inventario por debajo de"
 " cero."
 msgstr "The value adjustment cannot reduce the inventory value below zero."
 
-#: cacao_accounting/contabilidad/posting_service.py:2423
+#: cacao_accounting/contabilidad/posting_service.py:2428
 msgid ""
 "Este documento ya tiene prorrateos de costos capitalizables "
 "contabilizados."
 msgstr "This document already has capitalizable cost allocations posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:2452
+#: cacao_accounting/contabilidad/posting_service.py:2457
 msgid "El prorrateo de costo capitalizable no coincide con una linea de factura."
 msgstr "The capitalizable cost allocation does not match an invoice line."
 
-#: cacao_accounting/contabilidad/posting_service.py:2455
+#: cacao_accounting/contabilidad/posting_service.py:2460
 msgid "La linea con costo capitalizable requiere almacen para ajustar valuacion."
 msgstr "The capitalizable cost line requires a warehouse to adjust valuation."
 
-#: cacao_accounting/contabilidad/posting_service.py:2487
+#: cacao_accounting/contabilidad/posting_service.py:2492
 msgid "No hay inventario disponible para materializar el costo capitalizable."
 msgstr "There is no inventory available to materialize the capitalizable cost."
 
-#: cacao_accounting/contabilidad/posting_service.py:2500
+#: cacao_accounting/contabilidad/posting_service.py:2505
 msgid "No se pudo actualizar la valuacion de inventario."
 msgstr "Could not update the inventory valuation."
 
-#: cacao_accounting/contabilidad/posting_service.py:2670
+#: cacao_accounting/contabilidad/posting_service.py:2675
 msgid "La conciliación requiere bodega."
 msgstr "The reconciliation requires a warehouse."
 
-#: cacao_accounting/contabilidad/posting_service.py:2705
+#: cacao_accounting/contabilidad/posting_service.py:2710
 msgid "La conciliación requiere tasa de valuación objetivo."
 msgstr "The reconciliation requires a target valuation rate."
 
-#: cacao_accounting/contabilidad/posting_service.py:2708
+#: cacao_accounting/contabilidad/posting_service.py:2713
 msgid "El valor objetivo de la conciliación no coincide con cantidad por tasa."
 msgstr "The reconciliation target value does not match quantity by rate."
 
-#: cacao_accounting/contabilidad/posting_service.py:2713
+#: cacao_accounting/contabilidad/posting_service.py:2718
 #, fuzzy
 msgid "La conciliación no permite cantidad o valor objetivo negativo."
 msgstr "The reconciliation does not allow a negative target quantity or value."
 
-#: cacao_accounting/contabilidad/posting_service.py:2715
+#: cacao_accounting/contabilidad/posting_service.py:2720
 msgid "No se puede ajustar valor sin stock positivo o cantidad contada positiva."
 msgstr ""
 "Value cannot be adjusted without positive stock or positive counted "
 "quantity."
 
-#: cacao_accounting/contabilidad/posting_service.py:2735
+#: cacao_accounting/contabilidad/posting_service.py:2741
 msgid ""
 "La conciliación no puede reducir cantidad mientras aumenta el valor; "
 "registre el ajuste de valor por separado."
@@ -14193,7 +14700,7 @@ msgstr ""
 "Reconciliation cannot reduce quantity while increasing value; record the "
 "value adjustment separately."
 
-#: cacao_accounting/contabilidad/posting_service.py:2752
+#: cacao_accounting/contabilidad/posting_service.py:2759
 msgid ""
 "La conciliación no puede aumentar cantidad mientras reduce el valor; "
 "registre el ajuste de valor por separado."
@@ -14201,76 +14708,76 @@ msgstr ""
 "Reconciliation cannot increase quantity while reducing value; record the "
 "value adjustment separately."
 
-#: cacao_accounting/contabilidad/posting_service.py:2931
-#: cacao_accounting/contabilidad/posting_service.py:3771
+#: cacao_accounting/contabilidad/posting_service.py:2938
+#: cacao_accounting/contabilidad/posting_service.py:3778
 msgid "Este documento ya tiene movimientos de inventario contabilizados."
 msgstr "This document already has inventory movements posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:2936
+#: cacao_accounting/contabilidad/posting_service.py:2943
 msgid "La entrada de stock no contiene lineas para contabilizar."
 msgstr "The stock entry does not contain lines to post."
 
-#: cacao_accounting/contabilidad/posting_service.py:2941
+#: cacao_accounting/contabilidad/posting_service.py:2948
 #, fuzzy
 msgid "La conciliación no contiene diferencias de cantidad o valuacion."
 msgstr "The reconciliation contains no quantity or valuation differences."
 
-#: cacao_accounting/contabilidad/posting_service.py:3031
-#: cacao_accounting/contabilidad/posting_service.py:3057
+#: cacao_accounting/contabilidad/posting_service.py:3038
+#: cacao_accounting/contabilidad/posting_service.py:3064
 #: cacao_accounting/inventario/routes.py:988
 msgid "Un ajuste de solo valor requiere un monto mayor a cero."
 msgstr "A value-only adjustment requires an amount greater than zero."
 
-#: cacao_accounting/contabilidad/posting_service.py:3090
+#: cacao_accounting/contabilidad/posting_service.py:3097
 msgid "Las transferencias de material requieren una cantidad mayor a cero."
 msgstr "Material transfers require a quantity greater than zero."
 
-#: cacao_accounting/contabilidad/posting_service.py:3129
+#: cacao_accounting/contabilidad/posting_service.py:3136
 msgid "Proposito de inventario no soportado para Stock Ledger."
 msgstr "Inventory purpose not supported for Stock Ledger."
 
-#: cacao_accounting/contabilidad/posting_service.py:3143
+#: cacao_accounting/contabilidad/posting_service.py:3150
 msgid "El documento no contiene lineas de inventario compatibles."
 msgstr "The document does not contain compatible inventory lines."
 
-#: cacao_accounting/contabilidad/posting_service.py:3150
+#: cacao_accounting/contabilidad/posting_service.py:3157
 msgid "La devolución de venta requiere la nota de entrega origen."
 msgstr "The sales return requires the source delivery note."
 
-#: cacao_accounting/contabilidad/posting_service.py:3153
+#: cacao_accounting/contabilidad/posting_service.py:3160
 msgid "La nota de entrega origen de la devolución no es válida."
 msgstr "The source delivery note of the return is invalid."
 
-#: cacao_accounting/contabilidad/posting_service.py:3291
-#: cacao_accounting/contabilidad/posting_service.py:3343
+#: cacao_accounting/contabilidad/posting_service.py:3298
+#: cacao_accounting/contabilidad/posting_service.py:3350
 msgid "La devolución excede la cantidad entregada pendiente de devolver."
 msgstr "The return exceeds the delivered quantity pending return."
 
-#: cacao_accounting/contabilidad/posting_service.py:3353
+#: cacao_accounting/contabilidad/posting_service.py:3360
 msgid "La devolución de compra requiere la recepción origen."
 msgstr "The purchase return requires the source receipt."
 
-#: cacao_accounting/contabilidad/posting_service.py:3356
+#: cacao_accounting/contabilidad/posting_service.py:3363
 msgid "La recepción origen de la devolución no es válida."
 msgstr "The source receipt of the return is invalid."
 
-#: cacao_accounting/contabilidad/posting_service.py:3408
+#: cacao_accounting/contabilidad/posting_service.py:3415
 msgid "La recepción origen no tiene capas de valuación para la devolución."
 msgstr "The source receipt has no valuation layers for the return."
 
-#: cacao_accounting/contabilidad/posting_service.py:3434
+#: cacao_accounting/contabilidad/posting_service.py:3441
 msgid "La devolución excede la cantidad disponible en la recepción origen."
 msgstr "The return exceeds the quantity available in the source receipt."
 
-#: cacao_accounting/contabilidad/posting_service.py:3775
+#: cacao_accounting/contabilidad/posting_service.py:3782
 msgid "El documento no contiene lineas de inventario para contabilizar."
 msgstr "The document does not contain inventory lines to post."
 
-#: cacao_accounting/contabilidad/posting_service.py:3798
+#: cacao_accounting/contabilidad/posting_service.py:3805
 msgid "La recepción de compra no tiene monto conciliable."
 msgstr "The purchase receipt has no reconcilable amount."
 
-#: cacao_accounting/contabilidad/posting_service.py:3817
+#: cacao_accounting/contabilidad/posting_service.py:3824
 msgid ""
 "La factura de compra y la recepción de compra deben pertenecer a la misma"
 " compañía."
@@ -14278,61 +14785,61 @@ msgstr ""
 "The purchase invoice and the purchase receipt must belong to the same "
 "company."
 
-#: cacao_accounting/contabilidad/posting_service.py:3819
+#: cacao_accounting/contabilidad/posting_service.py:3826
 msgid "La recepción de compra referenciada debe estar aprobada."
 msgstr "The referenced purchase receipt must be approved."
 
-#: cacao_accounting/contabilidad/posting_service.py:3821
+#: cacao_accounting/contabilidad/posting_service.py:3828
 msgid ""
 "La recepción de compra referenciada debe estar contabilizada antes de "
 "facturarse."
 msgstr "The referenced purchase receipt must be posted before invoicing."
 
-#: cacao_accounting/contabilidad/posting_service.py:4028
+#: cacao_accounting/contabilidad/posting_service.py:4037
 msgid "Solo se puede contabilizar una recepción de compra aprobada."
 msgstr "Only an approved purchase receipt can be posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:4058
+#: cacao_accounting/contabilidad/posting_service.py:4067
 msgid "No se generaron movimientos de inventario para esta recepción de compra."
 msgstr "No inventory movements were generated for this purchase receipt."
 
-#: cacao_accounting/contabilidad/posting_service.py:4165
+#: cacao_accounting/contabilidad/posting_service.py:4174
 msgid "Solo se puede contabilizar una nota de entrega aprobada."
 msgstr "Only an approved delivery note can be posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:4172
+#: cacao_accounting/contabilidad/posting_service.py:4181
 msgid "No se generaron movimientos de inventario para esta nota de entrega."
 msgstr "No inventory movements were generated for this delivery note."
 
-#: cacao_accounting/contabilidad/posting_service.py:4197
+#: cacao_accounting/contabilidad/posting_service.py:4206
 msgid "El comprobante requiere moneda base para convertir sus líneas."
 msgstr "The entry requires a base currency to convert its lines."
 
-#: cacao_accounting/contabilidad/posting_service.py:4204
+#: cacao_accounting/contabilidad/posting_service.py:4213
 msgid "El comprobante requiere moneda transaccional para convertir sus líneas."
 msgstr "The entry requires a transaction currency to convert its lines."
 
-#: cacao_accounting/contabilidad/posting_service.py:4276
+#: cacao_accounting/contabilidad/posting_service.py:4285
 msgid "El comprobante contable no contiene lineas."
 msgstr "The accounting entry does not contain lines."
 
-#: cacao_accounting/contabilidad/posting_service.py:4289
+#: cacao_accounting/contabilidad/posting_service.py:4298
 msgid "Las lineas del comprobante contable deben tener un valor distinto de cero."
 msgstr "The accounting entry lines must have a non-zero value."
 
-#: cacao_accounting/contabilidad/posting_service.py:4299
+#: cacao_accounting/contabilidad/posting_service.py:4308
 msgid "El comprobante contable no está balanceado en la moneda del libro."
 msgstr "The accounting entry is not balanced in the book currency."
 
-#: cacao_accounting/contabilidad/posting_service.py:4307
+#: cacao_accounting/contabilidad/posting_service.py:4316
 msgid "Solo se puede contabilizar una entrada de stock aprobada."
 msgstr "Only an approved stock entry can be posted."
 
-#: cacao_accounting/contabilidad/posting_service.py:4331
+#: cacao_accounting/contabilidad/posting_service.py:4340
 msgid "No se generan movimientos para este documento de inventario."
 msgstr "No movements are generated for this inventory document."
 
-#: cacao_accounting/contabilidad/posting_service.py:4345
+#: cacao_accounting/contabilidad/posting_service.py:4354
 msgid ""
 "La transferencia de material requiere bodegas de origen y destino "
 "distintas."
@@ -14340,23 +14847,23 @@ msgstr ""
 "The material transfer requires different source and destination "
 "warehouses."
 
-#: cacao_accounting/contabilidad/posting_service.py:4349
+#: cacao_accounting/contabilidad/posting_service.py:4358
 msgid "La transferencia requiere cuenta de inventario en ambas bodegas."
 msgstr "The transfer requires an inventory account in both warehouses."
 
-#: cacao_accounting/contabilidad/posting_service.py:4602
+#: cacao_accounting/contabilidad/posting_service.py:4611
 msgid "Tipo de documento no soportado para posting contable."
 msgstr "Document type not supported for accounting posting."
 
-#: cacao_accounting/contabilidad/posting_service.py:4640
+#: cacao_accounting/contabilidad/posting_service.py:4649
 msgid "Solo se puede aprobar un documento en borrador."
 msgstr "Only a document in draft can be approved."
 
-#: cacao_accounting/contabilidad/posting_service.py:4683
+#: cacao_accounting/contabilidad/posting_service.py:4692
 msgid "No se puede anular un comprobante de capitalización automática."
 msgstr "A capitalization entry cannot be cancelled."
 
-#: cacao_accounting/contabilidad/posting_service.py:4686
+#: cacao_accounting/contabilidad/posting_service.py:4695
 msgid ""
 "No se puede anular una transacción que ya ha sido capitalizada. Bloquear "
 "anular pero permitir revertir."
@@ -14364,27 +14871,27 @@ msgstr ""
 "A transaction that has already been capitalized cannot be canceled. Block"
 " cancellation but allow reversal."
 
-#: cacao_accounting/contabilidad/posting_service.py:4826
+#: cacao_accounting/contabilidad/posting_service.py:4835
 msgid "El documento debe estar persistido antes de cambiar su estado."
 msgstr "The document must be persisted before changing its status."
 
-#: cacao_accounting/contabilidad/posting_service.py:4830
+#: cacao_accounting/contabilidad/posting_service.py:4839
 msgid "El documento no existe."
 msgstr "The document does not exist."
 
-#: cacao_accounting/contabilidad/posting_service.py:4878
+#: cacao_accounting/contabilidad/posting_service.py:4887
 msgid "El documento no tiene entradas GL para reversar."
 msgstr "The document has no GL entries to reverse."
 
-#: cacao_accounting/contabilidad/posting_service.py:4964
+#: cacao_accounting/contabilidad/posting_service.py:4973
 msgid "El documento no tiene movimientos de inventario para reversar."
 msgstr "The document has no inventory movements to reverse."
 
-#: cacao_accounting/contabilidad/posting_service.py:4996
+#: cacao_accounting/contabilidad/posting_service.py:5005
 msgid "El costo capitalizable no tiene capa de valoración para reversar."
 msgstr "The capitalizable cost has no valuation layer to reverse."
 
-#: cacao_accounting/contabilidad/posting_service.py:5000
+#: cacao_accounting/contabilidad/posting_service.py:5009
 msgid "El costo capitalizable no tiene saldo de inventario para reversar."
 msgstr "The capitalizable cost has no inventory balance to reverse."
 
@@ -14598,6 +15105,11 @@ msgstr "The approved template has no accounting lines."
 msgid "La plantilla recurrente referencia un libro inexistente."
 msgstr "The recurring template references a non-existent book."
 
+#: cacao_accounting/contabilidad/recurring_journal_service.py:210
+#, python-format
+msgid "Generado automáticamente desde plantilla recurrente: %(template)s"
+msgstr "Automatically generated from recurring template: %(template)s"
+
 #: cacao_accounting/contabilidad/recurring_journal_service.py:271
 msgid "Cada línea debe tener una cuenta contable."
 msgstr "Each line must have an accounting account."
@@ -14634,88 +15146,116 @@ msgstr "The persisted book selection is invalid."
 msgid "Seleccione una compañía para aplicar el filtro por período."
 msgstr "Select a company to apply the period filter."
 
-#: cacao_accounting/contabilidad/routes.py:308
+#: cacao_accounting/contabilidad/routes.py:249
+#: cacao_accounting/contabilidad/services.py:122
+#: cacao_accounting/contabilidad/services.py:832
+msgid "Periodo no encontrado."
+msgstr "Period not found."
+
+#: cacao_accounting/contabilidad/routes.py:251
+#: cacao_accounting/contabilidad/services.py:124
+#: cacao_accounting/contabilidad/services.py:785
+msgid "Cierre mensual no encontrado."
+msgstr "Monthly closing not found."
+
+#: cacao_accounting/contabilidad/routes.py:253
+msgid "La entidad indicada no existe."
+msgstr "The indicated entity does not exist."
+
+#: cacao_accounting/contabilidad/routes.py:257
+msgid "entradas GL"
+msgstr "GL entries"
+
+#: cacao_accounting/contabilidad/routes.py:258
+msgid "movimientos de inventario"
+msgstr "inventory movements"
+
+#: cacao_accounting/contabilidad/routes.py:282
+msgid ", Desactive el registro para conservar la trazabilidad."
+msgstr ""
+
+#: cacao_accounting/contabilidad/routes.py:310
 msgid "Contabilidad | Monedas"
 msgstr "Accounting | Currencies"
 
-#: cacao_accounting/contabilidad/routes.py:326
+#: cacao_accounting/contabilidad/routes.py:328
 msgid "Contabilidad | Nueva Moneda"
 msgstr "Accounting | New Currency"
 
-#: cacao_accounting/contabilidad/routes.py:363
+#: cacao_accounting/contabilidad/routes.py:365
 msgid "Contabilidad | Moneda"
 msgstr "Accounting | Currency"
 
-#: cacao_accounting/contabilidad/routes.py:401
-#: cacao_accounting/contabilidad/routes.py:410
+#: cacao_accounting/contabilidad/routes.py:403
+#: cacao_accounting/contabilidad/routes.py:412
 msgid "Contabilidad | Editar Moneda"
 msgstr "Accounting | Edit Currency"
 
-#: cacao_accounting/contabilidad/routes.py:449
+#: cacao_accounting/contabilidad/routes.py:451
 msgid "Módulo Contabilidad"
 msgstr "Accounting Module"
 
-#: cacao_accounting/contabilidad/routes.py:481
+#: cacao_accounting/contabilidad/routes.py:483
 msgid "Contabilidad | Entidades"
 msgstr "Accounting | Entities"
 
-#: cacao_accounting/contabilidad/routes.py:506
+#: cacao_accounting/contabilidad/routes.py:508
 msgid "Contabilidad | Entidad"
 msgstr "Accounting | Entity"
 
-#: cacao_accounting/contabilidad/routes.py:522
+#: cacao_accounting/contabilidad/routes.py:524
 msgid "Contabilidad | Nueva Entidad"
 msgstr "Accounting | New Entity"
 
-#: cacao_accounting/contabilidad/routes.py:560
+#: cacao_accounting/contabilidad/routes.py:562
 msgid "Complete los campos correctamente."
 msgstr "Complete the fields correctly."
 
-#: cacao_accounting/contabilidad/routes.py:615
+#: cacao_accounting/contabilidad/routes.py:617
 msgid "Contabilidad | Editar Entidad"
 msgstr "Accounting | Edit Entity"
 
-#: cacao_accounting/contabilidad/routes.py:747
+#: cacao_accounting/contabilidad/routes.py:749
 msgid "Contabilidad | Unidades de Negocio"
 msgstr "Accounting | Business Units"
 
-#: cacao_accounting/contabilidad/routes.py:771
+#: cacao_accounting/contabilidad/routes.py:773
 msgid "Contabilidad | Unidad"
 msgstr "Accounting | Unit"
 
-#: cacao_accounting/contabilidad/routes.py:786
+#: cacao_accounting/contabilidad/routes.py:788
 msgid ""
 "No se puede eliminar la unidad porque tiene unidades hijas asignadas "
 "(RN-006)."
 msgstr "The unit cannot be deleted because it has child units assigned (RN-006)."
 
-#: cacao_accounting/contabilidad/routes.py:820
+#: cacao_accounting/contabilidad/routes.py:822
 msgid "Contabilidad | Nueva Unidad de Negocio"
 msgstr "Accounting | New Business Unit"
 
-#: cacao_accounting/contabilidad/routes.py:895
-#: cacao_accounting/contabilidad/routes.py:910
+#: cacao_accounting/contabilidad/routes.py:897
+#: cacao_accounting/contabilidad/routes.py:912
 #: cacao_accounting/contabilidad/templates/contabilidad/unidad_crear.html:15
 msgid "Editar Unidad de Negocio"
 msgstr "Edit Business Unit"
 
-#: cacao_accounting/contabilidad/routes.py:937
+#: cacao_accounting/contabilidad/routes.py:939
 msgid "Contabilidad | Libros de Contabilidad"
 msgstr "Accounting | Ledger Books"
 
-#: cacao_accounting/contabilidad/routes.py:958
+#: cacao_accounting/contabilidad/routes.py:960
 msgid "Contabilidad | Libro"
 msgstr "Accounting | Book"
 
-#: cacao_accounting/contabilidad/routes.py:1035
+#: cacao_accounting/contabilidad/routes.py:1037
 msgid "Contabilidad | Editar Libro de Contabilidad"
 msgstr "Accounting | Edit Ledger Book"
 
-#: cacao_accounting/contabilidad/routes.py:1053
+#: cacao_accounting/contabilidad/routes.py:1055
 msgid "No se puede activar un libro con una moneda inactiva."
 msgstr "You cannot activate a book with an inactive currency."
 
-#: cacao_accounting/contabilidad/routes.py:1098
+#: cacao_accounting/contabilidad/routes.py:1100
 msgid ""
 "No se puede cambiar compañía o moneda de un libro con historial contable;"
 " cree un libro nuevo para ese contexto."
@@ -14723,75 +15263,75 @@ msgstr ""
 "You cannot change company or currency of a book with accounting history; "
 "create a new workbook for that context."
 
-#: cacao_accounting/contabilidad/routes.py:1138
+#: cacao_accounting/contabilidad/routes.py:1140
 msgid "Crear Nuevo Libro de Contabilidad"
 msgstr "Create New Ledger Book"
 
-#: cacao_accounting/contabilidad/routes.py:1153
+#: cacao_accounting/contabilidad/routes.py:1155
 msgid "No se puede crear un libro activo con una moneda inactiva."
 msgstr "You cannot create an active ledger with an inactive currency."
 
-#: cacao_accounting/contabilidad/routes.py:1230
+#: cacao_accounting/contabilidad/routes.py:1232
 msgid "Catalogo de Cuentas Contables"
 msgstr "Chart of Accounts"
 
-#: cacao_accounting/contabilidad/routes.py:1264
+#: cacao_accounting/contabilidad/routes.py:1266
 msgid "La cuenta contable no existe"
 msgstr "The accounting account does not exist"
 
-#: cacao_accounting/contabilidad/routes.py:1271
+#: cacao_accounting/contabilidad/routes.py:1273
 msgid "Contabilidad | Cuenta"
 msgstr "Accounting | Account"
 
-#: cacao_accounting/contabilidad/routes.py:1296
+#: cacao_accounting/contabilidad/routes.py:1298
 msgid "Contabilidad | Nueva Cuenta Contable"
 msgstr "Accounting | New Account"
 
-#: cacao_accounting/contabilidad/routes.py:1360
+#: cacao_accounting/contabilidad/routes.py:1362
 msgid "La cuenta contable indicada no existe."
 msgstr "The specified accounting account does not exist."
 
-#: cacao_accounting/contabilidad/routes.py:1364
+#: cacao_accounting/contabilidad/routes.py:1366
 msgid "Contabilidad | Editar Cuenta Contable"
 msgstr "Accounting | Edit Account"
 
-#: cacao_accounting/contabilidad/routes.py:1421
+#: cacao_accounting/contabilidad/routes.py:1423
 msgid "Catalogo de Centros de Costos"
 msgstr "Cost Center Catalog"
 
-#: cacao_accounting/contabilidad/routes.py:1464
+#: cacao_accounting/contabilidad/routes.py:1466
 msgid "Contabilidad | Nuevo Centro de Costos"
 msgstr "Accounting | New Cost Center"
 
-#: cacao_accounting/contabilidad/routes.py:1527
+#: cacao_accounting/contabilidad/routes.py:1529
 msgid "Contabilidad | Editar Centro de Costos"
 msgstr "Accounting | Edit Cost Center"
 
-#: cacao_accounting/contabilidad/routes.py:1595
+#: cacao_accounting/contabilidad/routes.py:1597
 msgid "Contabilidad | Centro de Costos"
 msgstr "Accounting | Cost Center"
 
-#: cacao_accounting/contabilidad/routes.py:1649
+#: cacao_accounting/contabilidad/routes.py:1651
 msgid "Listado de Proyectos"
 msgstr "Projects List"
 
-#: cacao_accounting/contabilidad/routes.py:1672
+#: cacao_accounting/contabilidad/routes.py:1674
 msgid "Contabilidad | Nuevo Proyecto"
 msgstr "Accounting | New Project"
 
-#: cacao_accounting/contabilidad/routes.py:1734
+#: cacao_accounting/contabilidad/routes.py:1736
 msgid "El proyecto indicado no existe."
 msgstr "The indicated project does not exist."
 
-#: cacao_accounting/contabilidad/routes.py:1741
+#: cacao_accounting/contabilidad/routes.py:1743
 msgid "Contabilidad | Proyecto"
 msgstr "Accounting | Project"
 
-#: cacao_accounting/contabilidad/routes.py:1764
+#: cacao_accounting/contabilidad/routes.py:1766
 msgid "Contabilidad | Editar Proyecto"
 msgstr "Accounting | Edit Project"
 
-#: cacao_accounting/contabilidad/routes.py:1795
+#: cacao_accounting/contabilidad/routes.py:1797
 msgid ""
 "No se puede eliminar el proyecto porque tiene proyectos hijos asignados "
 "(RN-006)."
@@ -14799,103 +15339,103 @@ msgstr ""
 "The project cannot be deleted because it has child projects assigned "
 "(RN-006)."
 
-#: cacao_accounting/contabilidad/routes.py:1836
+#: cacao_accounting/contabilidad/routes.py:1838
 msgid "Contabilidad | Años Fiscales"
 msgstr "Accounting | Fiscal Years"
 
-#: cacao_accounting/contabilidad/routes.py:1853
+#: cacao_accounting/contabilidad/routes.py:1855
 msgid "Contabilidad | Nuevo Año Fiscal"
 msgstr "Accounting | New Fiscal Year"
 
-#: cacao_accounting/contabilidad/routes.py:1898
+#: cacao_accounting/contabilidad/routes.py:1900
 msgid "Contabilidad | Editar Año Fiscal"
 msgstr "Accounting | Edit Fiscal Year"
 
-#: cacao_accounting/contabilidad/routes.py:1905
+#: cacao_accounting/contabilidad/routes.py:1907
 msgid "La compañía del año fiscal no puede cambiarse."
 msgstr "The company of the fiscal year cannot be changed."
 
-#: cacao_accounting/contabilidad/routes.py:1917
+#: cacao_accounting/contabilidad/routes.py:1919
 msgid "No se puede abrir un año con cierre contable realizado."
 msgstr "A year with an accounting close performed cannot be opened."
 
-#: cacao_accounting/contabilidad/routes.py:1946
+#: cacao_accounting/contabilidad/routes.py:1948
 msgid "El año fiscal indicado no existe."
 msgstr "The indicated fiscal year does not exist."
 
-#: cacao_accounting/contabilidad/routes.py:1953
+#: cacao_accounting/contabilidad/routes.py:1955
 msgid "Contabilidad | Año Fiscal"
 msgstr "Accounting | Fiscal Year"
 
-#: cacao_accounting/contabilidad/routes.py:1980
+#: cacao_accounting/contabilidad/routes.py:1982
 msgid "No se puede eliminar un año fiscal cerrado financieramente."
 msgstr "A financially closed fiscal year cannot be deleted."
 
-#: cacao_accounting/contabilidad/routes.py:2009
+#: cacao_accounting/contabilidad/routes.py:2011
 msgid "Contabilidad | Nuevo Período Contable"
 msgstr "Accounting | New Accounting Period"
 
-#: cacao_accounting/contabilidad/routes.py:2017
-#: cacao_accounting/contabilidad/routes.py:2092
+#: cacao_accounting/contabilidad/routes.py:2019
+#: cacao_accounting/contabilidad/routes.py:2094
 msgid "El año fiscal debe pertenecer a la compañía del período."
 msgstr "The fiscal year must belong to the period's company."
 
-#: cacao_accounting/contabilidad/routes.py:2080
+#: cacao_accounting/contabilidad/routes.py:2082
 msgid "Contabilidad | Editar Período Contable"
 msgstr "Accounting | Edit Accounting Period"
 
-#: cacao_accounting/contabilidad/routes.py:2087
+#: cacao_accounting/contabilidad/routes.py:2089
 msgid "La compañía del período no puede cambiarse."
 msgstr "The period's company cannot be changed."
 
-#: cacao_accounting/contabilidad/routes.py:2148
+#: cacao_accounting/contabilidad/routes.py:2150
 msgid "El período fue reabierto y la operación quedó registrada en auditoría."
 msgstr "The period was reopened and the operation was recorded in the audit log."
 
-#: cacao_accounting/contabilidad/routes.py:2204
+#: cacao_accounting/contabilidad/routes.py:2206
 msgid "El período contable indicado no existe."
 msgstr "The indicated accounting period does not exist."
 
-#: cacao_accounting/contabilidad/routes.py:2211
+#: cacao_accounting/contabilidad/routes.py:2213
 msgid "Contabilidad | Período"
 msgstr "Accounting | Period"
 
-#: cacao_accounting/contabilidad/routes.py:2234
+#: cacao_accounting/contabilidad/routes.py:2236
 msgid "Contabilidad | Tasas de Cambio"
 msgstr "Accounting | Exchange Rates"
 
-#: cacao_accounting/contabilidad/routes.py:2256
+#: cacao_accounting/contabilidad/routes.py:2258
 msgid "Contabilidad | Nueva Tasa de Cambio"
 msgstr "Accounting | New Exchange Rate"
 
-#: cacao_accounting/contabilidad/routes.py:2262
+#: cacao_accounting/contabilidad/routes.py:2264
 msgid "La moneda origen debe existir y estar activa."
 msgstr "The source currency must exist and be active."
 
-#: cacao_accounting/contabilidad/routes.py:2266
+#: cacao_accounting/contabilidad/routes.py:2268
 msgid "La moneda destino debe existir y estar activa."
 msgstr "The target currency must exist and be active."
 
-#: cacao_accounting/contabilidad/routes.py:2277
-#: cacao_accounting/contabilidad/routes.py:2350
+#: cacao_accounting/contabilidad/routes.py:2279
+#: cacao_accounting/contabilidad/routes.py:2352
 msgid "La moneda origen y destino deben ser diferentes."
 msgstr "The origin and destination currency must be different."
 
-#: cacao_accounting/contabilidad/routes.py:2285
-#: cacao_accounting/contabilidad/routes.py:2352
+#: cacao_accounting/contabilidad/routes.py:2287
+#: cacao_accounting/contabilidad/routes.py:2354
 msgid "La tasa debe ser mayor a cero."
 msgstr "The rate must be greater than zero."
 
-#: cacao_accounting/contabilidad/routes.py:2320
-#: cacao_accounting/contabilidad/routes.py:2341
+#: cacao_accounting/contabilidad/routes.py:2322
+#: cacao_accounting/contabilidad/routes.py:2343
 msgid "La tasa de cambio indicada no existe."
 msgstr "The indicated exchange rate does not exist."
 
-#: cacao_accounting/contabilidad/routes.py:2326
+#: cacao_accounting/contabilidad/routes.py:2328
 msgid "Contabilidad | Tasa"
 msgstr "Accounting | Rate"
 
-#: cacao_accounting/contabilidad/routes.py:2379
+#: cacao_accounting/contabilidad/routes.py:2381
 msgid ""
 "No se puede editar una tasa que ya fue utilizada en contabilidad; "
 "registre una nueva tasa correctiva."
@@ -14903,95 +15443,95 @@ msgstr ""
 "You cannot edit a rate that has already been used in accounting; register"
 " a new corrective rate."
 
-#: cacao_accounting/contabilidad/routes.py:2394
+#: cacao_accounting/contabilidad/routes.py:2396
 msgid "Editar Tasa de Cambio"
 msgstr "Edit Exchange Rate"
 
-#: cacao_accounting/contabilidad/routes.py:2409
+#: cacao_accounting/contabilidad/routes.py:2411
 msgid "Contabilidad | Importar Tasas de Cambio"
 msgstr "Accounting | Import Exchange Rates"
 
-#: cacao_accounting/contabilidad/routes.py:2414
+#: cacao_accounting/contabilidad/routes.py:2416
 msgid "Debe seleccionar un archivo."
 msgstr "You must select a file."
 
-#: cacao_accounting/contabilidad/routes.py:2421
+#: cacao_accounting/contabilidad/routes.py:2423
 #, python-format
 msgid ""
 "Importación completada: %(inserted)s insertadas, %(skipped)s duplicadas "
 "omitidas."
 msgstr "Import completed: %(inserted)s inserted, %(skipped)s duplicates skipped."
 
-#: cacao_accounting/contabilidad/routes.py:2430
+#: cacao_accounting/contabilidad/routes.py:2432
 #, python-format
 msgid "%(count)s errores adicionales omitidos."
 msgstr "%(count)s additional errors skipped."
 
-#: cacao_accounting/contabilidad/routes.py:2460
+#: cacao_accounting/contabilidad/routes.py:2462
 msgid "Contabilidad | Períodos Contables"
 msgstr "Accounting | Accounting Periods"
 
 #: cacao_accounting/contabilidad/gl/templates/gl_lista.html:10
-#: cacao_accounting/contabilidad/routes.py:2517
+#: cacao_accounting/contabilidad/routes.py:2519
 #: cacao_accounting/contabilidad/templates/contabilidad.html:102
 #: cacao_accounting/contabilidad/templates/contabilidad.html:131
 #: cacao_accounting/imports/routes.py:182
 msgid "Comprobantes Contables"
 msgstr "Journal Entries"
 
-#: cacao_accounting/contabilidad/routes.py:2558
+#: cacao_accounting/contabilidad/routes.py:2560
 msgid "Comprobantes Recurrentes"
 msgstr "Recurring Journal Entries"
 
-#: cacao_accounting/contabilidad/routes.py:2584
+#: cacao_accounting/contabilidad/routes.py:2586
 msgid "Debe incluir al menos dos líneas contables."
 msgstr "You must include at least two accounting lines."
 
-#: cacao_accounting/contabilidad/routes.py:2606
+#: cacao_accounting/contabilidad/routes.py:2608
 msgid "Plantilla de comprobante recurrente creada."
 msgstr "Recurring entry template created."
 
-#: cacao_accounting/contabilidad/routes.py:2614
+#: cacao_accounting/contabilidad/routes.py:2616
 msgid "Nueva Plantilla Recurrente"
 msgstr "New Recurring Template"
 
-#: cacao_accounting/contabilidad/routes.py:2632
+#: cacao_accounting/contabilidad/routes.py:2634
 msgid "Plantilla no encontrada."
 msgstr "Template not found."
 
-#: cacao_accounting/contabilidad/routes.py:2653
+#: cacao_accounting/contabilidad/routes.py:2655
 msgid "Detalle de Plantilla Recurrente"
 msgstr "Recurring Template Detail"
 
-#: cacao_accounting/contabilidad/routes.py:2668
+#: cacao_accounting/contabilidad/routes.py:2670
 msgid "Plantilla recurrente aprobada."
 msgstr "Recurring template approved."
 
-#: cacao_accounting/contabilidad/routes.py:2685
+#: cacao_accounting/contabilidad/routes.py:2687
 msgid "Debe indicar un motivo de cancelación."
 msgstr "You must provide a reason for cancellation."
 
-#: cacao_accounting/contabilidad/routes.py:2690
+#: cacao_accounting/contabilidad/routes.py:2692
 msgid "Plantilla recurrente cancelada."
 msgstr "Recurring template cancelled."
 
-#: cacao_accounting/contabilidad/routes.py:2731
-#: cacao_accounting/contabilidad/routes.py:2878
+#: cacao_accounting/contabilidad/routes.py:2733
+#: cacao_accounting/contabilidad/routes.py:2880
 #: cacao_accounting/contabilidad/templates/contabilidad.html:114
 #: cacao_accounting/contabilidad/templates/contabilidad/monthly_close_assistant.html:14
 #: cacao_accounting/contabilidad/templates/contabilidad/monthly_close_assistant.html:19
 msgid "Asistente de Cierre Mensual"
 msgstr "Month-End Close Wizard"
 
-#: cacao_accounting/contabilidad/routes.py:2757
+#: cacao_accounting/contabilidad/routes.py:2759
 msgid "Ya existe un cierre mensual para ese periodo."
 msgstr "A monthly close already exists for that period."
 
-#: cacao_accounting/contabilidad/routes.py:2763
+#: cacao_accounting/contabilidad/routes.py:2765
 msgid "Cierre mensual creado."
 msgstr "Monthly close created."
 
-#: cacao_accounting/contabilidad/routes.py:2814
+#: cacao_accounting/contabilidad/routes.py:2816
 #, python-format
 msgid ""
 "La capitalización automática de proyectos finalizó con %(count)s "
@@ -15000,120 +15540,121 @@ msgstr ""
 "Automatic project capitalization finished with %(count)s records "
 "processed."
 
-#: cacao_accounting/contabilidad/routes.py:2924
+#: cacao_accounting/contabilidad/routes.py:2926
 #, python-format
 msgid "Se aplicaron %(count)s plantillas correctamente."
 msgstr "%(count)s templates were applied successfully."
 
-#: cacao_accounting/contabilidad/routes.py:2984
+#: cacao_accounting/contabilidad/routes.py:2986
 #: cacao_accounting/contabilidad/services.py:1059
 msgid "La revalorizacion fue ejecutada correctamente."
 msgstr "The revaluation was executed successfully."
 
-#: cacao_accounting/contabilidad/routes.py:2986
+#: cacao_accounting/contabilidad/routes.py:2988
 #: cacao_accounting/contabilidad/services.py:1061
 #: cacao_accounting/contabilidad/templates/contabilidad/exchange_revaluation.html:91
 msgid "No se generaron diferencias cambiarias."
 msgstr "No exchange differences were generated."
 
-#: cacao_accounting/contabilidad/routes.py:3010
+#: cacao_accounting/contabilidad/routes.py:3012
 msgid "El cierre mensual ha finalizado y el periodo ha sido cerrado."
 msgstr "The monthly close has finished and the period has been closed."
 
-#: cacao_accounting/contabilidad/routes.py:3039
-#: cacao_accounting/contabilidad/routes.py:3123
+#: cacao_accounting/contabilidad/routes.py:3041
+#: cacao_accounting/contabilidad/routes.py:3125
 msgid "Revalorizacion cambiaria"
 msgstr "Foreign Exchange Revaluation"
 
-#: cacao_accounting/contabilidad/routes.py:3066
+#: cacao_accounting/contabilidad/routes.py:3068
 msgid "Nueva revalorizacion cambiaria"
 msgstr "New Foreign Exchange Revaluation"
 
-#: cacao_accounting/contabilidad/routes.py:3082
+#: cacao_accounting/contabilidad/routes.py:3084
 msgid "Revalorizacion no encontrada."
 msgstr "Revaluation not found."
 
-#: cacao_accounting/contabilidad/routes.py:3155
+#: cacao_accounting/contabilidad/routes.py:3157
 msgid "Revalorizacion anulada correctamente."
 msgstr "Revaluation cancelled successfully."
 
-#: cacao_accounting/contabilidad/routes.py:3181
+#: cacao_accounting/contabilidad/routes.py:3183
 msgid "Comprobante contable guardado como borrador."
 msgstr "Accounting entry saved as draft."
 
-#: cacao_accounting/contabilidad/routes.py:3184
+#: cacao_accounting/contabilidad/routes.py:3186
 msgid "Nuevo Comprobante Contable"
 msgstr "New Journal Entry"
 
-#: cacao_accounting/contabilidad/routes.py:3223
+#: cacao_accounting/contabilidad/routes.py:3225
 msgid "Comprobante contable aprobado."
 msgstr "Accounting entry approved."
 
-#: cacao_accounting/contabilidad/routes.py:3228
+#: cacao_accounting/contabilidad/routes.py:3230
 msgid "Comprobante contable enviado para aprobación (Pendiente de Aprobación)."
 msgstr "Accounting entry sent for approval (Pending Approval)."
 
-#: cacao_accounting/contabilidad/routes.py:3235
+#: cacao_accounting/contabilidad/routes.py:3237
 msgid "Comprobante contable contabilizado."
 msgstr "Accounting entry posted."
 
-#: cacao_accounting/contabilidad/routes.py:3263
+#: cacao_accounting/contabilidad/routes.py:3265
 msgid "Comprobante contable rechazado."
 msgstr "Accounting entry rejected."
 
-#: cacao_accounting/contabilidad/routes.py:3311
+#: cacao_accounting/contabilidad/routes.py:3313
 msgid "Comprobante contable anulado con reversa contable."
 msgstr "Accounting entry cancelled with accounting reversal."
 
-#: cacao_accounting/contabilidad/routes.py:3326
-#: cacao_accounting/contabilidad/routes.py:3456
+#: cacao_accounting/contabilidad/routes.py:3328
+#: cacao_accounting/contabilidad/routes.py:3458
 msgid "El comprobante contable indicado no existe."
 msgstr "The specified accounting entry does not exist."
 
-#: cacao_accounting/contabilidad/routes.py:3376
+#: cacao_accounting/contabilidad/routes.py:3378
+#: cacao_accounting/document_flow/registry.py:697
 msgid "Comprobante Contable"
 msgstr "Journal Entry"
 
-#: cacao_accounting/contabilidad/routes.py:3399
+#: cacao_accounting/contabilidad/routes.py:3401
 msgid "Comprobante duplicado como nuevo borrador."
 msgstr "Entry duplicated as a new draft."
 
-#: cacao_accounting/contabilidad/routes.py:3419
+#: cacao_accounting/contabilidad/routes.py:3421
 msgid "Debe seleccionar la fecha de reversión."
 msgstr "You must select the rollback date."
 
-#: cacao_accounting/contabilidad/routes.py:3436
+#: cacao_accounting/contabilidad/routes.py:3438
 msgid "Reversión creada como nuevo borrador editable."
 msgstr "Reversal created as a new editable draft."
 
-#: cacao_accounting/contabilidad/routes.py:3460
+#: cacao_accounting/contabilidad/routes.py:3462
 msgid "No se puede editar un comprobante de capitalización automática."
 msgstr "A capitalization entry cannot be edited."
 
-#: cacao_accounting/contabilidad/routes.py:3472
+#: cacao_accounting/contabilidad/routes.py:3474
 msgid "Comprobante contable actualizado."
 msgstr "Accounting entry updated."
 
-#: cacao_accounting/contabilidad/routes.py:3475
+#: cacao_accounting/contabilidad/routes.py:3477
 msgid "Editar Comprobante Contable"
 msgstr "Edit Journal Entry"
 
-#: cacao_accounting/contabilidad/routes.py:3533
+#: cacao_accounting/contabilidad/routes.py:3535
 #: cacao_accounting/contabilidad/templates/contabilidad/naming_series_lista.html:14
 #: cacao_accounting/contabilidad/templates/contabilidad/naming_series_nueva.html:9
 msgid "Series de Numeracion"
 msgstr "Naming Series"
 
-#: cacao_accounting/contabilidad/routes.py:3597
+#: cacao_accounting/contabilidad/routes.py:3599
 #: cacao_accounting/contabilidad/templates/contabilidad/naming_series_nueva.html:16
 msgid "Nueva Serie de Numeracion"
 msgstr "New Naming Series"
 
-#: cacao_accounting/contabilidad/routes.py:3659
+#: cacao_accounting/contabilidad/routes.py:3661
 msgid "Editar Serie de Numeracion"
 msgstr "Edit Numbering Series"
 
-#: cacao_accounting/contabilidad/routes.py:3778
+#: cacao_accounting/contabilidad/routes.py:3780
 #: cacao_accounting/contabilidad/templates/contabilidad/external_counter_ajuste.html:9
 #: cacao_accounting/contabilidad/templates/contabilidad/external_counter_auditoria.html:10
 #: cacao_accounting/contabilidad/templates/contabilidad/external_counter_lista.html:14
@@ -15123,61 +15664,61 @@ msgstr "Edit Numbering Series"
 msgid "Contadores Externos"
 msgstr "External Counters"
 
-#: cacao_accounting/contabilidad/routes.py:3832
+#: cacao_accounting/contabilidad/routes.py:3834
 #: cacao_accounting/contabilidad/templates/contabilidad/external_counter_nuevo.html:16
 msgid "Nuevo Contador Externo"
 msgstr "New External Counter"
 
-#: cacao_accounting/contabilidad/routes.py:3863
+#: cacao_accounting/contabilidad/routes.py:3865
 msgid "Contador externo ajustado correctamente."
 msgstr "External counter adjusted successfully."
 
-#: cacao_accounting/contabilidad/routes.py:3875
+#: cacao_accounting/contabilidad/routes.py:3877
 msgid "Ajustar Contador Externo"
 msgstr "Adjust External Counter"
 
-#: cacao_accounting/contabilidad/routes.py:3905
+#: cacao_accounting/contabilidad/routes.py:3907
 msgid "Auditoria de Contador Externo"
 msgstr "External Counter Audit"
 
-#: cacao_accounting/contabilidad/routes.py:3958
+#: cacao_accounting/contabilidad/routes.py:3960
 #: cacao_accounting/contabilidad/templates/contabilidad/external_counter_nuevo.html:16
 msgid "Editar Contador Externo"
 msgstr "Edit External Counter"
 
-#: cacao_accounting/contabilidad/routes.py:3989
+#: cacao_accounting/contabilidad/routes.py:3991
 #: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year_closing_lista.html:10
 #: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year_closing_lista.html:16
 #: cacao_accounting/contabilidad/templates/contabilidad/fiscal_year_closing_nuevo.html:9
 msgid "Cierres de Año Fiscal"
 msgstr "Fiscal Year Closes"
 
-#: cacao_accounting/contabilidad/routes.py:4004
+#: cacao_accounting/contabilidad/routes.py:4006
 msgid "Solo el administrador del sistema puede ejecutar el cierre de año fiscal."
 msgstr "Only the system administrator can run the fiscal year close."
 
-#: cacao_accounting/contabilidad/routes.py:4021
+#: cacao_accounting/contabilidad/routes.py:4023
 msgid "Cierre de año fiscal ejecutado correctamente."
 msgstr "Fiscal year close executed successfully."
 
-#: cacao_accounting/contabilidad/routes.py:4033
+#: cacao_accounting/contabilidad/routes.py:4035
 msgid "Nuevo Cierre de Año Fiscal"
 msgstr "New Fiscal Year Closing"
 
-#: cacao_accounting/contabilidad/routes.py:4046
+#: cacao_accounting/contabilidad/routes.py:4048
 msgid "Solo el administrador del sistema puede revertir el cierre de año fiscal."
 msgstr "Only the system administrator can reverse the fiscal year close."
 
-#: cacao_accounting/contabilidad/routes.py:4061
+#: cacao_accounting/contabilidad/routes.py:4063
 msgid "Cierre de año fiscal revertido correctamente."
 msgstr "Fiscal year close reversed successfully."
 
-#: cacao_accounting/contabilidad/routes.py:4093
-#: cacao_accounting/contabilidad/routes.py:4118
+#: cacao_accounting/contabilidad/routes.py:4095
+#: cacao_accounting/contabilidad/routes.py:4120
 msgid "Contabilidad | Clasificación EFE"
 msgstr "Accounting | Cash Flow Classification"
 
-#: cacao_accounting/contabilidad/routes.py:4110
+#: cacao_accounting/contabilidad/routes.py:4112
 msgid "Clasificación del flujo de efectivo guardada correctamente."
 msgstr "Cash flow classification saved successfully."
 
@@ -15285,10 +15826,6 @@ msgstr "AR/AP and inventory subledgers reconciled against {count} book(s)."
 msgid "El cierre mensual requiere un usuario responsable."
 msgstr "The monthly close requires a responsible user."
 
-#: cacao_accounting/contabilidad/services.py:785
-msgid "Cierre mensual no encontrado."
-msgstr "Monthly closing not found."
-
 #: cacao_accounting/contabilidad/services.py:788
 msgid "El periodo del cierre no existe o no pertenece a la compañía."
 msgstr "The closing period does not exist or does not belong to the company."
@@ -15313,10 +15850,6 @@ msgstr "The reopening requires a responsible user."
 #: cacao_accounting/contabilidad/services.py:828
 msgid "Debe indicar el motivo de reapertura del período."
 msgstr "You must provide the reason for reopening the period."
-
-#: cacao_accounting/contabilidad/services.py:832
-msgid "Periodo no encontrado."
-msgstr "Period not found."
 
 #: cacao_accounting/contabilidad/services.py:834
 msgid "El periodo ya se encuentra abierto."
@@ -16736,6 +17269,7 @@ msgstr "At least one line with account and amount (debit or credit)"
 
 #: cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html:743
 #: cacao_accounting/contabilidad/templates/contabilidad/journal_nuevo.html:1377
+#: cacao_accounting/printing/registry.py:107
 msgid "Comprobante contable"
 msgstr "Accounting Entry"
 
@@ -17932,7 +18466,7 @@ msgid ""
 "registros."
 msgstr "The default unit cannot be changed when the item already has records."
 
-#: cacao_accounting/database/__init__.py:5868
+#: cacao_accounting/database/__init__.py:5869
 msgid ""
 "El artículo cuenta con transacciones activas en el sistema y no puede ser"
 " eliminado físicamente. Se sugiere en su lugar su inactivación o bloqueo."
@@ -17940,7 +18474,7 @@ msgstr ""
 "The item has active transactions in the system and cannot be physically "
 "deleted. Deactivation or blocking is recommended instead."
 
-#: cacao_accounting/database/__init__.py:5880
+#: cacao_accounting/database/__init__.py:5883
 msgid ""
 "La bodega cuenta con transacciones activas en el sistema y no puede ser "
 "eliminada físicamente. Se sugiere en su lugar su inactivación o bloqueo."
@@ -17948,7 +18482,7 @@ msgstr ""
 "The warehouse has active transactions in the system and cannot be "
 "physically deleted. Deactivation or blocking is recommended instead."
 
-#: cacao_accounting/database/__init__.py:5892
+#: cacao_accounting/database/__init__.py:5897
 msgid ""
 "El cliente/proveedor cuenta con transacciones activas en el sistema y no "
 "puede ser eliminado físicamente. Se sugiere en su lugar su inactivación o"
@@ -18184,7 +18718,7 @@ msgid "Factura origen no encontrada."
 msgstr "Source invoice not found."
 
 #: cacao_accounting/document_flow/payment.py:1860
-#: cacao_accounting/document_flow/service.py:773
+#: cacao_accounting/document_flow/service.py:775
 #, fuzzy
 msgid "No se pueden mezclar companias incompatibles."
 msgstr "Incompatible companies cannot be mixed."
@@ -18217,6 +18751,93 @@ msgstr ""
 "(%(payment_currency)s) does not match the referenced document currency "
 "(%(document_currency)s). Cross-currency applications are not allowed."
 
+#: cacao_accounting/document_flow/registry.py:45
+msgid "Crear Factura"
+msgstr "Create Invoice"
+
+#: cacao_accounting/document_flow/registry.py:46
+msgid "Crear Reembolso"
+msgstr "Create Reimbursement"
+
+#: cacao_accounting/document_flow/registry.py:49
+msgid "Crear Pago"
+msgstr "Create Payment"
+
+#: cacao_accounting/document_flow/registry.py:50
+msgid "Crear Nota de Crédito"
+msgstr "Create Credit Note"
+
+#: cacao_accounting/document_flow/registry.py:51
+msgid "Crear Nota de Débito"
+msgstr "Create Debit Note"
+
+#: cacao_accounting/document_flow/registry.py:52
+msgid "Crear Orden de Compra"
+msgstr "Create Purchase Order"
+
+#: cacao_accounting/document_flow/registry.py:53
+msgid "Crear Comparativo de Ofertas"
+msgstr "Create Offer Comparison"
+
+#: cacao_accounting/document_flow/registry.py:124
+msgid "Crear Recepción"
+msgstr "Create Receipt"
+
+#: cacao_accounting/document_flow/registry.py:144
+#: cacao_accounting/document_flow/registry.py:274
+msgid "Crear devolución física"
+msgstr "Create physical return"
+
+#: cacao_accounting/document_flow/registry.py:168
+msgid "Crear Solicitud de Cotización"
+msgstr "Create Request for Quotation"
+
+#: cacao_accounting/document_flow/registry.py:174
+#: cacao_accounting/document_flow/registry.py:205
+msgid "Crear Cotización de Proveedor"
+msgstr "Create Supplier Quotation"
+
+#: cacao_accounting/document_flow/registry.py:309
+msgid "Crear Costo de Importación"
+msgstr "Create Import Cost"
+
+#: cacao_accounting/document_flow/registry.py:421
+msgid "Crear Remisión de Mercadería Vendida"
+msgstr "Create Goods Delivery Note"
+
+#: cacao_accounting/document_flow/registry.py:446
+msgid "Crear Cotización"
+msgstr "Create Quotation"
+
+#: cacao_accounting/document_flow/registry.py:447
+#: cacao_accounting/document_flow/registry.py:466
+msgid "Crear Orden de Venta"
+msgstr "Create Sales Order"
+
+#: cacao_accounting/document_flow/registry.py:475
+#: cacao_accounting/inventario/routes.py:750
+#: cacao_accounting/inventario/services.py:910
+#: cacao_accounting/ventas/templates/ventas/entrega.html:45
+#: cacao_accounting/ventas/templates/ventas/entrega_nuevo.html:27
+msgid "Remisión de Mercadería Vendida"
+msgstr "Goods Delivery Note"
+
+#: cacao_accounting/document_flow/registry.py:503
+msgid "Crear Movimiento de Inventario"
+msgstr "Create Inventory Movement"
+
+#: cacao_accounting/document_flow/registry.py:510
+msgid "Crear Devolución de Venta"
+msgstr "Create Sales Return"
+
+#: cacao_accounting/document_flow/registry.py:614
+msgid "Crear Cobro"
+msgstr "Create Collection"
+
+#: cacao_accounting/document_flow/registry.py:684
+msgid "Crear Reuso Interno"
+msgstr "Create Internal Reuse"
+
 #: cacao_accounting/document_flow/registry.py:783
 #, python-format
 msgid "Tipo documental desconocido: %(value)s"
@@ -18236,36 +18857,36 @@ msgstr "The source parameter must use the doctype:id format."
 msgid "El documento origen y destino pertenecen a companias distintas."
 msgstr "The source and target documents belong to different companies."
 
-#: cacao_accounting/document_flow/service.py:405
+#: cacao_accounting/document_flow/service.py:406
 msgid "Configure la conversión de UOM antes de relacionar las líneas."
 msgstr "Configure UOM conversion before linking the lines."
 
-#: cacao_accounting/document_flow/service.py:440
+#: cacao_accounting/document_flow/service.py:442
 #, fuzzy
 msgid "La cantidad relacionada debe ser mayor que cero."
 msgstr "The related quantity must be greater than zero."
 
-#: cacao_accounting/document_flow/service.py:455
+#: cacao_accounting/document_flow/service.py:457
 #, fuzzy
 msgid "La cantidad relacionada excede el pendiente disponible."
 msgstr "The related quantity exceeds the available outstanding balance."
 
-#: cacao_accounting/document_flow/service.py:503
+#: cacao_accounting/document_flow/service.py:505
 #, fuzzy
 msgid "Linea destino no encontrada."
 msgstr "Target line not found."
 
-#: cacao_accounting/document_flow/service.py:505
+#: cacao_accounting/document_flow/service.py:507
 #, fuzzy
 msgid "La linea origen no pertenece al documento indicado."
 msgstr "The source line does not belong to the specified document."
 
-#: cacao_accounting/document_flow/service.py:507
+#: cacao_accounting/document_flow/service.py:509
 #, fuzzy
 msgid "La linea destino no pertenece al documento indicado."
 msgstr "The target line does not belong to the specified document."
 
-#: cacao_accounting/document_flow/service.py:511
+#: cacao_accounting/document_flow/service.py:513
 #, fuzzy
 msgid ""
 "La linea destino usa un artículo distinto al de la linea origen de la "
@@ -18274,34 +18895,34 @@ msgstr ""
 "The target line uses a different item than the source line in the "
 "relation."
 
-#: cacao_accounting/document_flow/service.py:520
+#: cacao_accounting/document_flow/service.py:522
 #, fuzzy
 msgid ""
 "El documento origen debe estar aprobado (docstatus=1) para crear la "
 "relación."
 msgstr "The source document must be approved (docstatus=1) to create the relation."
 
-#: cacao_accounting/document_flow/service.py:522
+#: cacao_accounting/document_flow/service.py:524
 #, fuzzy
 msgid "No se puede crear una relación hacia un documento cancelado (docstatus=2)."
 msgstr "A relation cannot be created to a cancelled document (docstatus=2)."
 
-#: cacao_accounting/document_flow/service.py:633
+#: cacao_accounting/document_flow/service.py:635
 #, fuzzy
 msgid "Debe indicar el motivo del cierre de saldo."
 msgstr "You must provide the reason for closing the balance."
 
-#: cacao_accounting/document_flow/service.py:643
+#: cacao_accounting/document_flow/service.py:645
 #, fuzzy
 msgid "La cantidad a cerrar debe ser mayor que cero."
 msgstr "The quantity to close must be greater than zero."
 
-#: cacao_accounting/document_flow/service.py:645
+#: cacao_accounting/document_flow/service.py:647
 #, fuzzy
 msgid "La cantidad a cerrar excede el pendiente disponible."
 msgstr "The quantity to close exceeds the available outstanding balance."
 
-#: cacao_accounting/document_flow/service.py:880
+#: cacao_accounting/document_flow/service.py:882
 #, fuzzy
 msgid "Debe indicar destino, compañía, fecha y lineas."
 msgstr "You must provide target, company, date and lines."
@@ -18363,48 +18984,68 @@ msgstr "Partially Billed"
 msgid "Pendiente Facturar"
 msgstr "Pending Billing"
 
-#: cacao_accounting/document_flow/validation.py:131
+#: cacao_accounting/document_flow/validation.py:135
 #, fuzzy
 msgid "El documento debe tener una compañía."
 msgstr "The document must have a company."
 
-#: cacao_accounting/document_flow/validation.py:133
+#: cacao_accounting/document_flow/validation.py:137
 msgid "El documento debe tener una fecha de contabilizacion."
 msgstr "The document must have a posting date."
 
-#: cacao_accounting/document_flow/validation.py:140
+#: cacao_accounting/document_flow/validation.py:144
 msgid "El documento debe tener un cliente o proveedor."
 msgstr "The document must have a customer or supplier."
 
-#: cacao_accounting/document_flow/validation.py:147
+#: cacao_accounting/document_flow/validation.py:151
 msgid "Todas las cantidades deben ser mayores a cero."
 msgstr "All quantities must be greater than zero."
 
-#: cacao_accounting/document_flow/validation.py:154
+#: cacao_accounting/document_flow/validation.py:158
 msgid "Todas las tarifas deben ser mayores a cero."
 msgstr "All rates must be greater than zero."
 
-#: cacao_accounting/document_flow/validation.py:161
+#: cacao_accounting/document_flow/validation.py:165
 msgid "Los montos no pueden ser cero."
 msgstr "Amounts cannot be zero."
 
-#: cacao_accounting/document_flow/validation.py:177
+#: cacao_accounting/document_flow/validation.py:181
 #, fuzzy, python-format
 msgid "La linea del artículo %(item)s requiere un almacen asignado."
 msgstr "The item line %(item)s requires an assigned warehouse."
 
-#: cacao_accounting/document_flow/validation.py:199
+#: cacao_accounting/document_flow/validation.py:203
 #, fuzzy
 msgid "Cada línea debe conservar una relación activa con el documento origen "
 msgstr "The currency must match the source document."
 
-#: cacao_accounting/document_flow/validation.py:237
+#: cacao_accounting/document_flow/validation.py:241
 msgid "El documento debe tener al menos una linea de detalle."
 msgstr "The document must have at least one detail line."
 
 #: cacao_accounting/exceptions/__init__.py:69
 msgid "Error interno al procesar la solicitud."
 msgstr "Internal error while processing the request."
+
+#: cacao_accounting/exceptions/mensajes.py:20
+msgid "No se proporcionaron datos."
+msgstr "No data was provided."
+
+#: cacao_accounting/exceptions/mensajes.py:21
+msgid "Instancia de Flask requerida"
+msgstr "A Flask application instance is required."
+
+#: cacao_accounting/exceptions/mensajes.py:22
+msgid "No se ha establecido una tabla para operación."
+msgstr "No table has been configured for the operation."
+
+#: cacao_accounting/exceptions/mensajes.py:23
+msgid "Tipo de acción no implementada."
+msgstr "Unsupported action type."
+
+#: cacao_accounting/imports/routes.py:61
+msgid "Error al validar el tipo de archivo"
+msgstr ""
 
 #: cacao_accounting/imports/routes.py:129
 msgid "Debe seleccionar compañía y tipo de registro."
@@ -18474,7 +19115,7 @@ msgstr "A bank row cannot contain a deposit and withdrawal simultaneously."
 msgid "Cuenta bancaria no encontrada: %(account)s"
 msgstr "Bank account not found: %(account)s"
 
-#: cacao_accounting/imports/adapters/bank_statement.py:166
+#: cacao_accounting/imports/adapters/bank_statement.py:168
 msgid "La transacción bancaria ya existe en la base de datos."
 msgstr "The bank transaction already exists in the database."
 
@@ -18509,7 +19150,7 @@ msgstr ""
 msgid "La compañía no tiene moneda funcional configurada."
 msgstr "The company has no functional currency configured."
 
-#: cacao_accounting/imports/adapters/transaction_documents.py:319
+#: cacao_accounting/imports/adapters/transaction_documents.py:320
 msgid ""
 "El documento importado requiere una moneda transaccional explicita en la "
 "primera fila o un documento origen con moneda transaccional persistida."
@@ -18517,16 +19158,16 @@ msgstr ""
 "Imported document requires an explicit transactional currency in the "
 "first row or a source document with a persisted transactional currency."
 
-#: cacao_accounting/imports/adapters/transaction_documents.py:339
+#: cacao_accounting/imports/adapters/transaction_documents.py:341
 msgid "El tipo de cambio debe ser positivo."
 msgstr "The exchange rate must be positive."
 
-#: cacao_accounting/imports/adapters/transaction_documents.py:401
+#: cacao_accounting/imports/adapters/transaction_documents.py:403
 #, python-format
 msgid "El lote '%(batch)s' del item '%(item)s' no existe en el maestro de lotes."
 msgstr "Batch '%(batch)s' for item '%(item)s' does not exist in the batch master."
 
-#: cacao_accounting/imports/adapters/transaction_documents.py:406
+#: cacao_accounting/imports/adapters/transaction_documents.py:408
 #, python-format
 msgid "El lote '%(batch)s' del item '%(item)s' está inactivo."
 msgstr "Batch '%(batch)s' for item '%(item)s' is inactive."
@@ -18937,13 +19578,6 @@ msgstr "Batch created successfully."
 #: cacao_accounting/inventario/routes.py:661
 msgid "Revise los datos del formulario de lote."
 msgstr "Review the batch form data."
-
-#: cacao_accounting/inventario/routes.py:750
-#: cacao_accounting/inventario/services.py:910
-#: cacao_accounting/ventas/templates/ventas/entrega.html:45
-#: cacao_accounting/ventas/templates/ventas/entrega_nuevo.html:27
-msgid "Remisión de Mercadería Vendida"
-msgstr "Goods Delivery Note"
 
 #: cacao_accounting/inventario/routes.py:757
 #: cacao_accounting/inventario/routes.py:883
@@ -19952,16 +20586,6 @@ msgstr "No invoices found."
 msgid "Nota de Entrega / Remisión"
 msgstr "Delivery Note / Remission"
 
-#: cacao_accounting/portal/templates/portal/invoice_detail.html:22
-#: cacao_accounting/portal/templates/portal/supplier_dashboard.html:154
-msgid "Nota de Crédito"
-msgstr "Credit Note"
-
-#: cacao_accounting/portal/templates/portal/invoice_detail.html:23
-#: cacao_accounting/portal/templates/portal/supplier_dashboard.html:156
-msgid "Nota de Débito"
-msgstr "Debit Note"
-
 #: cacao_accounting/portal/templates/portal/quotation_detail.html:24
 msgid "Solicitud de Cotización de Compra"
 msgstr "Purchase Quotation Request"
@@ -20060,6 +20684,62 @@ msgstr "Template updated successfully."
 #, python-format
 msgid "Error al actualizar plantilla: %(error)s"
 msgstr "Error updating template: %(error)s"
+
+#: cacao_accounting/printing/registry.py:129
+msgid "Nota de crédito de venta"
+msgstr "Sales Credit Note"
+
+#: cacao_accounting/printing/registry.py:140
+msgid "Nota de débito de venta"
+msgstr "Sales Debit Note"
+
+#: cacao_accounting/printing/registry.py:151
+msgid "Devolución de venta"
+msgstr "Sales Return"
+
+#: cacao_accounting/printing/registry.py:173
+msgid "Nota de crédito de compra"
+msgstr "Purchase Credit Note"
+
+#: cacao_accounting/printing/registry.py:184
+msgid "Nota de débito de compra"
+msgstr "Purchase Debit Note"
+
+#: cacao_accounting/printing/registry.py:239
+msgid "Cotización de proveedor"
+msgstr "Supplier Quotation"
+
+#: cacao_accounting/printing/registry.py:250
+msgid "Solicitud de cotizacion"
+msgstr ""
+
+#: cacao_accounting/printing/registry.py:272
+msgid "Gasto de importación"
+msgstr "Import Expense"
+
+#: cacao_accounting/printing/registry.py:305
+msgid "Comprobante de pago"
+msgstr "Payment Entry"
+
+#: cacao_accounting/printing/registry.py:316
+msgid "Certificado de retención"
+msgstr "Withholding Certificate"
+
+#: cacao_accounting/printing/registry.py:327
+msgid "Transferencia bancaria"
+msgstr "Bank Transfer"
+
+#: cacao_accounting/printing/registry.py:338
+msgid "Recibo de caja"
+msgstr "Cash Receipt"
+
+#: cacao_accounting/printing/registry.py:349
+msgid "Cotización de venta"
+msgstr "Sales Quotation"
+
+#: cacao_accounting/printing/registry.py:360
+msgid "Comprobante de revaluación"
+msgstr "Revaluation Entry"
 
 #: cacao_accounting/printing/service.py:162
 msgid "La plantilla renderizada esta vacia."
@@ -20230,9 +20910,49 @@ msgstr "If left empty, the fallback is used:"
 msgid "Acción de auditoría no permitida: %(action)s"
 msgstr "Audit action not allowed: %(action)s"
 
+#: cacao_accounting/query_tools/decorators.py:11
+msgid ""
+"Resultado de consulta de solo lectura; el contenido puede incluir "
+"paginación y procedencia."
+msgstr "Read-only query result; the content may include pagination and provenance."
+
 #: cacao_accounting/query_tools/decorators.py:41
-msgid "Write operations are not allowed in query_tools."
+#, python-format
+msgid ""
+"Tool '%(name)s' must declare read_only=True. Write operations are not "
+"allowed in query_tools."
 msgstr ""
+"Tool '%(name)s' must declare read_only=True. Write operations are not "
+"allowed in query_tools."
+
+#: cacao_accounting/query_tools/pagination.py:59
+#, python-format
+msgid "El tamaño de página no puede exceder %(max_size)s."
+msgstr "Page size cannot exceed %(max_size)s."
+
+#: cacao_accounting/query_tools/permissions.py:20
+msgid "No tiene acceso a la compañía solicitada."
+msgstr "You do not have access to the requested company."
+
+#: cacao_accounting/query_tools/permissions.py:29
+msgid "La compañía solicitada no existe."
+msgstr "The requested company does not exist."
+
+#: cacao_accounting/query_tools/permissions.py:40
+#: cacao_accounting/query_tools/permissions.py:71
+#, python-format
+msgid "El módulo '%(module_name)s' no está disponible."
+msgstr "The module '%(module_name)s' is not available."
+
+#: cacao_accounting/query_tools/permissions.py:46
+#, python-format
+msgid "El módulo '%(module_name)s' se encuentra deshabilitado."
+msgstr "The module '%(module_name)s' is disabled."
+
+#: cacao_accounting/query_tools/permissions.py:60
+#: cacao_accounting/query_tools/permissions.py:80
+msgid "No tiene permisos para consultar este recurso."
+msgstr "You do not have permission to query this resource."
 
 #: cacao_accounting/query_tools/registry.py:23
 #, python-format
@@ -20255,17 +20975,287 @@ msgstr ""
 msgid "Herramienta '%(name)s' no encontrada."
 msgstr "Tool '%(name)s' not found."
 
+#: cacao_accounting/query_tools/handlers/accounting.py:32
+msgid "Lista los períodos contables de una compañía."
+msgstr "Lists accounting periods for a company."
+
+#: cacao_accounting/query_tools/handlers/accounting.py:108
+msgid "Busca cuentas contables por código o nombre."
+msgstr "Searches ledger accounts by code or name."
+
+#: cacao_accounting/query_tools/handlers/accounting.py:186
+msgid ""
+"Obtiene la balanza de comprobación para una compañía, libro y rango de "
+"fechas."
+msgstr "Gets the trial balance for a company, ledger, and date range."
+
+#: cacao_accounting/query_tools/handlers/accounting.py:268
+msgid "Consulta los movimientos del libro mayor por cuenta."
+msgstr "Queries general ledger movements by account."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:155
+msgid "Obtiene el estado de resultados acumulado."
+msgstr "Gets the year-to-date income statement."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:175
+msgid "Obtiene el balance general por clasificación."
+msgstr "Gets the balance sheet by classification."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:195
+msgid "Obtiene el resumen de movimientos por cuenta."
+msgstr "Gets the account movement summary."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:215
+msgid "Obtiene el detalle de asientos de una cuenta con saldo acumulado opcional."
+msgstr "Gets account entry details with an optional running balance."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:262
+msgid "Compara presupuesto aprobado contra ejecución real por cuenta y período."
+msgstr "Compares the approved budget with actual execution by account and period."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:389
+msgid "Consulta movimientos de inventario por artículo y almacén."
+msgstr "Queries inventory movements by item and warehouse."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:410
+msgid "Obtiene existencia histórica o actual de inventario."
+msgstr "Gets historical or current inventory stock."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:449
+msgid "Lista lotes de inventario."
+msgstr "Lists inventory batches."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:470
+msgid "Lista números de serie de inventario."
+msgstr "Lists inventory serial numbers."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:491
+msgid "Detecta existencias negativas por artículo y almacén."
+msgstr "Detects negative stock by item and warehouse."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:522
+msgid "Detecta artículos por debajo del mínimo o punto de reorden configurado."
+msgstr "Detects items below the configured minimum or reorder point."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:553
+msgid "Consulta traslados de material entre almacenes."
+msgstr "Queries material transfers between warehouses."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:586
+msgid "Lista inventario con existencias y sin salidas durante un umbral."
+msgstr "Lists inventory with stock and no issues during a threshold period."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:625
+msgid "Calcula rotación de inventario por artículo y almacén."
+msgstr "Calculates inventory turnover by item and warehouse."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:661
+msgid "Obtiene saldos bancarios consolidados."
+msgstr "Gets consolidated bank balances."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:691
+msgid "Obtiene el estado de conciliaciones bancarias y pendientes de compras."
+msgstr "Gets the status of bank reconciliations and pending purchases."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:721
+msgid "Lista movimientos de extracto pendientes de conciliación."
+msgstr "Lists statement movements pending reconciliation."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:787
+msgid "Obtiene el subledger detallado de clientes."
+msgstr "Gets the detailed customer subledger."
+
+#: cacao_accounting/query_tools/handlers/advanced.py:807
+msgid "Obtiene el subledger detallado de proveedores."
+msgstr "Gets the detailed supplier subledger."
+
+#: cacao_accounting/query_tools/handlers/analytics.py:64
+msgid ""
+"Obtiene un snapshot ejecutivo determinista de liquidez, cartera, "
+"inventario y resultado."
+msgstr ""
+"Gets a deterministic executive snapshot of liquidity, receivables, "
+"inventory, and results."
+
+#: cacao_accounting/query_tools/handlers/analytics.py:81
+msgid ""
+"Compara una métrica permitida entre dos períodos sin descargar "
+"movimientos."
+msgstr ""
+"Compares an allowed metric between two periods without downloading "
+"movements."
+
+#: cacao_accounting/query_tools/handlers/analytics.py:130
+msgid "Obtiene una tendencia mensual de una métrica permitida."
+msgstr "Gets a monthly trend for an allowed metric."
+
+#: cacao_accounting/query_tools/handlers/analytics.py:152
+msgid ""
+"Obtiene concentración por cliente, proveedor o artículo con un límite "
+"explícito."
+msgstr "Gets concentration by customer, supplier, or item with an explicit limit."
+
+#: cacao_accounting/query_tools/handlers/audit_trail.py:24
+msgid "Obtiene la auditoría de un documento específico."
+msgstr "Gets the audit trail for a specific document."
+
+#: cacao_accounting/query_tools/handlers/audit_trail.py:89
+msgid ""
+"Resume eventos de auditoría por usuario y acción, sin exponer payloads "
+"internos."
+msgstr ""
+"Summarizes audit events by user and action without exposing internal "
+"payloads."
+
+#: cacao_accounting/query_tools/handlers/banking.py:24
+msgid "Lista las cuentas bancarias de una compañía."
+msgstr "Lists bank accounts for a company."
+
+#: cacao_accounting/query_tools/handlers/banking.py:90
+msgid "Consulta movimientos bancarios."
+msgstr "Queries bank movements."
+
+#: cacao_accounting/query_tools/handlers/companies.py:19
+msgid "Lista las compañías accesibles para el usuario."
+msgstr "Lists companies accessible to the user."
+
+#: cacao_accounting/query_tools/handlers/configuration.py:29
+msgid "Lista configuración permitida con valores sensibles siempre redactados."
+msgstr "Lists allowed configuration with sensitive values always redacted."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:58
+msgid "Lista libros contables autorizados de una compañía."
+msgstr "Lists authorized ledgers for a company."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:85
+msgid "Busca clientes y proveedores activos de una compañía."
+msgstr "Searches active customers and suppliers for a company."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:127
+msgid "Busca artículos activos por código o nombre."
+msgstr "Searches active items by code or name."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:157
+msgid "Lista almacenes activos de una compañía."
+msgstr "Lists active warehouses for a company."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:184
+msgid "Busca cuentas bancarias activas de una compañía."
+msgstr "Searches active bank accounts for a company."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:216
+msgid "Lista monedas configuradas."
+msgstr "Lists configured currencies."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:242
+msgid "Lista tipos de dimensión analítica activos."
+msgstr "Lists active analytical dimension types."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:262
+msgid "Busca valores de una dimensión por compañía."
+msgstr "Searches dimension values by company."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:304
+msgid "Lista centros de costo activos de una compañía."
+msgstr "Lists active cost centers for a company."
+
+#: cacao_accounting/query_tools/handlers/discovery.py:324
+msgid "Lista unidades de medida activas."
+msgstr "Lists active units of measure."
+
+#: cacao_accounting/query_tools/handlers/documents.py:25
+msgid "Obtiene las relaciones documentales de un documento."
+msgstr "Gets a document’s relationships."
+
+#: cacao_accounting/query_tools/handlers/documents.py:105
+msgid "Obtiene documentos relacionados y sus líneas de flujo."
+msgstr "Gets related documents and their flow lines."
+
 #: cacao_accounting/query_tools/handlers/documents.py:123
 msgid "documents.get_flow handler is not configured"
 msgstr "documents.get_flow handler is not configured"
+
+#: cacao_accounting/query_tools/handlers/documents.py:144
+msgid "Obtiene un DTO controlado de una factura o pago."
+msgstr "Gets a controlled DTO for an invoice or payment."
+
+#: cacao_accounting/query_tools/handlers/documents.py:158
+msgid "Obtiene líneas controladas de una factura; los pagos no tienen líneas."
+msgstr "Gets controlled invoice lines; payments have no lines."
+
+#: cacao_accounting/query_tools/handlers/documents.py:177
+msgid "Obtiene el estado contable controlado de una factura o pago."
+msgstr "Gets the controlled accounting status of an invoice or payment."
+
+#: cacao_accounting/query_tools/handlers/operational.py:95
+msgid "Busca pagos y cobros de una compañía por fecha, tercero y tipo."
+msgstr "Searches payments and collections for a company by date, party, and type."
+
+#: cacao_accounting/query_tools/handlers/operational.py:145
+msgid "Obtiene pagos y cobros con importe todavía no aplicado."
+msgstr "Gets payments and collections with amounts still unallocated."
+
+#: cacao_accounting/query_tools/handlers/operational.py:201
+msgid "Obtiene las aplicaciones de un pago o de un documento."
+msgstr "Gets allocations for a payment or document."
 
 #: cacao_accounting/query_tools/handlers/operational.py:227
 msgid "payment_id o document_id es obligatorio"
 msgstr "payment_id or document_id is required"
 
+#: cacao_accounting/query_tools/handlers/operational.py:270
+msgid "Busca relaciones documentales por compañía, documento o tipo de relación."
+msgstr ""
+"Searches document relationships by company, document, or relationship "
+"type."
+
+#: cacao_accounting/query_tools/handlers/operational.py:332
+msgid "Busca eventos de auditoría por compañía, documento, acción y fecha."
+msgstr "Searches audit events by company, document, action, and date."
+
+#: cacao_accounting/query_tools/handlers/operational.py:405
+msgid ""
+"Consulta ejecuciones de revalorización cambiaria y sus ganancias o "
+"pérdidas."
+msgstr "Queries currency revaluation runs and their gains or losses."
+
+#: cacao_accounting/query_tools/handlers/payables.py:28
+msgid "Obtiene la antigüedad de saldos de cuentas por pagar."
+msgstr "Gets the accounts payable aging."
+
+#: cacao_accounting/query_tools/handlers/payables.py:113
+msgid "Consulta documentos de compra abiertos (pendientes de pago)."
+msgstr "Queries open purchase documents (pending payment)."
+
+#: cacao_accounting/query_tools/handlers/receivables.py:28
+msgid "Obtiene la antigüedad de saldos de cuentas por cobrar."
+msgstr "Gets the accounts receivable aging."
+
+#: cacao_accounting/query_tools/handlers/receivables.py:113
+msgid "Consulta documentos de venta abiertos (pendientes de pago)."
+msgstr "Queries open sales documents (pending payment)."
+
 #: cacao_accounting/query_tools/handlers/treasury.py:38
 msgid "Pronóstico no encontrado para la compañía autorizada"
 msgstr "Forecast not found for the authorized company"
+
+#: cacao_accounting/query_tools/handlers/treasury.py:55
+msgid "Lista versiones de pronósticos de caja de una compañía."
+msgstr "Lists cash forecast versions for a company."
+
+#: cacao_accounting/query_tools/handlers/treasury.py:93
+msgid "Obtiene el pronóstico de caja por períodos, sin modificarlo."
+msgstr "Gets the cash forecast by period without modifying it."
+
+#: cacao_accounting/query_tools/handlers/treasury.py:110
+msgid "Compara dos versiones de pronóstico de caja de una misma compañía."
+msgstr "Compares two cash forecast versions for the same company."
+
+#: cacao_accounting/query_tools/handlers/treasury.py:142
+msgid ""
+"Obtiene vencimientos de cartera y proveedores calculados desde términos "
+"de pago."
+msgstr "Gets customer and supplier due dates calculated from payment terms."
 
 #: cacao_accounting/reportes/analytics.py:106
 #: cacao_accounting/reportes/services.py:558
@@ -20479,6 +21469,44 @@ msgstr "Accounts Receivable Aging"
 #: cacao_accounting/reportes/services.py:369
 msgid "El subledger solo soporta customer o supplier."
 msgstr "The subledger only supports customer or supplier."
+
+#: cacao_accounting/reportes/services.py:670
+msgid "Fuente: facturas de venta y aplicaciones de pago."
+msgstr ""
+
+#: cacao_accounting/reportes/services.py:687
+msgid ""
+"Fuente: facturas de compra y aplicaciones de pago; el pasivo se expresa "
+"como crédito neto."
+msgstr ""
+"Source: purchase invoices and payment allocations; the liability is "
+"expressed as a net credit."
+
+#: cacao_accounting/reportes/services.py:719
+msgid ""
+"Fuente: Stock Ledger; cuentas derivadas de la configuración activa por "
+"bodega."
+msgstr ""
+"Source: Stock Ledger; accounts derived from the active warehouse "
+"configuration."
+
+#: cacao_accounting/reportes/services.py:740
+msgid ""
+"Fuente: recepciones aprobadas pendientes de factura; el puente se expresa"
+" como crédito neto."
+msgstr ""
+"Source: approved receipts pending invoicing; the bridge is expressed as a"
+" net credit."
+
+#: cacao_accounting/reportes/services.py:787
+msgid "Impuestos netos: compras debitadas menos ventas acreditadas."
+msgstr ""
+
+#: cacao_accounting/reportes/services.py:839
+msgid ""
+"Movimiento de extracto; no equivale a saldo de libro si existe saldo "
+"inicial no importado."
+msgstr ""
 
 #: cacao_accounting/reportes/services.py:954
 msgid "horizon_days debe estar entre 0 y 3650"
@@ -22087,13 +23115,25 @@ msgstr "Delivery Note List"
 msgid "Listado de Facturas de Venta"
 msgstr "Sales Invoice List"
 
-#: cacao_accounting/ventas/routes.py:754
+#: cacao_accounting/ventas/routes.py:754 cacao_accounting/ventas/routes.py:759
 msgid "Listado de Notas de Débito de Venta"
 msgstr "Sales Debit Notes List"
 
-#: cacao_accounting/ventas/routes.py:776
+#: cacao_accounting/ventas/routes.py:761
+msgid "Listado de notas de débito de venta."
+msgstr "List of sales debit notes."
+
+#: cacao_accounting/ventas/routes.py:776 cacao_accounting/ventas/routes.py:781
 msgid "Listado de Devoluciones de Venta"
 msgstr "Sales Returns List"
+
+#: cacao_accounting/ventas/routes.py:782
+msgid "Nueva Devolución"
+msgstr "New Sales Return"
+
+#: cacao_accounting/ventas/routes.py:783
+msgid "Listado de devoluciones y notas de crédito de venta."
+msgstr "List of sales returns and credit notes."
 
 #: cacao_accounting/ventas/routes.py:815
 #: cacao_accounting/ventas/templates/ventas/cliente_lista.html:13
@@ -22266,6 +23306,10 @@ msgstr "Customer enabled as supplier successfully."
 msgid "Rol de proveedor deshabilitado exitosamente."
 msgstr "Supplier role disabled successfully."
 
+#: cacao_accounting/ventas/services.py:154
+msgid "La compañía de un documento existente no puede cambiarse."
+msgstr "The company of an existing document cannot be changed."
+
 #: cacao_accounting/ventas/services.py:200
 msgid ""
 "El documento de ventas requiere una moneda transaccional explicita antes "
@@ -22391,11 +23435,11 @@ msgid ""
 "puede derivar la Nota de Entrega."
 msgstr "The selected company has no functional currency configured."
 
-#: cacao_accounting/ventas/services.py:1306
+#: cacao_accounting/ventas/services.py:1307
 msgid "Configure la bodega del ítem o cree la nota de entrega manualmente."
 msgstr "Configure the item warehouse or create the delivery note manually."
 
-#: cacao_accounting/ventas/services.py:1405
+#: cacao_accounting/ventas/services.py:1407
 #, python-brace-format
 msgid ""
 "El precio del item {item_code} (${rate}) difiere del precio en "
@@ -22406,11 +23450,11 @@ msgstr ""
 "{reference} (${source_rate}) by {variance}{unit}. Allowed tolerance: "
 "{tolerance}{unit}."
 
-#: cacao_accounting/ventas/services.py:1444
+#: cacao_accounting/ventas/services.py:1446
 msgid "la Lista de Precios"
 msgstr "the Price List"
 
-#: cacao_accounting/ventas/services.py:1567
+#: cacao_accounting/ventas/services.py:1569
 #, python-format
 msgid ""
 "No existe un precio vigente para el item %(item_code)s en la lista de "
@@ -22419,25 +23463,25 @@ msgstr ""
 "No current price exists for item %(item_code)s in the applicable price "
 "list."
 
-#: cacao_accounting/ventas/services.py:1572
+#: cacao_accounting/ventas/services.py:1574
 msgid ""
 "Solo el Administrador del Sistema o el Gerente de Ventas puede modificar "
 "un precio de venta."
 msgstr "Only the System Administrator or Sales Manager can modify a sales price."
 
-#: cacao_accounting/ventas/services.py:1639
+#: cacao_accounting/ventas/services.py:1641
 #, python-brace-format
 msgid ""
 "Sobre-entrega: cantidad entregada {} excede la ordenada {} para el "
 "artículo {}."
 msgstr "Over-delivery: delivered quantity {} exceeds the ordered {} for item {}."
 
-#: cacao_accounting/ventas/services.py:1684
+#: cacao_accounting/ventas/services.py:1686
 #, python-format
 msgid "La línea %(item)s debe tener un monto positivo."
 msgstr "Line %(item)s must have a positive amount."
 
-#: cacao_accounting/ventas/services.py:1687
+#: cacao_accounting/ventas/services.py:1689
 #, python-format
 msgid ""
 "El monto de la línea %(item)s no coincide con cantidad por precio "
@@ -22446,12 +23490,12 @@ msgstr ""
 "The amount for line %(item)s does not match quantity times price "
 "(%(amount)s versus %(expected)s)."
 
-#: cacao_accounting/ventas/services.py:1707
+#: cacao_accounting/ventas/services.py:1709
 #, python-format
 msgid "La Orden de Venta origen '%(source)s' está cerrada."
 msgstr "Source Sales Order '%(source)s' is closed."
 
-#: cacao_accounting/ventas/services.py:1712
+#: cacao_accounting/ventas/services.py:1714
 msgid ""
 "El documento origen y el documento destino deben pertenecer al mismo "
 "cliente."
@@ -22459,60 +23503,60 @@ msgstr ""
 "The source document and the target document must belong to the same "
 "customer."
 
-#: cacao_accounting/ventas/services.py:1718
+#: cacao_accounting/ventas/services.py:1720
 msgid "La nota de entrega no pertenece a la orden de venta indicada."
 msgstr "The delivery note does not belong to the specified sales order."
 
-#: cacao_accounting/ventas/services.py:1745
+#: cacao_accounting/ventas/services.py:1747
 msgid "La orden y la nota de entrega de la factura no pertenecen al mismo flujo."
 msgstr ""
 "The order and the delivery note of the invoice do not belong to the same "
 "flow."
 
-#: cacao_accounting/ventas/services.py:1775
+#: cacao_accounting/ventas/services.py:1777
 msgid "La factura debe estar vinculada a una Orden de Venta aprobada."
 msgstr "The invoice must be linked to an approved Sales Order."
 
-#: cacao_accounting/ventas/services.py:1792
+#: cacao_accounting/ventas/services.py:1794
 msgid "La línea de la factura origen no pertenece al documento indicado."
 msgstr "The source invoice line does not belong to the specified document."
 
-#: cacao_accounting/ventas/services.py:1932
+#: cacao_accounting/ventas/services.py:1934
 msgid "Orden de venta creada correctamente."
 msgstr "Sales order created successfully."
 
-#: cacao_accounting/ventas/services.py:1942
+#: cacao_accounting/ventas/services.py:1944
 msgid "Error inesperado al crear la orden de venta: "
 msgstr "Unexpected error when creating sales order:"
 
-#: cacao_accounting/ventas/services.py:1970
+#: cacao_accounting/ventas/services.py:1972
 msgid "Cotización de venta actualizada correctamente."
 msgstr "Sales Quotation updated successfully."
 
-#: cacao_accounting/ventas/services.py:1996
+#: cacao_accounting/ventas/services.py:1998
 msgid "Nota de entrega actualizada correctamente."
 msgstr "Delivery Note updated successfully."
 
-#: cacao_accounting/ventas/services.py:2161
+#: cacao_accounting/ventas/services.py:2163
 msgid "Factura de venta creada correctamente."
 msgstr "Sales invoice created successfully."
 
-#: cacao_accounting/ventas/services.py:2290
+#: cacao_accounting/ventas/services.py:2292
 msgid "Factura de venta actualizada correctamente."
 msgstr "Sales Invoice updated successfully."
 
-#: cacao_accounting/ventas/services.py:2321
+#: cacao_accounting/ventas/services.py:2323
 #, python-format
 msgid "Se ha cancelado la Nota de Entrega %s asociada."
 msgstr "The associated Delivery Note %s has been cancelled."
 
-#: cacao_accounting/ventas/services.py:2479
+#: cacao_accounting/ventas/services.py:2486
 msgid ""
 "El cliente tiene facturas vencidas y su configuración bloquea nuevas "
 "ventas. "
 msgstr "The customer has overdue invoices and its configuration blocks new sales. "
 
-#: cacao_accounting/ventas/services.py:2510
+#: cacao_accounting/ventas/services.py:2518
 #, python-format
 msgid "La factura origen '%(source)s' no pertenece al mismo cliente."
 msgstr "Source invoice '%(source)s' does not belong to the same customer."
@@ -22736,563 +23780,74 @@ msgstr "New Order"
 #~ msgid "La compañía de un documento existente no puede cambiarse."
 #~ msgstr "The company of an existing document cannot be changed."
 
-msgid "No tiene acceso a la compañía solicitada."
-msgstr "You do not have access to the requested company."
+#~ msgid "AUTHORIZATION_REVOKED"
+#~ msgstr "Authorize"
 
-msgid "La compañía solicitada no existe."
-msgstr "The requested company does not exist."
+#~ msgid "SUPPLIER_UNRESOLVED"
+#~ msgstr ""
 
-msgid "No tiene permisos para consultar este recurso."
-msgstr "You do not have permission to query this resource."
+#~ msgid "ORDER_CURRENCY_MISMATCH"
+#~ msgstr ""
 
-msgid "El módulo '%s' no está disponible."
-msgstr "The module '%s' is not available."
+#~ msgid "DUPLICATE_INVOICE"
+#~ msgstr ""
 
-msgid "El módulo '%s' se encuentra deshabilitado."
-msgstr "The module '%s' is disabled."
+#~ msgid "CLOSED_ACCOUNTING_PERIOD"
+#~ msgstr ""
 
-msgid "El módulo '%(module_name)s' no está disponible."
-msgstr "The module '%(module_name)s' is not available."
+#~ msgid "IDEMPOTENCY_KEY_CONFLICT"
+#~ msgstr ""
 
-msgid "El módulo '%(module_name)s' se encuentra deshabilitado."
-msgstr "The module '%(module_name)s' is disabled."
+#~ msgid "PURCHASE_ORDER_REQUIRED"
+#~ msgstr ""
 
-msgid "Costo de Importación"
-msgstr "Import Cost"
+#~ msgid "RECEIPT_REQUIRED"
+#~ msgstr "Preprinted Receipt"
 
-msgid "Crear Cobro"
-msgstr "Create Collection"
+#~ msgid "PURCHASE_ORDER_NOT_FOUND"
+#~ msgstr ""
 
-msgid "Crear Comparativo de Ofertas"
-msgstr "Create Offer Comparison"
+#~ msgid "RECEIPT_MISSING"
+#~ msgstr ""
 
-msgid "Crear Costo de Importación"
-msgstr "Create Import Cost"
+#~ msgid "LINE_UNRESOLVED"
+#~ msgstr ""
 
-msgid "Crear Cotización"
-msgstr "Create Quotation"
+#~ msgid "MATH_MISMATCH"
+#~ msgstr ""
 
-msgid "Crear Cotización de Proveedor"
-msgstr "Create Supplier Quotation"
+#~ msgid "TAX_MISMATCH"
+#~ msgstr ""
 
-msgid "Crear Devolución de Venta"
-msgstr "Create Sales Return"
+#~ msgid "Write operations are not allowed in query_tools."
+#~ msgstr ""
 
-msgid "Crear Factura"
-msgstr "Create Invoice"
+#~ msgid "El módulo '%s' no está disponible."
+#~ msgstr "The module '%s' is not available."
 
-msgid "Crear Movimiento de Inventario"
-msgstr "Create Inventory Movement"
+#~ msgid "El módulo '%s' se encuentra deshabilitado."
+#~ msgstr "The module '%s' is disabled."
 
-msgid "Crear Nota de Crédito"
-msgstr "Create Credit Note"
+#~ msgid ""
+#~ "Los servicios y artículos no "
+#~ "inventariables requieren cuenta de gasto "
+#~ "predeterminada por compañía."
+#~ msgstr ""
+#~ "Non-inventory services and items require"
+#~ " a default expense account per "
+#~ "company."
 
-msgid "Crear Nota de Débito"
-msgstr "Create Debit Note"
+#~ msgid ""
+#~ "Los servicios y artículos no "
+#~ "inventariables requieren centro de costo "
+#~ "predeterminado por compañía."
+#~ msgstr ""
+#~ "Non-inventory services and items require"
+#~ " a default cost center per company."
 
-msgid "Crear Orden de Compra"
-msgstr "Create Purchase Order"
+#~ msgid "Solicitud de cotización"
+#~ msgstr "Request for Quotation"
 
-msgid "Crear Orden de Venta"
-msgstr "Create Sales Order"
+#~ msgid "  Vuelve a cargar tu configuración o reinicia el terminal."
+#~ msgstr "  Reload your configuration or restart the terminal."
 
-msgid "Crear Pago"
-msgstr "Create Payment"
-
-msgid "Crear Recepción"
-msgstr "Create Receipt"
-
-msgid "Crear Reembolso"
-msgstr "Create Reimbursement"
-
-msgid "Crear Remisión de Mercadería Vendida"
-msgstr "Create Goods Delivery Note"
-
-msgid "Crear Reuso Interno"
-msgstr "Create Internal Reuse"
-
-msgid "Crear Solicitud de Cotización"
-msgstr "Create Request for Quotation"
-
-msgid "Crear devolución física"
-msgstr "Create physical return"
-
-msgid "Los servicios y artículos no inventariables requieren cuenta de gasto predeterminada por compañía."
-msgstr "Non-inventory services and items require a default expense account per company."
-
-msgid "Los servicios y artículos no inventariables requieren centro de costo predeterminado por compañía."
-msgstr "Non-inventory services and items require a default cost center per company."
-
-msgid "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
-msgstr "Cancellation request sent for approval (Pending Cancellation)."
-
-msgid "La compañía de un documento existente no puede cambiarse."
-msgstr "The company of an existing document cannot be changed."
-
-msgid "La entidad indicada no existe."
-msgstr "The indicated entity does not exist."
-
-msgid "entradas GL"
-msgstr "GL entries"
-
-msgid "movimientos de inventario"
-msgstr "inventory movements"
-
-msgid "No se proporcionaron datos."
-msgstr "No data was provided."
-
-msgid "Instancia de Flask requerida"
-msgstr "A Flask application instance is required."
-
-msgid "No se ha establecido una tabla para operación."
-msgstr "No table has been configured for the operation."
-
-msgid "Tipo de acción no implementada."
-msgstr "Unsupported action type."
-
-msgid "Nota de crédito de venta"
-msgstr "Sales Credit Note"
-
-msgid "Nota de débito de venta"
-msgstr "Sales Debit Note"
-
-msgid "Devolución de venta"
-msgstr "Sales Return"
-
-msgid "Nota de crédito de compra"
-msgstr "Purchase Credit Note"
-
-msgid "Nota de débito de compra"
-msgstr "Purchase Debit Note"
-
-msgid "Cotización de proveedor"
-msgstr "Supplier Quotation"
-
-msgid "Solicitud de cotización"
-msgstr "Request for Quotation"
-
-msgid "Gasto de importación"
-msgstr "Import Expense"
-
-msgid "Comprobante de pago"
-msgstr "Payment Entry"
-
-msgid "Certificado de retención"
-msgstr "Withholding Certificate"
-
-msgid "Transferencia bancaria"
-msgstr "Bank Transfer"
-
-msgid "Recibo de caja"
-msgstr "Cash Receipt"
-
-msgid "Cotización de venta"
-msgstr "Sales Quotation"
-
-msgid "Comprobante de revaluación"
-msgstr "Revaluation Entry"
-
-msgid "El tamaño de página no puede exceder %(max_size)s."
-msgstr "Page size cannot exceed %(max_size)s."
-
-msgid "Fuente: facturas de compra y aplicaciones de pago; el pasivo se expresa como crédito neto."
-msgstr "Source: purchase invoices and payment allocations; the liability is expressed as a net credit."
-
-msgid "Fuente: Stock Ledger; cuentas derivadas de la configuración activa por bodega."
-msgstr "Source: Stock Ledger; accounts derived from the active warehouse configuration."
-
-msgid "Fuente: recepciones aprobadas pendientes de factura; el puente se expresa como crédito neto."
-msgstr "Source: approved receipts pending invoicing; the bridge is expressed as a net credit."
-
-msgid "Resultado de consulta de solo lectura; el contenido puede incluir paginación y procedencia."
-msgstr "Read-only query result; the content may include pagination and provenance."
-
-msgid "Conciliación automática aplicada"
-msgstr "Automatic reconciliation applied"
-
-msgid "Conciliación automática parcial aplicada"
-msgstr "Partial automatic reconciliation applied"
-
-msgid "{0} por la regla de matching '{1}' contra {2} {3} por {4} (conciliación {5})."
-msgstr "{0} by matching rule '{1}' against {2} {3} for {4} (reconciliation {5})."
-
-msgid "Tool '%(name)s' must declare read_only=True. Write operations are not allowed in query_tools."
-msgstr "Tool '%(name)s' must declare read_only=True. Write operations are not allowed in query_tools."
-
-msgid "  Shells disponibles: bash, zsh, fish"
-msgstr "  Available shells: bash, zsh, fish"
-
-msgid "  Vuelve a cargar tu configuración o reinicia el terminal."
-msgstr "  Reload your configuration or restart the terminal."
-
-msgid "%(prog)s %(version)s"
-msgstr "%(prog)s %(version)s"
-
-msgid "Abre una consola interactiva con el contexto de la aplicación."
-msgstr "Open an interactive console with the application context."
-
-msgid "Activa el depurador de Werkzeug."
-msgstr "Enable the Werkzeug debugger."
-
-msgid "Administración de la base de datos."
-msgstr "Database administration."
-
-msgid "Administración del sistema"
-msgstr "System administration."
-
-msgid "Aplica migraciones pendientes de Alembic (idempotente)."
-msgstr "Apply pending Alembic migrations (idempotent)."
-
-msgid "Base de datos creada."
-msgstr "Database created."
-
-msgid "Base de datos eliminada."
-msgstr "Database deleted."
-
-msgid "Base de datos recreada correctamente."
-msgstr "Database recreated successfully."
-
-msgid "CLI oficial para administrar Cacao Accounting."
-msgstr "Official CLI for administering Cacao Accounting."
-
-msgid "Crea o verifica la base de datos (idempotente)."
-msgstr "Create or verify the database (idempotent)."
-
-msgid "Datos de ejemplo insertados."
-msgstr "Example data inserted."
-
-msgid "Dirección de escucha."
-msgstr "Listen address."
-
-msgid "Ejemplos:\n\n  cacaoctl run\n  cacaoctl serve\n  cacaoctl db init\n  cacaoctl db migrate\n  cacaoctl db reset\n  cacaoctl status\n  cacaoctl version\n"
-msgstr "Examples:\n\n  cacaoctl run\n  cacaoctl serve\n  cacaoctl db init\n  cacaoctl db migrate\n  cacaoctl db reset\n  cacaoctl status\n  cacaoctl version\n"
-
-msgid "Elimina la base de datos (solo desarrollo)."
-msgstr "Delete the database (development only)."
-
-msgid "Elimina una base existente antes de crear la nueva."
-msgstr "Delete an existing database before creating the new one."
-
-msgid "Entorno de ejecución (dev, test, prod)."
-msgstr "Execution environment (dev, test, prod)."
-
-msgid "Esta operación eliminará toda la base de datos."
-msgstr "This operation will delete the entire database."
-
-msgid "Este comando solo está disponible en entornos de desarrollo o con --force."
-msgstr "This command is only available in development environments or with --force."
-
-msgid "Genera script de autocompletado para el shell."
-msgstr "Generate a shell completion script."
-
-msgid "Inicia el servidor de desarrollo."
-msgstr "Start the development server."
-
-msgid "Inicia el servidor de producción (Waitress)."
-msgstr "Start the production server (Waitress)."
-
-msgid "Inserta datos de ejemplo después de crear la base."
-msgstr "Insert example data after creating the database."
-
-msgid "Inserta datos de ejemplo después de recrear la base."
-msgstr "Insert example data after recreating the database."
-
-msgid "Inserta datos de ejemplo en la base de datos."
-msgstr "Insert example data into the database."
-
-msgid "La base de datos existente será reemplazada."
-msgstr "The existing database will be replaced."
-
-msgid "La base de datos ya existe, nada que hacer."
-msgstr "The database already exists; nothing to do."
-
-msgid "Lista las rutas registradas en la aplicación."
-msgstr "List the routes registered in the application."
-
-msgid "Migraciones aplicadas correctamente."
-msgstr "Migrations applied successfully."
-
-msgid "Muestra el estado general del sistema."
-msgstr "Show the general system status."
-
-msgid "Muestra información detallada de la ejecución."
-msgstr "Show detailed execution information."
-
-msgid "Muestra la configuración activa."
-msgstr "Show the active configuration."
-
-msgid "Muestra la versión instalada."
-msgstr "Show the installed version."
-
-msgid "No fue posible crear la base de datos."
-msgstr "Unable to create the database."
-
-msgid "No fue posible recrear la base de datos."
-msgstr "Unable to recreate the database."
-
-msgid "Omite la confirmación de la operación destructiva."
-msgstr "Skip confirmation of the destructive operation."
-
-msgid "Omite la confirmación y permite ejecutarlo fuera de desarrollo."
-msgstr "Skip confirmation and allow execution outside development."
-
-msgid "Operación cancelada por el usuario."
-msgstr "Operation canceled by the user."
-
-msgid "Puerto de escucha (por defecto el de configuración)."
-msgstr "Listen port (defaults to the configured port)."
-
-msgid "Recrea completamente la base de datos."
-msgstr "Recreate the database completely."
-
-msgid "Reduce la salida de la herramienta."
-msgstr "Reduce tool output."
-
-msgid "Revisión destino (por defecto: head)."
-msgstr "Target revision (default: head)."
-
-msgid "Revisión específica a aplicar."
-msgstr "Specific revision to apply."
-
-msgid "Se están usando usuario y contraseña predeterminados para el setup inicial."
-msgstr "Default username and password are being used for initial setup."
-
-msgid "¿Desea continuar?"
-msgstr "Do you want to continue?"
-
-msgid "Busca artículos activos por código o nombre."
-msgstr "Searches active items by code or name."
-
-msgid "Busca clientes y proveedores activos de una compañía."
-msgstr "Searches active customers and suppliers for a company."
-
-msgid "Busca cuentas bancarias activas de una compañía."
-msgstr "Searches active bank accounts for a company."
-
-msgid "Busca cuentas contables por código o nombre."
-msgstr "Searches ledger accounts by code or name."
-
-msgid "Busca eventos de auditoría por compañía, documento, acción y fecha."
-msgstr "Searches audit events by company, document, action, and date."
-
-msgid "Busca pagos y cobros de una compañía por fecha, tercero y tipo."
-msgstr "Searches payments and collections for a company by date, party, and type."
-
-msgid "Busca relaciones documentales por compañía, documento o tipo de relación."
-msgstr "Searches document relationships by company, document, or relationship type."
-
-msgid "Busca valores de una dimensión por compañía."
-msgstr "Searches dimension values by company."
-
-msgid "Calcula rotación de inventario por artículo y almacén."
-msgstr "Calculates inventory turnover by item and warehouse."
-
-msgid "Compara dos versiones de pronóstico de caja de una misma compañía."
-msgstr "Compares two cash forecast versions for the same company."
-
-msgid "Compara presupuesto aprobado contra ejecución real por cuenta y período."
-msgstr "Compares the approved budget with actual execution by account and period."
-
-msgid "Compara una métrica permitida entre dos períodos sin descargar movimientos."
-msgstr "Compares an allowed metric between two periods without downloading movements."
-
-msgid "Consulta documentos de compra abiertos (pendientes de pago)."
-msgstr "Queries open purchase documents (pending payment)."
-
-msgid "Consulta documentos de venta abiertos (pendientes de pago)."
-msgstr "Queries open sales documents (pending payment)."
-
-msgid "Consulta ejecuciones de revalorización cambiaria y sus ganancias o pérdidas."
-msgstr "Queries currency revaluation runs and their gains or losses."
-
-msgid "Consulta los movimientos del libro mayor por cuenta."
-msgstr "Queries general ledger movements by account."
-
-msgid "Consulta movimientos bancarios."
-msgstr "Queries bank movements."
-
-msgid "Consulta movimientos de inventario por artículo y almacén."
-msgstr "Queries inventory movements by item and warehouse."
-
-msgid "Consulta traslados de material entre almacenes."
-msgstr "Queries material transfers between warehouses."
-
-msgid "Detecta artículos por debajo del mínimo o punto de reorden configurado."
-msgstr "Detects items below the configured minimum or reorder point."
-
-msgid "Detecta existencias negativas por artículo y almacén."
-msgstr "Detects negative stock by item and warehouse."
-
-msgid "Lista almacenes activos de una compañía."
-msgstr "Lists active warehouses for a company."
-
-msgid "Lista centros de costo activos de una compañía."
-msgstr "Lists active cost centers for a company."
-
-msgid "Lista configuración permitida con valores sensibles siempre redactados."
-msgstr "Lists allowed configuration with sensitive values always redacted."
-
-msgid "Lista inventario con existencias y sin salidas durante un umbral."
-msgstr "Lists inventory with stock and no issues during a threshold period."
-
-msgid "Lista las compañías accesibles para el usuario."
-msgstr "Lists companies accessible to the user."
-
-msgid "Lista las cuentas bancarias de una compañía."
-msgstr "Lists bank accounts for a company."
-
-msgid "Lista libros contables autorizados de una compañía."
-msgstr "Lists authorized ledgers for a company."
-
-msgid "Lista los períodos contables de una compañía."
-msgstr "Lists accounting periods for a company."
-
-msgid "Lista lotes de inventario."
-msgstr "Lists inventory batches."
-
-msgid "Lista monedas configuradas."
-msgstr "Lists configured currencies."
-
-msgid "Lista movimientos de extracto pendientes de conciliación."
-msgstr "Lists statement movements pending reconciliation."
-
-msgid "Lista números de serie de inventario."
-msgstr "Lists inventory serial numbers."
-
-msgid "Lista tipos de dimensión analítica activos."
-msgstr "Lists active analytical dimension types."
-
-msgid "Lista unidades de medida activas."
-msgstr "Lists active units of measure."
-
-msgid "Lista versiones de pronósticos de caja de una compañía."
-msgstr "Lists cash forecast versions for a company."
-
-msgid "Obtiene concentración por cliente, proveedor o artículo con un límite explícito."
-msgstr "Gets concentration by customer, supplier, or item with an explicit limit."
-
-msgid "Obtiene documentos relacionados y sus líneas de flujo."
-msgstr "Gets related documents and their flow lines."
-
-msgid "Obtiene el balance general por clasificación."
-msgstr "Gets the balance sheet by classification."
-
-msgid "Obtiene el detalle de asientos de una cuenta con saldo acumulado opcional."
-msgstr "Gets account entry details with an optional running balance."
-
-msgid "Obtiene el estado contable controlado de una factura o pago."
-msgstr "Gets the controlled accounting status of an invoice or payment."
-
-msgid "Obtiene el estado de conciliaciones bancarias y pendientes de compras."
-msgstr "Gets the status of bank reconciliations and pending purchases."
-
-msgid "Obtiene el estado de resultados acumulado."
-msgstr "Gets the year-to-date income statement."
-
-msgid "Obtiene el pronóstico de caja por períodos, sin modificarlo."
-msgstr "Gets the cash forecast by period without modifying it."
-
-msgid "Obtiene el resumen de movimientos por cuenta."
-msgstr "Gets the account movement summary."
-
-msgid "Obtiene el subledger detallado de clientes."
-msgstr "Gets the detailed customer subledger."
-
-msgid "Obtiene el subledger detallado de proveedores."
-msgstr "Gets the detailed supplier subledger."
-
-msgid "Obtiene existencia histórica o actual de inventario."
-msgstr "Gets historical or current inventory stock."
-
-msgid "Obtiene la antigüedad de saldos de cuentas por cobrar."
-msgstr "Gets the accounts receivable aging."
-
-msgid "Obtiene la antigüedad de saldos de cuentas por pagar."
-msgstr "Gets the accounts payable aging."
-
-msgid "Obtiene la auditoría de un documento específico."
-msgstr "Gets the audit trail for a specific document."
-
-msgid "Obtiene la balanza de comprobación para una compañía, libro y rango de fechas."
-msgstr "Gets the trial balance for a company, ledger, and date range."
-
-msgid "Obtiene las aplicaciones de un pago o de un documento."
-msgstr "Gets allocations for a payment or document."
-
-msgid "Obtiene las relaciones documentales de un documento."
-msgstr "Gets a document’s relationships."
-
-msgid "Obtiene líneas controladas de una factura; los pagos no tienen líneas."
-msgstr "Gets controlled invoice lines; payments have no lines."
-
-msgid "Obtiene pagos y cobros con importe todavía no aplicado."
-msgstr "Gets payments and collections with amounts still unallocated."
-
-msgid "Obtiene saldos bancarios consolidados."
-msgstr "Gets consolidated bank balances."
-
-msgid "Obtiene un DTO controlado de una factura o pago."
-msgstr "Gets a controlled DTO for an invoice or payment."
-
-msgid "Obtiene un snapshot ejecutivo determinista de liquidez, cartera, inventario y resultado."
-msgstr "Gets a deterministic executive snapshot of liquidity, receivables, inventory, and results."
-
-msgid "Obtiene una tendencia mensual de una métrica permitida."
-msgstr "Gets a monthly trend for an allowed metric."
-
-msgid "Obtiene vencimientos de cartera y proveedores calculados desde términos de pago."
-msgstr "Gets customer and supplier due dates calculated from payment terms."
-
-msgid "Resume eventos de auditoría por usuario y acción, sin exponer payloads internos."
-msgstr "Summarizes audit events by user and action without exposing internal payloads."
-
-msgid "Listado de notas de débito de compra."
-msgstr "List of purchase debit notes."
-
-msgid "Listado de devoluciones y notas de crédito de venta."
-msgstr "List of sales returns and credit notes."
-
-msgid "Listado de notas de débito de venta."
-msgstr "List of sales debit notes."
-
-msgid "Nueva Devolución"
-msgstr "New Sales Return"
-
-msgid "Devolución"
-msgstr "Return"
-
-msgid "Solicitud de confirmación de saldo cancelada manualmente por el usuario."
-msgstr "Balance confirmation request manually canceled by the user."
-
-msgid "Solicitud de confirmación de saldo enviada por correo electrónico."
-msgstr "Balance confirmation request sent by email."
-
-msgid "Solicitud de confirmación de saldo reenviada con nuevos tokens y códigos."
-msgstr "Balance confirmation request resent with new tokens and codes."
-
-msgid "Confirmación respondida como %(response_type)s. Comentario: %(comment)s."
-msgstr "Confirmation responded to as %(response_type)s. Comment: %(comment)s."
-
-msgid "Sin comentario"
-msgstr "No comment"
-
-msgid "Solicitud de Confirmación de Saldo - %(company)s"
-msgstr "Balance Confirmation Request - %(company)s"
-
-msgid "Reenvío de Solicitud de Confirmación de Saldo - %(company)s"
-msgstr "Balance Confirmation Request Resent - %(company)s"
-
-msgid "Cierre año fiscal %(year)s"
-msgstr "Fiscal year closing %(year)s"
-
-msgid "Resultado neto año fiscal %(year)s"
-msgstr "Net result for fiscal year %(year)s"
-
-msgid "Cierre contable automático del año fiscal %(year)s"
-msgstr "Automatic accounting close for fiscal year %(year)s"
-
-msgid "Generado automáticamente desde plantilla recurrente: %(template)s"
-msgstr "Automatically generated from recurring template: %(template)s"
-
-msgid "Resultado cambiario %(document)s"
-msgstr "Currency result %(document)s"

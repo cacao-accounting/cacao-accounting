@@ -1287,7 +1287,7 @@ def nueva_cuenta():
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
     entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
-    parent_initial_label = _("")
+    parent_initial_label = ""
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
         entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
@@ -1455,7 +1455,7 @@ def nuevo_centro_costo():
     formulario.entidad.choices = obtener_lista_entidades_por_id_razonsocial()
     formulario.padre.choices = [("", SIN_PADRE)]
     entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""
-    parent_initial_label = _("")
+    parent_initial_label = ""
     if request.method == "POST" and request.form.get("padre"):
         formulario.padre.choices.append((request.form["padre"], request.form["padre"]))
         entity_initial_label = _company_label(formulario.entidad.data) if formulario.entidad.data else ""

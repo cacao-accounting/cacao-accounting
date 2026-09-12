@@ -184,7 +184,7 @@ def _mostrar_banner() -> None:
     """Imprime un encabezado visual para la herramienta."""
     click.secho(_(f"{APPNAME} CLI"), fg=COLOR_TITULO, bold=True)
     click.secho(_("Administración del sistema"), fg=COLOR_INFO)
-    click.echo(_(""))
+    click.echo("")
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -443,7 +443,7 @@ def routes() -> None:
             metodos = ",".join(sorted(m for m in regla.methods if m not in ("HEAD", "OPTIONS")))
             click.echo(_(f"{str(regla.rule).ljust(ancho)}  {metodos}"))
         try:
-            click.echo(_(""))
+            click.echo("")
             click.secho(_(f"Motor: {db_version()}"), fg=COLOR_INFO)
         except SQLAlchemyError:
             pass
@@ -538,22 +538,22 @@ def completion(ctx: click.Context, shell: str) -> None:
     comando = f'eval "$(_CACAOCTL_COMPLETE={shell}_source cacaoctl)"'
     archivo = {"bash": "~/.bashrc", "zsh": "~/.zshrc", "fish": "~/.config/fish/completions/cacaoctl.fish"}
 
-    click.echo(_(""))
+    click.echo("")
     if shell == "fish":
         click.echo(_(f"  {comando}"))
-        click.echo(_(""))
+        click.echo("")
         click.echo(_(f"  Agrega la linea anterior a {archivo[shell]}:"))
         click.echo(_(f"  echo '{comando}' >> {archivo[shell]}"))
     else:
         click.echo(_(f"  Agrega la siguiente linea a tu {archivo[shell]}:"))
-        click.echo(_(""))
+        click.echo("")
         click.echo(_(f"  {comando}"))
-    click.echo(_(""))
+    click.echo("")
     click.echo(_("  Vuelve a cargar tu configuracion o reinicia el terminal."))
     click.echo(_(f"  source {archivo[shell]}"))
 
     # Muestra tambien las opciones de shell disponibles.
-    click.echo(_(""))
+    click.echo("")
     click.echo(_("  Shells disponibles: bash, zsh, fish"))
 
 
