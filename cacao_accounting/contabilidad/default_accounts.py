@@ -228,7 +228,7 @@ def validate_default_account_assignment(company: str, field: str, account_id: st
     definition = DEFAULT_ACCOUNT_DEFINITION_BY_FIELD[field]
     account = _account_by_id(account_id)
     if not account or account.entity != company:
-        raise DefaultAccountError(_("La cuenta seleccionada no existe para la compania."))
+        raise DefaultAccountError(_("La cuenta seleccionada no existe para la compañía."))
     account_type = (account.account_type or "").strip()
     if account_type and account_type not in definition.allowed_account_types:
         allowed = ", ".join(definition.allowed_account_types)

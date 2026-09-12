@@ -279,7 +279,7 @@ def create_party_address(party_id: str, values: Mapping[str, str | None]) -> Add
         is_active=True,
     )
     if not address.address_line1:
-        raise ValueError(_("La direccion es obligatoria."))
+        raise ValueError(_("La dirección es obligatoria."))
     database.session.add(address)
     database.session.flush()
     database.session.add(
@@ -298,10 +298,10 @@ def update_party_address(party_id: str, link_id: str, values: Mapping[str, str |
     link = _party_address_link(party_id, link_id)
     address = database.session.get(Address, link.address_id)
     if not address:
-        raise ValueError(_("Direccion no encontrada."))
+        raise ValueError(_("Dirección no encontrada."))
     line1 = (values.get("address_line1") or "").strip()
     if not line1:
-        raise ValueError(_("La direccion es obligatoria."))
+        raise ValueError(_("La dirección es obligatoria."))
     address.address_line1 = line1
     address.address_line2 = (values.get("address_line2") or "").strip() or None
     address.city = (values.get("city") or "").strip() or None
@@ -341,7 +341,7 @@ def _party_contact_link(party_id: str, link_id: str) -> PartyContact:
 def _party_address_link(party_id: str, link_id: str) -> PartyAddress:
     link = database.session.get(PartyAddress, link_id)
     if not link or link.party_id != party_id:
-        raise ValueError(_("Direccion no encontrada."))
+        raise ValueError(_("Dirección no encontrada."))
     return link
 
 

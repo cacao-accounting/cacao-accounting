@@ -110,7 +110,7 @@ def _document_company(document: Any) -> str:
         bank_account = database.session.get(BankAccount, document.bank_account_id)
         company = str(getattr(bank_account, "company", None) or "")
     if not company:
-        raise CancellationPolicyError(_("El documento no tiene compania definida."))
+        raise CancellationPolicyError(_("El documento no tiene compañía definida."))
     return company
 
 
@@ -118,12 +118,12 @@ def _request_metadata(request: CancellationRequest) -> tuple[str, str]:
     """Normalize and require the actor and reason of a cancellation."""
     reason = str(request.reason or "").strip()
     if not reason:
-        raise CancellationPolicyError(_("Debe indicar el motivo de la anulacion."))
+        raise CancellationPolicyError(_("Debe indicar el motivo de la anulación."))
     actor = str(request.actor_user_id or "").strip()
     if not actor:
-        raise CancellationPolicyError(_("Debe indicar el usuario que ejecuta la anulacion."))
+        raise CancellationPolicyError(_("Debe indicar el usuario que ejecuta la anulación."))
     if database.session.get(User, actor) is None:
-        raise CancellationPolicyError(_("El usuario que ejecuta la anulacion no existe."))
+        raise CancellationPolicyError(_("El usuario que ejecuta la anulación no existe."))
     return actor, reason
 
 
@@ -135,7 +135,7 @@ def _resolve_effective_dates(request: CancellationRequest, document: Any) -> tup
     except IdentifierConfigurationError as exc:
         raise CancellationPolicyError(str(exc)) from exc
     if effective_date < original_date:
-        raise CancellationPolicyError(_("La fecha de anulacion no puede ser anterior a la fecha original."))
+        raise CancellationPolicyError(_("La fecha de anulación no puede ser anterior a la fecha original."))
     return original_date, effective_date
 
 
@@ -147,7 +147,7 @@ def _resolve_periods(company: str, original_date: date, effective_date: date) ->
 def _validate_periods(original_period: AccountingPeriod, effective_period: AccountingPeriod) -> None:
     """Require the effective date to remain in the original open period."""
     if original_period.id != effective_period.id:
-        raise CancellationPolicyError(_("La anulacion debe registrarse en el mismo periodo contable del documento."))
+        raise CancellationPolicyError(_("La anulación debe registrarse en el mismo periodo contable del documento."))
     if bool(original_period.is_closed) or not bool(original_period.enabled):
         raise CancellationPolicyError(_("No puede anularse: periodo contable cerrado o deshabilitado."))
     if bool(effective_period.is_closed) or not bool(effective_period.enabled):
@@ -172,7 +172,7 @@ def _ensure_no_previous_cancellation(source_type: str, source_id: str) -> None:
         )
     ).scalar_one_or_none()
     if existing is not None:
-        raise CancellationPolicyError(_("El documento ya tiene una anulacion o una reversion registrada."))
+        raise CancellationPolicyError(_("El documento ya tiene una anulación o una reversion registrada."))
 
 
 def active_cancellation_dependencies(document: Any, source_type: str, source_id: str) -> list[CancellationDependency]:

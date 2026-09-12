@@ -65,7 +65,7 @@ def parse_posting_date(posting_date_raw: date | str | None) -> date:
     try:
         return date.fromisoformat(str(posting_date_raw))
     except ValueError as exc:
-        raise IdentifierConfigurationError(_("La fecha de contabilizacion es invalida.")) from exc
+        raise IdentifierConfigurationError(_("La fecha de contabilizacion es inválida.")) from exc
 
 
 def validate_accounting_period(company: str | None, posting_date: date, allow_closing: bool = False) -> None:
@@ -77,7 +77,7 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
     completar el cierre. Si el año fiscal está cerrado, no se permite ningún movimiento.
     """
     if not company:
-        raise IdentifierConfigurationError(_("Debe indicar la compania del documento."))
+        raise IdentifierConfigurationError(_("Debe indicar la compañía del documento."))
 
     closed_fiscal_year = database.session.execute(
         database.select(FiscalYear)
@@ -159,7 +159,7 @@ def _pick_naming_series(entity_type: str, company: str | None, naming_series_id:
         if selected.entity_type != entity_type:
             raise IdentifierConfigurationError(_("La serie seleccionada no coincide con el tipo de documento."))
         if selected.company not in (None, company):
-            raise IdentifierConfigurationError(_("La serie seleccionada no pertenece a la compania indicada."))
+            raise IdentifierConfigurationError(_("La serie seleccionada no pertenece a la compañía indicada."))
         return selected
 
     candidates = get_active_naming_series(entity_type=entity_type, company=company)
@@ -601,7 +601,7 @@ def assign_document_identifier(
 
     if counter:
         if counter.company != company_code:
-            raise IdentifierConfigurationError(_("El contador externo no pertenece a la compania indicada."))
+            raise IdentifierConfigurationError(_("El contador externo no pertenece a la compañía indicada."))
         ext_num = external_number or counter.next_suggested_formatted
         _validate_and_register_external_number(
             counter=counter,

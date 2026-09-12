@@ -1723,7 +1723,7 @@ def _handle_purchase_receipt_edit_post(registro):
     after_state = _capture_purchase_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
-    flash(_("Recepcion de compra actualizada correctamente."), "success")
+    flash(_("Recepción de compra actualizada correctamente."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=registro.id))
 
 
@@ -1736,7 +1736,7 @@ def _set_purchase_receipt_totals(receipt: PurchaseReceipt, total: Decimal) -> No
         raise ValueError(_("La recepción requiere una moneda transaccional explicita antes de recalcular totales."))
     base_currency_value = company_functional_currency(receipt.company)
     if not base_currency_value:
-        raise ValueError(_("La compania requiere una moneda funcional configurada."))
+        raise ValueError(_("La compañía requiere una moneda funcional configurada."))
     receipt.base_currency = base_currency_value
     receipt.exchange_rate = _purchase_exchange_rate(receipt.company, receipt.posting_date, receipt.transaction_currency)
     receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
@@ -1753,7 +1753,7 @@ def _set_purchase_document_totals(document: Any, total: Decimal) -> None:
         raise ValueError(_("El documento de compras requiere una moneda transaccional explicita antes de recalcular totales."))
     base_currency_value = company_functional_currency(document.company)
     if not base_currency_value:
-        raise ValueError(_("La compania requiere una moneda funcional configurada."))
+        raise ValueError(_("La compañía requiere una moneda funcional configurada."))
     document.base_currency = base_currency_value
     document.exchange_rate = _purchase_exchange_rate(document.company, document.posting_date, document.transaction_currency)
     document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))
@@ -2796,7 +2796,7 @@ def _create_import_landed_cost_from_request():
     remarks = request.form.get("remarks", "").strip()
 
     if not company or not posting_date:
-        flash(_("Compania y fecha son obligatorios."), "danger")
+        flash(_("Compañía y fecha son obligatorios."), "danger")
         return None
     try:
         allocation_method = validate_allocation_method(allocation_method)

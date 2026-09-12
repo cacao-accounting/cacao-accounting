@@ -296,7 +296,7 @@ def external_document_validation_settings():
             enabled=request.form.get("enabled") == "on",
             base_url=request.form.get("base_url") or DEFAULT_VALIDATION_BASE_URL,
         )
-        flash(_("Configuracion de validacion externa guardada correctamente."), "success")
+        flash(_("Configuración de validación externa guardada correctamente."), "success")
         return redirect(url_for("admin.external_document_validation_settings"))
 
     return render_template(
@@ -418,7 +418,7 @@ def configuracion_valuacion_inventario():
             flash(_(str(exc)), "danger")
         else:
             database.session.commit()
-            flash(_("Metodo de valuacion guardado correctamente."), "success")
+            flash(_("Método de valuacion guardado correctamente."), "success")
         return redirect(url_for(LISTA_VALUACION_INVENTARIO, company=selected_company))
 
     current_method = get_company_valuation_method(selected_company) if selected_company else "moving_average"
@@ -965,7 +965,7 @@ def config_conciliacion_compras():
             database.session.add(default_accounts)
         default_accounts.apply_advances_automatically = bool(request.form.get("apply_advances_automatically"))
         database.session.commit()
-        flash(_("Configuracion de conciliacion de compras guardada correctamente."), "success")
+        flash(_("Configuración de conciliación de compras guardada correctamente."), "success")
         return redirect(url_for("admin.config_conciliacion_compras"))
 
     configs = (
@@ -985,7 +985,7 @@ def config_conciliacion_compras():
         configs=configs,
         companies=companies,
         advance_settings=advance_settings,
-        titulo=_("Configuracion de Conciliacion de Compras"),
+        titulo=_("Configuración de Conciliación de Compras"),
     )
 
 
@@ -1039,7 +1039,7 @@ def config_conciliacion_ventas():
         config.require_sales_order = bool(request.form.get("require_sales_order"))
         config.allow_price_difference = bool(request.form.get("allow_price_difference"))
         database.session.commit()
-        flash(_("Configuracion de conciliacion de ventas guardada correctamente."), "success")
+        flash(_("Configuración de conciliación de ventas guardada correctamente."), "success")
         return redirect(url_for("admin.config_conciliacion_ventas"))
 
     configs = (
@@ -1050,7 +1050,7 @@ def config_conciliacion_ventas():
         "admin/sales_matching_config.html",
         configs=configs,
         companies=companies,
-        titulo=_("Configuracion de Conciliacion de Ventas"),
+        titulo=_("Configuración de Conciliación de Ventas"),
     )
 
 
@@ -1131,7 +1131,7 @@ def cuentas_predeterminadas():
             if config:
                 database.session.delete(config)
                 database.session.commit()
-                flash(_("Configuracion de cuentas predeterminadas eliminada correctamente."), "success")
+                flash(_("Configuración de cuentas predeterminadas eliminada correctamente."), "success")
             return redirect(url_for(CUENTAS_PREDETERMINADAS, company=selected_company))
 
         values = {field: request.form.get(field) or None for field in DEFAULT_ACCOUNT_FIELDS}

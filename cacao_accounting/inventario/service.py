@@ -907,7 +907,7 @@ def validate_item_account_rows(
     requires_expense_by_company = item_type == "service" or not is_stock_item
     if requires_expense_by_company and not rows:
         raise InventoryServiceError(
-            "Los servicios y articulos no inventariables requieren cuenta de gasto predeterminada por compañia."
+            "Los servicios y artículos no inventariables requieren cuenta de gasto predeterminada por compañia."
         )
 
     seen_companies: set[str] = set()
@@ -922,7 +922,7 @@ def _validate_single_item_account_row(row: ItemAccountRow, requires_expense: boo
     if not row.company:
         raise InventoryServiceError(_("Cada fila contable del item debe indicar una compañia."))
     if row.company in seen_companies:
-        raise InventoryServiceError(_("No se puede repetir la misma compañia en la configuracion contable del item."))
+        raise InventoryServiceError(_("No se puede repetir la misma compañia en la configuración contable del item."))
     if database.session.execute(select(Entity).filter_by(code=row.company)).scalar_one_or_none() is None:
         raise InventoryServiceError(f"La compañia '{row.company}' no existe.")
     for account_id, account_type, label in (
@@ -935,11 +935,11 @@ def _validate_single_item_account_row(row: ItemAccountRow, requires_expense: boo
     _validate_cost_center(row.company, row.cost_center_code)
     if requires_expense and not row.expense_account_id:
         raise InventoryServiceError(
-            "Los servicios y articulos no inventariables requieren cuenta de gasto predeterminada por compañia."
+            "Los servicios y artículos no inventariables requieren cuenta de gasto predeterminada por compañia."
         )
     if requires_expense and not row.cost_center_code:
         raise InventoryServiceError(
-            "Los servicios y articulos no inventariables requieren centro de costo predeterminado por compañia."
+            "Los servicios y artículos no inventariables requieren centro de costo predeterminado por compañia."
         )
 
 

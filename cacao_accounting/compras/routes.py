@@ -1645,7 +1645,7 @@ def compras_reconciliation_panel():
     company = request.args.get("company", "cacao")
     exige_acceso_compania("purchases", company, "consultar")
     groups = get_purchase_reconciliation_panel_groups(company=company)
-    titulo = _("Panel de Conciliacion de Compras") + " - " + APPNAME
+    titulo = _("Panel de Conciliación de Compras") + " - " + APPNAME
     return render_template(
         "compras/purchase_reconciliation_panel.html",
         groups=groups,
@@ -1710,7 +1710,7 @@ def compras_proveedor_configuracion_compania(supplier_id: str):
     try:
         upsert_party_company_settings_rows(supplier_id, "supplier", request.form)
         database.session.commit()
-        flash(_("Configuracion por compania del proveedor guardada correctamente."), "success")
+        flash(_("Configuración por compañía del proveedor guardada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1803,7 +1803,7 @@ def compras_proveedor_direccion_crear(supplier_id: str):
     try:
         create_party_address(supplier_id, request.form)
         database.session.commit()
-        flash(_("Direccion agregada correctamente."), "success")
+        flash(_("Dirección agregada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1819,7 +1819,7 @@ def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
     try:
         update_party_address(supplier_id, link_id, request.form)
         database.session.commit()
-        flash(_("Direccion actualizada correctamente."), "success")
+        flash(_("Dirección actualizada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1834,7 +1834,7 @@ def compras_proveedor_direccion_desactivar(supplier_id: str, link_id: str):
     _party_or_404(supplier_id)
     deactivate_party_address(supplier_id, link_id)
     database.session.commit()
-    flash(_("Direccion desactivada correctamente."), "success")
+    flash(_("Dirección desactivada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
@@ -2681,7 +2681,7 @@ def compras_recepcion_editar(receipt_id: str):
     return render_template(
         "compras/recepcion_nuevo.html",
         form=formulario,
-        titulo=_("Editar Recepcion de Compra") + " - " + APPNAME,
+        titulo=_("Editar Recepción de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -2756,7 +2756,7 @@ def compras_recepcion_duplicar(receipt_id: str):
     _copy_active_document_relations(origen.id, duplicada.id, "purchase_receipt", duplicada.company, item_ids)
     log_create(duplicada)
     database.session.commit()
-    flash(_("Recepcion de compra duplicada como nuevo borrador."), "success")
+    flash(_("Recepción de compra duplicada como nuevo borrador."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=duplicada.id))
 
 
@@ -2802,7 +2802,7 @@ def compras_recepcion_submit(receipt_id: str):
         submit_document(registro)  # type: ignore[misc]
         log_submit(registro)
         database.session.commit()
-        flash(_("Recepcion de compra aprobada."), "success")
+        flash(_("Recepción de compra aprobada."), "success")
     except (ValueError, BudgetError) as exc:
         database.session.rollback()
         flash_error(exc)
@@ -3441,7 +3441,7 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_("Solicitud de cancelacion enviada para aprobacion."), "info")
+            flash(_("Solicitud de cancelacion enviada para aprobación."), "info")
             return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()

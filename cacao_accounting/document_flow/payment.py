@@ -502,7 +502,7 @@ def payment_reference_candidates(
 ) -> list[dict[str, Any]]:
     """Devuelve documentos candidatos para la tabla de referencias de pago."""
     if not company or party_type not in {"supplier", "customer"} or not party_id:
-        raise _document_flow_error(_("Debe indicar compania, tipo de tercero y tercero."))
+        raise _document_flow_error(_("Debe indicar compañía, tipo de tercero y tercero."))
     allowed_by_party = (
         {"purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_order"}
         if party_type == "supplier"
@@ -617,7 +617,7 @@ def payment_reconciliation_candidates(
 ) -> dict[str, list[dict[str, Any]]]:
     """Devuelve pagos abiertos y documentos pendientes para conciliacion AR/AP."""
     if not company or party_type not in {"supplier", "customer"}:
-        raise _document_flow_error(_("Debe indicar compania y tipo de tercero."))
+        raise _document_flow_error(_("Debe indicar compañía y tipo de tercero."))
 
     payments = _candidate_payments(company, party_type, party_id, currency)
     documents = _candidate_documents(company, party_type, party_id, currency)
@@ -718,7 +718,7 @@ def _payment_reference_model(flow_source_type: str) -> type[PurchaseInvoice] | t
         return PurchaseInvoice
     if source_key in {"sales_invoice", "sales_credit_note", "sales_debit_note", "sales_return"}:
         return SalesInvoice
-    raise _document_flow_error(_("Tipo de referencia invalido."))
+    raise _document_flow_error(_("Tipo de referencia inválido."))
 
 
 def _payment_reference_party(document: Any, flow_source_type: str) -> tuple[str, str | None]:
@@ -758,13 +758,13 @@ def apply_payment_reconciliation(
 ) -> Reconciliation:
     """Aplica pagos existentes contra documentos AR/AP abiertos."""
     if not lines:
-        raise _document_flow_error(_("La conciliacion requiere al menos una linea."))
+        raise _document_flow_error(_("La conciliación requiere al menos una linea."))
     if len(lines) > MAX_RECONCILIATION_LINES:
         raise _document_flow_error(
             _("El numero de lineas excede el maximo permitido ({0}).").format(MAX_RECONCILIATION_LINES),
         )
     if not company or party_type not in {"supplier", "customer"} or not party_id:
-        raise _document_flow_error(_("Debe indicar compania, tipo de tercero y tercero."))
+        raise _document_flow_error(_("Debe indicar compañía, tipo de tercero y tercero."))
     latest_allocation = database.session.execute(
         select(func.max(PaymentReference.allocation_date))
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
@@ -1060,7 +1060,7 @@ def _plan_reconciliation_allocation(
     # documentos nuevos siguen llegando con ``transaction_currency``.
     document_currency = _document_transaction_currency(document) or payment_currency
     if not payment_currency:
-        raise _document_flow_error(_("La conciliacion requiere moneda explicita en el pago."), 409)
+        raise _document_flow_error(_("La conciliación requiere moneda explicita en el pago."), 409)
     requested_rate = raw_line.get("payment_exchange_rate")
     if requested_rate is None and document_currency != payment_currency:
         requested_rate = raw_line.get("exchange_rate")
@@ -1162,7 +1162,7 @@ def _validate_payment(payment: Any, company: str, party_type: str, party_id: str
     if not payment or payment.docstatus != 1:
         raise _document_flow_error(_("El pago debe existir y estar aprobado."), 404)
     if payment.company != company or payment.party_type != party_type or payment.party_id != party_id:
-        raise _document_flow_error(_("El pago no coincide con la compania o tercero de la conciliacion."), 409)
+        raise _document_flow_error(_("El pago no coincide con la compañía o tercero de la conciliación."), 409)
     if not _payment_type_matches_source(payment.payment_type, flow_source_type):
         raise _document_flow_error(_("El tipo de pago no corresponde con el documento referenciado."), 409)
 
@@ -1173,7 +1173,7 @@ def _get_reference_document(flow_source_type: str, document_id: str, company: st
     if not document or getattr(document, "docstatus", 0) != 1:
         raise _document_flow_error(_("El documento referenciado debe existir y estar aprobado."), 404)
     if getattr(document, "company", None) != company:
-        raise _document_flow_error(_("El documento referenciado no pertenece a la misma compania."), 409)
+        raise _document_flow_error(_("El documento referenciado no pertenece a la misma compañía."), 409)
     expected_party_type, expected_party_id = _payment_reference_party(document, flow_source_type)
     if expected_party_type != party_type or expected_party_id != party_id:
         raise _document_flow_error(_("El documento referenciado no coincide con el tercero."), 409)

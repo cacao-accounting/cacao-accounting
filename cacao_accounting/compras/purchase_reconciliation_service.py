@@ -208,7 +208,7 @@ def _line_amount(line: Any) -> Decimal:
 def _line_rate(line: Any) -> Decimal:
     qty = _line_qty(line)
     if qty <= 0:
-        raise PurchaseReconciliationError(_("La linea de conciliacion requiere cantidad positiva."))
+        raise PurchaseReconciliationError(_("La linea de conciliación requiere cantidad positiva."))
     return _line_amount(line) / qty
 
 
@@ -1080,7 +1080,7 @@ def reconcile_purchase_invoice(
         .limit(1)
     ).scalar_one_or_none()
     if duplicate:
-        raise PurchaseReconciliationError(_("La factura de compra ya tiene una conciliacion activa."))
+        raise PurchaseReconciliationError(_("La factura de compra ya tiene una conciliación activa."))
 
     config = get_matching_config(str(invoice.company))
 
@@ -1197,7 +1197,7 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     receipt_items = _lock_receipt_items(receipt.id)
     invoice_items = _invoice_items(invoice.id)
     if not receipt_items or not invoice_items:
-        raise PurchaseReconciliationError(_("La conciliacion 3-way requiere lineas de recepcion y factura."))
+        raise PurchaseReconciliationError(_("La conciliación 3-way requiere lineas de recepción y factura."))
     receipt_groups = _aggregate_lines_by_item_and_uom(receipt_items)
     invoice_groups = _aggregate_lines_by_item_and_uom(invoice_items)
 
@@ -1240,7 +1240,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     order_items = _lock_purchase_order_items(purchase_order_id)
     invoice_items = _invoice_items(invoice.id)
     if not order_items or not invoice_items:
-        raise PurchaseReconciliationError(_("La conciliacion 2-way requiere lineas de OC y factura."))
+        raise PurchaseReconciliationError(_("La conciliación 2-way requiere lineas de OC y factura."))
     order_groups = _aggregate_lines_by_item_and_uom(order_items)
     invoice_groups = _aggregate_lines_by_item_and_uom(invoice_items)
 
@@ -1342,7 +1342,7 @@ def _load_purchase_order_for_invoice(invoice: PurchaseInvoice) -> tuple[str, Any
     if not order:
         raise PurchaseReconciliationError(_("La orden de compra referenciada no existe."))
     if getattr(order, "company", None) != invoice.company:
-        raise PurchaseReconciliationError(_("La factura y la orden de compra deben pertenecer a la misma compania."))
+        raise PurchaseReconciliationError(_("La factura y la orden de compra deben pertenecer a la misma compañía."))
     if getattr(order, "supplier_id", None) != getattr(invoice, "supplier_id", None):
         raise PurchaseReconciliationError(_("La factura y la orden de compra deben pertenecer al mismo proveedor."))
     if getattr(order, "docstatus", 0) != 1:
@@ -1356,18 +1356,18 @@ def _load_purchase_receipt_for_invoice(invoice: PurchaseInvoice) -> PurchaseRece
     """Carga y valida la recepcion asociada a una factura 3-way."""
     purchase_receipt_id = getattr(invoice, "purchase_receipt_id", None)
     if not purchase_receipt_id:
-        raise PurchaseReconciliationError(_("Matching 3-way requiere que la factura referencie una recepcion de compra."))
+        raise PurchaseReconciliationError(_("Matching 3-way requiere que la factura referencie una recepción de compra."))
     receipt = database.session.get(PurchaseReceipt, purchase_receipt_id)
     if not receipt:
-        raise PurchaseReconciliationError(_("La recepcion de compra referenciada no existe."))
+        raise PurchaseReconciliationError(_("La recepción de compra referenciada no existe."))
     if receipt.company != invoice.company:
-        raise PurchaseReconciliationError(_("La factura y la recepcion deben pertenecer a la misma compania."))
+        raise PurchaseReconciliationError(_("La factura y la recepción deben pertenecer a la misma compañía."))
     if getattr(receipt, "supplier_id", None) != getattr(invoice, "supplier_id", None):
-        raise PurchaseReconciliationError(_("La factura y la recepcion deben pertenecer al mismo proveedor."))
+        raise PurchaseReconciliationError(_("La factura y la recepción deben pertenecer al mismo proveedor."))
     if getattr(receipt, "docstatus", 0) != 1:
-        raise PurchaseReconciliationError(_("La recepcion de compra debe estar aprobada."))
+        raise PurchaseReconciliationError(_("La recepción de compra debe estar aprobada."))
     if getattr(receipt, "transaction_currency", None) != getattr(invoice, "transaction_currency", None):
-        raise PurchaseReconciliationError(_("La factura y la recepcion deben estar en la misma moneda."))
+        raise PurchaseReconciliationError(_("La factura y la recepción deben estar en la misma moneda."))
     return receipt
 
 

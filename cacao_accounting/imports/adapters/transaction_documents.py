@@ -307,7 +307,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         """
         base_currency = company_currency(company)
         if not base_currency:
-            raise ValueError(_("La compania no tiene moneda funcional configurada."))
+            raise ValueError(_("La compañía no tiene moneda funcional configurada."))
         row_currency = first_row.get("moneda") or first_row.get("transaction_currency")
         source_currency = effective_currency(source)
         if row_currency:

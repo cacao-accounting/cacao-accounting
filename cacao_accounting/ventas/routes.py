@@ -877,7 +877,7 @@ def ventas_cliente_configuracion_compania(customer_id: str):
     try:
         upsert_party_company_settings_rows(customer_id, "customer", request.form)
         database.session.commit()
-        flash(_("Configuracion por compania del cliente guardada correctamente."), "success")
+        flash(_("Configuración por compañía del cliente guardada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -970,7 +970,7 @@ def ventas_cliente_direccion_crear(customer_id: str):
     try:
         create_party_address(customer_id, request.form)
         database.session.commit()
-        flash(_("Direccion agregada correctamente."), "success")
+        flash(_("Dirección agregada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -986,7 +986,7 @@ def ventas_cliente_direccion_editar(customer_id: str, link_id: str):
     try:
         update_party_address(customer_id, link_id, request.form)
         database.session.commit()
-        flash(_("Direccion actualizada correctamente."), "success")
+        flash(_("Dirección actualizada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1001,7 +1001,7 @@ def ventas_cliente_direccion_desactivar(customer_id: str, link_id: str):
     _party_or_404(customer_id, "customer")
     deactivate_party_address(customer_id, link_id)
     database.session.commit()
-    flash(_("Direccion desactivada correctamente."), "success")
+    flash(_("Dirección desactivada correctamente."), "success")
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 

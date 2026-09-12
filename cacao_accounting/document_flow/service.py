@@ -508,7 +508,7 @@ def _validate_relation_documents(source_key, source_id, source_item_id, target_k
     source_item_code = getattr(source_item, "item_code", None) if source_item else None
     target_item_code = getattr(target_item, "item_code", None) if target_item else None
     if source_item_code and target_item_code and source_item_code != target_item_code:
-        raise DocumentFlowError(_("La linea destino usa un articulo distinto al de la linea origen de la relacion."), 409)
+        raise DocumentFlowError(_("La linea destino usa un artículo distinto al de la linea origen de la relación."), 409)
     return source_item, target_item
 
 
@@ -517,9 +517,9 @@ def _validate_relation_status(source_key: str, source_id: str, target_key: str, 
     source_doc = get_document(source_key, source_id)
     target_doc = get_document(target_key, target_id)
     if source_doc is not None and getattr(source_doc, "docstatus", None) != 1:
-        raise DocumentFlowError(_("El documento origen debe estar aprobado (docstatus=1) para crear la relacion."), 409)
+        raise DocumentFlowError(_("El documento origen debe estar aprobado (docstatus=1) para crear la relación."), 409)
     if target_doc is not None and getattr(target_doc, "docstatus", None) == 2:
-        raise DocumentFlowError(_("No se puede crear una relacion hacia un documento cancelado (docstatus=2)."), 409)
+        raise DocumentFlowError(_("No se puede crear una relación hacia un documento cancelado (docstatus=2)."), 409)
 
 
 def get_target_line_source(target_type: str, target_item_id: str) -> dict[str, str]:
@@ -877,7 +877,7 @@ def create_target_document(payload: dict[str, Any], *, commit: bool = True) -> d
     posting_date = payload.get("posting_date")
     lines = payload.get("lines") or []
     if not target_type or not company or not posting_date or not lines:
-        raise DocumentFlowError(_("Debe indicar destino, compania, fecha y lineas."), 400)
+        raise DocumentFlowError(_("Debe indicar destino, compañía, fecha y lineas."), 400)
     if target_type == "payment_entry":
         from cacao_accounting.document_flow.payment import _create_payment_target
 

@@ -590,7 +590,7 @@ def _save_stock_reconciliation_item(entry: StockEntry, index: int, item_code: st
     current_qty, current_rate, current_value, _reserved_qty = _stock_bin_snapshot(entry.company, item_code, warehouse)
     uom = request.form.get(f"uom_{index}") or _item_default_uom(item_code)
     if not uom:
-        raise ValueError(_("La conciliacion del item %(item_code)s requiere una unidad de medida.") % {"item_code": item_code})
+        raise ValueError(_("La conciliación del item %(item_code)s requiere una unidad de medida.") % {"item_code": item_code})
     default_uom = _item_default_uom(item_code)
     if not default_uom:
         raise ValueError(_("El item %(item_code)s requiere una UOM base configurada.") % {"item_code": item_code})
@@ -748,7 +748,7 @@ def _handle_stock_entry_new_post(form_data: Mapping[str, Any]):
 
         base_currency_value = company_functional_currency(company)
         if not base_currency_value:
-            raise ValueError(_("La compania requiere una moneda funcional configurada."))
+            raise ValueError(_("La compañía requiere una moneda funcional configurada."))
         raw_currency = form_data.get("transaction_currency") or form_data.get("currency") or ""
         if not raw_currency:
             raise ValueError(_("La entrada de inventario requiere una moneda transaccional explicita."))
@@ -861,7 +861,7 @@ def _update_stock_entry_from_form(registro: StockEntry) -> None:
 
     base_currency_value = company_functional_currency(company)
     if not base_currency_value:
-        raise ValueError(_("La compania requiere una moneda funcional configurada."))
+        raise ValueError(_("La compañía requiere una moneda funcional configurada."))
     registro.base_currency = base_currency_value
 
 

@@ -184,7 +184,7 @@ def _decimal_value(value: Any) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError) as exc:
-        raise PostingError(_("Valor numerico invalido para contabilizacion.")) from exc
+        raise PostingError(_("Valor numerico inválido para contabilizacion.")) from exc
 
 
 def _validate_single_sided_amount(debit: Decimal, credit: Decimal) -> None:
@@ -685,10 +685,10 @@ def _assert_single_currency_balance(currency: str, curr_entries: list[GLEntry], 
     if abs(curr_debit - curr_credit) < Decimal("0.01"):
         return
     if num_currencies == 1:
-        raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
+        raise PostingError("Las entradas GL no balancean en moneda de transacción ({0}).".format(currency))
     if _is_cross_currency_legitimate(curr_entries):
         return
-    raise PostingError("Las entradas GL no balancean en moneda de transaccion ({0}).".format(currency))
+    raise PostingError("Las entradas GL no balancean en moneda de transacción ({0}).".format(currency))
 
 
 def _is_purchase_receipt(document: Any) -> bool:
@@ -2231,7 +2231,7 @@ def _company_for(document: Any) -> str:
     if not company and isinstance(document, BankTransaction):
         company = _bank_transaction_company(document)
     if not company:
-        raise PostingError(_("El documento no tiene compania definida."))
+        raise PostingError(_("El documento no tiene compañía definida."))
     return str(company)
 
 
@@ -2710,7 +2710,7 @@ def _reconciliation_snapshot(
     if qty_change == 0 and value_change == 0:
         return None
     if counted_qty < 0 or target_value < 0:
-        raise PostingError(_("La conciliacion no permite cantidad o valor objetivo negativo."))
+        raise PostingError(_("La conciliación no permite cantidad o valor objetivo negativo."))
     if current_qty <= 0 and counted_qty <= 0 and value_change != 0:
         raise PostingError(_("No se puede ajustar valor sin stock positivo o cantidad contada positiva."))
     _validate_reconciliation_value_direction(qty_change, value_change)
@@ -2938,7 +2938,7 @@ def _create_stock_ledger(document: StockEntry) -> list[StockLedgerEntry]:
     movements = _create_stock_movements_for_items(document, items, purpose)
 
     if not movements:
-        raise PostingError(_("La conciliacion no contiene diferencias de cantidad o valuacion."))
+        raise PostingError(_("La conciliación no contiene diferencias de cantidad o valuacion."))
     database.session.add_all(movements)
     return movements
 
@@ -4792,10 +4792,10 @@ def _cancel_fiscal_year_closing_document(
     """
     normalized_reason = str(reason or "").strip()
     if not normalized_reason:
-        raise PostingError(_("Debe indicar el motivo de la anulacion."))
+        raise PostingError(_("Debe indicar el motivo de la anulación."))
     normalized_actor = str(actor_user_id or "").strip()
     if not normalized_actor:
-        raise PostingError(_("Debe indicar el usuario que ejecuta la anulacion."))
+        raise PostingError(_("Debe indicar el usuario que ejecuta la anulación."))
 
     voucher_type = _get_voucher_type(document)
     voucher_id = _get_voucher_id(document)

@@ -49,7 +49,7 @@ class CurrencyGuard:
             database.select(Entity).filter(Entity.currency == currency.code, Entity.enabled.is_(True)).limit(1)
         ).scalar_one_or_none()
         if active_company is not None:
-            raise CurrencyGuardError(_("No se puede deshabilitar la moneda porque esta en uso por una compania activa."))
+            raise CurrencyGuardError(_("No se puede deshabilitar la moneda porque esta en uso por una compañía activa."))
         active_book = database.session.execute(
             database.select(Book).filter(Book.currency == currency.code, Book.status == "activo").limit(1)
         ).scalar_one_or_none()
@@ -74,10 +74,10 @@ class CurrencyGuard:
     def validate_company_functional_currency(self, company_code: str | None) -> Currency:
         """Valida la moneda funcional activa de una compania."""
         if not company_code:
-            raise CurrencyGuardError(_("La compania es obligatoria."))
+            raise CurrencyGuardError(_("La compañía es obligatoria."))
         company = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
         if company is None or company.enabled is False:
-            raise CurrencyGuardError(_("La compania indicada no existe o esta inactiva."))
+            raise CurrencyGuardError(_("La compañía indicada no existe o esta inactiva."))
         return self.validate_active_currency(
             company.currency,
             "La moneda funcional de la compania debe existir y estar activa.",

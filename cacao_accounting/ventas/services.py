@@ -200,7 +200,7 @@ def _set_sales_document_totals(document: Any, total: Decimal) -> None:
         raise ValueError(_("El documento de ventas requiere una moneda transaccional explicita antes de recalcular totales."))
     base_currency_value = company_functional_currency(document.company)
     if not base_currency_value:
-        raise ValueError(_("La compania requiere una moneda funcional configurada."))
+        raise ValueError(_("La compañía requiere una moneda funcional configurada."))
     document.transaction_currency = transaction_currency
     document.base_currency = base_currency_value
     document.exchange_rate = _sales_exchange_rate(document.company, document.posting_date, transaction_currency)
@@ -1271,7 +1271,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         base_currency_value = company_functional_currency(invoice.company)
         if not base_currency_value:
             raise PostingError(
-                "La compania de la factura no tiene moneda funcional configurada; no se puede derivar la Nota de Entrega."
+                "La compañía de la factura no tiene moneda funcional configurada; no se puede derivar la Nota de Entrega."
             )
     else:
         base_currency_value = invoice.base_currency
@@ -2509,7 +2509,7 @@ def _validate_reversal_of(
     if customer_id and source.customer_id != customer_id:
         raise ValueError(_("La factura origen '%(source)s' no pertenece al mismo cliente.") % {"source": reversal_of})
     if company and source.company != company:
-        raise ValueError(_("La factura origen '%(source)s' no pertenece a la misma compania.") % {"source": reversal_of})
+        raise ValueError(_("La factura origen '%(source)s' no pertenece a la misma compañía.") % {"source": reversal_of})
     if document_type in {"sales_credit_note", "sales_return"} and note_amount is not None:
         from cacao_accounting.document_flow.payment import compute_outstanding_amount
 

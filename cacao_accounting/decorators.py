@@ -34,7 +34,7 @@ def modulo_activo(modulo):  # pragma: no cover
             if any(validar_modulo_activo(modulo_nombre) for modulo_nombre in modulos):
                 return func(*args, **kwargs)
             else:
-                flash(_("El modulo que intenta acceder se encuentra inactivo"))
+                flash(_("El módulo que intenta acceder se encuentra inactivo"))
                 return abort(404)
 
         return wrapper

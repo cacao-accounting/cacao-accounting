@@ -584,7 +584,7 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
         for transaction_id, difference in difference_requests:
             transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)
             if transaction is None:
-                raise BankReconciliationError(_("La transaccion bancaria no existe."))
+                raise BankReconciliationError(_("La transacción bancaria no existe."))
             _post_bank_difference_adjustment(
                 reconciliation.id,
                 transaction,
@@ -1183,7 +1183,7 @@ def caja_chica_vale_nuevo():
         company = request.form.get("company")
         petty_cash_id = request.form.get("petty_cash_id")
         if not company or not petty_cash_id:
-            flash(_("Seleccione la compania y la caja chica."), "danger")
+            flash(_("Seleccione la compañía y la caja chica."), "danger")
             return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
         exige_acceso_compania("cash", company, "crear")
         try:
@@ -1286,7 +1286,7 @@ def caja_chica_gasto_nuevo():
         company = request.form.get("company")
         petty_cash_id = request.form.get("petty_cash_id")
         if not company or not petty_cash_id:
-            flash(_("Seleccione la compania y la caja chica."), "danger")
+            flash(_("Seleccione la compañía y la caja chica."), "danger")
             return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
         exige_acceso_compania("cash", company, "crear")
         try:
@@ -1352,13 +1352,13 @@ def caja_chica_conciliacion_nueva():
         except ValueError as exc:
             flash(_(str(exc)), "danger")
         else:
-            flash(_("Conciliacion de caja chica creada."), "success")
+            flash(_("Conciliación de caja chica creada."), "success")
             return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
     return render_template(
         "bancos/caja_chica_conciliacion_nueva.html",
         fondos=fondos,
         today=date.today().isoformat(),
-        titulo=_("Nueva Conciliacion de Caja Chica") + " - " + APPNAME,
+        titulo=_("Nueva Conciliación de Caja Chica") + " - " + APPNAME,
     )
 
 
@@ -1385,7 +1385,7 @@ def caja_chica_conciliacion_editar(r_id):
         except (ValueError, InvalidOperation) as exc:
             flash(_(str(exc)), "danger")
         else:
-            flash(_("Conciliacion de caja chica actualizada."), "success")
+            flash(_("Conciliación de caja chica actualizada."), "success")
             return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
     return render_template(
         "bancos/caja_chica_conciliacion_nueva.html",
@@ -1393,7 +1393,7 @@ def caja_chica_conciliacion_editar(r_id):
         registro=conciliacion,
         edit=True,
         today=conciliacion.reconciliation_date.isoformat() if conciliacion.reconciliation_date else date.today().isoformat(),
-        titulo=_("Editar Conciliacion de Caja Chica") + " - " + APPNAME,
+        titulo=_("Editar Conciliación de Caja Chica") + " - " + APPNAME,
     )
 
 
@@ -1412,7 +1412,7 @@ def caja_chica_conciliacion_confirmar(r_id):
     except ValueError as exc:
         flash(_(str(exc)), "danger")
     else:
-        flash(_("Conciliacion de caja chica confirmada."), "success")
+        flash(_("Conciliación de caja chica confirmada."), "success")
     return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
 
 
@@ -1481,14 +1481,14 @@ def caja_chica_reposicion_nueva():
         except ValueError as exc:
             flash(_(str(exc)), "danger")
         else:
-            flash(_("Solicitud de reposicion creada."), "success")
+            flash(_("Solicitud de reposición creada."), "success")
             return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
     return render_template(
         "bancos/caja_chica_reposicion_nueva.html",
         fondos=fondos,
         gastos=gastos,
         selected_fund=selected_fund,
-        titulo=_("Nueva Reposicion de Caja Chica") + " - " + APPNAME,
+        titulo=_("Nueva Reposición de Caja Chica") + " - " + APPNAME,
     )
 
 
@@ -1506,7 +1506,7 @@ def caja_chica_reposicion_estado(r_id):
     except ValueError as exc:
         flash(_(str(exc)), "danger")
     else:
-        flash(_("Estado de la reposicion actualizado."), "success")
+        flash(_("Estado de la reposición actualizado."), "success")
     return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
 
 

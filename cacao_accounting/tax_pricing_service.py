@@ -179,7 +179,7 @@ def calculate_taxes(document: Any, template_id: str) -> TaxCalculationResult:
         raise TaxPricingError(_("La plantilla de impuestos no existe o esta inactiva."))
     company = getattr(document, "company", None)
     if template.company and company and template.company != company:
-        raise TaxPricingError(_("La plantilla de impuestos pertenece a otra compania."))
+        raise TaxPricingError(_("La plantilla de impuestos pertenece a otra compañía."))
 
     base_amount = _document_items_total(document)
     totals = _TaxTotals(running_total=base_amount)

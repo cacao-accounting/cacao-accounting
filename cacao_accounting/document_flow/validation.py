@@ -128,7 +128,7 @@ def assert_currency_contract_or_raise(
 def _validate_basic_document_fields(registro):
     """Valida campos basicos del documento (compania y fecha)."""
     if not registro.company:
-        raise ValueError(_("El documento debe tener una compania."))
+        raise ValueError(_("El documento debe tener una compañía."))
     if not registro.posting_date:
         raise ValueError(_("El documento debe tener una fecha de contabilizacion."))
 
@@ -174,7 +174,7 @@ def _validate_warehouse_assignments(items, warehouse_for_stock_items_only):
         )
         if not wh:
             item_code = getattr(item, "item_code", "desconocido")
-            raise ValueError(_("La linea del articulo %(item)s requiere un almacen asignado.") % {"item": item_code})
+            raise ValueError(_("La linea del artículo %(item)s requiere un almacen asignado.") % {"item": item_code})
 
 
 def require_line_relations(*, target_type: str, target_id: str, source_type: str, source_id: str, items: list[Any]) -> None:

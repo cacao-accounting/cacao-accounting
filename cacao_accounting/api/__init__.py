@@ -416,7 +416,7 @@ def api_search_select():
         )
     except ValueError as exc:
         if not isinstance(exc, SearchSelectError):
-            return jsonify({"error": _("Parametro invalido."), "message": str(exc)}), 400
+            return jsonify({"error": _("Parametro inválido."), "message": str(exc)}), 400
         return jsonify({"error": _(str(exc)), "message": _(str(exc))}), exc.status_code
     return jsonify(payload)
 

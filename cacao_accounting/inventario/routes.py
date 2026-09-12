@@ -126,7 +126,7 @@ def inventario_articulo_lista():
         max_per_page=10,
         count=True,
     )
-    titulo = _("Listado de Articulos") + " - " + APPNAME
+    titulo = _("Listado de Artículos") + " - " + APPNAME
     return render_template("inventario/articulo_lista.html", consulta=consulta, titulo=titulo)
 
 

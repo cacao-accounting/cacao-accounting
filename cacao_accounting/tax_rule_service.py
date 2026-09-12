@@ -191,7 +191,7 @@ def _decimal_value(value: object, *, default: str) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError) as exc:
-        raise TaxRuleServiceError(_("La tasa o monto de la regla fiscal es invalido.")) from exc
+        raise TaxRuleServiceError(_("La tasa o monto de la regla fiscal es inválido.")) from exc
 
 
 def _date_value(value: str | None) -> date | None:
@@ -201,4 +201,4 @@ def _date_value(value: str | None) -> date | None:
     try:
         return date.fromisoformat(value)
     except ValueError as exc:
-        raise TaxRuleServiceError(_("La fecha de vigencia de la regla fiscal es invalida.")) from exc
+        raise TaxRuleServiceError(_("La fecha de vigencia de la regla fiscal es inválida.")) from exc

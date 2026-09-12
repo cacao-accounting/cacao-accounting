@@ -154,7 +154,7 @@ ENTITY_TYPE_CHOICES = [
     ("payment_entry", _l("Pago")),
     ("stock_entry", _l("Movimiento de Inventario")),
     ("purchase_order", _l("Orden de Compra")),
-    ("purchase_receipt", _l("Recepcion de Compra")),
+    ("purchase_receipt", _l("Recepción de Compra")),
     ("purchase_request", _l("Solicitud de Compra")),
     ("purchase_quotation", _l("Solicitud de Cotizacion")),
     ("supplier_quotation", _l("Cotizacion de Proveedor")),
@@ -177,7 +177,7 @@ RESET_POLICY_CHOICES = [
 
 EXTERNAL_COUNTER_TYPE_CHOICES = [
     ("checkbook", _l("Chequera")),
-    ("fiscal", _l("Numero Fiscal")),
+    ("fiscal", _l("Número Fiscal")),
     ("receipt", _l("Recibo Preimpreso")),
     ("bank_transfer", _l("Transferencia Bancaria")),
     ("other", _l("Otro")),
@@ -189,16 +189,16 @@ class FormularioNamingSeries(FlaskForm):
 
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     entity_type = SelectField(_l("Tipo de Documento"), choices=ENTITY_TYPE_CHOICES, validators=[DataRequired()])
-    company = SelectField(_l("Compania (opcional — dejar vacio para serie global)"), validators=[Optional()])
+    company = SelectField(_l("Compañía (opcional — dejar vacio para serie global)"), validators=[Optional()])
     prefix_template = StringField(_l("Plantilla de Prefijo"), validators=[DataRequired()])
     current_value = IntegerField(
-        _l("Ultimo Numero Interno Usado"), default=0, validators=[InputRequired(), NumberRange(min=0)]
+        _l("Ultimo Número Interno Usado"), default=0, validators=[InputRequired(), NumberRange(min=0)]
     )
     increment = IntegerField(_l("Incremento"), default=1, validators=[InputRequired(), NumberRange(min=1)])
     padding = IntegerField(PADDING_DIGITOS, default=5, validators=[InputRequired(), NumberRange(min=1, max=20)])
     reset_policy = SelectField(_l("Politica de Reinicio"), choices=RESET_POLICY_CHOICES)
     is_active = BooleanField(_l("Activa"), default=True)
-    is_default = BooleanField(_l("Predeterminada para esta compania y documento"))
+    is_default = BooleanField(_l("Predeterminada para esta compañía y documento"))
 
 
 class FormularioMoneda(FlaskForm):
@@ -273,7 +273,7 @@ class FormularioCuenta(FlaskForm):
 class FormularioCentroCosto(FlaskForm):
     """Formulario para crear y editar centros de costos."""
 
-    id = StringField(_l("Codigo"), validators=[DataRequired()])
+    id = StringField(_l("Código"), validators=[DataRequired()])
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     activo = BooleanField(_l("Activo"), default=True)
@@ -285,7 +285,7 @@ class FormularioCentroCosto(FlaskForm):
 class FormularioProyecto(FlaskForm):
     """Formulario para crear y editar proyectos."""
 
-    id = StringField(_l("Codigo"), validators=[DataRequired()])
+    id = StringField(_l("Código"), validators=[DataRequired()])
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     parent_id = SelectField(_l("Proyecto Padre"), choices=[], validators=[Optional()], validate_choice=False)
@@ -312,7 +312,7 @@ class FormularioProyecto(FlaskForm):
 class FormularioFiscalYear(FlaskForm):
     """Formulario para crear y editar años fiscales."""
 
-    id = StringField(_l("Codigo"), validators=[DataRequired()])
+    id = StringField(_l("Código"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     inicio = DateField(FECHA_INICIO, validators=[DataRequired()])
     fin = DateField(FECHA_FIN, validators=[DataRequired()])
@@ -322,7 +322,7 @@ class FormularioFiscalYear(FlaskForm):
 class FormularioAccountingPeriod(FlaskForm):
     """Formulario para crear y editar periodos contables."""
 
-    id = StringField(_l("Codigo"), validators=[DataRequired()])
+    id = StringField(_l("Código"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     fiscal_year = SelectField(_l("Año Fiscal"), validators=[DataRequired()])
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
@@ -344,21 +344,21 @@ class FormularioSecuencia(FlaskForm):
 class FormularioExternalCounter(FlaskForm):
     """Formulario para crear y editar contadores externos."""
 
-    company = SelectField(_l("Compania"), validators=[DataRequired()])
+    company = SelectField(_l("Compañía"), validators=[DataRequired()])
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     counter_type = SelectField(_l("Tipo"), choices=EXTERNAL_COUNTER_TYPE_CHOICES)
     prefix = StringField(_l("Prefijo"), validators=[Optional()])
-    last_used = IntegerField(_l("Ultimo Numero Usado"), default=0, validators=[NumberRange(min=0)])
+    last_used = IntegerField(_l("Ultimo Número Usado"), default=0, validators=[NumberRange(min=0)])
     padding = IntegerField(PADDING_DIGITOS, default=5, validators=[NumberRange(min=1, max=20)])
     is_active = BooleanField(_l("Activo"), default=True)
-    description = TextAreaField(_l("Descripcion"), validators=[Optional()])
+    description = TextAreaField(_l("Descripción"), validators=[Optional()])
     naming_series_id = SelectField(_l("Serie Interna Asociada (opcional)"), validators=[Optional()])
 
 
 class FormularioAjusteContadorExterno(FlaskForm):
     """Formulario de ajuste de ultimo numero usado con motivo obligatorio."""
 
-    new_last_used = IntegerField(_l("Nuevo Ultimo Numero Usado"), validators=[InputRequired(), NumberRange(min=0)])
+    new_last_used = IntegerField(_l("Nuevo Ultimo Número Usado"), validators=[InputRequired(), NumberRange(min=0)])
     reason = TextAreaField(_l("Motivo del Ajuste"), validators=[DataRequired()])
 
 

@@ -3875,7 +3875,7 @@ def _validate_bank_transaction_amounts(mapper, connection, target: BankTransacti
     if deposit < 0 or withdrawal < 0:
         raise ValueError(_("Los montos bancarios no pueden ser negativos."))
     if (deposit > 0) == (withdrawal > 0):
-        raise ValueError(_("La transaccion bancaria requiere exactamente un deposito o retiro positivo."))
+        raise ValueError(_("La transacción bancaria requiere exactamente un deposito o retiro positivo."))
 
 
 def _bank_transaction_identity(transaction: BankTransaction) -> str:
