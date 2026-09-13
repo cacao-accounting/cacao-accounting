@@ -633,7 +633,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     ).scalar_one_or_none()
     comparison_currency = filters.currency or selected_ledger.currency
     ledger_needs_conversion = selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
-    period_start, period_end, period_obj = _report_period_bounds(filters)
+    period_end = _report_period_bounds(filters)[1]
     as_of_date = filters.as_of_date or period_end or date.today()
     defaults = database.session.execute(
         select(CompanyDefaultAccount).where(CompanyDefaultAccount.company == filters.company)
