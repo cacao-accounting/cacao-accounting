@@ -47,7 +47,7 @@ class TestValidateSubmitPrerequisites:
     def test_rejects_missing_company(self):
         items = [MockItem(qty=1)]
         registro = MockRegistro(company=None, posting_date=date(2026, 7, 8), supplier_id="SUP-001")
-        with pytest.raises(ValueError, match="compa[nñ]í?a"):
+        with pytest.raises(ValueError, match="compania"):
             validate_submit_prerequisites(registro, items=items)
 
     def test_rejects_missing_posting_date(self):

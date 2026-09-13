@@ -85,7 +85,7 @@ def test_r2r17_unbalanced_transaction_currency():
             account_currency="USD",
         ),
     ]
-    with pytest.raises(PostingError, match="moneda de transacci[oó]n"):
+    with pytest.raises(PostingError, match="moneda de transaccion"):
         _assert_entries_balance(entries)
 
 

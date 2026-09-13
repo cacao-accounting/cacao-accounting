@@ -336,7 +336,7 @@ def test_identifier_rejects_incompatible_or_cross_company_series(app_ctx):
             naming_series_id=wrong_type.id,
         )
 
-    with pytest.raises(IdentifierConfigurationError, match="compa[nñ][ií]a indicada"):
+    with pytest.raises(IdentifierConfigurationError, match="compania indicada"):
         assign_document_identifier(
             document=invoice,
             entity_type="purchase_invoice",

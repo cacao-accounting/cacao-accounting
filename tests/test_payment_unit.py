@@ -504,7 +504,7 @@ class TestPaymentReferenceModel:
         assert _payment_reference_model("purchase_invoice") is PurchaseInvoice
         assert _payment_reference_model("purchase_credit_note") is PurchaseInvoice
         assert _payment_reference_model("purchase_debit_note") is PurchaseInvoice
-        with pytest.raises(ValueError, match="Tipo de referencia inv[aá]lido"):
+        with pytest.raises(ValueError, match="Tipo de referencia invalido"):
             _payment_reference_model("purchase_return")
 
     def test_sales_types_return_sales_invoice(self):
@@ -519,7 +519,7 @@ class TestPaymentReferenceModel:
     def test_unknown_type_raises(self):
         from cacao_accounting.document_flow.payment import _payment_reference_model
 
-        with pytest.raises(ValueError, match="Tipo de referencia inv[aá]lido"):
+        with pytest.raises(ValueError, match="Tipo de referencia invalido"):
             _payment_reference_model("unknown_type")
 
 
@@ -631,7 +631,7 @@ class TestPaymentReferenceCandidates:
     def test_requires_company_party_type_party_id(self):
         from cacao_accounting.document_flow.payment import payment_reference_candidates
 
-        with pytest.raises(ValueError, match="compa[nñ]í?a"):
+        with pytest.raises(ValueError, match="compania"):
             payment_reference_candidates(company="", party_type="customer", party_id="X", source_types=["sales_invoice"])
 
     def test_supplier_does_not_return_sales_docs(self, app_ctx):
@@ -962,7 +962,7 @@ class TestValidatePayment:
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         payment = _make_open_payment(party=customer, payment_type="receive", amount=Decimal("100"))
 
-        with pytest.raises(ValueError, match="compa[nñ]í?a o tercero"):
+        with pytest.raises(ValueError, match="compania o tercero"):
             _validate_payment(payment, "other_company", "customer", customer.id, "sales_invoice")
 
     def test_wrong_payment_type_raises(self, app_ctx):
@@ -1041,7 +1041,7 @@ class TestValidateAdvanceAllocation:
         class FakeInvoice:
             company = "other_company"
 
-        with pytest.raises(ValueError, match="compa[nñ][ií]as distintas"):
+        with pytest.raises(ValueError, match="companias distintas"):
             _validate_advance_allocation(payment, FakeInvoice(), customer.id, Decimal("100"), date.today())
 
     def test_party_mismatch_raises(self, app_ctx):
@@ -1489,7 +1489,7 @@ class TestCreatePaymentTarget:
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         si = _make_customer_invoice(grand_total=Decimal("500"))
 
-        with pytest.raises(ValueError, match="compa[nñ][ií]as incompatibles"):
+        with pytest.raises(ValueError, match="companias incompatibles"):
             create_target_document(
                 {
                     "target_document_type": "payment_entry",
@@ -1671,7 +1671,7 @@ class TestPaymentReconciliationCandidates:
     def test_requires_company(self):
         from cacao_accounting.document_flow.payment import payment_reconciliation_candidates
 
-        with pytest.raises(ValueError, match="compa[nñ]í?a"):
+        with pytest.raises(ValueError, match="compania"):
             payment_reconciliation_candidates(company="", party_type="customer")
 
     def test_returns_payments_and_documents(self, app_ctx):
@@ -2339,7 +2339,7 @@ class TestBankManagementExhaustive:
         database.session.add(payment)
         database.session.commit()
 
-        with pytest.raises(PostingError, match="Las entradas GL no balancean en moneda de transacci[oó]n"):
+        with pytest.raises(PostingError, match="Las entradas GL no balancean en moneda de transaccion"):
             post_payment_entry(payment)
 
     def test_bank_reconciliation_and_difference_journal(self, app_ctx):

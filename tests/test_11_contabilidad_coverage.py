@@ -3310,7 +3310,7 @@ def test_route_external_counter_audit_log_missing(app_ctx):
 def test_posting_decimal_value_invalid(app_ctx):
     from cacao_accounting.contabilidad.posting import PostingError, _decimal_value
 
-    with pytest.raises(PostingError, match="inv[aá]lido"):
+    with pytest.raises(PostingError, match="invalido"):
         _decimal_value("abc")
 
 

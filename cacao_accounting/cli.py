@@ -299,7 +299,9 @@ def db_reset(force: bool, seed: bool) -> None:
             raise click.exceptions.Exit(1)
 
     with app.app_context():
+        database.session.rollback()
         database.drop_all()
+        database.session.remove()
         _mensaje_advertencia(_("Base de datos eliminada."))
         if usuario == "cacao" and contrasena == "cacao":
             _mensaje_advertencia(_("Se están usando usuario y contraseña predeterminados para el setup inicial."))

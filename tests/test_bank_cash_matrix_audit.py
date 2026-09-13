@@ -277,7 +277,7 @@ def test_gl_reconciliation_rejects_incompatible_direction(app_ctx, chart):
     database.session.add(deposit_entry)
     database.session.commit()
 
-    with pytest.raises(BankReconciliationError, match="direcci[oó]n bancaria"):
+    with pytest.raises(BankReconciliationError, match="direccion bancaria"):
         reconcile_bank_items(
             BankReconciliationRequest(
                 company=COMPANY,
@@ -822,7 +822,7 @@ def test_cross_company_and_foreign_currency_targets_are_rejected(app_ctx, chart)
     foreign_deposit = _make_bank_transaction(other_account, deposit=Decimal("90.00"))
 
     # La transaccion de otra compania no puede conciliarse bajo bnk7.
-    with pytest.raises(BankReconciliationError, match="otra compa[nñ]í?a"):
+    with pytest.raises(BankReconciliationError, match="otra compania"):
         reconcile_bank_items(
             BankReconciliationRequest(
                 company=COMPANY,

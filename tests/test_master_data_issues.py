@@ -932,7 +932,7 @@ def test_currency_edit_rejects_company_currency_deactivation(app_ctx):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert "compañía activa" in response.get_data(as_text=True).lower()
+    assert b"compania activa" in response.data.lower()
     currency = Currency.query.filter_by(code="USD").first()
     assert currency is not None
     assert currency.active is True

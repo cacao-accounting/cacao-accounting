@@ -89,7 +89,7 @@ def entidades_creadas():
         else:
             return False
 
-    except (OperationalError, TypeError, InterfaceError, ProgrammingError):
+    except (OperationalError, TypeError, InterfaceError, ProgrammingError, SQLAlchemyError):
         database.session.rollback()
         return False
 
@@ -106,19 +106,7 @@ def usuarios_creados():
         else:
             return False
 
-    except OperationalError:
-        database.session.rollback()
-        return False
-
-    except TypeError:
-        database.session.rollback()
-        return False
-
-    except InterfaceError:
-        database.session.rollback()
-        return False
-
-    except ProgrammingError:
+    except (OperationalError, TypeError, InterfaceError, ProgrammingError, SQLAlchemyError):
         database.session.rollback()
         return False
 
@@ -127,16 +115,16 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
     """Inicia esquema de base datos."""
     from cacao_accounting.datos import base_data, dev_data
 
-    entidad_creada = entidades_creadas()
-    if usuarios_creados():
-        return True
-
     log.info("Intentando inicializar base de datos.")
 
     with app.app_context():
+        database.session.rollback()
         try:
             database.create_all()
             log.info("Esquema de base de datos creado correctamente.")
+            entidad_creada = entidades_creadas()
+            if usuarios_creados():
+                return True
             _ensure_stock_valuation_layer_batch_column()
             _ensure_purchase_line_version_columns()
             # Validate and correct any StockBin with negative reserved_qty before constraint applies
@@ -151,6 +139,7 @@ def inicia_base_de_datos(app: Flask, user: str, passwd: str, with_examples: bool
             DB_ESQUEMA = True
         except SQLAlchemyError:
             log.exception("No se pudo inicializar esquema de base de datos.")
+            database.session.rollback()
             DB_ESQUEMA = False
 
         if DB_ESQUEMA and not with_examples:

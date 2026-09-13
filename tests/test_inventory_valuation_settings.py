@@ -100,7 +100,7 @@ def test_inventory_valuation_settings_post_updates_company_method(app_ctx):
     )
 
     assert response.status_code == 200
-    assert "Método de valuacion guardado correctamente." in response.get_data(as_text=True)
+    assert "Metodo de valuacion guardado correctamente." in response.get_data(as_text=True)
     entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
     assert entity.valuation_method == "fifo"
 
@@ -138,7 +138,9 @@ def test_inventory_valuation_settings_blocks_changes_with_inventory_activity(app
     assert get_response.status_code == 200
     assert "compañía ya tiene operación de inventario contabilizada" in get_response.get_data(as_text=True)
     assert post_response.status_code == 200
-    assert "operación de inventario" in post_response.get_data(as_text=True)
+    assert "No se puede cambiar la valuacion porque la compania ya tiene operacion de inventario." in post_response.get_data(
+        as_text=True
+    )
     entity = database.session.execute(database.select(Entity).filter_by(code="cacao")).scalar_one()
     assert entity.valuation_method == "moving_average"
 
