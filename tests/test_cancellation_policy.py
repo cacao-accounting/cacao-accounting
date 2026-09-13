@@ -272,7 +272,7 @@ def test_cancellation_policy_covers_invalid_metadata_and_period_resolution(app_c
     with pytest.raises(PostingError, match="no existe"):
         cancel_document(invoice, actor_user_id="missing", reason="Corrección")
 
-    with pytest.raises(PostingError, match="invalida"):
+    with pytest.raises(PostingError, match="inv[aá]lida"):
         cancel_document(invoice, actor_user_id=actor.id, reason="Corrección", cancellation_date="invalid")
 
     invoice.docstatus = 0
@@ -281,7 +281,7 @@ def test_cancellation_policy_covers_invalid_metadata_and_period_resolution(app_c
     invoice.docstatus = 1
     database.session.commit()
 
-    with pytest.raises(ValueError, match="compania"):
+    with pytest.raises(ValueError, match="compa[nñ]í?a"):
         resolve_cancellation(
             CancellationRequest(SimpleNamespace(docstatus=1), None, actor.id, "Corrección"),
             source_type="sales_invoice",

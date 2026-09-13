@@ -351,7 +351,7 @@ def test_supplier_quotation_origin_header_is_immutable(app_ctx, monkeypatch):
         monkeypatch.setattr(compras, "_require_purchase_document_access", lambda *_args: None)
 
         with app_ctx.test_request_context(method="POST", data={"company": "other", "currency": "NIO"}):
-            with pytest.raises(DocumentFlowError, match="compa.*ia"):
+            with pytest.raises(DocumentFlowError, match="compa[nñ]í?a"):
                 _validate_supplier_quotation_header(source)
 
 

@@ -168,7 +168,7 @@ def test_external_document_validation_settings(app_instance):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        assert b"Configuracion de validacion externa" in response.data
+        assert "Configuración de validación externa" in response.get_data(as_text=True)
 
 
 def test_configuracion_valuacion_inventario(app_instance):
@@ -206,7 +206,7 @@ def test_configuracion_valuacion_inventario(app_instance):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        assert b"Metodo de valuacion guardado" in response.data
+        assert "Método de valuacion guardado" in response.get_data(as_text=True)
 
         # POST invalid method (triggers ValueError)
         response = client.post(
@@ -507,7 +507,7 @@ def test_config_conciliacion_compras_y_ventas(app_instance):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        assert b"conciliacion de compras guardada" in response.data
+        assert "conciliación de compras guardada" in response.get_data(as_text=True).lower()
         with app_instance.app_context():
             from cacao_accounting.database import CompanyDefaultAccount
 
@@ -536,7 +536,7 @@ def test_config_conciliacion_compras_y_ventas(app_instance):
             follow_redirects=True,
         )
         assert response.status_code == 200
-        assert b"conciliacion de ventas guardada" in response.data
+        assert "conciliación de ventas guardada" in response.get_data(as_text=True).lower()
 
 
 def test_budget_control_config(app_instance):
