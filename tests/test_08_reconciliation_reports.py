@@ -5862,7 +5862,7 @@ def test_purchase_reconciliation_rejects_duplicate_invoice(app_ctx):
     database.session.commit()
     assert result.matched_qty == Decimal("10")
 
-    with pytest.raises(PurchaseReconciliationError, match="conciliacion activa"):
+    with pytest.raises(PurchaseReconciliationError, match="conciliaci[oó]n activa"):
         reconcile_purchase_invoice(invoice.id)
 
 
@@ -5948,7 +5948,7 @@ def test_purchase_reconciliation_concurrent_sessions_no_duplicate(app_ctx):
     session2 = Session(database.engine)
     try:
         invoice2 = session2.get(PurchaseInvoice, invoice.id)
-        with pytest.raises(PurchaseReconciliationError, match="conciliacion activa"):
+        with pytest.raises(PurchaseReconciliationError, match="conciliaci[oó]n activa"):
             reconcile_purchase_invoice(invoice2.id)
     finally:
         session2.close()
