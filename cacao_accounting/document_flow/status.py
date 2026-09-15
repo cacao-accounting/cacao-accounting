@@ -301,8 +301,8 @@ def document_status_payload(document_type: str, document_or_id: Any) -> dict[str
     status = calculate_document_status(document_type, document_or_id)
     return {
         "code": status.code,
-        "label": status.label,
-        "full_label": status.full_label,
+        "label": str(status.label),
+        "full_label": str(status.full_label),
         "tone": status.tone,
         "badge_class": status.badge_class,
         "icon": status.icon,

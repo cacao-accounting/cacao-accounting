@@ -198,16 +198,27 @@ def test_catalog_raw_folding_roundtrips_through_polib() -> None:
         nonlocal index, target, fragments, msgstr_fragments
         if target is None:
             return
+        msgid = polib.unescape("".join(fragments))
+        msgstr = polib.unescape("".join(msgstr_fragments))
+        if not msgid:
+            target = None
+            fragments = []
+            msgstr_fragments = []
+            return
         if index < len(entries):
             expected = entries[index]
-            msgid = polib.unescape("".join(fragments))
-            msgstr = polib.unescape("".join(msgstr_fragments))
             if msgid != expected.msgid or msgstr != expected.msgstr:
                 problems.append((expected.msgid, msgid, msgstr))
             index += 1
         target = None
         fragments = []
         msgstr_fragments = []
+
+    def _strip_po_quotes(text: str) -> str:
+        s = text.strip()
+        if len(s) >= 2 and s.startswith('"') and s.endswith('"'):
+            return s[1:-1]
+        return s
 
     for line in lines:
         if line.startswith("#") or line == "":
@@ -217,17 +228,17 @@ def test_catalog_raw_folding_roundtrips_through_polib() -> None:
         if stripped.startswith("msgid "):
             close_entry()
             target = "msgid"
-            fragments = [stripped[len("msgid ") :].strip().strip('"')]
+            fragments = [_strip_po_quotes(stripped[len("msgid ") :])]
             msgstr_fragments = []
             continue
         if stripped.startswith("msgstr "):
             target = "msgstr"
-            msgstr_fragments = [stripped[len("msgstr ") :].strip().strip('"')]
+            msgstr_fragments = [_strip_po_quotes(stripped[len("msgstr ") :])]
             continue
         if target == "msgid":
-            fragments.append(stripped.strip('"'))
+            fragments.append(_strip_po_quotes(stripped))
         elif target == "msgstr":
-            msgstr_fragments.append(stripped.strip('"'))
+            msgstr_fragments.append(_strip_po_quotes(stripped))
     close_entry()
 
     assert problems == [], f"El doblado crudo no coincide con el catálogo parseado: {problems}"
