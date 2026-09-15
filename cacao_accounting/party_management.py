@@ -24,10 +24,10 @@ from cacao_accounting.database import (
 from cacao_accounting.party_settings import PartyCompanySettings, build_party_company_settings
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
-NATIONALITY_LABELS = {"national": _("Nacional"), "foreign": _("Extranjero")}
-PERSON_TYPE_LABELS = {"natural": _("Natural"), "juridical": _("Jurídica")}
+NATIONALITY_LABELS: dict[str, LazyText] = {"national": _l("Nacional"), "foreign": _l("Extranjero")}
+PERSON_TYPE_LABELS: dict[str, LazyText] = {"natural": _l("Natural"), "juridical": _l("Jurídica")}
 
 
 @dataclass(frozen=True)
@@ -144,11 +144,11 @@ def _parse_date(value: str | None) -> date | None:
         raise ValueError(_("La fecha de constitucion no es valida.")) from exc
 
 
-def _choice_label(labels: dict[str, str], value: str | None) -> str:
+def _choice_label(labels: Mapping[str, LazyText], value: str | None) -> str:
     """Resuelve un valor de lista a su etiqueta legible."""
     if not value:
         return ""
-    return labels.get(value, "")
+    return str(labels.get(value, ""))
 
 
 def _compose_address_label(

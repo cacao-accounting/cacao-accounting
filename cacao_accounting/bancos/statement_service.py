@@ -257,7 +257,7 @@ def _decimal_value(value: Any) -> Decimal:
     try:
         return Decimal(normalized)
     except InvalidOperation as exc:
-        raise BankStatementError(_(f"El monto del extracto no es válido: {value}")) from exc
+        raise BankStatementError(_("El monto del extracto no es válido: %(value)s") % {"value": value}) from exc
 
 
 def _parse_date(value: str) -> date:

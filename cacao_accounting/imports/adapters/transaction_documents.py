@@ -335,7 +335,12 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 rate = _lookup_exchange_rate(transaction_currency, base_currency, posting_date)
             except PostingError as exc:
                 raise ValueError(
-                    _(f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}.")
+                    _("No existe tipo de cambio para %(transaction_currency)s -> %(base_currency)s en %(posting_date)s.")
+                    % {
+                        "transaction_currency": transaction_currency,
+                        "base_currency": base_currency,
+                        "posting_date": posting_date,
+                    }
                 ) from exc
         if rate <= 0:
             raise ValueError(_("El tipo de cambio debe ser positivo."))

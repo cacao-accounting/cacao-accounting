@@ -72,9 +72,10 @@ echo "Usando Python: $PYTHON"
 
 if [[ "$compile_only" == false ]]; then
     echo "== 1/3 Extrayendo cadenas a $POT_FILE =="
+    cd "$PROJECT_ROOT"
     "$PYTHON" -m babel.messages.frontend extract \
-        -F "$BABEL_CFG" -k _l -o "$POT_FILE" \
-        "$PROJECT_ROOT/cacao_accounting"
+        -F "$BABEL_CFG" -k _l -w 127 -o "$POT_FILE" \
+        cacao_accounting
 
     echo "== 2/3 Fusionando $POT_FILE con los catalogos =="
     "$PYTHON" -m babel.messages.frontend update \

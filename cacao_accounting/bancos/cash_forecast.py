@@ -28,11 +28,11 @@ from cacao_accounting.bancos.cash_forecast_service import (
     get_forecast_comparison,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 CASH_FORECAST_DETAIL_ENDPOINT = "bancos.cash_forecast_detail"
 BANCOS_PREFIX = "bancos.bancos_"
-PRONOSTICO_NO_MODIFICABLE_MSG = _("No se pueden modificar pronósticos aprobados o cerrados.")
+PRONOSTICO_NO_MODIFICABLE_MSG = _l("No se pueden modificar pronósticos aprobados o cerrados.")
 CASH_FORECAST_ENTRY_TYPES = {"Income", "Expense"}
 
 
@@ -316,7 +316,7 @@ def cash_forecast_entry_add(forecast_id):
         abort(404)
     _require_forecast_access(forecast, "editar")
     if forecast.status != "Draft":
-        flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
+        flash(str(PRONOSTICO_NO_MODIFICABLE_MSG), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     try:
@@ -366,7 +366,7 @@ def cash_forecast_entry_delete(forecast_id, entry_id):
         abort(404)
     _require_forecast_access(forecast, "editar")
     if forecast.status != "Draft":
-        flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
+        flash(str(PRONOSTICO_NO_MODIFICABLE_MSG), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     entry = database.session.get(CashForecastEntry, entry_id)
@@ -521,7 +521,7 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
         abort(404)
     _require_forecast_access(forecast, "editar")
     if forecast.status != "Draft":
-        flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
+        flash(str(PRONOSTICO_NO_MODIFICABLE_MSG), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     entry = database.session.get(CashForecastEntry, entry_id)

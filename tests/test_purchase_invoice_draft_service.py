@@ -1,17 +1,26 @@
 """Regresión de aislamiento para borradores de factura de compra."""
 
+from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
+from unittest.mock import MagicMock, patch
 
 import pytest
+from flask import Flask
+from flask_babel import Babel, force_locale
 
 from cacao_accounting.compras.purchase_invoice_draft_service import (
     PurchaseInvoiceDraftCommand,
     PurchaseInvoiceDraftError,
+    PurchaseInvoiceDraftLine,
     _validate_idempotency_replay,
+    _validate_line,
     _validate_sources,
 )
-from cacao_accounting.database import PurchaseInvoice
+from cacao_accounting.database import CompanyParty, PurchaseInvoice
+
+TRANSLATIONS_DIR = Path(__file__).resolve().parent.parent / "cacao_accounting" / "translations"
 
 
 @pytest.mark.parametrize(
@@ -47,14 +56,20 @@ def test_idempotency_replay_returns_same_tenant_and_supplier_invoice() -> None:
 
 def test_non_po_invoice_requires_supplier_permission_without_receipt() -> None:
     """NON_PO drafts require both no-order and no-receipt supplier permissions."""
-    command = SimpleNamespace(
-        matching_mode="NON_PO_INVOICE",
-        purchase_order_id=None,
-        purchase_receipt_id=None,
+    command = cast(
+        PurchaseInvoiceDraftCommand,
+        SimpleNamespace(
+            matching_mode="NON_PO_INVOICE",
+            purchase_order_id=None,
+            purchase_receipt_id=None,
+        ),
     )
-    settings = SimpleNamespace(
-        allow_purchase_invoice_without_order=True,
-        allow_purchase_invoice_without_receipt=False,
+    settings = cast(
+        CompanyParty,
+        SimpleNamespace(
+            allow_purchase_invoice_without_order=True,
+            allow_purchase_invoice_without_receipt=False,
+        ),
     )
 
     with pytest.raises(PurchaseInvoiceDraftError) as exc_info:
@@ -65,14 +80,52 @@ def test_non_po_invoice_requires_supplier_permission_without_receipt() -> None:
 
 def test_non_po_invoice_accepts_both_supplier_permissions() -> None:
     """NON_PO drafts are accepted when both source bypasses are configured."""
-    command = SimpleNamespace(
-        matching_mode="NON_PO_INVOICE",
-        purchase_order_id=None,
-        purchase_receipt_id=None,
+    command = cast(
+        PurchaseInvoiceDraftCommand,
+        SimpleNamespace(
+            matching_mode="NON_PO_INVOICE",
+            purchase_order_id=None,
+            purchase_receipt_id=None,
+        ),
     )
-    settings = SimpleNamespace(
-        allow_purchase_invoice_without_order=True,
-        allow_purchase_invoice_without_receipt=True,
+    settings = cast(
+        CompanyParty,
+        SimpleNamespace(
+            allow_purchase_invoice_without_order=True,
+            allow_purchase_invoice_without_receipt=True,
+        ),
     )
 
     _validate_sources(command, settings)
+
+
+def test_non_purchasable_line_translates_template_before_interpolation() -> None:
+    """El código de artículo se interpola después de resolver el catálogo inglés."""
+    app = Flask(__name__)
+    app.config["BABEL_TRANSLATION_DIRECTORIES"] = str(TRANSLATIONS_DIR)
+    Babel(app, locale_selector=lambda: "es")
+    query = MagicMock()
+    query.where.return_value = query
+    query_result = MagicMock()
+    query_result.scalar_one_or_none.return_value = None
+    database_stub = SimpleNamespace(
+        select=MagicMock(return_value=query),
+        session=SimpleNamespace(execute=MagicMock(return_value=query_result)),
+    )
+    line = PurchaseInvoiceDraftLine(
+        item_code="CACAO-01",
+        quantity=Decimal("1"),
+        rate=Decimal("1"),
+        amount=Decimal("1"),
+    )
+
+    with (
+        app.test_request_context(),
+        force_locale("en"),
+        patch("cacao_accounting.compras.purchase_invoice_draft_service.database", database_stub),
+        pytest.raises(PurchaseInvoiceDraftError) as exc_info,
+    ):
+        _validate_line(line)
+
+    assert exc_info.value.code == "LINE_UNRESOLVED"
+    assert str(exc_info.value) == "Item 'CACAO-01' is not purchasable."

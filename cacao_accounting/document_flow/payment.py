@@ -40,14 +40,14 @@ from cacao_accounting.database import (
 from cacao_accounting.document_flow.registry import normalize_doctype
 from cacao_accounting.document_flow.repository import decimal_or_zero
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 if TYPE_CHECKING:
     from cacao_accounting.contabilidad.arap_allocation import AllocationLine
 
-_MSG_MONTO_MAYOR_CERO = _("El monto aplicado debe ser mayor que cero.")
-_MSG_TASA_PAGO_POSITIVA = _("Se requiere una tasa positiva entre la moneda del documento y la del pago.")
-_MSG_PAGO_EXCEDE_SALDO = _("El monto aplicado excede el saldo disponible del pago.")
+_MSG_MONTO_MAYOR_CERO = _l("El monto aplicado debe ser mayor que cero.")
+_MSG_TASA_PAGO_POSITIVA = _l("Se requiere una tasa positiva entre la moneda del documento y la del pago.")
+_MSG_PAGO_EXCEDE_SALDO = _l("El monto aplicado excede el saldo disponible del pago.")
 
 MAX_RECONCILIATION_LINES = 100
 
@@ -59,11 +59,11 @@ def _list_open_items(**filters: Any) -> tuple[Any, ...]:
     return list_open_items(**filters)
 
 
-def _document_flow_error(message: str, status_code: int = 400) -> ValueError:
+def _document_flow_error(message: LazyText, status_code: int = 400) -> ValueError:
     """Resuelve DocumentFlowError via import tardio para evitar circular."""
     from cacao_accounting.document_flow.service import DocumentFlowError as _DFE
 
-    return _DFE(message, status_code)
+    return _DFE(str(message), status_code)
 
 
 @dataclass
@@ -777,7 +777,8 @@ def apply_payment_reconciliation(
     ).scalar_one()
     if latest_allocation and allocation_date < latest_allocation:
         raise _document_flow_error(
-            _(f"La fecha de conciliación no puede ser anterior a una aplicación existente ({latest_allocation}).")
+            _("La fecha de conciliación no puede ser anterior a una aplicación existente (%(latest_allocation)s).")
+            % {"latest_allocation": latest_allocation}
         )
 
     reconciliation = Reconciliation(
@@ -1097,7 +1098,7 @@ def _plan_reconciliation_allocation(
     except AllocationError as exc:
         message = str(exc)
         if isinstance(exc, AllocationOverpaymentError) and "efectivo" in message.lower():
-            message = _(_MSG_PAGO_EXCEDE_SALDO)
+            message = str(_MSG_PAGO_EXCEDE_SALDO)
         raise _document_flow_error(message, 409) from exc
     line = plan.lines[0]
     if line.source_amount > available + Decimal("0.01"):
@@ -1356,13 +1357,13 @@ def _validate_advance_allocation(
     outstanding = compute_outstanding_amount(invoice, as_of_date=allocation_date)
     current_outstanding = compute_outstanding_amount(invoice)
     if amount <= 0:
-        raise _document_flow_error(_(_MSG_MONTO_MAYOR_CERO), 409)
+        raise _document_flow_error(_MSG_MONTO_MAYOR_CERO, 409)
     payment_currency = str(getattr(payment, "currency", None) or "")
     document_currency = _document_transaction_currency(invoice) or payment_currency
     if payment_currency and document_currency and payment_currency != document_currency:
         rate = decimal_or_zero(exchange_rate)
         if rate <= 0:
-            raise _document_flow_error(_(_MSG_TASA_PAGO_POSITIVA), 409)
+            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
     else:
         rate = Decimal("1")
     payment_consumed = amount * rate
@@ -1881,7 +1882,7 @@ def _payment_target_exchange_rate(payment: PaymentEntry, invoice: Any, selected:
     requested_rate = selected.get("payment_exchange_rate") or selected.get("exchange_rate")
     effective_rate = decimal_or_zero(requested_rate)
     if effective_rate <= 0:
-        raise _document_flow_error(_(_MSG_TASA_PAGO_POSITIVA), 409)
+        raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
     return effective_rate
 
 
@@ -1912,7 +1913,7 @@ def _apply_payment_target_line(
 def _validate_payment_target_allocation(allocated: Decimal, outstanding: Decimal) -> None:
     """Valida la cantidad a aplicar contra una factura origen."""
     if allocated <= 0:
-        raise _document_flow_error(_(_MSG_MONTO_MAYOR_CERO), 409)
+        raise _document_flow_error(_MSG_MONTO_MAYOR_CERO, 409)
     if allocated > outstanding:
         raise _document_flow_error(_("El monto aplicado excede el saldo pendiente."), 409)
 

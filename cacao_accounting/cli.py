@@ -88,22 +88,22 @@ class CacaoGroup(click.Group):
 
 def _mensaje_exito(mensaje: str) -> None:
     """Imprime un mensaje de éxito con formato visual."""
-    click.secho(_(f"[OK] {mensaje}"), fg=COLOR_EXITO)
+    click.secho(_("[OK] %(message)s") % {"message": mensaje}, fg=COLOR_EXITO)
 
 
 def _mensaje_advertencia(mensaje: str) -> None:
     """Imprime un mensaje de advertencia con formato visual."""
-    click.secho(_(f"[WARN] {mensaje}"), fg=COLOR_ADVERTENCIA)
+    click.secho(_("[WARN] %(message)s") % {"message": mensaje}, fg=COLOR_ADVERTENCIA)
 
 
 def _mensaje_error(mensaje: str) -> None:
     """Imprime un mensaje de error con formato visual."""
-    click.secho(_(f"[ERROR] {mensaje}"), fg=COLOR_ERROR)
+    click.secho(_("[ERROR] %(message)s") % {"message": mensaje}, fg=COLOR_ERROR)
 
 
 def _mensaje_info(mensaje: str) -> None:
     """Imprime un mensaje informativo con formato visual."""
-    click.secho(_(f"[INFO] {mensaje}"), fg=COLOR_INFO)
+    click.secho(_("[INFO] %(message)s") % {"message": mensaje}, fg=COLOR_INFO)
 
 
 def _obtener_aplicacion():
@@ -182,7 +182,7 @@ def linea_comandos(ctx: click.Context, env: str | None, verbose: bool, quiet: bo
 
 def _mostrar_banner() -> None:
     """Imprime un encabezado visual para la herramienta."""
-    click.secho(_(f"{APPNAME} CLI"), fg=COLOR_TITULO, bold=True)
+    click.secho(_("%(app_name)s CLI") % {"app_name": APPNAME}, fg=COLOR_TITULO, bold=True)
     click.secho(_("Administración del sistema"), fg=COLOR_INFO)
     click.echo("")
 
@@ -265,7 +265,7 @@ def db_migrate(head: str, revision: str | None) -> None:
             alembic.upgrade(target=target)
             _mensaje_exito(_("Migraciones aplicadas correctamente."))
         except Exception as exc:
-            _mensaje_error(_(f"No fue posible aplicar las migraciones: {exc}"))
+            _mensaje_error(_("No fue posible aplicar las migraciones: %(error)s") % {"error": exc})
             raise click.exceptions.Exit(1)
 
 
@@ -352,7 +352,7 @@ def db_seed() -> None:
             _mensaje_exito(_("Datos de ejemplo insertados."))
         except SQLAlchemyError as exc:
             log.exception("Error al insertar datos de ejemplo.")
-            _mensaje_error(_(f"No fue posible insertar los datos de ejemplo: {exc}"))
+            _mensaje_error(_("No fue posible insertar los datos de ejemplo: %(error)s") % {"error": exc})
             raise click.exceptions.Exit(1)
 
 
@@ -368,7 +368,7 @@ def run(host: str, port: str | None, debug: bool) -> None:
 
     app = _obtener_aplicacion()
     puerto = int(port) if port else int(PORT)
-    _mensaje_info(_(f"Iniciando servidor de desarrollo en http://{host}:{puerto}"))
+    _mensaje_info(_("Iniciando servidor de desarrollo en http://%(host)s:%(port)s") % {"host": host, "port": puerto})
     app.run(host=host, port=puerto, debug=debug, use_reloader=debug, use_debugger=debug)
 
 
@@ -383,7 +383,7 @@ def serve() -> None:
     try:
         server()
     except (OSError, ValueError, ImportError, SQLAlchemyError) as exc:
-        _mensaje_error(_(f"No fue posible iniciar el servidor: {exc}"))
+        _mensaje_error(_("No fue posible iniciar el servidor: %(error)s") % {"error": exc})
         raise click.exceptions.Exit(1)
 
 
@@ -441,10 +441,10 @@ def routes() -> None:
             ancho = max(len(str(r.rule)) for r in reglas)
         for regla in sorted(reglas, key=lambda r: str(r.rule)):
             metodos = ",".join(sorted(m for m in regla.methods if m not in ("HEAD", "OPTIONS")))
-            click.echo(_(f"{str(regla.rule).ljust(ancho)}  {metodos}"))
+            click.echo(_("%(rule)s  %(methods)s") % {"rule": str(regla.rule).ljust(ancho), "methods": metodos})
         try:
             click.echo("")
-            click.secho(_(f"Motor: {db_version()}"), fg=COLOR_INFO)
+            click.secho(_("Motor: %(engine)s") % {"engine": db_version()}, fg=COLOR_INFO)
         except SQLAlchemyError:
             pass
 
@@ -488,7 +488,7 @@ def status() -> None:
         ("Server", "Waitress"),
     ]
     for etiqueta, valor in filas:
-        click.echo(_(f"{etiqueta.ljust(12)} : {valor}"))
+        click.echo(_("%(label)s : %(value)s") % {"label": etiqueta.ljust(12), "value": valor})
 
 
 status.group = "System"  # type: ignore[attr-defined]
@@ -518,7 +518,7 @@ def config() -> None:
         ("Cache", str(configuracion.get("CACHE_TYPE", ""))),
     ]
     for etiqueta, valor in filas:
-        click.echo(_(f"{etiqueta.ljust(12)} : {valor}"))
+        click.echo(_("%(label)s : %(value)s") % {"label": etiqueta.ljust(12), "value": valor})
 
 
 config.group = "System"  # type: ignore[attr-defined]
@@ -540,17 +540,17 @@ def completion(ctx: click.Context, shell: str) -> None:
 
     click.echo("")
     if shell == "fish":
-        click.echo(_(f"  {comando}"))
+        click.echo(_("  %(command)s") % {"command": comando})
         click.echo("")
-        click.echo(_(f"  Agrega la linea anterior a {archivo[shell]}:"))
-        click.echo(_(f"  echo '{comando}' >> {archivo[shell]}"))
+        click.echo(_("  Agrega la linea anterior a %(file)s:") % {"file": archivo[shell]})
+        click.echo(_("  echo '%(command)s' >> %(file)s") % {"command": comando, "file": archivo[shell]})
     else:
-        click.echo(_(f"  Agrega la siguiente linea a tu {archivo[shell]}:"))
+        click.echo(_("  Agrega la siguiente linea a tu %(file)s:") % {"file": archivo[shell]})
         click.echo("")
-        click.echo(_(f"  {comando}"))
+        click.echo(_("  %(command)s") % {"command": comando})
     click.echo("")
     click.echo(_("  Vuelve a cargar tu configuracion o reinicia el terminal."))
-    click.echo(_(f"  source {archivo[shell]}"))
+    click.echo(_("  source %(file)s") % {"file": archivo[shell]})
 
     # Muestra tambien las opciones de shell disponibles.
     click.echo("")

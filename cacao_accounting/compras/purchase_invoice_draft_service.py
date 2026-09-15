@@ -232,7 +232,10 @@ def _exchange_rate(company: Entity, command: PurchaseInvoiceDraftCommand) -> Dec
 def _validate_line(line: PurchaseInvoiceDraftLine) -> Item:
     item = database.session.execute(database.select(Item).where(Item.code == line.item_code)).scalar_one_or_none()
     if item is None or not item.is_purchase_item:
-        raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _(f"El ítem '{line.item_code}' no es comprable."))
+        raise PurchaseInvoiceDraftError(
+            "LINE_UNRESOLVED",
+            _("El ítem '%(item_code)s' no es comprable.") % {"item_code": line.item_code},
+        )
     if line.uom:
         uom = database.session.execute(database.select(UOM).where(UOM.code == line.uom)).scalar_one_or_none()
         if uom is None or not uom.is_active:

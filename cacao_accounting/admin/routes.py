@@ -139,7 +139,7 @@ from cacao_accounting.contabilidad.ledger_mapping_service import (
 )
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 
 def _require_price_list_editor() -> None:
@@ -170,7 +170,7 @@ LISTA_MODULOS = "admin.lista_modulos"
 
 CUENTAS_PREDETERMINADAS = "admin.cuentas_predeterminadas"
 
-USUARIO_NO_ENCONTRADO = _("Usuario no encontrado.")
+USUARIO_NO_ENCONTRADO = _l("Usuario no encontrado.")
 
 LISTA_USUARIOS = "admin.lista_usuarios"
 
@@ -178,7 +178,7 @@ LISTA_ROLES = "admin.lista_roles"
 
 ADMIN_LISTA_GRUPOS_TERCEROS = "admin.lista_grupos_terceros"
 
-DESKTOP_SINGLE_ADMIN_MESSAGE = _("En modo escritorio solo se permite un usuario administrador.")
+DESKTOP_SINGLE_ADMIN_MESSAGE = _l("En modo escritorio solo se permite un usuario administrador.")
 
 LISTA_VALUACION_INVENTARIO = "admin.configuracion_valuacion_inventario"
 
@@ -393,7 +393,7 @@ def email_log_retry(queue_id: str):
     except EmailError as exc:
         flash(_(str(exc)), "danger")
     except Exception as exc:
-        flash(_(f"Error al reintentar envío: {exc}"), "danger")
+        flash(_("Error al reintentar envío: %(error)s") % {"error": exc}, "danger")
 
     return redirect(url_for("admin.email_log"))
 
@@ -1177,7 +1177,7 @@ def lista_usuarios():
         usuario = _obtener_usuario(user_id) if user_id else None
 
         if usuario is None:
-            flash(USUARIO_NO_ENCONTRADO, "danger")
+            flash(str(USUARIO_NO_ENCONTRADO), "danger")
             return redirect(url_for(LISTA_USUARIOS))
 
         if action == "toggle":
@@ -1209,7 +1209,7 @@ def crear_usuario():
     if not _can_create_user():
         if request.method == "POST":
             abort(403)
-        flash(DESKTOP_SINGLE_ADMIN_MESSAGE, "danger")
+        flash(str(DESKTOP_SINGLE_ADMIN_MESSAGE), "danger")
         return redirect(url_for(LISTA_USUARIOS))
 
     form = UserCreateForm()
@@ -1238,7 +1238,7 @@ def editar_usuario(user_id: str):
     _require_system_admin()
     usuario = _obtener_usuario(user_id)
     if usuario is None:
-        flash(USUARIO_NO_ENCONTRADO, "danger")
+        flash(str(USUARIO_NO_ENCONTRADO), "danger")
         return redirect(url_for(LISTA_USUARIOS))
 
     form = UserEditForm(obj=usuario)
@@ -1266,7 +1266,7 @@ def usuario_roles(user_id: str):
     _require_system_admin()
     usuario = _obtener_usuario(user_id)
     if usuario is None:
-        flash(USUARIO_NO_ENCONTRADO, "danger")
+        flash(str(USUARIO_NO_ENCONTRADO), "danger")
         return redirect(url_for(LISTA_USUARIOS))
 
     if usuario.classification in ("customer", "supplier"):
@@ -1306,7 +1306,7 @@ def usuario_companias(user_id: str):
         abort(403)
     usuario = _obtener_usuario(user_id)
     if usuario is None:
-        flash(USUARIO_NO_ENCONTRADO, "danger")
+        flash(str(USUARIO_NO_ENCONTRADO), "danger")
         return redirect(url_for(LISTA_USUARIOS))
     if usuario.classification in ("customer", "supplier"):
         flash(_("Solo los usuarios internos pueden tener compañías asignadas."), "warning")
@@ -1347,7 +1347,7 @@ def usuario_password(user_id: str):
     _require_system_admin()
     usuario = _obtener_usuario(user_id)
     if usuario is None:
-        flash(USUARIO_NO_ENCONTRADO, "danger")
+        flash(str(USUARIO_NO_ENCONTRADO), "danger")
         return redirect(url_for(LISTA_USUARIOS))
 
     form = UserPasswordForm()

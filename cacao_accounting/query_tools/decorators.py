@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Callable
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 _DEFAULT_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
-    "description": _("Resultado de consulta de solo lectura; el contenido puede incluir paginación y procedencia."),
+    "description": _l("Resultado de consulta de solo lectura; el contenido puede incluir paginación y procedencia."),
     "properties": {
         "items": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
         "summary": {"type": "object", "additionalProperties": True},

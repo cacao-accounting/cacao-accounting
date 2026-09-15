@@ -159,7 +159,9 @@ def _validate_dependencies(document: Any, source_type: str, source_id: str) -> N
     dependencies = active_cancellation_dependencies(document, source_type, source_id)
     if dependencies:
         details = ", ".join(f"{dependency.detail} ({dependency.identifier})" for dependency in dependencies)
-        raise CancellationPolicyError(_(f"No se puede anular el documento porque tiene efectos activos: {details}."))
+        raise CancellationPolicyError(
+            _("No se puede anular el documento porque tiene efectos activos: %(details)s.") % {"details": details}
+        )
 
 
 def _ensure_no_previous_cancellation(source_type: str, source_id: str) -> None:

@@ -65,7 +65,7 @@ from cacao_accounting.database.helpers import (
 from cacao_accounting.decorators import exige_acceso_compania
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 contabilidad = Blueprint("contabilidad", __name__, template_folder="templates")
 
@@ -119,9 +119,9 @@ CONTABILIDAD_FISCAL_YEAR_CREAR_TEMPLATE = "contabilidad/fiscal_year_crear.html"
 
 CONTABILIDAD_TASA_CAMBIO = "contabilidad.tasa_cambio"
 
-CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = _("Periodo no encontrado.")
+CONTABILIDAD_PERIODO_NO_EXISTE_MESSAGE = _l("Periodo no encontrado.")
 
-CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = _("Cierre mensual no encontrado.")
+CONTABILIDAD_CIERRE_MENSUAL_NO_EXISTE_MESSAGE = _l("Cierre mensual no encontrado.")
 
 ENTIDAD_NO_EXISTE_MSG = "La entidad indicada no existe."
 

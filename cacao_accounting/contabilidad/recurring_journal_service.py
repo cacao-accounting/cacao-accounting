@@ -188,7 +188,9 @@ def apply_recurring_template(
     )
 
     if existing and existing.status in {"pending", "applied"}:
-        raise RecurringJournalError(_(f"La plantilla ya fue aplicada al periodo {period_name}."))
+        raise RecurringJournalError(
+            _("La plantilla ya fue aplicada al periodo %(period_name)s.") % {"period_name": period_name}
+        )
 
     items = database.session.query(RecurringJournalItem).filter_by(template_id=template.id).all()
     if not items:

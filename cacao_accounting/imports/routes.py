@@ -34,7 +34,7 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 
 from typing import Any
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 _MAGIC_EXCEPTION: type[BaseException] = ImportError
 
@@ -58,7 +58,7 @@ imports = Blueprint("imports", __name__, template_folder="templates")
 
 _ENDPOINT_IMPORTS_DETAIL = "imports.detail"
 _ENDPOINT_IMPORTS_NEW = "imports.new"
-_INVALID_FILE_TYPE_MSG = _("Error al validar el tipo de archivo")
+_INVALID_FILE_TYPE_MSG = _l("Error al validar el tipo de archivo")
 
 
 def check_desktop_mode():
@@ -267,7 +267,7 @@ def _validate_mime_type(file: Any) -> bool:
         file.seek(0)
         mime = magic_modulo.from_buffer(chunk, mime=True)
     except (ImportError, OSError, _MAGIC_EXCEPTION):
-        flash(_INVALID_FILE_TYPE_MSG, "danger")
+        flash(str(_INVALID_FILE_TYPE_MSG), "danger")
         return False
     if mime not in _ALLOWED_MIMES:
         flash(_("Tipo de archivo no válido"), "danger")

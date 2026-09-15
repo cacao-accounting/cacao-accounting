@@ -635,9 +635,14 @@ def _validate_and_register_external_number(
     if existing:
         raise ExternalNumberDuplicateError(
             _(
-                f"El numero externo '{external_number}' ya fue utilizado en este contador "
-                f"por el documento {existing.entity_type}/{existing.entity_id}."
+                "El numero externo '%(external_number)s' ya fue utilizado en este contador "
+                "por el documento %(entity_type)s/%(entity_id)s."
             )
+            % {
+                "external_number": external_number,
+                "entity_type": existing.entity_type,
+                "entity_id": existing.entity_id,
+            }
         )
 
     # Intentar extraer el valor numerico del numero externo (despues del prefijo)

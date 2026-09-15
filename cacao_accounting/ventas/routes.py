@@ -137,7 +137,7 @@ from cacao_accounting.ventas.services import (
     sales_order_line_closure_reasons,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
@@ -165,15 +165,15 @@ _FORMKEY_SALES_INVOICE = "sales.sales_invoice"
 
 _FORMKEY_DELIVERY_NOTE = "sales.delivery_note"
 
-_LABEL_PEDIDO_VENTA = _("Pedido de Venta")
+_LABEL_PEDIDO_VENTA = _l("Pedido de Venta")
 
-_LABEL_ORDEN_VENTA = _("Orden de Venta")
+_LABEL_ORDEN_VENTA = _l("Orden de Venta")
 
-_LABEL_NOTA_ENTREGA = _("Nota de Entrega")
+_LABEL_NOTA_ENTREGA = _l("Nota de Entrega")
 
-DOCUMENT_REQUIRES_LINE_MSG = _("El documento requiere al menos una línea.")
+DOCUMENT_REQUIRES_LINE_MSG = _l("El documento requiere al menos una línea.")
 
-SOLICITUD_CANCELACION_PENDIENTE_MSG = _("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
+SOLICITUD_CANCELACION_PENDIENTE_MSG = _l("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
 
 
 @dataclass(frozen=True)
@@ -241,8 +241,8 @@ def _build_delivery_note_transaction_config(
         "warehouses": warehouses,
         "initialSourceType": initial_source_type,
         "availableSourceTypes": [
-            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
+            {"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)},
+            {"value": "delivery_note", "label": str(_LABEL_NOTA_ENTREGA)},
         ],
     }
 
@@ -693,7 +693,7 @@ def ventas_pedido_venta_cancel(request_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
 
         registro.docstatus = 2
@@ -1145,7 +1145,7 @@ def ventas_orden_venta_editar(order_id: str):
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
         "availableSourceTypes": [
-            {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
+            {"value": "sales_request", "label": str(_LABEL_PEDIDO_VENTA)},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},
         ],
         "initialHeader": {
@@ -1338,7 +1338,7 @@ def ventas_cotizacion_nueva():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "initialSourceType": "sales_request" if from_request_id else "",
-        "availableSourceTypes": [{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}],
+        "availableSourceTypes": [{"value": "sales_request", "label": str(_LABEL_PEDIDO_VENTA)}],
     }
     if solicitud_origen:
         transaction_config["initialHeader"] = {
@@ -1422,7 +1422,7 @@ def ventas_cotizacion_editar(quotation_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "availableSourceTypes": [{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}],
+        "availableSourceTypes": [{"value": "sales_request", "label": str(_LABEL_PEDIDO_VENTA)}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -1575,7 +1575,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
         registro.docstatus = 2
@@ -1656,7 +1656,7 @@ def ventas_orden_venta_cancel(order_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
         _release_reservation_for_sales_order(registro)
@@ -1830,7 +1830,7 @@ def ventas_entrega_editar(note_id: str):
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "availableSourceTypes": [{"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)}],
+        "availableSourceTypes": [{"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -2009,7 +2009,7 @@ def ventas_entrega_cancel(note_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
         _execute_delivery_note_cancellation(
@@ -2081,8 +2081,8 @@ def ventas_factura_venta_nuevo():
         "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "initialSourceType": initial_source_type,
         "availableSourceTypes": [
-            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
+            {"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)},
+            {"value": "delivery_note", "label": str(_LABEL_NOTA_ENTREGA)},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
         "initialHeader": {"company": company_id or "", "posting_date": str(date.today())},
@@ -2167,8 +2167,8 @@ def _build_sales_invoice_edit_config(
         "warehouses": bodegas_disponibles,
         "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "availableSourceTypes": [
-            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
+            {"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)},
+            {"value": "delivery_note", "label": str(_LABEL_NOTA_ENTREGA)},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
         "initialHeader": {
@@ -2424,7 +2424,7 @@ def ventas_factura_venta_cancel(invoice_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
         _cancel_linked_delivery_note(

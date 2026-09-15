@@ -223,7 +223,7 @@ from cacao_accounting.compras.services import (
     check_budget_control,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 logger = getLogger(__name__)
 
@@ -236,7 +236,7 @@ PURCHASE_DEBIT_NOTE = "purchase_debit_note"
 PURCHASE_CREDIT_NOTE = "purchase_credit_note"
 
 
-FACTURA_COMPRA_LABEL = _("Factura de Compra")
+FACTURA_COMPRA_LABEL = _l("Factura de Compra")
 
 COMPRAS_IMPORT_LANDED_COST_ENDPOINT = "compras.compras_import_landed_cost"
 
@@ -244,9 +244,9 @@ COMPRAS_PROVEEDOR_ENDPOINT = "compras.compras_proveedor"
 
 COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT = "compras.compras_comparativo_ofertas"
 
-DOCUMENT_REQUIRES_LINE_MSG = _("El documento requiere al menos una línea.")
+DOCUMENT_REQUIRES_LINE_MSG = _l("El documento requiere al menos una línea.")
 
-SOLICITUD_CANCELACION_PENDIENTE_MSG = _("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
+SOLICITUD_CANCELACION_PENDIENTE_MSG = _l("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
 
 FACTURA_DE_COMPRA = FACTURA_COMPRA_LABEL
 
@@ -282,23 +282,23 @@ ROUTE_COMPRAS_COTIZACION_PROVEEDOR = "compras.compras_cotizacion_proveedor"
 
 ROUTE_COMPRAS_PROVEEDOR = COMPRAS_PROVEEDOR_ENDPOINT
 
-LABEL_SOLICITUD_COMPRA = _("Solicitud de Compra")
+LABEL_SOLICITUD_COMPRA = _l("Solicitud de Compra")
 
-LABEL_SOLICITUD_COTIZACION = _("Solicitud de Cotización")
+LABEL_SOLICITUD_COTIZACION = _l("Solicitud de Cotización")
 
-LABEL_ORDEN_COMPRA = _("Orden de Compra")
+LABEL_ORDEN_COMPRA = _l("Orden de Compra")
 
 LABEL_FACTURA_COMPRA_LONG = FACTURA_COMPRA_LABEL
 
 IMPORT_LANDED_COST = "import_landed_cost"
 
-IMPORT_LANDED_COST_LABEL = _("Costo de Importación")
+IMPORT_LANDED_COST_LABEL = _l("Costo de Importación")
 
 COMPRAS_COMPARATIVO_ORDENES = "compras.compras_comparativo_ordenes"
 
-CANCELLATION_REASON_REQUIRED_MSG = _("Debe indicar el motivo de la anulación.")
+CANCELLATION_REASON_REQUIRED_MSG = _l("Debe indicar el motivo de la anulación.")
 
-DOCUMENT_TYPE_LABELS: dict[str, str] = {
+DOCUMENT_TYPE_LABELS: dict[str, LazyText] = {
     PURCHASE_INVOICE: FACTURA_DE_COMPRA,
     PURCHASE_DEBIT_NOTE: "Nota de Débito de Compra",
     PURCHASE_CREDIT_NOTE: "Nota de Crédito de Compra",
@@ -681,7 +681,7 @@ def compras_solicitud_compra_cancel(request_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -972,7 +972,7 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -2357,7 +2357,7 @@ def compras_solicitud_cotizacion_cancel(quotation_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -2439,7 +2439,7 @@ def compras_orden_compra_cancel(order_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -2823,7 +2823,7 @@ def compras_recepcion_cancel(receipt_id: str):
         abort(400)
     reason = (request.form.get("reason") or "").strip()
     if not reason:
-        flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
+        flash(str(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
     if has_active_source_relations("purchase_receipt", receipt_id):
         flash(_("No se puede cancelar la recepción de compra porque tiene facturas de compra activas."), "danger")
@@ -2838,7 +2838,7 @@ def compras_recepcion_cancel(receipt_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -3229,7 +3229,7 @@ def compras_factura_compra_cancel(invoice_id: str):
         abort(400)
     reason = (request.form.get("reason") or "").strip()
     if not reason:
-        flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
+        flash(str(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     active_payment = (
         database.select(PaymentReference.id)
@@ -3262,7 +3262,7 @@ def compras_factura_compra_cancel(invoice_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -3343,7 +3343,7 @@ def compras_import_landed_cost_nuevo():
             "/api/document-flow/pending-lines"
             "?source_type=purchase_invoice&target_type=import_landed_cost&source_id=" + (from_invoice_id or "")
         ),
-        "source_label": FACTURA_COMPRA_LABEL,
+        "source_label": str(FACTURA_COMPRA_LABEL),
     }
 
     if request.method == "POST":
@@ -3429,7 +3429,7 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
         abort(400)
     reason = (request.form.get("reason") or "").strip()
     if not reason:
-        flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
+        flash(str(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine

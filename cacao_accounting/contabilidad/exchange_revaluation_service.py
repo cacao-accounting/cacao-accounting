@@ -882,7 +882,10 @@ class ExchangeRevaluationService:
         if rate_val is not None:
             return (Decimal("1") / rate_val).quantize(Decimal("0.000000001"))
 
-        raise ExchangeRevaluationError(_(f"Falta tasa de cierre para {origin} -> {destination} en {closing_date}."))
+        raise ExchangeRevaluationError(
+            _("Falta tasa de cierre para %(origin)s -> %(destination)s en %(closing_date)s.")
+            % {"origin": origin, "destination": destination, "closing_date": closing_date}
+        )
 
     def _party_account(self, party_id: str | None, company: str, *, receivable: bool) -> str | None:
         if party_id:

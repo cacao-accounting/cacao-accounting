@@ -10,7 +10,7 @@ from typing import Any
 
 from cacao_accounting.auth.permisos import Permisos
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 
 @dataclass(frozen=True)
@@ -23,16 +23,16 @@ class ModuleBadge:
     title: str
 
 
-_BADGE_META = {
-    "ok": ("ca-status-ok", _("Todo ok"), _("Acceso operativo disponible")),
-    "no_access": ("ca-status-no-access", _("Sin acceso"), _("No tiene acceso a esta opción")),
+_BADGE_META: dict[str, tuple[str, LazyText, LazyText]] = {
+    "ok": ("ca-status-ok", _l("Todo ok"), _l("Acceso operativo disponible")),
+    "no_access": ("ca-status-no-access", _l("Sin acceso"), _l("No tiene acceso a esta opción")),
     "pending_approval": (
         "ca-status-pending-approval",
-        _("Pendiente de aprobar"),
-        _("Hay registros pendientes de aprobación"),
+        _l("Pendiente de aprobar"),
+        _l("Hay registros pendientes de aprobación"),
     ),
-    "view_only": ("ca-status-view-only", _("Solo visualizar"), _("Acceso solo de visualización")),
-    "attention": ("ca-status-attention", _("Requiere atención"), _("Hay una situación que requiere atención")),
+    "view_only": ("ca-status-view-only", _l("Solo visualizar"), _l("Acceso solo de visualización")),
+    "attention": ("ca-status-attention", _l("Requiere atención"), _l("Hay una situación que requiere atención")),
 }
 
 
@@ -81,8 +81,8 @@ def module_badge(
         status = "ok"
 
     css_class, default_label, default_title = _BADGE_META[status]
-    resolved_label = label or _(default_label)
-    title = resolved_label if label else _(default_title)
+    resolved_label = label or str(default_label)
+    title = resolved_label if label else str(default_title)
     if status == "pending_approval" and pending_count > 0:
         title = _("%(count)s registro(s) pendiente(s) de aprobación") % {"count": pending_count}
 

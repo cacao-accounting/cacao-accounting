@@ -251,7 +251,8 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     ).all()
     if open_periods:
         raise FiscalYearClosingError(
-            _(f"No se puede cerrar el año fiscal: hay {len(open_periods)} período(s) contable(s) abierto(s).")
+            _("No se puede cerrar el año fiscal: hay %(open_period_count)s período(s) contable(s) abierto(s).")
+            % {"open_period_count": len(open_periods)}
         )
 
     if not fiscal_year.is_closed:
@@ -263,7 +264,8 @@ def create_fiscal_year_closing_voucher(company: str, fiscal_year_id: str, user_i
     if reversal_pairs:
         details = ", ".join(f"{original} → {reversal}" for original, reversal in reversal_pairs)
         raise FiscalYearClosingError(
-            _(f"No se puede cerrar el año fiscal: existen reversas publicadas posteriormente ({details}).")
+            _("No se puede cerrar el año fiscal: existen reversas publicadas posteriormente (%(details)s).")
+            % {"details": details}
         )
 
     books = list(
