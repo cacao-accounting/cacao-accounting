@@ -2380,7 +2380,8 @@ def ventas_factura_venta_submit(invoice_id: str):
         ):
             dn = _create_delivery_note_from_invoice(registro)
             flash(
-                _("Se ha creado y aprobado la Nota de Entrega %s asociada a esta factura.") % (dn.document_no or dn.id),
+                _("Se ha creado y aprobado la Nota de Entrega %(document)s asociada a esta factura.")
+                % {"document": dn.document_no or dn.id},
                 "info",
             )
         log_submit(registro)

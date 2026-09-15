@@ -1950,7 +1950,7 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
         flash_error(exc)
     except SQLAlchemyError as exc:
         database.session.rollback()
-        flash(_("Error inesperado al crear la orden de venta: ") + str(exc), "danger")
+        flash(_("Error inesperado al crear la orden de venta: %(error)s") % {"error": exc}, "danger")
 
 
 def _handle_sales_quotation_edit_post(registro):
@@ -2329,7 +2329,7 @@ def _cancel_linked_delivery_note(
     _restore_reservation_for_delivery_note(dn)
     log_cancel(dn)
     flash(
-        _("Se ha cancelado la Nota de Entrega %s asociada.") % (dn.document_no or dn.id),
+        _("Se ha cancelado la Nota de Entrega %(document)s asociada.") % {"document": dn.document_no or dn.id},
         "info",
     )
 
