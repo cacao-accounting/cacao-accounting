@@ -22,14 +22,14 @@ from cacao_accounting.query_tools.pagination import (
 from cacao_accounting.query_tools.permissions import (
     validate_permission,
 )
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _l
 
 _PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
 
 
 @query_tool(
     name="accounting_periods.list",
-    description=_("Lista los períodos contables de una compañía."),
+    description=_l("Lista los períodos contables de una compañía."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
@@ -105,7 +105,7 @@ def list_accounting_periods(
 
 @query_tool(
     name="accounts.search",
-    description=_("Busca cuentas contables por código o nombre."),
+    description=_l("Busca cuentas contables por código o nombre."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
@@ -183,7 +183,7 @@ def search_accounts(
 
 @query_tool(
     name="accounting.get_trial_balance",
-    description=_("Obtiene la balanza de comprobación para una compañía, libro y rango de fechas."),
+    description=_l("Obtiene la balanza de comprobación para una compañía, libro y rango de fechas."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     max_date_range_months=12,
@@ -265,7 +265,7 @@ def get_trial_balance(
 
 @query_tool(
     name="accounting.get_general_ledger",
-    description=_("Consulta los movimientos del libro mayor por cuenta."),
+    description=_l("Consulta los movimientos del libro mayor por cuenta."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     max_date_range_months=12,

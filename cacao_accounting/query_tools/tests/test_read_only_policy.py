@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from cacao_accounting.i18n import _l
 from cacao_accounting.query_tools.decorators import QueryTool, query_tool
 
 
@@ -29,7 +30,7 @@ def test_tool_must_be_read_only():
 def test_query_tool_decorator_sets_read_only():
     @query_tool(
         name="test.decorator_read_only",
-        description="Decorated tool",
+        description=_l("Decorated tool"),
     )
     def my_handler(*, context, **kwargs):
         return {"data": "test"}

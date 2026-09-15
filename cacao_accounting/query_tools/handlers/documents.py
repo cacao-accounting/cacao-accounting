@@ -17,12 +17,12 @@ from cacao_accounting.query_tools.pagination import (
 from cacao_accounting.query_tools.permissions import validate_permission
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 
 @query_tool(
     name="documents.get_flow",
-    description=_("Obtiene las relaciones documentales de un documento."),
+    description=_l("Obtiene las relaciones documentales de un documento."),
     required_permission="documents.reports.read",
     parameters_schema={
         "type": "object",
@@ -102,7 +102,7 @@ def get_document_flow(
 
 @query_tool(
     name="documents.get_related_documents",
-    description=_("Obtiene documentos relacionados y sus líneas de flujo."),
+    description=_l("Obtiene documentos relacionados y sus líneas de flujo."),
     required_permission="documents.reports.read",
     parameters_schema={
         "type": "object",
@@ -141,7 +141,7 @@ def _document_context(context: QueryContext, company_id: str) -> None:
 
 @query_tool(
     "documents.get_details",
-    _("Obtiene un DTO controlado de una factura o pago."),
+    _l("Obtiene un DTO controlado de una factura o pago."),
     required_permission="documents.reports.read",
     parameters_schema=_DOCUMENT_SCHEMA,
 )
@@ -155,7 +155,7 @@ def get_document_details_handler(
 
 @query_tool(
     "documents.get_lines",
-    _("Obtiene líneas controladas de una factura; los pagos no tienen líneas."),
+    _l("Obtiene líneas controladas de una factura; los pagos no tienen líneas."),
     required_permission="documents.reports.read",
     parameters_schema=_DOCUMENT_SCHEMA,
 )
@@ -174,7 +174,7 @@ def get_document_lines_handler(
 
 @query_tool(
     "documents.get_status",
-    _("Obtiene el estado contable controlado de una factura o pago."),
+    _l("Obtiene el estado contable controlado de una factura o pago."),
     required_permission="documents.reports.read",
     parameters_schema=_DOCUMENT_SCHEMA,
 )

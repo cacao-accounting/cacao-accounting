@@ -65,7 +65,7 @@ class Registry:
     def _tool_to_schema(self, tool: QueryTool) -> dict[str, Any]:
         return {
             "name": tool.name,
-            "description": tool.description,
+            "description": _serialize_schema(tool.description),
             "read_only": tool.read_only,
             "parameters": _serialize_schema(tool.parameters_schema),
             "response": _serialize_schema(tool.response_schema),

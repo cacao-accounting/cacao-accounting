@@ -14,7 +14,7 @@ from cacao_accounting.query_tools.decorators import query_tool
 from cacao_accounting.query_tools.pagination import PaginatedResult, paginate
 from cacao_accounting.query_tools.permissions import validate_permission
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 _PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
@@ -52,7 +52,7 @@ _LIST_SCHEMA = {
 
 @query_tool(
     "treasury.forecasts.list",
-    _("Lista versiones de pronósticos de caja de una compañía."),
+    _l("Lista versiones de pronósticos de caja de una compañía."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_LIST_SCHEMA,
@@ -90,7 +90,7 @@ _FORECAST_SCHEMA = {
 
 @query_tool(
     "treasury.get_cash_forecast",
-    _("Obtiene el pronóstico de caja por períodos, sin modificarlo."),
+    _l("Obtiene el pronóstico de caja por períodos, sin modificarlo."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema=_FORECAST_SCHEMA,
@@ -107,7 +107,7 @@ def get_cash_forecast(*, context: QueryContext, company_id: str, forecast_id: st
 
 @query_tool(
     "treasury.compare_forecasts",
-    _("Compara dos versiones de pronóstico de caja de una misma compañía."),
+    _l("Compara dos versiones de pronóstico de caja de una misma compañía."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={
@@ -139,7 +139,7 @@ def compare_cash_forecasts(
 
 @query_tool(
     "treasury.get_maturity_schedule",
-    _("Obtiene vencimientos de cartera y proveedores calculados desde términos de pago."),
+    _l("Obtiene vencimientos de cartera y proveedores calculados desde términos de pago."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={

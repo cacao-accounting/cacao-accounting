@@ -11,12 +11,12 @@ from cacao_accounting.query_tools.pagination import (
     PaginatedResult,
     paginate,
 )
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _l
 
 
 @query_tool(
     name="companies.list",
-    description=_("Lista las compañías accesibles para el usuario."),
+    description=_l("Lista las compañías accesibles para el usuario."),
     parameters_schema={
         "type": "object",
         "properties": {

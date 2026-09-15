@@ -14,14 +14,14 @@ from cacao_accounting.query_tools.pagination import (
     paginate,
 )
 from cacao_accounting.query_tools.permissions import validate_permission
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _l
 
 _PERM_BANKING_REPORTS_READ = "banking.reports.read"
 
 
 @query_tool(
     name="banking.get_accounts",
-    description=_("Lista las cuentas bancarias de una compañía."),
+    description=_l("Lista las cuentas bancarias de una compañía."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     parameters_schema={
@@ -87,7 +87,7 @@ def get_banking_accounts(
 
 @query_tool(
     name="banking.get_transactions",
-    description=_("Consulta movimientos bancarios."),
+    description=_l("Consulta movimientos bancarios."),
     required_module="cash",
     required_permission=_PERM_BANKING_REPORTS_READ,
     max_date_range_months=12,

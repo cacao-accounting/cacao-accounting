@@ -83,3 +83,60 @@ def test_get_count():
     assert r.get_count() == 1
     r.register(QueryTool(name="test.c2", description="C2", read_only=True))
     assert r.get_count() == 2
+
+
+def test_query_tool_lazy_description_localization():
+    from flask_babel import force_locale
+    from cacao_accounting import create_app
+    from cacao_accounting.i18n import _l
+    from cacao_accounting.query_tools import load_query_tools
+
+    app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test_key",
+            "MODO_ESCRITORIO": False,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        }
+    )
+    with app.app_context():
+        load_query_tools()
+        r = Registry()
+        tool = QueryTool(
+            name="test.accounting_periods",
+            description=_l("Lista los períodos contables de una compañía."),
+            read_only=True,
+        )
+        r.register(tool)
+
+        # Confirm description is stored lazily and not as a plain static str
+        assert type(tool.description).__name__ == "LazyString"
+
+        # Materialization in default locale (Spanish)
+        schema_es = r._tool_to_schema(tool)
+        assert schema_es["description"] == "Lista los períodos contables de una compañía."
+
+        # Materialization in English locale
+        with force_locale("en"):
+            schema_en = r._tool_to_schema(tool)
+            assert schema_en["description"] == "Lists accounting periods for a company."
+
+
+def test_all_registered_tools_have_lazy_descriptions():
+    from cacao_accounting import create_app
+    from cacao_accounting.query_tools import load_query_tools
+
+    app = create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "test_key",
+            "MODO_ESCRITORIO": False,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        }
+    )
+    with app.app_context():
+        load_query_tools()
+        tools = registry.list_tools()
+        assert len(tools) > 0
+        for name, tool in tools.items():
+            assert type(tool.description).__name__ == "LazyString", f"Tool '{name}' description is not LazyString"

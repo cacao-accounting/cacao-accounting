@@ -18,7 +18,7 @@ from cacao_accounting.reportes.analytics import (
     get_kpi_snapshot,
     get_trend,
 )
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _l
 
 _PERM_ACCOUNTING_REPORTS_READ = "accounting.reports.read"
 
@@ -61,7 +61,7 @@ _PERIOD_SCHEMA: dict[str, Any] = {
 
 @query_tool(
     "analytics.get_kpi_snapshot",
-    _("Obtiene un snapshot ejecutivo determinista de liquidez, cartera, inventario y resultado."),
+    _l("Obtiene un snapshot ejecutivo determinista de liquidez, cartera, inventario y resultado."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema=_PERIOD_SCHEMA,
@@ -78,7 +78,7 @@ def get_kpi_snapshot_tool(*, context: QueryContext, company_id: str, date_from: 
 
 @query_tool(
     "analytics.compare_periods",
-    _("Compara una métrica permitida entre dos períodos sin descargar movimientos."),
+    _l("Compara una métrica permitida entre dos períodos sin descargar movimientos."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
@@ -127,7 +127,7 @@ def compare_periods_tool(
 
 @query_tool(
     "analytics.get_trend",
-    _("Obtiene una tendencia mensual de una métrica permitida."),
+    _l("Obtiene una tendencia mensual de una métrica permitida."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={
@@ -149,7 +149,7 @@ def get_trend_tool(*, context: QueryContext, company_id: str, metric: str, date_
 
 @query_tool(
     "analytics.get_concentration",
-    _("Obtiene concentración por cliente, proveedor o artículo con un límite explícito."),
+    _l("Obtiene concentración por cliente, proveedor o artículo con un límite explícito."),
     required_module="accounting",
     required_permission=_PERM_ACCOUNTING_REPORTS_READ,
     parameters_schema={

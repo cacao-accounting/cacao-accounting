@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Callable
-from cacao_accounting.i18n import _, _l
+from cacao_accounting.i18n import LazyText, _, _l
 
 _DEFAULT_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -24,7 +24,7 @@ class QueryTool:
     """Descriptor inmutable de una herramienta de consulta."""
 
     name: str
-    description: str
+    description: LazyText
     required_permission: str | None = None
     required_module: str | None = None
     read_only: bool = True
@@ -45,7 +45,7 @@ def _validate_read_only(tool: QueryTool) -> None:
 
 def query_tool(
     name: str,
-    description: str,
+    description: LazyText,
     *,
     required_permission: str | None = None,
     required_module: str | None = None,
