@@ -96,7 +96,10 @@ def get_base_amount(amount, currency_code, company_currency, target_date):
             return Decimal(str(amount)) * Decimal(str(rate))
     except (ValueError, SQLAlchemyError):
         pass
-    raise CashForecastConversionError(f"No existe tipo de cambio para {currency_code} -> {company_currency} en {target_date}.")
+    raise CashForecastConversionError(
+        _("No existe tipo de cambio para %(currency_code)s -> %(company_currency)s en %(target_date)s.")
+        % {"currency_code": currency_code, "company_currency": company_currency, "target_date": target_date}
+    )
 
 
 def _resolve_company_currency(company: str) -> str:
@@ -284,15 +287,23 @@ def _forecast_base_amount(outstanding: Decimal, invoice, company_currency: str, 
     transaction_currency = getattr(invoice, "transaction_currency", None)
     if not transaction_currency:
         raise CashForecastConversionError(
-            f"El documento no tiene moneda transaccional explicita; "
-            f"no se puede convertir al pronostico de {company_currency} en {flow_date}."
+            _(
+                "El documento no tiene moneda transaccional explícita; "
+                "no se puede convertir al pronóstico de %(company_currency)s en %(flow_date)s."
+            )
+            % {"company_currency": company_currency, "flow_date": flow_date}
         )
     if transaction_currency == company_currency:
         return outstanding
     raw_exchange_rate = getattr(invoice, "exchange_rate", None)
     if raw_exchange_rate is None or Decimal(str(raw_exchange_rate)) <= 0:
         raise CashForecastConversionError(
-            f"No existe tipo de cambio para {transaction_currency} -> {company_currency} en {flow_date}."
+            _("No existe tipo de cambio para %(transaction_currency)s -> %(company_currency)s en %(flow_date)s.")
+            % {
+                "transaction_currency": transaction_currency,
+                "company_currency": company_currency,
+                "flow_date": flow_date,
+            }
         )
     return outstanding * Decimal(str(raw_exchange_rate))
 

@@ -675,7 +675,7 @@ class ApprovalEngine:
         doctype = f"cancel_{base_doctype}"
         if base_doctype in _POSTED_CANCEL_DOCTYPES or base_doctype == "journal_entry":
             if not (reason or "").strip():
-                raise ValueError(_("Debe indicar el motivo de la anulacion."))
+                raise ValueError(_("Debe indicar el motivo de la anulación."))
         amount = cls.get_document_amount(document)
 
         req = database.session.execute(

@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
+from cacao_accounting.i18n import _
 from cacao_accounting.query_tools.decorators import QueryTool
 from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
-from cacao_accounting.i18n import _
+
+_LazyStringType: Any
+
+try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
+    from flask_babel.speaklater import LazyString as _LazyStringType  # type: ignore[no-redef]
+except ImportError:  # pragma: no cover
+
+    class _LazyStringType:  # type: ignore[no-redef]
+        """Stub que nunca se instancia cuando Flask-Babel no esta disponible."""
 
 
 class Registry:
@@ -55,15 +65,28 @@ class Registry:
     def _tool_to_schema(self, tool: QueryTool) -> dict[str, Any]:
         return {
             "name": tool.name,
-            "description": tool.description,
+            "description": _serialize_schema(tool.description),
             "read_only": tool.read_only,
-            "parameters": tool.parameters_schema,
-            "response": tool.response_schema,
+            "parameters": _serialize_schema(tool.parameters_schema),
+            "response": _serialize_schema(tool.response_schema),
         }
 
     def get_count(self) -> int:
         """Devuelve la cantidad de herramientas registradas."""
         return len(self._tools)
+
+
+def _serialize_schema(value: Any) -> Any:
+    """Materializa textos diferidos antes de incluirlos en una respuesta JSON."""
+    if isinstance(value, _LazyStringType):
+        return str(value)
+    if isinstance(value, Mapping):
+        return {key: _serialize_schema(child) for key, child in value.items()}
+    if isinstance(value, tuple):
+        return tuple(_serialize_schema(child) for child in value)
+    if isinstance(value, list):
+        return [_serialize_schema(child) for child in value]
+    return value
 
 
 registry = Registry()

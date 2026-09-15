@@ -139,3 +139,26 @@ def test_usuarios_compañias_no_creados(request):
         with app.app_context():
             assert entidades_creadas() is False
             assert usuarios_creados() is False
+
+
+def test_entity_and_user_probes_rollback_aborted_transaction(monkeypatch):
+    from sqlalchemy.exc import InternalError
+
+    from cacao_accounting import create_app
+    from cacao_accounting.database import database
+    from cacao_accounting.database.helpers import entidades_creadas, usuarios_creados
+
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"})
+
+    with app.app_context():
+        rollback_calls = []
+
+        def fake_execute(*args, **kwargs):
+            raise InternalError("SELECT 1", {}, Exception("current transaction is aborted"))
+
+        monkeypatch.setattr(database.session, "execute", fake_execute)
+        monkeypatch.setattr(database.session, "rollback", lambda: rollback_calls.append(True))
+
+        assert entidades_creadas() is False
+        assert usuarios_creados() is False
+        assert rollback_calls == [True, True]

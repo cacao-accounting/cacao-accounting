@@ -109,7 +109,7 @@ def customer_dashboard():
         orders=orders,
         quotations=quotations,
         deliveries=deliveries,
-        titulo="Portal de Clientes",
+        titulo=_("Portal de Clientes"),
     )
 
 
@@ -248,7 +248,7 @@ def supplier_dashboard():
         orders=orders,
         quotations=quotations,
         receipts=receipts,
-        titulo="Portal de Proveedores",
+        titulo=_("Portal de Proveedores"),
     )
 
 

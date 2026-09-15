@@ -307,7 +307,7 @@ class TransactionDocumentAdapter(BaseImportAdapter):
         """
         base_currency = company_currency(company)
         if not base_currency:
-            raise ValueError(_("La compania no tiene moneda funcional configurada."))
+            raise ValueError(_("La compañía no tiene moneda funcional configurada."))
         row_currency = first_row.get("moneda") or first_row.get("transaction_currency")
         source_currency = effective_currency(source)
         if row_currency:
@@ -316,8 +316,10 @@ class TransactionDocumentAdapter(BaseImportAdapter):
             transaction_currency = source_currency
         else:
             raise ValueError(
-                _("El documento importado requiere una moneda transaccional explicita en la primera fila "
-                  "o un documento origen con moneda transaccional persistida.")
+                _(
+                    "El documento importado requiere una moneda transaccional explicita en la primera fila "
+                    "o un documento origen con moneda transaccional persistida."
+                )
             )
         explicit_rate = first_row.get("tipo_cambio") or first_row.get("exchange_rate")
         if transaction_currency == base_currency:
@@ -333,7 +335,12 @@ class TransactionDocumentAdapter(BaseImportAdapter):
                 rate = _lookup_exchange_rate(transaction_currency, base_currency, posting_date)
             except PostingError as exc:
                 raise ValueError(
-                    f"No existe tipo de cambio para {transaction_currency} -> {base_currency} en {posting_date}."
+                    _("No existe tipo de cambio para %(transaction_currency)s -> %(base_currency)s en %(posting_date)s.")
+                    % {
+                        "transaction_currency": transaction_currency,
+                        "base_currency": base_currency,
+                        "posting_date": posting_date,
+                    }
                 ) from exc
         if rate <= 0:
             raise ValueError(_("El tipo de cambio debe ser positivo."))

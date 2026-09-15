@@ -152,7 +152,9 @@ class PrintService:
         validate_css_safety(stylesheet_body)
         doc_def = get_printable_document(document_type)
         if doc_def is None:
-            raise TemplateValidationError(f"Document type {document_type} is not registered.")
+            raise TemplateValidationError(
+                _("Document type %(document_type)s is not registered.") % {"document_type": document_type}
+            )
 
         try:
             context = doc_def["sample_context_builder"]()
@@ -167,7 +169,7 @@ class PrintService:
         except RuntimeError as exc:
             raise TemplateValidationError(str(exc)) from exc
         except TemplateError as exc:
-            raise TemplateValidationError(f"Error de renderizado Jinja2: {exc}") from exc
+            raise TemplateValidationError(_("Error de renderizado Jinja2: %(error)s") % {"error": exc}) from exc
 
         return True
 
@@ -195,7 +197,9 @@ class PrintService:
     ) -> PrintTemplate:
         """Resolve a published template by explicit id, company default or global default."""
         if get_printable_document(document_type) is None:
-            raise PrintTemplateNotFoundError(f"Document type {document_type} is not registered.")
+            raise PrintTemplateNotFoundError(
+                _("Document type %(document_type)s is not registered.") % {"document_type": document_type}
+            )
         if template_id:
             return self._resolve_template_by_id(document_type, company_code, template_id, allow_draft)
 
@@ -218,7 +222,9 @@ class PrintService:
         global_default = self._default_template(document_type, None)
         if global_default is not None:
             return global_default
-        raise PrintTemplateNotFoundError(f"No published template found for {document_type}.")
+        raise PrintTemplateNotFoundError(
+            _("No published template found for %(document_type)s.") % {"document_type": document_type}
+        )
 
     def build_print_html(
         self,

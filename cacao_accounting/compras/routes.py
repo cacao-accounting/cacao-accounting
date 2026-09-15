@@ -223,7 +223,7 @@ from cacao_accounting.compras.services import (
     check_budget_control,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 logger = getLogger(__name__)
 
@@ -236,7 +236,7 @@ PURCHASE_DEBIT_NOTE = "purchase_debit_note"
 PURCHASE_CREDIT_NOTE = "purchase_credit_note"
 
 
-FACTURA_COMPRA_LABEL = "Factura de Compra"
+FACTURA_COMPRA_LABEL = _l("Factura de Compra")
 
 COMPRAS_IMPORT_LANDED_COST_ENDPOINT = "compras.compras_import_landed_cost"
 
@@ -244,9 +244,9 @@ COMPRAS_PROVEEDOR_ENDPOINT = "compras.compras_proveedor"
 
 COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT = "compras.compras_comparativo_ofertas"
 
-DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
+DOCUMENT_REQUIRES_LINE_MSG = _l("El documento requiere al menos una línea.")
 
-SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
+SOLICITUD_CANCELACION_PENDIENTE_MSG = _l("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
 
 FACTURA_DE_COMPRA = FACTURA_COMPRA_LABEL
 
@@ -282,25 +282,23 @@ ROUTE_COMPRAS_COTIZACION_PROVEEDOR = "compras.compras_cotizacion_proveedor"
 
 ROUTE_COMPRAS_PROVEEDOR = COMPRAS_PROVEEDOR_ENDPOINT
 
-LABEL_SOLICITUD_COMPRA = "Solicitud de Compra"
+LABEL_SOLICITUD_COMPRA = _l("Solicitud de Compra")
 
-LABEL_SOLICITUD_COTIZACION = "Solicitud de Cotización"
+LABEL_SOLICITUD_COTIZACION = _l("Solicitud de Cotización")
 
-LABEL_ORDEN_COMPRA = "Orden de Compra"
+LABEL_ORDEN_COMPRA = _l("Orden de Compra")
 
 LABEL_FACTURA_COMPRA_LONG = FACTURA_COMPRA_LABEL
 
 IMPORT_LANDED_COST = "import_landed_cost"
 
-IMPORT_LANDED_COST_LABEL = "Costo de Importación"
-
-COMPARATIVO_OFERTAS_TITULO = "Comparativo de Ofertas - "
+IMPORT_LANDED_COST_LABEL = _l("Costo de Importación")
 
 COMPRAS_COMPARATIVO_ORDENES = "compras.compras_comparativo_ordenes"
 
-CANCELLATION_REASON_REQUIRED_MSG = "Debe indicar el motivo de la anulacion."
+CANCELLATION_REASON_REQUIRED_MSG = _l("Debe indicar el motivo de la anulación.")
 
-DOCUMENT_TYPE_LABELS: dict[str, str] = {
+DOCUMENT_TYPE_LABELS: dict[str, LazyText] = {
     PURCHASE_INVOICE: FACTURA_DE_COMPRA,
     PURCHASE_DEBIT_NOTE: "Nota de Débito de Compra",
     PURCHASE_CREDIT_NOTE: "Nota de Crédito de Compra",
@@ -328,7 +326,7 @@ def compras_orden_compra_lista():
         (PurchaseOrder.document_no, PurchaseOrder.supplier_name, PurchaseOrder.supplier_invoice_no, PurchaseOrder.remarks),
         access_modules=("purchases", "inventory"),
     )
-    titulo = "Listado de Ordenes de Compra - " + APPNAME
+    titulo = _("Listado de Ordenes de Compra") + " - " + APPNAME
     return render_template("compras/orden_compra_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -341,7 +339,7 @@ def compras_solicitud_compra_lista():
         PurchaseRequest,
         (PurchaseRequest.document_no, PurchaseRequest.requested_by, PurchaseRequest.remarks),
     )
-    titulo = "Listado de Solicitudes de Compra - " + APPNAME
+    titulo = _("Listado de Solicitudes de Compra") + " - " + APPNAME
     return render_template("compras/solicitud_compra_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -365,7 +363,7 @@ def compras_solicitud_compra_nueva():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
-    titulo = "Nueva Solicitud de Compra - " + APPNAME
+    titulo = _("Nueva Solicitud de Compra") + " - " + APPNAME
     transaction_config = {
         "formKey": FORMKEY_PURCHASE_REQUEST,
         "viewKey": "draft",
@@ -553,7 +551,7 @@ def compras_solicitud_compra_editar(request_id: str):
     return render_template(
         "compras/solicitud_compra_nueva.html",
         form=formulario,
-        titulo="Editar Solicitud de Compra - " + APPNAME,
+        titulo=_("Editar Solicitud de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
         items_disponibles=items_disponibles,
@@ -683,7 +681,7 @@ def compras_solicitud_compra_cancel(request_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COMPRA, request_id=request_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -706,7 +704,7 @@ def compras_cotizacion_proveedor_lista():
         SupplierQuotation,
         (SupplierQuotation.document_no, SupplierQuotation.supplier_name, SupplierQuotation.remarks),
     )
-    titulo = "Listado de Cotizaciones de Proveedor - " + APPNAME
+    titulo = _("Listado de Cotizaciones de Proveedor") + " - " + APPNAME
     return render_template("compras/cotizacion_proveedor_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -736,7 +734,7 @@ def compras_cotizacion_proveedor_nueva():
     solicitud_origen, rfq_origen = _supplier_quotation_sources(from_request_id, from_rfq_id)
     _validate_supplier_quotation_origin(solicitud_origen or rfq_origen)
     items_disponibles, uoms_disponibles = _supplier_quotation_catalogs()
-    titulo = "Nueva Cotización de Proveedor - " + APPNAME
+    titulo = _("Nueva Cotización de Proveedor") + " - " + APPNAME
     transaction_config = _supplier_quotation_transaction_config(
         form_key=FORMKEY_SUPPLIER_QUOTATION,
         items=items_disponibles,
@@ -851,7 +849,7 @@ def compras_cotizacion_proveedor_editar(quotation_id: str):
     return render_template(
         "compras/cotizacion_proveedor_nueva.html",
         form=formulario,
-        titulo="Editar Cotizacion de Proveedor - " + APPNAME,
+        titulo=_("Editar Cotizacion de Proveedor") + " - " + APPNAME,
         edit=True,
         registro=registro,
         rfq_origen=None,
@@ -974,7 +972,7 @@ def compras_cotizacion_proveedor_cancel(quotation_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(ROUTE_COMPRAS_COTIZACION_PROVEEDOR, quotation_id=quotation_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -1008,7 +1006,7 @@ def compras_comparativo_ofertas_lista():
         ).scalars()
         for comparison in comparisons:
             comparisons_by_request.setdefault(comparison.purchase_request_id, comparison)
-    titulo = COMPARATIVO_OFERTAS_TITULO + APPNAME
+    titulo = _("Comparativo de Ofertas") + " - " + APPNAME
     return render_template(
         "compras/comparativo_ofertas_lista.html",
         consulta=consulta,
@@ -1058,7 +1056,7 @@ def compras_comparativo_ordenes_seleccionar(purchase_request_id: str):
         "compras/comparativo_ordenes_seleccionar.html",
         purchase_request=purchase_request,
         candidates=candidates,
-        titulo="Crear comparativo de ofertas - " + APPNAME,
+        titulo=_("Crear comparativo de ofertas") + " - " + APPNAME,
     )
 
 
@@ -1242,7 +1240,7 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         comparison_lines=comparison_lines,
         negotiation_rfqs=negotiation_rfqs,
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
-        titulo=COMPARATIVO_OFERTAS_TITULO + (request_comparison.document_no or request_comparison.id or ""),
+        titulo=_("Comparativo de Ofertas") + " - " + (request_comparison.document_no or request_comparison.id or ""),
     )
 
 
@@ -1314,7 +1312,7 @@ def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested
         participant_order_ids=participant_order_ids,
         rounds=rounds,
         selected_round=selected_round,
-        titulo=COMPARATIVO_OFERTAS_TITULO + (comparison.id or ""),
+        titulo=_("Comparativo de Ofertas") + " - " + (comparison.id or ""),
     )
 
 
@@ -1360,7 +1358,7 @@ def compras_comparativo_ofertas(rfq_id: str):
         if award
         else []
     )
-    titulo = COMPARATIVO_OFERTAS_TITULO + (registro.document_no or rfq_id)
+    titulo = _("Comparativo de Ofertas") + " - " + (registro.document_no or rfq_id)
     return render_template(
         "compras/comparativo_ofertas.html",
         registro=registro,
@@ -1483,7 +1481,7 @@ def compras_recepcion_lista():
         (PurchaseReceipt.document_no, PurchaseReceipt.supplier_name, PurchaseReceipt.remarks),
         access_modules=("purchases", "inventory"),
     )
-    titulo = "Listado de Recepciones de Compra - " + APPNAME
+    titulo = _("Listado de Recepciones de Compra") + " - " + APPNAME
     return render_template(
         "compras/recepcion_lista.html",
         consulta=consulta,
@@ -1503,7 +1501,7 @@ def compras_factura_compra_devolucion_lista():
         database.select(PurchaseReceipt).filter(PurchaseReceipt.is_return.is_(True)),
         access_modules=("purchases", "inventory"),
     )
-    titulo = "Listado de Devoluciones de Compra - " + APPNAME
+    titulo = _("Listado de Devoluciones de Compra") + " - " + APPNAME
     return render_template(
         "compras/recepcion_lista.html",
         consulta=consulta,
@@ -1527,7 +1525,7 @@ def compras_factura_compra_lista():
         ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_INVOICE),
     )
-    titulo = "Listado de Facturas de Compra - " + APPNAME
+    titulo = _("Listado de Facturas de Compra") + " - " + APPNAME
     return render_template("compras/factura_compra_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -1546,14 +1544,14 @@ def compras_factura_compra_nota_debito_lista():
         ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_DEBIT_NOTE),
     )
-    titulo = "Listado de Notas de Débito de Compra - " + APPNAME
+    titulo = _("Listado de Notas de Débito de Compra") + " - " + APPNAME
     return render_template(
         COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
-        page_heading="Listado de Notas de Débito de Compra",
-        new_button_label="Nueva Nota de Débito",
-        page_caption="Listado de notas de débito de compra.",
+        page_heading=_("Listado de Notas de Débito de Compra"),
+        new_button_label=_("Nueva Nota de Débito"),
+        page_caption=_("Listado de notas de débito de compra."),
         new_document_type=PURCHASE_DEBIT_NOTE,
     )
 
@@ -1573,14 +1571,14 @@ def compras_factura_compra_nota_credito_lista():
         ),
         database.select(PurchaseInvoice).filter_by(document_type=PURCHASE_CREDIT_NOTE),
     )
-    titulo = "Listado de Notas de Crédito de Compra - " + APPNAME
+    titulo = _("Listado de Notas de Crédito de Compra") + " - " + APPNAME
     return render_template(
         COMPRAS_FACTURA_COMPRA_DEVOLUCION_LISTA_HTML,
         consulta=consulta,
         titulo=titulo,
-        page_heading="Listado de Notas de Crédito de Compra",
-        new_button_label="Nueva Nota de Crédito",
-        page_caption="Listado de notas de crédito de compra.",
+        page_heading=_("Listado de Notas de Crédito de Compra"),
+        new_button_label=_("Nueva Nota de Crédito"),
+        page_caption=_("Listado de notas de crédito de compra."),
         new_document_type=PURCHASE_CREDIT_NOTE,
     )
 
@@ -1612,7 +1610,7 @@ def compras_proveedor_lista():
         database.select(Party).filter(Party.is_supplier.is_(True)),
         include_status=False,
     )
-    titulo = "Listado de Proveedores - " + APPNAME
+    titulo = _("Listado de Proveedores") + " - " + APPNAME
     return render_template("compras/proveedor_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -1647,7 +1645,7 @@ def compras_reconciliation_panel():
     company = request.args.get("company", "cacao")
     exige_acceso_compania("purchases", company, "consultar")
     groups = get_purchase_reconciliation_panel_groups(company=company)
-    titulo = _("Panel de Conciliacion de Compras") + " - " + APPNAME
+    titulo = _("Panel de Conciliación de Compras") + " - " + APPNAME
     return render_template(
         "compras/purchase_reconciliation_panel.html",
         groups=groups,
@@ -1665,7 +1663,7 @@ def compras_proveedor_nuevo():
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     formulario = FormularioProveedor()
-    titulo = "Nuevo Proveedor - " + APPNAME
+    titulo = _("Nuevo Proveedor") + " - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
 
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
@@ -1712,7 +1710,7 @@ def compras_proveedor_configuracion_compania(supplier_id: str):
     try:
         upsert_party_company_settings_rows(supplier_id, "supplier", request.form)
         database.session.commit()
-        flash(_("Configuracion por compania del proveedor guardada correctamente."), "success")
+        flash(_("Configuración por compañía del proveedor guardada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1733,7 +1731,7 @@ def compras_proveedor_editar(supplier_id: str):
     if not proveedor:
         abort(404)
     formulario = FormularioProveedor(obj=proveedor)
-    titulo = f"Editar Proveedor - {APPNAME}"
+    titulo = _("Editar Proveedor") + " - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(proveedor.id, selected_company, role="supplier")
@@ -1805,7 +1803,7 @@ def compras_proveedor_direccion_crear(supplier_id: str):
     try:
         create_party_address(supplier_id, request.form)
         database.session.commit()
-        flash(_("Direccion agregada correctamente."), "success")
+        flash(_("Dirección agregada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1821,7 +1819,7 @@ def compras_proveedor_direccion_editar(supplier_id: str, link_id: str):
     try:
         update_party_address(supplier_id, link_id, request.form)
         database.session.commit()
-        flash(_("Direccion actualizada correctamente."), "success")
+        flash(_("Dirección actualizada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1836,7 +1834,7 @@ def compras_proveedor_direccion_desactivar(supplier_id: str, link_id: str):
     _party_or_404(supplier_id)
     deactivate_party_address(supplier_id, link_id)
     database.session.commit()
-    flash(_("Direccion desactivada correctamente."), "success")
+    flash(_("Dirección desactivada correctamente."), "success")
     return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=supplier_id))
 
 
@@ -1871,7 +1869,7 @@ def compras_orden_compra_nuevo():
     supplier_quotation_origen = (
         database.session.get(SupplierQuotation, from_supplier_quotation_id) if from_supplier_quotation_id else None
     )
-    titulo = "Nueva Orden de Compra - " + APPNAME
+    titulo = _("Nueva Orden de Compra") + " - " + APPNAME
     if request.method == "POST":
         response = _create_purchase_order_from_request(request.form)
         if response is not None:
@@ -1959,7 +1957,7 @@ def compras_orden_compra_editar(order_id: str):
     return render_template(
         "compras/orden_compra_nuevo.html",
         form=formulario,
-        titulo="Editar Orden de Compra - " + APPNAME,
+        titulo=_("Editar Orden de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
         from_request_id=None,
@@ -2091,7 +2089,7 @@ def compras_solicitud_cotizacion_lista():
         PurchaseQuotation,
         (PurchaseQuotation.document_no, PurchaseQuotation.supplier_name, PurchaseQuotation.remarks),
     )
-    titulo = "Listado de Solicitudes de Cotización - " + APPNAME
+    titulo = _("Listado de Solicitudes de Cotización") + " - " + APPNAME
     return render_template("compras/solicitud_cotizacion_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -2112,7 +2110,7 @@ def compras_solicitud_cotizacion_nueva():
     solicitud_origen = database.session.get(PurchaseRequest, from_request_id) if from_request_id else None
     source_currency = effective_currency(solicitud_origen) if solicitud_origen else None
     items_disponibles, uoms_disponibles = _purchase_quotation_catalogs()
-    titulo = "Nueva Solicitud de Cotización - " + APPNAME
+    titulo = _("Nueva Solicitud de Cotización") + " - " + APPNAME
     transaction_config = _purchase_quotation_transaction_config(
         items=items_disponibles,
         uoms=uoms_disponibles,
@@ -2233,7 +2231,7 @@ def compras_solicitud_cotizacion_editar(quotation_id: str):
     return render_template(
         "compras/solicitud_cotizacion_nuevo.html",
         form=formulario,
-        titulo="Editar Solicitud de Cotizacion - " + APPNAME,
+        titulo=_("Editar Solicitud de Cotizacion") + " - " + APPNAME,
         edit=True,
         registro=registro,
         from_request_id=None,
@@ -2359,7 +2357,7 @@ def compras_solicitud_cotizacion_cancel(quotation_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(ROUTE_COMPRAS_SOLICITUD_COTIZACION, quotation_id=quotation_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -2441,7 +2439,7 @@ def compras_orden_compra_cancel(order_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -2501,7 +2499,7 @@ def compras_recepcion_nuevo():
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
     is_return = bool(recepcion_origen) or request.args.get("is_return") in {"1", "true", "True"}
-    titulo = ("Nueva Devolución de Recepción" if is_return else "Nueva Recepción de Compra") + " - " + APPNAME
+    titulo = (_("Nueva Devolución de Recepción") if is_return else _("Nueva Recepción de Compra")) + " - " + APPNAME
     company_id = (
         (recepcion_origen.company if recepcion_origen else None)
         or (orden_origen.company if orden_origen else None)
@@ -2683,7 +2681,7 @@ def compras_recepcion_editar(receipt_id: str):
     return render_template(
         "compras/recepcion_nuevo.html",
         form=formulario,
-        titulo="Editar Recepcion de Compra - " + APPNAME,
+        titulo=_("Editar Recepción de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -2758,7 +2756,7 @@ def compras_recepcion_duplicar(receipt_id: str):
     _copy_active_document_relations(origen.id, duplicada.id, "purchase_receipt", duplicada.company, item_ids)
     log_create(duplicada)
     database.session.commit()
-    flash(_("Recepcion de compra duplicada como nuevo borrador."), "success")
+    flash(_("Recepción de compra duplicada como nuevo borrador."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=duplicada.id))
 
 
@@ -2804,7 +2802,7 @@ def compras_recepcion_submit(receipt_id: str):
         submit_document(registro)  # type: ignore[misc]
         log_submit(registro)
         database.session.commit()
-        flash(_("Recepcion de compra aprobada."), "success")
+        flash(_("Recepción de compra aprobada."), "success")
     except (ValueError, BudgetError) as exc:
         database.session.rollback()
         flash_error(exc)
@@ -2825,7 +2823,7 @@ def compras_recepcion_cancel(receipt_id: str):
         abort(400)
     reason = (request.form.get("reason") or "").strip()
     if not reason:
-        flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
+        flash(str(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
     if has_active_source_relations("purchase_receipt", receipt_id):
         flash(_("No se puede cancelar la recepción de compra porque tiene facturas de compra activas."), "danger")
@@ -2840,7 +2838,7 @@ def compras_recepcion_cancel(receipt_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=receipt_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -2889,7 +2887,7 @@ def compras_factura_compra_nuevo():
     orden_origen, recepcion_origen, factura_origen = _purchase_invoice_sources(source_ids)
     document_title = DOCUMENT_TYPE_LABELS.get(document_type, FACTURA_DE_COMPRA)
     items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
-    titulo = f"Nueva {document_title} - {APPNAME}"
+    titulo = _("Nueva") + " " + _(document_title) + " - " + APPNAME
     company_id = (
         (orden_origen.company if orden_origen else None)
         or (recepcion_origen.company if recepcion_origen else None)
@@ -3051,7 +3049,7 @@ def compras_factura_compra_editar(invoice_id: str):
     return render_template(
         "compras/factura_compra_nuevo.html",
         form=formulario,
-        titulo="Editar Factura de Compra - " + APPNAME,
+        titulo=_("Editar Factura de Compra") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -3231,7 +3229,7 @@ def compras_factura_compra_cancel(invoice_id: str):
         abort(400)
     reason = (request.form.get("reason") or "").strip()
     if not reason:
-        flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
+        flash(str(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     active_payment = (
         database.select(PaymentReference.id)
@@ -3264,7 +3262,7 @@ def compras_factura_compra_cancel(invoice_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(COMPRAS_COMPRAS_FACTURA_COMPRA, invoice_id=invoice_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()
@@ -3304,7 +3302,7 @@ def compras_import_landed_cost_lista():
         ImportLandedCost,
         (ImportLandedCost.document_no, ImportLandedCost.supplier_name, ImportLandedCost.remarks),
     )
-    titulo = "Listado de Costos de Importacion - " + APPNAME
+    titulo = _("Listado de Costos de Importacion") + " - " + APPNAME
     return render_template("compras/import_landed_cost_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -3329,7 +3327,7 @@ def compras_import_landed_cost_nuevo():
     if from_invoice_id:
         invoice_origen = database.session.get(PurchaseInvoice, from_invoice_id)
 
-    titulo = f"Nuevo Costo de Importacion - {APPNAME}"
+    titulo = _("Nuevo Costo de Importacion") + " - " + APPNAME
     items_disponibles, uoms_disponibles = _purchase_invoice_catalogs()
 
     transaction_config = {
@@ -3345,7 +3343,7 @@ def compras_import_landed_cost_nuevo():
             "/api/document-flow/pending-lines"
             "?source_type=purchase_invoice&target_type=import_landed_cost&source_id=" + (from_invoice_id or "")
         ),
-        "source_label": FACTURA_COMPRA_LABEL,
+        "source_label": str(FACTURA_COMPRA_LABEL),
     }
 
     if request.method == "POST":
@@ -3376,7 +3374,7 @@ def compras_import_landed_cost(landed_cost_id: str):
     _require_purchase_document_access(registro)
     items = _get_import_landed_cost_items(landed_cost_id)
     cargos = _get_import_landed_cost_charges(landed_cost_id)
-    titulo = f"Costo de Importacion {registro.document_no or registro.id} - {APPNAME}"
+    titulo = _("Costo de Importacion") + f" {registro.document_no or registro.id} - " + APPNAME
     audit_timeline = format_document_timeline("import_landed_cost", registro.id)
     return render_template(
         "compras/import_landed_cost.html",
@@ -3431,7 +3429,7 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
         abort(400)
     reason = (request.form.get("reason") or "").strip()
     if not reason:
-        flash(_(CANCELLATION_REASON_REQUIRED_MSG), "danger")
+        flash(str(CANCELLATION_REASON_REQUIRED_MSG), "danger")
         return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
     try:
         from cacao_accounting.approval_engine import ApprovalEngine
@@ -3443,7 +3441,7 @@ def compras_import_landed_cost_cancel(landed_cost_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_("Solicitud de cancelacion enviada para aprobacion."), "info")
+            flash(_("Solicitud de cancelacion enviada para aprobación."), "info")
             return redirect(url_for(COMPRAS_IMPORT_LANDED_COST_ENDPOINT, landed_cost_id=landed_cost_id))
     except (ValueError, SQLAlchemyError) as exc:
         database.session.rollback()

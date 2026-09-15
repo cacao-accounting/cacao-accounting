@@ -1084,7 +1084,7 @@ def test_forecast_base_amount_rejects_document_without_transaction_currency():
 
     invoice_without_currency = SimpleNamespace(transaction_currency=None, exchange_rate=Decimal("36.5"))
     with test_app.app_context():
-        with pytest.raises(CashForecastConversionError, match="moneda transaccional explicita"):
+        with pytest.raises(CashForecastConversionError, match="moneda transaccional expl[i\u00ed]cita"):
             _forecast_base_amount(Decimal("100"), invoice_without_currency, "NIO", date(2026, 8, 29))
 
 

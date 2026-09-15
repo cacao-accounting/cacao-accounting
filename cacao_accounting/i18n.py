@@ -18,10 +18,23 @@ localización (l10n) de cada petición:
 
 from __future__ import annotations
 
+from typing import Protocol, TypeAlias
+
 from flask_login import current_user
 from sqlalchemy.exc import SQLAlchemyError
 
-__all__ = ["DEFAULT_TIMEZONE", "_", "_l", "_get_locale", "_get_timezone", "lazy_gettext"]
+__all__ = ["DEFAULT_TIMEZONE", "LazyText", "_", "_l", "_get_locale", "_get_timezone", "lazy_gettext"]
+
+
+class _Stringifiable(Protocol):
+    """Valor localizado que puede materializarse como texto."""
+
+    def __str__(self) -> str:
+        """Materializa el valor localizado."""
+        ...
+
+
+LazyText: TypeAlias = str | _Stringifiable
 
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
     from flask_babel import gettext as _babel_gettext

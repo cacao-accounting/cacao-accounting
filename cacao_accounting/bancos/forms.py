@@ -104,12 +104,12 @@ class FormularioPago(FlaskForm):
     remarks = TextAreaField(_l("Observaciones"))
     # Contador externo — opcional. Si se selecciona, se asigna el numero externo al pago.
     external_counter_id = SelectField(
-        _l("Contador Externo (Cheque / Numero Fiscal)"),
+        _l("Contador Externo (Cheque / Número Fiscal)"),
         choices=[],
         validators=[Optional()],
     )
     # Numero externo: si se deja vacio, el sistema usa el siguiente sugerido por el contador.
     external_number = StringField(
-        _l("Numero Externo"),
+        _l("Número Externo"),
         validators=[Optional()],
     )

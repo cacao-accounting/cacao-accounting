@@ -106,7 +106,7 @@ def update_task_status(task_id: str, status: str, user_id: str) -> DocumentTask:
     normalized_status = _validate_status(status)
     task = database.session.get(DocumentTask, task_id)
     if task is None:
-        raise CollaborationError("Tarea no encontrada.", 404)
+        raise CollaborationError(_("Tarea no encontrada."), 404)
     document = _document_for_collaboration(task.document_type, task.document_id, user_id)
 
     previous_status = task.status
@@ -185,38 +185,38 @@ def document_url(task: DocumentTask) -> str | None:
 
 def _ensure_cloud_mode() -> None:
     if is_desktop_mode():
-        raise CollaborationError("La colaboración no está disponible en modo escritorio.", 403)
+        raise CollaborationError(_("La colaboración no está disponible en modo escritorio."), 403)
 
 
 def _validate_comment(comment: str) -> str:
     cleaned = (comment or "").strip()
     if not cleaned:
-        raise CollaborationError("El comentario no puede estar vacío.", 400)
+        raise CollaborationError(_("El comentario no puede estar vacío."), 400)
     if len(cleaned) > COMMENT_MAX_LENGTH:
-        raise CollaborationError("El comentario no puede exceder 2000 caracteres.", 400)
+        raise CollaborationError(_("El comentario no puede exceder 2000 caracteres."), 400)
     return cleaned
 
 
 def _validate_title(title: str) -> str:
     cleaned = (title or "").strip()
     if not cleaned:
-        raise CollaborationError("El título de la tarea es obligatorio.", 400)
+        raise CollaborationError(_("El título de la tarea es obligatorio."), 400)
     if len(cleaned) > 255:
-        raise CollaborationError("El título de la tarea no puede exceder 255 caracteres.", 400)
+        raise CollaborationError(_("El título de la tarea no puede exceder 255 caracteres."), 400)
     return cleaned
 
 
 def _validate_status(status: str) -> str:
     normalized = (status or "").strip()
     if normalized not in TASK_STATUSES:
-        raise CollaborationError("Estado de tarea inválido.", 400)
+        raise CollaborationError(_("Estado de tarea inválido."), 400)
     return normalized
 
 
 def _validate_priority(priority: str) -> str:
     normalized = (priority or "normal").strip()
     if normalized not in TASK_PRIORITIES:
-        raise CollaborationError("Prioridad de tarea inválida.", 400)
+        raise CollaborationError(_("Prioridad de tarea inválida."), 400)
     return normalized
 
 
@@ -226,15 +226,15 @@ def _parse_date(value: Any) -> date | None:
     try:
         return date.fromisoformat(str(value))
     except ValueError as exc:
-        raise CollaborationError("Fecha de vencimiento inválida.", 400) from exc
+        raise CollaborationError(_("Fecha de vencimiento inválida."), 400) from exc
 
 
 def _active_user_or_error(user_id: str) -> User:
     user = database.session.get(User, user_id)
     if user is None:
-        raise CollaborationError("Usuario asignado no encontrado.", 404)
+        raise CollaborationError(_("Usuario asignado no encontrado."), 404)
     if not user.active:
-        raise CollaborationError("No se puede asignar tareas a usuarios inactivos.", 400)
+        raise CollaborationError(_("No se puede asignar tareas a usuarios inactivos."), 400)
     return user
 
 
@@ -248,16 +248,16 @@ def _require_assignee_document_access(document: Any, user_id: str) -> None:
     module_id = obtener_id_modulo_por_nombre(module_name) if module_name else None
     permissions = Permisos(modulo=module_id, usuario=user_id) if module_id else None
     if permissions is None or not permissions.consultar or not permissions.tiene_acceso_compania(company):
-        raise CollaborationError("El usuario asignado no tiene acceso al documento.", 403)
+        raise CollaborationError(_("El usuario asignado no tiene acceso al documento."), 403)
 
 
 def _document_for_collaboration(document_type: str, document_id: str, user_id: str) -> Any:
     doctype = normalize_doctype(document_type)
     if doctype not in DOCUMENT_TYPES:
-        raise CollaborationError("Tipo documental no encontrado.", 404)
+        raise CollaborationError(_("Tipo documental no encontrado."), 404)
     document = get_document(doctype, document_id)
     if document is None:
-        raise CollaborationError("Documento no encontrado.", 404)
+        raise CollaborationError(_("Documento no encontrado."), 404)
     _require_document_permission(doctype, user_id)
     spec = DOCUMENT_TYPES[doctype]
     module_name = spec.permission_module or spec.module
@@ -271,7 +271,7 @@ def _require_document_permission(document_type: str, user_id: str) -> None:
     module_id = obtener_id_modulo_por_nombre(module_name)
     permission = Permisos(modulo=module_id, usuario=user_id)
     if not permission.autorizado:
-        raise CollaborationError("No tiene permiso para colaborar en este documento.", 403)
+        raise CollaborationError(_("No tiene permiso para colaborar en este documento."), 403)
 
 
 def _document_type(document: Any) -> str:

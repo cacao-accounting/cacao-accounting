@@ -228,7 +228,7 @@ def bancos_banco_lista():
         (Bank.name, Bank.swift_code),
         include_status=False,
     )
-    titulo = "Listado de Bancos - " + APPNAME
+    titulo = _("Listado de Bancos") + " - " + APPNAME
     return render_template("bancos/banco_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -242,7 +242,7 @@ def bancos_cuenta_bancaria_lista():
         (BankAccount.account_name, BankAccount.account_no, BankAccount.iban, BankAccount.company, BankAccount.currency),
         include_status=False,
     )
-    titulo = "Listado de Cuentas Bancarias - " + APPNAME
+    titulo = _("Listado de Cuentas Bancarias") + " - " + APPNAME
     return render_template("bancos/banco_cuenta_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -256,7 +256,7 @@ def bancos_pago_lista():
         (PaymentEntry.document_no, PaymentEntry.party_name, PaymentEntry.reference_no, PaymentEntry.remarks),
         database.select(PaymentEntry).filter(PaymentEntry.payment_type.in_(("receive", "pay"))),
     )
-    titulo = "Listado de Pagos - " + APPNAME
+    titulo = _("Listado de Pagos") + " - " + APPNAME
     return render_template(BANCOS_PAGO_LISTA_HTML, consulta=consulta, titulo=titulo)
 
 
@@ -297,7 +297,7 @@ def bancos_conciliacion_facturas_pagos():
 
     return render_template(
         "bancos/conciliacion_facturas_pagos.html",
-        titulo="Conciliación Facturas/Pagos - " + APPNAME,
+        titulo=_("Conciliación Facturas/Pagos") + " - " + APPNAME,
         companies=obtener_lista_entidades_por_id_razonsocial(),
     )
 
@@ -312,7 +312,7 @@ def bancos_transferencia_lista():
         (PaymentEntry.document_no, PaymentEntry.party_name, PaymentEntry.reference_no, PaymentEntry.remarks),
         database.select(PaymentEntry).filter_by(payment_type="internal_transfer"),
     )
-    titulo = "Listado de Transferencias Internas - " + APPNAME
+    titulo = _("Listado de Transferencias Internas") + " - " + APPNAME
     return render_template(BANCOS_PAGO_LISTA_HTML, consulta=consulta, titulo=titulo, is_transfer_list=True)
 
 
@@ -326,7 +326,7 @@ def bancos_nota_debito_lista():
         (PaymentEntry.document_no, PaymentEntry.party_name, PaymentEntry.reference_no, PaymentEntry.remarks),
         database.select(PaymentEntry).filter_by(payment_type="debit_note"),
     )
-    titulo = "Listado de Notas de Débito Bancario - " + APPNAME
+    titulo = _("Listado de Notas de Débito Bancario") + " - " + APPNAME
     return render_template(
         BANCOS_PAGO_LISTA_HTML,
         consulta=consulta,
@@ -346,7 +346,7 @@ def bancos_nota_credito_lista():
         (PaymentEntry.document_no, PaymentEntry.party_name, PaymentEntry.reference_no, PaymentEntry.remarks),
         database.select(PaymentEntry).filter_by(payment_type="credit_note"),
     )
-    titulo = "Listado de Notas de Crédito Bancario - " + APPNAME
+    titulo = _("Listado de Notas de Crédito Bancario") + " - " + APPNAME
     return render_template(
         BANCOS_PAGO_LISTA_HTML,
         consulta=consulta,
@@ -366,7 +366,7 @@ def bancos_transaccion_lista():
         (BankTransaction.description, BankTransaction.reference_number),
         include_status=False,
     )
-    titulo = "Listado de Transacciones Bancarias - " + APPNAME
+    titulo = _("Listado de Transacciones Bancarias") + " - " + APPNAME
     return render_template(BANCOS_TRANSACCION_LISTA_HTML, consulta=consulta, titulo=titulo)
 
 
@@ -464,7 +464,7 @@ def bancos_conciliacion_bancaria():
     suggestions = {transaction.id: _safe_bank_reconciliation_candidates(transaction) for transaction in transactions}
     return render_template(
         "bancos/conciliacion_bancaria.html",
-        titulo="Conciliación Bancaria - " + APPNAME,
+        titulo=_("Conciliación Bancaria") + " - " + APPNAME,
         transactions=transactions,
         suggestions=suggestions,
         company=company,
@@ -493,7 +493,7 @@ def bancos_conciliacion_bancaria_cuenta(bank_account_id: str):
     suggestions = {transaction.id: _safe_bank_reconciliation_candidates(transaction) for transaction in transactions}
     return render_template(
         "bancos/conciliacion_bancaria.html",
-        titulo="Conciliación Bancaria - " + APPNAME,
+        titulo=_("Conciliación Bancaria") + " - " + APPNAME,
         transactions=transactions,
         suggestions=suggestions,
         company=bank_account.company,
@@ -584,7 +584,7 @@ def bancos_conciliacion_bancaria_aplicar() -> ResponseReturnValue:
         for transaction_id, difference in difference_requests:
             transaction = database.session.get(BankTransaction, transaction_id, with_for_update=True)
             if transaction is None:
-                raise BankReconciliationError(_("La transaccion bancaria no existe."))
+                raise BankReconciliationError(_("La transacción bancaria no existe."))
             _post_bank_difference_adjustment(
                 reconciliation.id,
                 transaction,
@@ -747,7 +747,7 @@ def bancos_banco_nuevo():
     from cacao_accounting.bancos.forms import FormularioBanco
 
     formulario = FormularioBanco()
-    titulo = "Nuevo Banco - " + APPNAME
+    titulo = _("Nuevo Banco") + " - " + APPNAME
     if formulario.validate_on_submit():
         banco = Bank(
             name=request.form.get("name"),
@@ -811,7 +811,7 @@ def bancos_cuenta_bancaria_nuevo():
         .scalars()
         .all()
     ]
-    titulo = "Nueva Cuenta Bancaria - " + APPNAME
+    titulo = _("Nueva Cuenta Bancaria") + " - " + APPNAME
     if formulario.validate_on_submit():
         gl_account_id = request.form.get("gl_account_id") or None
         company = request.form.get("company")
@@ -980,7 +980,7 @@ def caja_chica_lista():
     responsables = {
         pc.custodian_id: (database.session.get(User, pc.custodian_id).name if pc.custodian_id else None) for pc in registros
     }
-    titulo = "Listado de Cajas Chicas - " + APPNAME
+    titulo = _("Listado de Cajas Chicas") + " - " + APPNAME
     return render_template(
         "bancos/caja_chica_lista.html",
         registros=registros,
@@ -1007,7 +1007,7 @@ def caja_chica_nuevo():
     usuarios = [
         (str(u.id), u.name or u.user) for u in database.session.execute(database.select(User).filter_by(active=True)).scalars()
     ]
-    titulo = "Nueva Caja Chica - " + APPNAME
+    titulo = _("Nueva Caja Chica") + " - " + APPNAME
 
     if formulario.validate_on_submit() or request.method == "POST":
         company = request.form.get("company")
@@ -1098,7 +1098,7 @@ def caja_chica_editar(pc_id):
     usuarios = [
         (str(u.id), u.name or u.user) for u in database.session.execute(database.select(User).filter_by(active=True)).scalars()
     ]
-    titulo = "Editar Caja Chica - " + APPNAME
+    titulo = _("Editar Caja Chica") + " - " + APPNAME
     return render_template(BANCOS_CAJA_CHICA_NUEVO_HTML, form=formulario, registro=registro, usuarios=usuarios, titulo=titulo)
 
 
@@ -1160,7 +1160,7 @@ def caja_chica_vale_lista():
     registros = []
     for company in companies:
         registros.extend(petty_cash_vouchers(company))
-    titulo = "Listado de Vales de Caja Chica - " + APPNAME
+    titulo = _("Listado de Vales de Caja Chica") + " - " + APPNAME
     return render_template("bancos/caja_chica_vale_lista.html", registros=registros, titulo=titulo)
 
 
@@ -1177,13 +1177,13 @@ def caja_chica_vale_nuevo():
     formulario.company.choices = companies
     fondos = _obtener_fondos_compania()
     formulario.petty_cash_id.choices = [(f.id, f"{f.company} - {f.name}") for f in fondos]
-    titulo = "Nuevo Vale de Caja Chica - " + APPNAME
+    titulo = _("Nuevo Vale de Caja Chica") + " - " + APPNAME
 
     if formulario.validate_on_submit() or request.method == "POST":
         company = request.form.get("company")
         petty_cash_id = request.form.get("petty_cash_id")
         if not company or not petty_cash_id:
-            flash(_("Seleccione la compania y la caja chica."), "danger")
+            flash(_("Seleccione la compañía y la caja chica."), "danger")
             return render_template(BANCOS_CAJA_CHICA_VALE_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
         exige_acceso_compania("cash", company, "crear")
         try:
@@ -1253,7 +1253,7 @@ def caja_chica_gasto_lista():
     registros = []
     for company in companies:
         registros.extend(petty_cash_expenses(company))
-    titulo = "Listado de Gastos de Caja Chica - " + APPNAME
+    titulo = _("Listado de Gastos de Caja Chica") + " - " + APPNAME
     return render_template("bancos/caja_chica_gasto_lista.html", registros=registros, titulo=titulo)
 
 
@@ -1280,13 +1280,13 @@ def caja_chica_gasto_nuevo():
         formulario.concept.data = voucher.concept
         formulario.amount.data = str(voucher.amount)
         formulario.cost_center_code.data = voucher.cost_center_code
-    titulo = "Nuevo Gasto de Caja Chica - " + APPNAME
+    titulo = _("Nuevo Gasto de Caja Chica") + " - " + APPNAME
 
     if formulario.validate_on_submit() or request.method == "POST":
         company = request.form.get("company")
         petty_cash_id = request.form.get("petty_cash_id")
         if not company or not petty_cash_id:
-            flash(_("Seleccione la compania y la caja chica."), "danger")
+            flash(_("Seleccione la compañía y la caja chica."), "danger")
             return render_template(BANCOS_CAJA_CHICA_GASTO_NUEVO_HTML, form=formulario, fondos=fondos, titulo=titulo)
         exige_acceso_compania("cash", company, "crear")
         try:
@@ -1327,7 +1327,7 @@ def caja_chica_conciliacion_lista():
     return render_template(
         "bancos/caja_chica_conciliacion_lista.html",
         registros=registros,
-        titulo="Conciliaciones de Caja Chica - " + APPNAME,
+        titulo=_("Conciliaciones de Caja Chica") + " - " + APPNAME,
     )
 
 
@@ -1352,13 +1352,13 @@ def caja_chica_conciliacion_nueva():
         except ValueError as exc:
             flash(_(str(exc)), "danger")
         else:
-            flash(_("Conciliacion de caja chica creada."), "success")
+            flash(_("Conciliación de caja chica creada."), "success")
             return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
     return render_template(
         "bancos/caja_chica_conciliacion_nueva.html",
         fondos=fondos,
         today=date.today().isoformat(),
-        titulo="Nueva Conciliacion de Caja Chica - " + APPNAME,
+        titulo=_("Nueva Conciliación de Caja Chica") + " - " + APPNAME,
     )
 
 
@@ -1385,7 +1385,7 @@ def caja_chica_conciliacion_editar(r_id):
         except (ValueError, InvalidOperation) as exc:
             flash(_(str(exc)), "danger")
         else:
-            flash(_("Conciliacion de caja chica actualizada."), "success")
+            flash(_("Conciliación de caja chica actualizada."), "success")
             return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
     return render_template(
         "bancos/caja_chica_conciliacion_nueva.html",
@@ -1393,7 +1393,7 @@ def caja_chica_conciliacion_editar(r_id):
         registro=conciliacion,
         edit=True,
         today=conciliacion.reconciliation_date.isoformat() if conciliacion.reconciliation_date else date.today().isoformat(),
-        titulo="Editar Conciliacion de Caja Chica - " + APPNAME,
+        titulo=_("Editar Conciliación de Caja Chica") + " - " + APPNAME,
     )
 
 
@@ -1412,7 +1412,7 @@ def caja_chica_conciliacion_confirmar(r_id):
     except ValueError as exc:
         flash(_(str(exc)), "danger")
     else:
-        flash(_("Conciliacion de caja chica confirmada."), "success")
+        flash(_("Conciliación de caja chica confirmada."), "success")
     return redirect(url_for(BANCOS_CAJA_CHICA_CONCILIACION_LISTA_ENDPOINT))
 
 
@@ -1453,7 +1453,7 @@ def caja_chica_reposicion_lista():
     return render_template(
         "bancos/caja_chica_reposicion_lista.html",
         registros=registros,
-        titulo="Reposiciones de Caja Chica - " + APPNAME,
+        titulo=_("Reposiciones de Caja Chica") + " - " + APPNAME,
     )
 
 
@@ -1481,14 +1481,14 @@ def caja_chica_reposicion_nueva():
         except ValueError as exc:
             flash(_(str(exc)), "danger")
         else:
-            flash(_("Solicitud de reposicion creada."), "success")
+            flash(_("Solicitud de reposición creada."), "success")
             return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
     return render_template(
         "bancos/caja_chica_reposicion_nueva.html",
         fondos=fondos,
         gastos=gastos,
         selected_fund=selected_fund,
-        titulo="Nueva Reposicion de Caja Chica - " + APPNAME,
+        titulo=_("Nueva Reposición de Caja Chica") + " - " + APPNAME,
     )
 
 
@@ -1506,7 +1506,7 @@ def caja_chica_reposicion_estado(r_id):
     except ValueError as exc:
         flash(_(str(exc)), "danger")
     else:
-        flash(_("Estado de la reposicion actualizado."), "success")
+        flash(_("Estado de la reposición actualizado."), "success")
     return redirect(url_for(BANCOS_CAJA_CHICA_REPOSICION_LISTA_ENDPOINT))
 
 
@@ -1616,7 +1616,7 @@ def bancos_pago_nuevo():
 
     return render_template(
         "bancos/pago_nuevo.html",
-        titulo="Nuevo Pago - " + APPNAME,
+        titulo=_("Nuevo Pago") + " - " + APPNAME,
         initial_payment=initial_payment,
         transaction_config=transaction_config,
         companies=obtener_lista_entidades_por_id_razonsocial(),

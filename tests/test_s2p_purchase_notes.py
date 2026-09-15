@@ -517,7 +517,7 @@ def test_purchase_credit_note_exceeds_source_balance(app_ctx):
     database.session.commit()
 
     # Credit note for 600 should raise an exception
-    with pytest.raises(ValueError, match="excede el credito disponible"):
+    with pytest.raises(ValueError, match="excede el cr[e\u00e9]dito disponible"):
         _validate_purchase_reversal_of(
             reversal_of="PINV-ORIG-002",
             supplier_id=supplier.id,

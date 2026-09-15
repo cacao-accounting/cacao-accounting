@@ -46,17 +46,17 @@ from cacao_accounting.database import (
     database,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 _DEDUP_QUERY_LIMIT_MULTIPLIER = 5
 _DEDUP_QUERY_LIMIT_MIN = 25
-_STATIC_SEARCH_SELECT_OPTIONS: dict[str, tuple[tuple[str, str], ...]] = {
-    "report_status": (("submitted", _("Contabilizado")), ("cancelled", _("Cancelado"))),
-    "party_type": (("customer", _("Cliente")), ("supplier", _("Proveedor"))),
+_STATIC_SEARCH_SELECT_OPTIONS: dict[str, tuple[tuple[str, LazyText], ...]] = {
+    "report_status": (("submitted", _l("Contabilizado")), ("cancelled", _l("Cancelado"))),
+    "party_type": (("customer", _l("Cliente")), ("supplier", _l("Proveedor"))),
     "mode_of_payment": (
-        ("transfer", _("Transferencia")),
-        ("check", _("Cheque")),
-        ("cash", _("Efectivo")),
+        ("transfer", _l("Transferencia")),
+        ("check", _l("Cheque")),
+        ("cash", _l("Efectivo")),
     ),
 }
 
@@ -230,7 +230,7 @@ def _voucher_type_catalog(query: str, filters: dict[str, list[str]], limit: int 
         "exchange_revaluation",
         automatic_project_capitalization,
     }
-    catalog = {key: (DOCUMENT_TYPES[key].label or key) for key in ledger_types if key in DOCUMENT_TYPES}
+    catalog = {key: str(DOCUMENT_TYPES[key].label or key) for key in ledger_types if key in DOCUMENT_TYPES}
     catalog.update(
         {
             "exchange_revaluation": _("Revalorización cambiaria"),
@@ -774,11 +774,11 @@ def _search_static_options(doctype: str, query: str, limit: int | None) -> dict[
         {
             "id": value,
             "value": value,
-            "label": label,
-            "display_name": label,
+            "label": str(label),
+            "display_name": str(label),
         }
         for value, label in options
-        if not normalized_query or normalized_query in value.lower() or normalized_query in label.lower()
+        if not normalized_query or normalized_query in value.lower() or normalized_query in str(label).lower()
     ]
     visible_rows = filtered[:max_results]
     return {
@@ -894,7 +894,7 @@ def _apply_role_filter(statement: Select[tuple[Any]], values: Sequence[str | boo
         elif sv == "supplier":
             conditions.append(Party.is_supplier.is_(True))
         else:
-            raise SearchSelectError(f"Tipo de tercero o rol no soportado: {sv}")
+            raise SearchSelectError(_("Tipo de tercero o rol no soportado: %(value)s") % {"value": sv})
     if conditions:
         statement = statement.where(or_(*conditions))
     return statement

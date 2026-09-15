@@ -112,7 +112,7 @@ from cacao_accounting.audit_trail_service import log_cancel, log_submit, log_upd
 from cacao_accounting.logistics import copy_logistics, logistics_values
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 
 def _raise_posting_error(message: str) -> NoReturn:
@@ -147,15 +147,15 @@ _FORMKEY_SALES_INVOICE = "sales.sales_invoice"
 
 _FORMKEY_DELIVERY_NOTE = "sales.delivery_note"
 
-_LABEL_PEDIDO_VENTA = "Pedido de Venta"
+_LABEL_PEDIDO_VENTA = _l("Pedido de Venta")
 
-_LABEL_ORDEN_VENTA = "Orden de Venta"
+_LABEL_ORDEN_VENTA = _l("Orden de Venta")
 
-DOCUMENT_COMPANY_IMMUTABLE_MSG = "La compañía de un documento existente no puede cambiarse."
+DOCUMENT_COMPANY_IMMUTABLE_MSG = _l("La compañía de un documento existente no puede cambiarse.")
 
-DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
+DOCUMENT_REQUIRES_LINE_MSG = _l("El documento requiere al menos una línea.")
 
-SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
+SOLICITUD_CANCELACION_PENDIENTE_MSG = _l("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
 
 
 def _sales_logistics_values(source: Any = None, form: Any = None) -> dict[str, Any]:
@@ -200,7 +200,7 @@ def _set_sales_document_totals(document: Any, total: Decimal) -> None:
         raise ValueError(_("El documento de ventas requiere una moneda transaccional explicita antes de recalcular totales."))
     base_currency_value = company_functional_currency(document.company)
     if not base_currency_value:
-        raise ValueError(_("La compania requiere una moneda funcional configurada."))
+        raise ValueError(_("La compañía requiere una moneda funcional configurada."))
     document.transaction_currency = transaction_currency
     document.base_currency = base_currency_value
     document.exchange_rate = _sales_exchange_rate(document.company, document.posting_date, transaction_currency)
@@ -814,7 +814,7 @@ def _handle_sales_request_update(registro: SalesRequest, form: dict, endpoint: s
     requested_company = form.get("company") or registro.company
     if requested_company != registro.company:
         database.session.rollback()
-        flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
+        flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(endpoint, request_id=request_id))
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
@@ -841,7 +841,7 @@ def _handle_sales_order_update(registro: SalesOrder, form: dict, endpoint: str, 
     requested_company = form.get("company") or registro.company
     if requested_company != registro.company:
         database.session.rollback()
-        flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
+        flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(endpoint, order_id=order_id))
     registro.posting_date = _parse_date(form.get("posting_date"))
     registro.remarks = form.get("remarks")
@@ -1118,7 +1118,9 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+                raise DocumentFlowError(
+                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
+                )
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1162,7 +1164,9 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+                raise DocumentFlowError(
+                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
+                )
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1176,7 +1180,9 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
                 or None
             )
             if not warehouse:
-                raise DocumentFlowError(f"El item {item_code} requiere un almacén de origen.", 400)
+                raise DocumentFlowError(
+                    _("El item %(item_code)s requiere un almacén de origen.") % {"item_code": item_code}, 400
+                )
             linea = DeliveryNoteItem(
                 delivery_note_id=note_id,
                 item_code=item_code,
@@ -1217,7 +1223,9 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(f"El item {item_code} no puede repetirse en el documento.", 400)
+                raise DocumentFlowError(
+                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
+                )
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1263,7 +1271,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
 
     if not invoice.transaction_currency:
         raise PostingError(
-            "La factura origen no tiene moneda transaccional explicita; no se puede derivar la Nota de Entrega."
+            _("La factura origen no tiene moneda transaccional explicita; no se puede derivar la Nota de Entrega.")
         )
     if not invoice.base_currency:
         from cacao_accounting.document_flow.currency_resolver import company_functional_currency
@@ -1271,7 +1279,7 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         base_currency_value = company_functional_currency(invoice.company)
         if not base_currency_value:
             raise PostingError(
-                "La compania de la factura no tiene moneda funcional configurada; no se puede derivar la Nota de Entrega."
+                _("La compañía de la factura no tiene moneda funcional configurada; no se puede derivar la Nota de Entrega.")
             )
     else:
         base_currency_value = invoice.base_currency
@@ -1303,8 +1311,11 @@ def _create_delivery_note_from_invoice(invoice: SalesInvoice) -> DeliveryNote:
         warehouse = si_item.warehouse or (item_obj.default_warehouse_id if item_obj else None)
         if not warehouse:
             raise PostingError(
-                f"El ítem {si_item.item_code} no tiene bodega predeterminada. "
-                "Configure la bodega del ítem o cree la nota de entrega manualmente."
+                _(
+                    "El ítem %(item_code)s no tiene bodega predeterminada. "
+                    "Configure la bodega del ítem o cree la nota de entrega manualmente."
+                )
+                % {"item_code": si_item.item_code}
             )
         _require_sales_warehouse(invoice.company, warehouse)
         dn_item = DeliveryNoteItem(
@@ -1385,7 +1396,7 @@ def _validate_single_item_price(
     tolerance_value: Decimal,
     allow_diff: bool,
     raise_on_violation: bool,
-    reference_label: str = _LABEL_ORDEN_VENTA,
+    reference_label: LazyText = _LABEL_ORDEN_VENTA,
 ) -> str | None:
     """Valida el precio de un item individual contra la orden de venta.
 
@@ -1401,11 +1412,17 @@ def _validate_single_item_price(
         return None
 
     unit = "%" if tolerance_type == "percentage" else ""
-    msg = (
-        f"El precio del item {si_item.item_code} (${si_rate}) "
-        f"difiere del precio en {reference_label} (${so_rate}) "
-        f"en {variance:.2f}{unit}. "
-        f"Tolerancia permitida: {tolerance_value}{unit}."
+    msg = _(
+        "El precio del item {item_code} (${rate}) difiere del precio en {reference} "
+        "(${source_rate}) en {variance}{unit}. Tolerancia permitida: {tolerance}{unit}."
+    ).format(
+        item_code=si_item.item_code,
+        rate=si_rate,
+        reference=reference_label,
+        source_rate=so_rate,
+        variance=f"{variance:.2f}",
+        unit=unit,
+        tolerance=tolerance_value,
     )
     if allow_diff:
         return msg
@@ -1435,7 +1452,7 @@ def _validate_invoice_prices_against_source(invoice: SalesInvoice, raise_on_viol
         reference_label = _LABEL_ORDEN_VENTA
         if so_rate is None:
             so_rate = _resolve_catalog_sales_rate(invoice, si_item)
-            reference_label = "la Lista de Precios"
+            reference_label = _("la Lista de Precios")
         if so_rate is None:
             continue
 
@@ -1851,7 +1868,7 @@ def _build_sales_order_transaction_config(
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
         "availableSourceTypes": [
-            {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
+            {"value": "sales_request", "label": str(_LABEL_PEDIDO_VENTA)},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},
         ],
         "initialSourceType": initial_source_type,
@@ -1933,7 +1950,7 @@ def _handle_sales_order_new_post(from_quotation_id, from_request_id):
         flash_error(exc)
     except SQLAlchemyError as exc:
         database.session.rollback()
-        flash(_("Error inesperado al crear la orden de venta: ") + str(exc), "danger")
+        flash(_("Error inesperado al crear la orden de venta: %(error)s") % {"error": exc}, "danger")
 
 
 def _handle_sales_quotation_edit_post(registro):
@@ -1947,7 +1964,7 @@ def _handle_sales_quotation_edit_post(registro):
     requested_company = request.form.get("company") or registro.company
     if requested_company != registro.company:
         database.session.rollback()
-        flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
+        flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=registro.id))
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.valid_until = _parse_date(request.form.get("valid_until")) if request.form.get("valid_until") else None
@@ -1976,7 +1993,7 @@ def _handle_delivery_note_edit_post(registro):
     requested_company = request.form.get("company") or registro.company
     if requested_company != registro.company:
         database.session.rollback()
-        flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
+        flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
         return redirect(url_for(_ENDPOINT_ENTREGA, note_id=registro.id))
     registro.posting_date = _parse_date(request.form.get("posting_date"))
     registro.remarks = request.form.get("remarks")
@@ -2229,7 +2246,7 @@ def _handle_sales_invoice_edit_post(registro):
     try:
         requested_company = request.form.get("company") or registro.company
         if requested_company != registro.company:
-            flash(_(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
+            flash(str(DOCUMENT_COMPANY_IMMUTABLE_MSG), "danger")
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=registro.id))
         before_state = _capture_sales_state(registro)
         revert_relations_for_target("sales_invoice", registro.id, reason="draft_edited")
@@ -2312,7 +2329,7 @@ def _cancel_linked_delivery_note(
     _restore_reservation_for_delivery_note(dn)
     log_cancel(dn)
     flash(
-        _("Se ha cancelado la Nota de Entrega %s asociada.") % (dn.document_no or dn.id),
+        _("Se ha cancelado la Nota de Entrega %(document)s asociada.") % {"document": dn.document_no or dn.id},
         "info",
     )
 
@@ -2358,9 +2375,18 @@ def _validate_credit_limit_and_overdue(
         if exposure > limit:
             base_currency = company_currency(company) or ""
             raise ValueError(
-                f"El límite de crédito para el cliente ha sido excedido. Límite: {limit}, "
-                f"Saldo actual: {outstanding + order_exposure}, Monto del documento: {current_doc_base}, "
-                f"Exposición total: {exposure}. Moneda base: {base_currency}."
+                _(
+                    "El límite de crédito para el cliente ha sido excedido. Límite: %(limit)s, "
+                    "Saldo actual: %(outstanding)s, Monto del documento: %(current_document_amount)s, "
+                    "Exposición total: %(exposure)s. Moneda base: %(base_currency)s."
+                )
+                % {
+                    "limit": limit,
+                    "outstanding": outstanding + order_exposure,
+                    "current_document_amount": current_doc_base,
+                    "exposure": exposure,
+                    "base_currency": base_currency,
+                }
             )
 
 
@@ -2400,8 +2426,15 @@ def _sales_base_amount(document: Any, amount: Decimal, *, use_stored_total: bool
     exchange_rate = getattr(document, "exchange_rate", None)
     if exchange_rate is None or Decimal(str(exchange_rate)) <= 0:
         raise ValueError(
-            f"El documento {getattr(document, 'document_no', None) or getattr(document, 'id', '')} "
-            f"no tiene una tasa válida para {transaction_currency} -> {base_currency}."
+            _(
+                "El documento %(document_number)s no tiene una tasa válida para %(transaction_currency)s "
+                "-> %(base_currency)s."
+            )
+            % {
+                "document_number": getattr(document, "document_no", None) or getattr(document, "id", ""),
+                "transaction_currency": transaction_currency,
+                "base_currency": base_currency,
+            }
         )
     return (Decimal(str(amount)) * Decimal(str(exchange_rate))).quantize(Decimal("0.0001"))
 
@@ -2470,8 +2503,11 @@ def _reject_overdue_invoices(invoices, payment_terms_id, outstanding_getter) -> 
         due_date = invoice.posting_date + timedelta(days=due_days)
         if today > due_date:
             raise ValueError(
-                f"El cliente tiene facturas vencidas y su configuración bloquea nuevas ventas. "
-                f"Factura vencida: {invoice.document_no or invoice.id} (Vencimiento: {due_date})."
+                _(
+                    "El cliente tiene facturas vencidas y su configuración bloquea nuevas ventas. "
+                    "Factura vencida: %(invoice_number)s (Vencimiento: %(due_date)s)."
+                )
+                % {"invoice_number": invoice.document_no or invoice.id, "due_date": due_date}
             )
 
 
@@ -2499,11 +2535,11 @@ def _validate_reversal_of(
     if not source:
         raise ValueError(_("La factura origen '%(source)s' no existe.") % {"source": reversal_of})
     if source.docstatus != 1:
-        raise ValueError(_("La factura origen '%(source)s' no esta aprobada.") % {"source": reversal_of})
+        raise ValueError(_("La factura origen '%(source)s' no está aprobada.") % {"source": reversal_of})
     if customer_id and source.customer_id != customer_id:
         raise ValueError(_("La factura origen '%(source)s' no pertenece al mismo cliente.") % {"source": reversal_of})
     if company and source.company != company:
-        raise ValueError(_("La factura origen '%(source)s' no pertenece a la misma compania.") % {"source": reversal_of})
+        raise ValueError(_("La factura origen '%(source)s' no pertenece a la misma compañía.") % {"source": reversal_of})
     if document_type in {"sales_credit_note", "sales_return"} and note_amount is not None:
         from cacao_accounting.document_flow.payment import compute_outstanding_amount
 
@@ -2512,7 +2548,8 @@ def _validate_reversal_of(
         outstanding = compute_outstanding_amount(source)
         if note_amount > outstanding:
             raise ValueError(
-                f"La nota de credito ({note_amount}) excede el saldo pendiente de la factura origen ({outstanding})."
+                _("La nota de crédito (%(note_amount)s) excede el saldo pendiente de la factura origen (%(outstanding)s).")
+                % {"note_amount": note_amount, "outstanding": outstanding}
             )
 
 

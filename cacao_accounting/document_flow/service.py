@@ -45,7 +45,7 @@ from cacao_accounting.audit_trail_service import log_create
 from cacao_accounting.document_identifiers import assign_document_identifier
 from cacao_accounting.i18n import _
 
-_MSG_LINEA_ORIGEN = "Linea origen no encontrada."
+_MSG_LINEA_ORIGEN = "Línea origen no encontrada."
 
 
 def _allows_parallel_purchase_quotations(source_type: str, target_type: str | None) -> bool:
@@ -110,7 +110,7 @@ def _state_quantities(
     source_item_id: str | None,
     target_type: str | None,
 ) -> tuple[Decimal, Decimal]:
-    """Obtiene cantidades canceladas/cerradas para una linea si existe estado cacheado."""
+    """Obtiene cantidades canceladas/cerradas para una línea si existe estado cacheado."""
     if not target_type:
         return Decimal("0"), Decimal("0")
     state = get_line_flow_state(source_type, source_id, source_item_id, target_type)
@@ -120,7 +120,7 @@ def _state_quantities(
 
 
 def _line_payload(source_type: str, source_id: str, item: Any, target_type: str | None = None) -> dict[str, Any]:
-    """Construye la respuesta estandar para una linea origen."""
+    """Construye la respuesta estandar para una línea origen."""
     qty = decimal_or_zero(
         getattr(item, "qty_in_base_uom", None)
         if getattr(item, "qty_in_base_uom", None) is not None
@@ -170,11 +170,15 @@ def _line_payload(source_type: str, source_id: str, item: Any, target_type: str 
 
 
 def get_source_items(source_type: str, source_id: str, target_type: str | None = None) -> list[dict[str, Any]]:
-    """Devuelve lineas disponibles desde un documento origen."""
+    """Devuelve líneas disponibles desde un documento origen."""
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type) if target_type else None
     if target_key and not is_allowed_flow(source_key, target_key):
-        raise DocumentFlowError(f"Relacion no permitida: {source_key} -> {target_key}", 400)
+        raise DocumentFlowError(
+            _("Relación no permitida: %(source_key)s -> %(target_key)s")
+            % {"source_key": source_key, "target_key": target_key},
+            400,
+        )
     source = get_document(source_key, source_id)
     if not source:
         raise DocumentFlowError(_("Documento origen no encontrado."), 404)
@@ -191,7 +195,7 @@ def get_source_items(source_type: str, source_id: str, target_type: str | None =
 
 
 def get_document_flow_items(target_type: str, source_values: list[str]) -> list[dict[str, Any]]:
-    """Devuelve lineas pendientes para uno o mas documentos origen."""
+    """Devuelve líneas pendientes para uno o mas documentos origen."""
     target_key = normalize_doctype(target_type)
     items: list[dict[str, Any]] = []
     for value in source_values:
@@ -211,7 +215,7 @@ def pending_qty(
     exclude_draft_targets: bool = False,
     include_target_id: str | None = None,
 ) -> Decimal:
-    """Calcula la cantidad pendiente para una linea origen hacia un target.
+    """Calcula la cantidad pendiente para una línea origen hacia un target.
 
     La cantidad y el consumo se expresan en la UOM base del articulo para que
     la parcialidad sea dimensionalmente consistente con flujos que utilizan
@@ -249,7 +253,7 @@ def _assert_same_company(source_type: str, source_id: str, target_type: str, tar
 
 
 def _update_source_cache(source_type: str, source_id: str, source_item_id: str | None, target_type: str) -> None:
-    """Actualiza campos cache de consumo cuando existen en la linea origen."""
+    """Actualiza campos cache de consumo cuando existen en la línea origen."""
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
     source_item = get_document_item(source_key, source_item_id)
@@ -402,8 +406,11 @@ def _relation_qty_in_base_uom(source_item: Any, qty: Decimal, presentation_uom: 
         return convert_item_qty(item_code, qty, from_uom, base_uom)
     except InventoryServiceError as exc:
         raise DocumentFlowError(
-            f"No se pudo convertir {qty} {from_uom} a {base_uom} para el artículo {item_code}. "
-            "Configure la conversión de UOM antes de relacionar las líneas.",
+            _(
+                "No se pudo convertir %(quantity)s %(from_uom)s a %(base_uom)s para el artículo %(item_code)s. "
+                "Configure la conversión de UOM antes de relacionar las líneas."
+            )
+            % {"quantity": qty, "from_uom": from_uom, "base_uom": base_uom, "item_code": item_code},
             409,
         ) from exc
 
@@ -421,11 +428,11 @@ def create_document_relation(
     rate: Any = None,
     amount: Any = None,
 ) -> DocumentRelation:
-    """Crea una relacion entre lineas validando parcialidad y compania.
+    """Crea una relacion entre líneas validando parcialidad y compania.
 
     La cantidad se normaliza a la UOM base del articulo origen para que la
     comparacion contra ``pending_qty`` y el consumo acumulado sean
-    dimensionalmente consistentes cuando la linea destino usa una unidad
+    dimensionalmente consistentes cuando la línea destino usa una unidad
     comercial distinta (p.ej. 1 BOX contra un origen en EA).
     """
     source_key = normalize_doctype(source_type)
@@ -494,21 +501,25 @@ def _validate_relation_documents(source_key, source_id, source_item_id, target_k
     harían inconsistente la trazabilidad de cantidades del flujo documental.
     """
     if not is_allowed_flow(source_key, target_key):
-        raise DocumentFlowError(f"Relacion no permitida: {source_key} -> {target_key}", 400)
+        raise DocumentFlowError(
+            _("Relación no permitida: %(source_key)s -> %(target_key)s")
+            % {"source_key": source_key, "target_key": target_key},
+            400,
+        )
     source_item = get_document_item(source_key, source_item_id) if source_item_id else None
     target_item = get_document_item(target_key, target_item_id) if target_item_id else None
     if source_item_id and not source_item:
         raise DocumentFlowError(_(_MSG_LINEA_ORIGEN), 404)
     if target_item_id and not target_item:
-        raise DocumentFlowError(_("Linea destino no encontrada."), 404)
+        raise DocumentFlowError(_("Línea destino no encontrada."), 404)
     if source_item and get_item_parent_id(get_document_type(source_key), source_item) != source_id:
-        raise DocumentFlowError(_("La linea origen no pertenece al documento indicado."), 409)
+        raise DocumentFlowError(_("La línea origen no pertenece al documento indicado."), 409)
     if target_item and get_item_parent_id(get_document_type(target_key), target_item) != target_id:
-        raise DocumentFlowError(_("La linea destino no pertenece al documento indicado."), 409)
+        raise DocumentFlowError(_("La línea destino no pertenece al documento indicado."), 409)
     source_item_code = getattr(source_item, "item_code", None) if source_item else None
     target_item_code = getattr(target_item, "item_code", None) if target_item else None
     if source_item_code and target_item_code and source_item_code != target_item_code:
-        raise DocumentFlowError(_("La linea destino usa un articulo distinto al de la linea origen de la relacion."), 409)
+        raise DocumentFlowError(_("La línea destino usa un artículo distinto al de la línea origen de la relación."), 409)
     return source_item, target_item
 
 
@@ -517,9 +528,9 @@ def _validate_relation_status(source_key: str, source_id: str, target_key: str, 
     source_doc = get_document(source_key, source_id)
     target_doc = get_document(target_key, target_id)
     if source_doc is not None and getattr(source_doc, "docstatus", None) != 1:
-        raise DocumentFlowError(_("El documento origen debe estar aprobado (docstatus=1) para crear la relacion."), 409)
+        raise DocumentFlowError(_("El documento origen debe estar aprobado (docstatus=1) para crear la relación."), 409)
     if target_doc is not None and getattr(target_doc, "docstatus", None) == 2:
-        raise DocumentFlowError(_("No se puede crear una relacion hacia un documento cancelado (docstatus=2)."), 409)
+        raise DocumentFlowError(_("No se puede crear una relación hacia un documento cancelado (docstatus=2)."), 409)
 
 
 def get_target_line_source(target_type: str, target_item_id: str) -> dict[str, str]:
@@ -626,7 +637,7 @@ def close_line_balance(
     qty: Any | None = None,
     reason: str = "",
 ) -> dict[str, Any]:
-    """Cierra manualmente saldo pendiente de una linea fuente."""
+    """Cierra manualmente saldo pendiente de una línea fuente."""
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type)
     if not reason.strip():
@@ -691,7 +702,7 @@ def close_document_balances(
 
 
 def _state_payload(state: Any) -> dict[str, Any]:
-    """Serializa estado de linea para API."""
+    """Serializa estado de línea para API."""
     return {
         "source_type": state.source_type,
         "source_id": state.source_id,
@@ -724,7 +735,7 @@ def _collect_source_document_row(
     document: Any,
     target_key: str,
 ) -> dict[str, Any] | None:
-    """Recolecta informacion de un documento fuente si tiene lineas pendientes."""
+    """Recolecta informacion de un documento fuente si tiene líneas pendientes."""
     items = get_source_items(source_key, document.id, target_key)
     if not items:
         return None
@@ -765,7 +776,7 @@ def get_pending_lines(
     target_document_type: str,
     company: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Obtiene lineas pendientes desde uno o varios documentos fuente."""
+    """Obtiene líneas pendientes desde uno o varios documentos fuente."""
     lines: list[dict[str, Any]] = []
     for source_id in source_document_ids:
         source_company = get_document_company(source_document_type, source_id)
@@ -826,7 +837,7 @@ def _process_target_line(
     target_spec: Any,
     target_type: str,
 ) -> dict[str, Any]:
-    """Procesa una linea individual del documento destino."""
+    """Procesa una línea individual del documento destino."""
     source_type = normalize_doctype(str(selected.get("source_document_type") or selected.get("source_type") or ""))
     source_id = str(selected.get("source_document_id") or selected.get("source_id") or "")
     source_item_id = str(selected.get("source_row_id") or selected.get("source_item_id") or "")
@@ -867,7 +878,7 @@ def _process_target_line(
 
 
 def create_target_document(payload: dict[str, Any], *, commit: bool = True) -> dict[str, Any]:
-    """Crea un documento destino generico a partir de lineas fuente.
+    """Crea un documento destino generico a partir de líneas fuente.
 
     ``commit=False`` permite que un servicio de negocio agregue relaciones
     complementarias y confirme el documento de forma atómica.
@@ -877,7 +888,7 @@ def create_target_document(payload: dict[str, Any], *, commit: bool = True) -> d
     posting_date = payload.get("posting_date")
     lines = payload.get("lines") or []
     if not target_type or not company or not posting_date or not lines:
-        raise DocumentFlowError(_("Debe indicar destino, compania, fecha y lineas."), 400)
+        raise DocumentFlowError(_("Debe indicar destino, compañía, fecha y líneas."), 400)
     if target_type == "payment_entry":
         from cacao_accounting.document_flow.payment import _create_payment_target
 

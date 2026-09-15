@@ -90,7 +90,7 @@ def _create_action_payload(action: Any, document_id: str) -> dict[str, Any]:
     except (BuildError, RuntimeError):
         create_url = None
     return {
-        "label": action.label,
+        "label": str(action.label) if action.label is not None else None,
         "target_type": action.target_type,
         "model_target_type": action.model_target_type,
         "endpoint": action.endpoint,

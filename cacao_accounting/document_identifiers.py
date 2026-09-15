@@ -65,7 +65,7 @@ def parse_posting_date(posting_date_raw: date | str | None) -> date:
     try:
         return date.fromisoformat(str(posting_date_raw))
     except ValueError as exc:
-        raise IdentifierConfigurationError(_("La fecha de contabilizacion es invalida.")) from exc
+        raise IdentifierConfigurationError(_("La fecha de contabilizacion es inválida.")) from exc
 
 
 def validate_accounting_period(company: str | None, posting_date: date, allow_closing: bool = False) -> None:
@@ -77,7 +77,7 @@ def validate_accounting_period(company: str | None, posting_date: date, allow_cl
     completar el cierre. Si el año fiscal está cerrado, no se permite ningún movimiento.
     """
     if not company:
-        raise IdentifierConfigurationError(_("Debe indicar la compania del documento."))
+        raise IdentifierConfigurationError(_("Debe indicar la compañía del documento."))
 
     closed_fiscal_year = database.session.execute(
         database.select(FiscalYear)
@@ -155,11 +155,11 @@ def _pick_naming_series(entity_type: str, company: str | None, naming_series_id:
     if naming_series_id:
         selected = database.session.get(NamingSeries, naming_series_id)
         if not selected or not selected.is_active:
-            raise IdentifierConfigurationError(_("La serie seleccionada no existe o esta inactiva."))
+            raise IdentifierConfigurationError(_("La serie seleccionada no existe o está inactiva."))
         if selected.entity_type != entity_type:
             raise IdentifierConfigurationError(_("La serie seleccionada no coincide con el tipo de documento."))
         if selected.company not in (None, company):
-            raise IdentifierConfigurationError(_("La serie seleccionada no pertenece a la compania indicada."))
+            raise IdentifierConfigurationError(_("La serie seleccionada no pertenece a la compañía indicada."))
         return selected
 
     candidates = get_active_naming_series(entity_type=entity_type, company=company)
@@ -457,7 +457,7 @@ def _get_explicit_counter(explicit_counter_id: str) -> ExternalCounter:
     if not counter:
         raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
     if not counter.is_active:
-        raise IdentifierConfigurationError(_("El contador externo indicado esta inactivo."))
+        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
     return counter
 
 
@@ -601,7 +601,7 @@ def assign_document_identifier(
 
     if counter:
         if counter.company != company_code:
-            raise IdentifierConfigurationError(_("El contador externo no pertenece a la compania indicada."))
+            raise IdentifierConfigurationError(_("El contador externo no pertenece a la compañía indicada."))
         ext_num = external_number or counter.next_suggested_formatted
         _validate_and_register_external_number(
             counter=counter,
@@ -634,8 +634,15 @@ def _validate_and_register_external_number(
 
     if existing:
         raise ExternalNumberDuplicateError(
-            f"El numero externo '{external_number}' ya fue utilizado en este contador "
-            f"por el documento {existing.entity_type}/{existing.entity_id}."
+            _(
+                "El número externo '%(external_number)s' ya fue utilizado en este contador "
+                "por el documento %(entity_type)s/%(entity_id)s."
+            )
+            % {
+                "external_number": external_number,
+                "entity_type": existing.entity_type,
+                "entity_id": existing.entity_id,
+            }
         )
 
     # Intentar extraer el valor numerico del numero externo (despues del prefijo)
@@ -709,7 +716,7 @@ def record_external_number_used(
     if not counter.is_active:
         raise IdentifierConfigurationError(EL_CONTADOR_EXTERNO_ESTA_INACTIVO)
     if number_used < 0:
-        raise IdentifierConfigurationError(_("El numero externo usado no puede ser negativo."))
+        raise IdentifierConfigurationError(_("El número externo usado no puede ser negativo."))
 
     if number_used > (counter.last_used or 0):
         counter.last_used = number_used
@@ -742,7 +749,7 @@ def adjust_external_counter(
     if not reason or not reason.strip():
         raise IdentifierConfigurationError(_("Debe indicar el motivo del ajuste del contador externo."))
     if new_last_used < 0:
-        raise IdentifierConfigurationError(_("El ultimo numero usado no puede ser negativo."))
+        raise IdentifierConfigurationError(_("El último número usado no puede ser negativo."))
 
     counter = database.session.get(ExternalCounter, external_counter_id)
     if not counter:

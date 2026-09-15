@@ -34,6 +34,7 @@ from cacao_accounting.database import (
 )
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.document_flow.service import compute_outstanding_amount
+from cacao_accounting.i18n import _
 from cacao_accounting.modulos import (
     MODULE_ACCOUNTING,
     MODULE_BANKS,
@@ -61,18 +62,18 @@ def get_dashboard_data():
     period_id = request.args.get("period")
 
     if not company_id:
-        return jsonify({"error": "Se requiere el parámetro 'company'"}), 400
+        return jsonify({"error": _("Se requiere el parámetro 'company'")}), 400
 
     company = database.session.get(Entity, company_id)
     if company is None:
-        return jsonify({"error": "Compañía no encontrada"}), 404
+        return jsonify({"error": _("Compañía no encontrada")}), 404
 
     if not user_can_access_company(current_user, company):
-        return jsonify({"error": "No tiene acceso a la compañía seleccionada"}), 403
+        return jsonify({"error": _("No tiene acceso a la compañía seleccionada")}), 403
 
     period = _resolve_period(period_id, company)
     if period_id and period is None:
-        return jsonify({"error": "Periodo contable no encontrado para la compañía"}), 404
+        return jsonify({"error": _("Periodo contable no encontrado para la compañía")}), 404
 
     start_date = period.start if period else None
     end_date = period.end if period else None
@@ -140,36 +141,36 @@ def _dashboard_sections(
         "accounting": _section_or_hidden(
             MODULE_ACCOUNTING,
             company_code,
-            "Contabilidad",
-            "Resumen financiero del periodo seleccionado.",
+            _("Contabilidad"),
+            _("Resumen financiero del periodo seleccionado."),
             lambda: get_accounting_data(company_code, currency, start_date, end_date),
         ),
         "banks": _section_or_hidden(
             MODULE_BANKS,
             company_code,
-            "Bancos",
-            "Saldos, conciliaciones y pagos en proceso.",
+            _("Bancos"),
+            _("Saldos, conciliaciones y pagos en proceso."),
             lambda: get_banks_data(company_code, currency, start_date, end_date),
         ),
         "purchases": _section_or_hidden(
             MODULE_PURCHASES,
             company_code,
-            "Compras",
-            "Facturas, órdenes abiertas y cuentas por pagar.",
+            _("Compras"),
+            _("Facturas, órdenes abiertas y cuentas por pagar."),
             lambda: get_purchases_data(company_code, currency, start_date, end_date),
         ),
         "inventory": _section_or_hidden(
             MODULE_INVENTORY,
             company_code,
-            "Inventario",
-            "Existencias, bodegas y movimientos recientes.",
+            _("Inventario"),
+            _("Existencias, bodegas y movimientos recientes."),
             lambda: get_inventory_data(company_code, currency, start_date, end_date),
         ),
         "sales": _section_or_hidden(
             MODULE_SALES,
             company_code,
-            "Ventas",
-            "Facturación, cobranza y comportamiento comercial.",
+            _("Ventas"),
+            _("Facturación, cobranza y comportamiento comercial."),
             lambda: get_sales_data(company_code, currency, start_date, end_date),
         ),
     }
@@ -210,12 +211,12 @@ def _hidden_section(title: str, subtitle: str) -> dict[str, Any]:
         "visible": False,
         "title": title,
         "subtitle": subtitle,
-        "badge": "Oculto por permisos",
+        "badge": _("Oculto por permisos"),
         "kpis": {},
         "charts": {},
         "tables": {},
         "actions": [],
-        "empty_state": "No tiene permisos para ver esta sección.",
+        "empty_state": _("No tiene permisos para ver esta sección."),
     }
 
 
@@ -237,27 +238,27 @@ def get_accounting_data(
 
     return {
         "kpis": {
-            "income": _money_kpi("Ingresos", income, currency),
-            "expenses": _money_kpi("Gastos", expenses, currency),
-            "profit": _money_kpi("Utilidad", profit, currency),
-            "pending_vouchers": _count_kpi("Pendientes", pending_vouchers),
+            "income": _money_kpi(_("Ingresos"), income, currency),
+            "expenses": _money_kpi(_("Gastos"), expenses, currency),
+            "profit": _money_kpi(_("Utilidad"), profit, currency),
+            "pending_vouchers": _count_kpi(_("Pendientes"), pending_vouchers),
         },
         "charts": {"monthly_result": _accounting_monthly_result(company, start_date, end_date)},
         "tables": {
             "summary": [
-                {"label": "Ingresos", "amount": _numeric(income), "currency": currency},
-                {"label": "Gastos", "amount": _numeric(expenses), "currency": currency},
-                {"label": "Utilidad", "amount": _numeric(profit), "currency": currency},
-                {"label": "Asientos del periodo", "amount": journal_entries, "currency": ""},
+                {"label": _("Ingresos"), "amount": _numeric(income), "currency": currency},
+                {"label": _("Gastos"), "amount": _numeric(expenses), "currency": currency},
+                {"label": _("Utilidad"), "amount": _numeric(profit), "currency": currency},
+                {"label": _("Asientos del periodo"), "amount": journal_entries, "currency": ""},
             ]
         },
         "actions": [
-            {"label": "Nuevo comprobante", "url": "/accounting/journal/new"},
-            {"label": "Estado de resultados", "url": "/reports/income-statement"},
-            {"label": "Balance general", "url": "/reports/balance-sheet"},
-            {"label": "Flujo de efectivo", "url": "/reports/cash-flow"},
+            {"label": _("Nuevo comprobante"), "url": "/accounting/journal/new"},
+            {"label": _("Estado de resultados"), "url": "/reports/income-statement"},
+            {"label": _("Balance general"), "url": "/reports/balance-sheet"},
+            {"label": _("Flujo de efectivo"), "url": "/reports/cash-flow"},
         ],
-        "empty_state": "No hay movimientos contables en el periodo seleccionado.",
+        "empty_state": _("No hay movimientos contables en el periodo seleccionado."),
     }
 
 
@@ -277,10 +278,10 @@ def get_banks_data(
 
     return {
         "kpis": {
-            "balance": _money_kpi("Saldo bancario", total_balance, currency),
-            "accounts": _count_kpi("Cuentas activas", len(accounts)),
-            "unreconciled": _count_kpi("Sin conciliar", unreconciled),
-            "pending_payments": _count_kpi("Pagos pendientes", pending_payments),
+            "balance": _money_kpi(_("Saldo bancario"), total_balance, currency),
+            "accounts": _count_kpi(_("Cuentas activas"), len(accounts)),
+            "unreconciled": _count_kpi(_("Sin conciliar"), unreconciled),
+            "pending_payments": _count_kpi(_("Pagos pendientes"), pending_payments),
         },
         "charts": {},
         "tables": {
@@ -296,11 +297,11 @@ def get_banks_data(
             "recent_movements": _recent_bank_movements(account_ids, start_date, end_date, currency),
         },
         "actions": [
-            {"label": "Nuevo pago", "url": "/cash_management/payment/new"},
-            {"label": "Conciliar bancos", "url": "/cash_management/bank-reconciliation"},
-            {"label": "Resumen bancario", "url": "/reports/bank-balance-summary"},
+            {"label": _("Nuevo pago"), "url": "/cash_management/payment/new"},
+            {"label": _("Conciliar bancos"), "url": "/cash_management/bank-reconciliation"},
+            {"label": _("Resumen bancario"), "url": "/reports/bank-balance-summary"},
         ],
-        "empty_state": "No hay cuentas bancarias activas para esta compañía.",
+        "empty_state": _("No hay cuentas bancarias activas para esta compañía."),
     }
 
 
@@ -325,10 +326,10 @@ def get_purchases_data(
 
     return {
         "kpis": {
-            "total": _money_kpi("Compras", total, currency),
-            "outstanding": _money_kpi("Por pagar", outstanding, currency),
-            "open_orders": _count_kpi("Órdenes abiertas", open_orders),
-            "suppliers": _count_kpi("Proveedores activos", suppliers),
+            "total": _money_kpi(_("Compras"), total, currency),
+            "outstanding": _money_kpi(_("Por pagar"), outstanding, currency),
+            "open_orders": _count_kpi(_("Órdenes abiertas"), open_orders),
+            "suppliers": _count_kpi(_("Proveedores activos"), suppliers),
         },
         "charts": {},
         "tables": {
@@ -336,11 +337,11 @@ def get_purchases_data(
             "payables": _payable_invoices(company, currency),
         },
         "actions": [
-            {"label": "Nueva factura", "url": "/buying/purchase-invoice/new"},
-            {"label": "Nueva orden", "url": "/buying/purchase-order/new"},
-            {"label": "Cuentas por pagar", "url": "/reports/accounts-payable"},
+            {"label": _("Nueva factura"), "url": "/buying/purchase-invoice/new"},
+            {"label": _("Nueva orden"), "url": "/buying/purchase-order/new"},
+            {"label": _("Cuentas por pagar"), "url": "/reports/accounts-payable"},
         ],
-        "empty_state": "No hay compras en el periodo seleccionado.",
+        "empty_state": _("No hay compras en el periodo seleccionado."),
     }
 
 
@@ -359,10 +360,10 @@ def get_inventory_data(
 
     return {
         "kpis": {
-            "value": _money_kpi("Valor inventario", inventory_value, currency),
-            "warehouses": _count_kpi("Bodegas activas", active_warehouses),
-            "stocked_items": _count_kpi("Ítems con existencia", stocked_items),
-            "movements": _count_kpi("Movimientos", movements),
+            "value": _money_kpi(_("Valor inventario"), inventory_value, currency),
+            "warehouses": _count_kpi(_("Bodegas activas"), active_warehouses),
+            "stocked_items": _count_kpi(_("Ítems con existencia"), stocked_items),
+            "movements": _count_kpi(_("Movimientos"), movements),
         },
         "charts": {},
         "tables": {
@@ -370,11 +371,11 @@ def get_inventory_data(
             "recent_movements": _recent_stock_movements(company, start_date, end_date),
         },
         "actions": [
-            {"label": "Movimiento", "url": "/inventory/stock-entry/new"},
-            {"label": "Conciliación", "url": "/inventory/stock-entry/reconciliation/new"},
-            {"label": "Valuación", "url": "/reports/inventory-valuation"},
+            {"label": _("Movimiento"), "url": "/inventory/stock-entry/new"},
+            {"label": _("Conciliación"), "url": "/inventory/stock-entry/reconciliation/new"},
+            {"label": _("Valuación"), "url": "/reports/inventory-valuation"},
         ],
-        "empty_state": "No hay existencias o movimientos de inventario.",
+        "empty_state": _("No hay existencias o movimientos de inventario."),
     }
 
 
@@ -393,10 +394,10 @@ def get_sales_data(
 
     return {
         "kpis": {
-            "sales": _money_kpi("Ventas", sales_total, currency),
-            "receivables": _money_kpi("Por cobrar", receivables, currency),
-            "invoices": _count_kpi("Facturas emitidas", invoice_count),
-            "customers": _count_kpi("Clientes activos", customers),
+            "sales": _money_kpi(_("Ventas"), sales_total, currency),
+            "receivables": _money_kpi(_("Por cobrar"), receivables, currency),
+            "invoices": _count_kpi(_("Facturas emitidas"), invoice_count),
+            "customers": _count_kpi(_("Clientes activos"), customers),
         },
         "charts": {"trend": _sales_trend(company, start_date, end_date)},
         "tables": {
@@ -404,11 +405,11 @@ def get_sales_data(
             "recent_invoices": _recent_sales_invoices(company, start_date, end_date, currency),
         },
         "actions": [
-            {"label": "Nueva factura", "url": "/sales/sales-invoice/new"},
-            {"label": "Nueva orden", "url": "/sales/sales-order/new"},
-            {"label": "Cuentas por cobrar", "url": "/reports/accounts-receivable"},
+            {"label": _("Nueva factura"), "url": "/sales/sales-invoice/new"},
+            {"label": _("Nueva orden"), "url": "/sales/sales-order/new"},
+            {"label": _("Cuentas por cobrar"), "url": "/reports/accounts-receivable"},
         ],
-        "empty_state": "No hay ventas en el periodo seleccionado.",
+        "empty_state": _("No hay ventas en el periodo seleccionado."),
     }
 
 
@@ -555,10 +556,10 @@ def _recent_bank_movements(
     return [
         {
             "date": row.posting_date.isoformat() if row.posting_date else "",
-            "description": row.description or row.reference_number or "Movimiento bancario",
+            "description": row.description or row.reference_number or _("Movimiento bancario"),
             "amount": _numeric(Decimal(str(row.deposit or 0)) - Decimal(str(row.withdrawal or 0))),
             "currency": currency,
-            "status": "Conciliado" if row.is_reconciled else "Pendiente",
+            "status": _("Conciliado") if row.is_reconciled else _("Pendiente"),
         }
         for row in rows
     ]
@@ -599,7 +600,7 @@ def _purchase_invoice_payload(invoice: PurchaseInvoice, currency: str) -> dict[s
     return {
         "date": invoice.posting_date.isoformat() if invoice.posting_date else "",
         "document_no": invoice.document_no or invoice.id,
-        "party": invoice.supplier_name or "Proveedor",
+        "party": invoice.supplier_name or _("Proveedor"),
         "total": _signed_numeric(invoice.base_grand_total or invoice.grand_total, sign),
         "outstanding": _signed_numeric(invoice.base_outstanding_amount or invoice.outstanding_amount, sign),
         "currency": currency,
@@ -693,7 +694,7 @@ def _top_customers(
         .order_by(func.sum(_signed_document_expression(SalesInvoice)).desc())
         .limit(5)
     )
-    return [{"name": row.customer_name or "Cliente", "total": _numeric(row.total), "currency": currency} for row in query]
+    return [{"name": row.customer_name or _("Cliente"), "total": _numeric(row.total), "currency": currency} for row in query]
 
 
 def _recent_sales_invoices(
@@ -713,7 +714,7 @@ def _recent_sales_invoices(
         {
             "date": row.posting_date.isoformat() if row.posting_date else "",
             "document_no": row.document_no or row.id,
-            "party": row.customer_name or "Cliente",
+            "party": row.customer_name or _("Cliente"),
             "total": _signed_numeric(row.base_grand_total or row.grand_total, -1 if row.is_return else 1),
             "outstanding": _signed_numeric(row.base_outstanding_amount or row.outstanding_amount, -1 if row.is_return else 1),
             "currency": currency,

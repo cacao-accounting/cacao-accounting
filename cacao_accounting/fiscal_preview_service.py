@@ -21,7 +21,7 @@ from cacao_accounting.accounting_engine.fiscal.engine import FiscalEngine
 from cacao_accounting.tax_rule_service import build_tax_rule_contexts
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 try:  # pragma: no cover - fallback para contextos sin Babel.
     from flask_babel import gettext as _fallback_gettext
@@ -46,7 +46,7 @@ class FiscalDocumentProfile:
     """Matriz de comportamiento fiscal por tipo documental."""
 
     document_type: str
-    label: str
+    label: LazyText
     applies_to: str
     recognition_event: str
     supports_taxes: bool
@@ -58,7 +58,7 @@ class FiscalDocumentProfile:
 _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     "purchase_request": FiscalDocumentProfile(
         document_type="purchase_request",
-        label=_("Solicitud de compra"),
+        label=_l("Solicitud de compra"),
         applies_to="purchase",
         recognition_event="purchase_request_confirmed",
         supports_taxes=False,
@@ -68,7 +68,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "purchase_order": FiscalDocumentProfile(
         document_type="purchase_order",
-        label=_("Orden de compra"),
+        label=_l("Orden de compra"),
         applies_to="purchase",
         recognition_event="purchase_order_confirmed",
         supports_taxes=False,
@@ -78,7 +78,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "purchase_receipt": FiscalDocumentProfile(
         document_type="purchase_receipt",
-        label=_("Recepción de compra"),
+        label=_l("Recepción de compra"),
         applies_to="purchase",
         recognition_event="purchase_receipt_confirmed",
         supports_taxes=False,
@@ -88,7 +88,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "purchase_invoice": FiscalDocumentProfile(
         document_type="purchase_invoice",
-        label=_("Factura de compra"),
+        label=_l("Factura de compra"),
         applies_to="purchase",
         recognition_event="purchase_invoice_confirmed",
         supports_taxes=True,
@@ -98,7 +98,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "import_landed_cost": FiscalDocumentProfile(
         document_type="import_landed_cost",
-        label=_("Costo de importación"),
+        label=_l("Costo de importación"),
         applies_to="purchase",
         recognition_event="import_landed_cost_confirmed",
         supports_taxes=False,
@@ -108,7 +108,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "sales_request": FiscalDocumentProfile(
         document_type="sales_request",
-        label=_("Solicitud de venta"),
+        label=_l("Solicitud de venta"),
         applies_to="sales",
         recognition_event="sales_request_confirmed",
         supports_taxes=False,
@@ -118,7 +118,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "sales_order": FiscalDocumentProfile(
         document_type="sales_order",
-        label=_("Orden de venta"),
+        label=_l("Orden de venta"),
         applies_to="sales",
         recognition_event="sales_order_confirmed",
         supports_taxes=False,
@@ -128,7 +128,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "delivery_note": FiscalDocumentProfile(
         document_type="delivery_note",
-        label=_("Nota de entrega"),
+        label=_l("Nota de entrega"),
         applies_to="sales",
         recognition_event="delivery_note_confirmed",
         supports_taxes=False,
@@ -138,7 +138,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "sales_invoice": FiscalDocumentProfile(
         document_type="sales_invoice",
-        label=_("Factura de venta"),
+        label=_l("Factura de venta"),
         applies_to="sales",
         recognition_event="sales_invoice_confirmed",
         supports_taxes=True,
@@ -148,7 +148,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "stock_entry": FiscalDocumentProfile(
         document_type="stock_entry",
-        label=_("Movimiento de inventario"),
+        label=_l("Movimiento de inventario"),
         applies_to="purchase",
         recognition_event="stock_entry_confirmed",
         supports_taxes=False,
@@ -158,7 +158,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "payment_entry": FiscalDocumentProfile(
         document_type="payment_entry",
-        label=_("Pago"),
+        label=_l("Pago"),
         applies_to="purchase",
         recognition_event="payment_confirmed",
         supports_taxes=True,
@@ -168,7 +168,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "collection_entry": FiscalDocumentProfile(
         document_type="payment_entry",
-        label=_("Cobro"),
+        label=_l("Cobro"),
         applies_to="sales",
         recognition_event="collection_confirmed",
         supports_taxes=True,
@@ -178,7 +178,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "bank_debit_note": FiscalDocumentProfile(
         document_type="bank_debit_note",
-        label=_("Nota de débito bancaria"),
+        label=_l("Nota de débito bancaria"),
         applies_to="purchase",
         recognition_event="payment_confirmed",
         supports_taxes=False,
@@ -188,7 +188,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "bank_credit_note": FiscalDocumentProfile(
         document_type="bank_credit_note",
-        label=_("Nota de crédito bancaria"),
+        label=_l("Nota de crédito bancaria"),
         applies_to="sales",
         recognition_event="collection_confirmed",
         supports_taxes=False,
@@ -198,7 +198,7 @@ _FISCAL_MATRIX: dict[str, FiscalDocumentProfile] = {
     ),
     "bank_transfer": FiscalDocumentProfile(
         document_type="bank_transfer",
-        label=_("Transferencia interna"),
+        label=_l("Transferencia interna"),
         applies_to="both",
         recognition_event="bank_transfer_confirmed",
         supports_taxes=False,
@@ -301,7 +301,7 @@ def fiscal_preview(payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "profile": {
             "document_type": profile.document_type,
-            "label": profile.label,
+            "label": str(profile.label),
             "applies_to": profile.applies_to,
             "recognition_event": profile.recognition_event,
             "supports_taxes": profile.supports_taxes,

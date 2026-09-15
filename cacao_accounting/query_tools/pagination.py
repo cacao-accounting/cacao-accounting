@@ -7,6 +7,7 @@ from math import ceil
 from typing import Any
 
 from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
+from cacao_accounting.i18n import _
 
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 500
@@ -55,6 +56,6 @@ def paginate(
     if page_size > MAX_PAGE_SIZE:
         raise QueryToolError(
             code=ErrorCode.PAGE_SIZE_EXCEEDED,
-            message=f"El tamaño de página no puede exceder {MAX_PAGE_SIZE}.",
+            message=_("El tamaño de página no puede exceder %(max_size)s.") % {"max_size": MAX_PAGE_SIZE},
         )
     return page, page_size

@@ -2497,3 +2497,15 @@ manteniendo el movimiento positivo de inventario al aprobar el duplicado.
   recibos/facturas de compra, fuera del alcance de estos issues.
 - Ruff, Flake8, Mypy y `git diff --check` pasan. Black no terminó en el entorno tras varios minutos y fue detenido;
   no se modificó código en esta ronda.
+
+## 2026-09-15 (auditoría de calidad del catálogo inglés)
+
+- Se corrigieron errores ortográficos en textos fuente españoles de identificación documental, pronósticos de caja,
+  conciliaciones, pagos, relaciones documentales y validaciones de terceros, preservando sus traducciones inglesas.
+- Se revisaron las 4,591 entradas activas del catálogo: ninguna queda sin traducir ni marcada como `fuzzy`; también se
+  corrigieron traducciones de caja chica, cuenta contable, almacén y nombres alternativos de columnas.
+- La guarda AST de i18n ahora detecta `f-strings` incompatibles tanto en helpers importados como en llamadas por atributo,
+  incluyendo las variantes gettext de contexto y pluralización.
+- Verificación focalizada: 39 pruebas pasan y 5 se omiten por la dependencia opcional `polib`; Black, Ruff, Mypy,
+  `msgfmt`, placeholders y `git diff --check` quedan limpios. Flake8, Pylint, pydocstyle y complexipy no están instalados
+  en el entorno y el proxy bloqueó su instalación.

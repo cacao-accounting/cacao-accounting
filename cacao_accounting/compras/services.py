@@ -129,7 +129,7 @@ from cacao_accounting.party_settings import (
 
 from cacao_accounting.logistics import copy_logistics, logistics_values
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 logger = getLogger(__name__)
 
@@ -142,7 +142,7 @@ PURCHASE_DEBIT_NOTE = "purchase_debit_note"
 PURCHASE_CREDIT_NOTE = "purchase_credit_note"
 
 
-FACTURA_COMPRA_LABEL = "Factura de Compra"
+FACTURA_COMPRA_LABEL = _l("Factura de Compra")
 
 COMPRAS_IMPORT_LANDED_COST_ENDPOINT = "compras.compras_import_landed_cost"
 
@@ -150,9 +150,9 @@ COMPRAS_PROVEEDOR_ENDPOINT = "compras.compras_proveedor"
 
 COMPRAS_COMPARATIVO_OFERTAS_ENDPOINT = "compras.compras_comparativo_ofertas"
 
-DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
+DOCUMENT_REQUIRES_LINE_MSG = _l("El documento requiere al menos una línea.")
 
-SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
+SOLICITUD_CANCELACION_PENDIENTE_MSG = _l("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
 
 FACTURA_DE_COMPRA = FACTURA_COMPRA_LABEL
 
@@ -188,19 +188,19 @@ ROUTE_COMPRAS_COTIZACION_PROVEEDOR = "compras.compras_cotizacion_proveedor"
 
 ROUTE_COMPRAS_PROVEEDOR = COMPRAS_PROVEEDOR_ENDPOINT
 
-LABEL_SOLICITUD_COMPRA = "Solicitud de Compra"
+LABEL_SOLICITUD_COMPRA = _l("Solicitud de Compra")
 
-LABEL_SOLICITUD_COTIZACION = "Solicitud de Cotización"
+LABEL_SOLICITUD_COTIZACION = _l("Solicitud de Cotización")
 
-LABEL_ORDEN_COMPRA = "Orden de Compra"
+LABEL_ORDEN_COMPRA = _l("Orden de Compra")
 
 LABEL_FACTURA_COMPRA_LONG = FACTURA_COMPRA_LABEL
 
 IMPORT_LANDED_COST = "import_landed_cost"
 
-IMPORT_LANDED_COST_LABEL = "Costo de Importación"
+IMPORT_LANDED_COST_LABEL = _l("Costo de Importación")
 
-DOCUMENT_TYPE_LABELS: dict[str, str] = {
+DOCUMENT_TYPE_LABELS: dict[str, LazyText] = {
     PURCHASE_INVOICE: FACTURA_DE_COMPRA,
     PURCHASE_DEBIT_NOTE: "Nota de Débito de Compra",
     PURCHASE_CREDIT_NOTE: "Nota de Crédito de Compra",
@@ -964,7 +964,9 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
+                raise DocumentFlowError(
+                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
+                )
             uom = request.form.get(f"uom_{i}") or None
             linea = PurchaseQuotationItem(
                 purchase_quotation_id=quotation_id,
@@ -997,7 +999,9 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
+                raise DocumentFlowError(
+                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
+                )
             linea = PurchaseRequestItem(
                 purchase_request_id=request_id,
                 item_code=item_code,
@@ -1027,12 +1031,16 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
+                raise DocumentFlowError(
+                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
+                )
             item_obj = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
             if not item_obj:
-                raise DocumentFlowError(f"El item {item_code} no existe.", 400)
+                raise DocumentFlowError(_("El item %(item_code)s no existe.") % {"item_code": item_code}, 400)
             if not item_obj.is_active or not item_obj.is_purchase_item:
-                raise DocumentFlowError(f"El item {item_code} no está habilitado para compra.", 400)
+                raise DocumentFlowError(
+                    _("El item %(item_code)s no está habilitado para compra.") % {"item_code": item_code}, 400
+                )
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1092,7 +1100,9 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
+                raise DocumentFlowError(
+                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
+                )
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1142,7 +1152,10 @@ def _validate_receipt_warehouse(warehouse_code: str | None, item_code: str | Non
     if not warehouse.is_active:
         raise DocumentFlowError(_("Almacén '%(warehouse_code)s' está inactivo.") % {"warehouse_code": warehouse_code}, 409)
     if company and warehouse.company != company:
-        raise DocumentFlowError(f"Almacén '{warehouse_code}' no pertenece a la compañía de la recepción.", 400)
+        raise DocumentFlowError(
+            _("Almacén '%(warehouse_code)s' no pertenece a la compañía de la recepción.") % {"warehouse_code": warehouse_code},
+            400,
+        )
 
 
 def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
@@ -1157,12 +1170,16 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(f"La cantidad del item {item_code} debe ser mayor a cero.", 400)
+                raise DocumentFlowError(
+                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
+                )
             item_obj = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
             if not item_obj:
-                raise DocumentFlowError(f"El item {item_code} no existe.", 400)
+                raise DocumentFlowError(_("El item %(item_code)s no existe.") % {"item_code": item_code}, 400)
             if not item_obj.is_active or not item_obj.is_purchase_item:
-                raise DocumentFlowError(f"El item {item_code} no está habilitado para compra.", 400)
+                raise DocumentFlowError(
+                    _("El item %(item_code)s no está habilitado para compra.") % {"item_code": item_code}, 400
+                )
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1723,7 +1740,7 @@ def _handle_purchase_receipt_edit_post(registro):
     after_state = _capture_purchase_state(registro)
     log_update(registro, before=before_state, after=after_state)
     database.session.commit()
-    flash(_("Recepcion de compra actualizada correctamente."), "success")
+    flash(_("Recepción de compra actualizada correctamente."), "success")
     return redirect(url_for(COMPRAS_COMPRAS_RECEPCION, receipt_id=registro.id))
 
 
@@ -1736,7 +1753,7 @@ def _set_purchase_receipt_totals(receipt: PurchaseReceipt, total: Decimal) -> No
         raise ValueError(_("La recepción requiere una moneda transaccional explicita antes de recalcular totales."))
     base_currency_value = company_functional_currency(receipt.company)
     if not base_currency_value:
-        raise ValueError(_("La compania requiere una moneda funcional configurada."))
+        raise ValueError(_("La compañía requiere una moneda funcional configurada."))
     receipt.base_currency = base_currency_value
     receipt.exchange_rate = _purchase_exchange_rate(receipt.company, receipt.posting_date, receipt.transaction_currency)
     receipt.base_total = (total * receipt.exchange_rate).quantize(Decimal("0.0001"))
@@ -1753,7 +1770,7 @@ def _set_purchase_document_totals(document: Any, total: Decimal) -> None:
         raise ValueError(_("El documento de compras requiere una moneda transaccional explicita antes de recalcular totales."))
     base_currency_value = company_functional_currency(document.company)
     if not base_currency_value:
-        raise ValueError(_("La compania requiere una moneda funcional configurada."))
+        raise ValueError(_("La compañía requiere una moneda funcional configurada."))
     document.base_currency = base_currency_value
     document.exchange_rate = _purchase_exchange_rate(document.company, document.posting_date, document.transaction_currency)
     document.base_total = (total * document.exchange_rate).quantize(Decimal("0.0001"))
@@ -2236,7 +2253,7 @@ def _validate_purchase_reversal_of(
     if not source:
         raise ValueError(_("La factura origen '%(source)s' no existe.") % {"source": reversal_of})
     if source.docstatus != 1:
-        raise ValueError(_("La factura origen '%(source)s' no esta aprobada.") % {"source": reversal_of})
+        raise ValueError(_("La factura origen '%(source)s' no está aprobada.") % {"source": reversal_of})
     if supplier_id and source.supplier_id != supplier_id:
         raise ValueError(_("La factura origen '%(source)s' no pertenece al mismo proveedor.") % {"source": reversal_of})
     if company and source.company != company:
@@ -2289,7 +2306,11 @@ def _validate_purchase_reversal_of(
         credit_capacity = max(invoice_total + debited - credited, Decimal("0"))
         if note_amount > credit_capacity:
             raise ValueError(
-                f"La nota de credito ({note_amount}) excede el credito disponible de la factura origen ({credit_capacity})."
+                _(
+                    "La nota de crédito (%(note_amount)s) excede el crédito disponible de la factura origen "
+                    "(%(credit_capacity)s)."
+                )
+                % {"note_amount": note_amount, "credit_capacity": credit_capacity}
             )
 
 
@@ -2796,7 +2817,7 @@ def _create_import_landed_cost_from_request():
     remarks = request.form.get("remarks", "").strip()
 
     if not company or not posting_date:
-        flash(_("Compania y fecha son obligatorios."), "danger")
+        flash(_("Compañía y fecha son obligatorios."), "danger")
         return None
     try:
         allocation_method = validate_allocation_method(allocation_method)
