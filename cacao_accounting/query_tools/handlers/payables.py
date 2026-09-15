@@ -18,14 +18,14 @@ from cacao_accounting.query_tools.pagination import (
     paginate,
 )
 from cacao_accounting.query_tools.permissions import validate_permission
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _l
 
 _PERM_PAYABLES_REPORTS_READ = "payables.reports.read"
 
 
 @query_tool(
     name="payables.get_aging",
-    description=_("Obtiene la antigüedad de saldos de cuentas por pagar."),
+    description=_l("Obtiene la antigüedad de saldos de cuentas por pagar."),
     required_module="purchases",
     required_permission=_PERM_PAYABLES_REPORTS_READ,
     parameters_schema={
@@ -110,7 +110,7 @@ def get_payables_aging(
 
 @query_tool(
     name="payables.get_open_documents",
-    description=_("Consulta documentos de compra abiertos (pendientes de pago)."),
+    description=_l("Consulta documentos de compra abiertos (pendientes de pago)."),
     required_module="purchases",
     required_permission=_PERM_PAYABLES_REPORTS_READ,
     parameters_schema={
