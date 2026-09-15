@@ -152,7 +152,7 @@ def _handle_cash_forecast_new_post(company: str):
         database.session.query(CashForecast).filter_by(company=company, fiscal_year_id=fiscal_year_id, version=version).first()
     )
     if existing:
-        flash(_("La version '%(version)s' ya existe para este ao fiscal.") % {"version": version}, "danger")
+        flash(_("La versión '%(version)s' ya existe para este año fiscal.") % {"version": version}, "danger")
         return None
 
     forecast = CashForecast(
@@ -166,7 +166,7 @@ def _handle_cash_forecast_new_post(company: str):
     )
     database.session.add(forecast)
     database.session.commit()
-    flash(_("Pronostico de flujo de caja creado correctamente."), "success")
+    flash(_("Pronóstico de flujo de caja creado correctamente."), "success")
     return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 

@@ -758,10 +758,10 @@ def apply_payment_reconciliation(
 ) -> Reconciliation:
     """Aplica pagos existentes contra documentos AR/AP abiertos."""
     if not lines:
-        raise _document_flow_error(_("La conciliación requiere al menos una linea."))
+        raise _document_flow_error(_("La conciliación requiere al menos una línea."))
     if len(lines) > MAX_RECONCILIATION_LINES:
         raise _document_flow_error(
-            _("El numero de lineas excede el maximo permitido ({0}).").format(MAX_RECONCILIATION_LINES),
+            _("El número de líneas excede el máximo permitido ({0}).").format(MAX_RECONCILIATION_LINES),
         )
     if not company or party_type not in {"supplier", "customer"} or not party_id:
         raise _document_flow_error(_("Debe indicar compañía, tipo de tercero y tercero."))
@@ -1061,7 +1061,7 @@ def _plan_reconciliation_allocation(
     # documentos nuevos siguen llegando con ``transaction_currency``.
     document_currency = _document_transaction_currency(document) or payment_currency
     if not payment_currency:
-        raise _document_flow_error(_("La conciliación requiere moneda explicita en el pago."), 409)
+        raise _document_flow_error(_("La conciliación requiere moneda explícita en el pago."), 409)
     requested_rate = raw_line.get("payment_exchange_rate")
     if requested_rate is None and document_currency != payment_currency:
         requested_rate = raw_line.get("exchange_rate")
@@ -1213,7 +1213,7 @@ def _check_duplicate_application(payment_id: str, flow_source_type: str, documen
         .limit(1)
     ).scalar_one_or_none()
     if existing:
-        raise _document_flow_error(_("El documento ya esta aplicado a este pago."), 409)
+        raise _document_flow_error(_("El documento ya está aplicado a este pago."), 409)
 
 
 def _validate_and_get_outstanding(document: Any, allocated: Decimal, allocation_date: date) -> Decimal:

@@ -288,8 +288,8 @@ def _forecast_base_amount(outstanding: Decimal, invoice, company_currency: str, 
     if not transaction_currency:
         raise CashForecastConversionError(
             _(
-                "El documento no tiene moneda transaccional explicita; "
-                "no se puede convertir al pronostico de %(company_currency)s en %(flow_date)s."
+                "El documento no tiene moneda transaccional explícita; "
+                "no se puede convertir al pronóstico de %(company_currency)s en %(flow_date)s."
             )
             % {"company_currency": company_currency, "flow_date": flow_date}
         )

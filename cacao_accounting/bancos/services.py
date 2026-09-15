@@ -397,7 +397,7 @@ def _validate_petty_cash_account(company: str, account_id: str | None) -> Accoun
     if not account or account.entity != company:
         raise ValueError(_("La cuenta contable seleccionada no existe para la compañía."))
     if account.group or account.active is False or account.enabled is False:
-        raise ValueError(_("La cuenta contable seleccionada no esta activa o es una cuenta agrupadora."))
+        raise ValueError(_("La cuenta contable seleccionada no está activa o es una cuenta agrupadora."))
     if (account.account_type or "").strip() != "petty_cash":
         raise ValueError(_("La cuenta contable debe ser de tipo Caja Chica (petty_cash)."))
     return account
@@ -724,7 +724,7 @@ def set_petty_cash_voucher_status(voucher: PettyCashVoucher, new_status: str) ->
     allowed = _PETTY_CASH_VOUCHER_STATUS_FLOW.get(current, set())
     if new_status not in allowed:
         raise ValueError(
-            _("Transicion de estado no valida: %(current)s -> %(new_status)s") % {"current": current, "new_status": new_status}
+            _("Transición de estado no válida: %(current)s -> %(new_status)s") % {"current": current, "new_status": new_status}
         )
     if new_status == "liquidado":
         expense = database.session.get(PettyCashExpense, voucher.expense_id) if voucher.expense_id else None
@@ -1304,7 +1304,7 @@ def set_petty_cash_replenishment_status(
     transitions = {"borrador": {"solicitado"}, "solicitado": {"aprobado"}, "aprobado": {"reembolsado"}}
     if new_status not in transitions.get(current, set()):
         raise ValueError(
-            _("Transicion de reposición no valida: %(current)s -> %(new_status)s")
+            _("Transición de reposición no válida: %(current)s -> %(new_status)s")
             % {"current": current, "new_status": new_status}
         )
     replenishment.status = new_status

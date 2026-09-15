@@ -85,7 +85,7 @@ def validate_party_group(group_id: str | None, role: str) -> PartyGroup | None:
     if group.group_type != role:
         raise ValueError(_("El tipo seleccionado no corresponde al tercero."))
     if not group.is_active:
-        raise ValueError(_("El tipo seleccionado no esta activo."))
+        raise ValueError(_("El tipo seleccionado no está activo."))
     return group
 
 
@@ -100,9 +100,9 @@ def apply_party_profile(party: Party, values: Mapping[str, str | None]) -> None:
     nationality_type = (values.get("nationality_type") or "").strip() or None
     person_type = (values.get("person_type") or "").strip() or None
     if nationality_type and nationality_type not in NATIONALITY_LABELS:
-        raise ValueError(_("La nacionalidad seleccionada no es valida."))
+        raise ValueError(_("La nacionalidad seleccionada no es válida."))
     if person_type and person_type not in PERSON_TYPE_LABELS:
-        raise ValueError(_("El tipo de persona seleccionada no es valido."))
+        raise ValueError(_("El tipo de persona seleccionado no es válido."))
 
     party.nationality_type = nationality_type
     party.person_type = person_type
@@ -141,7 +141,7 @@ def _parse_date(value: str | None) -> date | None:
     try:
         return date.fromisoformat(value)
     except ValueError as exc:  # pragma: no cover - validado en rutas
-        raise ValueError(_("La fecha de constitucion no es valida.")) from exc
+        raise ValueError(_("La fecha de constitución no es válida.")) from exc
 
 
 def _choice_label(labels: Mapping[str, LazyText], value: str | None) -> str:

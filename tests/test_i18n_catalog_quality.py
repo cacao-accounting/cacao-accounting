@@ -39,7 +39,7 @@ from cacao_accounting.admin.navigation import CONFIGURATION_SECTIONS
 TRANSLATIONS_DIR = Path(__file__).resolve().parent.parent / "cacao_accounting" / "translations"
 PO_PATH = TRANSLATIONS_DIR / "en" / "LC_MESSAGES" / "messages.po"
 SOURCE_DIR = TRANSLATIONS_DIR.parent
-GETTEXT_HELPERS = frozenset({"_", "_l", "lazy_gettext"})
+GETTEXT_HELPERS = frozenset({"_", "_l", "gettext", "lazy_gettext", "ngettext", "pgettext", "npgettext"})
 
 SPANISH_ONLY_WORDS = {
     "transacciones",
@@ -140,6 +140,20 @@ def test_reported_spanglish_strings_are_translated(english_catalog, msgid, expec
         (
             "Se ha cancelado la Nota de Entrega %(document)s asociada.",
             "The associated Delivery Note %(document)s has been cancelled.",
+        ),
+        (
+            "La versión '%(version)s' ya existe para este año fiscal.",
+            "Version '%(version)s' already exists for this fiscal year.",
+        ),
+        (
+            "La cuenta contable seleccionada no está activa o es una cuenta agrupadora.",
+            "The selected accounting account is not active or is a grouping account.",
+        ),
+        ("No hay gastos pendientes para esta caja.", "No pending expenses for this petty cash fund."),
+        ("Almacén predeterminado", "Default warehouse"),
+        (
+            "Puede incluir columnas con nombres alternativos (ej: Artículo, Producto, Código).",
+            "You can include columns with alternative names (e.g.: Item, Product, Code).",
         ),
     ],
 )
@@ -304,8 +318,10 @@ def test_gettext_is_never_called_with_an_interpolated_f_string() -> None:
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id in GETTEXT_HELPERS
+                and (
+                    (isinstance(node.func, ast.Name) and node.func.id in GETTEXT_HELPERS)
+                    or (isinstance(node.func, ast.Attribute) and node.func.attr in GETTEXT_HELPERS)
+                )
                 and node.args
                 and isinstance(node.args[0], ast.JoinedStr)
             ):

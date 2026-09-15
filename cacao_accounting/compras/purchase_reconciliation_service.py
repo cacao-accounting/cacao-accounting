@@ -737,7 +737,7 @@ def _find_receipt_item_for_invoice_line(
     if not candidates:
         raise PurchaseReconciliationError(RECEIPT_LINE_NOT_FOUND_ERROR)
     if len(candidates) > 1 and invoice_item.warehouse is None:
-        raise PurchaseReconciliationError(_("La linea de factura requiere almacen para conciliar sin ambiguedad."))
+        raise PurchaseReconciliationError(_("La línea de factura requiere almacén para conciliar sin ambigüedad."))
     return candidates[0]
 
 
@@ -745,10 +745,10 @@ def _find_order_item_for_invoice_line(order_items: list[Any], invoice_item: Purc
     candidates = [order_item for order_item in order_items if _line_key(order_item)[:2] == _line_key(invoice_item)[:2]]
     if not candidates:
         raise PurchaseReconciliationError(
-            _("No existe linea de OC compatible para el item %(item_code)s.") % {"item_code": invoice_item.item_code}
+            _("No existe línea de OC compatible para el ítem %(item_code)s.") % {"item_code": invoice_item.item_code}
         )
     if len(candidates) > 1:
-        raise PurchaseReconciliationError(_("La linea de factura requiere una OC sin lineas duplicadas ambiguas."))
+        raise PurchaseReconciliationError(_("La línea de factura requiere una OC sin líneas duplicadas ambiguas."))
     return candidates[0]
 
 
@@ -1276,7 +1276,7 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
         if order_group is None:
             item_code, _uom, _warehouse = key
             raise PurchaseReconciliationError(
-                _("No existe linea de OC compatible para el item %(item_code)s.") % {"item_code": item_code}
+                _("No existe línea de OC compatible para el ítem %(item_code)s.") % {"item_code": item_code}
             )
         if invoice_group.qty <= 0:
             raise PurchaseReconciliationError(_("La cantidad facturada debe ser positiva."))

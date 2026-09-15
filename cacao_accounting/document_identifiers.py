@@ -155,7 +155,7 @@ def _pick_naming_series(entity_type: str, company: str | None, naming_series_id:
     if naming_series_id:
         selected = database.session.get(NamingSeries, naming_series_id)
         if not selected or not selected.is_active:
-            raise IdentifierConfigurationError(_("La serie seleccionada no existe o esta inactiva."))
+            raise IdentifierConfigurationError(_("La serie seleccionada no existe o está inactiva."))
         if selected.entity_type != entity_type:
             raise IdentifierConfigurationError(_("La serie seleccionada no coincide con el tipo de documento."))
         if selected.company not in (None, company):
@@ -457,7 +457,7 @@ def _get_explicit_counter(explicit_counter_id: str) -> ExternalCounter:
     if not counter:
         raise IdentifierConfigurationError(_("El contador externo indicado no existe."))
     if not counter.is_active:
-        raise IdentifierConfigurationError(_("El contador externo indicado esta inactivo."))
+        raise IdentifierConfigurationError(_("El contador externo indicado está inactivo."))
     return counter
 
 
@@ -635,7 +635,7 @@ def _validate_and_register_external_number(
     if existing:
         raise ExternalNumberDuplicateError(
             _(
-                "El numero externo '%(external_number)s' ya fue utilizado en este contador "
+                "El número externo '%(external_number)s' ya fue utilizado en este contador "
                 "por el documento %(entity_type)s/%(entity_id)s."
             )
             % {
@@ -716,7 +716,7 @@ def record_external_number_used(
     if not counter.is_active:
         raise IdentifierConfigurationError(EL_CONTADOR_EXTERNO_ESTA_INACTIVO)
     if number_used < 0:
-        raise IdentifierConfigurationError(_("El numero externo usado no puede ser negativo."))
+        raise IdentifierConfigurationError(_("El número externo usado no puede ser negativo."))
 
     if number_used > (counter.last_used or 0):
         counter.last_used = number_used
@@ -749,7 +749,7 @@ def adjust_external_counter(
     if not reason or not reason.strip():
         raise IdentifierConfigurationError(_("Debe indicar el motivo del ajuste del contador externo."))
     if new_last_used < 0:
-        raise IdentifierConfigurationError(_("El ultimo numero usado no puede ser negativo."))
+        raise IdentifierConfigurationError(_("El último número usado no puede ser negativo."))
 
     counter = database.session.get(ExternalCounter, external_counter_id)
     if not counter:
