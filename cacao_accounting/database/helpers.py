@@ -13,7 +13,7 @@ from typing import Optional
 # Librerias de terceros
 # ---------------------------------------------------------------------------------------
 from flask import Flask
-from sqlalchemy.exc import OperationalError, InterfaceError, ProgrammingError, SQLAlchemyError
+from sqlalchemy.exc import InternalError, InterfaceError, OperationalError, ProgrammingError, SQLAlchemyError
 
 # ---------------------------------------------------------------------------------------
 # Recursos locales
@@ -89,7 +89,7 @@ def entidades_creadas():
         else:
             return False
 
-    except (OperationalError, TypeError, InterfaceError, ProgrammingError):
+    except (OperationalError, TypeError, InterfaceError, ProgrammingError, InternalError):
         database.session.rollback()
         return False
 
@@ -106,19 +106,7 @@ def usuarios_creados():
         else:
             return False
 
-    except OperationalError:
-        database.session.rollback()
-        return False
-
-    except TypeError:
-        database.session.rollback()
-        return False
-
-    except InterfaceError:
-        database.session.rollback()
-        return False
-
-    except ProgrammingError:
+    except (OperationalError, TypeError, InterfaceError, ProgrammingError, InternalError):
         database.session.rollback()
         return False
 
