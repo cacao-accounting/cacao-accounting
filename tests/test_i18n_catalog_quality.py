@@ -322,8 +322,10 @@ def test_gettext_is_never_called_with_an_interpolated_f_string() -> None:
                     (isinstance(node.func, ast.Name) and node.func.id in GETTEXT_HELPERS)
                     or (isinstance(node.func, ast.Attribute) and node.func.attr in GETTEXT_HELPERS)
                 )
-                and node.args
-                and isinstance(node.args[0], ast.JoinedStr)
+                and (
+                    any(isinstance(arg, ast.JoinedStr) for arg in node.args)
+                    or any(isinstance(kw.value, ast.JoinedStr) for kw in node.keywords)
+                )
             ):
                 offenders.append(f"{path.relative_to(SOURCE_DIR.parent)}:{node.lineno}")
     assert offenders == [], f"gettext recibió f-strings ya interpolados: {offenders}"
