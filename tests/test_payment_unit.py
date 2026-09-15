@@ -911,7 +911,7 @@ class TestCheckDuplicateApplication:
         database.session.add(rel)
         database.session.commit()
 
-        with pytest.raises(ValueError, match="ya esta aplicado"):
+        with pytest.raises(ValueError, match="ya est[a\u00e1] aplicado"):
             _check_duplicate_application(payment.id, "sales_invoice", si.id)
 
 
@@ -1423,7 +1423,7 @@ class TestCreatePaymentTarget:
     def test_create_payment_missing_lines_rejected(self, app_ctx):
         from cacao_accounting.document_flow.service import create_target_document
 
-        with pytest.raises(ValueError, match="lineas"):
+        with pytest.raises(ValueError, match="l[i\u00ed]neas"):
             create_target_document(
                 {
                     "target_document_type": "payment_entry",
