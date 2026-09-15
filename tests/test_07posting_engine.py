@@ -235,7 +235,7 @@ def test_inventory_valuation_rejects_missing_transaction_currency(app_ctx):
 
     document = SimpleNamespace(base_currency="NIO", transaction_currency=None)
 
-    with pytest.raises(PostingError, match="moneda transaccional explicita"):
+    with pytest.raises(PostingError, match="moneda transaccional expl[i\u00ed]cita"):
         _inventory_value_in_functional_currency(document, Decimal("100"))
 
 

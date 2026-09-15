@@ -77,5 +77,6 @@ def test_reconcile_two_way_incompatible_item_raises_purchase_reconciliation_erro
     monkeypatch.setattr(service, "_normalized_line_uom", lambda line: line.uom)
     monkeypatch.setattr(service, "database", SimpleNamespace(session=SimpleNamespace(add=lambda x: None, flush=lambda: None)))
 
-    with pytest.raises(service.PurchaseReconciliationError, match="No existe linea de OC compatible para el item ITEM-B"):
+    msg = "No existe l[i\u00ed]nea de OC compatible para el [i\u00ed]tem ITEM-B"
+    with pytest.raises(service.PurchaseReconciliationError, match=msg):
         service._reconcile_two_way(invoice, config)
