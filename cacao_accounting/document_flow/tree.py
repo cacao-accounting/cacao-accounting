@@ -49,7 +49,7 @@ def get_document_node(document_type: str, document_id: str) -> dict[str, Any]:
         "document_type": doctype,
         "document_id": document_id,
         "document_no": getattr(document, "document_no", None) or document_id,
-        "label": label,
+        "label": str(label) if label else doctype,
         "docstatus": _resolve_docstatus(document),
         "posting_date": _serialize_date(_resolve_date(document, spec)),
         "party_name": _resolve_party_name(document, spec),
