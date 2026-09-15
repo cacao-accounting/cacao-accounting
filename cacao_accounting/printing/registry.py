@@ -60,13 +60,13 @@ from cacao_accounting.printing.context import (
     build_supplier_quotation_sample_context,
 )
 from cacao_accounting.printing.snippets import get_common_snippets
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _l
 
 
 class PrintableDocumentDefinition(TypedDict):
     """Contract for one printable document type."""
 
-    label: str
+    label: LazyText
     module: str
     root_context_name: str
     permission: str
@@ -95,7 +95,7 @@ def get_printable_document(document_type: str) -> PrintableDocumentDefinition | 
 
 def list_printable_documents() -> list[tuple[str, str]]:
     """List registered document types as ``(document_type, label)`` pairs."""
-    return sorted((key, value["label"]) for key, value in PRINTABLE_DOCUMENTS.items())
+    return sorted((key, str(value["label"])) for key, value in PRINTABLE_DOCUMENTS.items())
 
 
 def init_printing_registry() -> None:
@@ -104,7 +104,7 @@ def init_printing_registry() -> None:
     snippets = get_common_snippets()
     _register(
         "journal_entry",
-        _("Comprobante contable"),
+        _l("Comprobante contable"),
         "accounting",
         "journal_entry",
         "accounting.view",
@@ -115,7 +115,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "sales_invoice",
-        _("Factura de venta"),
+        _l("Factura de venta"),
         "sales",
         "invoice",
         _PERM_SALES_VIEW,
@@ -126,7 +126,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "sales_credit_note",
-        _("Nota de crédito de venta"),
+        _l("Nota de crédito de venta"),
         "sales",
         "invoice",
         _PERM_SALES_VIEW,
@@ -137,7 +137,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "sales_debit_note",
-        _("Nota de débito de venta"),
+        _l("Nota de débito de venta"),
         "sales",
         "invoice",
         _PERM_SALES_VIEW,
@@ -148,7 +148,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "sales_return",
-        _("Devolución de venta"),
+        _l("Devolución de venta"),
         "sales",
         "invoice",
         _PERM_SALES_VIEW,
@@ -159,7 +159,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "purchase_invoice",
-        _("Factura de compra"),
+        _l("Factura de compra"),
         "purchases",
         "invoice",
         _PERM_PURCHASES_VIEW,
@@ -170,7 +170,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "purchase_credit_note",
-        _("Nota de crédito de compra"),
+        _l("Nota de crédito de compra"),
         "purchases",
         "invoice",
         _PERM_PURCHASES_VIEW,
@@ -181,7 +181,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "purchase_debit_note",
-        _("Nota de débito de compra"),
+        _l("Nota de débito de compra"),
         "purchases",
         "invoice",
         _PERM_PURCHASES_VIEW,
@@ -192,7 +192,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "purchase_order",
-        _("Orden de compra"),
+        _l("Orden de compra"),
         "purchases",
         "purchase_order",
         _PERM_PURCHASES_VIEW,
@@ -203,7 +203,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "sales_order",
-        _("Orden de venta"),
+        _l("Orden de venta"),
         "sales",
         "sales_order",
         _PERM_SALES_VIEW,
@@ -214,7 +214,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "sales_request",
-        _("Solicitud de venta"),
+        _l("Solicitud de venta"),
         "sales",
         "sales_request",
         _PERM_SALES_VIEW,
@@ -225,7 +225,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "purchase_request",
-        _("Solicitud de compra"),
+        _l("Solicitud de compra"),
         "purchases",
         "purchase_request",
         _PERM_PURCHASES_VIEW,
@@ -236,7 +236,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "supplier_quotation",
-        _("Cotización de proveedor"),
+        _l("Cotización de proveedor"),
         "purchases",
         "supplier_quotation",
         _PERM_PURCHASES_VIEW,
@@ -247,7 +247,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "request_for_quotation",
-        _("Solicitud de cotizacion"),
+        _l("Solicitud de cotizacion"),
         "purchases",
         "request_for_quotation",
         _PERM_PURCHASES_VIEW,
@@ -258,7 +258,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "purchase_receipt",
-        _("Recepción de compra"),
+        _l("Recepción de compra"),
         "purchases",
         "purchase_receipt",
         _PERM_PURCHASES_VIEW,
@@ -269,7 +269,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "landed_cost",
-        _("Gasto de importación"),
+        _l("Gasto de importación"),
         "purchases",
         "landed_cost",
         _PERM_PURCHASES_VIEW,
@@ -280,7 +280,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "delivery_note",
-        _("Nota de entrega"),
+        _l("Nota de entrega"),
         "sales",
         "receipt",
         _PERM_SALES_VIEW,
@@ -291,7 +291,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "stock_entry",
-        _("Movimiento de inventario"),
+        _l("Movimiento de inventario"),
         "inventory",
         "adjustment",
         "inventory.view",
@@ -302,7 +302,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "payment_entry",
-        _("Comprobante de pago"),
+        _l("Comprobante de pago"),
         "cash",
         "payment",
         _PERM_CASH_VIEW,
@@ -313,7 +313,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "withholding_certificate",
-        _("Certificado de retención"),
+        _l("Certificado de retención"),
         "purchases",
         "withholding_certificate",
         _PERM_PURCHASES_VIEW,
@@ -324,7 +324,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "bank_transfer",
-        _("Transferencia bancaria"),
+        _l("Transferencia bancaria"),
         "cash",
         "payment",
         _PERM_CASH_VIEW,
@@ -335,7 +335,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "cash_receipt",
-        _("Recibo de caja"),
+        _l("Recibo de caja"),
         "cash",
         "payment",
         _PERM_CASH_VIEW,
@@ -346,7 +346,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "sales_quotation",
-        _("Cotización de venta"),
+        _l("Cotización de venta"),
         "sales",
         "quote",
         _PERM_SALES_VIEW,
@@ -357,7 +357,7 @@ def init_printing_registry() -> None:
     )
     _register(
         "exchange_revaluation",
-        _("Comprobante de revaluación"),
+        _l("Comprobante de revaluación"),
         "accounting",
         "revaluation",
         "accounting.view",
@@ -370,7 +370,7 @@ def init_printing_registry() -> None:
 
 def _register(
     document_type: str,
-    label: str,
+    label: LazyText,
     module: str,
     root_context_name: str,
     permission: str,
