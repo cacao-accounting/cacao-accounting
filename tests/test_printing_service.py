@@ -220,6 +220,25 @@ def test_status_watermark_rendering_for_draft_and_cancelled(app):
         assert "status-posted" in rendered_posted
 
 
+def test_list_printable_documents_i18n(app):
+    from flask_babel import force_locale
+    from cacao_accounting.printing.registry import init_printing_registry, list_printable_documents
+
+    with app.app_context():
+        init_printing_registry()
+
+        with app.test_request_context():
+            with force_locale("es"):
+                docs_es = dict(list_printable_documents())
+                assert docs_es["journal_entry"] == "Comprobante contable"
+                assert docs_es["sales_invoice"] == "Factura de venta"
+
+            with force_locale("en"):
+                docs_en = dict(list_printable_documents())
+                assert docs_en["journal_entry"] == "Accounting Entry"
+                assert docs_en["sales_invoice"] == "Sales Invoice"
+
+
 def test_seed_preserves_customized_system_template(app):
     from cacao_accounting.printing.seed import SEED_TEMPLATE_VERSION, seed_print_templates
 
