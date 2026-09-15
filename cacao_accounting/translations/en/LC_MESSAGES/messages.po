@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSIO\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-15 03:41+0000\n"
+"POT-Creation-Date: 2026-09-15 16:43+0000\n"
 "PO-Revision-Date: 2026-08-23 16:28+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -311,7 +311,7 @@ msgstr ""
 #: cacao_accounting/contabilidad/routes.py:3291
 #: cacao_accounting/inventario/routes.py:1022
 #: cacao_accounting/ventas/routes.py:1997
-#: cacao_accounting/ventas/routes.py:2412
+#: cacao_accounting/ventas/routes.py:2415
 msgid "Debe indicar el motivo de la anulación."
 msgstr "You must indicate the reason for the cancellation."
 
@@ -1674,6 +1674,9 @@ msgid "Idioma del sistema"
 msgstr "System Language"
 
 #: cacao_accounting/admin/navigation.py:44
+#: cacao_accounting/admin/templates/admin/external_document_validation.html:6
+#: cacao_accounting/admin/templates/admin/external_document_validation.html:11
+#: cacao_accounting/printing/templates/admin/print_validation_settings.html:6
 msgid "Validación externa de documentos"
 msgstr "External Document Validation"
 
@@ -2967,6 +2970,7 @@ msgstr "Account Configuration"
 #: cacao_accounting/admin/templates/admin/inventory_valuation.html:24
 #: cacao_accounting/auth/templates/test_roles.html:76
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:40
+#: cacao_accounting/bancos/templates/bancos/cash_forecast_entradas.html:227
 #: cacao_accounting/bancos/templates/bancos/pago_nuevo.html:1024
 #: cacao_accounting/bancos/templates/bancos/pago_nuevo.html:1093
 #: cacao_accounting/compras/templates/compras/solicitud_compra.html:38
@@ -2982,6 +2986,7 @@ msgstr "Account Configuration"
 #: cacao_accounting/templates/detail_view_macros.html:220
 #: cacao_accounting/templates/macros.html:746
 #: cacao_accounting/templates/macros.html:1018
+#: cacao_accounting/templates/public/confirm_balance_verify.html:19
 #: cacao_accounting/templates/transaction_form_macros.html:581
 #: cacao_accounting/templates/transaction_form_macros.html:703
 #: cacao_accounting/templates/transaction_form_macros.html:807
@@ -3880,25 +3885,19 @@ msgstr "e.g. test@example.com"
 msgid "Enviar Correo de Prueba"
 msgstr "Send Test Email"
 
-#: cacao_accounting/admin/templates/admin/external_document_validation.html:6
-#: cacao_accounting/admin/templates/admin/external_document_validation.html:11
-#: cacao_accounting/printing/templates/admin/print_validation_settings.html:6
-msgid "External Document Validation"
-msgstr "External Document Validation"
-
 #: cacao_accounting/admin/templates/admin/external_document_validation.html:17
 #: cacao_accounting/printing/templates/admin/print_validation_settings.html:25
-msgid "Enabled"
+msgid "Habilitada"
 msgstr "Enabled"
 
 #: cacao_accounting/admin/templates/admin/external_document_validation.html:21
 #: cacao_accounting/printing/templates/admin/print_validation_settings.html:30
-msgid "Base URL"
+msgid "URL base"
 msgstr "Base URL"
 
 #: cacao_accounting/admin/templates/admin/external_document_validation.html:23
 #, python-format
-msgid "Fallback: %(fallback)s"
+msgid "Alternativa: %(fallback)s"
 msgstr "Fallback: %(fallback)s"
 
 #: cacao_accounting/admin/templates/admin/inventory_valuation.html:55
@@ -3951,10 +3950,21 @@ msgstr "No companies configured."
 
 #: cacao_accounting/admin/templates/admin/item_prices.html:6
 #: cacao_accounting/admin/templates/admin/item_prices.html:19
+#: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:81
+#: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:129
+#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:68
+#: cacao_accounting/compras/templates/compras/comparativo_solicitud.html:122
 #: cacao_accounting/compras/templates/compras/gr_ir.html:32
+#: cacao_accounting/compras/templates/compras/purchase_reconciliation.html:237
+#: cacao_accounting/inventario/forms.py:65
+#: cacao_accounting/inventario/templates/inventario/lote.html:25
+#: cacao_accounting/inventario/templates/inventario/lote_lista.html:29
 #: cacao_accounting/inventario/templates/inventario/stock_reconciliation_nuevo.html:131
+#: cacao_accounting/reportes/templates/reportes/operational_report.html:35
 #: cacao_accounting/reportes/templates/reportes/report_table.html:29
-msgid "Item"
+#: cacao_accounting/templates/macros.html:950
+#: cacao_accounting/templates/macros.html:1114
+msgid "Artículo"
 msgstr "Item"
 
 #: cacao_accounting/admin/templates/admin/item_prices.html:8
@@ -4532,6 +4542,7 @@ msgstr "Price List Listing"
 #: cacao_accounting/contabilidad/templates/contabilidad/naming_series_lista.html:55
 #: cacao_accounting/contabilidad/templates/contabilidad/naming_series_lista.html:80
 #: cacao_accounting/contabilidad/templates/contabilidad/naming_series_nueva.html:70
+#: cacao_accounting/printing/templates/admin/print_template_list.html:28
 msgid "Predeterminada"
 msgstr "Default"
 
@@ -4642,8 +4653,10 @@ msgstr "Reconciliation configurations"
 
 #: cacao_accounting/admin/templates/admin/purchase_reconciliation_config.html:140
 #: cacao_accounting/admin/templates/admin/sales_matching_config.html:109
-msgid "Matching"
-msgstr "Matching"
+#: cacao_accounting/api/dashboard.py:375
+#: cacao_accounting/compras/templates/compras.html:161
+msgid "Conciliación"
+msgstr "Reconciliation"
 
 #: cacao_accounting/admin/templates/admin/purchase_reconciliation_config.html:141
 #: cacao_accounting/admin/templates/admin/sales_matching_config.html:110
@@ -5766,11 +5779,6 @@ msgstr "Movements"
 #: cacao_accounting/api/dashboard.py:374
 msgid "Movimiento"
 msgstr "Movement"
-
-#: cacao_accounting/api/dashboard.py:375
-#: cacao_accounting/compras/templates/compras.html:161
-msgid "Conciliación"
-msgstr "Reconciliation"
 
 #: cacao_accounting/api/dashboard.py:376
 msgid "Valuación"
@@ -9250,24 +9258,24 @@ msgid "Período / Zona"
 msgstr "Period / Zone"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html:84
-msgid "Base Projected (A)"
-msgstr "Base Projected (A)"
+msgid "Proyección base (A)"
+msgstr "Base projection (A)"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html:85
-msgid "Compare Projected (B)"
-msgstr "Compare Projected (B)"
+msgid "Proyección comparada (B)"
+msgstr "Comparison projection (B)"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html:86
 msgid "Varianza"
 msgstr "Variance"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html:87
-msgid "Manual Inflow Var"
-msgstr "Manual Inflow Var"
+msgid "Variación manual de entradas"
+msgstr "Manual inflow variance"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html:88
-msgid "Manual Outflow Var"
-msgstr "Manual Outflow Var"
+msgid "Variación manual de salidas"
+msgstr "Manual outflow variance"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_comparar.html:121
 msgid ""
@@ -9385,16 +9393,16 @@ msgid "Zona Temporal"
 msgstr "Time Zone"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:105
-msgid "Real (ERP Posted)"
-msgstr "Actual (ERP Posted)"
+msgid "Real (contabilizado en ERP)"
+msgstr "Actual (posted in ERP)"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:106
-msgid "Current (ERP + AR/AP)"
+msgid "Actual (ERP + CxC/CxP)"
 msgstr "Current (ERP + AR/AP)"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:107
-msgid "Projected (Manual + ERP)"
-msgstr "Projected (Manual + ERP)"
+msgid "Proyectado (manual + ERP)"
+msgstr "Projected (manual + ERP)"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:116
 #: cacao_accounting/contabilidad/templates/contabilidad/presupuestos/real_vs_budget.html:79
@@ -9402,11 +9410,11 @@ msgid "Real"
 msgstr "Actual"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:118
-msgid "Current"
+msgid "Actual"
 msgstr "Current"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:120
-msgid "Projected"
+msgid "Proyectado"
 msgstr "Projected"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_detalle.html:136
@@ -9551,11 +9559,6 @@ msgstr "Delete line"
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_entradas.html:226
 msgid "Editar Proyección Manual"
 msgstr "Edit Manual Projection"
-
-#: cacao_accounting/bancos/templates/bancos/cash_forecast_entradas.html:227
-#: cacao_accounting/templates/public/confirm_balance_verify.html:19
-msgid "Close"
-msgstr "Close"
 
 #: cacao_accounting/bancos/templates/bancos/cash_forecast_entradas.html:272
 #: cacao_accounting/contabilidad/templates/contabilidad/entidad_editar.html:20
@@ -10848,9 +10851,7 @@ msgstr "The return and the original receipt must share company and supplier."
 msgid ""
 "La línea de devolución no corresponde de forma unívoca a la recepción "
 "original."
-msgstr ""
-"The return line does not correspond unambiguously to the original "
-"receipt."
+msgstr "The return line does not correspond unambiguously to the original receipt."
 
 #: cacao_accounting/compras/purchase_reconciliation_service.py:430
 msgid "La devolución excede la cantidad recibida original."
@@ -12054,8 +12055,8 @@ msgid "Notas de Crédito y Devoluciones"
 msgstr "Credit Notes and Returns"
 
 #: cacao_accounting/compras/templates/compras.html:110
-msgid "Import Landed Cost"
-msgstr "Import Landed Cost"
+msgid "Importar costos de importación"
+msgstr "Import landed costs"
 
 #: cacao_accounting/compras/templates/compras.html:134
 #: cacao_accounting/reportes/routes.py:732
@@ -12101,8 +12102,8 @@ msgid "Cerrado manualmente"
 msgstr "Manually closed"
 
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:31
-msgid "Total RFQ"
-msgstr "Total RFQ"
+msgid "Total de la solicitud de cotización"
+msgstr "RFQ total"
 
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:39
 #: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:37
@@ -12155,20 +12156,6 @@ msgstr "Awarded lines"
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:80
 msgid "Detalle de líneas adjudicadas."
 msgstr "Awarded lines detail."
-
-#: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:81
-#: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:129
-#: cacao_accounting/compras/templates/compras/comparativo_ordenes.html:68
-#: cacao_accounting/compras/templates/compras/comparativo_solicitud.html:122
-#: cacao_accounting/compras/templates/compras/purchase_reconciliation.html:237
-#: cacao_accounting/inventario/forms.py:65
-#: cacao_accounting/inventario/templates/inventario/lote.html:25
-#: cacao_accounting/inventario/templates/inventario/lote_lista.html:29
-#: cacao_accounting/reportes/templates/reportes/operational_report.html:35
-#: cacao_accounting/templates/macros.html:950
-#: cacao_accounting/templates/macros.html:1114
-msgid "Artículo"
-msgstr "Item"
 
 #: cacao_accounting/compras/templates/compras/comparativo_ofertas.html:81
 msgid "Tarifa"
@@ -12578,8 +12565,8 @@ msgid "Metodo de Prorrateo"
 msgstr "Apportionment Method"
 
 #: cacao_accounting/compras/templates/compras/import_landed_cost.html:54
-msgid "Total Base"
-msgstr "Total Base"
+msgid "Total base"
+msgstr "Base total"
 
 #: cacao_accounting/compras/templates/compras/import_landed_cost.html:55
 msgid "Total Cargos"
@@ -20428,7 +20415,7 @@ msgstr "Serial Numbers"
 
 #: cacao_accounting/inventario/templates/inventario/articulo.html:12
 #: cacao_accounting/inventario/templates/inventario/articulo_nuevo.html:12
-msgid "Items"
+msgid "Artículos"
 msgstr "Items"
 
 #: cacao_accounting/inventario/templates/inventario/articulo.html:31
@@ -20891,8 +20878,8 @@ msgid "Líneas de conciliación"
 msgstr "Reconciliation Lines"
 
 #: cacao_accounting/inventario/templates/inventario/stock_reconciliation_nuevo.html:128
-msgid "Stock Reconciliation"
-msgstr "Stock Reconciliation"
+msgid "Conciliación de existencias"
+msgstr "Stock reconciliation"
 
 #: cacao_accounting/inventario/templates/inventario/stock_reconciliation_nuevo.html:133
 msgid "Cantidad actual"
@@ -21400,10 +21387,6 @@ msgstr ""
 msgid "Formatos de impresión registrados"
 msgstr "Registered print templates"
 
-#: cacao_accounting/printing/templates/admin/print_template_list.html:28
-msgid "Default"
-msgstr "Default"
-
 #: cacao_accounting/printing/templates/admin/print_template_list.html:66
 msgid "Publicar"
 msgstr "Publish"
@@ -21464,14 +21447,14 @@ msgstr "The module '%(module_name)s' is disabled."
 msgid "No tiene permisos para consultar este recurso."
 msgstr "You do not have permission to query this resource."
 
-#: cacao_accounting/query_tools/registry.py:26
+#: cacao_accounting/query_tools/registry.py:33
 #, python-format
 msgid ""
 "La herramienta '%(tool)s' ya está registrada. Los nombres deben ser "
 "únicos."
 msgstr "Tool '%(tool)s' is already registered. Names must be unique."
 
-#: cacao_accounting/query_tools/registry.py:30
+#: cacao_accounting/query_tools/registry.py:37
 #, python-format
 msgid ""
 "La herramienta '%(tool)s' debe declarar read_only=True. Las operaciones "
@@ -21480,7 +21463,7 @@ msgstr ""
 "Tool '%(tool)s' must declare read_only=True. Write operations are not "
 "allowed."
 
-#: cacao_accounting/query_tools/registry.py:41
+#: cacao_accounting/query_tools/registry.py:48
 #, python-format
 msgid "Herramienta '%(name)s' no encontrada."
 msgstr "Tool '%(name)s' not found."
@@ -22300,21 +22283,20 @@ msgid "El recurso solicitado no pudo ser encontrado."
 msgstr "The requested resource could not be found."
 
 #: cacao_accounting/templates/detail_view_macros.html:3
-msgid "draft"
-msgstr "draft"
+msgid "borrador"
+msgstr "Draft"
 
 #: cacao_accounting/templates/detail_view_macros.html:9
-msgid "submitted"
-msgstr "submitted"
+msgid "presentado"
+msgstr "Submitted"
 
 #: cacao_accounting/templates/detail_view_macros.html:12
-msgid "rejected"
-msgstr "rejected"
+msgid "rechazado"
+msgstr "Rejected"
 
 #: cacao_accounting/templates/detail_view_macros.html:15
-#: cacao_accounting/templates/tasks/my.html:23
-msgid "cancelled"
-msgstr "cancelled"
+msgid "anulado"
+msgstr "Cancelled"
 
 #: cacao_accounting/templates/detail_view_macros.html:93
 msgid "Seleccione una línea para ver detalle"
@@ -23512,19 +23494,23 @@ msgid "Confirmación"
 msgstr "Confirmation"
 
 #: cacao_accounting/templates/tasks/my.html:23
-msgid "open"
+msgid "abierta"
 msgstr "Open"
 
 #: cacao_accounting/templates/tasks/my.html:23
-msgid "in_progress"
+msgid "en curso"
 msgstr "In progress"
 
 #: cacao_accounting/templates/tasks/my.html:23
-msgid "completed"
+msgid "completada"
 msgstr "Completed"
 
+#: cacao_accounting/templates/tasks/my.html:23
+msgid "anulada"
+msgstr "Cancelled"
+
 #: cacao_accounting/templates/tasks/my.html:33
-msgid "low"
+msgid "baja"
 msgstr "Low"
 
 #: cacao_accounting/templates/tasks/my.html:33
@@ -23532,7 +23518,7 @@ msgid "normal"
 msgstr "Normal"
 
 #: cacao_accounting/templates/tasks/my.html:33
-msgid "high"
+msgid "alta"
 msgstr "High"
 
 #: cacao_accounting/templates/tasks/my.html:69
@@ -23786,18 +23772,18 @@ msgstr "Edit Sales Invoice"
 msgid "Factura de venta duplicada como nuevo borrador."
 msgstr "Sales Invoice duplicated as a new draft."
 
-#: cacao_accounting/ventas/routes.py:2383
+#: cacao_accounting/ventas/routes.py:2384
 #, python-format
-msgid "Se ha creado y aprobado la Nota de Entrega %s asociada a esta factura."
-msgstr ""
-"The Delivery Note %s associated with this invoice has been created and "
-"approved."
+msgid ""
+"Se ha creado y aprobado la Nota de Entrega %(document)s asociada a esta "
+"factura."
+msgstr "The Delivery Note %(document)s associated with this invoice has been created and approved."
 
-#: cacao_accounting/ventas/routes.py:2394
+#: cacao_accounting/ventas/routes.py:2397
 msgid "Factura de venta aprobada y contabilizada."
 msgstr "Sales Invoice approved and posted."
 
-#: cacao_accounting/ventas/routes.py:2415
+#: cacao_accounting/ventas/routes.py:2418
 msgid ""
 "No se puede cancelar la factura de venta porque tiene documentos "
 "financieros activos."
@@ -23805,15 +23791,15 @@ msgstr ""
 "The sales invoice cannot be cancelled because it has active financial "
 "documents."
 
-#: cacao_accounting/ventas/routes.py:2457
+#: cacao_accounting/ventas/routes.py:2460
 msgid "Factura de venta cancelada con reverso contable."
 msgstr "Sales Invoice cancelled with reversing entry."
 
-#: cacao_accounting/ventas/routes.py:2469
+#: cacao_accounting/ventas/routes.py:2472
 msgid "Cliente habilitado como proveedor exitosamente."
 msgstr "Customer enabled as supplier successfully."
 
-#: cacao_accounting/ventas/routes.py:2484
+#: cacao_accounting/ventas/routes.py:2487
 msgid "Rol de proveedor deshabilitado exitosamente."
 msgstr "Supplier role disabled successfully."
 
@@ -24048,8 +24034,9 @@ msgid "Orden de venta creada correctamente."
 msgstr "Sales order created successfully."
 
 #: cacao_accounting/ventas/services.py:1953
-msgid "Error inesperado al crear la orden de venta: "
-msgstr "Unexpected error when creating sales order:"
+#, python-format
+msgid "Error inesperado al crear la orden de venta: %(error)s"
+msgstr "Unexpected error when creating the sales order: %(error)s"
 
 #: cacao_accounting/ventas/services.py:1981
 msgid "Cotización de venta actualizada correctamente."
@@ -24069,8 +24056,8 @@ msgstr "Sales Invoice updated successfully."
 
 #: cacao_accounting/ventas/services.py:2332
 #, python-format
-msgid "Se ha cancelado la Nota de Entrega %s asociada."
-msgstr "The associated Delivery Note %s has been cancelled."
+msgid "Se ha cancelado la Nota de Entrega %(document)s asociada."
+msgstr "The associated Delivery Note %(document)s has been cancelled."
 
 #: cacao_accounting/ventas/services.py:2379
 #, python-format
@@ -24423,4 +24410,85 @@ msgstr "New Order"
 #~ msgstr ""
 #~ "The customer has overdue invoices and"
 #~ " its configuration blocks new sales. "
+
+#~ msgid "External Document Validation"
+#~ msgstr "External Document Validation"
+
+#~ msgid "Enabled"
+#~ msgstr "Enabled"
+
+#~ msgid "Base URL"
+#~ msgstr "Base URL"
+
+#~ msgid "Item"
+#~ msgstr "Item"
+
+#~ msgid "Matching"
+#~ msgstr "Matching"
+
+#~ msgid "Base Projected (A)"
+#~ msgstr "Base Projected (A)"
+
+#~ msgid "Compare Projected (B)"
+#~ msgstr "Compare Projected (B)"
+
+#~ msgid "Manual Inflow Var"
+#~ msgstr "Manual Inflow Var"
+
+#~ msgid "Manual Outflow Var"
+#~ msgstr "Manual Outflow Var"
+
+#~ msgid "Real (ERP Posted)"
+#~ msgstr "Actual (ERP Posted)"
+
+#~ msgid "Current"
+#~ msgstr "Current"
+
+#~ msgid "Projected"
+#~ msgstr "Projected"
+
+#~ msgid "Close"
+#~ msgstr "Close"
+
+#~ msgid "Import Landed Cost"
+#~ msgstr "Import Landed Cost"
+
+#~ msgid "Total RFQ"
+#~ msgstr "Total RFQ"
+
+#~ msgid "Items"
+#~ msgstr "Items"
+
+#~ msgid "Stock Reconciliation"
+#~ msgstr "Stock Reconciliation"
+
+#~ msgid "Default"
+#~ msgstr "Default"
+
+#~ msgid "draft"
+#~ msgstr "draft"
+
+#~ msgid "submitted"
+#~ msgstr "submitted"
+
+#~ msgid "rejected"
+#~ msgstr "rejected"
+
+#~ msgid "cancelled"
+#~ msgstr "cancelled"
+
+#~ msgid "open"
+#~ msgstr "Open"
+
+#~ msgid "in_progress"
+#~ msgstr "In progress"
+
+#~ msgid "completed"
+#~ msgstr "Completed"
+
+#~ msgid "low"
+#~ msgstr "Low"
+
+#~ msgid "high"
+#~ msgstr "High"
 

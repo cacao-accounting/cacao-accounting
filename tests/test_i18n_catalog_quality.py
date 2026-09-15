@@ -31,6 +31,7 @@ except ImportError:
 import pytest
 from flask import Flask
 from flask_babel import Babel, force_locale
+from babel.messages.pofile import read_po
 from babel.support import Translations
 
 from cacao_accounting.admin.navigation import CONFIGURATION_SECTIONS
@@ -123,6 +124,31 @@ def test_document_status_labels_translate(english_catalog, msgid, expected):
 def test_reported_spanglish_strings_are_translated(english_catalog, msgid, expected):
     """Cadenas reportadas con Spanglish quedan correctamente traducidas."""
     assert english_catalog.gettext(msgid) == expected
+
+
+@pytest.mark.parametrize(
+    ("msgid", "expected"),
+    [
+        ("Validación externa de documentos", "External Document Validation"),
+        ("Variación manual de entradas", "Manual inflow variance"),
+        ("Actual (ERP + CxC/CxP)", "Current (ERP + AR/AP)"),
+        ("Importar costos de importación", "Import landed costs"),
+        ("Conciliación de existencias", "Stock reconciliation"),
+        ("Artículos", "Items"),
+        ("Predeterminada", "Default"),
+        ("en curso", "In progress"),
+        (
+            "Se ha cancelado la Nota de Entrega %(document)s asociada.",
+            "The associated Delivery Note %(document)s has been cancelled.",
+        ),
+    ],
+)
+def test_new_source_spanish_messages_have_english_catalog_entries(msgid, expected):
+    """Los textos normalizados al español conservan su traducción inglesa."""
+    with PO_PATH.open("rb") as catalog_file:
+        catalog = read_po(catalog_file)
+
+    assert catalog.get(msgid).string == expected
 
 
 def test_catalog_has_no_spanish_leftovers():
