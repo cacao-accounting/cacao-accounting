@@ -34,7 +34,7 @@ from cacao_accounting.runtime_mode import is_desktop_mode
 
 from typing import Any
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 _MAGIC_EXCEPTION: type[BaseException] = ImportError
 
@@ -58,7 +58,7 @@ imports = Blueprint("imports", __name__, template_folder="templates")
 
 _ENDPOINT_IMPORTS_DETAIL = "imports.detail"
 _ENDPOINT_IMPORTS_NEW = "imports.new"
-_INVALID_FILE_TYPE_MSG = "Error al validar el tipo de archivo"
+_INVALID_FILE_TYPE_MSG = _l("Error al validar el tipo de archivo")
 
 
 def check_desktop_mode():
@@ -156,40 +156,40 @@ def new():
 
     record_type_groups = [
         {
-            "label": "Source to Pay",
+            "label": _("Source to Pay"),
             "items": [
-                {"value": "purchase_request", "label": "Solicitud de Compra"},
-                {"value": "purchase_quotation", "label": "Solicitud de Cotización"},
-                {"value": "supplier_quotation", "label": "Cotización de Proveedor"},
-                {"value": "purchase_order", "label": "Orden de Compra"},
-                {"value": "purchase_receipt", "label": "Recepción de Compra"},
-                {"value": "purchase_invoice", "label": "Factura de Compra"},
+                {"value": "purchase_request", "label": _("Solicitud de Compra")},
+                {"value": "purchase_quotation", "label": _("Solicitud de Cotización")},
+                {"value": "supplier_quotation", "label": _("Cotización de Proveedor")},
+                {"value": "purchase_order", "label": _("Orden de Compra")},
+                {"value": "purchase_receipt", "label": _("Recepción de Compra")},
+                {"value": "purchase_invoice", "label": _("Factura de Compra")},
             ],
         },
         {
-            "label": "Order to Cash",
+            "label": _("Order to Cash"),
             "items": [
-                {"value": "sales_request", "label": "Pedido de Venta"},
-                {"value": "sales_quotation", "label": "Cotización de Venta"},
-                {"value": "sales_order", "label": "Orden de Venta"},
-                {"value": "delivery_note", "label": "Nota de Entrega"},
-                {"value": "sales_invoice", "label": "Factura de Venta"},
+                {"value": "sales_request", "label": _("Pedido de Venta")},
+                {"value": "sales_quotation", "label": _("Cotización de Venta")},
+                {"value": "sales_order", "label": _("Orden de Venta")},
+                {"value": "delivery_note", "label": _("Nota de Entrega")},
+                {"value": "sales_invoice", "label": _("Factura de Venta")},
             ],
         },
         {
-            "label": "Contabilidad y Maestros",
+            "label": _("Contabilidad y Maestros"),
             "items": [
-                {"value": "journal_entry", "label": "Comprobantes Contables"},
-                {"value": "chart_of_accounts", "label": "Catálogo de Cuentas"},
-                {"value": "customer", "label": "Clientes"},
-                {"value": "vendor", "label": "Proveedores"},
+                {"value": "journal_entry", "label": _("Comprobantes Contables")},
+                {"value": "chart_of_accounts", "label": _("Catálogo de Cuentas")},
+                {"value": "customer", "label": _("Clientes")},
+                {"value": "vendor", "label": _("Proveedores")},
             ],
         },
         {
-            "label": "Caja y Bancos",
+            "label": _("Caja y Bancos"),
             "items": [
-                {"value": "bank_statement", "label": "Extractos Bancarios"},
-                {"value": "cash_forecast_entry", "label": "Entradas de Pronóstico de Caja"},
+                {"value": "bank_statement", "label": _("Extractos Bancarios")},
+                {"value": "cash_forecast_entry", "label": _("Entradas de Pronóstico de Caja")},
             ],
         },
     ]
@@ -267,7 +267,7 @@ def _validate_mime_type(file: Any) -> bool:
         file.seek(0)
         mime = magic_modulo.from_buffer(chunk, mime=True)
     except (ImportError, OSError, _MAGIC_EXCEPTION):
-        flash(_INVALID_FILE_TYPE_MSG, "danger")
+        flash(str(_INVALID_FILE_TYPE_MSG), "danger")
         return False
     if mime not in _ALLOWED_MIMES:
         flash(_("Tipo de archivo no válido"), "danger")

@@ -43,7 +43,7 @@ def _decimal(value: Any) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError) as exc:
-        raise AllocationError(f"Monto inválido: {value!r}.") from exc
+        raise AllocationError(_("Monto inválido: %(value)r.") % {"value": value}) from exc
 
 
 @dataclass(frozen=True)
@@ -186,7 +186,7 @@ class OpenItemResolver:
         """Añade un documento al índice."""
         key = self._key(item)
         if key in self._items:
-            raise AllocationError(f"El documento {item.document_id} está duplicado.")
+            raise AllocationError(_("El documento %(document_id)s está duplicado.") % {"document_id": item.document_id})
         self._items[key] = item
 
     def resolve(self, document_id: str) -> ARAPOpenItem:
@@ -198,8 +198,11 @@ class OpenItemResolver:
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            raise AllocationError(f"El documento {document_id} tiene varias líneas abiertas; indique el open item.")
-        raise AllocationError(f"No existe open item para {document_id}.")
+            raise AllocationError(
+                _("El documento %(document_id)s tiene varias líneas abiertas; indique el open item.")
+                % {"document_id": document_id}
+            )
+        raise AllocationError(_("No existe open item para %(document_id)s.") % {"document_id": document_id})
 
     def all(self) -> tuple[ARAPOpenItem, ...]:
         """Devuelve una instantánea de los documentos indexados."""
@@ -211,7 +214,9 @@ class OpenItemResolver:
         key = self._key(item)
         amount = _decimal(amount)
         if amount <= 0 or amount > item.outstanding:
-            raise AllocationOverpaymentError(f"La asignación excede el saldo de {document_id}.")
+            raise AllocationOverpaymentError(
+                _("La asignación excede el saldo de %(document_id)s.") % {"document_id": document_id}
+            )
         self._items[key] = ARAPOpenItem(
             document_id=item.document_id,
             document_type=item.document_type,
@@ -346,7 +351,7 @@ def resolve_open_item(
         if item.document_id == document_id and (document_type is None or item.document_type == document_type)
     ]
     if len(matches) != 1:
-        raise AllocationError(f"No existe un open item único para {document_id}.")
+        raise AllocationError(_("No existe un open item único para %(document_id)s.") % {"document_id": document_id})
     return matches[0]
 
 
@@ -379,11 +384,15 @@ class AllocationPlanner:
                 continue
             amount = item.outstanding if request.amount is None else _decimal(request.amount)
             if amount <= 0:
-                raise AllocationError(f"El importe aplicado a {item.document_id} debe ser mayor que cero.")
+                raise AllocationError(
+                    _("El importe aplicado a %(document_id)s debe ser mayor que cero.") % {"document_id": item.document_id}
+                )
             item_key = self.resolver._key(item)
             total = requested.get(item_key, Decimal("0")) + amount
             if total > item.outstanding:
-                raise AllocationOverpaymentError(f"La asignación excede el saldo de {item.document_id}.")
+                raise AllocationOverpaymentError(
+                    _("La asignación excede el saldo de %(document_id)s.") % {"document_id": item.document_id}
+                )
             requested[item_key] = total
             rate = self._rate(item.currency, source_currency, request.rate)
             source_line = (amount * rate).quantize(Decimal("0.0001"))
@@ -442,7 +451,7 @@ class AllocationExecutor:
                 key = line.idempotency_key
                 if key and key in self._applied:
                     if self._applied[key] != line:
-                        raise AllocationIdempotencyError(f"La clave {key} ya fue usada con otro importe.")
+                        raise AllocationIdempotencyError(_("La clave %(key)s ya fue usada con otro importe.") % {"key": key})
                     output.append(line)
                     continue
                 self.resolver.consume(line.document_id, line.document_amount)

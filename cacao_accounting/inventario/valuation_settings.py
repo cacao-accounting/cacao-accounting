@@ -31,7 +31,7 @@ def normalize_valuation_method(method: str | None) -> str:
     """Normaliza un metodo de valuacion y aplica el default del sistema."""
     value = (method or MOVING_AVERAGE).strip().lower()
     if value not in VALUATION_METHOD_LABELS:
-        raise ValueError(_("El metodo de valuacion seleccionado no es valido."))
+        raise ValueError(_("El método de valuacion seleccionado no es valido."))
     return value
 
 
@@ -39,7 +39,7 @@ def get_company_valuation_method(company_code: str) -> str:
     """Obtiene el metodo de valuacion configurado para una compania."""
     entity = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
     if entity is None:
-        raise ValueError(_("La compania seleccionada no existe."))
+        raise ValueError(_("La compañía seleccionada no existe."))
     return normalize_valuation_method(entity.valuation_method)
 
 
@@ -62,14 +62,14 @@ def update_company_valuation_method(company_code: str, method: str) -> Entity:
     normalized_method = normalize_valuation_method(method)
     entity = database.session.execute(database.select(Entity).filter_by(code=company_code)).scalar_one_or_none()
     if entity is None:
-        raise ValueError(_("La compania seleccionada no existe."))
+        raise ValueError(_("La compañía seleccionada no existe."))
 
     current_method = normalize_valuation_method(entity.valuation_method)
     if current_method == normalized_method:
         return entity
 
     if company_has_inventory_activity(company_code):
-        raise ValueError(_("No se puede cambiar la valuacion porque la compania ya tiene operacion de inventario."))
+        raise ValueError(_("No se puede cambiar la valuacion porque la compañía ya tiene operacion de inventario."))
 
     entity.valuation_method = normalized_method
     database.session.add(entity)

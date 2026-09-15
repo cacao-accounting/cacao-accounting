@@ -20,7 +20,7 @@
         <label class="form-label small fw-semibold" for="status">{{ _('Estado') }}</label>
         <select class="form-select form-select-sm" id="status" name="status">
           <option value="">{{ _('Todos') }}</option>
-          {% set labels = {'open': _('open'), 'in_progress': _('in_progress'), 'completed': _('completed'), 'cancelled': _('cancelled')} %}
+          {% set labels = {'open': _('abierta'), 'in_progress': _('en curso'), 'completed': _('completada'), 'cancelled': _('anulada')} %}
           {% for value in ['open', 'in_progress', 'completed', 'cancelled'] %}
           <option value="{{ value }}" {% if request.args.get('status') == value %}selected{% endif %}>{{ labels[value] }}</option>
           {% endfor %}
@@ -30,7 +30,7 @@
         <label class="form-label small fw-semibold" for="priority">{{ _('Prioridad') }}</label>
         <select class="form-select form-select-sm" id="priority" name="priority">
           <option value="">{{ _('Todas') }}</option>
-          {% set labels = {'low': _('low'), 'normal': _('normal'), 'high': _('high')} %}
+          {% set labels = {'low': _('baja'), 'normal': _('normal'), 'high': _('alta')} %}
           {% for value in ['low', 'normal', 'high'] %}
           <option value="{{ value }}" {% if request.args.get('priority') == value %}selected{% endif %}>{{ labels[value] }}</option>
           {% endfor %}

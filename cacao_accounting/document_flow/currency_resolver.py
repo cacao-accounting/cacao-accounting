@@ -6,13 +6,13 @@
 Refs: #758
 
 El contrato de moneda exige que toda transaccion persistida tenga una
-moneda transaccional explicita y que el posting rechace cualquier inferencia
+moneda transaccional explícita y que el posting rechace cualquier inferencia
 silenciosa. Este modulo concentra la prelacion:
 
-    1. Moneda seleccionada explicitamente por el usuario.
+    1. Moneda seleccionada explícitamente por el usuario.
     2. Moneda del documento origen en Document Flow (heredada, no sustituible).
     3. Moneda predeterminada del tercero.
-    4. Moneda funcional de la compania.
+    4. Moneda funcional de la compañía.
 
 Cuando existe un origen de Document Flow la moneda se hereda obligatoriamente;
 el usuario no puede sustituirla y los origenes deben compartir moneda o la
@@ -39,9 +39,9 @@ class ResolvedCurrency:
 
 
 def company_functional_currency(company: str | None) -> str | None:
-    """Devuelve la moneda funcional vigente de la compania o ``None``.
+    """Devuelve la moneda funcional vigente de la compañía o ``None``.
 
-    No aplica fallback; devuelve ``None`` cuando la compania no existe o no
+    No aplica fallback; devuelve ``None`` cuando la compañía no existe o no
     tiene moneda funcional configurada. Los consumidores deben tratar el
     resultado como dato y nunca como inferencia.
     """
@@ -57,17 +57,17 @@ def _require_explicit_currency(code: str | None, *, context: str) -> str:
     """Falla si la moneda es vacia o no es una cadena valida."""
     if not code or not isinstance(code, str) or not code.strip():
         raise DocumentFlowError(
-            f"La {context} requiere una moneda transaccional explicita antes de persistirse.",
+            _("La %(context)s requiere una moneda transaccional explícita antes de persistirse.") % {"context": context},
             400,
         )
     return code.strip()
 
 
 def source_transaction_currencies(sources: Sequence[Any] | None) -> list[str]:
-    """Devuelve la lista de monedas transaccionales explicitas de cada origen.
+    """Devuelve la lista de monedas transaccionales explícitas de cada origen.
 
-    Un origen sin ``transaction_currency`` falla explicitamente; nunca se
-    infiere desde la compania para preservar la regla de no-inferencia.
+    Un origen sin ``transaction_currency`` falla explícitamente; nunca se
+    infiere desde la compañía para preservar la regla de no-inferencia.
     """
     if not sources:
         return []
@@ -76,7 +76,7 @@ def source_transaction_currencies(sources: Sequence[Any] | None) -> list[str]:
         currency = getattr(source, "transaction_currency", None)
         if not currency:
             raise DocumentFlowError(
-                _("El documento origen no tiene moneda transaccional explicita; no se permite inferirla desde la compania."),
+                _("El documento origen no tiene moneda transaccional explícita; no se permite inferirla desde la compañía."),
                 400,
             )
         currencies.append(str(currency))
@@ -88,7 +88,7 @@ def validate_flow_currency_homogeneity(sources: Sequence[Any] | None) -> str | N
 
     Devuelve la moneda comun cuando existe o ``None`` cuando no hay origenes.
     Lanza ``DocumentFlowError`` cuando los origenes existen pero mezclan
-    monedas o cuando alguno carece de ``transaction_currency`` explicita.
+    monedas o cuando alguno carece de ``transaction_currency`` explícita.
     """
     if not sources:
         return None
@@ -127,20 +127,21 @@ def resolve_transaction_currency(
 
     Reglas:
 
-    - Si hay origenes de Document Flow se exige moneda homogenea explicita;
+    - Si hay origenes de Document Flow se exige moneda homogenea explícita;
       el usuario no puede sustituirla.
     - Si no hay origenes y el usuario eligio moneda, gana la eleccion.
     - Si no hay eleccion del usuario, se usa la moneda del tercero.
-    - Como ultimo recurso se usa la moneda funcional de la compania.
+    - Como ultimo recurso se usa la moneda funcional de la compañía.
 
     El resultado siempre incluye ``transaction_currency`` y ``base_currency``
-    explicitas; la funcion nunca devuelve valores nulos en presencia de
-    compania configurada.
+    explícitas; la funcion nunca devuelve valores nulos en presencia de
+    compañía configurada.
     """
     base_currency = company_functional_currency(company)
     if not base_currency:
         raise DocumentFlowError(
-            f"La compania {company!r} requiere una moneda funcional configurada antes de crear {context}.",
+            _("La compañía %(company)r requiere una moneda funcional configurada antes de crear %(context)s.")
+            % {"company": company, "context": context},
             400,
         )
 
@@ -148,8 +149,13 @@ def resolve_transaction_currency(
         inherited = validate_flow_currency_homogeneity(sources)
         if inherited and user_selection and user_selection != inherited:
             raise DocumentFlowError(
-                f"La moneda del {context} no puede diferir de la heredada por Document Flow "
-                f"({inherited!r} vs {user_selection!r}).",
+                (
+                    _(
+                        "La moneda del %(context)s no puede diferir de la heredada por Document Flow "
+                        "(%(inherited)r vs %(user_selection)r)."
+                    )
+                    % {"context": context, "inherited": inherited, "user_selection": user_selection}
+                ),
                 400,
             )
         return ResolvedCurrency(
@@ -194,11 +200,12 @@ def assert_currency_explicit(
     a aprobado.
     """
     if document is None:
-        raise DocumentFlowError(f"{context.capitalize()} no encontrado.", 404)
+        raise DocumentFlowError(_("%(context)s no encontrado.") % {"context": context.capitalize()}, 404)
     value = getattr(document, field, None)
     if not value or not isinstance(value, str) or not value.strip():
         raise DocumentFlowError(
-            f"El {context} requiere una {field} explicita antes de contabilizarse.",
+            _("El %(context)s requiere una %(field)s explícita antes de contabilizarse.")
+            % {"context": context, "field": field},
             400,
         )
     return value.strip()
@@ -213,27 +220,33 @@ def assert_base_currency_snapshot(
     """Asegura que el documento tenga snapshot de ``base_currency`` consistente.
 
     El snapshot se persiste al crear el borrador y debe coincidir con la moneda
-    funcional vigente de la compania. Si difiere, el documento requiere
-    revalidacion; en caso de no existir, se rechaza.
+    funcional vigente de la compañía. Si difiere, el documento requiere
+    revalidación; en caso de no existir, se rechaza.
     """
     if document is None:
-        raise DocumentFlowError(f"{context.capitalize()} no encontrado.", 404)
+        raise DocumentFlowError(_("%(context)s no encontrado.") % {"context": context.capitalize()}, 404)
     expected = company_functional_currency(company)
     if not expected:
         raise DocumentFlowError(
-            f"La compania {company!r} requiere una moneda funcional configurada.",
+            _("La compañía %(company)r requiere una moneda funcional configurada.") % {"company": company},
             400,
         )
     snapshot = getattr(document, "base_currency", None)
     if not snapshot or not isinstance(snapshot, str) or not snapshot.strip():
         raise DocumentFlowError(
-            f"El {context} requiere un snapshot de base_currency explicito antes de contabilizarse.",
+            _("El %(context)s requiere un snapshot de base_currency explicito antes de contabilizarse.")
+            % {"context": context},
             400,
         )
     if snapshot != expected:
         raise DocumentFlowError(
-            f"El snapshot de base_currency del {context} ({snapshot!r}) no coincide con la "
-            f"moneda funcional vigente ({expected!r}); el documento requiere revalidacion.",
+            (
+                _(
+                    "El snapshot de base_currency del %(context)s (%(snapshot)r) no coincide con la "
+                    "moneda funcional vigente (%(expected)r); el documento requiere revalidación."
+                )
+                % {"context": context, "snapshot": snapshot, "expected": expected}
+            ),
             400,
         )
     return expected

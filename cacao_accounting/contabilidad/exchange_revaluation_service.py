@@ -351,7 +351,7 @@ class ExchangeRevaluationService:
             .first()
         )
         if period is None:
-            raise ExchangeRevaluationError(_("No existe un periodo contable abierto para la compania, mes y anio."))
+            raise ExchangeRevaluationError(_("No existe un periodo contable abierto para la compañía, mes y anio."))
         return period
 
     def _ensure_period_open(self, company: str, posting_date: date) -> None:
@@ -371,7 +371,7 @@ class ExchangeRevaluationService:
     def _validated_defaults(self, company: str) -> CompanyDefaultAccount:
         defaults = database.session.execute(select(CompanyDefaultAccount).filter_by(company=company)).scalars().first()
         if defaults is None:
-            raise ExchangeRevaluationError(_("No existe configuracion de cuentas predeterminadas para la compania."))
+            raise ExchangeRevaluationError(_("No existe configuración de cuentas predeterminadas para la compañía."))
         if not defaults.unrealized_exchange_gain_account_id:
             raise ExchangeRevaluationError(_("No existe cuenta de ganancia cambiaria no realizada configurada."))
         if not defaults.unrealized_exchange_loss_account_id:
@@ -390,7 +390,7 @@ class ExchangeRevaluationService:
             .all()
         )
         if not ledgers:
-            raise ExchangeRevaluationError(_("No existen libros contables activos para la compania."))
+            raise ExchangeRevaluationError(_("No existen libros contables activos para la compañía."))
         invalid = [ledger.code for ledger in ledgers if not ledger.currency]
         if invalid:
             raise ExchangeRevaluationError("Hay libros activos sin moneda configurada: " + ", ".join(invalid))
@@ -626,7 +626,7 @@ class ExchangeRevaluationService:
             debit_in_account_currency=amount if not monetary_debit else None,
             credit_in_account_currency=amount if not monetary_credit else None,
             account_currency=draft.ledger.currency,
-            remarks=f"Resultado cambiario {journal.document_no or run.document_no}",
+            remarks=_("Resultado cambiario %(document)s") % {"document": journal.document_no or run.document_no},
         )
         return monetary, offset
 
@@ -882,7 +882,10 @@ class ExchangeRevaluationService:
         if rate_val is not None:
             return (Decimal("1") / rate_val).quantize(Decimal("0.000000001"))
 
-        raise ExchangeRevaluationError(f"Falta tasa de cierre para {origin} -> {destination} en {closing_date}.")
+        raise ExchangeRevaluationError(
+            _("Falta tasa de cierre para %(origin)s -> %(destination)s en %(closing_date)s.")
+            % {"origin": origin, "destination": destination, "closing_date": closing_date}
+        )
 
     def _party_account(self, party_id: str | None, company: str, *, receivable: bool) -> str | None:
         if party_id:
@@ -996,4 +999,4 @@ class ExchangeRevaluationService:
         try:
             return Decimal(str(value))
         except (InvalidOperation, TypeError) as exc:
-            raise ExchangeRevaluationError(_("Valor numerico invalido en revalorizacion.")) from exc
+            raise ExchangeRevaluationError(_("Valor numerico inválido en revalorizacion.")) from exc

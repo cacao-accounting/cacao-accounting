@@ -102,9 +102,9 @@
         <tr>
           <th scope="col">{{ _('Período') }}</th>
           <th scope="col">{{ _('Zona Temporal') }}</th>
-          <th scope="col" class="text-end">{{ _('Real (ERP Posted)') }}</th>
-          <th scope="col" class="text-end">{{ _('Current (ERP + AR/AP)') }}</th>
-          <th scope="col" class="text-end">{{ _('Projected (Manual + ERP)') }}</th>
+          <th scope="col" class="text-end">{{ _('Real (contabilizado en ERP)') }}</th>
+          <th scope="col" class="text-end">{{ _('Actual (ERP + CxC/CxP)') }}</th>
+          <th scope="col" class="text-end">{{ _('Proyectado (manual + ERP)') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -115,9 +115,9 @@
             {% if row.zone == "Real" %}
             <span class="badge bg-secondary">{{ _('Real') }}</span>
             {% elif row.zone == "Current" %}
-            <span class="badge bg-primary">{{ _('Current') }}</span>
+            <span class="badge bg-primary">{{ _('Actual') }}</span>
             {% else %}
-            <span class="badge bg-info text-dark">{{ _('Projected') }}</span>
+            <span class="badge bg-info text-dark">{{ _('Proyectado') }}</span>
             {% endif %}
           </td>
           <td class="text-end text-success">{{ format_money_with_currency(row.real_balance, currency) }}</td>

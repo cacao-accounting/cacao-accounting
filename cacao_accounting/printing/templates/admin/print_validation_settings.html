@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">{{ _('External Document Validation') }}</h1>
+        <h1 class="h2">{{ _('Validación externa de documentos') }}</h1>
         <a href="{{ url_for('printing_admin.list_templates') }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> {{ _('Volver a formatos') }}
         </a>
@@ -22,12 +22,12 @@
                         {% if validation_enabled %}checked{% endif %}
                     >
                     <label class="form-check-label" for="external_document_validation_enabled">
-                        {{ _('Enabled') }}
+                        {{ _('Habilitada') }}
                     </label>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label" for="external_document_validation_base_url">{{ _('Base URL') }}</label>
+                    <label class="form-label" for="external_document_validation_base_url">{{ _('URL base') }}</label>
                     <input
                         class="form-control"
                         type="url"

@@ -86,8 +86,13 @@ def validate_currency_contract(registro: Any, *, context: str = "documento") -> 
         document_currency = str(getattr(registro, "transaction_currency", "") or "")
         if inherited and inherited != document_currency:
             raise DocumentFlowError(
-                f"La moneda del {context} ({document_currency!r}) no coincide con la moneda "
-                f"heredada de Document Flow ({inherited!r}).",
+                (
+                    _(
+                        "La moneda del %(context)s (%(document_currency)r) no coincide con la moneda "
+                        "heredada de Document Flow (%(inherited)r)."
+                    )
+                    % {"context": context, "document_currency": document_currency, "inherited": inherited}
+                ),
                 400,
             )
 
@@ -119,8 +124,13 @@ def assert_currency_contract_or_raise(
         document_currency = str(getattr(registro, "transaction_currency", "") or "")
         if inherited and inherited != document_currency:
             raise DocumentFlowError(
-                f"La moneda del {context} ({document_currency!r}) no coincide con la moneda "
-                f"heredada de Document Flow ({inherited!r}).",
+                (
+                    _(
+                        "La moneda del %(context)s (%(document_currency)r) no coincide con la moneda "
+                        "heredada de Document Flow (%(inherited)r)."
+                    )
+                    % {"context": context, "document_currency": document_currency, "inherited": inherited}
+                ),
                 400,
             )
 
@@ -128,7 +138,7 @@ def assert_currency_contract_or_raise(
 def _validate_basic_document_fields(registro):
     """Valida campos basicos del documento (compania y fecha)."""
     if not registro.company:
-        raise ValueError(_("El documento debe tener una compania."))
+        raise ValueError(_("El documento debe tener una compañía."))
     if not registro.posting_date:
         raise ValueError(_("El documento debe tener una fecha de contabilizacion."))
 
@@ -174,7 +184,7 @@ def _validate_warehouse_assignments(items, warehouse_for_stock_items_only):
         )
         if not wh:
             item_code = getattr(item, "item_code", "desconocido")
-            raise ValueError(_("La linea del articulo %(item)s requiere un almacen asignado.") % {"item": item_code})
+            raise ValueError(_("La linea del artículo %(item)s requiere un almacen asignado.") % {"item": item_code})
 
 
 def require_line_relations(*, target_type: str, target_id: str, source_type: str, source_id: str, items: list[Any]) -> None:
@@ -196,7 +206,8 @@ def require_line_relations(*, target_type: str, target_id: str, source_type: str
     relation_item_ids = {str(relation.target_item_id) for relation in relations if relation.target_item_id}
     if len(relations) != len(items) or relation_item_ids != expected_item_ids:
         raise ValueError(
-            "Cada línea debe conservar una relación activa con el documento origen " f"({source_type}:{source_id})."
+            _("Cada línea debe conservar una relación activa con el documento origen " "(%(source_type)s:%(source_id)s).")
+            % {"source_type": source_type, "source_id": source_id}
         )
 
 

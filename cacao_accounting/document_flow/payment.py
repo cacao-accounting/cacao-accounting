@@ -40,14 +40,14 @@ from cacao_accounting.database import (
 from cacao_accounting.document_flow.registry import normalize_doctype
 from cacao_accounting.document_flow.repository import decimal_or_zero
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 if TYPE_CHECKING:
     from cacao_accounting.contabilidad.arap_allocation import AllocationLine
 
-_MSG_MONTO_MAYOR_CERO = _("El monto aplicado debe ser mayor que cero.")
-_MSG_TASA_PAGO_POSITIVA = _("Se requiere una tasa positiva entre la moneda del documento y la del pago.")
-_MSG_PAGO_EXCEDE_SALDO = _("El monto aplicado excede el saldo disponible del pago.")
+_MSG_MONTO_MAYOR_CERO = _l("El monto aplicado debe ser mayor que cero.")
+_MSG_TASA_PAGO_POSITIVA = _l("Se requiere una tasa positiva entre la moneda del documento y la del pago.")
+_MSG_PAGO_EXCEDE_SALDO = _l("El monto aplicado excede el saldo disponible del pago.")
 
 MAX_RECONCILIATION_LINES = 100
 
@@ -59,11 +59,11 @@ def _list_open_items(**filters: Any) -> tuple[Any, ...]:
     return list_open_items(**filters)
 
 
-def _document_flow_error(message: str, status_code: int = 400) -> ValueError:
+def _document_flow_error(message: LazyText, status_code: int = 400) -> ValueError:
     """Resuelve DocumentFlowError via import tardio para evitar circular."""
     from cacao_accounting.document_flow.service import DocumentFlowError as _DFE
 
-    return _DFE(message, status_code)
+    return _DFE(str(message), status_code)
 
 
 @dataclass
@@ -502,7 +502,7 @@ def payment_reference_candidates(
 ) -> list[dict[str, Any]]:
     """Devuelve documentos candidatos para la tabla de referencias de pago."""
     if not company or party_type not in {"supplier", "customer"} or not party_id:
-        raise _document_flow_error(_("Debe indicar compania, tipo de tercero y tercero."))
+        raise _document_flow_error(_("Debe indicar compañía, tipo de tercero y tercero."))
     allowed_by_party = (
         {"purchase_invoice", "purchase_debit_note", "purchase_credit_note", "purchase_order"}
         if party_type == "supplier"
@@ -617,7 +617,7 @@ def payment_reconciliation_candidates(
 ) -> dict[str, list[dict[str, Any]]]:
     """Devuelve pagos abiertos y documentos pendientes para conciliacion AR/AP."""
     if not company or party_type not in {"supplier", "customer"}:
-        raise _document_flow_error(_("Debe indicar compania y tipo de tercero."))
+        raise _document_flow_error(_("Debe indicar compañía y tipo de tercero."))
 
     payments = _candidate_payments(company, party_type, party_id, currency)
     documents = _candidate_documents(company, party_type, party_id, currency)
@@ -718,7 +718,7 @@ def _payment_reference_model(flow_source_type: str) -> type[PurchaseInvoice] | t
         return PurchaseInvoice
     if source_key in {"sales_invoice", "sales_credit_note", "sales_debit_note", "sales_return"}:
         return SalesInvoice
-    raise _document_flow_error(_("Tipo de referencia invalido."))
+    raise _document_flow_error(_("Tipo de referencia inválido."))
 
 
 def _payment_reference_party(document: Any, flow_source_type: str) -> tuple[str, str | None]:
@@ -758,13 +758,13 @@ def apply_payment_reconciliation(
 ) -> Reconciliation:
     """Aplica pagos existentes contra documentos AR/AP abiertos."""
     if not lines:
-        raise _document_flow_error(_("La conciliacion requiere al menos una linea."))
+        raise _document_flow_error(_("La conciliación requiere al menos una línea."))
     if len(lines) > MAX_RECONCILIATION_LINES:
         raise _document_flow_error(
-            _("El numero de lineas excede el maximo permitido ({0}).").format(MAX_RECONCILIATION_LINES),
+            _("El número de líneas excede el máximo permitido ({0}).").format(MAX_RECONCILIATION_LINES),
         )
     if not company or party_type not in {"supplier", "customer"} or not party_id:
-        raise _document_flow_error(_("Debe indicar compania, tipo de tercero y tercero."))
+        raise _document_flow_error(_("Debe indicar compañía, tipo de tercero y tercero."))
     latest_allocation = database.session.execute(
         select(func.max(PaymentReference.allocation_date))
         .join(PaymentEntry, PaymentEntry.id == PaymentReference.payment_id)
@@ -777,7 +777,8 @@ def apply_payment_reconciliation(
     ).scalar_one()
     if latest_allocation and allocation_date < latest_allocation:
         raise _document_flow_error(
-            f"La fecha de conciliación no puede ser anterior a una aplicación existente ({latest_allocation})."
+            _("La fecha de conciliación no puede ser anterior a una aplicación existente (%(latest_allocation)s).")
+            % {"latest_allocation": latest_allocation}
         )
 
     reconciliation = Reconciliation(
@@ -1060,7 +1061,7 @@ def _plan_reconciliation_allocation(
     # documentos nuevos siguen llegando con ``transaction_currency``.
     document_currency = _document_transaction_currency(document) or payment_currency
     if not payment_currency:
-        raise _document_flow_error(_("La conciliacion requiere moneda explicita en el pago."), 409)
+        raise _document_flow_error(_("La conciliación requiere moneda explícita en el pago."), 409)
     requested_rate = raw_line.get("payment_exchange_rate")
     if requested_rate is None and document_currency != payment_currency:
         requested_rate = raw_line.get("exchange_rate")
@@ -1097,7 +1098,7 @@ def _plan_reconciliation_allocation(
     except AllocationError as exc:
         message = str(exc)
         if isinstance(exc, AllocationOverpaymentError) and "efectivo" in message.lower():
-            message = _(_MSG_PAGO_EXCEDE_SALDO)
+            message = str(_MSG_PAGO_EXCEDE_SALDO)
         raise _document_flow_error(message, 409) from exc
     line = plan.lines[0]
     if line.source_amount > available + Decimal("0.01"):
@@ -1162,7 +1163,7 @@ def _validate_payment(payment: Any, company: str, party_type: str, party_id: str
     if not payment or payment.docstatus != 1:
         raise _document_flow_error(_("El pago debe existir y estar aprobado."), 404)
     if payment.company != company or payment.party_type != party_type or payment.party_id != party_id:
-        raise _document_flow_error(_("El pago no coincide con la compania o tercero de la conciliacion."), 409)
+        raise _document_flow_error(_("El pago no coincide con la compañía o tercero de la conciliación."), 409)
     if not _payment_type_matches_source(payment.payment_type, flow_source_type):
         raise _document_flow_error(_("El tipo de pago no corresponde con el documento referenciado."), 409)
 
@@ -1173,7 +1174,7 @@ def _get_reference_document(flow_source_type: str, document_id: str, company: st
     if not document or getattr(document, "docstatus", 0) != 1:
         raise _document_flow_error(_("El documento referenciado debe existir y estar aprobado."), 404)
     if getattr(document, "company", None) != company:
-        raise _document_flow_error(_("El documento referenciado no pertenece a la misma compania."), 409)
+        raise _document_flow_error(_("El documento referenciado no pertenece a la misma compañía."), 409)
     expected_party_type, expected_party_id = _payment_reference_party(document, flow_source_type)
     if expected_party_type != party_type or expected_party_id != party_id:
         raise _document_flow_error(_("El documento referenciado no coincide con el tercero."), 409)
@@ -1212,7 +1213,7 @@ def _check_duplicate_application(payment_id: str, flow_source_type: str, documen
         .limit(1)
     ).scalar_one_or_none()
     if existing:
-        raise _document_flow_error(_("El documento ya esta aplicado a este pago."), 409)
+        raise _document_flow_error(_("El documento ya está aplicado a este pago."), 409)
 
 
 def _validate_and_get_outstanding(document: Any, allocated: Decimal, allocation_date: date) -> Decimal:
@@ -1356,13 +1357,13 @@ def _validate_advance_allocation(
     outstanding = compute_outstanding_amount(invoice, as_of_date=allocation_date)
     current_outstanding = compute_outstanding_amount(invoice)
     if amount <= 0:
-        raise _document_flow_error(_(_MSG_MONTO_MAYOR_CERO), 409)
+        raise _document_flow_error(_MSG_MONTO_MAYOR_CERO, 409)
     payment_currency = str(getattr(payment, "currency", None) or "")
     document_currency = _document_transaction_currency(invoice) or payment_currency
     if payment_currency and document_currency and payment_currency != document_currency:
         rate = decimal_or_zero(exchange_rate)
         if rate <= 0:
-            raise _document_flow_error(_(_MSG_TASA_PAGO_POSITIVA), 409)
+            raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
     else:
         rate = Decimal("1")
     payment_consumed = amount * rate
@@ -1881,7 +1882,7 @@ def _payment_target_exchange_rate(payment: PaymentEntry, invoice: Any, selected:
     requested_rate = selected.get("payment_exchange_rate") or selected.get("exchange_rate")
     effective_rate = decimal_or_zero(requested_rate)
     if effective_rate <= 0:
-        raise _document_flow_error(_(_MSG_TASA_PAGO_POSITIVA), 409)
+        raise _document_flow_error(_MSG_TASA_PAGO_POSITIVA, 409)
     return effective_rate
 
 
@@ -1912,7 +1913,7 @@ def _apply_payment_target_line(
 def _validate_payment_target_allocation(allocated: Decimal, outstanding: Decimal) -> None:
     """Valida la cantidad a aplicar contra una factura origen."""
     if allocated <= 0:
-        raise _document_flow_error(_(_MSG_MONTO_MAYOR_CERO), 409)
+        raise _document_flow_error(_MSG_MONTO_MAYOR_CERO, 409)
     if allocated > outstanding:
         raise _document_flow_error(_("El monto aplicado excede el saldo pendiente."), 409)
 

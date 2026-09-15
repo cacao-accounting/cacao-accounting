@@ -9,7 +9,7 @@
   <ol class="breadcrumb lh-sm">
     <li class="breadcrumb-item"><a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark"><i class="bi bi-house"></i> {{ _('Inicio') }}</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_') }}" class="link-dark">{{ _('Inventario') }}</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_articulo_lista') }}" class="link-dark">{{ _('Items') }}</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('inventario.inventario_articulo_lista') }}" class="link-dark">{{ _('Artículos') }}</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ registro.name }}</li>
   </ol>
 </nav>
@@ -98,7 +98,7 @@
   </div>
   <div class="p-3">
     <div class="ca-kv-list">
-      <div class="ca-kv-item"><label>{{ _('Almacen predeterminado') }}</label><p>{{ default_warehouse.name if default_warehouse else '-' }}</p></div>
+      <div class="ca-kv-item"><label>{{ _('Almacén predeterminado') }}</label><p>{{ default_warehouse.name if default_warehouse else '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Stock minimo') }}</label><p>{{ registro.min_stock_qty or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Stock maximo') }}</label><p>{{ registro.max_stock_qty or '-' }}</p></div>
       <div class="ca-kv-item"><label>{{ _('Punto de reorden') }}</label><p>{{ registro.reorder_level or '-' }}</p></div>

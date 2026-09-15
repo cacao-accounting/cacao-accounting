@@ -28,11 +28,11 @@ from cacao_accounting.bancos.cash_forecast_service import (
     get_forecast_comparison,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 CASH_FORECAST_DETAIL_ENDPOINT = "bancos.cash_forecast_detail"
 BANCOS_PREFIX = "bancos.bancos_"
-PRONOSTICO_NO_MODIFICABLE_MSG = "No se pueden modificar pronósticos aprobados o cerrados."
+PRONOSTICO_NO_MODIFICABLE_MSG = _l("No se pueden modificar pronósticos aprobados o cerrados.")
 CASH_FORECAST_ENTRY_TYPES = {"Income", "Expense"}
 
 
@@ -94,7 +94,7 @@ def cash_forecast_list():
         forecasts=forecasts,
         companies=companies,
         selected_company=company,
-        titulo="Pronósticos de Flujo de Caja",
+        titulo=_("Pronósticos de Flujo de Caja"),
     )
 
 
@@ -127,7 +127,7 @@ def cash_forecast_new():
         companies=companies,
         selected_company=company,
         fiscal_years=fiscal_years,
-        titulo="Nuevo Pronóstico de Flujo de Caja",
+        titulo=_("Nuevo Pronóstico de Flujo de Caja"),
     )
 
 
@@ -152,7 +152,7 @@ def _handle_cash_forecast_new_post(company: str):
         database.session.query(CashForecast).filter_by(company=company, fiscal_year_id=fiscal_year_id, version=version).first()
     )
     if existing:
-        flash(_("La version '%(version)s' ya existe para este ao fiscal.") % {"version": version}, "danger")
+        flash(_("La versión '%(version)s' ya existe para este año fiscal.") % {"version": version}, "danger")
         return None
 
     forecast = CashForecast(
@@ -166,7 +166,7 @@ def _handle_cash_forecast_new_post(company: str):
     )
     database.session.add(forecast)
     database.session.commit()
-    flash(_("Pronostico de flujo de caja creado correctamente."), "success")
+    flash(_("Pronóstico de flujo de caja creado correctamente."), "success")
     return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
 
@@ -208,7 +208,7 @@ def cash_forecast_detail(forecast_id):
         currencies=currencies,
         matrix=matrix,
         entries=entries,
-        titulo=f"Pronóstico de Flujo de Caja: {forecast.version}",
+        titulo=_("Pronóstico de Flujo de Caja:") + " " + forecast.version,
     )
 
 
@@ -316,7 +316,7 @@ def cash_forecast_entry_add(forecast_id):
         abort(404)
     _require_forecast_access(forecast, "editar")
     if forecast.status != "Draft":
-        flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
+        flash(str(PRONOSTICO_NO_MODIFICABLE_MSG), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     try:
@@ -366,7 +366,7 @@ def cash_forecast_entry_delete(forecast_id, entry_id):
         abort(404)
     _require_forecast_access(forecast, "editar")
     if forecast.status != "Draft":
-        flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
+        flash(str(PRONOSTICO_NO_MODIFICABLE_MSG), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     entry = database.session.get(CashForecastEntry, entry_id)
@@ -452,7 +452,7 @@ def cash_forecast_compare():
         base_forecast=base_forecast,
         compare_forecast=compare_forecast,
         comparison=comparison,
-        titulo="Comparación de Escenarios de Flujo de Caja",
+        titulo=_("Comparación de Escenarios de Flujo de Caja"),
     )
 
 
@@ -504,7 +504,7 @@ def cash_forecast_manual_entries():
         selected_forecast=selected_forecast,
         entries=entries,
         currencies=currencies,
-        titulo="Forecast de Entradas manuales",
+        titulo=_("Forecast de Entradas manuales"),
     )
 
 
@@ -521,7 +521,7 @@ def cash_forecast_entry_edit(forecast_id, entry_id):
         abort(404)
     _require_forecast_access(forecast, "editar")
     if forecast.status != "Draft":
-        flash(PRONOSTICO_NO_MODIFICABLE_MSG, "danger")
+        flash(str(PRONOSTICO_NO_MODIFICABLE_MSG), "danger")
         return redirect(url_for(CASH_FORECAST_DETAIL_ENDPOINT, forecast_id=forecast.id))
 
     entry = database.session.get(CashForecastEntry, entry_id)

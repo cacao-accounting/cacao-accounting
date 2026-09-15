@@ -633,7 +633,8 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     ).scalar_one_or_none()
     comparison_currency = filters.currency or selected_ledger.currency
     ledger_needs_conversion = selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
-    _, period_end, _ = _report_period_bounds(filters)
+    bounds = _report_period_bounds(filters)
+    period_end = bounds[1]
     as_of_date = filters.as_of_date or period_end or date.today()
     defaults = database.session.execute(
         select(CompanyDefaultAccount).where(CompanyDefaultAccount.company == filters.company)
@@ -667,7 +668,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
-            note="Fuente: facturas de venta y aplicaciones de pago.",
+            note=_("Fuente: facturas de venta y aplicaciones de pago."),
         )
     )
     rows.append(
@@ -684,7 +685,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
-            note="Fuente: facturas de compra y aplicaciones de pago; el pasivo se expresa como crédito neto.",
+            note=_("Fuente: facturas de compra y aplicaciones de pago; el pasivo se expresa como crédito neto."),
         )
     )
 
@@ -716,7 +717,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
-            note="Fuente: Stock Ledger; cuentas derivadas de la configuración activa por bodega.",
+            note=_("Fuente: Stock Ledger; cuentas derivadas de la configuración activa por bodega."),
         )
     )
 
@@ -737,7 +738,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
-            note="Fuente: recepciones aprobadas pendientes de factura; el puente se expresa como crédito neto.",
+            note=_("Fuente: recepciones aprobadas pendientes de factura; el puente se expresa como crédito neto."),
         )
     )
 
@@ -784,7 +785,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
             ),
             basis="ending_balance",
             currency=selected_ledger.currency,
-            note="Impuestos netos: compras debitadas menos ventas acreditadas.",
+            note=_("Impuestos netos: compras debitadas menos ventas acreditadas."),
         )
     )
 
@@ -836,7 +837,7 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
             ),
             basis="statement_movement",
             currency=selected_ledger.currency,
-            note="Movimiento de extracto; no equivale a saldo de libro si existe saldo inicial no importado.",
+            note=_("Movimiento de extracto; no equivale a saldo de libro si existe saldo inicial no importado."),
         )
     )
     return PaginatedReport(

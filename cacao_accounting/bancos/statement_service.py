@@ -126,7 +126,7 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
     """
     transaction = database.session.get(BankTransaction, bank_transaction_id)
     if not transaction:
-        raise BankStatementError(_("La transaccion bancaria no existe."))
+        raise BankStatementError(_("La transacción bancaria no existe."))
     if transaction.is_reconciled:
         return BankAutoReconciliationResult(
             bank_transaction_id=bank_transaction_id,
@@ -211,12 +211,11 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
     )
     fully_reconciled = allocated >= transaction_amount
     event_action = "reconciled" if fully_reconciled else "partially_reconciled"
-    event_prefix = "Conciliación automática aplicada" if fully_reconciled else "Conciliación automática parcial aplicada"
+    event_prefix = _("Conciliación automática aplicada") if fully_reconciled else _("Conciliación automática parcial aplicada")
     log_task_event(
         transaction,
         event_action,
-        "{0} por la regla de matching '{1}' contra {2} {3} "
-        "por {4} (conciliación {5}).".format(
+        _("{0} por la regla de matching '{1}' contra {2} {3} " "por {4} (conciliación {5}).").format(
             event_prefix,
             best_rule.name if best_rule else "",
             candidate.reference_type,
@@ -258,7 +257,7 @@ def _decimal_value(value: Any) -> Decimal:
     try:
         return Decimal(normalized)
     except InvalidOperation as exc:
-        raise BankStatementError(f"El monto del extracto no es válido: {value}") from exc
+        raise BankStatementError(_("El monto del extracto no es válido: %(value)s") % {"value": value}) from exc
 
 
 def _parse_date(value: str) -> date:
@@ -448,7 +447,7 @@ def _load_bank_reconciliation(reconciliation_id: str) -> Reconciliation:
     """Load the reconciliation required by a bank difference journal."""
     reconciliation = database.session.get(Reconciliation, reconciliation_id)
     if not reconciliation:
-        raise BankStatementError(_("La conciliacion no existe."))
+        raise BankStatementError(_("La conciliación no existe."))
     return reconciliation
 
 
@@ -476,7 +475,7 @@ def _find_reconciliation_bank_item(reconciliation: Reconciliation, transaction_i
         item_query = item_query.where(ReconciliationItem.source_id == transaction_id)
     reconciliation_items = database.session.execute(item_query.limit(2)).scalars().all()
     if len(reconciliation_items) != 1:
-        raise BankStatementError(_("La conciliacion no identifica una transaccion bancaria unica."))
+        raise BankStatementError(_("La conciliación no identifica una transacción bancaria unica."))
     return reconciliation_items[0]
 
 

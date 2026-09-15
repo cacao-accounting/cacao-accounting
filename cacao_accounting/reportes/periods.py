@@ -23,7 +23,7 @@ from sqlalchemy import select
 from cacao_accounting.database import AccountingPeriod, database
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _l
 
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
     from flask_babel import gettext as _fallback_gettext
@@ -43,9 +43,9 @@ else:
 
 _DATE_OVERRIDE_PARAMS = ("date_from", "date_to", "as_of_date")
 
-_INVALID_PERIOD_MESSAGE = _("Período contable inválido o perteneciente a otra compañía.")
-_INVERTED_RANGE_MESSAGE = _("El período inicial no puede ser posterior al período final.")
-_PARTIAL_RANGE_MESSAGE = _("No se permiten rangos parciales: use períodos contables completos.")
+_INVALID_PERIOD_MESSAGE = _l("Período contable inválido o perteneciente a otra compañía.")
+_INVERTED_RANGE_MESSAGE = _l("El período inicial no puede ser posterior al período final.")
+_PARTIAL_RANGE_MESSAGE = _l("No se permiten rangos parciales: use períodos contables completos.")
 
 
 @dataclass(frozen=True)

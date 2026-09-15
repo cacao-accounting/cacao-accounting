@@ -3875,7 +3875,7 @@ def _validate_bank_transaction_amounts(mapper, connection, target: BankTransacti
     if deposit < 0 or withdrawal < 0:
         raise ValueError(_("Los montos bancarios no pueden ser negativos."))
     if (deposit > 0) == (withdrawal > 0):
-        raise ValueError(_("La transaccion bancaria requiere exactamente un deposito o retiro positivo."))
+        raise ValueError(_("La transacción bancaria requiere exactamente un deposito o retiro positivo."))
 
 
 def _bank_transaction_identity(transaction: BankTransaction) -> str:
@@ -5865,8 +5865,10 @@ def _lock_item_delete_after_usage(_mapper, connection, target) -> None:
 
     if target.code and _item_has_usage(connection, str(target.code)):
         raise IntegrityError(
-            "El artículo cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
-            "Se sugiere en su lugar su inactivación o bloqueo."
+            _(
+                "El artículo cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
+                "Se sugiere en su lugar su inactivación o bloqueo."
+            )
         )
 
 
@@ -5877,8 +5879,10 @@ def _lock_warehouse_delete_after_usage(_mapper, connection, target) -> None:
 
     if target.code and _warehouse_has_usage(connection, str(target.code)):
         raise IntegrityError(
-            "La bodega cuenta con transacciones activas en el sistema y no puede ser eliminada físicamente. "
-            "Se sugiere en su lugar su inactivación o bloqueo."
+            _(
+                "La bodega cuenta con transacciones activas en el sistema y no puede ser eliminada físicamente. "
+                "Se sugiere en su lugar su inactivación o bloqueo."
+            )
         )
 
 
@@ -5889,8 +5893,10 @@ def _lock_party_delete_after_usage(_mapper, connection, target) -> None:
 
     if target.id and _party_has_usage(connection, str(target.id)):
         raise IntegrityError(
-            "El cliente/proveedor cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
-            "Se sugiere en su lugar su inactivación o bloqueo."
+            _(
+                "El cliente/proveedor cuenta con transacciones activas en el sistema y no puede ser eliminado físicamente. "
+                "Se sugiere en su lugar su inactivación o bloqueo."
+            )
         )
 
 

@@ -96,7 +96,7 @@ def listar():
     return render_template(
         "contabilidad/presupuestos/list.html",
         consulta=consulta,
-        titulo="Administrar Presupuestos - " + APPNAME,
+        titulo=_("Administrar Presupuestos") + " - " + APPNAME,
     )
 
 
@@ -127,7 +127,7 @@ def nuevo():
     return render_template(
         "contabilidad/presupuestos/form.html",
         form=form,
-        titulo="Nuevo Presupuesto - " + APPNAME,
+        titulo=_("Nuevo Presupuesto") + " - " + APPNAME,
     )
 
 
@@ -171,7 +171,7 @@ def detalle(budget_id):
         totals=totals,
         periods=periods,
         permisos=permisos,
-        titulo=f"Presupuesto: {budget.name} - " + APPNAME,
+        titulo=_("Presupuesto:") + f" {budget.name} - " + APPNAME,
     )
 
 
@@ -207,7 +207,7 @@ def editar(budget_id):
         "contabilidad/presupuestos/form.html",
         form=form,
         budget=budget,
-        titulo="Editar Presupuesto - " + APPNAME,
+        titulo=_("Editar Presupuesto") + " - " + APPNAME,
     )
 
 
@@ -263,7 +263,7 @@ def nueva_linea(budget_id):
         "contabilidad/presupuestos/line_form.html",
         form=form,
         budget=budget,
-        titulo="Agregar Línea de Presupuesto - " + APPNAME,
+        titulo=_("Agregar Línea de Presupuesto") + " - " + APPNAME,
     )
 
 
@@ -324,7 +324,7 @@ def editar_linea(line_id):
         form=form,
         budget=budget,
         line=line,
-        titulo="Editar Línea de Presupuesto - " + APPNAME,
+        titulo=_("Editar Línea de Presupuesto") + " - " + APPNAME,
     )
 
 
@@ -414,7 +414,7 @@ def importar(budget_id):
         _TEMPLATE_PRESUPUESTO_IMPORTAR,
         budget=budget,
         columns=BudgetImportService().get_template_columns(budget_id),
-        titulo="Importar Presupuesto - " + APPNAME,
+        titulo=_("Importar Presupuesto") + " - " + APPNAME,
     )
 
 
@@ -447,7 +447,7 @@ def _handle_budget_import_post(budget: Budget, budget_id: str):
                         budget=budget,
                         staged_lines=staged_lines,
                         import_id=import_obj.id,
-                        titulo="Previsualizar Importación - " + APPNAME,
+                        titulo=_("Previsualizar Importación") + " - " + APPNAME,
                     )
                 except (BudgetError, ValueError, KeyError, SQLAlchemyError) as e:
                     flash(_("Error al procesar el archivo: %(error)s") % {"error": e}, "danger")
@@ -455,7 +455,7 @@ def _handle_budget_import_post(budget: Budget, budget_id: str):
         _TEMPLATE_PRESUPUESTO_IMPORTAR,
         budget=budget,
         columns=BudgetImportService().get_template_columns(budget_id),
-        titulo="Importar Presupuesto - " + APPNAME,
+        titulo=_("Importar Presupuesto") + " - " + APPNAME,
     )
 
 
@@ -521,5 +521,5 @@ def reporte():
         projects=projects,
         report_data=report_data,
         filters=filters,
-        titulo="Real versus Presupuesto - " + APPNAME,
+        titulo=_("Real versus Presupuesto") + " - " + APPNAME,
     )

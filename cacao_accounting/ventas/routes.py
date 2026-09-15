@@ -137,7 +137,7 @@ from cacao_accounting.ventas.services import (
     sales_order_line_closure_reasons,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import _, _l
 
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
@@ -165,15 +165,15 @@ _FORMKEY_SALES_INVOICE = "sales.sales_invoice"
 
 _FORMKEY_DELIVERY_NOTE = "sales.delivery_note"
 
-_LABEL_PEDIDO_VENTA = "Pedido de Venta"
+_LABEL_PEDIDO_VENTA = _l("Pedido de Venta")
 
-_LABEL_ORDEN_VENTA = "Orden de Venta"
+_LABEL_ORDEN_VENTA = _l("Orden de Venta")
 
-_LABEL_NOTA_ENTREGA = "Nota de Entrega"
+_LABEL_NOTA_ENTREGA = _l("Nota de Entrega")
 
-DOCUMENT_REQUIRES_LINE_MSG = "El documento requiere al menos una línea."
+DOCUMENT_REQUIRES_LINE_MSG = _l("El documento requiere al menos una línea.")
 
-SOLICITUD_CANCELACION_PENDIENTE_MSG = "Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación)."
+SOLICITUD_CANCELACION_PENDIENTE_MSG = _l("Solicitud de cancelación enviada para aprobación (Pendiente de Cancelación).")
 
 
 @dataclass(frozen=True)
@@ -241,8 +241,8 @@ def _build_delivery_note_transaction_config(
         "warehouses": warehouses,
         "initialSourceType": initial_source_type,
         "availableSourceTypes": [
-            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
+            {"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)},
+            {"value": "delivery_note", "label": str(_LABEL_NOTA_ENTREGA)},
         ],
     }
 
@@ -390,7 +390,7 @@ def ventas_orden_venta_lista():
         SalesOrder,
         (SalesOrder.document_no, SalesOrder.customer_name, SalesOrder.remarks),
     )
-    titulo = "Listado de Ordenes de Venta - " + APPNAME
+    titulo = _("Listado de Ordenes de Venta") + " - " + APPNAME
     return render_template("ventas/orden_venta_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -403,7 +403,7 @@ def ventas_pedido_venta_lista():
         SalesRequest,
         (SalesRequest.document_no, SalesRequest.customer_name, SalesRequest.remarks),
     )
-    titulo = "Listado de Pedidos de Venta - " + APPNAME
+    titulo = _("Listado de Pedidos de Venta") + " - " + APPNAME
     return render_template("ventas/solicitud_venta_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -430,7 +430,7 @@ def ventas_pedido_venta_nuevo():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
-    titulo = "Nuevo Pedido de Venta - " + APPNAME
+    titulo = _("Nuevo Pedido de Venta") + " - " + APPNAME
     transaction_config = {
         "formKey": _FORMKEY_SALES_REQUEST,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
@@ -572,7 +572,7 @@ def ventas_pedido_venta_editar(request_id: str):
     return render_template(
         "ventas/solicitud_venta_nuevo.html",
         form=formulario,
-        titulo="Editar Pedido de Venta - " + APPNAME,
+        titulo=_("Editar Pedido de Venta") + " - " + APPNAME,
         edit=True,
         registro=registro,
         items_disponibles=items_disponibles,
@@ -693,7 +693,7 @@ def ventas_pedido_venta_cancel(request_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_PEDIDO_VENTA, request_id=request_id))
 
         registro.docstatus = 2
@@ -718,7 +718,7 @@ def ventas_entrega_lista():
         (DeliveryNote.document_no, DeliveryNote.customer_name, DeliveryNote.remarks),
         access_modules=("sales", "inventory"),
     )
-    titulo = "Listado de Remisiones de Mercadería Vendida - " + APPNAME
+    titulo = _("Listado de Remisiones de Mercadería Vendida") + " - " + APPNAME
     return render_template(
         "ventas/entrega_lista.html",
         consulta=consulta,
@@ -737,7 +737,7 @@ def ventas_factura_venta_lista():
         (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
         database.select(SalesInvoice).filter_by(document_type="sales_invoice"),
     )
-    titulo = "Listado de Facturas de Venta - " + APPNAME
+    titulo = _("Listado de Facturas de Venta") + " - " + APPNAME
     return render_template("ventas/factura_venta_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -751,14 +751,14 @@ def ventas_factura_venta_nota_debito_lista():
         (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
         database.select(SalesInvoice).filter_by(document_type="sales_debit_note"),
     )
-    titulo = "Listado de Notas de Débito de Venta - " + APPNAME
+    titulo = _("Listado de Notas de Débito de Venta") + " - " + APPNAME
     return render_template(
         "ventas/factura_venta_devolucion_lista.html",
         consulta=consulta,
         titulo=titulo,
-        page_heading="Listado de Notas de Débito de Venta",
-        new_button_label="Nueva Nota de Débito",
-        page_caption="Listado de notas de débito de venta.",
+        page_heading=_("Listado de Notas de Débito de Venta"),
+        new_button_label=_("Nueva Nota de Débito"),
+        page_caption=_("Listado de notas de débito de venta."),
         new_document_type="sales_debit_note",
     )
 
@@ -773,14 +773,14 @@ def ventas_factura_venta_devolucion_lista():
         (SalesInvoice.document_no, SalesInvoice.customer_name, SalesInvoice.remarks),
         database.select(SalesInvoice).filter(SalesInvoice.document_type.in_(["sales_credit_note", "sales_return"])),
     )
-    titulo = "Listado de Devoluciones de Venta - " + APPNAME
+    titulo = _("Listado de Devoluciones de Venta") + " - " + APPNAME
     return render_template(
         "ventas/factura_venta_devolucion_lista.html",
         consulta=consulta,
         titulo=titulo,
-        page_heading="Listado de Devoluciones de Venta",
-        new_button_label="Nueva Devolución",
-        page_caption="Listado de devoluciones y notas de crédito de venta.",
+        page_heading=_("Listado de Devoluciones de Venta"),
+        new_button_label=_("Nueva Devolución"),
+        page_caption=_("Listado de devoluciones y notas de crédito de venta."),
         new_document_type="sales_return",
     )
 
@@ -812,7 +812,7 @@ def ventas_cliente_lista():
         database.select(Party).filter(Party.is_customer.is_(True)),
         include_status=False,
     )
-    titulo = "Listado de Clientes - " + APPNAME
+    titulo = _("Listado de Clientes") + " - " + APPNAME
     return render_template("ventas/cliente_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -825,7 +825,7 @@ def ventas_cliente_nuevo():
     from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
 
     formulario = FormularioCliente()
-    titulo = "Nuevo Cliente - " + APPNAME
+    titulo = _("Nuevo Cliente") + " - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(None, selected_company, role="customer")
@@ -877,7 +877,7 @@ def ventas_cliente_configuracion_compania(customer_id: str):
     try:
         upsert_party_company_settings_rows(customer_id, "customer", request.form)
         database.session.commit()
-        flash(_("Configuracion por compania del cliente guardada correctamente."), "success")
+        flash(_("Configuración por compañía del cliente guardada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -898,7 +898,7 @@ def ventas_cliente_editar(customer_id: str):
     if not cliente:
         abort(404)
     formulario = FormularioCliente(obj=cliente)
-    titulo = f"Editar Cliente - {APPNAME}"
+    titulo = _("Editar Cliente") + " - " + APPNAME
     company_choices = obtener_lista_entidades_por_id_razonsocial()
     selected_company = request.values.get("company") or (company_choices[0][0] if company_choices else None)
     company_settings_rows = party_company_settings_rows(cliente.id, selected_company, role="customer")
@@ -970,7 +970,7 @@ def ventas_cliente_direccion_crear(customer_id: str):
     try:
         create_party_address(customer_id, request.form)
         database.session.commit()
-        flash(_("Direccion agregada correctamente."), "success")
+        flash(_("Dirección agregada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -986,7 +986,7 @@ def ventas_cliente_direccion_editar(customer_id: str, link_id: str):
     try:
         update_party_address(customer_id, link_id, request.form)
         database.session.commit()
-        flash(_("Direccion actualizada correctamente."), "success")
+        flash(_("Dirección actualizada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
         flash_error(exc)
@@ -1001,7 +1001,7 @@ def ventas_cliente_direccion_desactivar(customer_id: str, link_id: str):
     _party_or_404(customer_id, "customer")
     deactivate_party_address(customer_id, link_id)
     database.session.commit()
-    flash(_("Direccion desactivada correctamente."), "success")
+    flash(_("Dirección desactivada correctamente."), "success")
     return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=customer_id))
 
 
@@ -1041,7 +1041,7 @@ def ventas_orden_venta_nuevo():
         {"code": w[0].code, "name": w[0].name}
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
-    titulo = "Nueva Orden de Venta - " + APPNAME
+    titulo = _("Nueva Orden de Venta") + " - " + APPNAME
     initial_source_type = _sales_order_initial_source_type(from_request_id, from_quotation_id)
     source_origen = solicitud_origen or cotizacion_origen
     transaction_config = _build_sales_order_transaction_config(
@@ -1145,7 +1145,7 @@ def ventas_orden_venta_editar(order_id: str):
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
         "availableSourceTypes": [
-            {"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)},
+            {"value": "sales_request", "label": str(_LABEL_PEDIDO_VENTA)},
             {"value": "sales_quotation", "label": _("Cotización de Venta")},
         ],
         "initialHeader": {
@@ -1173,7 +1173,7 @@ def ventas_orden_venta_editar(order_id: str):
     return render_template(
         "ventas/orden_venta_nuevo.html",
         form=formulario,
-        titulo="Editar Orden de Venta - " + APPNAME,
+        titulo=_("Editar Orden de Venta") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -1248,7 +1248,7 @@ def ventas_cotizacion_lista():
         SalesQuotation,
         (SalesQuotation.document_no, SalesQuotation.customer_name, SalesQuotation.remarks),
     )
-    titulo = "Listado de Cotizaciones de Venta - " + APPNAME
+    titulo = _("Listado de Cotizaciones de Venta") + " - " + APPNAME
     return render_template("ventas/cotizacion_lista.html", consulta=consulta, titulo=titulo)
 
 
@@ -1329,7 +1329,7 @@ def ventas_cotizacion_nueva():
         for i in database.session.execute(database.select(Item)).all()
     ]
     uoms_disponibles = [{"code": u[0].code, "name": u[0].name} for u in database.session.execute(database.select(UOM)).all()]
-    titulo = "Nueva Cotización - " + APPNAME
+    titulo = _("Nueva Cotización") + " - " + APPNAME
     transaction_config = {
         "formKey": _FORMKEY_SALES_QUOTATION,
         "canEditPrices": is_sales_price_editor(str(current_user.id)),
@@ -1338,7 +1338,7 @@ def ventas_cotizacion_nueva():
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "initialSourceType": "sales_request" if from_request_id else "",
-        "availableSourceTypes": [{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}],
+        "availableSourceTypes": [{"value": "sales_request", "label": str(_LABEL_PEDIDO_VENTA)}],
     }
     if solicitud_origen:
         transaction_config["initialHeader"] = {
@@ -1422,7 +1422,7 @@ def ventas_cotizacion_editar(quotation_id: str):
         "viewKey": "draft",
         "items": items_disponibles,
         "uoms": uoms_disponibles,
-        "availableSourceTypes": [{"value": "sales_request", "label": _(_LABEL_PEDIDO_VENTA)}],
+        "availableSourceTypes": [{"value": "sales_request", "label": str(_LABEL_PEDIDO_VENTA)}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -1448,7 +1448,7 @@ def ventas_cotizacion_editar(quotation_id: str):
     return render_template(
         "ventas/cotizacion_nuevo.html",
         form=formulario,
-        titulo="Editar Cotización de Venta - " + APPNAME,
+        titulo=_("Editar Cotización de Venta") + " - " + APPNAME,
         edit=True,
         registro=registro,
         solicitud_origen=None,
@@ -1575,7 +1575,7 @@ def ventas_cotizacion_cancel(quotation_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_COTIZACION, quotation_id=quotation_id))
 
         registro.docstatus = 2
@@ -1656,7 +1656,7 @@ def ventas_orden_venta_cancel(order_id: str):
         if ApprovalEngine.is_enabled(registro.company):
             ApprovalEngine.request_cancellation(registro)
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_ORDEN_VENTA, order_id=order_id))
 
         _release_reservation_for_sales_order(registro)
@@ -1830,7 +1830,7 @@ def ventas_entrega_editar(note_id: str):
         "items": items_disponibles,
         "uoms": uoms_disponibles,
         "warehouses": bodegas_disponibles,
-        "availableSourceTypes": [{"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)}],
+        "availableSourceTypes": [{"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)}],
         "initialHeader": {
             "company": registro.company or "",
             "posting_date": str(registro.posting_date or ""),
@@ -1857,7 +1857,7 @@ def ventas_entrega_editar(note_id: str):
     return render_template(
         "ventas/entrega_nuevo.html",
         form=formulario,
-        titulo="Editar Nota de Entrega - " + APPNAME,
+        titulo=_("Editar Nota de Entrega") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -2009,7 +2009,7 @@ def ventas_entrega_cancel(note_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_ENTREGA, note_id=note_id))
 
         _execute_delivery_note_cancellation(
@@ -2048,7 +2048,7 @@ def ventas_factura_venta_nuevo():
 
     src = _sales_invoice_sources_and_type(formulario)
     items_disponibles, uoms_disponibles = _sales_invoice_catalogs()
-    titulo = "Nueva Factura de Venta - " + APPNAME
+    titulo = _("Nueva Factura de Venta") + " - " + APPNAME
 
     company_id = (
         next((o.company for o in (src["orden_origen"], src["entrega_origen"], src["factura_origen"]) if o), None)
@@ -2081,8 +2081,8 @@ def ventas_factura_venta_nuevo():
         "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "initialSourceType": initial_source_type,
         "availableSourceTypes": [
-            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
+            {"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)},
+            {"value": "delivery_note", "label": str(_LABEL_NOTA_ENTREGA)},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
         "initialHeader": {"company": company_id or "", "posting_date": str(date.today())},
@@ -2167,8 +2167,8 @@ def _build_sales_invoice_edit_config(
         "warehouses": bodegas_disponibles,
         "columns": [{"field": "warehouse", "label": _("Almacén"), "visible": True, "width": 2}],
         "availableSourceTypes": [
-            {"value": "sales_order", "label": _(_LABEL_ORDEN_VENTA)},
-            {"value": "delivery_note", "label": _(_LABEL_NOTA_ENTREGA)},
+            {"value": "sales_order", "label": str(_LABEL_ORDEN_VENTA)},
+            {"value": "delivery_note", "label": str(_LABEL_NOTA_ENTREGA)},
             {"value": "sales_invoice", "label": _("Factura de Venta")},
         ],
         "initialHeader": {
@@ -2230,7 +2230,7 @@ def ventas_factura_venta_editar(invoice_id: str):
     return render_template(
         "ventas/factura_venta_nuevo.html",
         form=formulario,
-        titulo="Editar Factura de Venta - " + APPNAME,
+        titulo=_("Editar Factura de Venta") + " - " + APPNAME,
         edit=True,
         registro=registro,
         orden_origen=None,
@@ -2380,7 +2380,8 @@ def ventas_factura_venta_submit(invoice_id: str):
         ):
             dn = _create_delivery_note_from_invoice(registro)
             flash(
-                _("Se ha creado y aprobado la Nota de Entrega %s asociada a esta factura.") % (dn.document_no or dn.id),
+                _("Se ha creado y aprobado la Nota de Entrega %(document)s asociada a esta factura.")
+                % {"document": dn.document_no or dn.id},
                 "info",
             )
         log_submit(registro)
@@ -2424,7 +2425,7 @@ def ventas_factura_venta_cancel(invoice_id: str):
                 cancellation_date=request.form.get("cancellation_date") or registro.posting_date,
             )
             database.session.commit()
-            flash(_(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
+            flash(str(SOLICITUD_CANCELACION_PENDIENTE_MSG), "info")
             return redirect(url_for(_ENDPOINT_FACTURA_VENTA, invoice_id=invoice_id))
 
         _cancel_linked_delivery_note(

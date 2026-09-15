@@ -24,10 +24,10 @@ from cacao_accounting.database import (
 from cacao_accounting.party_settings import PartyCompanySettings, build_party_company_settings
 
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
-NATIONALITY_LABELS = {"national": "Nacional", "foreign": "Extranjero"}
-PERSON_TYPE_LABELS = {"natural": "Natural", "juridical": "Jurídica"}
+NATIONALITY_LABELS: dict[str, LazyText] = {"national": _l("Nacional"), "foreign": _l("Extranjero")}
+PERSON_TYPE_LABELS: dict[str, LazyText] = {"natural": _l("Natural"), "juridical": _l("Jurídica")}
 
 
 @dataclass(frozen=True)
@@ -85,7 +85,7 @@ def validate_party_group(group_id: str | None, role: str) -> PartyGroup | None:
     if group.group_type != role:
         raise ValueError(_("El tipo seleccionado no corresponde al tercero."))
     if not group.is_active:
-        raise ValueError(_("El tipo seleccionado no esta activo."))
+        raise ValueError(_("El tipo seleccionado no está activo."))
     return group
 
 
@@ -100,9 +100,9 @@ def apply_party_profile(party: Party, values: Mapping[str, str | None]) -> None:
     nationality_type = (values.get("nationality_type") or "").strip() or None
     person_type = (values.get("person_type") or "").strip() or None
     if nationality_type and nationality_type not in NATIONALITY_LABELS:
-        raise ValueError(_("La nacionalidad seleccionada no es valida."))
+        raise ValueError(_("La nacionalidad seleccionada no es válida."))
     if person_type and person_type not in PERSON_TYPE_LABELS:
-        raise ValueError(_("El tipo de persona seleccionada no es valido."))
+        raise ValueError(_("El tipo de persona seleccionado no es válido."))
 
     party.nationality_type = nationality_type
     party.person_type = person_type
@@ -141,14 +141,14 @@ def _parse_date(value: str | None) -> date | None:
     try:
         return date.fromisoformat(value)
     except ValueError as exc:  # pragma: no cover - validado en rutas
-        raise ValueError(_("La fecha de constitucion no es valida.")) from exc
+        raise ValueError(_("La fecha de constitución no es válida.")) from exc
 
 
-def _choice_label(labels: dict[str, str], value: str | None) -> str:
+def _choice_label(labels: Mapping[str, LazyText], value: str | None) -> str:
     """Resuelve un valor de lista a su etiqueta legible."""
     if not value:
         return ""
-    return labels.get(value, "")
+    return str(labels.get(value, ""))
 
 
 def _compose_address_label(
@@ -279,7 +279,7 @@ def create_party_address(party_id: str, values: Mapping[str, str | None]) -> Add
         is_active=True,
     )
     if not address.address_line1:
-        raise ValueError(_("La direccion es obligatoria."))
+        raise ValueError(_("La dirección es obligatoria."))
     database.session.add(address)
     database.session.flush()
     database.session.add(
@@ -298,10 +298,10 @@ def update_party_address(party_id: str, link_id: str, values: Mapping[str, str |
     link = _party_address_link(party_id, link_id)
     address = database.session.get(Address, link.address_id)
     if not address:
-        raise ValueError(_("Direccion no encontrada."))
+        raise ValueError(_("Dirección no encontrada."))
     line1 = (values.get("address_line1") or "").strip()
     if not line1:
-        raise ValueError(_("La direccion es obligatoria."))
+        raise ValueError(_("La dirección es obligatoria."))
     address.address_line1 = line1
     address.address_line2 = (values.get("address_line2") or "").strip() or None
     address.city = (values.get("city") or "").strip() or None
@@ -341,7 +341,7 @@ def _party_contact_link(party_id: str, link_id: str) -> PartyContact:
 def _party_address_link(party_id: str, link_id: str) -> PartyAddress:
     link = database.session.get(PartyAddress, link_id)
     if not link or link.party_id != party_id:
-        raise ValueError(_("Direccion no encontrada."))
+        raise ValueError(_("Dirección no encontrada."))
     return link
 
 

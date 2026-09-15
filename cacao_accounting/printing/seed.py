@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from cacao_accounting.database import database
 from cacao_accounting.printing.models import PrintTemplate
+from cacao_accounting.i18n import LazyText
 from cacao_accounting.printing.registry import PRINTABLE_DOCUMENTS, init_printing_registry
 
 SEED_TEMPLATE_VERSION = 2
@@ -349,22 +350,45 @@ ROOT_TEMPLATE_MAP = {
 }
 
 
+def _get_base_locale() -> str:
+    """Return the installation/base locale for deterministic system template seeding."""
+    try:
+        from cacao_accounting.setup.service import SETUP_LANGUAGE, get_setup_value
+
+        return get_setup_value(SETUP_LANGUAGE, "es")
+    except Exception:
+        return "es"
+
+
 def seed_print_templates() -> None:
     """Seed global system default templates for every registered document."""
     if not PRINTABLE_DOCUMENTS:
         init_printing_registry()
+
+    base_locale = _get_base_locale()
+    try:
+        from flask_babel import force_locale
+
+        with force_locale(base_locale):
+            _seed_print_templates_internal()
+    except Exception:
+        _seed_print_templates_internal()
+
+
+def _seed_print_templates_internal() -> None:
     for document_type, definition in PRINTABLE_DOCUMENTS.items():
         _ensure_system_template(document_type, definition["label"], definition["root_context_name"])
 
 
-def _ensure_system_template(document_type: str, label: str, root_name: str) -> None:
+def _ensure_system_template(document_type: str, label: LazyText | str, root_name: str) -> None:
+    label_str = str(label)
     code = f"system_default_{document_type}"
     existing = database.session.execute(select(PrintTemplate).filter_by(code=code, company_code=None)).scalars().first()
     template_body = (
         JOURNAL_TEMPLATE
         if root_name == "journal_entry"
         else ROOT_TEMPLATE_MAP.get(
-            root_name, "{% set doc = " + root_name + " %}{% set title = '" + label + "' %}" + LINES_TEMPLATE
+            root_name, "{% set doc = " + root_name + " %}{% set title = '" + label_str + "' %}" + LINES_TEMPLATE
         )
     )
     if existing is not None:
@@ -379,7 +403,7 @@ def _ensure_system_template(document_type: str, label: str, root_name: str) -> N
             company_code=None,
             document_type=document_type,
             code=code,
-            name=f"{label} basico",
+            name=f"{label_str} basico",
             template_body=template_body,
             stylesheet_body=BASE_CSS,
             paper_size="letter",

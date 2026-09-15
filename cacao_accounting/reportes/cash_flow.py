@@ -32,7 +32,7 @@ from cacao_accounting.database import (
     database,
 )
 
-from cacao_accounting.i18n import _
+from cacao_accounting.i18n import LazyText, _, _l
 
 try:  # pragma: no cover - fallback defensivo para contextos sin Flask-Babel inicializado.
     from flask_babel import gettext as _fallback_gettext
@@ -88,11 +88,11 @@ def _period_bounds_for(
 
 
 #: Etiquetas visibles de las secciones para la vista dedicada de configuración.
-SECTION_LABELS = {
-    SECTION_OPERATING: _("Operación"),
-    SECTION_INVESTING: _("Inversión"),
-    SECTION_FINANCING: _("Financiamiento"),
-    SECTION_CASH: _("Efectivo y equivalentes"),
+SECTION_LABELS: dict[str, LazyText] = {
+    SECTION_OPERATING: _l("Operación"),
+    SECTION_INVESTING: _l("Inversión"),
+    SECTION_FINANCING: _l("Financiamiento"),
+    SECTION_CASH: _l("Efectivo y equivalentes"),
 }
 
 #: Clasificaciones de estado de resultados: alimentan la utilidad y no exigen mapeo.

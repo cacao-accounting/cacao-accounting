@@ -7,6 +7,7 @@ from cacao_accounting.database import database, Entity, Modules
 from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 from cacao_accounting.query_tools.context import QueryContext
 from cacao_accounting.query_tools.errors import ErrorCode, QueryToolError
+from cacao_accounting.i18n import _
 
 
 def validate_company_access(context: QueryContext, company_id: str) -> None:
@@ -16,7 +17,7 @@ def validate_company_access(context: QueryContext, company_id: str) -> None:
     if not context.allow_all_companies and company_id not in context.company_ids:
         raise QueryToolError(
             code=ErrorCode.COMPANY_ACCESS_DENIED,
-            message="No tiene acceso a la compañía solicitada.",
+            message=_("No tiene acceso a la compañía solicitada."),
             request_id=context.request_id,
         )
 
@@ -25,7 +26,7 @@ def validate_company_access(context: QueryContext, company_id: str) -> None:
     if not entity:
         raise QueryToolError(
             code=ErrorCode.COMPANY_ACCESS_DENIED,
-            message="La compañía solicitada no existe.",
+            message=_("La compañía solicitada no existe."),
             request_id=context.request_id,
         )
 
@@ -36,13 +37,13 @@ def validate_module_active(module_name: str) -> None:
     if not module_id:
         raise QueryToolError(
             code=ErrorCode.MODULE_DISABLED,
-            message=f"El módulo '{module_name}' no está disponible.",
+            message=_("El módulo '%(module_name)s' no está disponible.") % {"module_name": module_name},
         )
     module = database.session.get(Modules, module_id)
     if not module or not module.enabled:
         raise QueryToolError(
             code=ErrorCode.MODULE_DISABLED,
-            message=f"El módulo '{module_name}' se encuentra deshabilitado.",
+            message=_("El módulo '%(module_name)s' se encuentra deshabilitado.") % {"module_name": module_name},
         )
 
 
@@ -56,7 +57,7 @@ def validate_permission(
     if required_permission and required_permission not in context.permissions:
         raise QueryToolError(
             code=ErrorCode.PERMISSION_DENIED,
-            message="No tiene permisos para consultar este recurso.",
+            message=_("No tiene permisos para consultar este recurso."),
             request_id=context.request_id,
         )
 
@@ -67,7 +68,7 @@ def validate_permission(
         if not module_id:
             raise QueryToolError(
                 code=ErrorCode.MODULE_DISABLED,
-                message=f"El módulo '{required_module}' no está disponible.",
+                message=_("El módulo '%(module_name)s' no está disponible.") % {"module_name": required_module},
                 request_id=context.request_id,
             )
 
@@ -76,7 +77,7 @@ def validate_permission(
             if not permisos.autorizado:
                 raise QueryToolError(
                     code=ErrorCode.PERMISSION_DENIED,
-                    message="No tiene permisos para consultar este recurso.",
+                    message=_("No tiene permisos para consultar este recurso."),
                     request_id=context.request_id,
                 )
 

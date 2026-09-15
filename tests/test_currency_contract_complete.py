@@ -175,7 +175,7 @@ def test_resolve_rejects_source_without_currency(app_ctx):
     from cacao_accounting.document_flow.currency_resolver import validate_flow_currency_homogeneity
 
     legacy_source = SimpleNamespace(transaction_currency=None)
-    with pytest.raises(DocumentFlowError, match="moneda transaccional explicita"):
+    with pytest.raises(DocumentFlowError, match="moneda transaccional expl[i\u00ed]cita"):
         validate_flow_currency_homogeneity([legacy_source])
 
 
@@ -413,7 +413,7 @@ def test_assert_currency_explicit_rejects_missing(app_ctx):
     from cacao_accounting.document_flow import DocumentFlowError
     from cacao_accounting.document_flow.currency_resolver import assert_currency_explicit
 
-    with pytest.raises(DocumentFlowError, match="transaction_currency explicita"):
+    with pytest.raises(DocumentFlowError, match="transaction_currency expl[i\u00ed]cita"):
         assert_currency_explicit(SimpleNamespace(transaction_currency=None), context="documento")
 
 
@@ -421,7 +421,7 @@ def test_assert_currency_explicit_rejects_blank(app_ctx):
     from cacao_accounting.document_flow import DocumentFlowError
     from cacao_accounting.document_flow.currency_resolver import assert_currency_explicit
 
-    with pytest.raises(DocumentFlowError, match="transaction_currency explicita"):
+    with pytest.raises(DocumentFlowError, match="transaction_currency expl[i\u00ed]cita"):
         assert_currency_explicit(SimpleNamespace(transaction_currency="  "), context="documento")
 
 
@@ -459,7 +459,7 @@ def test_source_transaction_currencies_rejects_missing(app_ctx):
     from cacao_accounting.document_flow import DocumentFlowError
     from cacao_accounting.document_flow.currency_resolver import source_transaction_currencies
 
-    with pytest.raises(DocumentFlowError, match="moneda transaccional explicita"):
+    with pytest.raises(DocumentFlowError, match="moneda transaccional expl[i\u00ed]cita"):
         source_transaction_currencies([SimpleNamespace(transaction_currency=None)])
 
 
@@ -523,7 +523,7 @@ def test_validate_immutable_header_rejects_source_without_currency(app_ctx):
     from cacao_accounting.document_flow.context import validate_immutable_header
 
     source = SimpleNamespace(company="cacao", transaction_currency=None)
-    with pytest.raises(DocumentFlowError, match="moneda transaccional explicita"):
+    with pytest.raises(DocumentFlowError, match="moneda transaccional expl[i\u00ed]cita"):
         validate_immutable_header(source, "cacao", "USD")
 
 
@@ -532,7 +532,7 @@ def test_validate_immutable_header_rejects_company_mismatch(app_ctx):
     from cacao_accounting.document_flow.context import validate_immutable_header
 
     source = SimpleNamespace(company="cacao", transaction_currency="USD")
-    with pytest.raises(DocumentFlowError, match="compania debe coincidir"):
+    with pytest.raises(DocumentFlowError, match="compañía debe coincidir"):
         validate_immutable_header(source, "otra", "USD")
 
 
@@ -554,7 +554,7 @@ def test_set_sales_document_totals_rejects_missing_currency(app_ctx):
     from cacao_accounting.ventas.services import _set_sales_document_totals
 
     document = SimpleNamespace(company="cacao", transaction_currency=None, posting_date=date(2026, 5, 4))
-    with pytest.raises(ValueError, match="moneda transaccional explicita"):
+    with pytest.raises(ValueError, match="moneda transaccional expl[i\u00ed]cita"):
         _set_sales_document_totals(document, Decimal("100"))
 
 
@@ -562,7 +562,7 @@ def test_set_purchase_receipt_totals_rejects_missing_currency(app_ctx):
     from cacao_accounting.compras.services import _set_purchase_receipt_totals
 
     receipt = SimpleNamespace(company="cacao", transaction_currency=None)
-    with pytest.raises(ValueError, match="moneda transaccional explicita"):
+    with pytest.raises(ValueError, match="moneda transaccional expl[i\u00ed]cita"):
         _set_purchase_receipt_totals(receipt, Decimal("100"))
 
 
@@ -570,7 +570,7 @@ def test_set_purchase_document_totals_rejects_missing_currency(app_ctx):
     from cacao_accounting.compras.services import _set_purchase_document_totals
 
     document = SimpleNamespace(company="cacao", transaction_currency=None)
-    with pytest.raises(ValueError, match="moneda transaccional explicita"):
+    with pytest.raises(ValueError, match="moneda transaccional expl[i\u00ed]cita"):
         _set_purchase_document_totals(document, Decimal("100"))
 
 
@@ -614,7 +614,7 @@ def test_resolve_rejects_blank_user_selection(app_ctx):
     from cacao_accounting.document_flow import DocumentFlowError
     from cacao_accounting.document_flow.currency_resolver import resolve_transaction_currency
 
-    with pytest.raises(DocumentFlowError, match="moneda transaccional explicita"):
+    with pytest.raises(DocumentFlowError, match="moneda transaccional expl[i\u00ed]cita"):
         resolve_transaction_currency(company="cacao", user_selection="   ", context="documento")
 
 

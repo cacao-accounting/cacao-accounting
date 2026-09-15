@@ -288,23 +288,23 @@ def enviar_confirmacion(confirmation_id: str):
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
-        body = f"""Estimado cliente/proveedor,
+        body = _("""Estimado cliente/proveedor,
 
-La empresa {company_name} le solicita la confirmación externa del saldo de su cuenta al {cutoff_date_str}.
+La empresa %(company)s le solicita la confirmación externa del saldo de su cuenta al %(cutoff_date)s.
 
-Relación: {party_name}
-Código de verificación: {raw_code}
+Relación: %(party)s
+Código de verificación: %(code)s
 
 Para ver el detalle de los documentos y responder a esta solicitud, ingrese al siguiente enlace seguro:
-{link}
+%(link)s
 
 Atentamente,
-{company_name}
-"""
+%(company)s
+""") % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
         try:
             send_email(
                 to_email=inv.email,
-                subject=f"Solicitud de Confirmación de Saldo - {company_name}",
+                subject=_("Solicitud de Confirmación de Saldo - %(company)s") % {"company": company_name},
                 body=body,
             )
             inv.sent_at = _utcnow()
@@ -319,7 +319,7 @@ Atentamente,
             confirmation,
             "balance_confirmation_sent",
             after=snapshot,
-            comment="Solicitud de confirmación de saldo enviada por correo electrónico.",
+            comment=_("Solicitud de confirmación de saldo enviada por correo electrónico."),
         )
         database.session.commit()
         flash(_("Solicitud de confirmación enviada correctamente."), "success")
@@ -367,23 +367,23 @@ def reenviar_confirmacion(confirmation_id: str):
 
         link = url_for(ENDPOINT_PUBLIC_CONFIRM_BALANCE, token=raw_token, _external=True)
 
-        body = f"""Estimado cliente/proveedor,
+        body = _("""Estimado cliente/proveedor,
 
-Le reenviamos la solicitud de confirmación de saldo de {company_name} al {cutoff_date_str}.
+Le reenviamos la solicitud de confirmación de saldo de %(company)s al %(cutoff_date)s.
 
-Relación: {party_name}
-Nuevo código de verificación: {raw_code}
+Relación: %(party)s
+Nuevo código de verificación: %(code)s
 
 Para ver el detalle de los documentos y responder a esta solicitud, ingrese al siguiente enlace seguro:
-{link}
+%(link)s
 
 Atentamente,
-{company_name}
-"""
+%(company)s
+""") % {"company": company_name, "cutoff_date": cutoff_date_str, "party": party_name, "code": raw_code, "link": link}
         try:
             send_email(
                 to_email=inv.email,
-                subject=f"Reenvío de Solicitud de Confirmación de Saldo - {company_name}",
+                subject=_("Reenvío de Solicitud de Confirmación de Saldo - %(company)s") % {"company": company_name},
                 body=body,
             )
             inv.sent_at = _utcnow()
@@ -397,7 +397,7 @@ Atentamente,
             confirmation,
             "balance_confirmation_resent",
             after=snapshot,
-            comment="Solicitud de confirmación de saldo reenviada con nuevos tokens y códigos.",
+            comment=_("Solicitud de confirmación de saldo reenviada con nuevos tokens y códigos."),
         )
         database.session.commit()
         flash(_("Solicitud de confirmación reenviada correctamente con nuevos códigos de acceso."), "success")
@@ -439,7 +439,7 @@ def cancelar_confirmacion(confirmation_id: str):
     log_balance_confirmation_event(
         confirmation,
         "balance_confirmation_cancelled",
-        comment="Solicitud de confirmación de saldo cancelada manualmente por el usuario.",
+        comment=_("Solicitud de confirmación de saldo cancelada manualmente por el usuario."),
     )
     database.session.commit()
     flash(_("Solicitud de confirmación cancelada correctamente."), "warning")
@@ -712,7 +712,8 @@ def public_confirm_balance_respond(token: str):
     log_balance_confirmation_event(
         confirmation,
         action_event,
-        comment=f"Confirmación respondida como {response_type.upper()}. Comentario: {response_comment or 'Sin comentario'}.",
+        comment=_("Confirmación respondida como %(response_type)s. Comentario: %(comment)s.")
+        % {"response_type": response_type.upper(), "comment": response_comment or _("Sin comentario")},
     )
 
     database.session.commit()

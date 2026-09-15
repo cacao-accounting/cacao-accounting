@@ -117,8 +117,11 @@ def _proforma_for_ledger(
         debit = sum((line.debit for line in result.lines), Decimal("0")) if isinstance(result, JournalEntryProforma) else 0
         credit = sum((line.credit for line in result.lines), Decimal("0")) if isinstance(result, JournalEntryProforma) else 0
         raise PostingError(  # type: ignore[misc]
-            f"El asiento pro-forma no balancea en la moneda funcional del libro "
-            f"{ledger_currency}: débitos {debit}, créditos {credit}."
+            _(
+                "El asiento pro-forma no balancea en la moneda funcional del libro "
+                "%(ledger_currency)s: débitos %(debit)s, créditos %(credit)s."
+            )
+            % {"ledger_currency": ledger_currency, "debit": debit, "credit": credit}
         )
     return result
 
