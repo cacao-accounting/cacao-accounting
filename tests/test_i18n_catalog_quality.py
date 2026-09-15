@@ -181,6 +181,58 @@ def test_catalog_placeholders_are_consistent_between_msgid_and_msgstr() -> None:
     assert offenders == [], f"Placeholders inconsistentes entre msgid y msgstr: {offenders}"
 
 
+def test_catalog_raw_folding_roundtrips_through_polib() -> None:
+    """El doblado crudo de ``msgid``/``msgstr`` no pierde ni altera contenido."""
+    if polib is None:
+        pytest.skip("polib is not installed")
+
+    entries = [entry for entry in polib.pofile(str(PO_PATH)) if not entry.obsolete]
+    lines = PO_PATH.read_text(encoding="utf-8").splitlines()
+    problems: list[tuple[str, str, str]] = []
+    index = 0
+    target: str | None = None
+    fragments: list[str] = []
+    msgstr_fragments: list[str] = []
+
+    def close_entry() -> None:
+        nonlocal index, target, fragments, msgstr_fragments
+        if target is None:
+            return
+        if index < len(entries):
+            expected = entries[index]
+            msgid = polib.unescape("".join(fragments))
+            msgstr = polib.unescape("".join(msgstr_fragments))
+            if msgid != expected.msgid or msgstr != expected.msgstr:
+                problems.append((expected.msgid, msgid, msgstr))
+            index += 1
+        target = None
+        fragments = []
+        msgstr_fragments = []
+
+    for line in lines:
+        if line.startswith("#") or line == "":
+            close_entry()
+            continue
+        stripped = line.strip()
+        if stripped.startswith("msgid "):
+            close_entry()
+            target = "msgid"
+            fragments = [stripped[len("msgid ") :].strip().strip('"')]
+            msgstr_fragments = []
+            continue
+        if stripped.startswith("msgstr "):
+            target = "msgstr"
+            msgstr_fragments = [stripped[len("msgstr ") :].strip().strip('"')]
+            continue
+        if target == "msgid":
+            fragments.append(stripped.strip('"'))
+        elif target == "msgstr":
+            msgstr_fragments.append(stripped.strip('"'))
+    close_entry()
+
+    assert problems == [], f"El doblado crudo no coincide con el catálogo parseado: {problems}"
+
+
 def test_catalog_passes_gettext_validation() -> None:
     """El catálogo no puede contener definiciones duplicadas para msgfmt."""
     msgfmt = shutil.which("msgfmt")
