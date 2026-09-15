@@ -532,7 +532,7 @@ def test_validate_immutable_header_rejects_company_mismatch(app_ctx):
     from cacao_accounting.document_flow.context import validate_immutable_header
 
     source = SimpleNamespace(company="cacao", transaction_currency="USD")
-    with pytest.raises(DocumentFlowError, match="compania debe coincidir"):
+    with pytest.raises(DocumentFlowError, match="compañía debe coincidir"):
         validate_immutable_header(source, "otra", "USD")
 
 
