@@ -2535,7 +2535,7 @@ def _validate_reversal_of(
     if not source:
         raise ValueError(_("La factura origen '%(source)s' no existe.") % {"source": reversal_of})
     if source.docstatus != 1:
-        raise ValueError(_("La factura origen '%(source)s' no esta aprobada.") % {"source": reversal_of})
+        raise ValueError(_("La factura origen '%(source)s' no está aprobada.") % {"source": reversal_of})
     if customer_id and source.customer_id != customer_id:
         raise ValueError(_("La factura origen '%(source)s' no pertenece al mismo cliente.") % {"source": reversal_of})
     if company and source.company != company:
@@ -2548,7 +2548,7 @@ def _validate_reversal_of(
         outstanding = compute_outstanding_amount(source)
         if note_amount > outstanding:
             raise ValueError(
-                _("La nota de credito (%(note_amount)s) excede el saldo pendiente de la factura origen (%(outstanding)s).")
+                _("La nota de crédito (%(note_amount)s) excede el saldo pendiente de la factura origen (%(outstanding)s).")
                 % {"note_amount": note_amount, "outstanding": outstanding}
             )
 

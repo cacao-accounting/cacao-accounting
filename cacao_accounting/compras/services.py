@@ -2253,7 +2253,7 @@ def _validate_purchase_reversal_of(
     if not source:
         raise ValueError(_("La factura origen '%(source)s' no existe.") % {"source": reversal_of})
     if source.docstatus != 1:
-        raise ValueError(_("La factura origen '%(source)s' no esta aprobada.") % {"source": reversal_of})
+        raise ValueError(_("La factura origen '%(source)s' no está aprobada.") % {"source": reversal_of})
     if supplier_id and source.supplier_id != supplier_id:
         raise ValueError(_("La factura origen '%(source)s' no pertenece al mismo proveedor.") % {"source": reversal_of})
     if company and source.company != company:
@@ -2307,7 +2307,7 @@ def _validate_purchase_reversal_of(
         if note_amount > credit_capacity:
             raise ValueError(
                 _(
-                    "La nota de credito (%(note_amount)s) excede el credito disponible de la factura origen "
+                    "La nota de crédito (%(note_amount)s) excede el crédito disponible de la factura origen "
                     "(%(credit_capacity)s)."
                 )
                 % {"note_amount": note_amount, "credit_capacity": credit_capacity}

@@ -1807,7 +1807,7 @@ def _create_bank_credit_note_entries(
     defaults = _company_defaults(company)
     bank_account_id = _require_account(
         _resolve_bank_gl_account_id(document, destination=True),
-        "La nota de credito bancaria requiere una cuenta bancaria de destino.",
+        "La nota de crédito bancaria requiere una cuenta bancaria de destino.",
     )
     income_account_id = _require_company_account(
         document.paid_from_account_id or (defaults.default_income if defaults else None),
