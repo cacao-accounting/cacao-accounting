@@ -652,7 +652,6 @@ def _ensure_stock_valuation_layer_batch_column() -> None:
         log.info("Columna batch_id e indice agregados a stock_valuation_layer.")
     except (OperationalError, ProgrammingError, InterfaceError):
         database.session.rollback()
-        pass
     except Exception as exc:
         log.warning("Could not ensure StockValuationLayer.batch_id during initialization: {}", exc)
 
