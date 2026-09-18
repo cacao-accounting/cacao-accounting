@@ -60,7 +60,7 @@ class PasswordChangeForm(FlaskForm):
     current_password = PasswordField(_l("Contraseña actual"), validators=[DataRequired()])
     new_password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired()])
     confirm_password = PasswordField(
-        _l("Confirmar contraseña"),
+        CONFIRMAR_CONTRASENA,
         validators=[DataRequired(), EqualTo("new_password", message=CONTRASENAS_NO_COINCIDEN)],
     )
     cambiar_clave = SubmitField(_l("Cambiar contraseña"))
@@ -91,7 +91,7 @@ class UserCreateForm(FlaskForm):
     active = BooleanField(_l("Habilitado"), default=True)
     password = PasswordField(_l("Contraseña"), validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
-        _l("Confirmar contraseña"),
+        CONFIRMAR_CONTRASENA,
         validators=[DataRequired(), EqualTo("password", message=CONTRASENAS_NO_COINCIDEN)],
     )
     crear_usuario = SubmitField(_l("Crear usuario"))
@@ -129,7 +129,7 @@ class UserPasswordForm(FlaskForm):
 
     password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
-        _l("Confirmar contraseña"),
+        CONFIRMAR_CONTRASENA,
         validators=[DataRequired(), EqualTo("password", message=CONTRASENAS_NO_COINCIDEN)],
     )
     cambiar_clave = SubmitField(_l("Cambiar contraseña"))
@@ -183,7 +183,7 @@ class ResetPasswordForm(FlaskForm):
 
     new_password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
-        _l("Confirmar contraseña"),
+        CONFIRMAR_CONTRASENA,
         validators=[DataRequired(), EqualTo("new_password", message=CONTRASENAS_NO_COINCIDEN)],
     )
     restablecer = SubmitField(_l("Restablecer contraseña"))
