@@ -31,6 +31,11 @@ from sqlalchemy.orm import synonym
 
 from cacao_accounting.i18n import _, _l
 
+_UNIT_CODE_FK = "unit.code"
+_PROJECT_CODE_FK = "project.code"
+_PURCHASE_RECEIPT_ITEM_ID_FK = "purchase_receipt_item.id"
+_PURCHASE_INVOICE_ITEM_ID_FK = "purchase_invoice_item.id"
+
 # ---------------------------------------------------------------------------------------
 # Recursos locales
 # ---------------------------------------------------------------------------------------
@@ -1445,10 +1450,10 @@ class StockEntry(database.Model, DocBase):  # type: ignore[name-defined]
     )
     cost_center_code = database.Column(database.String(10), nullable=True)
     unit_code = database.Column(
-        database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(10), database.ForeignKey(_UNIT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     project_code = database.Column(
-        database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(10), database.ForeignKey(_PROJECT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     remarks = database.Column(database.Text(), nullable=True)
 
@@ -3072,10 +3077,10 @@ class PettyCashVoucher(database.Model, DocBase):  # type: ignore[name-defined]
     amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
     cost_center_code = database.Column(database.String(10), nullable=True)
     unit_code = database.Column(
-        database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(10), database.ForeignKey(_UNIT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     project_code = database.Column(
-        database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(10), database.ForeignKey(_PROJECT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     comments = database.Column(database.Text(), nullable=True)
     # Cuando el vale se convierte en gasto, se guarda la referencia.
@@ -3125,10 +3130,10 @@ class PettyCashExpense(database.Model, DocBase):  # type: ignore[name-defined]
     amount = database.Column(database.Numeric(20, 4), nullable=False, default=0)
     cost_center_code = database.Column(database.String(10), nullable=True)
     unit_code = database.Column(
-        database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(10), database.ForeignKey(_UNIT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     project_code = database.Column(
-        database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(10), database.ForeignKey(_PROJECT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     remarks = database.Column(database.Text(), nullable=True)
     # Comprobante contable generado por el Posting Engine.
@@ -4271,10 +4276,10 @@ class GLEntry(database.Model):  # type: ignore[name-defined]
     cost_center_code = database.Column(database.String(10), nullable=True)
     # Unidad de negocio como dimension analitica (sucursal, oficina, punto de venta)
     unit_code = database.Column(
-        database.String(10), database.ForeignKey("unit.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(10), database.ForeignKey(_UNIT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     project_code = database.Column(
-        database.String(10), database.ForeignKey("project.code", ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
+        database.String(10), database.ForeignKey(_PROJECT_CODE_FK, ondelete=FK_RESTRICT, onupdate=FK_CASCADE), nullable=True
     )
     remarks = database.Column(database.String(500), nullable=True)
     # Reversion contable append-only
@@ -5000,13 +5005,13 @@ class PurchaseReconciliationItem(database.Model, BaseTabla):  # type: ignore[nam
     )
     purchase_receipt_item_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_receipt_item.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        database.ForeignKey(_PURCHASE_RECEIPT_ITEM_ID_FK, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
         nullable=True,
         index=True,
     )
     purchase_invoice_item_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_invoice_item.id", ondelete=FK_CASCADE, onupdate=FK_CASCADE),
+        database.ForeignKey(_PURCHASE_INVOICE_ITEM_ID_FK, ondelete=FK_CASCADE, onupdate=FK_CASCADE),
         nullable=False,
         index=True,
     )
@@ -5046,13 +5051,13 @@ class PurchaseReceiptReturnAllocation(database.Model, BaseTabla):  # type: ignor
     __tablename__ = "purchase_receipt_return_allocation"
     original_receipt_item_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_receipt_item.id", ondelete=FK_RESTRICT),
+        database.ForeignKey(_PURCHASE_RECEIPT_ITEM_ID_FK, ondelete=FK_RESTRICT),
         nullable=False,
         index=True,
     )
     return_receipt_item_id = database.Column(
         database.String(26),
-        database.ForeignKey("purchase_receipt_item.id", ondelete=FK_RESTRICT),
+        database.ForeignKey(_PURCHASE_RECEIPT_ITEM_ID_FK, ondelete=FK_RESTRICT),
         nullable=False,
         unique=True,
         index=True,
@@ -5075,10 +5080,16 @@ class PurchaseInvoiceReceiptAllocation(database.Model, BaseTabla):  # type: igno
 
     __tablename__ = "purchase_invoice_receipt_allocation"
     invoice_item_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_invoice_item.id", ondelete=FK_RESTRICT), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(_PURCHASE_INVOICE_ITEM_ID_FK, ondelete=FK_RESTRICT),
+        nullable=False,
+        index=True,
     )
     receipt_item_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_receipt_item.id", ondelete=FK_RESTRICT), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(_PURCHASE_RECEIPT_ITEM_ID_FK, ondelete=FK_RESTRICT),
+        nullable=False,
+        index=True,
     )
     purchase_order_item_id = database.Column(
         database.String(26), database.ForeignKey("purchase_order_item.id", ondelete=FK_RESTRICT), nullable=True, index=True
@@ -5105,13 +5116,19 @@ class PurchaseCreditNoteAllocation(database.Model, BaseTabla):  # type: ignore[n
 
     __tablename__ = "purchase_credit_note_allocation"
     credit_note_item_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_invoice_item.id", ondelete=FK_RESTRICT), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(_PURCHASE_INVOICE_ITEM_ID_FK, ondelete=FK_RESTRICT),
+        nullable=False,
+        index=True,
     )
     invoice_item_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_invoice_item.id", ondelete=FK_RESTRICT), nullable=False, index=True
+        database.String(26),
+        database.ForeignKey(_PURCHASE_INVOICE_ITEM_ID_FK, ondelete=FK_RESTRICT),
+        nullable=False,
+        index=True,
     )
     return_receipt_item_id = database.Column(
-        database.String(26), database.ForeignKey("purchase_receipt_item.id", ondelete=FK_RESTRICT), nullable=True, index=True
+        database.String(26), database.ForeignKey(_PURCHASE_RECEIPT_ITEM_ID_FK, ondelete=FK_RESTRICT), nullable=True, index=True
     )
     company = database.Column(
         database.String(10), database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT), nullable=False, index=True

@@ -903,6 +903,21 @@ def _create_purchase_request_relation_from_supplier_quotation(
     )
 
 
+def _msg_cantidad_item(item_code: str) -> str:
+    """Mensaje para cantidad de item no positiva."""
+    return _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}
+
+
+def _msg_item_inexistente(item_code: str) -> str:
+    """Mensaje para item inexistente."""
+    return _("El item %(item_code)s no existe.") % {"item_code": item_code}
+
+
+def _msg_item_no_comprable(item_code: str) -> str:
+    """Mensaje para item no habilitado para compra."""
+    return _("El item %(item_code)s no está habilitado para compra.") % {"item_code": item_code}
+
+
 def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
     """Guarda las líneas de una orden de compra desde el formulario."""
     i = 0
@@ -914,16 +929,12 @@ def _save_purchase_order_items(order_id: str) -> tuple[Decimal, Decimal]:
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(
-                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
             item_obj = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
             if not item_obj:
-                raise DocumentFlowError(_("El item %(item_code)s no existe.") % {"item_code": item_code}, 400)
+                raise DocumentFlowError(_msg_item_inexistente(item_code), 400)
             if not item_obj.is_active or not item_obj.is_purchase_item:
-                raise DocumentFlowError(
-                    _("El item %(item_code)s no está habilitado para compra.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_item_no_comprable(item_code), 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -970,9 +981,7 @@ def _save_purchase_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(
-                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
             uom = request.form.get(f"uom_{i}") or None
             linea = PurchaseQuotationItem(
                 purchase_quotation_id=quotation_id,
@@ -1005,9 +1014,7 @@ def _save_purchase_request_items(request_id: str) -> tuple[Decimal, Decimal]:
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(
-                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
             linea = PurchaseRequestItem(
                 purchase_request_id=request_id,
                 item_code=item_code,
@@ -1037,16 +1044,12 @@ def _save_supplier_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(
-                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
             item_obj = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
             if not item_obj:
-                raise DocumentFlowError(_("El item %(item_code)s no existe.") % {"item_code": item_code}, 400)
+                raise DocumentFlowError(_msg_item_inexistente(item_code), 400)
             if not item_obj.is_active or not item_obj.is_purchase_item:
-                raise DocumentFlowError(
-                    _("El item %(item_code)s no está habilitado para compra.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_item_no_comprable(item_code), 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1106,9 +1109,7 @@ def _save_purchase_receipt_items(receipt_id: str) -> tuple[Decimal, Decimal]:
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(
-                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None
@@ -1176,16 +1177,12 @@ def _save_purchase_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
         if item_code.strip():
             qty = _form_decimal(f"qty_{i}", "1")
             if qty <= 0:
-                raise DocumentFlowError(
-                    _("La cantidad del item %(item_code)s debe ser mayor a cero.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_cantidad_item(item_code), 400)
             item_obj = database.session.execute(database.select(Item).filter_by(code=item_code)).scalar_one_or_none()
             if not item_obj:
-                raise DocumentFlowError(_("El item %(item_code)s no existe.") % {"item_code": item_code}, 400)
+                raise DocumentFlowError(_msg_item_inexistente(item_code), 400)
             if not item_obj.is_active or not item_obj.is_purchase_item:
-                raise DocumentFlowError(
-                    _("El item %(item_code)s no está habilitado para compra.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_item_no_comprable(item_code), 400)
             rate = _form_decimal(f"rate_{i}", "0")
             amount = _line_amount(i)
             uom = request.form.get(f"uom_{i}") or None

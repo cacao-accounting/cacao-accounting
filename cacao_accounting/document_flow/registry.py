@@ -41,6 +41,8 @@ from cacao_accounting.database import (
     SupplierQuotationItem,
 )
 
+COMPRAS_RECEPCION_NUEVO_ENDPOINT = "compras.compras_recepcion_nuevo"
+
 COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO = "compras.compras_factura_compra_nuevo"
 CREAR_FACTURA = _l("Crear Factura")
 CREAR_REEMBOLSO_LABEL = _l("Crear Reembolso")
@@ -121,7 +123,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         total_field="grand_total",
         filter_fields=("document_no", "company", "supplier_id", "supplier_name", "posting_date", "grand_total", "docstatus"),
         create_actions=(
-            DocumentAction(_l("Crear Recepción"), "purchase_receipt", "compras.compras_recepcion_nuevo", "from_order"),
+            DocumentAction(_l("Crear Recepción"), "purchase_receipt", COMPRAS_RECEPCION_NUEVO_ENDPOINT, "from_order"),
             DocumentAction(CREAR_FACTURA, "purchase_invoice", COMPRAS_COMPRAS_FACTURA_COMPRA_NUEVO, "from_order"),
             DocumentAction(_ACTION_CREAR_PAGO, "payment_entry", _ENDPOINT_PAGO_NUEVO, "from_purchase_order"),
             DocumentAction(
@@ -143,7 +145,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             DocumentAction(
                 _l("Crear devolución física"),
                 "purchase_receipt",
-                "compras.compras_recepcion_nuevo",
+                COMPRAS_RECEPCION_NUEVO_ENDPOINT,
                 "from_receipt",
                 {"is_return": "1"},
             ),
@@ -273,7 +275,7 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
             DocumentAction(
                 _l("Crear devolución física"),
                 "purchase_receipt",
-                "compras.compras_recepcion_nuevo",
+                COMPRAS_RECEPCION_NUEVO_ENDPOINT,
                 "from_receipt",
                 {"is_return": "1"},
             ),

@@ -16,6 +16,14 @@ from wtforms import BooleanField, PasswordField, SelectField, SelectMultipleFiel
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
 
+SEGUNDO_NOMBRE = _l("Segundo nombre")
+SEGUNDO_APELLIDO = _l("Segundo apellido")
+CORREO_ELECTRONICO = _l("Correo electrónico")
+TELEFONO = _l("Teléfono")
+NUEVA_CONTRASENA = _l("Nueva contraseña")
+CONFIRMAR_CONTRASENA = _l("Confirmar contraseña")
+CONTRASENAS_NO_COINCIDEN = _l("Las contraseñas deben coincidir")
+
 
 class LoginForm(FlaskForm):
     """Formulario de inicio de sesión."""
@@ -29,11 +37,11 @@ class ProfileForm(FlaskForm):
     """Formulario para actualizar información personal."""
 
     name = StringField(_l("Nombre"), validators=[Optional()])
-    name2 = StringField(_l("Segundo nombre"), validators=[Optional()])
+    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional()])
     last_name = StringField(_l("Apellido"), validators=[Optional()])
-    last_name2 = StringField(_l("Segundo apellido"), validators=[Optional()])
-    e_mail = StringField(_l("Correo electrónico"), validators=[Optional(), Email()])
-    phone = StringField(_l("Teléfono"), validators=[Optional()])
+    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
+    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
+    phone = StringField(TELEFONO, validators=[Optional()])
     language = SelectField(
         _l("Idioma"),
         choices=[
@@ -50,10 +58,10 @@ class PasswordChangeForm(FlaskForm):
     """Formulario para cambiar la contraseña del usuario."""
 
     current_password = PasswordField(_l("Contraseña actual"), validators=[DataRequired()])
-    new_password = PasswordField(_l("Nueva contraseña"), validators=[DataRequired()])
+    new_password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired()])
     confirm_password = PasswordField(
         _l("Confirmar contraseña"),
-        validators=[DataRequired(), EqualTo("new_password", message=_l("Las contraseñas deben coincidir"))],
+        validators=[DataRequired(), EqualTo("new_password", message=CONTRASENAS_NO_COINCIDEN)],
     )
     cambiar_clave = SubmitField(_l("Cambiar contraseña"))
 
@@ -63,11 +71,11 @@ class UserCreateForm(FlaskForm):
 
     usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
     name = StringField(_l("Nombre"), validators=[Optional()])
-    name2 = StringField(_l("Segundo nombre"), validators=[Optional()])
+    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional()])
     last_name = StringField(_l("Apellido"), validators=[Optional()])
-    last_name2 = StringField(_l("Segundo apellido"), validators=[Optional()])
-    e_mail = StringField(_l("Correo electrónico"), validators=[Optional(), Email()])
-    phone = StringField(_l("Teléfono"), validators=[Optional()])
+    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
+    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
+    phone = StringField(TELEFONO, validators=[Optional()])
     classification = SelectField(
         _l("Clasificación"),
         choices=[
@@ -84,7 +92,7 @@ class UserCreateForm(FlaskForm):
     password = PasswordField(_l("Contraseña"), validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
         _l("Confirmar contraseña"),
-        validators=[DataRequired(), EqualTo("password", message=_l("Las contraseñas deben coincidir"))],
+        validators=[DataRequired(), EqualTo("password", message=CONTRASENAS_NO_COINCIDEN)],
     )
     crear_usuario = SubmitField(_l("Crear usuario"))
 
@@ -94,11 +102,11 @@ class UserEditForm(FlaskForm):
 
     usuario = StringField(_l("Usuario"), validators=[DataRequired(), Length(min=3, max=15)])
     name = StringField(_l("Nombre"), validators=[Optional()])
-    name2 = StringField(_l("Segundo nombre"), validators=[Optional()])
+    name2 = StringField(SEGUNDO_NOMBRE, validators=[Optional()])
     last_name = StringField(_l("Apellido"), validators=[Optional()])
-    last_name2 = StringField(_l("Segundo apellido"), validators=[Optional()])
-    e_mail = StringField(_l("Correo electrónico"), validators=[Optional(), Email()])
-    phone = StringField(_l("Teléfono"), validators=[Optional()])
+    last_name2 = StringField(SEGUNDO_APELLIDO, validators=[Optional()])
+    e_mail = StringField(CORREO_ELECTRONICO, validators=[Optional(), Email()])
+    phone = StringField(TELEFONO, validators=[Optional()])
     classification = SelectField(
         _l("Clasificación"),
         choices=[
@@ -119,10 +127,10 @@ class UserEditForm(FlaskForm):
 class UserPasswordForm(FlaskForm):
     """Formulario para cambiar contraseña de usuario desde administración."""
 
-    password = PasswordField(_l("Nueva contraseña"), validators=[DataRequired(), Length(min=8)])
+    password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
         _l("Confirmar contraseña"),
-        validators=[DataRequired(), EqualTo("password", message=_l("Las contraseñas deben coincidir"))],
+        validators=[DataRequired(), EqualTo("password", message=CONTRASENAS_NO_COINCIDEN)],
     )
     cambiar_clave = SubmitField(_l("Cambiar contraseña"))
 
@@ -166,16 +174,16 @@ class OtpVerificationForm(FlaskForm):
 class ForgotPasswordForm(FlaskForm):
     """Formulario para solicitar recuperación de contraseña."""
 
-    email = StringField(_l("Correo electrónico"), validators=[DataRequired(), Email()])
+    email = StringField(CORREO_ELECTRONICO, validators=[DataRequired(), Email()])
     enviar = SubmitField(_l("Enviar enlace de recuperación"))
 
 
 class ResetPasswordForm(FlaskForm):
     """Formulario para restablecer contraseña con token de recuperación."""
 
-    new_password = PasswordField(_l("Nueva contraseña"), validators=[DataRequired(), Length(min=8)])
+    new_password = PasswordField(NUEVA_CONTRASENA, validators=[DataRequired(), Length(min=8)])
     confirm_password = PasswordField(
         _l("Confirmar contraseña"),
-        validators=[DataRequired(), EqualTo("new_password", message=_l("Las contraseñas deben coincidir"))],
+        validators=[DataRequired(), EqualTo("new_password", message=CONTRASENAS_NO_COINCIDEN)],
     )
     restablecer = SubmitField(_l("Restablecer contraseña"))

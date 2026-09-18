@@ -73,7 +73,7 @@ class FormularioEntidad(FlaskForm):
     un mapeo de la mayoria de sus campos.
     """
 
-    id = StringField(_l("Código"), validators=[DataRequired()])
+    id = StringField(CODIGO, validators=[DataRequired()])
     razon_social = StringField(_l("Razón social"), validators=[DataRequired()])
     nombre_comercial = StringField(_l("Nombre comercial"), validators=[])
     id_fiscal = StringField(_l("Identificación fiscal"), validators=[DataRequired()])
@@ -105,7 +105,7 @@ class FormularioUnidad(FlaskForm):
     un mapeo de la mayoria de sus campos.
     """
 
-    id = StringField(_l("Código"), validators=[DataRequired()])
+    id = StringField(CODIGO, validators=[DataRequired()])
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"))
     parent_id = SelectField(_l("Unidad Padre"), choices=[], validators=[Optional()], validate_choice=False)
@@ -120,7 +120,7 @@ class FormularioUnidad(FlaskForm):
 class FormularioLibro(FlaskForm):
     """Formulario base para la administración de libros de contabilidad."""
 
-    id = StringField(_l("Código"), validators=[DataRequired()])
+    id = StringField(CODIGO, validators=[DataRequired()])
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     moneda = SelectField(_l("Moneda"), choices=[], validators=[DataRequired()])
@@ -273,7 +273,7 @@ class FormularioCuenta(FlaskForm):
 class FormularioCentroCosto(FlaskForm):
     """Formulario para crear y editar centros de costos."""
 
-    id = StringField(_l("Código"), validators=[DataRequired()])
+    id = StringField(CODIGO, validators=[DataRequired()])
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     activo = BooleanField(_l("Activo"), default=True)
@@ -285,7 +285,7 @@ class FormularioCentroCosto(FlaskForm):
 class FormularioProyecto(FlaskForm):
     """Formulario para crear y editar proyectos."""
 
-    id = StringField(_l("Código"), validators=[DataRequired()])
+    id = StringField(CODIGO, validators=[DataRequired()])
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     parent_id = SelectField(_l("Proyecto Padre"), choices=[], validators=[Optional()], validate_choice=False)
@@ -312,7 +312,7 @@ class FormularioProyecto(FlaskForm):
 class FormularioFiscalYear(FlaskForm):
     """Formulario para crear y editar años fiscales."""
 
-    id = StringField(_l("Código"), validators=[DataRequired()])
+    id = StringField(CODIGO, validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     inicio = DateField(FECHA_INICIO, validators=[DataRequired()])
     fin = DateField(FECHA_FIN, validators=[DataRequired()])
@@ -322,7 +322,7 @@ class FormularioFiscalYear(FlaskForm):
 class FormularioAccountingPeriod(FlaskForm):
     """Formulario para crear y editar periodos contables."""
 
-    id = StringField(_l("Código"), validators=[DataRequired()])
+    id = StringField(CODIGO, validators=[DataRequired()])
     entidad = SelectField(_l("Entidad"), validators=[DataRequired()])
     fiscal_year = SelectField(_l("Año Fiscal"), validators=[DataRequired()])
     nombre = StringField(_l("Nombre"), validators=[DataRequired()])
