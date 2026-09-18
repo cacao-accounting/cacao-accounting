@@ -68,11 +68,11 @@ COPY run.py /app/run.py
 COPY --from=frontend /build/node_modules /app/cacao_accounting/static/node_modules
 COPY docs/oci_files/Caddyfile /etc/caddy/Caddyfile
 COPY docker-entry-point.sh /app/docker-entry-point.sh
-RUN chmod +x /app/docker-entry-point.sh
 
 # Compila los catalogos de traduccion (.mo) a partir de los .po para que la
 # imagen incluya siempre las traducciones vigentes de espanol e ingles.
-RUN pybabel compile -d /app/cacao_accounting/translations -D messages -f
+RUN chmod +x /app/docker-entry-point.sh \
+    && pybabel compile -d /app/cacao_accounting/translations -D messages -f
 
 USER appuser
 
