@@ -763,7 +763,7 @@ def test_payment_cancellation_reverts_relations(app_ctx, monkeypatch):
 def test_create_company_with_custom_fiscal_year_generates_12_periods(app_ctx):
     from cacao_accounting.runtime_mode import force_single_entity
     from cacao_accounting.setup.service import create_company
-    from cacao_accounting.database import AccountingPeriod, Entity, FiscalYear, database
+    from cacao_accounting.database import AccountingPeriod, Entity, FiscalYear, NamingSeries, database
 
     if force_single_entity():
         # Clean existing entities for single-entity environment in test
@@ -807,6 +807,14 @@ def test_create_company_with_custom_fiscal_year_generates_12_periods(app_ctx):
     assert len(periods) == 12
     assert periods[0].start == date(2025, 4, 1)
     assert periods[-1].end == date(2026, 3, 31)
+
+    assert entity.code == "MAPCO"
+    naming_series = database.session.execute(
+        database.select(NamingSeries).filter_by(entity_type="sales_invoice", company=entity.code).limit(1)
+    ).scalar_one_or_none()
+    assert naming_series is not None
+    assert naming_series.name.startswith("MAPCO")
+    assert naming_series.prefix_template.startswith("*COMP*")
 
 
 def test_closed_fiscal_year_blocks_all_postings(app_ctx):
