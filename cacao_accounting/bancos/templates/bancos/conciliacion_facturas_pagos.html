@@ -267,7 +267,7 @@ function paymentReconciliation() {
           payment_exchange_rate: row.payment_exchange_rate || '',
           notes: row.notes || '',
         }));
-      } catch (error) {
+      } catch {
         this.importError = '{{ _("No se pudo validar el archivo.") }}';
       } finally {
         if (event && event.target) event.target.value = '';
