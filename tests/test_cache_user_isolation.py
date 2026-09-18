@@ -151,6 +151,11 @@ def test_smart_select_master_data_is_isolated_between_users(app, memory_cache, m
             [
                 Party(id="CACHE-PARTY-A", code="PARTY-A", name="Party Alpha", is_customer=True, is_active=True),
                 Party(id="CACHE-PARTY-B", code="PARTY-B", name="Party Beta", is_customer=True, is_active=True),
+            ]
+        )
+        database.session.flush()
+        database.session.add_all(
+            [
                 CompanyParty(company="COMP-A", party_id="CACHE-PARTY-A", is_active=True),
                 CompanyParty(company="COMP-B", party_id="CACHE-PARTY-B", is_active=True),
             ]

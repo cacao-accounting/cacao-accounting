@@ -70,6 +70,11 @@ def _seed_test_data() -> None:
             Party(id="cust-1", code="CLI-01", is_customer=True, is_supplier=False, name="Cliente Uno", is_active=True),
             Party(id="supp-1", code="PROV-01", is_customer=False, is_supplier=True, name="Proveedor Uno", is_active=True),
             Party(id="cust-2", code="CLI-02", is_customer=True, is_supplier=False, name="Cliente Inactivo", is_active=True),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
             # Activation by company
             CompanyParty(company="cacao", party_id="cust-1", is_active=True),
             CompanyParty(company="cacao", party_id="supp-1", is_active=True),

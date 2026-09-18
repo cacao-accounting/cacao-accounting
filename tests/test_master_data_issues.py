@@ -154,6 +154,11 @@ def test_search_select_api_implicitly_scopes_parties(app_ctx, monkeypatch):
             limited_user,
             Party(id="PARTY-CACAO", code="PARTY-CACAO", name="Tercero Cacao", is_active=True),
             Party(id="PARTY-OTHER", code="PARTY-OTHER", name="Tercero Ajeno", is_active=True),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
             CompanyParty(company="cacao", party_id="PARTY-CACAO", is_active=True),
             CompanyParty(company="party-other", party_id="PARTY-OTHER", is_active=True),
         ]
@@ -182,6 +187,11 @@ def test_search_select_party_scope_deduplicates_multi_company_party(app_ctx):
         [
             Entity(code="party-two", name="Party Two", company_name="Party Two SA", tax_id="J2097", currency="NIO"),
             Party(id="PARTY-SHARED", code="PARTY-SHARED", name="Tercero Compartido", is_active=True),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
             CompanyParty(company="cacao", party_id="PARTY-SHARED", is_active=True),
             CompanyParty(company="party-two", party_id="PARTY-SHARED", is_active=True),
         ]

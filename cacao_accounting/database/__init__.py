@@ -1209,6 +1209,7 @@ class CompanyParty(database.Model, BaseTabla):  # type: ignore[name-defined]
         nullable=False,
         index=True,
     )
+    party = database.relationship("Party", foreign_keys=[party_id])
     is_active = database.Column(database.Boolean(), default=True, nullable=False)
     credit_limit = database.Column(database.Numeric(precision=20, scale=4), nullable=True)
     payment_terms_id = database.Column(

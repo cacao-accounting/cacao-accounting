@@ -1474,6 +1474,11 @@ def test_supplier_invoice_no_db_constraint_reuse_after_cancel(app_ctx):
     database.session.add_all(
         [
             Party(id="SUPLR-C-001", code="SUPLR-C-001", name="Proveedor C", is_supplier=True),
+        ]
+    )
+    database.session.flush()
+    database.session.add_all(
+        [
             CompanyParty(
                 party_id="SUPLR-C-001",
                 company="cacao",
