@@ -293,6 +293,12 @@ LABEL_SOLICITUD_COTIZACION = _l("Solicitud de Cotización")
 
 LABEL_ORDEN_COMPRA = _l("Orden de Compra")
 
+
+def _titulo_comparativo() -> str:
+    """Titulo localizado del comparativo de ofertas."""
+    return _("Comparativo de Ofertas")
+
+
 LABEL_FACTURA_COMPRA_LONG = FACTURA_COMPRA_LABEL
 
 IMPORT_LANDED_COST = "import_landed_cost"
@@ -1011,7 +1017,7 @@ def compras_comparativo_ofertas_lista():
         ).scalars()
         for comparison in comparisons:
             comparisons_by_request.setdefault(comparison.purchase_request_id, comparison)
-    titulo = _("Comparativo de Ofertas") + " - " + APPNAME
+    titulo = _titulo_comparativo() + " - " + APPNAME
     return render_template(
         "compras/comparativo_ofertas_lista.html",
         consulta=consulta,
@@ -1245,7 +1251,7 @@ def _render_request_comparison_view(request_comparison: PurchaseRequestCompariso
         comparison_lines=comparison_lines,
         negotiation_rfqs=negotiation_rfqs,
         is_purchase_sourcing_authorizer=is_purchase_sourcing_authorizer(current_user.id),
-        titulo=_("Comparativo de Ofertas") + " - " + (request_comparison.document_no or request_comparison.id or ""),
+        titulo=_titulo_comparativo() + " - " + (request_comparison.document_no or request_comparison.id or ""),
     )
 
 
@@ -1317,7 +1323,7 @@ def _render_order_comparison_view(comparison: PurchaseOrderComparison, requested
         participant_order_ids=participant_order_ids,
         rounds=rounds,
         selected_round=selected_round,
-        titulo=_("Comparativo de Ofertas") + " - " + (comparison.id or ""),
+        titulo=_titulo_comparativo() + " - " + (comparison.id or ""),
     )
 
 
@@ -1363,7 +1369,7 @@ def compras_comparativo_ofertas(rfq_id: str):
         if award
         else []
     )
-    titulo = _("Comparativo de Ofertas") + " - " + (registro.document_no or rfq_id)
+    titulo = _titulo_comparativo() + " - " + (registro.document_no or rfq_id)
     return render_template(
         "compras/comparativo_ofertas.html",
         registro=registro,

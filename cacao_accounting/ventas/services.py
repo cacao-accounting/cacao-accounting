@@ -125,6 +125,11 @@ def _raise_posting_error(message: str) -> NoReturn:
     raise error_type(message)
 
 
+def _msg_item_repetido(item_code: str) -> str:
+    """Mensaje para item repetido en el documento."""
+    return _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}
+
+
 ventas = Blueprint("ventas", __name__, template_folder="templates")
 
 VENTAS_CLIENTE_NUEVO_TEMPLATE = "ventas/cliente_nuevo.html"
@@ -1019,9 +1024,7 @@ def _save_sales_order_items(order_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(
-                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1073,9 +1076,7 @@ def _save_sales_request_items(request_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(
-                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1124,9 +1125,7 @@ def _save_sales_quotation_items(quotation_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(
-                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1170,9 +1169,7 @@ def _save_delivery_note_items(note_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(
-                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))
@@ -1229,9 +1226,7 @@ def _save_sales_invoice_items(invoice_id: str) -> tuple[Decimal, Decimal]:
         item_code = request.form.get(f"item_code_{i}", "")
         if item_code.strip():
             if item_code in seen_item_codes:
-                raise DocumentFlowError(
-                    _("El item %(item_code)s no puede repetirse en el documento.") % {"item_code": item_code}, 400
-                )
+                raise DocumentFlowError(_msg_item_repetido(item_code), 400)
             seen_item_codes.add(item_code)
             qty = _form_decimal(f"qty_{i}", "1")
             rate = _source_line_rate(i, _form_decimal(f"rate_{i}", "0"))

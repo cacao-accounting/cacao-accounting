@@ -98,6 +98,19 @@ class InvalidExchangeRateError(PostingError):
     """Tasa de cambio invalida (cero o negativa)."""
 
 
+def _invalid_exchange_rate_error() -> InvalidExchangeRateError:
+    """Error para tasa de cambio no positiva."""
+    return InvalidExchangeRateError(_("El tipo de cambio debe ser mayor que cero."))
+
+
+def _negative_stock_message(item_name: str, warehouse: str) -> str:
+    """Mensaje para articulo que no permite stock negativo."""
+    return _("El artículo %(item_name)s no permite stock negativo en la bodega %(warehouse)s.") % {
+        "item_name": item_name,
+        "warehouse": warehouse,
+    }
+
+
 @dataclass(frozen=True)
 class LedgerContext:
     """Contexto comun para generar lineas contables por libro."""
@@ -362,7 +375,7 @@ def _ledger_exchange_rate(
     if ledger_currency == document_base_currency and document_exchange_rate is not None:
         rate = _decimal_value(document_exchange_rate)
         if rate <= 0:
-            raise InvalidExchangeRateError(_("El tipo de cambio debe ser mayor que cero."))
+            raise _invalid_exchange_rate_error()
         return rate
     try:
         return _lookup_exchange_rate(transaction_currency, ledger_currency, posting_date)
@@ -377,7 +390,7 @@ def _ledger_exchange_rate(
             else _lookup_exchange_rate(transaction_currency, document_base_currency, posting_date)
         )
         if transaction_to_base <= 0:
-            raise InvalidExchangeRateError(_("El tipo de cambio debe ser mayor que cero."))
+            raise _invalid_exchange_rate_error()
         base_to_ledger = _lookup_exchange_rate(document_base_currency, ledger_currency, posting_date)
         return transaction_to_base * base_to_ledger
 
@@ -801,7 +814,7 @@ def _lookup_exchange_rate(origin: str, destination: str, posting_date: Any) -> D
             return None
         value = _decimal_value(rate.rate)
         if value <= 0:
-            raise InvalidExchangeRateError(_("El tipo de cambio debe ser mayor que cero."))
+            raise _invalid_exchange_rate_error()
         return value
 
     direct = latest_rate(origin, destination)
@@ -2624,10 +2637,7 @@ def _create_stock_movement(
             line._consumed_layers = consumed_layers
         except PostingError:
             if not item.allow_negative_stock:
-                raise PostingError(
-                    _("El artículo %(item_name)s no permite stock negativo en la bodega %(warehouse)s.")
-                    % {"item_name": item.name, "warehouse": warehouse}
-                )
+                raise PostingError(_negative_stock_message(item.name, warehouse))
             cost_rate = _consume_available_layers_for_negative_stock(
                 company=document.company,
                 item_code=line.item_code,
@@ -2657,10 +2667,7 @@ def _create_stock_movement(
     if qty_after < 0:
         item = _stock_item_for(line)
         if not item.allow_negative_stock:
-            raise PostingError(
-                _("El artículo %(item_name)s no permite stock negativo en la bodega %(warehouse)s.")
-                % {"item_name": item.name, "warehouse": warehouse}
-            )
+            raise PostingError(_negative_stock_message(item.name, warehouse))
     database.session.add(
         StockValuationLayer(
             item_code=line.item_code,
@@ -2945,10 +2952,7 @@ def _consume_reconciliation_stock(document, line, warehouse, qty_change, target_
         line._consumed_layers = consumed_layers
     except PostingError:
         if not item.allow_negative_stock:
-            raise PostingError(
-                _("El artículo %(item_name)s no permite stock negativo en la bodega %(warehouse)s.")
-                % {"item_name": item.name, "warehouse": warehouse}
-            )
+            raise PostingError(_negative_stock_message(item.name, warehouse))
         rate = _consume_available_layers_for_negative_stock(
             company=document.company,
             item_code=line.item_code,
@@ -3049,10 +3053,7 @@ def _consume_outflow_stock_valuation(
         )
     except PostingError:
         if not item.allow_negative_stock:
-            raise PostingError(
-                _("El artículo %(item_name)s no permite stock negativo en la bodega %(warehouse)s.")
-                % {"item_name": item.name, "warehouse": source_warehouse}
-            )
+            raise PostingError(_negative_stock_message(item.name, source_warehouse))
         cost_rate = _consume_available_layers_for_negative_stock(
             company=document.company,
             item_code=line.item_code,
@@ -3702,10 +3703,7 @@ def _create_stock_ledger_for_document(
         preserve_reserved_qty=isinstance(document, DeliveryNote) and bool(document.sales_order_id),
     )
     if qty_after < 0 and not item.allow_negative_stock:
-        raise PostingError(
-            _("El artículo %(item_name)s no permite stock negativo en la bodega %(warehouse)s.")
-            % {"item_name": item.name, "warehouse": warehouse}
-        )
+        raise PostingError(_negative_stock_message(item.name, warehouse))
     stock_layer = StockValuationLayer(
         item_code=line.item_code,
         warehouse=warehouse,
@@ -4276,7 +4274,7 @@ def _comprobante_line_value(
 
     effective_rate = line_to_header_rate * header_to_book_rate
     if effective_rate <= 0:
-        raise InvalidExchangeRateError(_("El tipo de cambio debe ser mayor que cero."))
+        raise _invalid_exchange_rate_error()
     converted_value = _to_company_currency(original_value, effective_rate)
     line_context = context.__class__(**{**context.__dict__, "exchange_rate": effective_rate})
     return line_context, converted_value
