@@ -142,6 +142,49 @@
   --ca-gray-800:       var(--ca-g900);
   --ca-dark:           #0D0D0D;
 
+  /* Visual system v5: professional accounting surfaces, Cacao accents only. */
+  --ca-p800: #466135;
+  --ca-p600: #5F7D46;
+  --ca-p400: #73935A;
+  --ca-p300: #DDE8D5;
+  --ca-p100: #F1F6ED;
+  --ca-bg: #F5F6F8;
+  --ca-surface: #FFFFFF;
+  --ca-surface-hover: #F8F9FA;
+  --ca-border: #E2E3E5;
+  --ca-text: #25211F;
+  --ca-text-secondary: #625D59;
+  --ca-text-muted: #777A7E;
+  --ca-navbar-bg: #FFFFFF;
+  --ca-navbar-text: #25211F;
+  --ca-navbar-hover: rgba(37, 33, 31, .06);
+  --ca-sidebar-bg: #FAFAF9;
+  --ca-sidebar-border-end: #E2E3E5;
+  --ca-sidebar-text: #625D59;
+  --ca-sidebar-icon: #777A7E;
+  --ca-sidebar-hover-bg: #F1F3F5;
+  --ca-sidebar-hover-text: #25211F;
+  --ca-sidebar-hover-icon: #5F7D46;
+  --ca-sidebar-active-bg: #F1F6ED;
+  --ca-sidebar-active-text: #25211F;
+  --ca-sidebar-active-border: #5F7D46;
+  --ca-success: #5F7D46;
+  --ca-status-ok-bg: #EAF3E5;
+  --ca-status-info: #2563EB;
+  --ca-status-info-bg: #E7F0FF;
+  --ca-status-view-bg: #FFF3DD;
+  --ca-status-view-text: #A86100;
+  --ca-status-attention-bg: #FDECEC;
+  --ca-status-attention-text: #B42318;
+  --ca-status-muted-bg: #F0F1F2;
+  --ca-status-muted-text: #62676C;
+  --ca-accent: #5F7D46;
+  --ca-chrome: #FFFFFF;
+  --ca-chrome-deep: #F5F6F8;
+  --bs-primary: #5F7D46;
+  --bs-primary-rgb: 95, 125, 70;
+  --bs-link-color: #466135;
+  --bs-link-hover-color: #38502A;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1434,12 +1477,6 @@ nav[aria-label="breadcrumb"] {
   }
 }
 
-[data-theme="dark"] body {
-  background:
-    linear-gradient(180deg, rgba(116,64,45,.08) 0, rgba(116,64,45,0) 18rem),
-    var(--ca-bg) !important;
-}
-
 .ca-navbar-brand img {
   height: 36px;
   max-width: 170px;
@@ -1518,52 +1555,6 @@ nav[aria-label="breadcrumb"] {
   color: #FFF !important;
   border-color: var(--ca-p800) !important;
   background-color: var(--ca-p800) !important;
-}
-
-/* Visual system v5: professional accounting surfaces, Cacao accents only. */
-:root {
-  --ca-p800: #466135;
-  --ca-p600: #5F7D46;
-  --ca-p400: #73935A;
-  --ca-p300: #DDE8D5;
-  --ca-p100: #F1F6ED;
-  --ca-bg: #F5F6F8;
-  --ca-surface: #FFFFFF;
-  --ca-surface-hover: #F8F9FA;
-  --ca-border: #E2E3E5;
-  --ca-text: #25211F;
-  --ca-text-secondary: #625D59;
-  --ca-text-muted: #777A7E;
-  --ca-navbar-bg: #FFFFFF;
-  --ca-navbar-text: #25211F;
-  --ca-navbar-hover: rgba(37, 33, 31, .06);
-  --ca-sidebar-bg: #FAFAF9;
-  --ca-sidebar-border-end: #E2E3E5;
-  --ca-sidebar-text: #625D59;
-  --ca-sidebar-icon: #777A7E;
-  --ca-sidebar-hover-bg: #F1F3F5;
-  --ca-sidebar-hover-text: #25211F;
-  --ca-sidebar-hover-icon: #5F7D46;
-  --ca-sidebar-active-bg: #F1F6ED;
-  --ca-sidebar-active-text: #25211F;
-  --ca-sidebar-active-border: #5F7D46;
-  --ca-success: #5F7D46;
-  --ca-status-ok-bg: #EAF3E5;
-  --ca-status-info: #2563EB;
-  --ca-status-info-bg: #E7F0FF;
-  --ca-status-view-bg: #FFF3DD;
-  --ca-status-view-text: #A86100;
-  --ca-status-attention-bg: #FDECEC;
-  --ca-status-attention-text: #B42318;
-  --ca-status-muted-bg: #F0F1F2;
-  --ca-status-muted-text: #62676C;
-  --ca-accent: #5F7D46;
-  --ca-chrome: #FFFFFF;
-  --ca-chrome-deep: #F5F6F8;
-  --bs-primary: #5F7D46;
-  --bs-primary-rgb: 95, 125, 70;
-  --bs-link-color: #466135;
-  --bs-link-hover-color: #38502A;
 }
 
 [data-theme="dark"] {
