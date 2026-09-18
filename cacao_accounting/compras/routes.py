@@ -2459,34 +2459,29 @@ def compras_orden_compra_cancel(order_id: str):
     return redirect(url_for(COMPRAS_COMPRAS_ORDEN_COMPRA, order_id=order_id))
 
 
-@compras.route("/purchase-receipt/new", methods=["GET", "POST"])
-@modulo_activo("inventory")
-@login_required
-@verifica_permiso("inventory", "crear")
-def compras_recepcion_nuevo():
-    """Formulario para crear una recepción de compra."""
-    from cacao_accounting.compras.forms import FormularioRecepcionCompra
-    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
-    from cacao_accounting.database import Warehouse
-
-    formulario = FormularioRecepcionCompra()
-    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
-
-    from_order_id = request.args.get("from_order") or request.form.get("from_order")
-    from_receipt_id = request.args.get("from_receipt") or request.form.get("from_receipt")
-    orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
-    recepcion_origen = database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None
-
-    selected_company = (
+def _resolve_receipt_selected_company(recepcion_origen, orden_origen, formulario) -> str | None:
+    """Resolve the company selected for a new receipt form."""
+    return (
         (recepcion_origen.company if recepcion_origen else None)
         or (orden_origen.company if orden_origen else None)
         or request.values.get("company")
         or (formulario.company.choices[0][0] if formulario.company.choices else None)
     )
-    formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
-    formulario.supplier_id.choices = [("", "")] + [
-        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
-    ]
+
+
+def _receipt_available_source_types(is_return: bool) -> list[dict[str, str]]:
+    """Return the source document types offered by the receipt form."""
+    if is_return:
+        return [{"value": "purchase_receipt", "label": _("Recepción original")}]
+    return [{"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}]
+
+
+def _receipt_catalogs(
+    selected_company: str | None,
+) -> tuple[list[dict[str, object]], list[dict[str, str]], list[dict[str, str]]]:
+    """Load the item, UOM and warehouse catalogs for the receipt form."""
+    from cacao_accounting.database import Warehouse
+
     items_disponibles = [
         {
             "code": item.code,
@@ -2504,6 +2499,72 @@ def compras_recepcion_nuevo():
         {"code": w[0].code, "name": w[0].name}
         for w in database.session.execute(database.select(Warehouse).filter_by(company=selected_company)).all()
     ]
+    return items_disponibles, uoms_disponibles, bodegas_disponibles
+
+
+def _receipt_initial_header(recepcion_origen, orden_origen, company_id: str | None) -> dict[str, str]:
+    """Build the initial header, preferring an order over a receipt source."""
+    source = orden_origen or recepcion_origen
+    if source is None:
+        return {"company": company_id or "", "posting_date": str(date.today())}
+    source_currency = effective_currency(source)
+    return {
+        "company": source.company or "",
+        "currency": source_currency or "",
+        "transaction_currency": source_currency or "",
+        "party": source.supplier_id or "",
+        "party_label": source.supplier_name or "",
+        "posting_date": str(date.today()),
+    }
+
+
+def _receipt_transaction_config(
+    *,
+    company_id: str | None,
+    is_return: bool,
+    from_order_id: str | None,
+    items: list[dict[str, object]],
+    uoms: list[dict[str, str]],
+    bodegas: list[dict[str, str]],
+    initial_header: dict[str, str],
+) -> dict[str, object]:
+    """Build the Alpine transaction config for the receipt form."""
+    return {
+        "formKey": FORMKEY_PURCHASE_RECEIPT,
+        "viewKey": "draft",
+        "enableBatchSerial": True,
+        "items": items,
+        "uoms": uoms,
+        "warehouses": bodegas,
+        "initialSourceType": "purchase_receipt" if is_return else ("purchase_order" if from_order_id else ""),
+        "availableSourceTypes": _receipt_available_source_types(is_return),
+        "initialHeader": initial_header,
+    }
+
+
+@compras.route("/purchase-receipt/new", methods=["GET", "POST"])
+@modulo_activo("inventory")
+@login_required
+@verifica_permiso("inventory", "crear")
+def compras_recepcion_nuevo():
+    """Formulario para crear una recepción de compra."""
+    from cacao_accounting.compras.forms import FormularioRecepcionCompra
+    from cacao_accounting.contabilidad.auxiliares import obtener_lista_entidades_por_id_razonsocial
+
+    formulario = FormularioRecepcionCompra()
+    formulario.company.choices = obtener_lista_entidades_por_id_razonsocial()
+
+    from_order_id = request.args.get("from_order") or request.form.get("from_order")
+    from_receipt_id = request.args.get("from_receipt") or request.form.get("from_receipt")
+    orden_origen = database.session.get(PurchaseOrder, from_order_id) if from_order_id else None
+    recepcion_origen = database.session.get(PurchaseReceipt, from_receipt_id) if from_receipt_id else None
+
+    selected_company = _resolve_receipt_selected_company(recepcion_origen, orden_origen, formulario)
+    formulario.naming_series.choices = _series_choices("purchase_receipt", selected_company)
+    formulario.supplier_id.choices = [("", "")] + [
+        (str(p[0].id), p[0].name) for p in database.session.execute(database.select(Party).filter_by(is_supplier=True)).all()
+    ]
+    items_disponibles, uoms_disponibles, bodegas_disponibles = _receipt_catalogs(selected_company)
     is_return = bool(recepcion_origen) or request.args.get("is_return") in {"1", "true", "True"}
     titulo = (_("Nueva Devolución de Recepción") if is_return else _("Nueva Recepción de Compra")) + " - " + APPNAME
     company_id = (
@@ -2512,45 +2573,15 @@ def compras_recepcion_nuevo():
         or request.args.get("company")
         or selected_company
     )
-    transaction_config = {
-        "formKey": FORMKEY_PURCHASE_RECEIPT,
-        "viewKey": "draft",
-        "enableBatchSerial": True,
-        "items": items_disponibles,
-        "uoms": uoms_disponibles,
-        "warehouses": bodegas_disponibles,
-        "initialSourceType": "purchase_receipt" if is_return else ("purchase_order" if from_order_id else ""),
-        "availableSourceTypes": [
-            (
-                {"value": "purchase_receipt", "label": _("Recepción original")}
-                if is_return
-                else {"value": "purchase_order", "label": _(LABEL_ORDEN_COMPRA)}
-            )
-        ],
-        "initialHeader": {
-            "company": company_id or "",
-            "posting_date": str(date.today()),
-        },
-    }
-    if recepcion_origen:
-        transaction_config["initialHeader"] = {
-            "company": recepcion_origen.company or "",
-            "currency": effective_currency(recepcion_origen) or "",
-            "transaction_currency": effective_currency(recepcion_origen) or "",
-            "party": recepcion_origen.supplier_id or "",
-            "party_label": recepcion_origen.supplier_name or "",
-            "posting_date": str(date.today()),
-        }
-    if orden_origen:
-        source_currency = effective_currency(orden_origen)
-        transaction_config["initialHeader"] = {
-            "company": orden_origen.company or "",
-            "currency": source_currency or "",
-            "transaction_currency": source_currency or "",
-            "party": orden_origen.supplier_id or "",
-            "party_label": orden_origen.supplier_name or "",
-            "posting_date": str(date.today()),
-        }
+    transaction_config = _receipt_transaction_config(
+        company_id=company_id,
+        is_return=is_return,
+        from_order_id=from_order_id,
+        items=items_disponibles,
+        uoms=uoms_disponibles,
+        bodegas=bodegas_disponibles,
+        initial_header=_receipt_initial_header(recepcion_origen, orden_origen, company_id),
+    )
     if request.method == "POST":
         response = _create_purchase_receipt_from_form()
         if response is not None:
