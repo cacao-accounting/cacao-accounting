@@ -308,6 +308,106 @@ def _allocated_receipt_qty(receipt_item_id: str) -> Decimal:
     return _decimal_value(value) + _decimal_value(returned)
 
 
+def _allocatable_invoices(receipt: PurchaseReceipt, invoice_id: str | None) -> list[PurchaseInvoice]:
+    """Return the invoices eligible to allocate against a receipt."""
+    if not invoice_id and not receipt.purchase_order_id:
+        return []
+    query = select(PurchaseInvoice).where(
+        PurchaseInvoice.company == receipt.company,
+        PurchaseInvoice.supplier_id == receipt.supplier_id,
+        PurchaseInvoice.docstatus == 1,
+        PurchaseInvoice.is_return.is_(False),
+    )
+    if invoice_id:
+        query = query.where(PurchaseInvoice.id == invoice_id)
+    else:
+        query = query.where(
+            PurchaseInvoice.purchase_order_id == receipt.purchase_order_id,
+            PurchaseInvoice.posting_date <= receipt.posting_date,
+        )
+    return list(database.session.execute(query.order_by(PurchaseInvoice.posting_date, PurchaseInvoice.id)).scalars().all())
+
+
+def _assert_same_transaction_currency(invoice: PurchaseInvoice, receipt: PurchaseReceipt) -> None:
+    """Reject allocating an invoice and receipt issued in different currencies."""
+    if invoice.transaction_currency and receipt.transaction_currency:
+        if invoice.transaction_currency != receipt.transaction_currency:
+            raise PurchaseReconciliationError(_("La factura y la recepción deben usar la misma moneda."))
+
+
+def _receipt_item_allocatable_qty(receipt_item: PurchaseReceiptItem, remaining_invoice_qty: Decimal) -> Decimal | None:
+    """Return the qty a receipt line can still allocate, or None if exhausted."""
+    remaining_receipt_qty = _item_qty_in_base_uom(receipt_item) - _allocated_receipt_qty(receipt_item.id)
+    if remaining_receipt_qty <= 0:
+        return None
+    return min(remaining_invoice_qty, remaining_receipt_qty)
+
+
+def _build_invoice_receipt_allocation(
+    receipt: PurchaseReceipt,
+    invoice: PurchaseInvoice,
+    receipt_item: PurchaseReceiptItem,
+    invoice_item: PurchaseInvoiceItem,
+    qty_base: Decimal,
+) -> PurchaseInvoiceReceiptAllocation:
+    """Build the append-only allocation row for a matched invoice/receipt line pair."""
+    receipt_qty_base = _item_qty_in_base_uom(receipt_item)
+    invoice_qty_base = _item_qty_in_base_uom(invoice_item)
+    if receipt_qty_base <= 0 or invoice_qty_base <= 0:
+        raise PurchaseReconciliationError(_("Las líneas de factura y recepción deben tener cantidad positiva."))
+    receipt_amount = _line_amount(receipt_item) * qty_base / receipt_qty_base
+    invoice_amount = _line_amount(invoice_item) * qty_base / invoice_qty_base
+    receipt_fx = _decimal_value(receipt.exchange_rate) or Decimal("1")
+    invoice_fx = _decimal_value(invoice.exchange_rate) or Decimal("1")
+    receipt_base_amount = receipt_amount * receipt_fx
+    invoice_base_amount = invoice_amount * invoice_fx
+    price_base = (invoice_amount - receipt_amount) * invoice_fx
+    exchange_base = invoice_base_amount - receipt_base_amount - price_base
+    return PurchaseInvoiceReceiptAllocation(
+        invoice_item_id=invoice_item.id,
+        receipt_item_id=receipt_item.id,
+        company=receipt.company,
+        qty_in_base_uom=qty_base,
+        receipt_amount=receipt_amount,
+        receipt_base_amount=receipt_base_amount,
+        invoice_amount=invoice_amount,
+        invoice_base_amount=invoice_base_amount,
+        price_variance_base=price_base,
+        exchange_variance_base=exchange_base,
+        transaction_currency=invoice.transaction_currency or receipt.transaction_currency or receipt.base_currency,
+        base_currency=invoice.base_currency or receipt.base_currency,
+        receipt_exchange_rate=receipt_fx,
+        invoice_exchange_rate=invoice_fx,
+        status="active",
+    )
+
+
+def _allocate_invoice_lines(
+    receipt: PurchaseReceipt,
+    invoice: PurchaseInvoice,
+    receipt_items: list[PurchaseReceiptItem],
+) -> list[PurchaseInvoiceReceiptAllocation]:
+    """Allocate every pending invoice line against the remaining receipt quantities."""
+    allocations: list[PurchaseInvoiceReceiptAllocation] = []
+    for invoice_item in _invoice_items(invoice.id):
+        remaining_invoice_qty = _item_qty_in_base_uom(invoice_item) - _allocated_invoice_qty(invoice_item.id)
+        if remaining_invoice_qty <= 0:
+            continue
+        for receipt_item in receipt_items:
+            if remaining_invoice_qty <= 0:
+                break
+            if receipt_item.item_code != invoice_item.item_code:
+                continue
+            qty_base = _receipt_item_allocatable_qty(receipt_item, remaining_invoice_qty)
+            if qty_base is None:
+                continue
+            row = _build_invoice_receipt_allocation(receipt, invoice, receipt_item, invoice_item, qty_base)
+            database.session.add(row)
+            allocations.append(row)
+            remaining_invoice_qty -= qty_base
+    return allocations
+
+
 def allocate_purchase_invoice_receipt_lines(
     receipt_id: str,
     invoice_id: str | None = None,
@@ -322,76 +422,12 @@ def allocate_purchase_invoice_receipt_lines(
     receipt = database.session.get(PurchaseReceipt, receipt_id, with_for_update=True)
     if receipt is None or receipt.docstatus != 1 or receipt.is_return:
         return []
-    invoices_query = select(PurchaseInvoice).where(
-        PurchaseInvoice.company == receipt.company,
-        PurchaseInvoice.supplier_id == receipt.supplier_id,
-        PurchaseInvoice.docstatus == 1,
-        PurchaseInvoice.is_return.is_(False),
-    )
-    if invoice_id:
-        invoices_query = invoices_query.where(PurchaseInvoice.id == invoice_id)
-    elif receipt.purchase_order_id:
-        invoices_query = invoices_query.where(
-            PurchaseInvoice.purchase_order_id == receipt.purchase_order_id,
-            PurchaseInvoice.posting_date <= receipt.posting_date,
-        )
-    else:
-        return []
-    invoices = (
-        database.session.execute(invoices_query.order_by(PurchaseInvoice.posting_date, PurchaseInvoice.id)).scalars().all()
-    )
+    invoices = _allocatable_invoices(receipt, invoice_id)
     receipt_items = _receipt_items(receipt.id)
     allocations: list[PurchaseInvoiceReceiptAllocation] = []
     for invoice in invoices:
-        if invoice.transaction_currency and receipt.transaction_currency:
-            if invoice.transaction_currency != receipt.transaction_currency:
-                raise PurchaseReconciliationError(_("La factura y la recepción deben usar la misma moneda."))
-        invoice_items = _invoice_items(invoice.id)
-        for invoice_item in invoice_items:
-            remaining_invoice_qty = _item_qty_in_base_uom(invoice_item) - _allocated_invoice_qty(invoice_item.id)
-            if remaining_invoice_qty <= 0:
-                continue
-            for receipt_item in receipt_items:
-                if remaining_invoice_qty <= 0:
-                    break
-                if receipt_item.item_code != invoice_item.item_code:
-                    continue
-                remaining_receipt_qty = _item_qty_in_base_uom(receipt_item) - _allocated_receipt_qty(receipt_item.id)
-                if remaining_receipt_qty <= 0:
-                    continue
-                qty_base = min(remaining_invoice_qty, remaining_receipt_qty)
-                receipt_qty_base = _item_qty_in_base_uom(receipt_item)
-                invoice_qty_base = _item_qty_in_base_uom(invoice_item)
-                if receipt_qty_base <= 0 or invoice_qty_base <= 0:
-                    raise PurchaseReconciliationError(_("Las líneas de factura y recepción deben tener cantidad positiva."))
-                receipt_amount = _line_amount(receipt_item) * qty_base / receipt_qty_base
-                invoice_amount = _line_amount(invoice_item) * qty_base / invoice_qty_base
-                receipt_fx = _decimal_value(receipt.exchange_rate) or Decimal("1")
-                invoice_fx = _decimal_value(invoice.exchange_rate) or Decimal("1")
-                receipt_base_amount = receipt_amount * receipt_fx
-                invoice_base_amount = invoice_amount * invoice_fx
-                price_base = (invoice_amount - receipt_amount) * invoice_fx
-                exchange_base = invoice_base_amount - receipt_base_amount - price_base
-                row = PurchaseInvoiceReceiptAllocation(
-                    invoice_item_id=invoice_item.id,
-                    receipt_item_id=receipt_item.id,
-                    company=receipt.company,
-                    qty_in_base_uom=qty_base,
-                    receipt_amount=receipt_amount,
-                    receipt_base_amount=receipt_base_amount,
-                    invoice_amount=invoice_amount,
-                    invoice_base_amount=invoice_base_amount,
-                    price_variance_base=price_base,
-                    exchange_variance_base=exchange_base,
-                    transaction_currency=invoice.transaction_currency or receipt.transaction_currency or receipt.base_currency,
-                    base_currency=invoice.base_currency or receipt.base_currency,
-                    receipt_exchange_rate=receipt_fx,
-                    invoice_exchange_rate=invoice_fx,
-                    status="active",
-                )
-                database.session.add(row)
-                allocations.append(row)
-                remaining_invoice_qty -= qty_base
+        _assert_same_transaction_currency(invoice, receipt)
+        allocations.extend(_allocate_invoice_lines(receipt, invoice, receipt_items))
     database.session.flush()
     return allocations
 
