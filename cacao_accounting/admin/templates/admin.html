@@ -4,11 +4,12 @@
 
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb lh-sm">
-    <li class="breadcrumb-item active" aria-current="page">
+    <li class="breadcrumb-item">
       <a href="{{ url_for('cacao_app.pagina_inicio') }}" class="link-dark">
         <i class="bi bi-house"></i> {{ _("Inicio") }}
       </a>
     </li>
+    <li class="breadcrumb-item active" aria-current="page">{{ _("Configuración") }}</li>
   </ol>
 </nav>
 
