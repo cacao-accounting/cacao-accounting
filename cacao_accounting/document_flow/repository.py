@@ -75,10 +75,11 @@ def iter_active_relations_for_source(
     """
     source_key = normalize_doctype(source_type)
     target_key = normalize_doctype(target_type) if target_type else None
+    source_item_key = source_item_id if source_item_id is not None else ""
     query = database.select(DocumentRelation).filter_by(
         source_type=source_key,
         source_id=source_id,
-        source_item_id=source_item_id,
+        source_item_id=source_item_key,
         status="active",
     )
     if target_key:
@@ -199,11 +200,12 @@ def get_line_flow_state(
     target_type: str,
 ) -> DocumentLineFlowState | None:
     """Obtiene el estado cacheado de una linea fuente para un destino."""
+    source_item_key = source_item_id if source_item_id is not None else ""
     return database.session.execute(
         database.select(DocumentLineFlowState).filter_by(
             source_type=normalize_doctype(source_type),
             source_id=source_id,
-            source_item_id=source_item_id,
+            source_item_id=source_item_key,
             target_type=normalize_doctype(target_type),
         )
     ).scalar_one_or_none()

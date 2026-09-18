@@ -15,7 +15,7 @@ import hashlib
 from cuid2 import Cuid
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Index, UniqueConstraint, event, func, inspect, select, text
+from sqlalchemy import CheckConstraint, Engine, ForeignKeyConstraint, Index, UniqueConstraint, event, func, inspect, select, text
 from ulid import ULID
 from sqlalchemy.orm import synonym
 
@@ -33,6 +33,9 @@ from cacao_accounting.i18n import _, _l
 # Definición principal de la clase del ORM.
 # < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
+
+
+# SQLite Foreign Key pragma listener is handled explicitly per session in tests if needed
 
 
 
@@ -537,26 +540,7 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
     @property
     def descendants(self):
         """Return the flat list of all descendant Unit records (recursive)."""
-        if not self.id:
-            return []
-        all_nodes = database.session.execute(
-            database.select(Unit).filter_by(entity=self.entity)
-        ).scalars().all()
-        children_map: dict[str, list[Unit]] = {}
-        for node in all_nodes:
-            if node.parent_id:
-                children_map.setdefault(node.parent_id, []).append(node)
-        res = []
-        stack = list(children_map.get(self.id, []))
-        visited = set()
-        while stack:
-            node = stack.pop()
-            if node.id in visited:
-                continue
-            visited.add(node.id)
-            res.append(node)
-            stack.extend(children_map.get(node.id, []))
-        return res
+        return _get_hierarchy_descendants(self, Unit)
 
 
 # Alias para compatibilidad
@@ -759,26 +743,7 @@ class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
     @property
     def descendants(self):
         """Return the flat list of all descendant BusinessUnit records (recursive)."""
-        if not self.id:
-            return []
-        all_nodes = database.session.execute(
-            database.select(BusinessUnit).filter_by(entity=self.entity)
-        ).scalars().all()
-        children_map: dict[str, list[BusinessUnit]] = {}
-        for node in all_nodes:
-            if node.parent_id:
-                children_map.setdefault(node.parent_id, []).append(node)
-        res = []
-        stack = list(children_map.get(self.id, []))
-        visited = set()
-        while stack:
-            node = stack.pop()
-            if node.id in visited:
-                continue
-            visited.add(node.id)
-            res.append(node)
-            stack.extend(children_map.get(node.id, []))
-        return res
+        return _get_hierarchy_descendants(self, BusinessUnit)
 
 
 class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
@@ -834,26 +799,7 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     @property
     def descendants(self):
         """Return the flat list of all descendant Project records (recursive)."""
-        if not self.id:
-            return []
-        all_nodes = database.session.execute(
-            database.select(Project).filter_by(entity=self.entity)
-        ).scalars().all()
-        children_map: dict[str, list[Project]] = {}
-        for node in all_nodes:
-            if node.parent_id:
-                children_map.setdefault(node.parent_id, []).append(node)
-        res = []
-        stack = list(children_map.get(self.id, []))
-        visited = set()
-        while stack:
-            node = stack.pop()
-            if node.id in visited:
-                continue
-            visited.add(node.id)
-            res.append(node)
-            stack.extend(children_map.get(node.id, []))
-        return res
+        return _get_hierarchy_descendants(self, Project)
 
 
 # <---------------------------------------------------------------------------------------------> #
@@ -3767,6 +3713,13 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     target_type = database.Column(database.String(50), nullable=False)
     target_id = database.Column(database.String(26), nullable=False)
     target_item_id = database.Column(database.String(26), nullable=False, default="")
+
+    def __init__(self, **kwargs):
+        if "source_item_id" in kwargs and kwargs["source_item_id"] is None:
+            kwargs["source_item_id"] = ""
+        if "target_item_id" in kwargs and kwargs["target_item_id"] is None:
+            kwargs["target_item_id"] = ""
+        super().__init__(**kwargs)
     company = database.Column(
         database.String(10),
         database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -5852,6 +5805,34 @@ def _warehouse_has_usage(connection, warehouse_code: str) -> bool:
             if connection.execute(statement).first():
                 return True
     return False
+
+
+def _get_hierarchy_descendants(node_instance, model_class) -> list:
+    """Devuelve la lista plana de descendientes de un nodo jerárquico."""
+    if not node_instance.id:
+        return []
+    if hasattr(node_instance, "entity") and getattr(node_instance, "entity", None) is not None:
+        query = database.select(model_class).filter_by(entity=node_instance.entity)
+    elif hasattr(node_instance, "company") and getattr(node_instance, "company", None) is not None:
+        query = database.select(model_class).filter_by(company=node_instance.company)
+    else:
+        query = database.select(model_class)
+    all_nodes = database.session.execute(query).scalars().all()
+    children_map: dict[str, list] = {}
+    for node in all_nodes:
+        if node.parent_id:
+            children_map.setdefault(node.parent_id, []).append(node)
+    res = []
+    stack = list(children_map.get(node_instance.id, []))
+    visited = set()
+    while stack:
+        curr = stack.pop()
+        if curr.id in visited:
+            continue
+        visited.add(curr.id)
+        res.append(curr)
+        stack.extend(children_map.get(curr.id, []))
+    return res
 
 
 def _party_has_usage(connection, party_id: str) -> bool:
