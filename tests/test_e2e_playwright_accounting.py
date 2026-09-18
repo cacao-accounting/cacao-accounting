@@ -61,13 +61,21 @@ def flask_server():
                     pass
         database.session.commit()
 
-        from cacao_accounting.database import Book, UserCompanyAccess
+        from cacao_accounting.database import Book, Entity, UserCompanyAccess
 
         books = database.session.execute(database.select(Book)).scalars().all()
+        default_company = database.session.execute(
+            database.select(Entity.code).where(Entity.default.is_(True))
+        ).scalar_one_or_none()
         for username, _, _ in user_list:
             user = database.session.execute(database.select(User).filter_by(user=username)).scalars().first()
             if user:
                 for book in books:
+                    # manager_ui se restringe a la compania por defecto para que
+                    # las vistas que resuelven una unica compania (reportes sin
+                    # parametro company) sean navegables en el E2E.
+                    if username == "manager_ui" and book.entity != default_company:
+                        continue
                     exists = database.session.execute(
                         database.select(UserCompanyAccess).filter_by(user_id=user.id, company_code=book.entity)
                     ).first()
@@ -178,8 +186,8 @@ def test_journal_company_smart_select_updates_hidden_filters_and_state(flask_ser
     company_input.fill("Choco")
     page.locator(".ca-smart-select-option", has_text="Choco Sonrisas Sociedad Anonima").click()
 
-    expect(company_hidden).to_have_value("cacao")
-    expect(page.locator("#company_filter_value")).to_have_value("cacao")
+    expect(company_hidden).to_have_value("CACAO")
+    expect(page.locator("#company_filter_value")).to_have_value("CACAO")
     expect(company_select).to_have_class(re.compile(r".*\bfilled\b.*"))
 
     context.close()
