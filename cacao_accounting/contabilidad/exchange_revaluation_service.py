@@ -92,21 +92,7 @@ class ExchangeRevaluationService:
         user_id: str | None = None,
     ) -> ExchangeRevaluation:
         """Ejecuta una revalorizacion para compania y periodo."""
-        if period_id:
-            period = database.session.get(AccountingPeriod, period_id)
-            if period is None:
-                raise ExchangeRevaluationError(_("No existe el periodo contable seleccionado."))
-            if period.entity != company:
-                raise ExchangeRevaluationError(_("El periodo contable no pertenece a la compañía seleccionada."))
-            if period.is_closed:
-                raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
-            year = period.end.year
-            month = period.end.month
-        elif year is None or month is None:
-            raise ExchangeRevaluationError(_("El año y el mes son requeridos para ejecutar la revalorización."))
-        else:
-            period = self._period_for(company, year, month)
-
+        period, year, month = self._resolve_period(company, year, month, period_id)
         defaults = self._validated_defaults(company)
         ledgers = self._active_ledgers(company)
         summary_ledger = self._summary_ledger(company, ledgers)
@@ -122,40 +108,19 @@ class ExchangeRevaluationService:
             .all()
         )
         try:
-            for previous_run in previous_runs:
-                self.void(
-                    run_id=str(previous_run.id),
-                    user_id=user_id,
-                    reason="Reejecucion de revalorizacion del periodo",
-                    commit=False,
-                )
-
-            self._reverse_prior_period_runs(company, period.start, user_id)
+            self._void_previous_runs(previous_runs, company, period, user_id)
 
             candidates = self._open_candidates(company, period.end, ledgers)
 
-            run = ExchangeRevaluation(
+            run = self._build_run_record(
                 company=company,
-                posting_date=period.end,
-                document_date=period.end,
-                run_date=period.end,
                 year=year,
                 month=month,
-                status=EXCHANGE_REVALUATION_STATUS_NO_CHANGES,
-                docstatus=1,
-                created_by=user_id,
-                processed_documents_count=len(candidates),
-                affected_documents_count=0,
-                total_gain=Decimal("0"),
-                total_loss=Decimal("0"),
-                currency=summary_ledger.currency,
-                generated_journal=False,
-                voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
+                period=period,
+                summary_ledger=summary_ledger,
+                user_id=user_id,
+                candidates=candidates,
             )
-            database.session.add(run)
-            database.session.flush()
-            self._assign_identifier(run)
-            log_create(run)
 
             drafts = self._calculate_lines(candidates, ledgers, period.end)
             affected = [draft for draft in drafts if draft.exchange_difference != 0]
@@ -164,59 +129,163 @@ class ExchangeRevaluationService:
                 return run
 
             journal = self._create_journal(run, user_id)
-            entries, items = self._build_entries_and_items(run, journal, affected, defaults)
-            self._validate_entries(entries)
-            database.session.add_all(entries)
-            database.session.flush()
-            self._link_items_to_entries(items, entries)
-            database.session.add_all(items)
+            entries = self._post_revaluation_entries(run, journal, affected, defaults)
 
             run.status = EXCHANGE_REVALUATION_STATUS_POSTED
             run.generated_journal = True
             run.journal_entry_id = journal.id
             run.affected_documents_count = len(affected)
-            summary_entries = [entry for entry in entries if entry.ledger_id == summary_ledger.id]
-            if summary_entries:
-                run.total_gain = sum(
-                    (
-                        self._decimal(entry.credit)
-                        for entry in summary_entries
-                        if entry.account_id == defaults.unrealized_exchange_gain_account_id
-                    ),
-                    Decimal("0"),
-                )
-                run.total_loss = sum(
-                    (
-                        self._decimal(entry.debit)
-                        for entry in summary_entries
-                        if entry.account_id == defaults.unrealized_exchange_loss_account_id
-                    ),
-                    Decimal("0"),
-                )
-            else:
-                total_gain = Decimal("0")
-                total_loss = Decimal("0")
-                for entry in entries:
-                    credit, debit = self._decimal(entry.credit), self._decimal(entry.debit)
-                    if entry.account_id == defaults.unrealized_exchange_gain_account_id and credit > 0:
-                        try:
-                            rate = self._closing_rate(entry.company_currency, summary_ledger.currency, period.end)
-                            total_gain += (credit * rate).quantize(Decimal("0.0001"))
-                        except ExchangeRevaluationError:
-                            pass
-                    elif entry.account_id == defaults.unrealized_exchange_loss_account_id and debit > 0:
-                        try:
-                            rate = self._closing_rate(entry.company_currency, summary_ledger.currency, period.end)
-                            total_loss += (debit * rate).quantize(Decimal("0.0001"))
-                        except ExchangeRevaluationError:
-                            pass
-                run.total_gain, run.total_loss = total_gain, total_loss
+            self._compute_run_totals(run, entries, summary_ledger, defaults, period.end)
             log_submit(run)
             database.session.commit()
             return run
         except Exception:
             database.session.rollback()
             raise
+
+    def _resolve_period(
+        self,
+        company: str,
+        year: int | None,
+        month: int | None,
+        period_id: str | None,
+    ) -> tuple[AccountingPeriod, int, int]:
+        """Resuelve el periodo contable objetivo y su ano/mes normalizados."""
+        if period_id:
+            period = database.session.get(AccountingPeriod, period_id)
+            if period is None:
+                raise ExchangeRevaluationError(_("No existe el periodo contable seleccionado."))
+            if period.entity != company:
+                raise ExchangeRevaluationError(_("El periodo contable no pertenece a la compañía seleccionada."))
+            if period.is_closed:
+                raise ExchangeRevaluationError(_("No se puede operar revalorizacion en un periodo cerrado o inexistente."))
+            return period, period.end.year, period.end.month
+        if year is None or month is None:
+            raise ExchangeRevaluationError(_("El año y el mes son requeridos para ejecutar la revalorización."))
+        return self._period_for(company, year, month), year, month
+
+    def _void_previous_runs(
+        self,
+        previous_runs: Sequence[ExchangeRevaluation],
+        company: str,
+        period: AccountingPeriod,
+        user_id: str | None,
+    ) -> None:
+        """Anula corridas del periodo y reversa las de periodos anteriores."""
+        for previous_run in previous_runs:
+            self.void(
+                run_id=str(previous_run.id),
+                user_id=user_id,
+                reason="Reejecucion de revalorizacion del periodo",
+                commit=False,
+            )
+        self._reverse_prior_period_runs(company, period.start, user_id)
+
+    def _build_run_record(
+        self,
+        *,
+        company: str,
+        year: int,
+        month: int,
+        period: AccountingPeriod,
+        summary_ledger: Book,
+        user_id: str | None,
+        candidates: list[RevaluationCandidate],
+    ) -> ExchangeRevaluation:
+        """Crea y registra la corrida con estado inicial sin cambios."""
+        run = ExchangeRevaluation(
+            company=company,
+            posting_date=period.end,
+            document_date=period.end,
+            run_date=period.end,
+            year=year,
+            month=month,
+            status=EXCHANGE_REVALUATION_STATUS_NO_CHANGES,
+            docstatus=1,
+            created_by=user_id,
+            processed_documents_count=len(candidates),
+            affected_documents_count=0,
+            total_gain=Decimal("0"),
+            total_loss=Decimal("0"),
+            currency=summary_ledger.currency,
+            generated_journal=False,
+            voucher_type=EXCHANGE_REVALUATION_ENTITY_TYPE,
+        )
+        database.session.add(run)
+        database.session.flush()
+        self._assign_identifier(run)
+        log_create(run)
+        return run
+
+    def _post_revaluation_entries(
+        self,
+        run: ExchangeRevaluation,
+        journal: ComprobanteContable,
+        affected: list[RevaluationLineDraft],
+        defaults: CompanyDefaultAccount,
+    ) -> list[GLEntry]:
+        """Construye, valida y persiste los asientos de la revalorizacion."""
+        entries, items = self._build_entries_and_items(run, journal, affected, defaults)
+        self._validate_entries(entries)
+        database.session.add_all(entries)
+        database.session.flush()
+        self._link_items_to_entries(items, entries)
+        database.session.add_all(items)
+        return entries
+
+    def _compute_run_totals(
+        self,
+        run: ExchangeRevaluation,
+        entries: list[GLEntry],
+        summary_ledger: Book,
+        defaults: CompanyDefaultAccount,
+        period_end: date,
+    ) -> None:
+        """Deriva ganancia/perdida del libro resumen o, si no aplica, de todos los libros."""
+        summary_entries = [entry for entry in entries if entry.ledger_id == summary_ledger.id]
+        if summary_entries:
+            run.total_gain = self._sum_account_credits(summary_entries, defaults.unrealized_exchange_gain_account_id)
+            run.total_loss = self._sum_account_debits(summary_entries, defaults.unrealized_exchange_loss_account_id)
+            return
+        run.total_gain, run.total_loss = self._converted_totals(entries, summary_ledger, defaults, period_end)
+
+    def _sum_account_credits(self, entries: list[GLEntry], account_id: str | None) -> Decimal:
+        return sum(
+            (self._decimal(entry.credit) for entry in entries if entry.account_id == account_id),
+            Decimal("0"),
+        )
+
+    def _sum_account_debits(self, entries: list[GLEntry], account_id: str | None) -> Decimal:
+        return sum(
+            (self._decimal(entry.debit) for entry in entries if entry.account_id == account_id),
+            Decimal("0"),
+        )
+
+    def _converted_totals(
+        self,
+        entries: list[GLEntry],
+        summary_ledger: Book,
+        defaults: CompanyDefaultAccount,
+        period_end: date,
+    ) -> tuple[Decimal, Decimal]:
+        """Totales convertidos a la moneda del libro resumen con la tasa de cierre."""
+        total_gain = Decimal("0")
+        total_loss = Decimal("0")
+        for entry in entries:
+            credit, debit = self._decimal(entry.credit), self._decimal(entry.debit)
+            if entry.account_id == defaults.unrealized_exchange_gain_account_id and credit > 0:
+                total_gain += self._converted_amount(credit, entry.company_currency, summary_ledger.currency, period_end)
+            elif entry.account_id == defaults.unrealized_exchange_loss_account_id and debit > 0:
+                total_loss += self._converted_amount(debit, entry.company_currency, summary_ledger.currency, period_end)
+        return total_gain, total_loss
+
+    def _converted_amount(self, amount: Decimal, origin: str, destination: str, period_end: date) -> Decimal:
+        """Convierte un monto ignorando los que no tienen tasa de cierre disponible."""
+        try:
+            rate = self._closing_rate(origin, destination, period_end)
+        except ExchangeRevaluationError:
+            return Decimal("0")
+        return (amount * rate).quantize(Decimal("0.0001"))
 
     def void(
         self,
