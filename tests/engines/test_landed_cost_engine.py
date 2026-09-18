@@ -276,3 +276,70 @@ def test_landed_cost_equal(items):
 
     assert result.get_allocation("A").allocated_total == Decimal("50.00")
     assert result.get_allocation("B").allocated_total == Decimal("50.00")
+
+
+def test_landed_cost_by_volume(items):
+    """Test allocation by volume."""
+    # Volumes: A = 10 * 0.1 = 1, B = 5 * 0.5 = 2.5, total = 3.5.
+    # A: 1/3.5, B: 1.5/... => charge 350 -> A 100, B 250.
+    fiscal_lines = [
+        FiscalLine(
+            line_id="T1",
+            concept="FREIGHT",
+            type="charge",
+            rate=Decimal("0"),
+            calculation_method="fixed",
+            base_amount=Decimal("0"),
+            amount=Decimal("350"),
+            recognition_event="invoice",
+            accounting_treatment="capitalizable_inventory_cost",
+            affects_inventory=True,
+            affects_document_total=True,
+            included_in_price=False,
+            source_rule_id="R1",
+            applies_to_items=["A", "B"],
+            depends_on=[],
+            participates_in_next_base=False,
+        )
+    ]
+
+    result = LandedCostEngine().calculate(items, fiscal_lines, allocation_method="by_volume")
+
+    assert result.get_allocation("A").allocated_total == Decimal("100.00")
+    assert result.get_allocation("B").allocated_total == Decimal("250.00")
+
+
+def test_landed_cost_by_current_value_uses_running_costs():
+    """A second rule must distribute over the costs updated by the first one."""
+    running_items = [
+        ItemContext(
+            line_id="A",
+            item_id="I1",
+            description="Item A",
+            quantity=Decimal("1"),
+            unit_price=Decimal("100"),
+            gross_amount=Decimal("100"),
+            net_amount=Decimal("100"),
+        ),
+        ItemContext(
+            line_id="B",
+            item_id="I2",
+            description="Item B",
+            quantity=Decimal("1"),
+            unit_price=Decimal("300"),
+            gross_amount=Decimal("300"),
+            net_amount=Decimal("300"),
+        ),
+    ]
+    charges = [
+        {"amount": Decimal("100"), "concept": "Flete", "allocation_method": "by_value"},
+        {"amount": Decimal("500"), "concept": "Seguro", "allocation_method": "by_current_value"},
+    ]
+
+    result = LandedCostEngine().calculate(running_items, [], capitalizable_charges=charges)
+
+    # A: 25 (by value over 100/400) + 125 (125/500) = 150.
+    # B: 75 (by value over 300/400) + 375 (375/500) = 450.
+    assert result.get_allocation("A").allocated_total == Decimal("150.00")
+    assert result.get_allocation("B").allocated_total == Decimal("450.00")
+    assert result.inventory_value_total == Decimal("1000.00")

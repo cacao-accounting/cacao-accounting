@@ -4,6 +4,7 @@
 """Landed Cost Engine implementation."""
 
 from __future__ import annotations
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
 from cacao_accounting.accounting_engine.common.context import (
@@ -17,6 +18,27 @@ from cacao_accounting.accounting_engine.common.rounding import RoundingManager
 from cacao_accounting.i18n import _
 
 VALID_ALLOCATION_METHODS = frozenset({"by_value", "by_current_value", "by_quantity", "by_weight", "by_volume", "equal"})
+
+
+@dataclass(frozen=True)
+class _AllocationBases:
+    """Distribution bases shared by every landed-cost rule."""
+
+    value: Decimal
+    qty: Decimal
+    weight: Decimal
+    volume: Decimal
+    count: Decimal
+
+
+@dataclass
+class _AllocationState:
+    """Running state while landed-cost rules are allocated sequentially."""
+
+    item_costs: Dict[str, Decimal]
+    item_allocations: Dict[str, List[Dict[str, Any]]]
+    rounding_manager: RoundingManager
+    audit_trail: List[AuditStep]
 
 
 def validate_allocation_method(method: str) -> str:
@@ -42,8 +64,6 @@ class LandedCostEngine:
         rounding_policy: Optional[Dict[str, Any]] = None,
     ) -> LandedCostResult:
         """Calculate inventory cost allocations."""
-        allocations: List[CostAllocation] = []
-        audit_trail: List[AuditStep] = []
         rounding_manager = RoundingManager(rounding_policy or {"precision": 4})
         warnings: List[str] = []
         errors: List[str] = []
@@ -58,18 +78,44 @@ class LandedCostEngine:
 
         validate_allocation_method(allocation_method)
 
-        total_qty = sum((item.quantity for item in items), Decimal("0"))
-        total_weight = sum((item.weight * item.quantity for item in items), Decimal("0"))
-        total_volume = sum((item.volume * item.quantity for item in items), Decimal("0"))
-        total_count = Decimal(len(items))
+        bases = _AllocationBases(
+            value=base_goods_total,
+            qty=sum((item.quantity for item in items), Decimal("0")),
+            weight=sum((item.weight * item.quantity for item in items), Decimal("0")),
+            volume=sum((item.volume * item.quantity for item in items), Decimal("0")),
+            count=Decimal(len(items)),
+        )
+        state = _AllocationState(
+            item_costs={item.line_id: item.net_amount for item in items},
+            item_allocations={item.line_id: [] for item in items},
+            rounding_manager=rounding_manager,
+            audit_trail=[],
+        )
+        all_rules = self._build_allocation_rules(capitalizable_fiscal_lines, capitalizable_charges, allocation_method)
+        for rule in all_rules:
+            self._allocate_rule(rule, items, bases, state)
 
-        # We need to process rules one by one and update item costs to support 'by_current_value'
-        item_costs = {item.line_id: item.net_amount for item in items}
-        item_allocations: Dict[str, List[Dict[str, Any]]] = {item.line_id: [] for item in items}
+        allocations = self._finalize_allocations(items, state)
+        inventory_value_total = sum((allocation.final_inventory_cost for allocation in allocations), Decimal("0"))
+        return LandedCostResult(
+            base_goods_total=base_goods_total,
+            capitalizable_charges_total=total_capitalizable,
+            inventory_value_total=inventory_value_total,
+            allocations=allocations,
+            audit_trail=state.audit_trail,
+            warnings=warnings,
+            errors=errors,
+        )
 
-        # Combine fiscal lines and charges for sequential processing
+    def _build_allocation_rules(
+        self,
+        fiscal_lines: List[FiscalLine],
+        charges: Optional[List[Dict[str, Any]]],
+        allocation_method: str,
+    ) -> List[Dict[str, Any]]:
+        """Combine fiscal lines and charges into sequential allocation rules."""
         all_rules: List[Dict[str, Any]] = []
-        for line in capitalizable_fiscal_lines:
+        for line in fiscal_lines:
             all_rules.append(
                 {
                     "type": "fiscal",
@@ -81,7 +127,7 @@ class LandedCostEngine:
                     "method": line.allocation_method or allocation_method,
                 }
             )
-        for charge in capitalizable_charges or []:
+        for charge in charges or []:
             all_rules.append(
                 {
                     "type": "charge",
@@ -93,103 +139,103 @@ class LandedCostEngine:
                     "method": charge.get("allocation_method") or allocation_method,
                 }
             )
+        return all_rules
 
-        step_counter = 1
-        for rule in all_rules:
-            rule_amount: Decimal = rule["amount"]
-            method = validate_allocation_method(rule["method"])
-            self._validate_allocation_basis(
-                method=method,
-                rule_amount=rule_amount,
-                total_value=base_goods_total,
-                total_current_value=sum(item_costs.values(), Decimal("0")),
-                total_qty=total_qty,
-                total_weight=total_weight,
-                total_volume=total_volume,
-                total_count=total_count,
+    def _allocate_rule(
+        self,
+        rule: Dict[str, Any],
+        items: List[ItemContext],
+        bases: _AllocationBases,
+        state: _AllocationState,
+    ) -> None:
+        """Validate, record and distribute one allocation rule."""
+        rule_amount: Decimal = rule["amount"]
+        method = validate_allocation_method(rule["method"])
+        total_current_value = sum(state.item_costs.values(), Decimal("0"))
+        self._validate_allocation_basis(
+            method=method,
+            rule_amount=rule_amount,
+            total_value=bases.value,
+            total_current_value=total_current_value,
+            total_qty=bases.qty,
+            total_weight=bases.weight,
+            total_volume=bases.volume,
+            total_count=bases.count,
+        )
+        shares = {
+            item.line_id: self._calculate_share(
+                item,
+                items,
+                bases.value,
+                bases.qty,
+                bases.weight,
+                bases.volume,
+                bases.count,
+                method,
+                current_item_value=state.item_costs[item.line_id],
+                total_current_value=total_current_value,
             )
-
-            # Calculate shares for this specific rule
-            shares = {}
-            total_current_value = sum(item_costs.values(), Decimal("0"))
-
-            for item in items:
-                shares[item.line_id] = self._calculate_share(
-                    item,
-                    items,
-                    base_goods_total,
-                    total_qty,
-                    total_weight,
-                    total_volume,
-                    total_count,
-                    method,
-                    current_item_value=item_costs[item.line_id],
-                    total_current_value=total_current_value,
-                )
-
-            audit_trail.append(
-                AuditStep(
-                    step=step_counter,
-                    concept=rule["concept"],
-                    formula=f"Allocation of {rule_amount} using {method}",
-                    base_amount=rule_amount,
-                    rate=Decimal("0"),
-                    result=rule_amount,
-                    reason=f"Distributed across {len(items)} items.",
-                )
+            for item in items
+        }
+        state.audit_trail.append(
+            AuditStep(
+                step=len(state.audit_trail) + 1,
+                concept=rule["concept"],
+                formula=f"Allocation of {rule_amount} using {method}",
+                base_amount=rule_amount,
+                rate=Decimal("0"),
+                result=rule_amount,
+                reason=f"Distributed across {len(items)} items.",
             )
-            step_counter += 1
+        )
+        self._distribute_rule_amount(rule, shares, rule_amount, state)
 
-            # Allocate and update costs
-            total_allocated_for_rule = Decimal("0")
-            item_list = list(shares.keys())
+    def _distribute_rule_amount(
+        self,
+        rule: Dict[str, Any],
+        shares: Dict[str, Decimal],
+        rule_amount: Decimal,
+        state: _AllocationState,
+    ) -> None:
+        """Assign a rule amount to every item, absorbing the residual in the last one."""
+        total_allocated_for_rule = Decimal("0")
+        item_list = list(shares.keys())
+        for index, item_id in enumerate(item_list):
+            allocated_amount = state.rounding_manager.round(rule_amount * shares[item_id], context_key="inventory")
+            if index == len(item_list) - 1:
+                allocated_amount = rule_amount - total_allocated_for_rule
+            total_allocated_for_rule += allocated_amount
+            state.item_allocations[item_id].append(
+                {
+                    "concept": rule["concept"],
+                    "amount": allocated_amount,
+                    "source": rule["type"],
+                    "source_rule_id": rule.get("source_rule_id"),
+                    "tax_type": rule.get("tax_type"),
+                }
+            )
+            state.item_costs[item_id] += allocated_amount
 
-            for i, item_id in enumerate(item_list):
-                share = shares[item_id]
-                allocated_amount = rounding_manager.round(rule_amount * share, context_key="inventory")
-
-                # Check for residual on last item
-                if i == len(item_list) - 1:
-                    allocated_amount = rule_amount - total_allocated_for_rule
-
-                total_allocated_for_rule += allocated_amount
-
-                item_allocations[item_id].append(
-                    {
-                        "concept": rule["concept"],
-                        "amount": allocated_amount,
-                        "source": rule["type"],
-                        "source_rule_id": rule.get("source_rule_id"),
-                        "tax_type": rule.get("tax_type"),
-                    }
-                )
-                item_costs[item_id] += allocated_amount
-
+    def _finalize_allocations(
+        self,
+        items: List[ItemContext],
+        state: _AllocationState,
+    ) -> List[CostAllocation]:
+        """Build the final cost allocation for every item."""
+        allocations: List[CostAllocation] = []
         for item in items:
-            final_cost = item_costs[item.line_id]
-            allocated_costs = item_allocations[item.line_id]
+            final_cost = state.item_costs[item.line_id]
             unit_cost = (final_cost / item.quantity) if item.quantity > 0 else Decimal("0")
-
             allocations.append(
                 CostAllocation(
                     item_line_id=item.line_id,
                     base_amount=item.net_amount,
-                    allocated_costs=allocated_costs,
+                    allocated_costs=state.item_allocations[item.line_id],
                     final_inventory_cost=final_cost,
-                    unit_inventory_cost=rounding_manager.round(unit_cost, context_key="inventory"),
+                    unit_inventory_cost=state.rounding_manager.round(unit_cost, context_key="inventory"),
                 )
             )
-
-        inventory_value_total = sum((a.final_inventory_cost for a in allocations), Decimal("0"))
-        return LandedCostResult(
-            base_goods_total=base_goods_total,
-            capitalizable_charges_total=total_capitalizable,
-            inventory_value_total=inventory_value_total,
-            allocations=allocations,
-            audit_trail=audit_trail,
-            warnings=warnings,
-            errors=errors,
-        )
+        return allocations
 
     def _calculate_share(
         self,
