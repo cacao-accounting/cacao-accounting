@@ -64,9 +64,7 @@ def test_reconcile_two_way_incompatible_item_raises_purchase_reconciliation_erro
         allow_price_difference=False,
     )
 
-    po_line = SimpleNamespace(
-        id="PO-L1", item_code="ITEM-A", uom="UN", warehouse="WH1", qty=Decimal("10"), rate=Decimal("50")
-    )
+    po_line = SimpleNamespace(id="PO-L1", item_code="ITEM-A", uom="UN", warehouse="WH1", qty=Decimal("10"), rate=Decimal("50"))
     inv_line = SimpleNamespace(
         id="INV-L1", item_code="ITEM-B", uom="UN", warehouse="WH1", qty=Decimal("10"), rate=Decimal("50")
     )
@@ -80,3 +78,84 @@ def test_reconcile_two_way_incompatible_item_raises_purchase_reconciliation_erro
     msg = "No existe l[i\u00ed]nea de OC compatible para el [i\u00ed]tem ITEM-B"
     with pytest.raises(service.PurchaseReconciliationError, match=msg):
         service._reconcile_two_way(invoice, config)
+
+
+def test_allocatable_invoices_returns_empty_without_invoice_or_order():
+    """A receipt without explicit invoice or purchase order cannot allocate."""
+    receipt = SimpleNamespace(purchase_order_id=None)
+    assert service._allocatable_invoices(receipt, None) == []
+
+
+def test_assert_same_transaction_currency_rejects_mismatch():
+    """An invoice and receipt in different currencies must not be allocated."""
+    invoice = SimpleNamespace(transaction_currency="USD")
+    receipt = SimpleNamespace(transaction_currency="NIO")
+    with pytest.raises(service.PurchaseReconciliationError):
+        service._assert_same_transaction_currency(invoice, receipt)
+
+
+def test_assert_same_transaction_currency_allows_missing_or_equal():
+    """Missing or matching currencies are accepted."""
+    service._assert_same_transaction_currency(
+        SimpleNamespace(transaction_currency="USD"), SimpleNamespace(transaction_currency="USD")
+    )
+    service._assert_same_transaction_currency(
+        SimpleNamespace(transaction_currency=None), SimpleNamespace(transaction_currency="NIO")
+    )
+
+
+def test_receipt_item_allocatable_qty_respects_remaining(monkeypatch):
+    """The allocatable qty is bounded by the invoice demand and receipt remainder."""
+    item = SimpleNamespace(id="R1")
+    monkeypatch.setattr(service, "_item_qty_in_base_uom", lambda _line: Decimal("10"))
+    monkeypatch.setattr(service, "_allocated_receipt_qty", lambda _item_id: Decimal("4"))
+    assert service._receipt_item_allocatable_qty(item, Decimal("20")) == Decimal("6")
+
+    monkeypatch.setattr(service, "_allocated_receipt_qty", lambda _item_id: Decimal("10"))
+    assert service._receipt_item_allocatable_qty(item, Decimal("20")) is None
+
+
+def test_build_invoice_receipt_allocation_computes_variance(monkeypatch):
+    """Price and exchange variances follow the documented base-currency formulas."""
+    receipt = SimpleNamespace(company="cacao", transaction_currency="USD", base_currency="NIO", exchange_rate=Decimal("36"))
+    invoice = SimpleNamespace(transaction_currency="USD", base_currency="NIO", exchange_rate=Decimal("37"))
+    receipt_item = SimpleNamespace(id="R1")
+    invoice_item = SimpleNamespace(id="I1")
+    monkeypatch.setattr(service, "_item_qty_in_base_uom", lambda _line: Decimal("10"))
+    monkeypatch.setattr(service, "_line_amount", lambda line: Decimal("100") if line is receipt_item else Decimal("110"))
+
+    row = service._build_invoice_receipt_allocation(receipt, invoice, receipt_item, invoice_item, Decimal("5"))
+
+    assert row.qty_in_base_uom == Decimal("5")
+    assert row.receipt_amount == Decimal("50")
+    assert row.invoice_amount == Decimal("55")
+    assert row.receipt_base_amount == Decimal("1800")
+    assert row.invoice_base_amount == Decimal("2035")
+    assert row.price_variance_base == Decimal("185")
+    assert row.exchange_variance_base == Decimal("50")
+    assert row.transaction_currency == "USD"
+    assert row.status == "active"
+
+
+def test_allocate_invoice_lines_consumes_multiple_receipt_lines(monkeypatch):
+    """A single invoice line is satisfied across consecutive receipt lines."""
+    receipt = SimpleNamespace(company="cacao", transaction_currency="USD", base_currency="NIO", exchange_rate=Decimal("1"))
+    invoice = SimpleNamespace(id="INV", transaction_currency="USD", base_currency="NIO", exchange_rate=Decimal("1"))
+    invoice_item = SimpleNamespace(id="II", item_code="IT", qty=Decimal("8"))
+    first_receipt_item = SimpleNamespace(id="R1", item_code="IT", qty=Decimal("5"))
+    second_receipt_item = SimpleNamespace(id="R2", item_code="IT", qty=Decimal("5"))
+    added = []
+    monkeypatch.setattr(service, "_invoice_items", lambda _invoice_id: [invoice_item])
+    monkeypatch.setattr(service, "_item_qty_in_base_uom", lambda line: line.qty)
+    monkeypatch.setattr(service, "_allocated_invoice_qty", lambda _item_id: Decimal("0"))
+    monkeypatch.setattr(service, "_allocated_receipt_qty", lambda _item_id: Decimal("0"))
+    monkeypatch.setattr(service, "_line_amount", lambda line: line.qty * Decimal("10"))
+    monkeypatch.setattr(service, "database", SimpleNamespace(session=SimpleNamespace(add=added.append, flush=lambda: None)))
+
+    allocations = service._allocate_invoice_lines(receipt, invoice, [first_receipt_item, second_receipt_item])
+
+    assert [(row.receipt_item_id, row.qty_in_base_uom) for row in allocations] == [
+        ("R1", Decimal("5")),
+        ("R2", Decimal("3")),
+    ]
+    assert len(added) == 2
