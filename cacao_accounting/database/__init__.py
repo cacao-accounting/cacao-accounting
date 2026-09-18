@@ -15,7 +15,17 @@ import hashlib
 from cuid2 import Cuid
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import CheckConstraint, Engine, ForeignKeyConstraint, Index, UniqueConstraint, event, func, inspect, select, text
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKeyConstraint,
+    Index,
+    UniqueConstraint,
+    event,
+    func,
+    inspect,
+    select,
+    text,
+)
 from ulid import ULID
 from sqlalchemy.orm import synonym
 
@@ -34,10 +44,7 @@ from cacao_accounting.i18n import _, _l
 # < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
 
-
 # SQLite Foreign Key pragma listener is handled explicitly per session in tests if needed
-
-
 
 ENTITY_CODE = "entity.code"
 CURRENCY_CODE = "currency.code"
@@ -3715,6 +3722,7 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     target_item_id = database.Column(database.String(26), nullable=False, default="")
 
     def __init__(self, **kwargs):
+        """Inicializa una relación documental normalizando identificadores nulos a cadena vacía."""
         if "source_item_id" in kwargs and kwargs["source_item_id"] is None:
             kwargs["source_item_id"] = ""
         if "target_item_id" in kwargs and kwargs["target_item_id"] is None:
