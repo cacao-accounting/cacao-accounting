@@ -32,6 +32,7 @@ def _document(*, has_receipt: bool = False, is_credit_note: bool = False, credit
         document_type="purchase_credit_note" if is_credit_note else "purchase_invoice",
         is_return=is_credit_note,
         credit_note_type=credit_note_type,
+        supplier_id="SUP",
         _has_receipt=has_receipt,
         _is_credit_note=is_credit_note,
     )
@@ -134,3 +135,58 @@ def test_bridge_variance_requires_configured_account(patched_helpers, monkeypatc
 def test_non_positive_line_amount_is_skipped(patched_helpers):
     document = _document()
     assert builders._purchase_invoice_account_lines(document, [_item("0")], "cacao") == []
+
+
+def test_receipt_reclassification_with_allocation_adds_variance(patched_helpers):
+    document = _document(has_receipt=True)
+    item = _item("100", receipt="60", invoice="100")
+    late_amounts = {"I1": Decimal("100")}
+    specs, reclassified = builders._receipt_reclassification_specs(
+        document, item, "cacao", Decimal("100"), (Decimal("60"), Decimal("100")), late_amounts, "VARIANCE"
+    )
+    assert reclassified == Decimal("100")
+    assert late_amounts["I1"] == Decimal("0")
+    assert [(spec.account_id, spec.amount, spec.side) for spec in specs] == [
+        ("EXPENSE", Decimal("100"), "credit"),
+        ("VARIANCE", Decimal("40"), "debit"),
+    ]
+
+
+def test_receipt_reclassification_without_allocation_consumes_late_amount(patched_helpers):
+    document = _document()
+    item = _item("100")
+    late_amounts = {"I1": Decimal("30")}
+    specs, reclassified = builders._receipt_reclassification_specs(
+        document, item, "cacao", Decimal("100"), (Decimal("0"), Decimal("0")), late_amounts, "VARIANCE"
+    )
+    assert reclassified == Decimal("30")
+    assert late_amounts["I1"] == Decimal("0")
+    assert [(spec.account_id, spec.amount, spec.side) for spec in specs] == [("EXPENSE", Decimal("30"), "credit")]
+
+
+def test_receipt_reclassification_variance_requires_account(patched_helpers):
+    document = _document(has_receipt=True)
+    item = _item("100", receipt="60", invoice="100")
+    with pytest.raises(builders.CalculationContextBuilderError):
+        builders._receipt_reclassification_specs(
+            document, item, "cacao", Decimal("100"), (Decimal("60"), Decimal("100")), {}, None
+        )
+
+
+def test_receipt_bridge_line_covers_unallocated_remainder(patched_helpers):
+    document = _document()
+    item = _item("100")
+    bridge = builders._receipt_bridge_line(
+        document, item, Decimal("100"), (Decimal("0"), Decimal("0")), Decimal("30"), "BRIDGE", "credit"
+    )
+    assert bridge is not None
+    assert (bridge.account_id, bridge.amount, bridge.side) == ("BRIDGE", Decimal("70"), "credit")
+
+
+def test_receipt_bridge_line_returns_none_without_remainder(patched_helpers):
+    document = _document(has_receipt=True)
+    item = _item("100", receipt="100", invoice="100")
+    bridge = builders._receipt_bridge_line(
+        document, item, Decimal("100"), (Decimal("100"), Decimal("100")), Decimal("100"), "BRIDGE", "credit"
+    )
+    assert bridge is None
