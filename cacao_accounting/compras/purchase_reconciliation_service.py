@@ -485,6 +485,143 @@ def create_purchase_receipt_return_allocations(receipt_id: str) -> list[Purchase
     return allocations
 
 
+def _index_items_by_code(items: list[Any]) -> dict[str, list[Any]]:
+    """Group document lines by item code preserving their original order."""
+    indexed: dict[str, list[Any]] = defaultdict(list)
+    for item in items:
+        indexed[item.item_code].append(item)
+    return indexed
+
+
+def _load_credit_note_and_source(
+    credit_note_id: str,
+) -> tuple[PurchaseInvoice | None, PurchaseInvoice | None]:
+    """Load and validate a credit note together with its source invoice."""
+    note = database.session.get(PurchaseInvoice, credit_note_id, with_for_update=True)
+    if note is None or note.docstatus != 1 or note.document_type != "purchase_credit_note":
+        return None, None
+    if not note.reversal_of:
+        raise PurchaseReconciliationError(_("La nota de crédito requiere una factura origen."))
+    source = database.session.get(PurchaseInvoice, note.reversal_of, with_for_update=True)
+    if source is None or source.docstatus != 1:
+        raise PurchaseReconciliationError(_("La factura origen de la nota de crédito debe estar aprobada."))
+    if source.company != note.company or source.supplier_id != note.supplier_id:
+        raise PurchaseReconciliationError(_("La nota y la factura origen deben compartir compañía y proveedor."))
+    return note, source
+
+
+def _physical_return_items_by_code(note: PurchaseInvoice) -> dict[str, list[Any]]:
+    """Index the physical return lines, requiring a posted return when applicable."""
+    return_receipt = database.session.get(PurchaseReceipt, note.purchase_receipt_id) if note.purchase_receipt_id else None
+    if note.credit_note_type != "physical_return":
+        return {}
+    if return_receipt is None or not return_receipt.is_return or return_receipt.docstatus != 1:
+        raise PurchaseReconciliationError(_("La nota física requiere una devolución de recepción aprobada."))
+    return _index_items_by_code(_receipt_items(return_receipt.id))
+
+
+def _existing_credit_note_allocation(note_item: PurchaseInvoiceItem) -> PurchaseCreditNoteAllocation | None:
+    """Return the active allocation already recorded for a credit note line, if any."""
+    return database.session.execute(
+        select(PurchaseCreditNoteAllocation).where(
+            PurchaseCreditNoteAllocation.credit_note_item_id == note_item.id,
+            PurchaseCreditNoteAllocation.status == "active",
+        )
+    ).scalar_one_or_none()
+
+
+def _single_source_item(note_item: PurchaseInvoiceItem, source_by_code: dict[str, list[Any]]) -> PurchaseInvoiceItem:
+    """Resolve the unique source invoice line matching a credit note line."""
+    candidates = source_by_code.get(note_item.item_code, [])
+    if len(candidates) != 1:
+        raise PurchaseReconciliationError(_("La línea de la nota debe corresponder a una única línea de la factura origen."))
+    return candidates[0]
+
+
+def _validate_credit_note_line_capacity(source_item: PurchaseInvoiceItem, amount: Decimal) -> None:
+    """Reject a credit note line that exceeds the remaining source line amount."""
+    allocated_amount = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseCreditNoteAllocation.amount), 0)).where(
+            PurchaseCreditNoteAllocation.invoice_item_id == source_item.id,
+            PurchaseCreditNoteAllocation.status == "active",
+        )
+    ).scalar_one()
+    if _decimal_value(allocated_amount) + amount > _line_amount(source_item):
+        raise PurchaseReconciliationError(_("La nota de crédito excede el importe de la línea de la factura origen."))
+
+
+def _resolve_physical_return_item(
+    note_item: PurchaseInvoiceItem, return_items_by_code: dict[str, list[Any]]
+) -> PurchaseReceiptItem:
+    """Resolve the unique return line matching a credit note line."""
+    matching_returns = return_items_by_code.get(note_item.item_code, [])
+    if len(matching_returns) != 1:
+        raise PurchaseReconciliationError(_("La nota física debe corresponder a una única línea de devolución de recepción."))
+    return matching_returns[0]
+
+
+def _validate_physical_return_binding(
+    note_item: PurchaseInvoiceItem,
+    source_item: PurchaseInvoiceItem,
+    return_item: PurchaseReceiptItem,
+    amount: Decimal,
+) -> None:
+    """Validate the return line is actively linked to the source invoice line."""
+    return_allocation = database.session.execute(
+        select(PurchaseReceiptReturnAllocation).where(
+            PurchaseReceiptReturnAllocation.return_receipt_item_id == return_item.id,
+            PurchaseReceiptReturnAllocation.status == "active",
+        )
+    ).scalar_one_or_none()
+    if return_allocation is None:
+        raise PurchaseReconciliationError(_("La devolución física no tiene asignación de recepción activa."))
+    invoice_allocation = database.session.execute(
+        select(PurchaseInvoiceReceiptAllocation).where(
+            PurchaseInvoiceReceiptAllocation.invoice_item_id == source_item.id,
+            PurchaseInvoiceReceiptAllocation.receipt_item_id == return_allocation.original_receipt_item_id,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+        )
+    ).scalar_one_or_none()
+    if invoice_allocation is None:
+        raise PurchaseReconciliationError(_("La devolución física no está vinculada a la factura origen."))
+    if _item_qty_in_base_uom(note_item) > _item_qty_in_base_uom(return_item):
+        raise PurchaseReconciliationError(_("La nota física excede la cantidad de la devolución de recepción."))
+    return_invoice_amount = database.session.execute(
+        select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.invoice_amount), 0)).where(
+            PurchaseInvoiceReceiptAllocation.invoice_item_id == source_item.id,
+            PurchaseInvoiceReceiptAllocation.receipt_item_id == return_allocation.original_receipt_item_id,
+            PurchaseInvoiceReceiptAllocation.status == "active",
+        )
+    ).scalar_one()
+    if amount > _decimal_value(return_invoice_amount):
+        raise PurchaseReconciliationError(_("La nota física excede el importe facturado de la devolución."))
+
+
+def _build_credit_note_allocation(
+    note: PurchaseInvoice,
+    note_item: PurchaseInvoiceItem,
+    source_item: PurchaseInvoiceItem,
+    return_item: PurchaseReceiptItem | None,
+    amount: Decimal,
+    physical_return: bool,
+) -> PurchaseCreditNoteAllocation:
+    """Build the immutable credit note application row."""
+    exchange_rate = _decimal_value(note.exchange_rate) or Decimal("1")
+    return PurchaseCreditNoteAllocation(
+        credit_note_item_id=note_item.id,
+        invoice_item_id=source_item.id,
+        return_receipt_item_id=return_item.id if return_item else None,
+        company=note.company,
+        amount=amount,
+        base_amount=amount * exchange_rate,
+        allocation_type="physical_return" if physical_return else "commercial_adjustment",
+        transaction_currency=note.transaction_currency or note.base_currency,
+        base_currency=note.base_currency,
+        exchange_rate=exchange_rate,
+        status="active",
+    )
+
+
 def create_purchase_credit_note_allocations(credit_note_id: str) -> list[PurchaseCreditNoteAllocation]:
     """Persist auditable applications of a supplier credit note.
 
@@ -494,109 +631,26 @@ def create_purchase_credit_note_allocations(credit_note_id: str) -> list[Purchas
     relation remains the document-level source of outstanding balance; these
     rows provide the immutable line-level evidence for audit and GL routing.
     """
-    note = database.session.get(PurchaseInvoice, credit_note_id, with_for_update=True)
-    if note is None or note.docstatus != 1 or note.document_type != "purchase_credit_note":
+    note, source = _load_credit_note_and_source(credit_note_id)
+    if note is None or source is None:
         return []
-    if not note.reversal_of:
-        raise PurchaseReconciliationError(_("La nota de crédito requiere una factura origen."))
-    source = database.session.get(PurchaseInvoice, note.reversal_of, with_for_update=True)
-    if source is None or source.docstatus != 1:
-        raise PurchaseReconciliationError(_("La factura origen de la nota de crédito debe estar aprobada."))
-    if source.company != note.company or source.supplier_id != note.supplier_id:
-        raise PurchaseReconciliationError(_("La nota y la factura origen deben compartir compañía y proveedor."))
-
-    source_items = _invoice_items(source.id)
-    source_by_code: dict[str, list[PurchaseInvoiceItem]] = defaultdict(list)
-    for item in source_items:
-        source_by_code[item.item_code].append(item)
-    note_items = _invoice_items(note.id)
-    return_receipt = database.session.get(PurchaseReceipt, note.purchase_receipt_id) if note.purchase_receipt_id else None
+    source_by_code = _index_items_by_code(_invoice_items(source.id))
     physical_return = note.credit_note_type == "physical_return"
-    return_items_by_code: dict[str, list[PurchaseReceiptItem]] = defaultdict(list)
-    if physical_return:
-        if return_receipt is None or not return_receipt.is_return or return_receipt.docstatus != 1:
-            raise PurchaseReconciliationError(_("La nota física requiere una devolución de recepción aprobada."))
-        for item in _receipt_items(return_receipt.id):
-            return_items_by_code[item.item_code].append(item)
-
+    return_items_by_code = _physical_return_items_by_code(note)
     allocations: list[PurchaseCreditNoteAllocation] = []
-    for note_item in note_items:
-        existing = database.session.execute(
-            select(PurchaseCreditNoteAllocation).where(
-                PurchaseCreditNoteAllocation.credit_note_item_id == note_item.id,
-                PurchaseCreditNoteAllocation.status == "active",
-            )
-        ).scalar_one_or_none()
+    for note_item in _invoice_items(note.id):
+        existing = _existing_credit_note_allocation(note_item)
         if existing is not None:
             allocations.append(existing)
             continue
-        candidates = source_by_code.get(note_item.item_code, [])
-        if len(candidates) != 1:
-            raise PurchaseReconciliationError(
-                _("La línea de la nota debe corresponder a una única línea de la factura origen.")
-            )
-        source_item = candidates[0]
+        source_item = _single_source_item(note_item, source_by_code)
         amount = _line_amount(note_item)
-        allocated_amount = database.session.execute(
-            select(func.coalesce(func.sum(PurchaseCreditNoteAllocation.amount), 0)).where(
-                PurchaseCreditNoteAllocation.invoice_item_id == source_item.id,
-                PurchaseCreditNoteAllocation.status == "active",
-            )
-        ).scalar_one()
-        source_amount = _line_amount(source_item)
-        if _decimal_value(allocated_amount) + amount > source_amount:
-            raise PurchaseReconciliationError(_("La nota de crédito excede el importe de la línea de la factura origen."))
-
+        _validate_credit_note_line_capacity(source_item, amount)
         return_item = None
         if physical_return:
-            matching_returns = return_items_by_code.get(note_item.item_code, [])
-            if len(matching_returns) != 1:
-                raise PurchaseReconciliationError(
-                    _("La nota física debe corresponder a una única línea de devolución de recepción.")
-                )
-            return_item = matching_returns[0]
-            return_allocation = database.session.execute(
-                select(PurchaseReceiptReturnAllocation).where(
-                    PurchaseReceiptReturnAllocation.return_receipt_item_id == return_item.id,
-                    PurchaseReceiptReturnAllocation.status == "active",
-                )
-            ).scalar_one_or_none()
-            if return_allocation is None:
-                raise PurchaseReconciliationError(_("La devolución física no tiene asignación de recepción activa."))
-            invoice_allocation = database.session.execute(
-                select(PurchaseInvoiceReceiptAllocation).where(
-                    PurchaseInvoiceReceiptAllocation.invoice_item_id == source_item.id,
-                    PurchaseInvoiceReceiptAllocation.receipt_item_id == return_allocation.original_receipt_item_id,
-                    PurchaseInvoiceReceiptAllocation.status == "active",
-                )
-            ).scalar_one_or_none()
-            if invoice_allocation is None:
-                raise PurchaseReconciliationError(_("La devolución física no está vinculada a la factura origen."))
-            if _item_qty_in_base_uom(note_item) > _item_qty_in_base_uom(return_item):
-                raise PurchaseReconciliationError(_("La nota física excede la cantidad de la devolución de recepción."))
-            return_invoice_amount = database.session.execute(
-                select(func.coalesce(func.sum(PurchaseInvoiceReceiptAllocation.invoice_amount), 0)).where(
-                    PurchaseInvoiceReceiptAllocation.invoice_item_id == source_item.id,
-                    PurchaseInvoiceReceiptAllocation.receipt_item_id == return_allocation.original_receipt_item_id,
-                    PurchaseInvoiceReceiptAllocation.status == "active",
-                )
-            ).scalar_one()
-            if amount > _decimal_value(return_invoice_amount):
-                raise PurchaseReconciliationError(_("La nota física excede el importe facturado de la devolución."))
-
-        row = PurchaseCreditNoteAllocation(
-            credit_note_item_id=note_item.id,
-            invoice_item_id=source_item.id,
-            return_receipt_item_id=return_item.id if return_item else None,
-            company=note.company,
-            amount=amount,
-            base_amount=amount * (_decimal_value(note.exchange_rate) or Decimal("1")),
-            allocation_type="physical_return" if physical_return else "commercial_adjustment",
-            transaction_currency=note.transaction_currency or note.base_currency,
-            base_currency=note.base_currency,
-            exchange_rate=_decimal_value(note.exchange_rate) or Decimal("1"),
-            status="active",
-        )
+            return_item = _resolve_physical_return_item(note_item, return_items_by_code)
+            _validate_physical_return_binding(note_item, source_item, return_item, amount)
+        row = _build_credit_note_allocation(note, note_item, source_item, return_item, amount, physical_return)
         database.session.add(row)
         allocations.append(row)
     database.session.flush()

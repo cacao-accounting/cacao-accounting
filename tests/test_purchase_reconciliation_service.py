@@ -159,3 +159,82 @@ def test_allocate_invoice_lines_consumes_multiple_receipt_lines(monkeypatch):
         ("R2", Decimal("3")),
     ]
     assert len(added) == 2
+
+
+def test_index_items_by_code_groups_and_preserves_order():
+    """Source and return lines are indexed by item code without reordering."""
+    items = [
+        SimpleNamespace(item_code="A", tag="a1"),
+        SimpleNamespace(item_code="B", tag="b1"),
+        SimpleNamespace(item_code="A", tag="a2"),
+    ]
+    indexed = service._index_items_by_code(items)
+    assert [item.tag for item in indexed["A"]] == ["a1", "a2"]
+    assert [item.tag for item in indexed["B"]] == ["b1"]
+
+
+def test_single_source_item_requires_unambiguous_match():
+    """A credit note line must map to exactly one source invoice line."""
+    note_item = SimpleNamespace(item_code="A")
+    with pytest.raises(service.PurchaseReconciliationError):
+        service._single_source_item(note_item, {})
+    with pytest.raises(service.PurchaseReconciliationError):
+        service._single_source_item(note_item, {"A": [object(), object()]})
+    source = object()
+    assert service._single_source_item(note_item, {"A": [source]}) is source
+
+
+def test_resolve_physical_return_item_requires_unique_match():
+    """A physical return credit note line must map to exactly one return line."""
+    note_item = SimpleNamespace(item_code="A")
+    with pytest.raises(service.PurchaseReconciliationError):
+        service._resolve_physical_return_item(note_item, {})
+    with pytest.raises(service.PurchaseReconciliationError):
+        service._resolve_physical_return_item(note_item, {"A": [object(), object()]})
+    return_item = object()
+    assert service._resolve_physical_return_item(note_item, {"A": [return_item]}) is return_item
+
+
+def test_build_credit_note_allocation_sets_type_and_base_amount():
+    """Commercial and physical allocations differ in type and return reference."""
+    note = SimpleNamespace(company="cacao", exchange_rate=Decimal("36"), transaction_currency="USD", base_currency="NIO")
+    note_item = SimpleNamespace(id="N1")
+    source_item = SimpleNamespace(id="S1")
+
+    commercial = service._build_credit_note_allocation(note, note_item, source_item, None, Decimal("50"), False)
+    assert commercial.allocation_type == "commercial_adjustment"
+    assert commercial.return_receipt_item_id is None
+    assert commercial.base_amount == Decimal("1800")
+    assert commercial.status == "active"
+
+    physical = service._build_credit_note_allocation(
+        note, note_item, source_item, SimpleNamespace(id="RT1"), Decimal("50"), True
+    )
+    assert physical.allocation_type == "physical_return"
+    assert physical.return_receipt_item_id == "RT1"
+
+
+def test_load_credit_note_and_source_rejects_invalid_or_unsourced_note(monkeypatch):
+    """Invalid notes return empty and notes without source raise."""
+    invalid = SimpleNamespace(docstatus=0, document_type="purchase_invoice", reversal_of=None)
+    monkeypatch.setattr(service, "database", SimpleNamespace(session=SimpleNamespace(get=lambda *args, **kwargs: invalid)))
+    assert service._load_credit_note_and_source("X") == (None, None)
+
+    unsourced = SimpleNamespace(
+        docstatus=1, document_type="purchase_credit_note", reversal_of=None, company="cacao", supplier_id="SUP"
+    )
+    monkeypatch.setattr(service, "database", SimpleNamespace(session=SimpleNamespace(get=lambda *args, **kwargs: unsourced)))
+    with pytest.raises(service.PurchaseReconciliationError):
+        service._load_credit_note_and_source("X")
+
+
+def test_validate_credit_note_line_capacity_rejects_excess(monkeypatch):
+    """Accumulated credit per source line cannot exceed the line amount."""
+    result = SimpleNamespace(scalar_one=lambda: Decimal("40"))
+    monkeypatch.setattr(service, "database", SimpleNamespace(session=SimpleNamespace(execute=lambda *args, **kwargs: result)))
+    monkeypatch.setattr(service, "_line_amount", lambda _item: Decimal("50"))
+    source_item = SimpleNamespace(id="S1")
+
+    with pytest.raises(service.PurchaseReconciliationError):
+        service._validate_credit_note_line_capacity(source_item, Decimal("20"))
+    service._validate_credit_note_line_capacity(source_item, Decimal("5"))
