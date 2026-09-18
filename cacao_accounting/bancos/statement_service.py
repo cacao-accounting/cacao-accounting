@@ -215,7 +215,7 @@ def auto_reconcile_bank_transaction(bank_transaction_id: str) -> BankAutoReconci
     log_task_event(
         transaction,
         event_action,
-        _("{0} por la regla de matching '{1}' contra {2} {3} " "por {4} (conciliación {5}).").format(
+        _("{0} por la regla de matching '{1}' contra {2} {3} por {4} (conciliación {5}).").format(
             event_prefix,
             best_rule.name if best_rule else "",
             candidate.reference_type,
