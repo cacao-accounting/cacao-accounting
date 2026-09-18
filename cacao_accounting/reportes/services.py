@@ -2210,6 +2210,19 @@ def _compute_gl_balance(company: str, bank_account_id: str, as_of_date: date | N
     return _decimal_value(database.session.execute(gl_balance_query).scalar_one())
 
 
+def _bank_balance_totals(
+    rows: list[ReportRow],
+) -> tuple[dict[str, Decimal] | Decimal, dict[str, Decimal] | Decimal, dict[str, Decimal] | Decimal]:
+    """Calcula recibos, pagos y saldo final del resumen bancario."""
+    multi = _multicurrency_bank_totals(rows, ("receipts_amount", "payments_amount", "ending_balance"))
+    if multi is None:
+        receipts = sum((_decimal_value(row.values["receipts_amount"]) for row in rows), Decimal("0"))
+        payments = sum((_decimal_value(row.values["payments_amount"]) for row in rows), Decimal("0"))
+        ending = sum((_decimal_value(row.values["ending_balance"]) for row in rows), Decimal("0"))
+        return receipts, payments, ending
+    return multi["receipts_amount"], multi["payments_amount"], multi["ending_balance"]
+
+
 def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
     """Devuelve resumen de saldos bancarios por cuenta."""
     bank_accounts_query = select(BankAccount).where(BankAccount.company == filters.company)
@@ -2235,27 +2248,7 @@ def get_bank_balance_summary(filters: BankingFilters) -> PaginatedReport:
             )
         )
 
-    currencies: set[str] = {str(row.values.get("currency")) for row in rows if row.values.get("currency") is not None}
-
-    total_receipts: dict[str, Decimal] | Decimal
-    total_payments: dict[str, Decimal] | Decimal
-    total_ending: dict[str, Decimal] | Decimal
-
-    if len(currencies) > 1:
-        total_receipts = {curr: Decimal("0") for curr in currencies}
-        total_payments = {curr: Decimal("0") for curr in currencies}
-        total_ending = {curr: Decimal("0") for curr in currencies}
-        for row in rows:
-            curr = row.values.get("currency")
-            if curr:
-                curr_str = str(curr)
-                total_receipts[curr_str] += _decimal_value(row.values.get("receipts_amount"))
-                total_payments[curr_str] += _decimal_value(row.values.get("payments_amount"))
-                total_ending[curr_str] += _decimal_value(row.values.get("ending_balance"))
-    else:
-        total_receipts = sum((_decimal_value(row.values["receipts_amount"]) for row in rows), Decimal("0"))
-        total_payments = sum((_decimal_value(row.values["payments_amount"]) for row in rows), Decimal("0"))
-        total_ending = sum((_decimal_value(row.values["ending_balance"]) for row in rows), Decimal("0"))
+    total_receipts, total_payments, total_ending = _bank_balance_totals(rows)
 
     return PaginatedReport(
         rows=rows,
