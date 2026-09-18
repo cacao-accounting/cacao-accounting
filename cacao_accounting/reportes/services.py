@@ -1891,6 +1891,56 @@ def _compute_running_balance(rows: list[ReportRow]) -> Decimal:
     return running_balance
 
 
+def _bank_movement_rows(
+    effective_filters: BankingFilters,
+    bank_accounts: dict[str, BankAccount],
+    party_names: dict[str, str],
+) -> list[ReportRow]:
+    """Combina y ordena los movimientos de pagos y extractos bancarios."""
+    payment_rows, _, _ = _process_payment_entries(effective_filters, bank_accounts, party_names)
+    transaction_rows = _process_bank_transactions(effective_filters, bank_accounts)
+    rows = payment_rows + transaction_rows
+    rows.sort(
+        key=lambda row: (
+            row.values.get("posting_date") or date.min,
+            str(row.values.get("document_no") or ""),
+            str(row.values.get("bank_account") or ""),
+        )
+    )
+    return rows
+
+
+def _multicurrency_bank_totals(rows: list[ReportRow], fields: tuple[str, ...]) -> dict[str, dict[str, Decimal]] | None:
+    """Acumula totales por moneda cuando el reporte mezcla varias; si no, None."""
+    currencies: set[str] = {str(row.values.get("currency")) for row in rows if row.values.get("currency") is not None}
+    if len(currencies) <= 1:
+        return None
+    totals = {field: {currency: Decimal("0") for currency in currencies} for field in fields}
+    for row in rows:
+        currency = row.values.get("currency")
+        if not currency:
+            continue
+        for field in fields:
+            totals[field][str(currency)] += _decimal_value(row.values.get(field))
+    return totals
+
+
+def _bank_movement_totals(
+    rows: list[ReportRow], running_balance: Decimal
+) -> tuple[dict[str, Decimal] | Decimal, dict[str, Decimal] | Decimal, dict[str, Decimal] | Decimal]:
+    """Calcula ingresos, egresos y saldo acumulado del detalle bancario."""
+    multi = _multicurrency_bank_totals(rows, ("incoming_amount", "outgoing_amount"))
+    if multi is None:
+        incoming = sum((_decimal_value(row.values.get("incoming_amount")) for row in rows), Decimal("0"))
+        outgoing = sum((_decimal_value(row.values.get("outgoing_amount")) for row in rows), Decimal("0"))
+        return incoming, outgoing, running_balance
+    incoming = multi["incoming_amount"]
+    outgoing = multi["outgoing_amount"]
+    for row in rows:
+        row.values["running_balance"] = None
+    return incoming, outgoing, {currency: incoming[currency] - outgoing[currency] for currency in incoming}
+
+
 def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     """Devuelve detalle de movimiento bancario desde pagos y extractos."""
     from dataclasses import replace
@@ -1907,43 +1957,9 @@ def get_bank_movement_detail(filters: BankingFilters) -> PaginatedReport:
     }
     party_names = {party.id: party.name for party in database.session.execute(select(Party)).scalars().all()}
 
-    payment_rows, _, _ = _process_payment_entries(effective_filters, bank_accounts, party_names)
-    transaction_rows = _process_bank_transactions(effective_filters, bank_accounts)
-
-    rows = payment_rows + transaction_rows
-    rows.sort(
-        key=lambda row: (
-            row.values.get("posting_date") or date.min,
-            str(row.values.get("document_no") or ""),
-            str(row.values.get("bank_account") or ""),
-        )
-    )
+    rows = _bank_movement_rows(effective_filters, bank_accounts, party_names)
     running_balance = _compute_running_balance(rows)
-
-    currencies: set[str] = {str(row.values.get("currency")) for row in rows if row.values.get("currency") is not None}
-
-    total_incoming: dict[str, Decimal] | Decimal
-    total_outgoing: dict[str, Decimal] | Decimal
-    total_running_balance: dict[str, Decimal] | Decimal
-
-    if len(currencies) > 1:
-        total_incoming = {curr: Decimal("0") for curr in currencies}
-        total_outgoing = {curr: Decimal("0") for curr in currencies}
-        for row in rows:
-            curr = row.values.get("currency")
-            if curr:
-                curr_str = str(curr)
-                total_incoming[curr_str] += _decimal_value(row.values.get("incoming_amount"))
-                total_outgoing[curr_str] += _decimal_value(row.values.get("outgoing_amount"))
-        total_running_balance = {curr: Decimal("0") for curr in currencies}
-        for curr in currencies:
-            total_running_balance[curr] = total_incoming[curr] - total_outgoing[curr]
-        for row in rows:
-            row.values["running_balance"] = None
-    else:
-        total_incoming = sum((_decimal_value(row.values.get("incoming_amount")) for row in rows), Decimal("0"))
-        total_outgoing = sum((_decimal_value(row.values.get("outgoing_amount")) for row in rows), Decimal("0"))
-        total_running_balance = running_balance
+    total_incoming, total_outgoing, total_running_balance = _bank_movement_totals(rows, running_balance)
 
     return PaginatedReport(
         rows=rows,
