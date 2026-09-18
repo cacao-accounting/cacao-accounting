@@ -86,8 +86,29 @@ def iter_active_relations_for_source(
 
     active: list[DocumentRelation] = []
     relations = database.session.execute(query).scalars().all()
+    if not relations:
+        return active
+
+    # Group target IDs by target_type for batch retrieval
+    targets_by_type_id: dict[tuple[str, str], Any] = {}
+    ids_by_type: dict[str, set[str]] = {}
+    for rel in relations:
+        ids_by_type.setdefault(rel.target_type, set()).add(rel.target_id)
+
+    for tt, target_ids in ids_by_type.items():
+        spec = get_document_type(tt)
+        docs = (
+            database.session.execute(
+                database.select(spec.header_model).where(spec.header_model.id.in_(target_ids))
+            )
+            .scalars()
+            .all()
+        )
+        for doc in docs:
+            targets_by_type_id[(tt, doc.id)] = doc
+
     for relation in relations:
-        target = get_document(relation.target_type, relation.target_id)
+        target = targets_by_type_id.get((relation.target_type, relation.target_id))
         if target and getattr(target, "docstatus", 0) != 2:
             docstatus = getattr(target, "docstatus", 0)
             if exclude_draft_targets and docstatus == 0 and relation.target_id != include_target_id:

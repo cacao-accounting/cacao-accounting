@@ -34,6 +34,8 @@ from cacao_accounting.i18n import _, _l
 # < --------------------------------------------------------------------------------------------- >
 database = SQLAlchemy()
 
+
+
 ENTITY_CODE = "entity.code"
 CURRENCY_CODE = "currency.code"
 ACCOUNT_ID = "accounts.id"
@@ -391,6 +393,8 @@ class Roles(database.Model, BaseTabla):  # type: ignore[name-defined]
 class RolesAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Los roles definen una cantidad de permisos."""
 
+    __table_args__ = (database.Index("ix_roles_access_rol_module", "rol_id", "module_id"),)
+
     rol_id = database.Column(
         database.String(26), database.ForeignKey(ROLES_ID_COLUMN, ondelete=FK_RESTRICT, onupdate=FK_CASCADE)
     )
@@ -416,6 +420,8 @@ class RolesAccess(database.Model, BaseTabla):  # type: ignore[name-defined]
 
 class RolesUser(database.Model, BaseTabla):  # type: ignore[name-defined]
     """Roles dan permisos a los usuarios del sistema."""
+
+    __table_args__ = (database.Index("ix_roles_user_role_user", "role_id", "user_id"),)
 
     user_id = database.Column(database.String(26), database.ForeignKey(USER_ID, ondelete=FK_RESTRICT, onupdate=FK_CASCADE))
     role_id = database.Column(
@@ -531,8 +537,17 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
     @property
     def descendants(self):
         """Return the flat list of all descendant Unit records (recursive)."""
+        if not self.id:
+            return []
+        all_nodes = database.session.execute(
+            database.select(Unit).filter_by(entity=self.entity)
+        ).scalars().all()
+        children_map: dict[str, list[Unit]] = {}
+        for node in all_nodes:
+            if node.parent_id:
+                children_map.setdefault(node.parent_id, []).append(node)
         res = []
-        stack = list(self.children)
+        stack = list(children_map.get(self.id, []))
         visited = set()
         while stack:
             node = stack.pop()
@@ -540,7 +555,7 @@ class Unit(database.Model, BaseTabla):  # type: ignore[name-defined]
                 continue
             visited.add(node.id)
             res.append(node)
-            stack.extend(node.children)
+            stack.extend(children_map.get(node.id, []))
         return res
 
 
@@ -744,8 +759,17 @@ class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
     @property
     def descendants(self):
         """Return the flat list of all descendant BusinessUnit records (recursive)."""
+        if not self.id:
+            return []
+        all_nodes = database.session.execute(
+            database.select(BusinessUnit).filter_by(entity=self.entity)
+        ).scalars().all()
+        children_map: dict[str, list[BusinessUnit]] = {}
+        for node in all_nodes:
+            if node.parent_id:
+                children_map.setdefault(node.parent_id, []).append(node)
         res = []
-        stack = list(self.children)
+        stack = list(children_map.get(self.id, []))
         visited = set()
         while stack:
             node = stack.pop()
@@ -753,7 +777,7 @@ class BusinessUnit(database.Model, BaseTabla):  # type: ignore[name-defined]
                 continue
             visited.add(node.id)
             res.append(node)
-            stack.extend(node.children)
+            stack.extend(children_map.get(node.id, []))
         return res
 
 
@@ -810,8 +834,17 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
     @property
     def descendants(self):
         """Return the flat list of all descendant Project records (recursive)."""
+        if not self.id:
+            return []
+        all_nodes = database.session.execute(
+            database.select(Project).filter_by(entity=self.entity)
+        ).scalars().all()
+        children_map: dict[str, list[Project]] = {}
+        for node in all_nodes:
+            if node.parent_id:
+                children_map.setdefault(node.parent_id, []).append(node)
         res = []
-        stack = list(self.children)
+        stack = list(children_map.get(self.id, []))
         visited = set()
         while stack:
             node = stack.pop()
@@ -819,7 +852,7 @@ class Project(database.Model, BaseTabla):  # type: ignore[name-defined]
                 continue
             visited.add(node.id)
             res.append(node)
-            stack.extend(node.children)
+            stack.extend(children_map.get(node.id, []))
         return res
 
 
@@ -3730,10 +3763,10 @@ class DocumentRelation(database.Model, BaseTabla):  # type: ignore[name-defined]
     )
     source_type = database.Column(database.String(50), nullable=False)
     source_id = database.Column(database.String(26), nullable=False)
-    source_item_id = database.Column(database.String(26), nullable=True)
+    source_item_id = database.Column(database.String(26), nullable=False, default="")
     target_type = database.Column(database.String(50), nullable=False)
     target_id = database.Column(database.String(26), nullable=False)
-    target_item_id = database.Column(database.String(26), nullable=True)
+    target_item_id = database.Column(database.String(26), nullable=False, default="")
     company = database.Column(
         database.String(10),
         database.ForeignKey(ENTITY_CODE, ondelete=FK_RESTRICT, onupdate=FK_CASCADE),
@@ -4150,6 +4183,8 @@ class ComprobanteContableDetalle(database.Model, GLBase):  # type: ignore[name-d
     """Comprobante contable manual detalle."""
 
     __tablename__ = "comprobante_contable_detalle"
+    __table_args__ = (database.Index("ix_comprobante_detalle_tx", "transaction", "transaction_id"),)
+
     is_advance = database.Column(database.Boolean(), default=False, nullable=False)
     bank_account_id = database.Column(
         database.String(26),
