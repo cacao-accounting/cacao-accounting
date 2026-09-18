@@ -1810,6 +1810,7 @@ def get_purchase_order_status_report(company: str) -> list[dict[str, Any]]:
     orders = (
         database.session.execute(
             select(PurchaseOrder)
+            .execution_options(populate_existing=True)
             .options(selectinload(cast(Any, PurchaseOrder.items)))
             .filter_by(company=company, docstatus=1)
             .order_by(PurchaseOrder.posting_date.desc(), PurchaseOrder.id.desc())
