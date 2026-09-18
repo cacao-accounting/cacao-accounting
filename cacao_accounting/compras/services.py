@@ -2241,6 +2241,98 @@ def _validate_duplicate_supplier_invoice(
         )
 
 
+def _load_reversal_source(reversal_of: str, lock_source: bool) -> PurchaseInvoice:
+    """Load the source purchase invoice of a reversal, optionally locking it."""
+    source_query = database.select(PurchaseInvoice).where(PurchaseInvoice.id == reversal_of)
+    if lock_source:
+        source_query = source_query.with_for_update()
+    source = database.session.execute(source_query).scalar_one_or_none()
+    if not source:
+        raise ValueError(_("La factura origen '%(source)s' no existe.") % {"source": reversal_of})
+    return source
+
+
+def _validate_reversal_source(
+    source: PurchaseInvoice,
+    supplier_id: str | None,
+    company: str | None,
+    reversal_of: str,
+) -> None:
+    """Validate approval, supplier and company of the source invoice."""
+    if source.docstatus != 1:
+        raise ValueError(_("La factura origen '%(source)s' no está aprobada.") % {"source": reversal_of})
+    if supplier_id and source.supplier_id != supplier_id:
+        raise ValueError(_("La factura origen '%(source)s' no pertenece al mismo proveedor.") % {"source": reversal_of})
+    if company and source.company != company:
+        raise ValueError(_("La factura origen '%(source)s' no pertenece a la misma compañía.") % {"source": reversal_of})
+
+
+def _assert_no_issued_withholding(source: PurchaseInvoice) -> None:
+    """Reject reversing an invoice that already has an issued withholding."""
+    issued_withholding = database.session.execute(
+        database.select(WithholdingCertificate.id)
+        .join(PaymentReference, PaymentReference.payment_id == WithholdingCertificate.payment_id)
+        .where(
+            PaymentReference.reference_id == source.id,
+            PaymentReference.reference_type.in_(("purchase_invoice", "purchase_credit_note")),
+            WithholdingCertificate.status == "issued",
+            WithholdingCertificate.docstatus == 1,
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    if issued_withholding is not None:
+        raise ValueError(
+            _(
+                "No se puede revertir una factura con retención emitida; "
+                "ajuste o cancele primero el certificado de retención."
+            )
+        )
+
+
+def _compute_credit_capacity(source: PurchaseInvoice) -> Decimal:
+    """Return the remaining amount that can still be credited against the invoice.
+
+    A credit note is a commercial reversal of the invoice, so its capacity is
+    independent of payments already applied to the source. Payments affect the
+    supplier's cash settlement, not the amount that can be credited back after
+    a physical return, so only active credit and debit notes are considered.
+    """
+    active_relations = database.session.execute(
+        database.select(DocumentRelation).where(
+            DocumentRelation.source_type == "purchase_invoice",
+            DocumentRelation.source_id == source.id,
+            DocumentRelation.target_type.in_(("purchase_credit_note", "purchase_debit_note")),
+            DocumentRelation.relation_type == "invoice_reversal",
+            DocumentRelation.status == "active",
+        )
+    ).scalars()
+    credited = Decimal("0")
+    debited = Decimal("0")
+    for relation in active_relations:
+        target = database.session.get(PurchaseInvoice, relation.target_id)
+        if target is None or target.docstatus == 2:
+            continue
+        amount = Decimal(str(relation.amount or target.grand_total or "0"))
+        if target.document_type == "purchase_credit_note":
+            credited += amount
+        elif target.document_type == "purchase_debit_note":
+            debited += amount
+    invoice_total = Decimal(str(source.grand_total or "0"))
+    return max(invoice_total + debited - credited, Decimal("0"))
+
+
+def _assert_credit_note_within_capacity(note_amount: Decimal, credit_capacity: Decimal) -> None:
+    """Reject a credit note that exceeds the remaining source credit."""
+    if note_amount > credit_capacity:
+        raise ValueError(
+            _(
+                "La nota de crédito (%(note_amount)s) excede el crédito disponible de la factura origen "
+                "(%(credit_capacity)s)."
+            )
+            % {"note_amount": note_amount, "credit_capacity": credit_capacity}
+        )
+
+
 def _validate_purchase_reversal_of(
     reversal_of: str,
     supplier_id: str | None,
@@ -2252,72 +2344,12 @@ def _validate_purchase_reversal_of(
     lock_source: bool = False,
 ) -> None:
     """Valida origen y limite acumulado de una nota de credito de compra."""
-    source_query = database.select(PurchaseInvoice).where(PurchaseInvoice.id == reversal_of)
-    if lock_source:
-        source_query = source_query.with_for_update()
-    source = database.session.execute(source_query).scalar_one_or_none()
-    if not source:
-        raise ValueError(_("La factura origen '%(source)s' no existe.") % {"source": reversal_of})
-    if source.docstatus != 1:
-        raise ValueError(_("La factura origen '%(source)s' no está aprobada.") % {"source": reversal_of})
-    if supplier_id and source.supplier_id != supplier_id:
-        raise ValueError(_("La factura origen '%(source)s' no pertenece al mismo proveedor.") % {"source": reversal_of})
-    if company and source.company != company:
-        raise ValueError(_("La factura origen '%(source)s' no pertenece a la misma compañía.") % {"source": reversal_of})
+    source = _load_reversal_source(reversal_of, lock_source)
+    _validate_reversal_source(source, supplier_id, company, reversal_of)
     if document_type == "purchase_credit_note":
-        issued_withholding = database.session.execute(
-            database.select(WithholdingCertificate.id)
-            .join(PaymentReference, PaymentReference.payment_id == WithholdingCertificate.payment_id)
-            .where(
-                PaymentReference.reference_id == source.id,
-                PaymentReference.reference_type.in_(("purchase_invoice", "purchase_credit_note")),
-                WithholdingCertificate.status == "issued",
-                WithholdingCertificate.docstatus == 1,
-            )
-            .limit(1)
-        ).scalar_one_or_none()
-        if issued_withholding is not None:
-            msg = _(
-                "No se puede revertir una factura con retención emitida; "
-                "ajuste o cancele primero el certificado de retención."
-            )
-            raise ValueError(msg)
-    if document_type == "purchase_credit_note" and note_amount is not None:
-        # A credit note is a commercial reversal of the invoice, so its
-        # capacity is independent of payments already applied to the source.
-        # Payments affect the supplier's cash settlement, not the amount that
-        # can be credited back after a physical return.  Keep the guard against
-        # cumulative over-crediting by considering active credit/debit notes.
-        active_relations = database.session.execute(
-            database.select(DocumentRelation).where(
-                DocumentRelation.source_type == "purchase_invoice",
-                DocumentRelation.source_id == source.id,
-                DocumentRelation.target_type.in_(("purchase_credit_note", "purchase_debit_note")),
-                DocumentRelation.relation_type == "invoice_reversal",
-                DocumentRelation.status == "active",
-            )
-        ).scalars()
-        credited = Decimal("0")
-        debited = Decimal("0")
-        for relation in active_relations:
-            target = database.session.get(PurchaseInvoice, relation.target_id)
-            if target is None or target.docstatus == 2:
-                continue
-            amount = Decimal(str(relation.amount or target.grand_total or "0"))
-            if target.document_type == "purchase_credit_note":
-                credited += amount
-            elif target.document_type == "purchase_debit_note":
-                debited += amount
-        invoice_total = Decimal(str(source.grand_total or "0"))
-        credit_capacity = max(invoice_total + debited - credited, Decimal("0"))
-        if note_amount > credit_capacity:
-            raise ValueError(
-                _(
-                    "La nota de crédito (%(note_amount)s) excede el crédito disponible de la factura origen "
-                    "(%(credit_capacity)s)."
-                )
-                % {"note_amount": note_amount, "credit_capacity": credit_capacity}
-            )
+        _assert_no_issued_withholding(source)
+        if note_amount is not None:
+            _assert_credit_note_within_capacity(note_amount, _compute_credit_capacity(source))
 
 
 def _persist_purchase_reversal_relation(invoice: PurchaseInvoice) -> None:
