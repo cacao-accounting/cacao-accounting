@@ -162,54 +162,62 @@ def _add_book_entry(
     database.session.add(row)
 
 
+@dataclass(frozen=True)
+class MovementOptions:
+    """Metadatos opcionales de enrutamiento de un movimiento documental."""
+
+    reference_type: str | None = None
+    reference_id: str | None = None
+    is_reversal: bool = False
+    reversal_of: str | None = None
+    ledger_type: str | None = None
+    party_type: str | None = None
+    party_id: str | None = None
+    currency: str | None = None
+    document_type: str | None = None
+    document_id: str | None = None
+    economic_line_id: str | None = None
+    posting_date: date | None = None
+    voucher_type: str | None = None
+    voucher_id: str | None = None
+
+
 def _new_movement(
     document: Any,
     *,
     amount: Decimal,
     event_type: str,
-    reference_type: str | None = None,
-    reference_id: str | None = None,
-    is_reversal: bool = False,
-    reversal_of: str | None = None,
-    ledger_type: str | None = None,
-    party_type: str | None = None,
-    party_id: str | None = None,
-    currency: str | None = None,
-    document_type: str | None = None,
-    document_id: str | None = None,
-    economic_line_id: str | None = None,
-    posting_date: date | None = None,
-    voucher_type: str | None = None,
-    voucher_id: str | None = None,
+    options: MovementOptions | None = None,
 ) -> ARAPLedgerEntry:
     """Construye un movimiento documental."""
+    opts = options or MovementOptions()
     movement = ARAPLedgerEntry(
         company=str(getattr(document, "company", None) or getattr(document, "entity", "")),
-        ledger_type=ledger_type or _ledger_type(document),
+        ledger_type=opts.ledger_type or _ledger_type(document),
         party_type=str(
-            party_type
+            opts.party_type
             or getattr(document, "party_type", None)
-            or ("customer" if (ledger_type or _ledger_type(document)) == "AR" else "supplier")
+            or ("customer" if (opts.ledger_type or _ledger_type(document)) == "AR" else "supplier")
         ),
-        party_id=str(party_id or _party_id(document) or ""),
-        document_type=document_type or _document_type(document),
-        document_id=str(document_id or document.id),
+        party_id=str(opts.party_id or _party_id(document) or ""),
+        document_type=opts.document_type or _document_type(document),
+        document_id=str(opts.document_id or document.id),
         document_no=getattr(document, "document_no", None),
-        posting_date=posting_date
+        posting_date=opts.posting_date
         or getattr(document, "posting_date", None)
         or getattr(document, "date", None)
         or date.today(),
         document_date=getattr(document, "posting_date", None) or getattr(document, "date", None),
         event_type=event_type,
-        currency=str(currency or _currency(document) or ""),
+        currency=str(opts.currency or _currency(document) or ""),
         document_amount=amount,
-        economic_line_id=economic_line_id,
-        reference_type=reference_type,
-        reference_id=reference_id,
-        voucher_type=voucher_type or _document_type(document),
-        voucher_id=str(voucher_id or document.id),
-        is_reversal=is_reversal,
-        reversal_of=reversal_of,
+        economic_line_id=opts.economic_line_id,
+        reference_type=opts.reference_type,
+        reference_id=opts.reference_id,
+        voucher_type=opts.voucher_type or _document_type(document),
+        voucher_id=str(opts.voucher_id or document.id),
+        is_reversal=opts.is_reversal,
+        reversal_of=opts.reversal_of,
     )
     database.session.add(movement)
     database.session.flush()
@@ -471,12 +479,14 @@ def _process_payment_reference(
         target,
         amount=target_delta,
         event_type="allocation",
-        reference_type="payment_entry",
-        reference_id=str(document.id),
-        economic_line_id=target_economic_line_id,
-        posting_date=payment_date,
-        voucher_type="payment_entry",
-        voucher_id=str(document.id),
+        options=MovementOptions(
+            reference_type="payment_entry",
+            reference_id=str(document.id),
+            economic_line_id=target_economic_line_id,
+            posting_date=payment_date,
+            voucher_type="payment_entry",
+            voucher_id=str(document.id),
+        ),
     )
     movements = [target_movement]
     if target_cache is not None:
@@ -503,9 +513,11 @@ def _process_payment_reference(
         document,
         amount=-payment_sign * _decimal(reference.payment_amount or reference.allocated_amount),
         event_type="allocation",
-        reference_type=str(reference.reference_type),
-        reference_id=str(reference.reference_id),
-        economic_line_id=str(document.id),
+        options=MovementOptions(
+            reference_type=str(reference.reference_type),
+            reference_id=str(reference.reference_id),
+            economic_line_id=str(document.id),
+        ),
     )
     movements.append(applied)
     for book in _active_books(str(document.company)):
@@ -605,7 +617,7 @@ def _create_payment_opening_movement(context: _PaymentPostingContext) -> ARAPLed
         context.document,
         amount=context.payment_sign * context.total,
         event_type="opening",
-        economic_line_id=str(context.document.id),
+        options=MovementOptions(economic_line_id=str(context.document.id)),
     )
     database.session.flush()
     return movement
@@ -740,16 +752,18 @@ def _resolve_application_target_item(
             document,
             amount=signed_target,
             event_type="opening",
-            ledger_type=target_ledger_type,
-            party_type=party_type,
-            party_id=party_id,
-            currency=document_currency,
-            document_type=document_type,
-            document_id=str(document.id),
-            economic_line_id=str(getattr(document, "id", "")),
-            posting_date=getattr(document, "posting_date", None) or allocation_date,
-            voucher_type=document_type,
-            voucher_id=str(document.id),
+            options=MovementOptions(
+                ledger_type=target_ledger_type,
+                party_type=party_type,
+                party_id=party_id,
+                currency=document_currency,
+                document_type=document_type,
+                document_id=str(document.id),
+                economic_line_id=str(getattr(document, "id", "")),
+                posting_date=getattr(document, "posting_date", None) or allocation_date,
+                voucher_type=document_type,
+                voucher_id=str(document.id),
+            ),
         )
         new_movements.append(target_opening)
     if target_cache is None:
@@ -815,16 +829,18 @@ def _resolve_application_payment_item(
             payment,
             amount=payment_sign * payment_total,
             event_type="opening",
-            ledger_type=target_ledger_type,
-            party_type=party_type,
-            party_id=party_id,
-            currency=payment_currency,
-            document_type=payment_type,
-            document_id=payment_id,
-            economic_line_id=payment_id,
-            posting_date=getattr(payment, "posting_date", None) or allocation_date,
-            voucher_type=payment_type,
-            voucher_id=payment_id,
+            options=MovementOptions(
+                ledger_type=target_ledger_type,
+                party_type=party_type,
+                party_id=party_id,
+                currency=payment_currency,
+                document_type=payment_type,
+                document_id=payment_id,
+                economic_line_id=payment_id,
+                posting_date=getattr(payment, "posting_date", None) or allocation_date,
+                voucher_type=payment_type,
+                voucher_id=payment_id,
+            ),
         )
         new_movements.append(payment_opening)
     if payment_cache is None:
@@ -845,43 +861,48 @@ def _resolve_application_payment_item(
     return payment_opening, payment_cache, new_movements
 
 
-def _build_application_movements(
-    company: str,
-    payment: PaymentEntry,
-    document: Any,
-    document_type: str,
-    payment_type: str,
-    payment_id: str,
-    document_currency: str,
-    payment_currency: str,
-    party_type: str,
-    party_id: str,
-    target_ledger_type: str,
-    amount: Decimal,
-    consumed: Decimal,
-    allocation_date: date,
-    reference_type: str | None,
-    target_opening: ARAPLedgerEntry,
-    target_cache: ARAPOpenItem | None,
-    payment_cache: ARAPOpenItem | None,
-) -> list[ARAPLedgerEntry]:
+@dataclass(frozen=True)
+class ApplicationMovementContext:
+    """Datos de una aplicacion pago-documento para el subledger AR/AP."""
+
+    company: str
+    payment: PaymentEntry
+    document: Any
+    document_type: str
+    payment_type: str
+    payment_id: str
+    document_currency: str
+    payment_currency: str
+    party_type: str
+    party_id: str
+    target_ledger_type: str
+    amount: Decimal
+    consumed: Decimal
+    allocation_date: date
+    reference_type: str | None
+    target_opening: ARAPLedgerEntry
+    target_cache: ARAPOpenItem | None
+    payment_cache: ARAPOpenItem | None
+
+
+def _build_application_movements(context: ApplicationMovementContext) -> list[ARAPLedgerEntry]:
     """Crea los movimientos de asignacion y actualiza las valoraciones por libro."""
-    payment_sign = _payment_party_sign(payment)
-    if target_cache is not None:
-        target_direction = target_cache.direction
-    elif _decimal(target_opening.document_amount) > 0:
+    payment_sign = _payment_party_sign(context.payment)
+    if context.target_cache is not None:
+        target_direction = context.target_cache.direction
+    elif _decimal(context.target_opening.document_amount) > 0:
         target_direction = "debit"
     else:
         target_direction = "credit"
-    target_delta = -amount if target_direction == "debit" else amount
+    target_delta = -context.amount if target_direction == "debit" else context.amount
     already_applied = database.session.execute(
         select(ARAPLedgerEntry)
         .where(
-            ARAPLedgerEntry.document_type == document_type,
-            ARAPLedgerEntry.document_id == str(document.id),
+            ARAPLedgerEntry.document_type == context.document_type,
+            ARAPLedgerEntry.document_id == str(context.document.id),
             ARAPLedgerEntry.event_type == "allocation",
             ARAPLedgerEntry.reference_type == "payment_entry",
-            ARAPLedgerEntry.reference_id == payment_id,
+            ARAPLedgerEntry.reference_id == context.payment_id,
             ARAPLedgerEntry.is_reversal.is_(False),
         )
         .order_by(ARAPLedgerEntry.id)
@@ -889,62 +910,70 @@ def _build_application_movements(
     ).scalar_one_or_none()
     if already_applied is not None:
         return []
+    target_ledger_type = context.target_cache.ledger_type if context.target_cache is not None else context.target_ledger_type
+    target_economic_line_id = (
+        context.target_cache.economic_line_id if context.target_cache is not None else context.target_opening.economic_line_id
+    )
     target_movement = _new_movement(
-        payment,
+        context.payment,
         amount=target_delta,
         event_type="allocation",
-        reference_type="payment_entry",
-        reference_id=payment_id,
-        ledger_type=target_cache.ledger_type if target_cache is not None else target_ledger_type,
-        party_type=party_type,
-        party_id=party_id,
-        currency=document_currency,
-        document_type=document_type,
-        document_id=str(document.id),
-        economic_line_id=(target_cache.economic_line_id if target_cache is not None else target_opening.economic_line_id),
-        posting_date=allocation_date,
-        voucher_type=payment_type,
-        voucher_id=payment_id,
+        options=MovementOptions(
+            reference_type="payment_entry",
+            reference_id=context.payment_id,
+            ledger_type=target_ledger_type,
+            party_type=context.party_type,
+            party_id=context.party_id,
+            currency=context.document_currency,
+            document_type=context.document_type,
+            document_id=str(context.document.id),
+            economic_line_id=target_economic_line_id,
+            posting_date=context.allocation_date,
+            voucher_type=context.payment_type,
+            voucher_id=context.payment_id,
+        ),
     )
     payment_movement = _new_movement(
-        payment,
-        amount=-payment_sign * consumed,
+        context.payment,
+        amount=-payment_sign * context.consumed,
         event_type="allocation",
-        reference_type=reference_type or document_type,
-        reference_id=str(document.id),
-        ledger_type=target_cache.ledger_type if target_cache is not None else target_ledger_type,
-        party_type=party_type,
-        party_id=party_id,
-        currency=payment_currency,
-        document_type=payment_type,
-        document_id=payment_id,
-        economic_line_id=payment_id,
-        posting_date=allocation_date,
-        voucher_type=payment_type,
-        voucher_id=payment_id,
+        options=MovementOptions(
+            reference_type=context.reference_type or context.document_type,
+            reference_id=str(context.document.id),
+            ledger_type=target_ledger_type,
+            party_type=context.party_type,
+            party_id=context.party_id,
+            currency=context.payment_currency,
+            document_type=context.payment_type,
+            document_id=context.payment_id,
+            economic_line_id=context.payment_id,
+            posting_date=context.allocation_date,
+            voucher_type=context.payment_type,
+            voucher_id=context.payment_id,
+        ),
     )
     movements = [target_movement, payment_movement]
-    for book in _active_books(company):
+    for book in _active_books(context.company):
         target_rate = _book_exchange_rate(
-            company,
-            document_currency,
-            str(book.currency or document_currency),
-            allocation_date,
-            _decimal(getattr(document, "exchange_rate", None)),
+            context.company,
+            context.document_currency,
+            str(book.currency or context.document_currency),
+            context.allocation_date,
+            _decimal(getattr(context.document, "exchange_rate", None)),
         )
         payment_rate = _book_exchange_rate(
-            company,
-            payment_currency,
-            str(book.currency or payment_currency),
-            allocation_date,
-            _decimal(getattr(payment, "exchange_rate", None)),
+            context.company,
+            context.payment_currency,
+            str(book.currency or context.payment_currency),
+            context.allocation_date,
+            _decimal(getattr(context.payment, "exchange_rate", None)),
         )
         _add_book_entry(target_movement, book=book, amount=target_delta * target_rate, gl_entry=None)
-        _add_book_entry(payment_movement, book=book, amount=(-payment_sign * consumed * payment_rate), gl_entry=None)
-    if target_cache is not None:
-        _decrease_open_item_cache(target_cache.id, amount)
-    if payment_cache is not None:
-        _decrease_open_item_cache(payment_cache.id, consumed)
+        _add_book_entry(payment_movement, book=book, amount=(-payment_sign * context.consumed * payment_rate), gl_entry=None)
+    if context.target_cache is not None:
+        _decrease_open_item_cache(context.target_cache.id, context.amount)
+    if context.payment_cache is not None:
+        _decrease_open_item_cache(context.payment_cache.id, context.consumed)
     return movements
 
 
@@ -1000,24 +1029,26 @@ def post_payment_application_ar_ap(
     )
     movements.extend(payment_new_movements)
     alloc_movements = _build_application_movements(
-        company,
-        payment,
-        document,
-        document_type,
-        payment_type,
-        payment_id,
-        document_currency,
-        payment_currency,
-        party_type,
-        party_id,
-        target_ledger_type,
-        amount,
-        consumed,
-        allocation_date,
-        reference_type,
-        target_opening,
-        target_cache,
-        payment_cache,
+        ApplicationMovementContext(
+            company=company,
+            payment=payment,
+            document=document,
+            document_type=document_type,
+            payment_type=payment_type,
+            payment_id=payment_id,
+            document_currency=document_currency,
+            payment_currency=payment_currency,
+            party_type=party_type,
+            party_id=party_id,
+            target_ledger_type=target_ledger_type,
+            amount=amount,
+            consumed=consumed,
+            allocation_date=allocation_date,
+            reference_type=reference_type,
+            target_opening=target_opening,
+            target_cache=target_cache,
+            payment_cache=payment_cache,
+        )
     )
     movements.extend(alloc_movements)
     return movements
@@ -1191,32 +1222,36 @@ def _apply_journal_open_item(
         document,
         amount=target_delta,
         event_type="allocation",
-        reference_type="journal_entry",
-        reference_id=str(document.id),
-        ledger_type=target.ledger_type,
-        party_type=target.party_type,
-        party_id=target.party_id,
-        currency=target.currency,
-        document_type=target.document_type,
-        document_id=target.document_id,
-        economic_line_id=target.economic_line_id,
-        voucher_type="journal_entry",
-        voucher_id=str(document.id),
+        options=MovementOptions(
+            reference_type="journal_entry",
+            reference_id=str(document.id),
+            ledger_type=target.ledger_type,
+            party_type=target.party_type,
+            party_id=target.party_id,
+            currency=target.currency,
+            document_type=target.document_type,
+            document_id=target.document_id,
+            economic_line_id=target.economic_line_id,
+            voucher_type="journal_entry",
+            voucher_id=str(document.id),
+        ),
     )
     source_allocation = _new_movement(
         document,
         amount=-source_consumed if source_signed > 0 else source_consumed,
         event_type="allocation",
-        reference_type=target.document_type,
-        reference_id=target.document_id,
-        ledger_type=source.ledger_type,
-        party_type=source.party_type,
-        party_id=source.party_id,
-        currency=source.currency,
-        document_type="journal_entry",
-        voucher_type="journal_entry",
-        voucher_id=str(document.id),
-        economic_line_id=source.economic_line_id,
+        options=MovementOptions(
+            reference_type=target.document_type,
+            reference_id=target.document_id,
+            ledger_type=source.ledger_type,
+            party_type=source.party_type,
+            party_id=source.party_id,
+            currency=source.currency,
+            document_type="journal_entry",
+            economic_line_id=source.economic_line_id,
+            voucher_type="journal_entry",
+            voucher_id=str(document.id),
+        ),
     )
     posting_date = getattr(document, "date", None) or date.today()
     for book in _active_books(str(document.entity)):
@@ -1372,17 +1407,19 @@ def _process_journal_party_line(
         document,
         amount=source_signed,
         event_type="opening",
-        ledger_type=ledger_type,
-        party_type=party_type,
-        party_id=party_id,
-        currency=currency,
-        document_type="journal_entry",
-        document_id=reversal_source.document_id if reversal_source is not None else str(document.id),
-        economic_line_id=economic_line_id,
-        voucher_type="journal_entry",
-        is_reversal=reversal_source is not None,
-        reversal_of=str(reversal_source.id) if reversal_source is not None else None,
-        voucher_id=str(document.id),
+        options=MovementOptions(
+            is_reversal=reversal_source is not None,
+            reversal_of=str(reversal_source.id) if reversal_source is not None else None,
+            ledger_type=ledger_type,
+            party_type=party_type,
+            party_id=party_id,
+            currency=currency,
+            document_type="journal_entry",
+            document_id=reversal_source.document_id if reversal_source is not None else str(document.id),
+            economic_line_id=economic_line_id,
+            voucher_type="journal_entry",
+            voucher_id=str(document.id),
+        ),
     )
     movements = [source]
     direction = "debit" if source_signed > 0 else "credit"
