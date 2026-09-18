@@ -875,7 +875,9 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         select(Entity.currency).where(Entity.code == filters.company)
     ).scalar_one_or_none()
     comparison_currency = filters.currency or selected_ledger.currency
-    ledger_needs_conversion = selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
+    ledger_needs_conversion = bool(
+        selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
+    )
     bounds = _report_period_bounds(filters)
     period_end = bounds[1]
     as_of_date = filters.as_of_date or period_end or date.today()
@@ -1931,9 +1933,9 @@ def _bank_movement_totals(
     """Calcula ingresos, egresos y saldo acumulado del detalle bancario."""
     multi = _multicurrency_bank_totals(rows, ("incoming_amount", "outgoing_amount"))
     if multi is None:
-        incoming = sum((_decimal_value(row.values.get("incoming_amount")) for row in rows), Decimal("0"))
-        outgoing = sum((_decimal_value(row.values.get("outgoing_amount")) for row in rows), Decimal("0"))
-        return incoming, outgoing, running_balance
+        single_incoming = sum((_decimal_value(row.values.get("incoming_amount")) for row in rows), Decimal("0"))
+        single_outgoing = sum((_decimal_value(row.values.get("outgoing_amount")) for row in rows), Decimal("0"))
+        return single_incoming, single_outgoing, running_balance
     incoming = multi["incoming_amount"]
     outgoing = multi["outgoing_amount"]
     for row in rows:
