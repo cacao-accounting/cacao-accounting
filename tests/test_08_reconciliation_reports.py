@@ -5043,6 +5043,46 @@ def test_purchase_order_status_report_avoids_query_per_order(app_ctx):
     assert select_count == 2
 
 
+def test_purchase_order_status_report_refreshes_cached_items(app_ctx):
+    """When PO items were loaded earlier in session, report must include newly added items."""
+    from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_order_status_report
+    from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, database
+
+    order = PurchaseOrder(company="cacao", posting_date=date(2026, 5, 1), supplier_id="SUPP-R1", docstatus=1)
+    database.session.add(order)
+    database.session.flush()
+
+    item1 = PurchaseOrderItem(
+        purchase_order_id=order.id,
+        item_code="ITEM-R1",
+        qty=Decimal("10"),
+        uom="EA",
+        rate=Decimal("5.00"),
+        amount=Decimal("50.00"),
+    )
+    database.session.add(item1)
+    database.session.commit()
+
+    po_cached = database.session.get(PurchaseOrder, order.id)
+    assert len(po_cached.items) == 1
+
+    item2 = PurchaseOrderItem(
+        purchase_order_id=order.id,
+        item_code="ITEM-R2",
+        qty=Decimal("20"),
+        uom="EA",
+        rate=Decimal("5.00"),
+        amount=Decimal("100.00"),
+    )
+    database.session.add(item2)
+    database.session.flush()
+
+    report = get_purchase_order_status_report("cacao")
+    row = next(r for r in report if r["id"] == order.id)
+    assert row["ordered_qty"] == Decimal("30")
+    assert len(po_cached.items) == 2
+
+
 def test_unlinked_purchase_invoices(app_ctx):
     from cacao_accounting.compras.purchase_reconciliation_service import get_unlinked_purchase_invoices
     from cacao_accounting.database import PurchaseInvoice, database

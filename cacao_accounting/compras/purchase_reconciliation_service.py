@@ -1807,6 +1807,8 @@ def get_purchase_order_status_report(company: str) -> list[dict[str, Any]]:
     """Retorna el estatus de las ordenes de compra aprobadas/activas para la compania."""
     from cacao_accounting.database import PurchaseOrder
 
+    # Use populate_existing=True with selectinload so previously cached item collections
+    # in the same scoped session are refreshed with current database state without N+1 queries.
     orders = (
         database.session.execute(
             select(PurchaseOrder)
