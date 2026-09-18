@@ -5,13 +5,14 @@
 
 from __future__ import annotations
 
-import sys
 import os
-import pytest
+import sys
 from datetime import date
 from decimal import Decimal
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../tests"))
+import pytest
+
+sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from cacao_accounting import create_app
 from cacao_accounting.database import (
