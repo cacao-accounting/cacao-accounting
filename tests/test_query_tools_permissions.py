@@ -10,7 +10,7 @@ import os
 import pytest
 from unittest import mock
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../../tests"))
+sys.path.append(os.path.join(os.path.dirname(__file__)))
 
 from cacao_accounting import create_app
 from cacao_accounting.database import database, Entity, Modules, User
