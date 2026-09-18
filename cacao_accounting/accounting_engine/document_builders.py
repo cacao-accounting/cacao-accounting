@@ -1135,12 +1135,19 @@ def _default_tax_accounts(defaults: CompanyDefaultAccount | None) -> dict[str, s
     return aliases
 
 
-def _purchase_invoice_account_lines(
-    document: PurchaseInvoice,
-    items: list[PurchaseInvoiceItem],
-    company: str,
-) -> list[AccountLineSpec]:
-    """Resolve the non-tax lines for purchase invoices and credit notes."""
+@dataclass(frozen=True)
+class _PurchaseInvoiceLineFlags:
+    """Routing flags shared by the account lines of a purchase invoice."""
+
+    use_bridge_account: bool
+    side: str
+    account_type: str
+    variance_account_id: str | None
+    bridge_account_id: str | None
+
+
+def _resolve_purchase_invoice_line_flags(document: PurchaseInvoice, company: str) -> _PurchaseInvoiceLineFlags:
+    """Resolve the routing flags for purchase invoice and credit note lines."""
     raw_document_type = getattr(document, "document_type", None)
     credit_note_type = getattr(document, "credit_note_type", None)
     if credit_note_type is None and raw_document_type == "purchase_credit_note":
@@ -1149,69 +1156,119 @@ def _purchase_invoice_account_lines(
     use_bridge_account = _purchase_invoice_has_receipt(document, company) and (
         not is_credit_note or credit_note_type == "physical_return"
     )
-    side = "credit" if is_credit_note else "debit"
-    account_type = (
-        "bridge"
-        if use_bridge_account
-        else ("purchase_settlement_variance" if credit_note_type == "commercial_adjustment" else "expense")
+    defaults = _company_defaults(company)
+    return _PurchaseInvoiceLineFlags(
+        use_bridge_account=use_bridge_account,
+        side="credit" if is_credit_note else "debit",
+        account_type=(
+            "bridge"
+            if use_bridge_account
+            else ("purchase_settlement_variance" if credit_note_type == "commercial_adjustment" else "expense")
+        ),
+        variance_account_id=getattr(defaults, "purchase_settlement_variance_account_id", None),
+        bridge_account_id=getattr(defaults, "bridge_account_id", None),
     )
+
+
+def _primary_invoice_line_spec(
+    item: PurchaseInvoiceItem,
+    company: str,
+    flags: _PurchaseInvoiceLineFlags,
+    has_allocation: bool,
+    allocated_receipt_amount: Decimal,
+) -> AccountLineSpec | None:
+    """Resolve the bridge or expense line for a single invoice item."""
+    if flags.use_bridge_account and has_allocation:
+        account_id = _require_account_id(
+            flags.bridge_account_id,
+            _("Falta la cuenta puente para liquidar una factura de compra."),
+        )
+        line_amount = allocated_receipt_amount
+    else:
+        account_id = _require_account_id(
+            _item_account_for_line(item, company, flags.account_type)
+            or flags.variance_account_id
+            or _item_account_for_line(item, company, "expense"),
+            _("Falta la cuenta de gasto, variaciones o cuenta puente para una línea de factura de compra."),
+        )
+        line_amount = _line_amount(item)
+    if line_amount <= 0:
+        return None
+    return AccountLineSpec(
+        account_id=account_id,
+        amount=line_amount,
+        side=flags.side,
+        description=getattr(item, "item_name", None) or item.item_code,
+    )
+
+
+def _bridge_invoice_line_specs(
+    item: PurchaseInvoiceItem,
+    company: str,
+    flags: _PurchaseInvoiceLineFlags,
+    allocated_receipt_amount: Decimal,
+    allocated_invoice_amount: Decimal,
+) -> list[AccountLineSpec]:
+    """Resolve the unreceived portion and settlement variance lines for an item."""
     specs: list[AccountLineSpec] = []
-    variance_account_id = getattr(_company_defaults(company), "purchase_settlement_variance_account_id", None)
+    remaining_amount = _line_amount(item) - allocated_invoice_amount
+    if remaining_amount > 0:
+        expense_account_id = _require_account_id(
+            _item_account_for_line(item, company, "expense"),
+            _("Falta la cuenta de gasto para la porción de factura aún no recibida."),
+        )
+        specs.append(
+            AccountLineSpec(
+                account_id=expense_account_id,
+                amount=remaining_amount,
+                side=flags.side,
+                description=f"{getattr(item, 'item_name', None) or item.item_code} - {_('Porción no recibida')}",
+            )
+        )
+    variance = allocated_invoice_amount - allocated_receipt_amount
+    if variance:
+        if not flags.variance_account_id:
+            raise CalculationContextBuilderError(
+                _("Falta la cuenta de variaciones de liquidación de compras para liquidar la factura.")
+            )
+        specs.append(
+            AccountLineSpec(
+                account_id=flags.variance_account_id,
+                amount=abs(variance),
+                side="debit" if (variance > 0) == (flags.side == "debit") else "credit",
+                description=_("Variación de liquidación de compras"),
+            )
+        )
+    return specs
+
+
+def _purchase_invoice_item_specs(
+    item: PurchaseInvoiceItem,
+    company: str,
+    flags: _PurchaseInvoiceLineFlags,
+) -> list[AccountLineSpec]:
+    """Resolve all account line specs for a single purchase invoice item."""
+    allocated_receipt_amount, allocated_invoice_amount = _invoice_receipt_allocation_amounts(item)
+    has_allocation = allocated_invoice_amount > 0 or allocated_receipt_amount > 0
+    specs: list[AccountLineSpec] = []
+    primary_spec = _primary_invoice_line_spec(item, company, flags, has_allocation, allocated_receipt_amount)
+    if primary_spec is not None:
+        specs.append(primary_spec)
+    if flags.use_bridge_account and has_allocation:
+        specs.extend(_bridge_invoice_line_specs(item, company, flags, allocated_receipt_amount, allocated_invoice_amount))
+    return specs
+
+
+def _purchase_invoice_account_lines(
+    document: PurchaseInvoice,
+    items: list[PurchaseInvoiceItem],
+    company: str,
+) -> list[AccountLineSpec]:
+    """Resolve the non-tax lines for purchase invoices and credit notes."""
+    flags = _resolve_purchase_invoice_line_flags(document, company)
+    specs: list[AccountLineSpec] = []
     for item in items:
-        allocated_receipt_amount, allocated_invoice_amount = _invoice_receipt_allocation_amounts(item)
-        has_allocation = allocated_invoice_amount > 0 or allocated_receipt_amount > 0
-        if use_bridge_account and has_allocation:
-            account_id = _require_account_id(
-                getattr(_company_defaults(company), "bridge_account_id", None),
-                _("Falta la cuenta puente para liquidar una factura de compra."),
-            )
-            line_amount = allocated_receipt_amount
-        else:
-            account_id = _require_account_id(
-                _item_account_for_line(item, company, account_type)
-                or variance_account_id
-                or _item_account_for_line(item, company, "expense"),
-                _("Falta la cuenta de gasto, variaciones o cuenta puente para una línea de factura de compra."),
-            )
-            line_amount = _line_amount(item) if not use_bridge_account or not has_allocation else Decimal("0")
-        if line_amount > 0:
-            specs.append(
-                AccountLineSpec(
-                    account_id=account_id,
-                    amount=line_amount,
-                    side=side,
-                    description=getattr(item, "item_name", None) or item.item_code,
-                )
-            )
-        if use_bridge_account and has_allocation:
-            remaining_amount = _line_amount(item) - allocated_invoice_amount
-            if remaining_amount > 0:
-                expense_account_id = _require_account_id(
-                    _item_account_for_line(item, company, "expense"),
-                    _("Falta la cuenta de gasto para la porción de factura aún no recibida."),
-                )
-                specs.append(
-                    AccountLineSpec(
-                        account_id=expense_account_id,
-                        amount=remaining_amount,
-                        side=side,
-                        description=f"{getattr(item, 'item_name', None) or item.item_code} - {_('Porción no recibida')}",
-                    )
-                )
-            variance = allocated_invoice_amount - allocated_receipt_amount
-            if variance:
-                if not variance_account_id:
-                    raise CalculationContextBuilderError(
-                        _("Falta la cuenta de variaciones de liquidación de compras para liquidar la factura.")
-                    )
-                specs.append(
-                    AccountLineSpec(
-                        account_id=variance_account_id,
-                        amount=abs(variance),
-                        side="debit" if (variance > 0) == (side == "debit") else "credit",
-                        description=_("Variación de liquidación de compras"),
-                    )
-                )
+        specs.extend(_purchase_invoice_item_specs(item, company, flags))
     return specs
 
 
