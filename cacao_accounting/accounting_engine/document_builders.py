@@ -131,6 +131,118 @@ def build_calculation_context(document: Any) -> CalculationContext | None:
     return None
 
 
+def _receipt_item_amount(document: PurchaseReceipt, item: PurchaseReceiptItem) -> Decimal:
+    """Resolve the inventory cost amount for a receipt line."""
+    if getattr(document, "is_return", False) and getattr(item, "_inventory_cost_amount", None) is not None:
+        return _decimal_value(getattr(item, "_inventory_cost_amount", None))
+    return _line_amount(item)
+
+
+def _receipt_inventory_line(
+    document: PurchaseReceipt,
+    item: PurchaseReceiptItem,
+    company: str,
+    amount: Decimal,
+    inventory_side: str,
+) -> AccountLineSpec:
+    """Build the inventory line for a receipt item."""
+    inventory_account_id = _require_account_id(
+        inventory_account_id_for_document_line(document, item, company),
+        _("Falta la cuenta de inventario para una línea de recepción de compra."),
+    )
+    description = getattr(item, "item_name", None) or item.item_code
+    return AccountLineSpec(
+        account_id=inventory_account_id,
+        amount=amount,
+        side=inventory_side,
+        description=f"{description} - {_event_label('purchase_receipt_confirmed')}",
+    )
+
+
+def _receipt_reclassification_specs(
+    document: PurchaseReceipt,
+    item: PurchaseReceiptItem,
+    company: str,
+    amount: Decimal,
+    allocation: tuple[Decimal, Decimal],
+    late_two_way_amounts: dict[str, Decimal],
+    variance_account_id: str | None,
+) -> tuple[list[AccountLineSpec], Decimal]:
+    """Resolve the expense and settlement variance lines for a receipt item."""
+    allocated_receipt_amount, allocated_invoice_amount = allocation
+    has_allocation = allocated_receipt_amount > 0 or allocated_invoice_amount > 0
+    reclassified_amount = allocated_invoice_amount
+    if not has_allocation:
+        reclassified_amount = min(late_two_way_amounts.get(item.item_code, Decimal("0")), amount)
+    specs: list[AccountLineSpec] = []
+    if reclassified_amount > 0:
+        description = getattr(item, "item_name", None) or item.item_code
+        expense_account_id = _require_account_id(
+            _item_account_for_line(item, company, "expense"),
+            _("Falta la cuenta de gasto para compensar una factura 2-way contabilizada."),
+        )
+        specs.append(
+            AccountLineSpec(
+                account_id=expense_account_id,
+                amount=reclassified_amount,
+                side="credit",
+                description=f"{description} - {_('Recepción posterior a factura 2-way')}",
+                party_id=document.supplier_id,
+            )
+        )
+        variance = reclassified_amount - allocated_receipt_amount if has_allocation else Decimal("0")
+        if variance:
+            specs.append(
+                _receipt_variance_line(document, variance, variance_account_id),
+            )
+        late_two_way_amounts[item.item_code] -= reclassified_amount
+    return specs, reclassified_amount
+
+
+def _receipt_variance_line(
+    document: PurchaseReceipt,
+    variance: Decimal,
+    variance_account_id: str | None,
+) -> AccountLineSpec:
+    """Build the settlement variance line for a receipt item."""
+    if not variance_account_id:
+        raise CalculationContextBuilderError(
+            _("Falta la cuenta de variaciones de liquidación de compras para compensar una factura 2-way.")
+        )
+    return AccountLineSpec(
+        account_id=variance_account_id,
+        amount=abs(variance),
+        side="debit" if variance > 0 else "credit",
+        description=_("Variación de liquidación de compras"),
+        party_id=document.supplier_id,
+    )
+
+
+def _receipt_bridge_line(
+    document: PurchaseReceipt,
+    item: PurchaseReceiptItem,
+    amount: Decimal,
+    allocation: tuple[Decimal, Decimal],
+    reclassified_amount: Decimal,
+    bridge_account_id: str,
+    bridge_side: str,
+) -> AccountLineSpec | None:
+    """Build the bridge line for the portion of a receipt item still in transit."""
+    allocated_receipt_amount, allocated_invoice_amount = allocation
+    has_allocation = allocated_receipt_amount > 0 or allocated_invoice_amount > 0
+    bridge_amount = amount - allocated_receipt_amount if has_allocation else amount - reclassified_amount
+    if bridge_amount <= 0:
+        return None
+    description = getattr(item, "item_name", None) or item.item_code
+    return AccountLineSpec(
+        account_id=bridge_account_id,
+        amount=bridge_amount,
+        side=bridge_side,
+        description=f"{description} - {_('Cuenta puente compras')}",
+        party_id=document.supplier_id,
+    )
+
+
 def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationContext:
     """Build the context for a submitted purchase receipt."""
     company = _require_company(document.company)
@@ -158,72 +270,18 @@ def _build_purchase_receipt_context(document: PurchaseReceipt) -> CalculationCon
         item_record = database.session.get(Item, item.item_code)
         if item_record is not None and (item_record.item_type == "service" or not item_record.is_stock_item):
             continue
-        amount = (
-            _decimal_value(getattr(item, "_inventory_cost_amount", None))
-            if getattr(document, "is_return", False) and getattr(item, "_inventory_cost_amount", None) is not None
-            else _line_amount(item)
+        amount = _receipt_item_amount(document, item)
+        account_lines.append(_receipt_inventory_line(document, item, company, amount, inventory_side))
+        allocation = allocated_late_amounts.get(str(getattr(item, "id", "")), (Decimal("0"), Decimal("0")))
+        reclassification_specs, reclassified_amount = _receipt_reclassification_specs(
+            document, item, company, amount, allocation, late_two_way_amounts, variance_account_id
         )
-        inventory_account_id = _require_account_id(
-            inventory_account_id_for_document_line(document, item, company),
-            _("Falta la cuenta de inventario para una línea de recepción de compra."),
+        account_lines.extend(reclassification_specs)
+        bridge_line = _receipt_bridge_line(
+            document, item, amount, allocation, reclassified_amount, bridge_account_id, bridge_side
         )
-        description = getattr(item, "item_name", None) or item.item_code
-        account_lines.append(
-            AccountLineSpec(
-                account_id=inventory_account_id,
-                amount=amount,
-                side=inventory_side,
-                description=f"{description} - {_event_label('purchase_receipt_confirmed')}",
-            )
-        )
-        allocated_receipt_amount, allocated_invoice_amount = allocated_late_amounts.get(
-            str(getattr(item, "id", "")), (Decimal("0"), Decimal("0"))
-        )
-        has_allocation = allocated_receipt_amount > 0 or allocated_invoice_amount > 0
-        reclassified_amount = allocated_invoice_amount
-        if not has_allocation:
-            reclassified_amount = min(late_two_way_amounts.get(item.item_code, Decimal("0")), amount)
-        if reclassified_amount > 0:
-            expense_account_id = _require_account_id(
-                _item_account_for_line(item, company, "expense"),
-                _("Falta la cuenta de gasto para compensar una factura 2-way contabilizada."),
-            )
-            account_lines.append(
-                AccountLineSpec(
-                    account_id=expense_account_id,
-                    amount=reclassified_amount,
-                    side="credit",
-                    description=f"{description} - {_('Recepción posterior a factura 2-way')}",
-                    party_id=document.supplier_id,
-                )
-            )
-            variance = reclassified_amount - allocated_receipt_amount if has_allocation else Decimal("0")
-            if variance:
-                if not variance_account_id:
-                    raise CalculationContextBuilderError(
-                        _("Falta la cuenta de variaciones de liquidación de compras para compensar una factura 2-way.")
-                    )
-                account_lines.append(
-                    AccountLineSpec(
-                        account_id=variance_account_id,
-                        amount=abs(variance),
-                        side="debit" if variance > 0 else "credit",
-                        description=_("Variación de liquidación de compras"),
-                        party_id=document.supplier_id,
-                    )
-                )
-            late_two_way_amounts[item.item_code] -= reclassified_amount
-        bridge_amount = amount - allocated_receipt_amount if has_allocation else amount - reclassified_amount
-        if bridge_amount > 0:
-            account_lines.append(
-                AccountLineSpec(
-                    account_id=bridge_account_id,
-                    amount=bridge_amount,
-                    side=bridge_side,
-                    description=f"{description} - {_('Cuenta puente compras')}",
-                    party_id=document.supplier_id,
-                )
-            )
+        if bridge_line is not None:
+            account_lines.append(bridge_line)
         item_contexts.append(_item_context_from_purchase_receipt_item(item))
     tax_rules = _document_tax_rules(document, items, company=company, applies_to="purchase", event_type=event_type)
     return CalculationContext(
