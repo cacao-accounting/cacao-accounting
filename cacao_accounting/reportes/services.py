@@ -3313,7 +3313,7 @@ def get_balance_sheet_report(filters: FinancialReportFilters) -> PaginatedReport
     if selected_ledger is None:
         return PaginatedReport(rows=[], totals={}, columns=[])
     # For balance sheet, query with include_closing=True to retrieve the closing entries (e.g. for retained earnings)
-    query_filters = replace(filters, include_closing=True)
+    query_filters: FinancialReportFilters = replace(filters, include_closing=True)
     posting_year = func.extract("year", GLEntry.posting_date).label("posting_year")
     base_query = select(
         Accounts.code.label("account_code"),
