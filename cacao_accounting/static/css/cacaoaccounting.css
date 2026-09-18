@@ -707,14 +707,22 @@ nav[aria-label="breadcrumb"] {
 }
 
 .btn-success, .btn-success:focus {
-  background-color: var(--ca-p300) !important;
-  border-color: var(--ca-p300) !important;
-  color: var(--ca-text) !important;
+  background-color: var(--ca-p600) !important;
+  border-color: var(--ca-p600) !important;
+  color: #fff !important;
   font-weight: 500;
 }
 .btn-success:hover, .btn-success:active {
-  background-color: #D89B64 !important;
-  border-color: #D89B64 !important;
+  background-color: var(--ca-p800) !important;
+  border-color: var(--ca-p800) !important;
+  color: #fff !important;
+}
+
+[data-theme="dark"] .btn-success:hover,
+[data-theme="dark"] .btn-success:active {
+  background-color: #B8693E !important;
+  border-color: #B8693E !important;
+  color: #fff !important;
 }
 
 .ca-document-create-button,
