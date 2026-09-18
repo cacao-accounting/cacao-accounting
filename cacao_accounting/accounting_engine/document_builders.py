@@ -1215,14 +1215,16 @@ def _resolve_purchase_invoice_line_flags(document: PurchaseInvoice, company: str
         not is_credit_note or credit_note_type == "physical_return"
     )
     defaults = _company_defaults(company)
+    if use_bridge_account:
+        account_type = "bridge"
+    elif credit_note_type == "commercial_adjustment":
+        account_type = "purchase_settlement_variance"
+    else:
+        account_type = "expense"
     return _PurchaseInvoiceLineFlags(
         use_bridge_account=use_bridge_account,
         side="credit" if is_credit_note else "debit",
-        account_type=(
-            "bridge"
-            if use_bridge_account
-            else ("purchase_settlement_variance" if credit_note_type == "commercial_adjustment" else "expense")
-        ),
+        account_type=account_type,
         variance_account_id=getattr(defaults, "purchase_settlement_variance_account_id", None),
         bridge_account_id=getattr(defaults, "bridge_account_id", None),
     )

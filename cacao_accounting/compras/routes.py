@@ -2529,6 +2529,12 @@ def _receipt_transaction_config(
     initial_header: dict[str, str],
 ) -> dict[str, object]:
     """Build the Alpine transaction config for the receipt form."""
+    if is_return:
+        initial_source_type = "purchase_receipt"
+    elif from_order_id:
+        initial_source_type = "purchase_order"
+    else:
+        initial_source_type = ""
     return {
         "formKey": FORMKEY_PURCHASE_RECEIPT,
         "viewKey": "draft",
@@ -2536,7 +2542,7 @@ def _receipt_transaction_config(
         "items": items,
         "uoms": uoms,
         "warehouses": bodegas,
-        "initialSourceType": "purchase_receipt" if is_return else ("purchase_order" if from_order_id else ""),
+        "initialSourceType": initial_source_type,
         "availableSourceTypes": _receipt_available_source_types(is_return),
         "initialHeader": initial_header,
     }
