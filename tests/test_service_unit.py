@@ -68,7 +68,7 @@ def _get_supplier():
 
 def _create_purchase_order(supplier, qty=Decimal("10"), rate=Decimal("100")):
     po = PurchaseOrder(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         docstatus=1,
@@ -90,7 +90,7 @@ def _create_purchase_order(supplier, qty=Decimal("10"), rate=Decimal("100")):
 
 def _create_receipt(supplier, po_id):
     pr = PurchaseReceipt(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         purchase_order_id=po_id,
         posting_date=date.today(),
@@ -261,7 +261,7 @@ class TestGetPendingLines:
             source_document_type="purchase_order",
             source_document_ids=[po.id],
             target_document_type="purchase_receipt",
-            company="cacao",
+            company="CACAO",
         )
         assert len(lines) == 1
         assert lines[0]["source_document_no"] is not None
@@ -289,7 +289,7 @@ class TestGetPendingLines:
             source_document_type="purchase_order",
             source_document_ids=[po1.id, po2.id],
             target_document_type="purchase_receipt",
-            company="cacao",
+            company="CACAO",
         )
         assert len(lines) == 2
         item_ids = {line["source_item_id"] for line in lines}
@@ -468,7 +468,7 @@ class TestListSourceDocuments:
 
         docs = list_source_documents(
             target_type="purchase_receipt",
-            company="cacao",
+            company="CACAO",
         )
         assert len(docs) >= 1
         assert any(d["source_id"] == po.id for d in docs)
@@ -489,7 +489,7 @@ class TestListSourceDocuments:
 
         docs = list_source_documents(
             target_type="purchase_receipt",
-            company="cacao",
+            company="CACAO",
             party_type="supplier",
             party_id="NONEXISTENT_PARTY",
         )
@@ -498,7 +498,7 @@ class TestListSourceDocuments:
     def test_empty_when_no_approved_documents(self, app_ctx):
         supplier = _get_supplier()
         po = PurchaseOrder(
-            company="cacao",
+            company="CACAO",
             supplier_id=supplier.id,
             posting_date=date.today(),
             docstatus=0,
@@ -518,7 +518,7 @@ class TestListSourceDocuments:
 
         docs = list_source_documents(
             target_type="purchase_receipt",
-            company="cacao",
+            company="CACAO",
         )
         assert all(d["source_id"] != po.id for d in docs)
 

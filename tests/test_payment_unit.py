@@ -71,7 +71,7 @@ def test_duplicate_payment_warning_covers_receipts(app_ctx):
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     existing = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         party_id=customer.id,
         party_type="customer",
         payment_type="receive",
@@ -82,7 +82,7 @@ def test_duplicate_payment_warning_covers_receipts(app_ctx):
     )
     candidate = PaymentEntry(
         id="PAY-DUP-RECEIVE",
-        company="cacao",
+        company="CACAO",
         party_id=customer.id,
         party_type="customer",
         payment_type="receive",
@@ -107,7 +107,7 @@ def test_direct_payment_with_realized_fx_difference_is_rejected(monkeypatch, app
     from cacao_accounting.database import GLEntry
 
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         payment_type="pay",
         transaction_currency="USD",
@@ -204,7 +204,7 @@ def _ensure_company_default_accounts(company: str, bank: BankAccount) -> Company
 def _make_customer_invoice(*, grand_total: Decimal = Decimal("1000")) -> SalesInvoice:
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -224,7 +224,7 @@ def _make_customer_invoice(*, grand_total: Decimal = Decimal("1000")) -> SalesIn
 def _make_supplier_invoice(*, grand_total: Decimal = Decimal("1000")) -> PurchaseInvoice:
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     pi = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -249,10 +249,10 @@ def _make_open_payment(
     document_no: str = "PAY-TEST-001",
     currency: str = "NIO",
 ) -> PaymentEntry:
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     party_type_value = "customer" if party.is_customer else "supplier"
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         payment_type=payment_type,
         party_type=party_type_value,
@@ -640,7 +640,7 @@ class TestPaymentReferenceCandidates:
         supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
         si = _make_customer_invoice()
         results = payment_reference_candidates(
-            company="cacao",
+            company="CACAO",
             party_type="supplier",
             party_id=supplier.id,
             source_types=["sales_invoice", "purchase_invoice"],
@@ -652,7 +652,7 @@ class TestPaymentReferenceCandidates:
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         so = SalesOrder(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             docstatus=1,
@@ -662,7 +662,7 @@ class TestPaymentReferenceCandidates:
         database.session.commit()
 
         results = payment_reference_candidates(
-            company="cacao",
+            company="CACAO",
             party_type="customer",
             party_id=customer.id,
             source_types=["sales_order"],
@@ -675,7 +675,7 @@ class TestPaymentReferenceCandidates:
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         so = SalesOrder(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             docstatus=1,
@@ -685,7 +685,7 @@ class TestPaymentReferenceCandidates:
         database.session.commit()
 
         results = payment_reference_candidates(
-            company="cacao",
+            company="CACAO",
             party_type="customer",
             party_id=customer.id,
             source_types=["sales_order"],
@@ -698,7 +698,7 @@ class TestPaymentReferenceCandidates:
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         sr = SalesInvoice(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             document_type="sales_return",
@@ -711,7 +711,7 @@ class TestPaymentReferenceCandidates:
         database.session.commit()
 
         results = payment_reference_candidates(
-            company="cacao",
+            company="CACAO",
             party_type="customer",
             party_id=customer.id,
             source_types=["sales_return"],
@@ -735,7 +735,7 @@ class TestPaymentOrderAllocated:
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         so = SalesOrder(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             docstatus=1,
@@ -751,9 +751,9 @@ class TestPaymentOrderAllocated:
         from cacao_accounting.document_flow.payment import _payment_order_allocated
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
         so = SalesOrder(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             docstatus=1,
@@ -763,7 +763,7 @@ class TestPaymentOrderAllocated:
         database.session.flush()
 
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="receive",
             party_type="customer",
@@ -869,11 +869,11 @@ class TestCheckDuplicateApplication:
         from cacao_accounting.document_flow.payment import _check_duplicate_application
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
         si = _make_customer_invoice()
 
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="receive",
             party_type="customer",
@@ -954,7 +954,7 @@ class TestValidatePayment:
         from cacao_accounting.document_flow.payment import _validate_payment
 
         with pytest.raises(ValueError, match="existir y estar aprobado"):
-            _validate_payment(None, "cacao", "customer", "X", "sales_invoice")
+            _validate_payment(None, "CACAO", "customer", "X", "sales_invoice")
 
     def test_wrong_company_raises(self, app_ctx):
         from cacao_accounting.document_flow.payment import _validate_payment
@@ -972,7 +972,7 @@ class TestValidatePayment:
         payment = _make_open_payment(party=customer, payment_type="receive", amount=Decimal("100"))
 
         with pytest.raises(ValueError, match="tipo de pago no corresponde"):
-            _validate_payment(payment, "cacao", "customer", customer.id, "purchase_invoice")
+            _validate_payment(payment, "CACAO", "customer", customer.id, "purchase_invoice")
 
 
 # ---------------------------------------------------------------------------
@@ -1052,7 +1052,7 @@ class TestValidateAdvanceAllocation:
         payment.party_id = "OTHER-PARTY"
 
         class FakeInvoice:
-            company = "cacao"
+            company = "CACAO"
 
         with pytest.raises(ValueError, match="otro tercero"):
             _validate_advance_allocation(payment, FakeInvoice(), customer.id, Decimal("100"), date.today())
@@ -1064,7 +1064,7 @@ class TestValidateAdvanceAllocation:
         payment = _make_open_payment(party=customer, payment_type="receive", amount=Decimal("500"))
 
         class FakeInvoice:
-            company = "cacao"
+            company = "CACAO"
 
         with pytest.raises(ValueError, match="mayor que cero"):
             _validate_advance_allocation(payment, FakeInvoice(), customer.id, Decimal("0"), date.today())
@@ -1076,7 +1076,7 @@ class TestValidateAdvanceAllocation:
         payment = _make_open_payment(party=customer, payment_type="receive", amount=Decimal("100"))
 
         class FakeInvoice:
-            company = "cacao"
+            company = "CACAO"
 
         with pytest.raises(ValueError, match="remanente del anticipo"):
             _validate_advance_allocation(payment, FakeInvoice(), customer.id, Decimal("200"), date.today())
@@ -1186,7 +1186,7 @@ class TestCreatePaymentTarget:
         """El target documental conserva la cuenta GL de cada pata bancaria."""
         from cacao_accounting.document_flow.payment import _build_payment_target_payment
 
-        bank_accounts = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().all()
+        bank_accounts = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().all()
         eligible = [account for account in bank_accounts if account.gl_account_id]
         if len(eligible) < 2:
             pytest.skip("La fixture requiere dos cuentas bancarias con cuenta GL configurada.")
@@ -1214,7 +1214,7 @@ class TestCreatePaymentTarget:
         result = create_target_document(
             {
                 "target_document_type": "payment_entry",
-                "company": "cacao",
+                "company": "CACAO",
                 "posting_date": date.today(),
                 "payment_type": "receive",
                 "party_type": "customer",
@@ -1249,7 +1249,7 @@ class TestCreatePaymentTarget:
             create_target_document(
                 {
                     "target_document_type": "payment_entry",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "posting_date": date.today(),
                     "payment_type": "receive",
                     "party_type": "customer",
@@ -1272,7 +1272,7 @@ class TestCreatePaymentTarget:
             create_target_document(
                 {
                     "target_document_type": "payment_entry",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "posting_date": date.today(),
                     "payment_type": "receive",
                     "party_type": "customer",
@@ -1294,7 +1294,7 @@ class TestCreatePaymentTarget:
             create_target_document(
                 {
                     "target_document_type": "payment_entry",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "posting_date": date.today(),
                     "payment_type": "receive",
                     "party_type": "customer",
@@ -1314,7 +1314,7 @@ class TestCreatePaymentTarget:
         result = create_target_document(
             {
                 "target_document_type": "payment_entry",
-                "company": "cacao",
+                "company": "CACAO",
                 "posting_date": date.today(),
                 "payment_type": "receive",
                 "party_type": "customer",
@@ -1346,7 +1346,7 @@ class TestCreatePaymentTarget:
         result = create_target_document(
             {
                 "target_document_type": "payment_entry",
-                "company": "cacao",
+                "company": "CACAO",
                 "posting_date": date.today(),
                 "payment_type": payment_type,
                 "party_type": "customer" if payment_type == "receive" else "supplier",
@@ -1372,7 +1372,7 @@ class TestCreatePaymentTarget:
         result = create_target_document(
             {
                 "target_document_type": "payment_entry",
-                "company": "cacao",
+                "company": "CACAO",
                 "posting_date": date.today(),
                 "payment_type": "pay",
                 "party_type": "supplier",
@@ -1400,7 +1400,7 @@ class TestCreatePaymentTarget:
             create_target_document(
                 {
                     "target_document_type": "payment_entry",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "posting_date": date.today(),
                     "payment_type": "receive",
                     "party_type": "customer",
@@ -1427,7 +1427,7 @@ class TestCreatePaymentTarget:
             create_target_document(
                 {
                     "target_document_type": "payment_entry",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "posting_date": date.today(),
                     "lines": [],
                 }
@@ -1443,7 +1443,7 @@ class TestCreatePaymentTarget:
             create_target_document(
                 {
                     "target_document_type": "payment_entry",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "posting_date": date.today(),
                     "payment_type": "receive",
                     "party_type": "customer",
@@ -1468,7 +1468,7 @@ class TestCreatePaymentTarget:
             create_target_document(
                 {
                     "target_document_type": "payment_entry",
-                    "company": "cacao",
+                    "company": "CACAO",
                     "posting_date": date.today(),
                     "payment_type": "receive",
                     "party_type": "customer",
@@ -1518,7 +1518,7 @@ class TestCreatePaymentTarget:
         result = create_target_document(
             {
                 "target_document_type": "payment_entry",
-                "company": "cacao",
+                "company": "CACAO",
                 "posting_date": date.today(),
                 "payment_type": "receive",
                 "party_type": "customer",
@@ -1546,7 +1546,7 @@ class TestCreatePaymentTarget:
 
         supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
         credit_note = PurchaseInvoice(
-            company="cacao",
+            company="CACAO",
             supplier_id=supplier.id,
             posting_date=date.today(),
             document_type="purchase_credit_note",
@@ -1559,7 +1559,7 @@ class TestCreatePaymentTarget:
         database.session.add(credit_note)
         database.session.flush()
         opening = ARAPLedgerEntry(
-            company="cacao",
+            company="CACAO",
             ledger_type="AP",
             party_type="supplier",
             party_id=supplier.id,
@@ -1578,7 +1578,7 @@ class TestCreatePaymentTarget:
         assert compute_outstanding_amount(credit_note, signed=True) == Decimal("-100")
 
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             payment_type="receive",
             party_type="supplier",
             party_id=supplier.id,
@@ -1630,7 +1630,7 @@ class TestCreatePaymentTarget:
         result = create_target_document(
             {
                 "target_document_type": "payment_entry",
-                "company": "cacao",
+                "company": "CACAO",
                 "posting_date": date.today(),
                 "payment_type": "receive",
                 "party_type": "customer",
@@ -1682,7 +1682,7 @@ class TestPaymentReconciliationCandidates:
         _make_open_payment(party=customer, payment_type="receive", amount=Decimal("300"))
 
         result = payment_reconciliation_candidates(
-            company="cacao",
+            company="CACAO",
             party_type="customer",
             party_id=customer.id,
         )
@@ -1827,7 +1827,7 @@ class TestApplyAdvancePartyTypeCasing:
             reference_id=invoice.id,
             allocated_amount=Decimal("100"),
             allocation_date=date.today(),
-            company="cacao",
+            company="CACAO",
         )
         database.session.add(later_reference)
         database.session.flush()
@@ -1867,13 +1867,13 @@ class TestBankManagementExhaustive:
         from cacao_accounting.database import BankAccount, Party, PaymentEntry, PaymentReference
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        defaults = _ensure_company_default_accounts("cacao", bank)
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        defaults = _ensure_company_default_accounts("CACAO", bank)
 
         si = _make_customer_invoice(grand_total=Decimal("700"))
 
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="receive",
             party_type="customer",
@@ -1901,7 +1901,7 @@ class TestBankManagementExhaustive:
         database.session.commit()
 
         context = _document_contexts(payment)[0]
-        entries = _create_payment_receive_entries(context, payment, "cacao", Decimal("1000"))
+        entries = _create_payment_receive_entries(context, payment, "CACAO", Decimal("1000"))
         assert len(entries) == 3
 
         debit_entry = [e for e in entries if e.debit > 0][0]
@@ -1924,10 +1924,10 @@ class TestBankManagementExhaustive:
         from cacao_accounting.database import BankAccount, Party, PaymentEntry
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        _ensure_company_default_accounts("cacao", bank)
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        _ensure_company_default_accounts("CACAO", bank)
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="receive",
             party_type="customer",
@@ -1944,7 +1944,7 @@ class TestBankManagementExhaustive:
         database.session.add(payment)
         database.session.commit()
 
-        entries = _create_payment_receive_entries(_document_contexts(payment)[0], payment, "cacao", Decimal("100"))
+        entries = _create_payment_receive_entries(_document_contexts(payment)[0], payment, "CACAO", Decimal("100"))
         bank_entry = next(entry for entry in entries if entry.account_id == bank.gl_account_id)
 
         assert bank_entry.party_type is None
@@ -1956,10 +1956,10 @@ class TestBankManagementExhaustive:
         from cacao_accounting.database import BankAccount, Party, PaymentEntry
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        defaults = _ensure_company_default_accounts("cacao", bank)
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        defaults = _ensure_company_default_accounts("CACAO", bank)
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="pay",
             party_type="customer",
@@ -1999,12 +1999,12 @@ class TestBankManagementExhaustive:
         from cacao_accounting.database import BankAccount, Party, PaymentEntry, PaymentReference
 
         supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        defaults = _ensure_company_default_accounts("cacao", bank)
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        defaults = _ensure_company_default_accounts("CACAO", bank)
         defaults.supplier_advance_account_id = None
         invoice = _make_supplier_invoice(grand_total=Decimal("700"))
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="pay",
             party_type="supplier",
@@ -2032,7 +2032,7 @@ class TestBankManagementExhaustive:
         database.session.commit()
 
         with pytest.raises(PostingError, match="anticipo de proveedor"):
-            _create_payment_pay_entries(_document_contexts(payment)[0], payment, "cacao", Decimal("1000"))
+            _create_payment_pay_entries(_document_contexts(payment)[0], payment, "CACAO", Decimal("1000"))
 
     def test_bank_debit_note_uses_custom_paid_to_account(self, app_ctx):
         """A bank debit note uses paid_to_account_id when specified."""
@@ -2040,19 +2040,19 @@ class TestBankManagementExhaustive:
         from cacao_accounting.database import BankAccount, Accounts, PaymentEntry
         from cacao_accounting.ledger_queries import primary_ledger_id
 
-        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        _ensure_company_default_accounts("cacao", bank)
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        _ensure_company_default_accounts("CACAO", bank)
 
         custom_expense = (
             database.session.execute(
-                database.select(Accounts).filter_by(entity="cacao", account_type="expense").order_by(Accounts.code.desc())
+                database.select(Accounts).filter_by(entity="CACAO", account_type="expense").order_by(Accounts.code.desc())
             )
             .scalars()
             .first()
         )
 
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="debit_note",
             bank_account_id=bank.id,
@@ -2068,7 +2068,7 @@ class TestBankManagementExhaustive:
         database.session.commit()
 
         entries = post_payment_entry(payment)
-        primary_id = primary_ledger_id("cacao")
+        primary_id = primary_ledger_id("CACAO")
         primary_entries = [e for e in entries if e.ledger_id == primary_id] if primary_id else entries
         assert len(primary_entries) == 2
         debit_entry = [e for e in primary_entries if e.debit > 0][0]
@@ -2081,19 +2081,19 @@ class TestBankManagementExhaustive:
         from cacao_accounting.database import BankAccount, Accounts, PaymentEntry
         from cacao_accounting.ledger_queries import primary_ledger_id
 
-        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        _ensure_company_default_accounts("cacao", bank)
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        _ensure_company_default_accounts("CACAO", bank)
 
         custom_income = (
             database.session.execute(
-                database.select(Accounts).filter_by(entity="cacao", account_type="income").order_by(Accounts.code.desc())
+                database.select(Accounts).filter_by(entity="CACAO", account_type="income").order_by(Accounts.code.desc())
             )
             .scalars()
             .first()
         )
 
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="credit_note",
             bank_account_id=bank.id,
@@ -2109,7 +2109,7 @@ class TestBankManagementExhaustive:
         database.session.commit()
 
         entries = post_payment_entry(payment)
-        primary_id = primary_ledger_id("cacao")
+        primary_id = primary_ledger_id("CACAO")
         primary_entries = [e for e in entries if e.ledger_id == primary_id] if primary_id else entries
         assert len(primary_entries) == 2
         credit_entry = [e for e in primary_entries if e.credit > 0][0]
@@ -2123,19 +2123,19 @@ class TestBankManagementExhaustive:
         from cacao_accounting.ledger_queries import primary_ledger_id
 
         bank_entity = database.session.execute(database.select(Bank)).scalars().first()
-        bank1 = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        _ensure_company_default_accounts("cacao", bank1)
+        bank1 = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        _ensure_company_default_accounts("CACAO", bank1)
 
         usd_account = (
             database.session.execute(
-                database.select(Accounts).filter_by(entity="cacao", account_type="bank").order_by(Accounts.code.desc())
+                database.select(Accounts).filter_by(entity="CACAO", account_type="bank").order_by(Accounts.code.desc())
             )
             .scalars()
             .first()
         )
         bank2 = BankAccount(
             bank_id=bank_entity.id,
-            company="cacao",
+            company="CACAO",
             account_name="Cuenta USD Test",
             account_no="USD-9999",
             currency="USD",
@@ -2163,7 +2163,7 @@ class TestBankManagementExhaustive:
         database.session.commit()
 
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="internal_transfer",
             bank_account_id=bank2.id,
@@ -2182,7 +2182,7 @@ class TestBankManagementExhaustive:
         database.session.commit()
 
         entries = post_payment_entry(payment)
-        primary_id = primary_ledger_id("cacao")
+        primary_id = primary_ledger_id("CACAO")
         primary_entries = [e for e in entries if e.ledger_id == primary_id] if primary_id else entries
         assert len(primary_entries) == 3
         target_debit = [e for e in primary_entries if e.account_id == bank1.gl_account_id and e.debit > 0][0]
@@ -2198,18 +2198,18 @@ class TestBankManagementExhaustive:
         from cacao_accounting.ledger_queries import primary_ledger_id
 
         bank_entity = database.session.execute(database.select(Bank)).scalars().first()
-        target_bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        defaults = _ensure_company_default_accounts("cacao", target_bank)
+        target_bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        defaults = _ensure_company_default_accounts("CACAO", target_bank)
         source_gl = (
             database.session.execute(
-                database.select(Accounts).filter_by(entity="cacao", account_type="bank").order_by(Accounts.code.desc())
+                database.select(Accounts).filter_by(entity="CACAO", account_type="bank").order_by(Accounts.code.desc())
             )
             .scalars()
             .first()
         )
         source_bank = BankAccount(
             bank_id=bank_entity.id,
-            company="cacao",
+            company="CACAO",
             account_name="Cuenta USD Ganancia",
             account_no="USD-GAIN-1",
             currency="USD",
@@ -2230,7 +2230,7 @@ class TestBankManagementExhaustive:
         database.session.commit()
 
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="internal_transfer",
             bank_account_id=source_bank.id,
@@ -2249,7 +2249,7 @@ class TestBankManagementExhaustive:
         database.session.commit()
 
         entries = post_payment_entry(payment)
-        primary_id = primary_ledger_id("cacao")
+        primary_id = primary_ledger_id("CACAO")
         primary_entries = [entry for entry in entries if entry.ledger_id == primary_id] if primary_id else entries
         gain_entries = [entry for entry in primary_entries if entry.account_id == defaults.exchange_gain_account_id]
 
@@ -2265,26 +2265,26 @@ class TestBankManagementExhaustive:
         from cacao_accounting.database import BankAccount, Bank, Accounts, ExchangeRate, PaymentEntry
 
         bank_entity = database.session.execute(database.select(Bank)).scalars().first()
-        bank1 = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        _ensure_company_default_accounts("cacao", bank1)
+        bank1 = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        _ensure_company_default_accounts("CACAO", bank1)
 
         usd_account1 = (
             database.session.execute(
-                database.select(Accounts).filter_by(entity="cacao", account_type="bank").order_by(Accounts.code.asc())
+                database.select(Accounts).filter_by(entity="CACAO", account_type="bank").order_by(Accounts.code.asc())
             )
             .scalars()
             .first()
         )
         usd_account2 = (
             database.session.execute(
-                database.select(Accounts).filter_by(entity="cacao", account_type="bank").order_by(Accounts.code.desc())
+                database.select(Accounts).filter_by(entity="CACAO", account_type="bank").order_by(Accounts.code.desc())
             )
             .scalars()
             .first()
         )
         bank_usd1 = BankAccount(
             bank_id=bank_entity.id,
-            company="cacao",
+            company="CACAO",
             account_name="Cuenta USD Out",
             account_no="USD-100",
             currency="USD",
@@ -2292,7 +2292,7 @@ class TestBankManagementExhaustive:
         )
         bank_usd2 = BankAccount(
             bank_id=bank_entity.id,
-            company="cacao",
+            company="CACAO",
             account_name="Cuenta USD In",
             account_no="USD-200",
             currency="USD",
@@ -2321,7 +2321,7 @@ class TestBankManagementExhaustive:
 
         # Unbalanced USD transfer: 100 USD paid from bank_usd1, 90 USD received into bank_usd2
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="internal_transfer",
             bank_account_id=bank_usd1.id,
@@ -2354,11 +2354,11 @@ class TestBankManagementExhaustive:
         from cacao_accounting.database import BankAccount, BankTransaction, CompanyDefaultAccount, Party, PaymentEntry
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-        bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-        _ensure_company_default_accounts("cacao", bank)
+        bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+        _ensure_company_default_accounts("CACAO", bank)
 
         payment = PaymentEntry(
-            company="cacao",
+            company="CACAO",
             posting_date=date.today(),
             payment_type="receive",
             party_type="customer",
@@ -2388,7 +2388,7 @@ class TestBankManagementExhaustive:
 
         reconciliation = reconcile_bank_items(
             BankReconciliationRequest(
-                company="cacao",
+                company="CACAO",
                 reconciliation_date=date.today(),
                 matches=[
                     BankReconciliationMatch(
@@ -2404,14 +2404,14 @@ class TestBankManagementExhaustive:
         assert bt.is_reconciled is True
 
         defaults = (
-            database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="cacao")).scalars().first()
+            database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="CACAO")).scalars().first()
         )
         defaults.bank_difference_account_id = defaults.default_expense
         database.session.commit()
 
         journal = create_bank_difference_journal(reconciliation.id, Decimal("10"), transaction_id=bt.id)
         assert journal is not None
-        assert journal.entity == "cacao"
+        assert journal.entity == "CACAO"
 
 
 def test_internal_transfer_cross_currency_uses_system_rate(app_ctx):
@@ -2427,10 +2427,10 @@ def test_internal_transfer_cross_currency_uses_system_rate(app_ctx):
     from cacao_accounting.database import BankAccount, ExchangeRate
 
     source_usd = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     )
     target_nio = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="NIO")).scalars().first()
     )
     assert source_usd is not None and target_nio is not None
 
@@ -2446,7 +2446,7 @@ def test_internal_transfer_cross_currency_uses_system_rate(app_ctx):
     database.session.commit()
 
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         payment_type="internal_transfer",
         bank_account_id=source_usd.id,
@@ -2485,12 +2485,12 @@ def test_internal_transfer_same_currency_ignores_ui_rate(app_ctx):
     from cacao_accounting.database import Bank, BankAccount
 
     source_usd = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     )
     bank_entity = database.session.execute(database.select(Bank)).scalars().first()
     target_usd = BankAccount(
         bank_id=bank_entity.id,
-        company="cacao",
+        company="CACAO",
         account_name="Cuenta USD Secundaria",
         account_no="USD-8888",
         currency="USD",
@@ -2501,7 +2501,7 @@ def test_internal_transfer_same_currency_ignores_ui_rate(app_ctx):
     assert source_usd is not None and target_usd is not None
 
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         payment_type="internal_transfer",
         bank_account_id=source_usd.id,

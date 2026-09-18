@@ -27,7 +27,7 @@ def app_ctx():
         yield app
 
 
-def _make_relation(source_type, source_id, target_type, target_id, company="cacao"):
+def _make_relation(source_type, source_id, target_type, target_id, company="CACAO"):
     rel = DocumentRelation(
         source_type=source_type,
         source_id=source_id,

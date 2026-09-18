@@ -42,7 +42,7 @@ def app_ctx():
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         from cacao_accounting.datos.dev import master_data
 
-        if not database.session.execute(database.select(Entity).filter_by(code="cacao")).first():
+        if not database.session.execute(database.select(Entity).filter_by(code="CACAO")).first():
             master_data()
         yield app
 
@@ -52,13 +52,13 @@ def test_budget_lifecycle(app_ctx):
     admin_user = database.session.query(User).filter_by(user="admin").first()
 
     # Buscar datos del master data
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao", is_primary=True).first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO", is_primary=True).first()
     if not book:
-        book = database.session.query(Book).filter_by(entity="cacao").first()
+        book = database.session.query(Book).filter_by(entity="CACAO").first()
 
     data = {
-        "company": "cacao",
+        "company": "CACAO",
         "ledger_id": book.id,
         "fiscal_year_id": fy.id,
         "budget_code": "TEST-2026",
@@ -69,8 +69,8 @@ def test_budget_lifecycle(app_ctx):
     assert budget.status == "draft"
 
     # 2. Agregar línea
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     line_data = {
@@ -89,7 +89,7 @@ def test_budget_lifecycle(app_ctx):
     # 4. Reporte
     report_service = BudgetReportService()
     report = report_service.get_real_vs_budget_report(
-        {"company": "cacao", "budget_id": budget.id, "ledger_id": book.id, "fiscal_year_id": fy.id, "granularity": "month"}
+        {"company": "CACAO", "budget_id": budget.id, "ledger_id": book.id, "fiscal_year_id": fy.id, "granularity": "month"}
     )
     assert len(report.rows) > 0
     assert report.totals["budget"] == Decimal("1000")
@@ -98,11 +98,11 @@ def test_budget_lifecycle(app_ctx):
 def test_duplicate_budget_code(app_ctx):
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
 
     data = {
-        "company": "cacao",
+        "company": "CACAO",
         "ledger_id": book.id,
         "fiscal_year_id": fy.id,
         "budget_code": "DUP-CODE",
@@ -119,13 +119,13 @@ def test_budget_currency_must_match_ledger(app_ctx):
     """A budget cannot label ledger amounts with a different currency."""
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
 
     with pytest.raises(BudgetError, match="moneda del presupuesto"):
         service.create_budget(
             {
-                "company": "cacao",
+                "company": "CACAO",
                 "ledger_id": book.id,
                 "fiscal_year_id": fy.id,
                 "budget_code": "CURRENCY-MISMATCH",
@@ -143,15 +143,15 @@ def test_budget_import(app_ctx):
     service = BudgetService()
     import_service = BudgetImportService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).all()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).all()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "IMPORT-TEST",
@@ -187,12 +187,12 @@ def test_budget_import_route_uses_shared_template(app_ctx, monkeypatch):
 
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "ROUTE-IMPORT-TEST",
@@ -228,15 +228,15 @@ def test_budget_import_route_uses_shared_template(app_ctx, monkeypatch):
 def test_budget_uniqueness_validation(app_ctx):
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "UNIQUE-TEST",
@@ -256,15 +256,15 @@ def test_budget_uniqueness_validation(app_ctx):
 def test_budget_line_validation_rejects_invalid_dimensions(app_ctx):
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "VALIDATION-TEST",
@@ -275,7 +275,7 @@ def test_budget_line_validation_rejects_invalid_dimensions(app_ctx):
     )
 
     group_account = Accounts(
-        entity="cacao",
+        entity="CACAO",
         code="GRP-BUDGET",
         name="Grupo Presupuesto",
         active=True,
@@ -346,15 +346,15 @@ def test_budget_import_rollback(app_ctx):
     service = BudgetService()
     import_service = BudgetImportService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).all()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).all()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "ROLLBACK-TEST",
@@ -396,12 +396,12 @@ def test_budget_import_unknown_column(app_ctx):
     service = BudgetService()
     import_service = BudgetImportService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "UNKNOWN-COL",
@@ -419,15 +419,15 @@ def test_budget_import_unknown_column(app_ctx):
 def test_budget_report_filters_with_dimension_ids(app_ctx):
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "FILTER-ID-TEST",
@@ -450,7 +450,7 @@ def test_budget_report_filters_with_dimension_ids(app_ctx):
 
     report = BudgetReportService().get_real_vs_budget_report(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "budget_id": budget.id,
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
@@ -465,25 +465,25 @@ def test_budget_report_filters_with_dimension_ids(app_ctx):
 def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
 
-    unit = Unit(entity="cacao", code="BU-TEST", name="Unidad Test")
-    project = Project(entity="cacao", code="PRJ-TEST", name="Proyecto Test", enabled=True, start=per.start)
+    unit = Unit(entity="CACAO", code="BU-TEST", name="Unidad Test")
+    project = Project(entity="CACAO", code="PRJ-TEST", name="Proyecto Test", enabled=True, start=per.start)
     database.session.add_all([unit, project])
     database.session.flush()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "REPORT-MAP-TEST",
             "name": "Reporte Real vs Presupuesto",
-            "currency_id": book.currency or database.session.get(Entity, "cacao").currency,
+            "currency_id": book.currency or database.session.get(Entity, "CACAO").currency,
         },
         str(admin_user.id),
     )
@@ -502,7 +502,7 @@ def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
     )
 
     gl_entry = GLEntry(
-        company="cacao",
+        company="CACAO",
         ledger_id=book.id,
         account_id=acc.id,
         account_code=acc.code,
@@ -521,7 +521,7 @@ def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
     )
     database.session.add(gl_entry)
     closing_entry = GLEntry(
-        company="cacao",
+        company="CACAO",
         ledger_id=book.id,
         account_id=acc.id,
         account_code=acc.code,
@@ -543,7 +543,7 @@ def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
 
     report = BudgetReportService().get_real_vs_budget_report(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "budget_id": budget.id,
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
@@ -563,7 +563,7 @@ def test_budget_report_populates_actual_and_budget_amounts(app_ctx):
     from cacao_accounting.reportes.services import FinancialReportFilters, get_budget_variance
 
     service.approve_budget(budget.id, str(admin_user.id))
-    variance = get_budget_variance(FinancialReportFilters(company="cacao", ledger=book.code, accounting_period=per.name))
+    variance = get_budget_variance(FinancialReportFilters(company="CACAO", ledger=book.code, accounting_period=per.name))
     assert variance.totals["actual"] == Decimal("300")
     assert report.totals["budget"] == Decimal("250")
     assert report.totals["actual"] == Decimal("300")
@@ -573,23 +573,23 @@ def test_budget_control_does_not_use_dimension_restricted_budget_for_global_tran
     """A transaction without dimensions cannot consume a project-only budget."""
     service = BudgetService()
     admin_user = database.session.query(User).filter_by(user="admin").first()
-    fy = database.session.query(FiscalYear).filter_by(entity="cacao").first()
-    book = database.session.query(Book).filter_by(entity="cacao").first()
-    acc = database.session.query(Accounts).filter_by(entity="cacao", group=False).first()
-    cc = database.session.query(CostCenter).filter_by(entity="cacao").first()
+    fy = database.session.query(FiscalYear).filter_by(entity="CACAO").first()
+    book = database.session.query(Book).filter_by(entity="CACAO").first()
+    acc = database.session.query(Accounts).filter_by(entity="CACAO", group=False).first()
+    cc = database.session.query(CostCenter).filter_by(entity="CACAO").first()
     per = database.session.query(AccountingPeriod).filter_by(fiscal_year_id=fy.id).first()
-    project = Project(entity="cacao", code="PRJ-GLOBAL-SCOPE", name="Proyecto restringido", enabled=True, start=per.start)
+    project = Project(entity="CACAO", code="PRJ-GLOBAL-SCOPE", name="Proyecto restringido", enabled=True, start=per.start)
     database.session.add(project)
     database.session.flush()
 
     budget = service.create_budget(
         {
-            "company": "cacao",
+            "company": "CACAO",
             "ledger_id": book.id,
             "fiscal_year_id": fy.id,
             "budget_code": "DIMENSION-SCOPE-TEST",
             "name": "Presupuesto por proyecto",
-            "currency_id": book.currency or database.session.get(Entity, "cacao").currency,
+            "currency_id": book.currency or database.session.get(Entity, "CACAO").currency,
         },
         str(admin_user.id),
     )
@@ -607,7 +607,7 @@ def test_budget_control_does_not_use_dimension_restricted_budget_for_global_tran
     service.approve_budget(budget.id, str(admin_user.id))
 
     result = service.validate_transaction(
-        company="cacao",
+        company="CACAO",
         date_val=per.start,
         account_id=acc.id,
         cost_center_id=cc.id,

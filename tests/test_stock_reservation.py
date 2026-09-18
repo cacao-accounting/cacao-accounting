@@ -56,11 +56,11 @@ def app_ctx():
 
 def _seed_data():
     period = database.session.execute(
-        database.select(AccountingPeriod).filter_by(entity="cacao", name="2026-06")
+        database.select(AccountingPeriod).filter_by(entity="CACAO", name="2026-06")
     ).scalar_one_or_none()
     if period is None:
         period = AccountingPeriod(
-            entity="cacao",
+            entity="CACAO",
             name="2026-06",
             start=date(2026, 6, 1),
             end=date(2026, 6, 30),
@@ -90,15 +90,15 @@ def _seed_data():
 
     warehouse = database.session.get(Warehouse, "WH-RESERVE")
     if not warehouse:
-        warehouse = Warehouse(code="WH-RESERVE", name="Bodega Reserva", company="cacao")
+        warehouse = Warehouse(code="WH-RESERVE", name="Bodega Reserva", company="CACAO")
         database.session.add(warehouse)
 
     database.session.flush()
 
-    inv_ac = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="INV-RES")).scalar_one_or_none()
+    inv_ac = database.session.execute(database.select(Accounts).filter_by(entity="CACAO", code="INV-RES")).scalar_one_or_none()
     if not inv_ac:
         inv_ac = Accounts(
-            entity="cacao",
+            entity="CACAO",
             code="INV-RES",
             name="Inventario Reserva",
             active=True,
@@ -108,10 +108,10 @@ def _seed_data():
         )
         database.session.add(inv_ac)
 
-    exp_ac = database.session.execute(database.select(Accounts).filter_by(entity="cacao", code="EXP-RES")).scalar_one_or_none()
+    exp_ac = database.session.execute(database.select(Accounts).filter_by(entity="CACAO", code="EXP-RES")).scalar_one_or_none()
     if not exp_ac:
         exp_ac = Accounts(
-            entity="cacao",
+            entity="CACAO",
             code="EXP-RES",
             name="Gasto Reserva",
             active=True,
@@ -124,23 +124,23 @@ def _seed_data():
     database.session.flush()
 
     if not database.session.execute(
-        database.select(ItemAccount).filter_by(item_code="ART-RESERVE", company="cacao")
+        database.select(ItemAccount).filter_by(item_code="ART-RESERVE", company="CACAO")
     ).scalar_one_or_none():
-        database.session.add(ItemAccount(item_code="ART-RESERVE", company="cacao"))
+        database.session.add(ItemAccount(item_code="ART-RESERVE", company="CACAO"))
 
     company_def = database.session.execute(
-        database.select(CompanyDefaultAccount).filter_by(company="cacao")
+        database.select(CompanyDefaultAccount).filter_by(company="CACAO")
     ).scalar_one_or_none()
     if not company_def:
-        company_def = CompanyDefaultAccount(company="cacao", default_expense=exp_ac.id)
+        company_def = CompanyDefaultAccount(company="CACAO", default_expense=exp_ac.id)
         database.session.add(company_def)
 
     if not database.session.execute(
-        database.select(WarehouseCompanyAccount).filter_by(warehouse_code="WH-RESERVE", company="cacao")
+        database.select(WarehouseCompanyAccount).filter_by(warehouse_code="WH-RESERVE", company="CACAO")
     ).scalar_one_or_none():
         database.session.add(
             WarehouseCompanyAccount(
-                warehouse_code="WH-RESERVE", company="cacao", inventory_account_id=inv_ac.id, is_active=True
+                warehouse_code="WH-RESERVE", company="CACAO", inventory_account_id=inv_ac.id, is_active=True
             )
         )
 
@@ -151,7 +151,7 @@ def _seed_data():
     ).scalar_one_or_none():
         database.session.add(
             StockBin(
-                company="cacao",
+                company="CACAO",
                 item_code="ART-RESERVE",
                 warehouse="WH-RESERVE",
                 actual_qty=Decimal("20"),
@@ -170,7 +170,7 @@ def _seed_data():
                 posting_date=date(2026, 6, 1),
                 item_code="ART-RESERVE",
                 warehouse="WH-RESERVE",
-                company="cacao",
+                company="CACAO",
                 qty_change=Decimal("20"),
                 qty_after_transaction=Decimal("20"),
                 valuation_rate=Decimal("10.00"),
@@ -189,7 +189,7 @@ def _seed_data():
             StockValuationLayer(
                 item_code="ART-RESERVE",
                 warehouse="WH-RESERVE",
-                company="cacao",
+                company="CACAO",
                 qty=Decimal("20"),
                 rate=Decimal("10.00"),
                 stock_value_difference=Decimal("200.00"),
@@ -207,7 +207,7 @@ def _make_so(
     so_id: str,
     qty: Decimal,
     warehouse: str = "WH-RESERVE",
-    company: str = "cacao",
+    company: str = "CACAO",
     docstatus: int = 0,
 ) -> SalesOrder:
     so = SalesOrder(
@@ -242,7 +242,7 @@ def _make_dn(
     qty: Decimal,
     warehouse: str = "WH-RESERVE",
     sales_order_id: str | None = None,
-    company: str = "cacao",
+    company: str = "CACAO",
     docstatus: int = 0,
 ) -> DeliveryNote:
     dn = DeliveryNote(
@@ -384,7 +384,7 @@ class TestReservaOrdenVenta:
         database.session.add(ItemUOMConversion(item_code="ART-BOX", from_uom="BOX", to_uom="UND", conversion_factor=12))
         database.session.add(
             StockBin(
-                company="cacao",
+                company="CACAO",
                 item_code="ART-BOX",
                 warehouse="WH-RESERVE",
                 actual_qty=Decimal("12"),
@@ -393,7 +393,7 @@ class TestReservaOrdenVenta:
                 valuation_rate=Decimal("10"),
             )
         )
-        so = SalesOrder(id="SO-RES-UOM", company="cacao", posting_date=date(2026, 6, 15), customer_id="CUST-RESERVE")
+        so = SalesOrder(id="SO-RES-UOM", company="CACAO", posting_date=date(2026, 6, 15), customer_id="CUST-RESERVE")
         database.session.add(so)
         database.session.flush()
         database.session.add(
@@ -532,7 +532,7 @@ class TestReservaNotaEntrega:
     def test_dn_libera_reserva_en_bodega_origen_de_la_orden(self, app_ctx):
         from cacao_accounting.ventas import _release_reservation_for_delivery_note
 
-        database.session.add(Warehouse(code="WH-OTHER", name="Bodega alternativa", company="cacao"))
+        database.session.add(Warehouse(code="WH-OTHER", name="Bodega alternativa", company="CACAO"))
         so = _make_so("SO-RES-DN-WH", Decimal("10"), warehouse="WH-RESERVE", docstatus=1)
         bin_row = _get_bin()
         bin_row.reserved_qty = Decimal("10")
@@ -582,7 +582,7 @@ def test_rebuild_stock_bins_preserva_reserved_qty(app_ctx):
     bin_row.reserved_qty = Decimal("7")
     database.session.commit()
 
-    result = rebuild_stock_bins(company="cacao", item_code="ART-RESERVE", warehouse="WH-RESERVE")
+    result = rebuild_stock_bins(company="CACAO", item_code="ART-RESERVE", warehouse="WH-RESERVE")
     assert result.rebuilt_bins >= 1
 
     database.session.refresh(bin_row)
@@ -600,7 +600,7 @@ def test_stock_posting_preserva_reserva_con_stock_negativo(app_ctx):
     database.session.commit()
 
     _upsert_stock_bin(
-        company="cacao",
+        company="CACAO",
         item_code="ART-RESERVE",
         warehouse="WH-RESERVE",
         qty_change=Decimal("-15"),
@@ -631,7 +631,7 @@ def test_release_reservation_is_idempotent(app_ctx):
 
     dn = DeliveryNote(
         customer_id="CUST-RES",
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         sales_order_id="SO-RES",
         docstatus=1,

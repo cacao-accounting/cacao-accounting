@@ -49,11 +49,11 @@ def app_ctx():
 
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         master_data()
-        books = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        books = database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
         for book in books:
             book.status = "inactivo"
         database.session.add(
-            Book(code="PRIMARY", name="Primary", entity="cacao", currency="NIO", is_primary=True, status="activo")
+            Book(code="PRIMARY", name="Primary", entity="CACAO", currency="NIO", is_primary=True, status="activo")
         )
         database.session.commit()
         yield app
@@ -115,7 +115,7 @@ def test_payment_to_single_invoice(app_ctx):
     # 1. Create a submitted Sales Invoice
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -130,12 +130,12 @@ def test_payment_to_single_invoice(app_ctx):
     database.session.add(sii)
     database.session.commit()
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     # 2. Create Payment Entry via JSON payload
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1000,
@@ -184,7 +184,7 @@ def test_payment_over_application_blocking(app_ctx):
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -195,12 +195,12 @@ def test_payment_over_application_blocking(app_ctx):
     database.session.add(si)
     database.session.commit()
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     # Try to apply 1200 to a 1000 payment (invoice has 2000 outstanding, so it's not a reference-level overflow)
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1000,
@@ -225,7 +225,7 @@ def test_fully_withheld_payment_can_be_registered_with_zero_cash(app_ctx):
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -234,13 +234,13 @@ def test_fully_withheld_payment_can_be_registered_with_zero_cash(app_ctx):
         outstanding_amount=Decimal("100"),
         base_outstanding_amount=Decimal("100"),
     )
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     database.session.add(invoice)
     database.session.commit()
 
     payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 0,
@@ -279,7 +279,7 @@ def test_payment_reference_rejects_a_foreign_document_with_zero_exchange_rate(ap
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -290,7 +290,7 @@ def test_payment_reference_rejects_a_foreign_document_with_zero_exchange_rate(ap
         outstanding_amount=Decimal("100"),
     )
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         payment_type="receive",
         currency="USD",
         party_type="customer",
@@ -311,7 +311,7 @@ def test_payment_line_cannot_exceed_individual_outstanding(app_ctx):
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -323,10 +323,10 @@ def test_payment_line_cannot_exceed_individual_outstanding(app_ctx):
     database.session.add(invoice)
     database.session.commit()
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1000,
@@ -348,7 +348,7 @@ def test_payment_rejects_discount_that_fully_consumes_the_allocation(app_ctx):
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -360,10 +360,10 @@ def test_payment_rejects_discount_that_fully_consumes_the_allocation(app_ctx):
     database.session.add(invoice)
     database.session.commit()
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1,
@@ -395,7 +395,7 @@ def test_payment_with_discount_and_gain_loss(app_ctx):
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -406,11 +406,11 @@ def test_payment_with_discount_and_gain_loss(app_ctx):
     database.session.add(si)
     database.session.commit()
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 950,
@@ -442,12 +442,12 @@ def test_unallocated_payment(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     # Payment with NO lines (unallocated / advance)
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 500,
@@ -476,9 +476,9 @@ def test_unallocated_payment_excludes_reverted_references(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -492,7 +492,7 @@ def test_unallocated_payment_excludes_reverted_references(app_ctx):
 
     payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1000,
@@ -519,9 +519,9 @@ def test_unallocated_payment_uses_cash_consumed_formula(app_ctx):
     login(client, "cacao", "cacao")
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     invoice = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -535,7 +535,7 @@ def test_unallocated_payment_uses_cash_consumed_formula(app_ctx):
 
     payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 900,
@@ -571,9 +571,9 @@ def test_partial_allocation_no_discount(app_ctx):
     login(client, "cacao", "cacao")
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     invoice = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -587,7 +587,7 @@ def test_partial_allocation_no_discount(app_ctx):
 
     payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1000,
@@ -620,7 +620,7 @@ def test_payment_to_multiple_invoices(app_ctx):
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si1 = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         docstatus=1,
@@ -628,7 +628,7 @@ def test_payment_to_multiple_invoices(app_ctx):
         outstanding_amount=300,
     )
     si2 = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         docstatus=1,
@@ -636,7 +636,7 @@ def test_payment_to_multiple_invoices(app_ctx):
         outstanding_amount=400,
     )
     si3 = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         docstatus=1,
@@ -646,11 +646,11 @@ def test_payment_to_multiple_invoices(app_ctx):
     database.session.add_all([si1, si2, si3])
     database.session.commit()
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1000,
@@ -687,7 +687,7 @@ def test_multiple_payments_to_single_invoice(app_ctx):
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         docstatus=1,
@@ -697,12 +697,12 @@ def test_multiple_payments_to_single_invoice(app_ctx):
     database.session.add(si)
     database.session.commit()
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     # First payment: 250
     p1 = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 250,
@@ -757,7 +757,7 @@ def test_payment_cancellation_and_balance_restoration(app_ctx):
     transaction_date = date.today()
     database.session.add(
         AccountingPeriod(
-            entity="cacao",
+            entity="CACAO",
             name=transaction_date.strftime("%Y-%m"),
             start=transaction_date.replace(day=1),
             end=transaction_date,
@@ -769,7 +769,7 @@ def test_payment_cancellation_and_balance_restoration(app_ctx):
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     si = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=transaction_date,
         docstatus=1,
@@ -779,11 +779,11 @@ def test_payment_cancellation_and_balance_restoration(app_ctx):
     database.session.add(si)
     database.session.commit()
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": transaction_date.isoformat(),
         "paid_amount": 1000,
@@ -840,14 +840,14 @@ def test_order_reference_requires_advance_mode(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    order = SalesOrder(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1, grand_total=1000)
+    order = SalesOrder(company="CACAO", customer_id=customer.id, posting_date=date.today(), docstatus=1, grand_total=1000)
     database.session.add(order)
     database.session.commit()
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1000,
@@ -866,12 +866,12 @@ def test_accounting_entries_for_customer_collection(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    defaults = _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    defaults = _ensure_company_default_accounts("CACAO", bank)
 
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1000,
@@ -923,11 +923,11 @@ def test_accounting_entries_for_payment_variants(
     else:
         party_filter = Party.is_customer.is_(True)
     party = database.session.execute(database.select(Party).filter(party_filter)).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    _ensure_company_default_accounts("CACAO", bank)
     if party_type == "supplier":
         doc = PurchaseInvoice(
-            company="cacao",
+            company="CACAO",
             supplier_id=party.id,
             posting_date=date.today(),
             document_type=document_type,
@@ -941,7 +941,7 @@ def test_accounting_entries_for_payment_variants(
         )
     else:
         doc = SalesInvoice(
-            company="cacao",
+            company="CACAO",
             customer_id=party.id,
             posting_date=date.today(),
             document_type=document_type,
@@ -993,7 +993,7 @@ def test_accounting_entries_for_payment_variants(
 
     payment_payload = {
         "payment_type": payment_type,
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 1000,
@@ -1031,10 +1031,10 @@ def test_supplier_discount_is_persisted_on_reference(app_ctx):
     login(client, "cacao", "cacao")
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    defaults = _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    defaults = _ensure_company_default_accounts("CACAO", bank)
     invoice = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -1048,7 +1048,7 @@ def test_supplier_discount_is_persisted_on_reference(app_ctx):
 
     payment_payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 900,
@@ -1081,10 +1081,10 @@ def test_accounting_entries_with_gain_loss_adjustment(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    defaults = _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    defaults = _ensure_company_default_accounts("CACAO", bank)
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -1098,7 +1098,7 @@ def test_accounting_entries_with_gain_loss_adjustment(app_ctx):
 
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 950,
@@ -1139,11 +1139,11 @@ def test_advance_payment_from_purchase_order(app_ctx):
     login(client, "cacao", "cacao")
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    defaults = _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    defaults = _ensure_company_default_accounts("CACAO", bank)
 
     order = PurchaseOrder(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         docstatus=1,
@@ -1154,7 +1154,7 @@ def test_advance_payment_from_purchase_order(app_ctx):
 
     payment_payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 500,
@@ -1184,7 +1184,7 @@ def test_advance_payment_from_purchase_order(app_ctx):
     assert reference.reference_type == "purchase_order"
     assert reference.flow_source_type == "purchase_order"
     assert reference.reference_document_no == (order.document_no or order.id)
-    assert reference.company == "cacao"
+    assert reference.company == "CACAO"
     assert reference.party_type == "supplier"
     assert reference.party_id == supplier.id
     relation = (
@@ -1231,11 +1231,11 @@ def test_advance_payment_from_sales_order(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    defaults = _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    defaults = _ensure_company_default_accounts("CACAO", bank)
 
     order = SalesOrder(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         docstatus=1,
@@ -1246,7 +1246,7 @@ def test_advance_payment_from_sales_order(app_ctx):
 
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 800,
@@ -1303,7 +1303,7 @@ def test_payment_from_purchase_order_prefills_reference_line(app_ctx):
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     order = PurchaseOrder(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         docstatus=1,
@@ -1329,7 +1329,7 @@ def test_payment_source_rows_preserve_order_and_skip_missing(app_ctx):
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     purchase_invoice = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -1338,7 +1338,7 @@ def test_payment_source_rows_preserve_order_and_skip_missing(app_ctx):
         document_no="PI-SRC-001",
     )
     sales_order = SalesOrder(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         docstatus=1,
@@ -1372,7 +1372,7 @@ def test_payment_source_rows_filters_note_document_types(app_ctx):
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     purchase_credit_note = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_credit_note",
@@ -1381,7 +1381,7 @@ def test_payment_source_rows_filters_note_document_types(app_ctx):
         document_no="PCN-SRC-001",
     )
     purchase_invoice = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -1390,7 +1390,7 @@ def test_payment_source_rows_filters_note_document_types(app_ctx):
         document_no="PI-SRC-002",
     )
     sales_credit_note = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_credit_note",
@@ -1399,7 +1399,7 @@ def test_payment_source_rows_filters_note_document_types(app_ctx):
         document_no="SCN-SRC-001",
     )
     wrong_sales_note = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -1436,7 +1436,7 @@ def test_payment_reference_candidates_endpoint_filters_by_party_and_company(app_
         id="candidate_other_customer", code="CANDIDATE_OTHER", is_customer=True, name="Cliente Candidatos Otro"
     )
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -1447,7 +1447,7 @@ def test_payment_reference_candidates_endpoint_filters_by_party_and_company(app_
         document_no="FV-CAND-001",
     )
     other_invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=other_customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -1463,7 +1463,7 @@ def test_payment_reference_candidates_endpoint_filters_by_party_and_company(app_
     response = client.get(
         "/api/document-flow/payment-reference-candidates",
         query_string={
-            "company": "cacao",
+            "company": "CACAO",
             "party_type": "customer",
             "party_id": customer.id,
             "source_type": ["sales_invoice", "sales_credit_note"],
@@ -1486,10 +1486,10 @@ def test_payment_reference_snapshot_is_persisted(app_ctx):
     login(client, "cacao", "cacao")
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    _ensure_company_default_accounts("CACAO", bank)
     invoice = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -1504,7 +1504,7 @@ def test_payment_reference_snapshot_is_persisted(app_ctx):
 
     payment_payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "currency": "NIO",
         "posting_date": date.today().isoformat(),
@@ -1526,7 +1526,7 @@ def test_payment_reference_snapshot_is_persisted(app_ctx):
     assert reference.reference_date == invoice.posting_date
     assert reference.party_type == "supplier"
     assert reference.party_id == supplier.id
-    assert reference.company == "cacao"
+    assert reference.company == "CACAO"
     assert reference.currency == "NIO"
     assert reference.outstanding_amount == 450
     assert reference.outstanding_amount_after == 250
@@ -1538,10 +1538,10 @@ def test_payment_requires_party_for_manual_pay_receive(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
 
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 100,
@@ -1566,11 +1566,11 @@ def test_payment_to_draft_document_blocked(app_ctx):
     login(client, "cacao", "cacao")
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    _ensure_company_default_accounts("CACAO", bank)
 
     draft_invoice = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -1584,7 +1584,7 @@ def test_payment_to_draft_document_blocked(app_ctx):
 
     payment_payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 300,
@@ -1608,11 +1608,11 @@ def test_payment_to_cancelled_document_blocked(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    _ensure_company_default_accounts("CACAO", bank)
 
     cancelled_invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -1626,7 +1626,7 @@ def test_payment_to_cancelled_document_blocked(app_ctx):
 
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 200,
@@ -1649,8 +1649,8 @@ def test_payment_company_mismatch_blocked(app_ctx):
     login(client, "cacao", "cacao")
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    _ensure_company_default_accounts("CACAO", bank)
 
     # Invoice belonging to a different company
     other_invoice = PurchaseInvoice(
@@ -1668,7 +1668,7 @@ def test_payment_company_mismatch_blocked(app_ctx):
 
     payment_payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 400,
@@ -1693,8 +1693,8 @@ def test_payment_party_mismatch_blocked(app_ctx):
     parties = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().all()
     assert len(parties) >= 1
     supplier_a = parties[0]
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    _ensure_company_default_accounts("CACAO", bank)
 
     # Create a second supplier if only one exists
     supplier_b_id = "other_supplier_id"
@@ -1706,7 +1706,7 @@ def test_payment_party_mismatch_blocked(app_ctx):
 
     # Invoice belonging to supplier_b
     invoice_b = PurchaseInvoice(
-        company="cacao",
+        company="CACAO",
         supplier_id=supplier_b.id,
         posting_date=date.today(),
         document_type="purchase_invoice",
@@ -1721,7 +1721,7 @@ def test_payment_party_mismatch_blocked(app_ctx):
     # Payment from supplier_a but referencing supplier_b's invoice
     payment_payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 250,
@@ -1744,11 +1744,11 @@ def test_payment_detail_view_shows_references(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
-    _ensure_company_default_accounts("cacao", bank)
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
+    _ensure_company_default_accounts("CACAO", bank)
 
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -1762,7 +1762,7 @@ def test_payment_detail_view_shows_references(app_ctx):
 
     payment_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 600,
@@ -1820,9 +1820,9 @@ def test_mode_of_payment_static_search_select_options(app_ctx):
 
 def test_bank_account_search_select_exposes_payment_metadata(app_ctx):
     """La cuenta bancaria devuelve moneda y defaults de numeración para el formulario."""
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
-    payload = search_select("bank_account", "", {"company": ["cacao"], "is_active": ["True"]}, limit=10)
+    payload = search_select("bank_account", "", {"company": ["CACAO"], "is_active": ["True"]}, limit=10)
     row = next(item for item in payload["results"] if item["value"] == bank.id)
 
     assert row["currency"] == bank.currency
@@ -1837,12 +1837,12 @@ def test_payment_ignores_exchange_rate_and_external_counter_for_transfer(app_ctx
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     assert bank.default_external_counter_id
 
     payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 125,
@@ -1878,10 +1878,10 @@ def test_internal_transfer_preserves_source_and_target_nominals(app_ctx, monkeyp
     from cacao_accounting.bancos import _build_payment_from_payload
 
     source = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     )
     target = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="NIO")).scalars().first()
     )
     assert source is not None
     assert target is not None
@@ -1894,7 +1894,7 @@ def test_internal_transfer_preserves_source_and_target_nominals(app_ctx, monkeyp
     payment, amount, _ = _build_payment_from_payload(
         {
             "payment_type": "internal_transfer",
-            "company": "cacao",
+            "company": "CACAO",
             "bank_account_id": source.id,
             "target_bank_account_id": target.id,
             "posting_date": "2026-05-05",
@@ -1916,15 +1916,15 @@ def test_payment_rejects_gl_account_from_another_company(app_ctx):
     from cacao_accounting.bancos import _build_payment_from_payload
 
     source = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     )
     target = (
-        database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
+        database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="NIO")).scalars().first()
     )
     assert source is not None
     assert target is not None
     foreign_account = Accounts(
-        entity="cafe",
+        entity="CAFE",
         code="FOREIGN-PAYMENT-ACCOUNT",
         name="Foreign payment account",
         active=True,
@@ -1939,7 +1939,7 @@ def test_payment_rejects_gl_account_from_another_company(app_ctx):
         _build_payment_from_payload(
             {
                 "payment_type": "internal_transfer",
-                "company": "cacao",
+                "company": "CACAO",
                 "bank_account_id": source.id,
                 "target_bank_account_id": target.id,
                 "paid_from_account_id": foreign_account.id,
@@ -1957,13 +1957,13 @@ def test_payment_uses_default_external_counter_for_check(app_ctx):
     login(client, "cacao", "cacao")
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     counter = database.session.get(ExternalCounter, bank.default_external_counter_id)
     assert counter is not None
 
     payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 125,
@@ -1992,10 +1992,10 @@ def test_payment_detail_view_matches_payment_header_changes(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 75,
@@ -2030,10 +2030,10 @@ def _open_payment(
     document_no: str,
 ) -> PaymentEntry:
     """Crea un pago aprobado sin referencias para pruebas de conciliacion masiva."""
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     party_type_value = "customer" if party.is_customer else "supplier"
     payment = PaymentEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         payment_type=payment_type,
         party_type=party_type_value,
@@ -2062,7 +2062,7 @@ def test_mass_payment_reconciliation_applies_customer_payment_to_multiple_sales_
     payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("500.00"), document_no="PAY-AR-001")
     invoices = [
         SalesInvoice(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             document_type="sales_invoice",
@@ -2078,7 +2078,7 @@ def test_mass_payment_reconciliation_applies_customer_payment_to_multiple_sales_
     database.session.commit()
 
     reconciliation = apply_payment_reconciliation(
-        company="cacao",
+        company="CACAO",
         party_type="customer",
         party_id=customer.id,
         allocation_date=date.today(),
@@ -2117,7 +2117,7 @@ def test_mass_payment_reconciliation_applies_supplier_payment_to_purchase_invoic
     payment = _open_payment(party=supplier, payment_type="pay", amount=Decimal("600.00"), document_no="PAY-AP-001")
     invoices = [
         PurchaseInvoice(
-            company="cacao",
+            company="CACAO",
             supplier_id=supplier.id,
             posting_date=date.today(),
             document_type="purchase_invoice",
@@ -2133,7 +2133,7 @@ def test_mass_payment_reconciliation_applies_supplier_payment_to_purchase_invoic
     database.session.commit()
 
     reconciliation = apply_payment_reconciliation(
-        company="cacao",
+        company="CACAO",
         party_type="supplier",
         party_id=supplier.id,
         allocation_date=date.today(),
@@ -2164,7 +2164,7 @@ def test_mass_payment_reconciliation_rejects_overapplication_and_party_mismatch(
     )
     payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("100.00"), document_no="PAY-ERR-001")
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -2174,7 +2174,7 @@ def test_mass_payment_reconciliation_rejects_overapplication_and_party_mismatch(
         base_outstanding_amount=Decimal("150.00"),
     )
     other_invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=other_customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -2188,7 +2188,7 @@ def test_mass_payment_reconciliation_rejects_overapplication_and_party_mismatch(
 
     with pytest.raises(DocumentFlowError, match="excede el saldo disponible"):
         apply_payment_reconciliation(
-            company="cacao",
+            company="CACAO",
             party_type="customer",
             party_id=customer.id,
             allocation_date=date.today(),
@@ -2205,7 +2205,7 @@ def test_mass_payment_reconciliation_rejects_overapplication_and_party_mismatch(
 
     with pytest.raises(DocumentFlowError, match="no coincide con el tercero"):
         apply_payment_reconciliation(
-            company="cacao",
+            company="CACAO",
             party_type="customer",
             party_id=customer.id,
             allocation_date=date.today(),
@@ -2228,7 +2228,7 @@ def test_payment_reconciliation_screen_menu_and_candidates_endpoint_render(app_c
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
     payment = _open_payment(party=customer, payment_type="receive", amount=Decimal("80.00"), document_no="PAY-UI-001")
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -2245,7 +2245,7 @@ def test_payment_reconciliation_screen_menu_and_candidates_endpoint_render(app_c
     screen_response = client.get("/cash_management/payment-reconciliation")
     api_response = client.get(
         "/api/document-flow/payment-reconciliation-candidates",
-        query_string={"company": "cacao", "party_type": "customer", "party_id": customer.id},
+        query_string={"company": "CACAO", "party_type": "customer", "party_id": customer.id},
     )
 
     assert menu_response.status_code == 200
@@ -2281,11 +2281,11 @@ def test_payment_auto_populates_exchange_rate_same_currency(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="NIO")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="NIO")).scalars().first()
 
     payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 500,
@@ -2313,12 +2313,12 @@ def test_payment_auto_populates_exchange_rate_different_currency(app_ctx):
     login(client, "cacao", "cacao")
 
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     assert bank is not None, "Se necesita una cuenta bancaria en USD en los datos de prueba"
 
     payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 100,
@@ -2348,9 +2348,9 @@ def test_payment_in_bank_currency_applies_invoice_in_document_currency(app_ctx, 
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao", currency="USD")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO", currency="USD")).scalars().first()
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -2370,7 +2370,7 @@ def test_payment_in_bank_currency_applies_invoice_in_document_currency(app_ctx, 
     monkeypatch.setattr(bancos_services, "_lookup_exchange_rate", lambda *_args: Decimal("36"))
     payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": "3",
@@ -2400,12 +2400,12 @@ def test_payment_reference_loads_with_row_lock(app_ctx):
     login(client, "cacao", "cacao")
 
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
 
     invoice = (
         database.session.execute(
             database.select(PurchaseInvoice)
-            .filter_by(company="cacao", docstatus=1)
+            .filter_by(company="CACAO", docstatus=1)
             .filter(PurchaseInvoice.supplier_id.isnot(None))
         )
         .scalars()
@@ -2414,7 +2414,7 @@ def test_payment_reference_loads_with_row_lock(app_ctx):
     if not invoice:
         invoice = PurchaseInvoice(
             id="PI-LOCK-TEST",
-            company="cacao",
+            company="CACAO",
             supplier_id=supplier.id,
             supplier_name=supplier.name,
             posting_date=date.today(),
@@ -2428,7 +2428,7 @@ def test_payment_reference_loads_with_row_lock(app_ctx):
 
     payload = {
         "payment_type": "pay",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 100,
@@ -2479,9 +2479,9 @@ def test_collection_cycle_partial_overpayment_and_advance(app_ctx):
     client = app_ctx.test_client()
     login(client, "cacao", "cacao")
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
-    bank = database.session.execute(database.select(BankAccount).filter_by(company="cacao")).scalars().first()
+    bank = database.session.execute(database.select(BankAccount).filter_by(company="CACAO")).scalars().first()
     invoice = SalesInvoice(
-        company="cacao",
+        company="CACAO",
         customer_id=customer.id,
         posting_date=date.today(),
         document_type="sales_invoice",
@@ -2495,7 +2495,7 @@ def test_collection_cycle_partial_overpayment_and_advance(app_ctx):
 
     partial_payload = {
         "payment_type": "receive",
-        "company": "cacao",
+        "company": "CACAO",
         "bank_account_id": bank.id,
         "posting_date": date.today().isoformat(),
         "paid_amount": 600,
@@ -2514,7 +2514,7 @@ def test_collection_cycle_partial_overpayment_and_advance(app_ctx):
     partial_payment = (
         database.session.execute(
             database.select(PaymentEntry)
-            .filter_by(company="cacao", received_amount=Decimal("600"))
+            .filter_by(company="CACAO", received_amount=Decimal("600"))
             .order_by(PaymentEntry.created.desc())
         )
         .scalars()
@@ -2550,7 +2550,7 @@ def test_collection_cycle_partial_overpayment_and_advance(app_ctx):
     advance = (
         database.session.execute(
             database.select(PaymentEntry)
-            .filter_by(company="cacao", received_amount=Decimal("300"))
+            .filter_by(company="CACAO", received_amount=Decimal("300"))
             .order_by(PaymentEntry.created.desc())
         )
         .scalars()

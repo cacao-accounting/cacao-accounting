@@ -53,10 +53,10 @@ def setup_test_data(request):
         init_test_db(test_app)
 
         # Ensure we have a fiscal year
-        fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+        fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
         if not fy:
             fy = FiscalYear(
-                entity="cacao",
+                entity="CACAO",
                 name="2026",
                 year_start_date=date(2026, 1, 1),
                 year_end_date=date(2026, 12, 31),
@@ -69,7 +69,7 @@ def setup_test_data(request):
 def test_cash_forecast_models():
     """Test model creation and validations."""
     with test_app.app_context():
-        fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+        fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
         assert fy is not None
 
         # Create forecast
@@ -77,7 +77,7 @@ def test_cash_forecast_models():
             version="V-TEST-01",
             description="Escenario de Pruebas",
             fiscal_year_id=fy.id,
-            company="cacao",
+            company="CACAO",
             periodicity="monthly",
             status="Draft",
         )
@@ -112,7 +112,7 @@ def test_cash_forecast_models():
 def test_period_generation():
     """Test dividing fiscal year into weekly and monthly periods."""
     with test_app.app_context():
-        fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+        fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
 
         # Test monthly
         monthly_periods = generate_periods(fy, "monthly")
@@ -129,13 +129,13 @@ def test_period_generation():
 def test_cash_forecast_matrix_calculation():
     """Test YTD cash flow calculations including Real, Current, and Projected zones."""
     with test_app.app_context():
-        fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+        fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
 
         forecast = CashForecast(
             version="V-TEST-MATRIX",
             description="Matriz test",
             fiscal_year_id=fy.id,
-            company="cacao",
+            company="CACAO",
             periodicity="monthly",
             status="Draft",
         )
@@ -168,7 +168,7 @@ def test_cash_forecast_matrix_calculation():
         today = date(2026, 7, 11)
 
         # Calculate matrix
-        matrix = get_cash_forecast_matrix("cacao", forecast.id, today_date=today)
+        matrix = get_cash_forecast_matrix("CACAO", forecast.id, today_date=today)
 
         assert len(matrix) == 12
 
@@ -199,7 +199,7 @@ def test_real_movements_classify_party_from_counterpart_line():
         from cacao_accounting.ledger_queries import primary_ledger_id
 
         cash_account = Accounts(
-            entity="cacao",
+            entity="CACAO",
             code="CASH-FORECAST-PARTY",
             name="Caja pronóstico terceros",
             active=True,
@@ -208,7 +208,7 @@ def test_real_movements_classify_party_from_counterpart_line():
             account_type="cash",
         )
         receivable_account = Accounts(
-            entity="cacao",
+            entity="CACAO",
             code="AR-FORECAST-PARTY",
             name="Clientes pronóstico terceros",
             active=True,
@@ -217,7 +217,7 @@ def test_real_movements_classify_party_from_counterpart_line():
             account_type="receivable",
         )
         payable_account = Accounts(
-            entity="cacao",
+            entity="CACAO",
             code="AP-FORECAST-PARTY",
             name="Proveedores pronóstico terceros",
             active=True,
@@ -229,7 +229,7 @@ def test_real_movements_classify_party_from_counterpart_line():
         db.session.flush()
 
         secondary_book = Book(
-            entity="cacao",
+            entity="CACAO",
             code="FCAST-SEC",
             name="Libro secundario pronóstico",
             currency="NIO",
@@ -239,10 +239,10 @@ def test_real_movements_classify_party_from_counterpart_line():
         db.session.add(secondary_book)
         db.session.flush()
 
-        ledger_id = primary_ledger_id("cacao")
+        ledger_id = primary_ledger_id("CACAO")
         entries = [
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=cash_account.id,
                 posting_date=date(2026, 7, 5),
@@ -252,7 +252,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-CUSTOMER",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=receivable_account.id,
                 posting_date=date(2026, 7, 5),
@@ -263,7 +263,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-CUSTOMER",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=cash_account.id,
                 posting_date=date(2026, 7, 6),
@@ -273,7 +273,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-SUPPLIER",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=payable_account.id,
                 posting_date=date(2026, 7, 6),
@@ -284,7 +284,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-SUPPLIER",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=cash_account.id,
                 posting_date=date(2026, 7, 7),
@@ -294,7 +294,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-OTHER",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=receivable_account.id,
                 posting_date=date(2026, 7, 7),
@@ -304,7 +304,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-OTHER",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=cash_account.id,
                 posting_date=date(2026, 7, 8),
@@ -314,7 +314,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-AMBIGUOUS",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=receivable_account.id,
                 posting_date=date(2026, 7, 8),
@@ -325,7 +325,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-AMBIGUOUS",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=payable_account.id,
                 posting_date=date(2026, 7, 8),
@@ -336,7 +336,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-AMBIGUOUS",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=cash_account.id,
                 posting_date=date(2026, 7, 9),
@@ -347,7 +347,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-CANCELLED",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=receivable_account.id,
                 posting_date=date(2026, 7, 9),
@@ -359,7 +359,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-CANCELLED",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=cash_account.id,
                 posting_date=date(2026, 7, 10),
@@ -370,7 +370,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-REVERSED",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=payable_account.id,
                 posting_date=date(2026, 7, 10),
@@ -382,7 +382,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-REVERSED",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=secondary_book.id,
                 account_id=cash_account.id,
                 posting_date=date(2026, 7, 11),
@@ -392,7 +392,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-SECONDARY",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=secondary_book.id,
                 account_id=receivable_account.id,
                 posting_date=date(2026, 7, 11),
@@ -403,7 +403,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-SECONDARY",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=cash_account.id,
                 posting_date=date(2026, 7, 12),
@@ -413,7 +413,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-CUSTOMER-REFUND",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=receivable_account.id,
                 posting_date=date(2026, 7, 12),
@@ -424,7 +424,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-CUSTOMER-REFUND",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=cash_account.id,
                 posting_date=date(2026, 7, 13),
@@ -434,7 +434,7 @@ def test_real_movements_classify_party_from_counterpart_line():
                 voucher_id="FORECAST-SUPPLIER-REFUND",
             ),
             GLEntry(
-                company="cacao",
+                company="CACAO",
                 ledger_id=ledger_id,
                 account_id=payable_account.id,
                 posting_date=date(2026, 7, 13),
@@ -449,7 +449,7 @@ def test_real_movements_classify_party_from_counterpart_line():
         db.session.flush()
 
         movements = _compute_real_movements(
-            "cacao",
+            "CACAO",
             [cash_account.id],
             date(2026, 7, 1),
             date(2026, 7, 31),
@@ -463,12 +463,12 @@ def test_real_movements_classify_party_from_counterpart_line():
 def test_cash_forecast_includes_invoice_with_missing_outstanding_cache():
     """A posted imported invoice is forecast from canonical balance even without cache fields."""
     with test_app.app_context():
-        fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+        fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
         forecast = CashForecast(
             version="V-TEST-CANONICAL-AR",
             description="Saldo canonico",
             fiscal_year_id=fy.id,
-            company="cacao",
+            company="CACAO",
             periodicity="monthly",
             status="Draft",
         )
@@ -476,11 +476,11 @@ def test_cash_forecast_includes_invoice_with_missing_outstanding_cache():
         db.session.commit()
         today = date(2026, 7, 11)
         before = next(
-            row for row in get_cash_forecast_matrix("cacao", forecast.id, today_date=today) if row["period"] == "July 2026"
+            row for row in get_cash_forecast_matrix("CACAO", forecast.id, today_date=today) if row["period"] == "July 2026"
         )
 
         invoice = SalesInvoice(
-            company="cacao",
+            company="CACAO",
             posting_date=date(2026, 7, 11),
             document_type="sales_invoice",
             docstatus=1,
@@ -494,7 +494,7 @@ def test_cash_forecast_includes_invoice_with_missing_outstanding_cache():
         db.session.commit()
 
         after = next(
-            row for row in get_cash_forecast_matrix("cacao", forecast.id, today_date=today) if row["period"] == "July 2026"
+            row for row in get_cash_forecast_matrix("CACAO", forecast.id, today_date=today) if row["period"] == "July 2026"
         )
 
         assert after["proj_ar"] - before["proj_ar"] == Decimal("100")
@@ -506,19 +506,19 @@ def test_cash_forecast_includes_invoice_with_missing_outstanding_cache():
 def test_forecast_comparison():
     """Test comparing two forecast scenarios."""
     with test_app.app_context():
-        fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+        fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
 
         f1 = CashForecast(
             version="BASE-CASE",
             fiscal_year_id=fy.id,
-            company="cacao",
+            company="CACAO",
             periodicity="monthly",
             status="Draft",
         )
         f2 = CashForecast(
             version="COMPARE-CASE",
             fiscal_year_id=fy.id,
-            company="cacao",
+            company="CACAO",
             periodicity="monthly",
             status="Draft",
         )
@@ -544,7 +544,7 @@ def test_forecast_comparison():
         db.session.add_all([entry_f1, entry_f2])
         db.session.commit()
 
-        comparison = get_forecast_comparison("cacao", f1.id, f2.id, today_date=date(2026, 7, 11))
+        comparison = get_forecast_comparison("CACAO", f1.id, f2.id, today_date=date(2026, 7, 11))
 
         # Check September 2026 (index 8)
         sept = [row for row in comparison if row["period"] == "September 2026"][0]
@@ -568,14 +568,14 @@ def test_routes_list_and_details():
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
 
         with test_app.app_context():
-            fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+            fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
 
             # Create a test forecast
             forecast = CashForecast(
                 version="WEB-TEST",
                 description="Vista web",
                 fiscal_year_id=fy.id,
-                company="cacao",
+                company="CACAO",
                 periodicity="monthly",
                 status="Draft",
             )
@@ -584,7 +584,7 @@ def test_routes_list_and_details():
             forecast_id = forecast.id
 
         # 1. Test list view
-        response = client.get("/cash_management/cash-forecast/list?company=cacao")
+        response = client.get("/cash_management/cash-forecast/list?company=CACAO")
         assert response.status_code == 200
         assert b"Pron\xc3\xb3sticos de Flujo de Caja" in response.data
 
@@ -656,13 +656,13 @@ def test_routes_import_entries():
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
 
         with test_app.app_context():
-            fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+            fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
             # Create a test forecast in draft mode
             forecast = CashForecast(
                 version="IMPORT-TEST",
                 description="Import test",
                 fiscal_year_id=fy.id,
-                company="cacao",
+                company="CACAO",
                 periodicity="monthly",
                 status="Draft",
             )
@@ -674,7 +674,7 @@ def test_routes_import_entries():
             with test_app.app_context():
                 batch = ImportBatch(
                     record_type="cash_forecast_entry",
-                    company_id="cacao",
+                    company_id="CACAO",
                     import_status=0,
                     created_by=1,
                 )
@@ -773,12 +773,12 @@ def test_edit_manual_entry_route():
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
 
         with test_app.app_context():
-            fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+            fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
             forecast = CashForecast(
                 version="EDIT-ROUTE-TEST",
                 description="Edit test",
                 fiscal_year_id=fy.id,
-                company="cacao",
+                company="CACAO",
                 periodicity="monthly",
                 status="Draft",
             )
@@ -834,12 +834,12 @@ def test_manual_entries_dashboard_route():
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
 
         with test_app.app_context():
-            fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
+            fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
             forecast = CashForecast(
                 version="DASHBOARD-TEST",
                 description="Dashboard list test",
                 fiscal_year_id=fy.id,
-                company="cacao",
+                company="CACAO",
                 periodicity="monthly",
                 status="Draft",
             )
@@ -859,7 +859,7 @@ def test_manual_entries_dashboard_route():
             forecast_id = forecast.id
             entry_id = entry.id
 
-        response = client.get(f"/cash_management/cash-forecast/manual-entries?company=cacao&forecast_id={forecast_id}")
+        response = client.get(f"/cash_management/cash-forecast/manual-entries?company=CACAO&forecast_id={forecast_id}")
         assert response.status_code == 200
         assert b"Forecast de Entradas manuales" in response.data
         assert b"Visible Concept" in response.data
@@ -878,22 +878,22 @@ def test_cash_forecast_creation_status_and_entry_validation_routes():
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
 
         with test_app.app_context():
-            fy = db.session.query(FiscalYear).filter_by(entity="cacao").first()
-            existing = db.session.query(CashForecast).filter_by(version="COVERAGE-ROUTES", company="cacao").first()
+            fy = db.session.query(FiscalYear).filter_by(entity="CACAO").first()
+            existing = db.session.query(CashForecast).filter_by(version="COVERAGE-ROUTES", company="CACAO").first()
             if existing:
                 db.session.delete(existing)
                 db.session.commit()
             fiscal_year_id = fy.id
 
-        assert client.get("/cash_management/cash-forecast/new?company=cacao").status_code == 200
+        assert client.get("/cash_management/cash-forecast/new?company=CACAO").status_code == 200
         missing = client.post(
-            "/cash_management/cash-forecast/new?company=cacao",
+            "/cash_management/cash-forecast/new?company=CACAO",
             data={"version": "", "fiscal_year_id": fiscal_year_id, "periodicity": "monthly"},
         )
         assert missing.status_code == 200
 
         created = client.post(
-            "/cash_management/cash-forecast/new?company=cacao",
+            "/cash_management/cash-forecast/new?company=CACAO",
             data={
                 "version": "COVERAGE-ROUTES",
                 "description": "Cobertura de rutas",
@@ -904,11 +904,11 @@ def test_cash_forecast_creation_status_and_entry_validation_routes():
         assert created.status_code == 302
 
         with test_app.app_context():
-            forecast = db.session.query(CashForecast).filter_by(version="COVERAGE-ROUTES", company="cacao").one()
+            forecast = db.session.query(CashForecast).filter_by(version="COVERAGE-ROUTES", company="CACAO").one()
             forecast_id = forecast.id
 
         duplicate = client.post(
-            "/cash_management/cash-forecast/new?company=cacao",
+            "/cash_management/cash-forecast/new?company=CACAO",
             data={
                 "version": "COVERAGE-ROUTES",
                 "fiscal_year_id": fiscal_year_id,
@@ -965,7 +965,7 @@ def test_cash_forecast_creation_status_and_entry_validation_routes():
                 version="COVERAGE-DRAFT-DELETE",
                 description="Cobertura de eliminación",
                 fiscal_year_id=fiscal_year_id,
-                company="cacao",
+                company="CACAO",
                 periodicity="monthly",
                 status="Draft",
             )
@@ -973,7 +973,7 @@ def test_cash_forecast_creation_status_and_entry_validation_routes():
                 version="COVERAGE-BASE",
                 description="Base de comparación",
                 fiscal_year_id=fiscal_year_id,
-                company="cacao",
+                company="CACAO",
                 periodicity="monthly",
                 status="Draft",
             )
@@ -981,7 +981,7 @@ def test_cash_forecast_creation_status_and_entry_validation_routes():
                 version="COVERAGE-COMPARE",
                 description="Comparativo",
                 fiscal_year_id=fiscal_year_id,
-                company="cacao",
+                company="CACAO",
                 periodicity="monthly",
                 status="Draft",
             )
@@ -993,7 +993,7 @@ def test_cash_forecast_creation_status_and_entry_validation_routes():
         assert (
             client.get(f"/cash_management/cash-forecast/compare?base_id={base_id}&compare_id={compare_id}").status_code == 200
         )
-        assert client.get("/cash_management/cash-forecast/manual-entries?company=cacao").status_code == 200
+        assert client.get("/cash_management/cash-forecast/manual-entries?company=CACAO").status_code == 200
         assert client.post(f"/cash_management/cash-forecast/{base_id}/entry/import").status_code == 302
 
         with test_app.app_context():
@@ -1050,7 +1050,7 @@ def test_cash_forecast_rejects_foreign_fiscal_year_and_matrix_relation():
         forecast = CashForecast(
             version="FOREIGN-FY-MATRIX",
             fiscal_year_id=foreign_year_id,
-            company="cacao",
+            company="CACAO",
             periodicity="monthly",
             status="Draft",
         )
@@ -1059,7 +1059,7 @@ def test_cash_forecast_rejects_foreign_fiscal_year_and_matrix_relation():
         forecast_id = forecast.id
 
         with pytest.raises(ValueError, match="no pertenece"):
-            get_cash_forecast_matrix("cacao", forecast_id, today_date=date(2026, 7, 1))
+            get_cash_forecast_matrix("CACAO", forecast_id, today_date=date(2026, 7, 1))
 
         db.session.delete(forecast)
         db.session.delete(fiscal_year)

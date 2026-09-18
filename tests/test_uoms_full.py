@@ -98,7 +98,7 @@ def test_uom_conversion_cycle(app_ctx):
     # 1. Buy 2 BOX (Should be 100 UND in inventory)
     supplier = database.session.execute(database.select(Party).filter(Party.is_supplier.is_(True))).scalars().first()
     prc_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "supplier_id": supplier.id,
         "posting_date": date.today().isoformat(),
         "transaction_currency": "NIO",
@@ -136,7 +136,7 @@ def test_uom_conversion_cycle(app_ctx):
 
     # 2. Transfer 1 PKG from PRINCIPAL to SUCURSAL (Should move 10 UND)
     mt_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "purpose": "material_transfer",
         "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
@@ -178,7 +178,7 @@ def test_uom_conversion_cycle(app_ctx):
     customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
 
     dn_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "customer_id": customer.id,
         "posting_date": date.today().isoformat(),
         "transaction_currency": "NIO",
@@ -274,7 +274,7 @@ def test_service_item_requires_company_cost_center(app_ctx):
 
     expense_account = (
         database.session.execute(
-            database.select(Accounts).filter_by(entity="cacao", account_type="expense", group=False, active=True, enabled=True)
+            database.select(Accounts).filter_by(entity="CACAO", account_type="expense", group=False, active=True, enabled=True)
         )
         .scalars()
         .first()
@@ -290,7 +290,7 @@ def test_service_item_requires_company_cost_center(app_ctx):
         uom_rows=[],
         account_rows=[
             ItemAccountRow(
-                company="cacao",
+                company="CACAO",
                 expense_account_id=expense_account.id,
                 cost_center_code=None,
             )
@@ -310,12 +310,12 @@ def test_service_item_persists_company_accounts(app_ctx):
 
     expense_account = (
         database.session.execute(
-            database.select(Accounts).filter_by(entity="cacao", account_type="expense", group=False, active=True, enabled=True)
+            database.select(Accounts).filter_by(entity="CACAO", account_type="expense", group=False, active=True, enabled=True)
         )
         .scalars()
         .first()
     )
-    cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="cacao", code="MAIN")).scalar_one()
+    cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="CACAO", code="MAIN")).scalar_one()
     assert expense_account is not None
 
     params = ItemParams(
@@ -327,7 +327,7 @@ def test_service_item_persists_company_accounts(app_ctx):
         uom_rows=[],
         account_rows=[
             ItemAccountRow(
-                company="cacao",
+                company="CACAO",
                 expense_account_id=expense_account.id,
                 cost_center_code=cost_center.code,
             )
@@ -339,7 +339,7 @@ def test_service_item_persists_company_accounts(app_ctx):
     database.session.commit()
 
     mapping = database.session.execute(
-        database.select(ItemAccount).filter_by(item_code="SERV-ITEM-002", company="cacao")
+        database.select(ItemAccount).filter_by(item_code="SERV-ITEM-002", company="CACAO")
     ).scalar_one()
     assert mapping.expense_account_id == expense_account.id
     assert mapping.cost_center_code == cost_center.code
@@ -350,7 +350,7 @@ def test_item_default_uom_is_locked_after_usage(app_ctx):
 
     item = Item(code="UOM-LOCK-001", name="Item bloqueado", item_type="goods", is_stock_item=True, default_uom="UND")
     database.session.add(item)
-    database.session.add(PurchaseReceipt(id="PR-UOM-LOCK", company="cacao", posting_date=date.today(), docstatus=0))
+    database.session.add(PurchaseReceipt(id="PR-UOM-LOCK", company="CACAO", posting_date=date.today(), docstatus=0))
     database.session.add(
         PurchaseReceiptItem(
             purchase_receipt_id="PR-UOM-LOCK",
@@ -384,7 +384,7 @@ def test_item_default_uom_ignores_cancelled_records_and_detects_migrated_stock(a
         default_uom="UND",
     )
     database.session.add(cancelled_item)
-    database.session.add(PurchaseReceipt(id="PR-UOM-CANCELLED", company="cacao", posting_date=date.today(), docstatus=2))
+    database.session.add(PurchaseReceipt(id="PR-UOM-CANCELLED", company="CACAO", posting_date=date.today(), docstatus=2))
     database.session.add(
         PurchaseReceiptItem(
             purchase_receipt_id="PR-UOM-CANCELLED",
@@ -408,7 +408,7 @@ def test_item_default_uom_ignores_cancelled_records_and_detects_migrated_stock(a
         StockBin(
             item_code=migrated_item.code,
             warehouse="PRINCIPAL",
-            company="cacao",
+            company="CACAO",
             actual_qty=Decimal("5"),
             stock_value=Decimal("50"),
         )
@@ -431,7 +431,7 @@ def test_inventory_flags_are_locked_after_stock_usage(app_ctx):
             posting_date=date.today(),
             item_code=item.code,
             warehouse="PRINCIPAL",
-            company="cacao",
+            company="CACAO",
             qty_change=Decimal("1"),
             qty_after_transaction=Decimal("1"),
             voucher_type="test",
@@ -478,7 +478,7 @@ def test_average_cost(app_ctx):
 
     # 2. Purchase 10 UND at 100 each
     mr1_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "purpose": "material_receipt",
         "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
@@ -518,7 +518,7 @@ def test_average_cost(app_ctx):
 
     # 3. Purchase another 10 UND at 200 each
     mr2_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "purpose": "material_receipt",
         "naming_series": stock_entry_series.id,
         "posting_date": date.today().isoformat(),
@@ -554,7 +554,7 @@ def test_average_cost(app_ctx):
 
     # 4. Sell 5 UND (Should use 150 as cost)
     dn_data = {
-        "company": "cacao",
+        "company": "CACAO",
         "customer_id": database.session.execute(database.select(Party).filter(Party.is_customer.is_(True)))
         .scalars()
         .first()

@@ -64,13 +64,13 @@ def app_ctx():
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         master_data()
 
-        books = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        books = database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
         book_codes = [b.code for b in books]
         for book in books:
             if book.is_primary and book.status is None:
                 book.status = "activo"
         if "USD_BOOK" not in book_codes:
-            database.session.add(Book(code="USD_BOOK", name="Dólares", entity="cacao", currency="USD", status="activo"))
+            database.session.add(Book(code="USD_BOOK", name="Dólares", entity="CACAO", currency="USD", status="activo"))
         database.session.commit()
         yield app
 
@@ -78,25 +78,25 @@ def app_ctx():
 def _ensure_item(code="ITEM-O2C", warehouse="WH-MAIN"):
     wh = database.session.get(Warehouse, warehouse)
     if not wh:
-        wh = Warehouse(code=warehouse, name="Almacén Principal O2C", company="cacao")
+        wh = Warehouse(code=warehouse, name="Almacén Principal O2C", company="CACAO")
         database.session.add(wh)
         database.session.flush()
 
     inv_account = (
-        database.session.execute(database.select(Accounts).filter_by(entity="cacao", account_type="inventory"))
+        database.session.execute(database.select(Accounts).filter_by(entity="CACAO", account_type="inventory"))
         .scalars()
         .first()
     )
     if (
         inv_account
         and not database.session.execute(
-            database.select(WarehouseCompanyAccount).filter_by(warehouse_code=warehouse, company="cacao")
+            database.select(WarehouseCompanyAccount).filter_by(warehouse_code=warehouse, company="CACAO")
         ).scalar_one_or_none()
     ):
         database.session.add(
             WarehouseCompanyAccount(
                 warehouse_code=warehouse,
-                company="cacao",
+                company="CACAO",
                 inventory_account_id=inv_account.id,
                 is_active=True,
             )
@@ -125,16 +125,16 @@ def _ensure_customer(code="CUST-O2C", name="Cliente O2C Test"):
         database.session.add(customer)
         database.session.flush()
     if not database.session.execute(
-        database.select(CompanyParty).filter_by(party_id=customer.id, company="cacao")
+        database.select(CompanyParty).filter_by(party_id=customer.id, company="CACAO")
     ).scalar_one_or_none():
-        database.session.add(CompanyParty(party_id=customer.id, company="cacao", is_active=True))
+        database.session.add(CompanyParty(party_id=customer.id, company="CACAO", is_active=True))
         database.session.commit()
     return customer
 
 
 def _receive_stock(item_code, warehouse, qty, valuation_rate):
     se = StockEntry(
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         purpose="material_receipt",
         docstatus=0,
@@ -176,7 +176,7 @@ def test_sales_quotation_workflow(app_ctx):
     sr = SalesRequest(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         total=Decimal("1500"),
         grand_total=Decimal("1500"),
@@ -207,7 +207,7 @@ def test_sales_quotation_workflow(app_ctx):
         customer_id=customer.id,
         customer_name=customer.name,
         sales_request_id=sr.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         total=Decimal("1500"),
         grand_total=Decimal("1500"),
@@ -252,7 +252,7 @@ def test_sales_quotation_workflow(app_ctx):
     so = SalesOrder(
         customer_id=customer.id,
         sales_quotation_id=sq.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         total=Decimal("1500"),
         grand_total=Decimal("1500"),
@@ -321,11 +321,11 @@ def test_sales_order_stock_reservation_and_credit_limit(app_ctx):
     # Ingresar stock real vía StockEntry
     _receive_stock(item.code, "WH-MAIN", 100, 50)
     bin_row = database.session.execute(
-        database.select(StockBin).filter_by(company="cacao", item_code=item.code, warehouse="WH-MAIN")
+        database.select(StockBin).filter_by(company="CACAO", item_code=item.code, warehouse="WH-MAIN")
     ).scalar_one()
 
     # Configurar límite de crédito de $5,000 para el cliente
-    cp = database.session.execute(database.select(CompanyParty).filter_by(party_id=customer.id, company="cacao")).scalar_one()
+    cp = database.session.execute(database.select(CompanyParty).filter_by(party_id=customer.id, company="CACAO")).scalar_one()
     cp.credit_limit = Decimal("5000")
     database.session.commit()
 
@@ -333,7 +333,7 @@ def test_sales_order_stock_reservation_and_credit_limit(app_ctx):
     so = SalesOrder(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         total=Decimal("2000"),
         grand_total=Decimal("2000"),
@@ -366,7 +366,7 @@ def test_sales_order_stock_reservation_and_credit_limit(app_ctx):
     so_excess = SalesOrder(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         total=Decimal("4000"),
         grand_total=Decimal("4000"),
@@ -416,14 +416,14 @@ def test_delivery_note_inventory_deduction_and_overdelivery_prevention(app_ctx):
     # Ingresar stock real vía StockEntry (50 unidades a $10 c/u)
     _receive_stock(item.code, "WH-MAIN", 50, 10)
     bin_row = database.session.execute(
-        database.select(StockBin).filter_by(company="cacao", item_code=item.code, warehouse="WH-MAIN")
+        database.select(StockBin).filter_by(company="CACAO", item_code=item.code, warehouse="WH-MAIN")
     ).scalar_one()
 
     # Crear y aprobar Orden de Venta por 10 unidades
     so = SalesOrder(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         total=Decimal("1000"),
         grand_total=Decimal("1000"),
@@ -450,7 +450,7 @@ def test_delivery_note_inventory_deduction_and_overdelivery_prevention(app_ctx):
     dn = DeliveryNote(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         sales_order_id=so.id,
         posting_date=date.today(),
         total=Decimal("1000"),
@@ -527,14 +527,14 @@ def test_sales_invoice_tolerance_and_auto_delivery_note(app_ctx):
     # Ingresar stock real vía StockEntry (100 unidades a $20 c/u)
     _receive_stock(item.code, "WH-MAIN", 100, 20)
     bin_row = database.session.execute(
-        database.select(StockBin).filter_by(company="cacao", item_code=item.code, warehouse="WH-MAIN")
+        database.select(StockBin).filter_by(company="CACAO", item_code=item.code, warehouse="WH-MAIN")
     ).scalar_one()
 
     # Crear Factura de Venta directa con update_inventory=True
     si = SalesInvoice(
         customer_id=customer.id,
         customer_name=customer.name,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         document_type="sales_invoice",
         update_inventory=True,
@@ -606,7 +606,7 @@ def test_debit_note_credit_note_and_returns(app_ctx):
     # 1. Factura de Venta original por $1,000
     si_orig = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         document_type="sales_invoice",
         docstatus=1,
@@ -631,7 +631,7 @@ def test_debit_note_credit_note_and_returns(app_ctx):
     # 2. Crear y aprobar Nota de Débito por $200 (incrementa saldo por cobrar)
     dn_invoice = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         document_type="sales_debit_note",
         reversal_of=si_orig.id,
@@ -661,7 +661,7 @@ def test_debit_note_credit_note_and_returns(app_ctx):
     # 3. Intentar crear Nota de Crédito por $1,500 que excede el saldo pendiente ($1,000 + $200 de débito = $1,200)
     cn_exceed = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         document_type="sales_credit_note",
         reversal_of=si_orig.id,
@@ -692,7 +692,7 @@ def test_debit_note_credit_note_and_returns(app_ctx):
     # 4. Crear Nota de Crédito válida por $400
     cn_valid = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         document_type="sales_credit_note",
         reversal_of=si_orig.id,
@@ -730,7 +730,7 @@ def test_debit_note_credit_note_and_returns(app_ctx):
     # with is_return=True.
     sales_return = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         document_type="sales_return",
         reversal_of=si_orig.id,

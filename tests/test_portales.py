@@ -78,7 +78,7 @@ def test_portal_security_and_access():
             active=True,
             party_id=c1.id,
             classification="customer",
-            company="cacao",
+            company="CACAO",
         )
         u_cust2 = User(
             user="cliente2",
@@ -87,7 +87,7 @@ def test_portal_security_and_access():
             active=True,
             party_id=c2.id,
             classification="customer",
-            company="cacao",
+            company="CACAO",
         )
         u_supp1 = User(
             user="proveedor1",
@@ -96,7 +96,7 @@ def test_portal_security_and_access():
             active=True,
             party_id=p1.id,
             classification="supplier",
-            company="cacao",
+            company="CACAO",
         )
         database.session.add_all([u_cust1, u_cust2, u_supp1])
         database.session.flush()

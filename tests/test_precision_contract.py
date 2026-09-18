@@ -115,7 +115,7 @@ class TestPaymentReferencePrecision:
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         invoice = SalesInvoice(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             document_type="sales_invoice",
@@ -131,7 +131,7 @@ class TestPaymentReferencePrecision:
         response = client.get(
             "/api/document-flow/payment-reference-candidates",
             query_string={
-                "company": "cacao",
+                "company": "CACAO",
                 "party_type": "customer",
                 "party_id": customer.id,
                 "source_type": ["sales_invoice"],
@@ -151,7 +151,7 @@ class TestPaymentReferencePrecision:
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         invoice = SalesInvoice(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             document_type="sales_invoice",
@@ -167,7 +167,7 @@ class TestPaymentReferencePrecision:
         response = client.get(
             "/api/document-flow/payment-reference-candidates",
             query_string={
-                "company": "cacao",
+                "company": "CACAO",
                 "party_type": "customer",
                 "party_id": customer.id,
                 "source_type": ["sales_invoice"],
@@ -186,7 +186,7 @@ class TestPaymentReferencePrecision:
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         invoice = SalesInvoice(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             document_type="sales_invoice",
@@ -202,7 +202,7 @@ class TestPaymentReferencePrecision:
         response = client.get(
             "/api/document-flow/payment-reference-candidates",
             query_string={
-                "company": "cacao",
+                "company": "CACAO",
                 "party_type": "customer",
                 "party_id": customer.id,
                 "source_type": ["sales_invoice"],
@@ -219,7 +219,7 @@ class TestPaymentReferencePrecision:
 
         customer = database.session.execute(database.select(Party).filter(Party.is_customer.is_(True))).scalars().first()
         invoice = SalesInvoice(
-            company="cacao",
+            company="CACAO",
             customer_id=customer.id,
             posting_date=date.today(),
             document_type="sales_invoice",
@@ -235,7 +235,7 @@ class TestPaymentReferencePrecision:
         response = client.get(
             "/api/document-flow/payment-reference-candidates",
             query_string={
-                "company": "cacao",
+                "company": "CACAO",
                 "party_type": "customer",
                 "party_id": customer.id,
                 "source_type": ["sales_invoice", "purchase_invoice"],

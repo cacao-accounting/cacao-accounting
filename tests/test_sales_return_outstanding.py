@@ -41,7 +41,7 @@ def app_ctx():
         inicia_base_de_datos(app, user="cacao", passwd="cacao", with_examples=False)
         master_data()
 
-        books = database.session.execute(database.select(Book).filter_by(entity="cacao")).scalars().all()
+        books = database.session.execute(database.select(Book).filter_by(entity="CACAO")).scalars().all()
         for book in books:
             if book.is_primary and book.status is None:
                 book.status = "activo"
@@ -53,24 +53,24 @@ def _ensure_item(code="ITEM-SR781", warehouse="WH-MAIN"):
     """Crea el artículo y la bodega mínima para emitir facturas."""
     wh = database.session.get(Warehouse, warehouse)
     if not wh:
-        wh = Warehouse(code=warehouse, name="Almacén Principal SR781", company="cacao")
+        wh = Warehouse(code=warehouse, name="Almacén Principal SR781", company="CACAO")
         database.session.add(wh)
         database.session.flush()
     inv_account = (
-        database.session.execute(database.select(Accounts).filter_by(entity="cacao", account_type="inventory"))
+        database.session.execute(database.select(Accounts).filter_by(entity="CACAO", account_type="inventory"))
         .scalars()
         .first()
     )
     if (
         inv_account
         and not database.session.execute(
-            database.select(WarehouseCompanyAccount).filter_by(warehouse_code=warehouse, company="cacao")
+            database.select(WarehouseCompanyAccount).filter_by(warehouse_code=warehouse, company="CACAO")
         ).scalar_one_or_none()
     ):
         database.session.add(
             WarehouseCompanyAccount(
                 warehouse_code=warehouse,
-                company="cacao",
+                company="CACAO",
                 inventory_account_id=inv_account.id,
                 is_active=True,
             )
@@ -99,9 +99,9 @@ def _ensure_customer(code="CUST-SR781", name="Cliente SR781"):
         database.session.add(customer)
         database.session.flush()
     if not database.session.execute(
-        database.select(CompanyParty).filter_by(party_id=customer.id, company="cacao")
+        database.select(CompanyParty).filter_by(party_id=customer.id, company="CACAO")
     ).scalar_one_or_none():
-        database.session.add(CompanyParty(party_id=customer.id, company="cacao", is_active=True))
+        database.session.add(CompanyParty(party_id=customer.id, company="CACAO", is_active=True))
         database.session.commit()
     return customer
 
@@ -110,7 +110,7 @@ def _create_invoice(customer, item, *, amount, document_type="sales_invoice", re
     """Crea una factura/nota/devolución en borrador con una línea."""
     invoice = SalesInvoice(
         customer_id=customer.id,
-        company="cacao",
+        company="CACAO",
         posting_date=date.today(),
         document_type=document_type,
         reversal_of=reversal_of,

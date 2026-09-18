@@ -69,8 +69,8 @@ def test_customer_list_overrides_company_default_and_observes_quantity_break(app
     """A single list can serve a customer while another remains the fallback."""
     with app_ctx.app_context():
         customer, item = _customer_and_item()
-        default = PriceList(name="Default", company="cacao", is_selling=True, is_default=True, is_active=True)
-        wholesale = PriceList(name="Mayoristas", company="cacao", is_selling=True, is_active=True)
+        default = PriceList(name="Default", company="CACAO", is_selling=True, is_default=True, is_active=True)
+        wholesale = PriceList(name="Mayoristas", company="CACAO", is_selling=True, is_active=True)
         database.session.add_all([default, wholesale])
         database.session.flush()
         database.session.add_all(
@@ -87,16 +87,16 @@ def test_customer_list_overrides_company_default_and_observes_quantity_break(app
             ]
         )
         company_party = database.session.execute(
-            database.select(CompanyParty).where(CompanyParty.company == "cacao", CompanyParty.party_id == customer.id)
+            database.select(CompanyParty).where(CompanyParty.company == "CACAO", CompanyParty.party_id == customer.id)
         ).scalar_one_or_none()
         if company_party is None:
-            company_party = CompanyParty(company="cacao", party_id=customer.id)
+            company_party = CompanyParty(company="CACAO", party_id=customer.id)
             database.session.add(company_party)
         company_party.default_price_list_id = wholesale.id
         database.session.commit()
 
-        regular = resolve_sales_catalog_price("cacao", customer.id, item.code, Decimal("1"), item.default_uom, date.today())
-        bulk = resolve_sales_catalog_price("cacao", customer.id, item.code, Decimal("10"), item.default_uom, date.today())
+        regular = resolve_sales_catalog_price("CACAO", customer.id, item.code, Decimal("1"), item.default_uom, date.today())
+        bulk = resolve_sales_catalog_price("CACAO", customer.id, item.code, Decimal("10"), item.default_uom, date.today())
 
         assert regular is not None and regular[0] == Decimal("90") and regular[1].id == wholesale.id
         assert bulk is not None and bulk[0] == Decimal("80") and bulk[1].id == wholesale.id
@@ -106,7 +106,7 @@ def test_sales_catalog_api_returns_effective_customer_price(app_ctx):
     """The transaction grid API exposes the same price resolver as posting."""
     with app_ctx.app_context():
         customer, item = _customer_and_item()
-        price_list = PriceList(name="Distribuidores", company="cacao", is_selling=True, is_default=True, is_active=True)
+        price_list = PriceList(name="Distribuidores", company="CACAO", is_selling=True, is_default=True, is_active=True)
         database.session.add(price_list)
         database.session.flush()
         database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, price=Decimal("55")))
@@ -117,7 +117,7 @@ def test_sales_catalog_api_returns_effective_customer_price(app_ctx):
         client.post("/login", data={"usuario": "cacao", "acceso": "cacao"})
         response = client.get(
             "/api/sales/catalog-price",
-            query_string={"company": "cacao", "customer_id": customer_id, "item_code": item_code, "qty": "1"},
+            query_string={"company": "CACAO", "customer_id": customer_id, "item_code": item_code, "qty": "1"},
         )
 
     assert response.status_code == 200
@@ -129,11 +129,11 @@ def test_quotation_rate_is_a_snapshot_when_the_catalog_changes(app_ctx):
     """A quotation retains its agreed price even after the catalog is corrected."""
     with app_ctx.app_context():
         customer, item = _customer_and_item()
-        price_list = PriceList(name="Default", company="cacao", is_selling=True, is_default=True, is_active=True)
+        price_list = PriceList(name="Default", company="CACAO", is_selling=True, is_default=True, is_active=True)
         database.session.add(price_list)
         database.session.flush()
         item_price = ItemPrice(item_code=item.code, price_list_id=price_list.id, price=Decimal("100"))
-        quotation = SalesQuotation(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1)
+        quotation = SalesQuotation(company="CACAO", customer_id=customer.id, posting_date=date.today(), docstatus=1)
         database.session.add_all([item_price, quotation])
         database.session.flush()
         database.session.add(
@@ -155,7 +155,7 @@ def test_quotation_rate_is_a_snapshot_when_the_catalog_changes(app_ctx):
         ).scalar_one()
 
         assert saved_line.rate == Decimal("100")
-        current = resolve_sales_catalog_price("cacao", customer.id, item.code, Decimal("2"), item.default_uom, date.today())
+        current = resolve_sales_catalog_price("CACAO", customer.id, item.code, Decimal("2"), item.default_uom, date.today())
         assert current is not None and current[0] == Decimal("125")
 
 
@@ -163,7 +163,7 @@ def test_source_line_rate_is_derived_on_the_server(app_ctx):
     """A forged price in a document-flow POST cannot change the source snapshot."""
     with app_ctx.app_context():
         customer, item = _customer_and_item()
-        quotation = SalesQuotation(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1)
+        quotation = SalesQuotation(company="CACAO", customer_id=customer.id, posting_date=date.today(), docstatus=1)
         database.session.add(quotation)
         database.session.flush()
         source_line = SalesQuotationItem(
@@ -219,8 +219,8 @@ def test_sales_order_persists_source_rate_not_forged_form_rate(app_ctx):
     """Document-flow persistence retains the quotation snapshot on a forged POST."""
     with app_ctx.app_context():
         customer, item = _customer_and_item()
-        quotation = SalesQuotation(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1)
-        order = SalesOrder(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=0)
+        quotation = SalesQuotation(company="CACAO", customer_id=customer.id, posting_date=date.today(), docstatus=1)
+        order = SalesOrder(company="CACAO", customer_id=customer.id, posting_date=date.today(), docstatus=0)
         database.session.add_all([quotation, order])
         database.session.flush()
         source_line = SalesQuotationItem(
@@ -261,11 +261,11 @@ def test_sales_quotation_discount_is_persisted_and_reduces_total(app_ctx):
     """Line percentage discounts are calculated server-side and included in totals."""
     with app_ctx.app_context():
         customer, item = _customer_and_item()
-        price_list = PriceList(name="Default", company="cacao", is_selling=True, is_default=True, is_active=True)
+        price_list = PriceList(name="Default", company="CACAO", is_selling=True, is_default=True, is_active=True)
         database.session.add(price_list)
         database.session.flush()
         database.session.add(ItemPrice(item_code=item.code, price_list_id=price_list.id, price=Decimal("100")))
-        quotation = SalesQuotation(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=0)
+        quotation = SalesQuotation(company="CACAO", customer_id=customer.id, posting_date=date.today(), docstatus=0)
         database.session.add(quotation)
         database.session.flush()
         with app_ctx.test_request_context(
@@ -284,8 +284,8 @@ def test_partial_conversion_prorates_source_discount(app_ctx):
     """A partial source conversion does not apply the full source discount twice."""
     with app_ctx.app_context():
         customer, item = _customer_and_item()
-        quotation = SalesQuotation(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=1)
-        order = SalesOrder(company="cacao", customer_id=customer.id, posting_date=date.today(), docstatus=0)
+        quotation = SalesQuotation(company="CACAO", customer_id=customer.id, posting_date=date.today(), docstatus=1)
+        order = SalesOrder(company="CACAO", customer_id=customer.id, posting_date=date.today(), docstatus=0)
         database.session.add_all([quotation, order])
         database.session.flush()
         source = SalesQuotationItem(
@@ -334,7 +334,7 @@ def test_sales_manager_cannot_manage_other_company_price_lists(app_ctx):
         other_company = Entity(
             code="price2", name="Café", company_name="Café", tax_id="J-PRICE-CAFE", currency="NIO", enabled=True
         )
-        local_list = PriceList(name="Cacao", company="cacao", is_selling=True, is_active=True)
+        local_list = PriceList(name="Cacao", company="CACAO", is_selling=True, is_active=True)
         foreign_list = PriceList(name="Café", company="price2", is_selling=True, is_active=True)
         database.session.add_all(
             [
@@ -343,7 +343,7 @@ def test_sales_manager_cannot_manage_other_company_price_lists(app_ctx):
                 local_list,
                 foreign_list,
                 RolesUser(user_id=manager.id, role_id=sales_role.id, active=True),
-                UserCompanyAccess(user_id=manager.id, company_code="cacao"),
+                UserCompanyAccess(user_id=manager.id, company_code="CACAO"),
             ]
         )
         database.session.flush()
@@ -382,12 +382,12 @@ def test_setup_default_sales_list_seeds_standard_item_prices(app_ctx):
         )
         database.session.add(item)
         database.session.flush()
-        create_default_price_lists("cacao", "NIO")
+        create_default_price_lists("CACAO", "NIO")
         database.session.flush()
         default_list = (
             database.session.execute(
                 database.select(PriceList).where(
-                    PriceList.company == "cacao", PriceList.is_default.is_(True), PriceList.is_selling.is_(True)
+                    PriceList.company == "CACAO", PriceList.is_default.is_(True), PriceList.is_selling.is_(True)
                 )
             )
             .scalars()

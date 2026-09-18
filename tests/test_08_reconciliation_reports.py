@@ -2994,7 +2994,7 @@ def test_setup_with_predefined_catalog_creates_complete_company_defaults(app_ctx
 
     finalize_setup(
         {
-            "id": "mapco",
+            "id": "MAPCO",
             "razon_social": "Mapping Company",
             "nombre_comercial": "Mapping Company",
             "id_fiscal": "J-MAP",
@@ -3008,7 +3008,7 @@ def test_setup_with_predefined_catalog_creates_complete_company_defaults(app_ctx
     )
     database.session.commit()
 
-    defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="mapco")).scalar_one()
+    defaults = database.session.execute(database.select(CompanyDefaultAccount).filter_by(company="MAPCO")).scalar_one()
     assert all(getattr(defaults, field) for field in DEFAULT_ACCOUNT_FIELDS)
 
 
@@ -3019,7 +3019,7 @@ def test_setup_with_invalid_catalog_raises_error(app_ctx):
     with pytest.raises(ValueError, match="catálogo seleccionado.*no está disponible"):
         finalize_setup(
             {
-                "id": "mapco",
+                "id": "MAPCO",
                 "razon_social": "Mapping Company",
                 "nombre_comercial": "Mapping Company",
                 "id_fiscal": "J-MAP",
@@ -3056,7 +3056,7 @@ def test_setup_with_predefined_catalog_creates_bootstrap_records(app_ctx):
 
     finalize_setup(
         {
-            "id": "mapco",
+            "id": "MAPCO",
             "razon_social": "Mapping Company",
             "nombre_comercial": "Mapping Company",
             "id_fiscal": "J-MAP",
@@ -3069,17 +3069,17 @@ def test_setup_with_predefined_catalog_creates_bootstrap_records(app_ctx):
         catalogo_archivo="base_es.csv",
     )
 
-    entity = database.session.execute(database.select(Entity).filter_by(code="mapco")).scalar_one()
-    book = database.session.execute(database.select(Book).filter_by(entity="mapco", default=True)).scalar_one()
-    cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="mapco", code="MAIN")).scalar_one()
+    entity = database.session.execute(database.select(Entity).filter_by(code="MAPCO")).scalar_one()
+    book = database.session.execute(database.select(Book).filter_by(entity="MAPCO", default=True)).scalar_one()
+    cost_center = database.session.execute(database.select(CostCenter).filter_by(entity="MAPCO", code="MAIN")).scalar_one()
     fiscal_year = database.session.execute(
-        database.select(FiscalYear).filter_by(entity="mapco", name=str(date.today().year))
+        database.select(FiscalYear).filter_by(entity="MAPCO", name=str(date.today().year))
     ).scalar_one()
     period = database.session.execute(
-        database.select(AccountingPeriod).filter_by(entity="mapco", name=f"{date.today().year}-01")
+        database.select(AccountingPeriod).filter_by(entity="MAPCO", name=f"{date.today().year}-01")
     ).scalar_one()
     series = database.session.execute(
-        database.select(NamingSeries).filter_by(company="mapco", entity_type="journal_entry")
+        database.select(NamingSeries).filter_by(company="MAPCO", entity_type="journal_entry")
     ).scalar_one_or_none()
     currency_nio = database.session.execute(database.select(Currency).filter_by(code="NIO")).scalar_one()
     currency_usd = database.session.execute(database.select(Currency).filter_by(code="USD")).scalar_one()
@@ -3119,7 +3119,7 @@ def test_setup_seeds_uoms_using_selected_language():
         database.create_all()
         finalize_setup(
             {
-                "id": "uomco",
+                "id": "UOMCO",
                 "razon_social": "UOM Company",
                 "nombre_comercial": "UOM Company",
                 "id_fiscal": "J-UOM",
@@ -3136,10 +3136,10 @@ def test_setup_seeds_uoms_using_selected_language():
         box = database.session.execute(database.select(UOM).filter_by(code="CAJ")).scalar_one()
         service = database.session.execute(database.select(UOM).filter_by(code="SERV")).scalar_one()
         sales_price_list = database.session.execute(
-            database.select(PriceList).filter_by(company="uomco", is_selling=True, is_default=True)
+            database.select(PriceList).filter_by(company="UOMCO", is_selling=True, is_default=True)
         ).scalar_one()
         purchase_price_list = database.session.execute(
-            database.select(PriceList).filter_by(company="uomco", is_buying=True, is_default=True)
+            database.select(PriceList).filter_by(company="UOMCO", is_buying=True, is_default=True)
         ).scalar_one()
 
         assert unit.name == "Unit"
@@ -3204,7 +3204,7 @@ def test_example_seed_creates_company_default_accounts(app_ctx):
         database.create_all()
         assert inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=True)
 
-        for company in ("cacao", "dulce", "cafe"):
+        for company in ("CACAO", "DULCE", "CAFE"):
             defaults = database.session.execute(
                 database.select(CompanyDefaultAccount).filter_by(company=company)
             ).scalar_one_or_none()
@@ -3240,7 +3240,7 @@ def test_example_seed_creates_company_base_records(app_ctx):
         database.create_all()
         assert inicia_base_de_datos(app=app, user="cacao", passwd="cacao", with_examples=True)
 
-        for company in ("cacao", "dulce", "cafe"):
+        for company in ("CACAO", "DULCE", "CAFE"):
             assert database.session.execute(database.select(Entity).filter_by(code=company)).scalar_one_or_none()
             assert database.session.execute(
                 database.select(Book).filter_by(entity=company, is_primary=True)
@@ -6059,3 +6059,28 @@ def test_purchase_reconciliation_rollback_on_intermediate_failure(app_ctx, monke
     assert count == 0
     item_count = database.session.query(PurchaseReconciliationItem).count()
     assert item_count == 0
+
+
+def test_reports_require_explicit_company_with_multiple_authorized(app_ctx):
+    """Con varias compañías autorizadas el filtro company es obligatorio."""
+    from cacao_accounting.database import Entity, Modules, User, database
+
+    accounting_module = Modules(module="accounting", default=True, enabled=True)
+    report_user = User(
+        user="report-company-scope-user", name="Report Scope User", password=b"x", classification="admin", active=True
+    )
+    second_entity = Entity(code="OTRA", name="Otra", company_name="Otra", tax_id="J-OTRA", currency="NIO")
+    database.session.add_all([accounting_module, report_user, second_entity])
+    database.session.commit()
+
+    app_ctx.config["SECRET_KEY"] = "testing"
+    client = app_ctx.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = report_user.id
+        session["_fresh"] = True
+
+    missing = client.get("/reports/trial-balance")
+    assert missing.status_code == 400
+
+    explicit = client.get("/reports/trial-balance?company=cacao")
+    assert explicit.status_code == 200
