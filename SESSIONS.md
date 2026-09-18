@@ -2521,3 +2521,36 @@ manteniendo el movimiento positivo de inventario al aprobar el duplicado.
 - Se extendió el mismo contrato de caché a Smart Select para compañía, cuenta, centro de costos, unidad de negocio, proyecto, cliente, proveedor y artículo. La autorización y el alcance de compañías se calculan antes de leer Redis; la llave incorpora esos valores y el usuario autenticado.
 - Las mutaciones de estos catálogos invalidan el namespace de Smart Select después del commit. Los artículos siguen usando el alcance global ya definido por el modelo y no se alteró esa regla de negocio.
 - El TTL de las entradas de datos maestros se mantiene en 300 segundos. La invalidación por generación es inmediata tras los cambios conocidos; el TTL solo limita la antigüedad si aparece un futuro flujo de mutación sin invalidación.
+
+## 2026-09-18 (auditoría técnica SQLAlchemy)
+
+### Petición del usuario
+
+Auditar integralmente modelos, relaciones, consultas, transacciones, índices,
+migraciones y patrones de crecimiento, e implementar solo optimizaciones
+respaldadas por evidencia sin alterar la semántica contable.
+
+### Hallazgos e implementación
+
+- Se inventariaron 174 tablas y se documentaron hallazgos confirmados y
+  optimizaciones potenciales en `docs/database-audit-2026-09.md`.
+- Se reprodujo un N+1 en el reporte de estado de órdenes: tres órdenes
+  ejecutaban cuatro SELECT. La carga específica con `selectinload` lo redujo a
+  dos SELECT en el escenario medido, sin cambiar cálculos ni la estrategia
+  global; conjuntos mayores pueden dividirse en lotes `IN`.
+- Se confirmó que una colisión UNIQUE durante la importación de tasas hacía
+  rollback de filas anteriores pero mantenía el contador. Un savepoint por
+  inserción limita el rollback a la fila en conflicto y conserva la
+  importación parcial.
+- No se agregaron índices: los candidatos compuestos requieren EXPLAIN con
+  datos representativos. Los índices redundantes identificados requieren una
+  migración incremental y validación multi-motor antes de eliminarse.
+
+### Verificación
+
+- La medición BEFORE del reporte produjo cuatro SELECT para tres órdenes; el
+  test de presupuesto AFTER exige exactamente dos.
+- La prueba provoca una colisión UNIQUE real entre filas y exige que las tasas
+  válidas anterior y posterior persistan con un resumen coherente.
+- Dos agentes independientes realizaron discovery de esquema y consultas; un
+  tercer agente aprobó el diff completo en la revisión QA final.

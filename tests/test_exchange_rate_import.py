@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 
 import pytest
 
@@ -148,3 +149,34 @@ class TestImportRates:
         assert result["inserted"] == 1
         assert len(result["errors"]) == 1
         assert "invalid-date" in result["errors"][0]
+
+    def test_integrity_collision_preserves_prior_rows(self, app_ctx, monkeypatch):
+        """A concurrent duplicate must not roll back earlier valid rates."""
+        from cacao_accounting.contabilidad.exchange_rate_import_service import ExchangeRateImportService
+        from cacao_accounting.database import ExchangeRate, database
+
+        class MissingRateQuery:
+            """Simulate a stale existence check before a concurrent insert."""
+
+            def filter_by(self, **_filters):
+                return self
+
+            def first(self):
+                return None
+
+        monkeypatch.setattr(database.session, "query", lambda _model: MissingRateQuery())
+        csv_content = (
+            "Moneda Base,Moneda Destino,Fecha,Tipo de Cambio\n"
+            "NIO,USD,2027-01-01,36.6243\n"
+            "NIO,USD,2027-01-01,36.6243\n"
+            "NIO,USD,2027-01-02,36.7000\n"
+        )
+
+        result = ExchangeRateImportService().import_rates("test.csv", csv_content.encode("utf-8-sig"))
+
+        persisted = database.session.execute(database.select(ExchangeRate).order_by(ExchangeRate.date)).scalars().all()
+        assert result == {"inserted": 2, "skipped": 1, "errors": []}
+        assert [(row.date, row.rate) for row in persisted] == [
+            (date(2027, 1, 1), Decimal("36.624300000")),
+            (date(2027, 1, 2), Decimal("36.700000000")),
+        ]

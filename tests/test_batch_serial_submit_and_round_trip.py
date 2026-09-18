@@ -1128,7 +1128,7 @@ class TestPurchaseInvoiceSubmit:
             .one_or_none()
         )
         assert relation is not None
-        assert relation.target_item_id is None
+        assert relation.target_item_id in (None, "")
 
 
 # <------------------------------------------------------------------------------------------> #

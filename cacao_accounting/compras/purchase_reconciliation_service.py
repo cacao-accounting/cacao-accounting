@@ -20,9 +20,10 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import selectinload
 
 from cacao_accounting.database import (
     Item,
@@ -1804,11 +1805,13 @@ def get_events_for_document(company: str, document_id: str) -> list[dict[str, An
 
 def get_purchase_order_status_report(company: str) -> list[dict[str, Any]]:
     """Retorna el estatus de las ordenes de compra aprobadas/activas para la compania."""
-    from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem
+    from cacao_accounting.database import PurchaseOrder
 
     orders = (
         database.session.execute(
             select(PurchaseOrder)
+            .execution_options(populate_existing=True)
+            .options(selectinload(cast(Any, PurchaseOrder.items)))
             .filter_by(company=company, docstatus=1)
             .order_by(PurchaseOrder.posting_date.desc(), PurchaseOrder.id.desc())
         )
@@ -1818,11 +1821,10 @@ def get_purchase_order_status_report(company: str) -> list[dict[str, Any]]:
 
     report_rows = []
     for order in orders:
-        items = database.session.execute(select(PurchaseOrderItem).filter_by(purchase_order_id=order.id)).scalars().all()
-
-        ordered_qty = sum((_decimal_value(item.qty) for item in items), Decimal("0"))
-        received_qty = sum((_decimal_value(item.received_qty) for item in items), Decimal("0"))
-        billed_qty = sum((_decimal_value(item.billed_qty) for item in items), Decimal("0"))
+        order_items = cast(list[Any], order.items)
+        ordered_qty = sum((_decimal_value(item.qty) for item in order_items), Decimal("0"))
+        received_qty = sum((_decimal_value(item.received_qty) for item in order_items), Decimal("0"))
+        billed_qty = sum((_decimal_value(item.billed_qty) for item in order_items), Decimal("0"))
 
         # Receipt Status
         if ordered_qty <= 0:
