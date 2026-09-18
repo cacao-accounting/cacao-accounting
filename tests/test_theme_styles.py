@@ -93,3 +93,22 @@ def test_module_status_badge_keeps_normal_access_and_exceptions() -> None:
     assert 'data-status="no_access"' in rendered
     assert "bi-lock-fill" in rendered
     assert "Sin acceso" in rendered
+
+
+def test_post_button_keeps_contrast_in_both_themes() -> None:
+    """The success "Post" button follows the theme emphasis with readable foreground."""
+    stylesheet = (PROJECT_ROOT / "cacao_accounting" / "static" / "css" / "cacaoaccounting.css").read_text(encoding="utf-8")
+    default = stylesheet.split(".btn-success, .btn-success:focus", maxsplit=1)[1].split("}", maxsplit=1)[0]
+
+    assert "background-color: var(--ca-p600) !important;" in default
+    assert "border-color: var(--ca-p600) !important;" in default
+    assert "color: #fff !important;" in default
+
+    dark_hover = stylesheet.split('[data-theme="dark"] .btn-success:hover', maxsplit=1)[1].split("}", maxsplit=1)[0]
+    assert "background-color: #B8693E !important;" in dark_hover
+    assert "color: #fff !important;" in dark_hover
+
+    final_tokens = stylesheet.rsplit("/* Visual system v5:", maxsplit=1)[1]
+    light_tokens, _, dark_tokens = final_tokens.partition('[data-theme="dark"]')
+    assert "--ca-p600: #5F7D46;" in light_tokens
+    assert "--ca-p600: #C8753D;" in dark_tokens
