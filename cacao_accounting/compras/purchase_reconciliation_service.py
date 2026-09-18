@@ -1330,6 +1330,94 @@ def _reconcile_three_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Pu
     return result
 
 
+@dataclass
+class _TwoWayTotals:
+    """Accumulated 2-way matching figures."""
+
+    total_qty: Decimal
+    total_amount: Decimal
+    total_price_difference: Decimal
+    total_amount_difference: Decimal
+    total_invoiced_qty: Decimal
+    total_ordered_qty: Decimal
+    price_tolerance_failed: bool
+
+
+def _require_compatible_group(order_groups: dict[Any, Any], invoice_line: Any, key: Any) -> Any:
+    """Return the compatible order group or raise a controlled error."""
+    order_group = _compatible_group(order_groups, invoice_line)
+    if order_group is None:
+        item_code, _uom, _warehouse = key
+        raise PurchaseReconciliationError(
+            _("No existe línea de OC compatible para el ítem %(item_code)s.") % {"item_code": item_code}
+        )
+    return order_group
+
+
+def _two_way_totals(invoice_groups: dict[Any, Any], order_groups: dict[Any, Any], config: MatchingConfig) -> _TwoWayTotals:
+    """Accumulate the 2-way matched, variance and tolerance figures."""
+    totals = _TwoWayTotals(
+        total_qty=sum((aggregate.qty for aggregate in invoice_groups.values()), Decimal("0")),
+        total_amount=Decimal("0"),
+        total_price_difference=Decimal("0"),
+        total_amount_difference=Decimal("0"),
+        total_invoiced_qty=Decimal("0"),
+        total_ordered_qty=Decimal("0"),
+        price_tolerance_failed=False,
+    )
+    for key, invoice_group in invoice_groups.items():
+        order_group = _require_compatible_group(order_groups, invoice_group.lines[0], key)
+        if invoice_group.qty <= 0:
+            raise PurchaseReconciliationError(_("La cantidad facturada debe ser positiva."))
+        pending_qty = sum(
+            (_line_qty(line) - _matched_qty_for_order_item(line.id) for line in order_group.lines),
+            Decimal("0"),
+        )
+        reference_qty = min(order_group.qty, pending_qty)
+        reference_amount = reference_qty * order_group.rate
+        matched_amount = min(invoice_group.qty, reference_qty) * order_group.rate
+        line_price_difference = (invoice_group.rate - order_group.rate) * min(invoice_group.qty, reference_qty)
+        if reference_qty > 0 and not _within_tolerance(
+            line_price_difference,
+            reference_amount,
+            config.price_tolerance_type,
+            config.price_tolerance_value,
+        ):
+            totals.price_tolerance_failed = True
+
+        totals.total_amount += matched_amount
+        totals.total_price_difference += line_price_difference
+        totals.total_amount_difference += invoice_group.amount - reference_amount
+        totals.total_invoiced_qty += invoice_group.qty
+        totals.total_ordered_qty += reference_qty
+    return totals
+
+
+def _persist_two_way_items(
+    reconciliation: PurchaseReconciliation,
+    invoice_items: list[PurchaseInvoiceItem],
+    order_groups: dict[Any, Any],
+) -> None:
+    """Persist matched slices between invoice lines and order lines."""
+    for invoice_item in invoice_items:
+        order_group = _compatible_group(order_groups, invoice_item)
+        if order_group is None:
+            raise PurchaseReconciliationError(_("No existe linea de OC compatible para la linea de factura."))
+        slices = _available_line_slices(order_group.lines, _line_qty(invoice_item), order_mode=True)
+        if not slices:
+            raise PurchaseReconciliationError(_("No queda cantidad pendiente en la orden de compra para la factura."))
+        for order_item, matched_qty in slices:
+            database.session.add(
+                _two_way_reconciliation_item(
+                    reconciliation.id,
+                    order_item,
+                    invoice_item,
+                    matched_qty=matched_qty,
+                    status=str(reconciliation.status),
+                )
+            )
+
+
 def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> PurchaseReconciliationResult:
     """Match purchase order vs invoice without requiring a receipt."""
     purchase_order_id, _order = _load_purchase_order_for_invoice(invoice)
@@ -1354,78 +1442,22 @@ def _reconcile_two_way(invoice: PurchaseInvoice, config: MatchingConfig) -> Purc
     database.session.add(reconciliation)
     database.session.flush()
 
-    total_qty = sum((aggregate.qty for aggregate in invoice_groups.values()), Decimal("0"))
-    total_amount = Decimal("0")
-    total_price_difference = Decimal("0")
-    total_amount_difference = Decimal("0")
-    total_invoiced_qty = Decimal("0")
-    total_ordered_qty = Decimal("0")
-    price_tolerance_failed = False
-
-    for key, invoice_group in invoice_groups.items():
-        order_group = _compatible_group(order_groups, invoice_group.lines[0])
-        if order_group is None:
-            item_code, _uom, _warehouse = key
-            raise PurchaseReconciliationError(
-                _("No existe línea de OC compatible para el ítem %(item_code)s.") % {"item_code": item_code}
-            )
-        if invoice_group.qty <= 0:
-            raise PurchaseReconciliationError(_("La cantidad facturada debe ser positiva."))
-        pending_qty = sum(
-            (_line_qty(line) - _matched_qty_for_order_item(line.id) for line in order_group.lines),
-            Decimal("0"),
-        )
-        reference_qty = min(order_group.qty, pending_qty)
-        reference_amount = reference_qty * order_group.rate
-        matched_amount = min(invoice_group.qty, reference_qty) * order_group.rate
-        price_difference = invoice_group.rate - order_group.rate
-        amount_difference = invoice_group.amount - reference_amount
-        line_price_difference = price_difference * min(invoice_group.qty, reference_qty)
-        if reference_qty > 0 and not _within_tolerance(
-            line_price_difference,
-            reference_amount,
-            config.price_tolerance_type,
-            config.price_tolerance_value,
-        ):
-            price_tolerance_failed = True
-
-        total_amount += matched_amount
-        total_price_difference += line_price_difference
-        total_amount_difference += amount_difference
-        total_invoiced_qty += invoice_group.qty
-        total_ordered_qty += reference_qty
-
+    totals = _two_way_totals(invoice_groups, order_groups, config)
     result = _finalize_reconciliation(
         reconciliation,
         invoice,
         config,
-        total_qty,
-        total_amount,
-        total_price_difference,
-        total_amount_difference,
-        total_invoiced_qty,
-        total_ordered_qty,
+        totals.total_qty,
+        totals.total_amount,
+        totals.total_price_difference,
+        totals.total_amount_difference,
+        totals.total_invoiced_qty,
+        totals.total_ordered_qty,
         receipt_id=None,
-        price_tolerance_failed=price_tolerance_failed,
+        price_tolerance_failed=totals.price_tolerance_failed,
     )
     if result.matching_result != MatchingResult.MATCH_FAILED.value:
-        for invoice_item in invoice_items:
-            order_group = _compatible_group(order_groups, invoice_item)
-            if order_group is None:
-                raise PurchaseReconciliationError(_("No existe linea de OC compatible para la linea de factura."))
-            slices = _available_line_slices(order_group.lines, _line_qty(invoice_item), order_mode=True)
-            if not slices:
-                raise PurchaseReconciliationError(_("No queda cantidad pendiente en la orden de compra para la factura."))
-            for order_item, matched_qty in slices:
-                database.session.add(
-                    _two_way_reconciliation_item(
-                        reconciliation.id,
-                        order_item,
-                        invoice_item,
-                        matched_qty=matched_qty,
-                        status=str(reconciliation.status),
-                    )
-                )
+        _persist_two_way_items(reconciliation, invoice_items, order_groups)
     return result
 
 

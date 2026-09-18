@@ -238,3 +238,78 @@ def test_validate_credit_note_line_capacity_rejects_excess(monkeypatch):
     with pytest.raises(service.PurchaseReconciliationError):
         service._validate_credit_note_line_capacity(source_item, Decimal("20"))
     service._validate_credit_note_line_capacity(source_item, Decimal("5"))
+
+
+def test_require_compatible_group_raises_with_item_code(monkeypatch):
+    """An incompatible invoice line reports its item code in the error."""
+    monkeypatch.setattr(service, "_compatible_group", lambda _groups, _line: None)
+    with pytest.raises(service.PurchaseReconciliationError, match="ITEM-X"):
+        service._require_compatible_group({}, object(), ("ITEM-X", "UN", "WH"))
+
+    order_group = object()
+    monkeypatch.setattr(service, "_compatible_group", lambda _groups, _line: order_group)
+    assert service._require_compatible_group({}, object(), ("ITEM-X", "UN", "WH")) is order_group
+
+
+def test_two_way_totals_accumulates_and_flags_tolerance(monkeypatch):
+    """The 2-way totals reflect matched value, differences and tolerance failure."""
+    invoice_group = SimpleNamespace(lines=[object()], qty=Decimal("10"), rate=Decimal("12"), amount=Decimal("120"))
+    order_group = SimpleNamespace(lines=[SimpleNamespace(id="O1")], qty=Decimal("10"), rate=Decimal("10"))
+    config = SimpleNamespace(price_tolerance_type="percentage", price_tolerance_value=Decimal("0"))
+    monkeypatch.setattr(service, "_compatible_group", lambda _groups, _line: order_group)
+    monkeypatch.setattr(service, "_line_qty", lambda _line: Decimal("10"))
+    monkeypatch.setattr(service, "_matched_qty_for_order_item", lambda _item_id: Decimal("0"))
+    monkeypatch.setattr(service, "_within_tolerance", lambda *args: False)
+
+    totals = service._two_way_totals({("ITEM", "UN", "WH"): invoice_group}, {"key": order_group}, config)
+
+    assert totals.total_qty == Decimal("10")
+    assert totals.total_amount == Decimal("100")
+    assert totals.total_price_difference == Decimal("20")
+    assert totals.total_amount_difference == Decimal("20")
+    assert totals.total_invoiced_qty == Decimal("10")
+    assert totals.total_ordered_qty == Decimal("10")
+    assert totals.price_tolerance_failed is True
+
+
+def test_two_way_totals_rejects_non_positive_invoice_qty(monkeypatch):
+    """A zero or negative invoiced qty is a controlled error."""
+    invoice_group = SimpleNamespace(lines=[object()], qty=Decimal("0"), rate=Decimal("12"), amount=Decimal("0"))
+    order_group = SimpleNamespace(lines=[SimpleNamespace(id="O1")], qty=Decimal("10"), rate=Decimal("10"))
+    config = SimpleNamespace(price_tolerance_type="percentage", price_tolerance_value=Decimal("0"))
+    monkeypatch.setattr(service, "_compatible_group", lambda _groups, _line: order_group)
+
+    with pytest.raises(service.PurchaseReconciliationError):
+        service._two_way_totals({("ITEM", "UN", "WH"): invoice_group}, {"key": order_group}, config)
+
+
+def test_persist_two_way_items_adds_matched_slices(monkeypatch):
+    """Matched order slices are persisted as reconciliation items."""
+    order_item = SimpleNamespace(id="O1")
+    reconciliation = SimpleNamespace(id="REC", status="pending_invoice")
+    invoice_item = SimpleNamespace(item_code="IT")
+    sentinel = object()
+    calls = []
+    added = []
+    monkeypatch.setattr(service, "_compatible_group", lambda _groups, _line: SimpleNamespace(lines=[order_item]))
+    monkeypatch.setattr(service, "_line_qty", lambda _line: Decimal("5"))
+    monkeypatch.setattr(service, "_available_line_slices", lambda _lines, _qty, order_mode=True: [(order_item, Decimal("5"))])
+    monkeypatch.setattr(service, "_two_way_reconciliation_item", lambda *args, **kwargs: calls.append(kwargs) or sentinel)
+    monkeypatch.setattr(service, "database", SimpleNamespace(session=SimpleNamespace(add=added.append, flush=lambda: None)))
+
+    service._persist_two_way_items(reconciliation, [invoice_item], {"key": object()})
+
+    assert added == [sentinel]
+    assert calls[0]["matched_qty"] == Decimal("5")
+
+
+def test_persist_two_way_items_rejects_exhausted_order(monkeypatch):
+    """An exhausted order line cannot persist more slices."""
+    reconciliation = SimpleNamespace(id="REC", status="pending_invoice")
+    invoice_item = SimpleNamespace(item_code="IT")
+    monkeypatch.setattr(service, "_compatible_group", lambda _groups, _line: SimpleNamespace(lines=[object()]))
+    monkeypatch.setattr(service, "_line_qty", lambda _line: Decimal("5"))
+    monkeypatch.setattr(service, "_available_line_slices", lambda _lines, _qty, order_mode=True: [])
+
+    with pytest.raises(service.PurchaseReconciliationError):
+        service._persist_two_way_items(reconciliation, [invoice_item], {"key": object()})
