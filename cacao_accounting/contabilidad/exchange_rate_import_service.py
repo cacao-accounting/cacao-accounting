@@ -84,12 +84,12 @@ class ExchangeRateImportService:
                 skipped += 1
                 continue
 
-            database.session.add(ExchangeRate(origin=origin, destination=dest, rate=rate, date=rate_date))
             try:
-                database.session.flush()
+                with database.session.begin_nested():
+                    database.session.add(ExchangeRate(origin=origin, destination=dest, rate=rate, date=rate_date))
+                    database.session.flush()
                 inserted += 1
             except IntegrityError:
-                database.session.rollback()
                 skipped += 1
 
         if errors and inserted == 0:

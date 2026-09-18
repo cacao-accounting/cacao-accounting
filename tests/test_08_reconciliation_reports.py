@@ -4996,6 +4996,53 @@ def test_purchase_order_status_report(app_ctx):
     assert row["billing_status"] == "Parcial"
 
 
+def test_purchase_order_status_report_avoids_query_per_order(app_ctx):
+    """Loading order lines must not issue one SELECT per purchase order."""
+    from sqlalchemy import event
+
+    from cacao_accounting.compras.purchase_reconciliation_service import get_purchase_order_status_report
+    from cacao_accounting.database import PurchaseOrder, PurchaseOrderItem, database
+
+    for sequence in range(3):
+        order = PurchaseOrder(
+            company="cacao",
+            posting_date=date(2026, 5, sequence + 1),
+            supplier_id=f"SUPP-Q{sequence}",
+            docstatus=1,
+        )
+        database.session.add(order)
+        database.session.flush()
+        database.session.add(
+            PurchaseOrderItem(
+                purchase_order_id=order.id,
+                item_code=f"ITEM-Q{sequence}",
+                qty=Decimal("1"),
+                uom="EA",
+                rate=Decimal("10.00"),
+                amount=Decimal("10.00"),
+            )
+        )
+    database.session.commit()
+    database.session.expire_all()
+
+    select_count = 0
+
+    def count_selects(_connection, _cursor, statement, _parameters, _context, _executemany):
+        nonlocal select_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_count += 1
+
+    engine = database.engine
+    event.listen(engine, "before_cursor_execute", count_selects)
+    try:
+        report = get_purchase_order_status_report("cacao")
+    finally:
+        event.remove(engine, "before_cursor_execute", count_selects)
+
+    assert len(report) == 3
+    assert select_count == 2
+
+
 def test_unlinked_purchase_invoices(app_ctx):
     from cacao_accounting.compras.purchase_reconciliation_service import get_unlinked_purchase_invoices
     from cacao_accounting.database import PurchaseInvoice, database
