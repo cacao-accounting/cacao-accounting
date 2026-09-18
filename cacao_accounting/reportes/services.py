@@ -616,36 +616,30 @@ def _reconciliation_row(
     )
 
 
-def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport:
-    """Reconcilia submayores independientes contra GL por compañía, libro y período.
+@dataclass(frozen=True)
+class _ReconciliationContext:
+    """Filtros y configuración resueltos para la matriz de conciliación."""
 
-    AR/AP se calculan desde facturas y aplicaciones; inventario desde Stock Ledger;
-    impuestos desde impuestos de facturas; bancos se presentan como movimientos
-    de pagos, porque el extracto bancario no tiene un saldo contable persistido.
-    La cuenta GL siempre se filtra por ``company`` y ``ledger_id`` para impedir
-    contaminación entre libros.
-    """
-    selected_ledger = _resolve_ledger(filters.company, filters.ledger)
-    if selected_ledger is None:
-        return PaginatedReport(rows=[], totals={}, columns=[])
-    company_currency = database.session.execute(
-        select(Entity.currency).where(Entity.code == filters.company)
-    ).scalar_one_or_none()
-    comparison_currency = filters.currency or selected_ledger.currency
-    ledger_needs_conversion = selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
-    bounds = _report_period_bounds(filters)
-    period_end = bounds[1]
-    as_of_date = filters.as_of_date or period_end or date.today()
-    defaults = database.session.execute(
-        select(CompanyDefaultAccount).where(CompanyDefaultAccount.company == filters.company)
-    ).scalar_one_or_none()
+    filters: ReconciliationFilters
+    ledger: Book
+    comparison_currency: str
+    as_of_date: date
+    company_currency: str | None
+    defaults: CompanyDefaultAccount | None
+    ledger_needs_conversion: bool
 
-    def _convert(subledger_amount: Decimal, source_currency: str | None) -> Decimal:
-        if not ledger_needs_conversion:
+    def convert(self, subledger_amount: Decimal, source_currency: str | None) -> Decimal:
+        """Convierte un saldo de submayor a la moneda del libro seleccionado."""
+        if not self.ledger_needs_conversion:
             return subledger_amount
-        return _convert_to_ledger_currency(subledger_amount, source_currency, selected_ledger.currency, as_of_date)
+        return _convert_to_ledger_currency(subledger_amount, source_currency, self.ledger.currency, self.as_of_date)
 
-    rows: list[ReportRow] = []
+
+def _reconcile_ar_ap_rows(context: _ReconciliationContext) -> list[ReportRow]:
+    """Construye las filas de conciliación de cuentas por cobrar y pagar."""
+    filters = context.filters
+    defaults = context.defaults
+    as_of_date = context.as_of_date
     ar_account = str(defaults.default_receivable) if defaults and defaults.default_receivable else None
     ap_account = str(defaults.default_payable) if defaults and defaults.default_payable else None
     ar_subledger = get_ar_ap_subledger(
@@ -654,41 +648,44 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
     ap_subledger = get_ar_ap_subledger(
         SubledgerFilters(company=filters.company, party_type="supplier", as_of_date=as_of_date)
     ).totals.get("outstanding_amount", Decimal("0"))
-    rows.append(
+    return [
         _reconciliation_row(
             "AR",
             [ar_account] if ar_account else [],
-            _convert(ar_subledger, company_currency),
+            context.convert(ar_subledger, context.company_currency),
             _reconciliation_gl_amount(
                 filters.company,
-                selected_ledger.id,
+                context.ledger.id,
                 [ar_account] if ar_account else [],
                 date_to=as_of_date,
-                currency=comparison_currency,
+                currency=context.comparison_currency,
             ),
             basis="ending_balance",
-            currency=selected_ledger.currency,
+            currency=context.ledger.currency,
             note=_("Fuente: facturas de venta y aplicaciones de pago."),
-        )
-    )
-    rows.append(
+        ),
         _reconciliation_row(
             "AP",
             [ap_account] if ap_account else [],
-            _convert(-ap_subledger, company_currency),
+            context.convert(-ap_subledger, context.company_currency),
             _reconciliation_gl_amount(
                 filters.company,
-                selected_ledger.id,
+                context.ledger.id,
                 [ap_account] if ap_account else [],
                 date_to=as_of_date,
-                currency=comparison_currency,
+                currency=context.comparison_currency,
             ),
             basis="ending_balance",
-            currency=selected_ledger.currency,
+            currency=context.ledger.currency,
             note=_("Fuente: facturas de compra y aplicaciones de pago; el pasivo se expresa como crédito neto."),
-        )
-    )
+        ),
+    ]
 
+
+def _reconcile_inventory_row(context: _ReconciliationContext) -> ReportRow:
+    """Construye la fila de conciliación de inventario."""
+    filters = context.filters
+    as_of_date = context.as_of_date
     inventory_accounts = [
         str(account_id)
         for account_id in database.session.execute(
@@ -707,48 +704,47 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         )
     )
     inventory_subledger = _decimal_value(database.session.execute(inventory_query).scalar_one())
-    rows.append(
-        _reconciliation_row(
-            "Inventory",
-            inventory_accounts,
-            _convert(inventory_subledger, company_currency),
-            _reconciliation_gl_amount(
-                filters.company, selected_ledger.id, inventory_accounts, date_to=as_of_date, currency=comparison_currency
-            ),
-            basis="ending_balance",
-            currency=selected_ledger.currency,
-            note=_("Fuente: Stock Ledger; cuentas derivadas de la configuración activa por bodega."),
-        )
+    return _reconciliation_row(
+        "Inventory",
+        inventory_accounts,
+        context.convert(inventory_subledger, context.company_currency),
+        _reconciliation_gl_amount(
+            filters.company, context.ledger.id, inventory_accounts, date_to=as_of_date, currency=context.comparison_currency
+        ),
+        basis="ending_balance",
+        currency=context.ledger.currency,
+        note=_("Fuente: Stock Ledger; cuentas derivadas de la configuración activa por bodega."),
     )
 
+
+def _reconcile_grni_row(context: _ReconciliationContext) -> ReportRow:
+    """Construye la fila de conciliación de recepciones pendientes de factura."""
+    filters = context.filters
+    defaults = context.defaults
+    as_of_date = context.as_of_date
     bridge_account = str(defaults.bridge_account_id) if defaults and defaults.bridge_account_id else None
     pending_receipts = get_purchase_reconciliation_pending(company=filters.company, as_of_date=as_of_date)
     pending_grni = sum((pending.pending_amount for pending in pending_receipts), Decimal("0"))
-    rows.append(
-        _reconciliation_row(
-            "GRNI/AP 3-way",
+    return _reconciliation_row(
+        "GRNI/AP 3-way",
+        [bridge_account] if bridge_account else [],
+        context.convert(-pending_grni, context.company_currency),
+        _reconciliation_gl_amount(
+            filters.company,
+            context.ledger.id,
             [bridge_account] if bridge_account else [],
-            _convert(-pending_grni, company_currency),
-            _reconciliation_gl_amount(
-                filters.company,
-                selected_ledger.id,
-                [bridge_account] if bridge_account else [],
-                date_to=as_of_date,
-                currency=comparison_currency,
-            ),
-            basis="ending_balance",
-            currency=selected_ledger.currency,
-            note=_("Fuente: recepciones aprobadas pendientes de factura; el puente se expresa como crédito neto."),
-        )
+            date_to=as_of_date,
+            currency=context.comparison_currency,
+        ),
+        basis="ending_balance",
+        currency=context.ledger.currency,
+        note=_("Fuente: recepciones aprobadas pendientes de factura; el puente se expresa como crédito neto."),
     )
 
-    sales_tax_account = (
-        str(defaults.default_sales_tax_account_id) if defaults and defaults.default_sales_tax_account_id else None
-    )
-    purchase_tax_account = (
-        str(defaults.default_purchase_tax_account_id) if defaults and defaults.default_purchase_tax_account_id else None
-    )
-    sales_tax = sum(
+
+def _reconcile_sales_tax_amount(filters: ReconciliationFilters, as_of_date: date) -> Decimal:
+    """Suma el impuesto de ventas neto de facturas aprobadas hasta la fecha."""
+    return sum(
         (
             _decimal_value(invoice.tax_total) * _document_base_factor(invoice) * _document_sign(invoice)
             for invoice in database.session.execute(
@@ -761,7 +757,11 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         ),
         Decimal("0"),
     )
-    purchase_tax = sum(
+
+
+def _reconcile_purchase_tax_amount(filters: ReconciliationFilters, as_of_date: date) -> Decimal:
+    """Suma el impuesto de compras neto de facturas aprobadas hasta la fecha."""
+    return sum(
         (
             _decimal_value(invoice.tax_total) * _document_base_factor(invoice) * _document_sign(invoice)
             for invoice in database.session.execute(
@@ -774,21 +774,40 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
         ),
         Decimal("0"),
     )
+
+
+def _reconcile_tax_row(context: _ReconciliationContext) -> ReportRow:
+    """Construye la fila de conciliación de impuestos netos."""
+    filters = context.filters
+    defaults = context.defaults
+    as_of_date = context.as_of_date
+    sales_tax_account = (
+        str(defaults.default_sales_tax_account_id) if defaults and defaults.default_sales_tax_account_id else None
+    )
+    purchase_tax_account = (
+        str(defaults.default_purchase_tax_account_id) if defaults and defaults.default_purchase_tax_account_id else None
+    )
+    sales_tax = _reconcile_sales_tax_amount(filters, as_of_date)
+    purchase_tax = _reconcile_purchase_tax_amount(filters, as_of_date)
     tax_accounts = [account for account in (sales_tax_account, purchase_tax_account) if account]
-    rows.append(
-        _reconciliation_row(
-            "Tax",
-            tax_accounts,
-            _convert(purchase_tax - sales_tax, company_currency),
-            _reconciliation_gl_amount(
-                filters.company, selected_ledger.id, tax_accounts, date_to=as_of_date, currency=comparison_currency
-            ),
-            basis="ending_balance",
-            currency=selected_ledger.currency,
-            note=_("Impuestos netos: compras debitadas menos ventas acreditadas."),
-        )
+    return _reconciliation_row(
+        "Tax",
+        tax_accounts,
+        context.convert(purchase_tax - sales_tax, context.company_currency),
+        _reconciliation_gl_amount(
+            filters.company, context.ledger.id, tax_accounts, date_to=as_of_date, currency=context.comparison_currency
+        ),
+        basis="ending_balance",
+        currency=context.ledger.currency,
+        note=_("Impuestos netos: compras debitadas menos ventas acreditadas."),
     )
 
+
+def _reconcile_bank_row(context: _ReconciliationContext) -> ReportRow:
+    """Construye la fila de conciliación de movimientos bancarios."""
+    filters = context.filters
+    as_of_date = context.as_of_date
+    company_currency = context.company_currency
     bank_accounts = [
         account
         for account in database.session.execute(
@@ -816,30 +835,67 @@ def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport
             _convert_to_ledger_currency(
                 _decimal_value(amount),
                 str(currency) if currency else company_currency,
-                selected_ledger.currency,
+                context.ledger.currency,
                 as_of_date,
             )
             for currency, amount in bank_amounts_by_currency
         ),
         Decimal("0"),
     )
-    rows.append(
-        _reconciliation_row(
-            "Bank",
+    return _reconciliation_row(
+        "Bank",
+        [str(account) for account in bank_accounts],
+        bank_subledger,
+        _reconciliation_gl_amount(
+            filters.company,
+            context.ledger.id,
             [str(account) for account in bank_accounts],
-            bank_subledger,
-            _reconciliation_gl_amount(
-                filters.company,
-                selected_ledger.id,
-                [str(account) for account in bank_accounts],
-                date_to=as_of_date,
-                currency=comparison_currency,
-            ),
-            basis="statement_movement",
-            currency=selected_ledger.currency,
-            note=_("Movimiento de extracto; no equivale a saldo de libro si existe saldo inicial no importado."),
-        )
+            date_to=as_of_date,
+            currency=context.comparison_currency,
+        ),
+        basis="statement_movement",
+        currency=context.ledger.currency,
+        note=_("Movimiento de extracto; no equivale a saldo de libro si existe saldo inicial no importado."),
     )
+
+
+def get_reconciliation_matrix(filters: ReconciliationFilters) -> PaginatedReport:
+    """Reconcilia submayores independientes contra GL por compañía, libro y período.
+
+    AR/AP se calculan desde facturas y aplicaciones; inventario desde Stock Ledger;
+    impuestos desde impuestos de facturas; bancos se presentan como movimientos
+    de pagos, porque el extracto bancario no tiene un saldo contable persistido.
+    La cuenta GL siempre se filtra por ``company`` y ``ledger_id`` para impedir
+    contaminación entre libros.
+    """
+    selected_ledger = _resolve_ledger(filters.company, filters.ledger)
+    if selected_ledger is None:
+        return PaginatedReport(rows=[], totals={}, columns=[])
+    company_currency = database.session.execute(
+        select(Entity.currency).where(Entity.code == filters.company)
+    ).scalar_one_or_none()
+    comparison_currency = filters.currency or selected_ledger.currency
+    ledger_needs_conversion = selected_ledger.currency and company_currency and selected_ledger.currency != company_currency
+    bounds = _report_period_bounds(filters)
+    period_end = bounds[1]
+    as_of_date = filters.as_of_date or period_end or date.today()
+    defaults = database.session.execute(
+        select(CompanyDefaultAccount).where(CompanyDefaultAccount.company == filters.company)
+    ).scalar_one_or_none()
+    context = _ReconciliationContext(
+        filters=filters,
+        ledger=selected_ledger,
+        comparison_currency=comparison_currency,
+        as_of_date=as_of_date,
+        company_currency=company_currency,
+        defaults=defaults,
+        ledger_needs_conversion=ledger_needs_conversion,
+    )
+    rows: list[ReportRow] = _reconcile_ar_ap_rows(context)
+    rows.append(_reconcile_inventory_row(context))
+    rows.append(_reconcile_grni_row(context))
+    rows.append(_reconcile_tax_row(context))
+    rows.append(_reconcile_bank_row(context))
     return PaginatedReport(
         rows=rows,
         totals={
