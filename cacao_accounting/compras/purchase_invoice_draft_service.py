@@ -294,6 +294,139 @@ def _resolve_tax_total(command: PurchaseInvoiceDraftCommand, line_total: Decimal
     return calculated
 
 
+def _resolve_idempotent_replay(command: PurchaseInvoiceDraftCommand) -> PurchaseInvoice | None:
+    """Return an existing invoice for a replaying idempotency key, if any."""
+    if not command.idempotency_key:
+        return None
+    existing = database.session.execute(
+        database.select(PurchaseInvoice).where(PurchaseInvoice.idempotency_key == command.idempotency_key)
+    ).scalar_one_or_none()
+    if existing is None:
+        return None
+    return _validate_idempotency_replay(existing, command)
+
+
+def _assert_expected_total(command: PurchaseInvoiceDraftCommand, grand_total: Decimal) -> None:
+    """Reject a draft whose resolved total differs from the observed total."""
+    if command.expected_total is not None and abs(_decimal(command.expected_total) - grand_total) > Decimal("0.02"):
+        raise PurchaseInvoiceDraftError(
+            "MATH_MISMATCH",
+            _("El total extraído no coincide con las líneas resueltas."),
+        )
+
+
+def _build_draft_invoice(
+    command: PurchaseInvoiceDraftCommand,
+    actor_id: str,
+    company: Entity,
+    supplier: Party,
+    rate: Decimal,
+    line_total: Decimal,
+    tax_total: Decimal,
+    grand_total: Decimal,
+) -> PurchaseInvoice:
+    """Instantiate, persist and identify the draft invoice header."""
+    invoice = PurchaseInvoice(
+        company=command.company_id,
+        supplier_id=command.supplier_id,
+        supplier_name=supplier.name,
+        supplier_invoice_no=command.supplier_invoice_no.strip(),
+        idempotency_key=command.idempotency_key,
+        document_type=PURCHASE_INVOICE,
+        posting_date=command.posting_date,
+        document_date=command.posting_date,
+        transaction_currency=command.transaction_currency,
+        base_currency=company.currency,
+        exchange_rate=rate,
+        purchase_order_id=command.purchase_order_id,
+        purchase_receipt_id=command.purchase_receipt_id,
+        tax_template_id=command.tax_template_id,
+        total=line_total,
+        base_total=_decimal(line_total * rate),
+        tax_total=tax_total,
+        grand_total=grand_total,
+        base_grand_total=_decimal(grand_total * rate),
+        outstanding_amount=grand_total,
+        base_outstanding_amount=_decimal(grand_total * rate),
+        remarks=command.remarks,
+        docstatus=0,
+        created_by=actor_id,
+    )
+    database.session.add(invoice)
+    database.session.flush()
+    assign_document_identifier(
+        document=invoice,
+        entity_type=PURCHASE_INVOICE,
+        posting_date_raw=command.posting_date,
+        naming_series_id=None,
+    )
+    return invoice
+
+
+def _relate_line_to_source(
+    invoice: PurchaseInvoice,
+    invoice_line: PurchaseInvoiceItem,
+    line: PurchaseInvoiceDraftLine,
+    command: PurchaseInvoiceDraftCommand,
+) -> None:
+    """Create the source document relation required by the matching mode."""
+    if command.matching_mode == "THREE_WAY_MATCH":
+        if not line.purchase_receipt_item_id:
+            raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _("Falta la recepción de una línea 3-way."))
+        create_document_relation(
+            source_type="purchase_receipt",
+            source_id=str(command.purchase_receipt_id),
+            source_item_id=line.purchase_receipt_item_id,
+            target_type=PURCHASE_INVOICE,
+            target_id=invoice.id,
+            target_item_id=invoice_line.id,
+            qty=line.quantity,
+            uom=invoice_line.uom,
+            rate=line.rate,
+            amount=line.amount,
+        )
+    elif command.matching_mode == "TWO_WAY_MATCH":
+        if not line.purchase_order_item_id:
+            raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _("Falta la orden de una línea 2-way."))
+        create_document_relation(
+            source_type="purchase_order",
+            source_id=str(command.purchase_order_id),
+            source_item_id=line.purchase_order_item_id,
+            target_type=PURCHASE_INVOICE,
+            target_id=invoice.id,
+            target_item_id=invoice_line.id,
+            qty=line.quantity,
+            uom=invoice_line.uom,
+            rate=line.rate,
+            amount=line.amount,
+        )
+
+
+def _persist_draft_lines(
+    invoice: PurchaseInvoice,
+    command: PurchaseInvoiceDraftCommand,
+    validated: list[Item],
+    rate: Decimal,
+) -> None:
+    """Persist every draft line and its source relation atomically."""
+    for line, item in zip(command.lines, validated, strict=True):
+        invoice_line = PurchaseInvoiceItem(
+            purchase_invoice_id=invoice.id,
+            item_code=item.code,
+            item_name=item.name,
+            qty=line.quantity,
+            uom=line.uom or item.purchase_uom or item.default_uom,
+            rate=line.rate,
+            amount=line.amount,
+            base_rate=_decimal(line.rate * rate),
+            base_amount=_decimal(line.amount * rate),
+            expense_account_id=line.expense_account_id,
+        )
+        database.session.add(invoice_line)
+        database.session.flush()
+        _relate_line_to_source(invoice, invoice_line, line, command)
+
+
 def create_purchase_invoice_draft(
     command: PurchaseInvoiceDraftCommand,
     actor_id: str,
@@ -304,12 +437,9 @@ def create_purchase_invoice_draft(
     try:
         _require_actor_can_create(actor_id, command.company_id)
         company, supplier, settings = _validate_header(command)
-        if command.idempotency_key:
-            existing = database.session.execute(
-                database.select(PurchaseInvoice).where(PurchaseInvoice.idempotency_key == command.idempotency_key)
-            ).scalar_one_or_none()
-            if existing is not None:
-                return _validate_idempotency_replay(existing, command)
+        replay = _resolve_idempotent_replay(command)
+        if replay is not None:
+            return replay
         _validate_duplicate(command)
         _validate_sources(command, settings)
         if not command.lines:
@@ -319,90 +449,9 @@ def create_purchase_invoice_draft(
         rate = _exchange_rate(company, command)
         tax_total = _resolve_tax_total(command, line_total)
         grand_total = line_total + tax_total
-        if command.expected_total is not None and abs(_decimal(command.expected_total) - grand_total) > Decimal("0.02"):
-            raise PurchaseInvoiceDraftError(
-                "MATH_MISMATCH",
-                _("El total extraído no coincide con las líneas resueltas."),
-            )
-        invoice = PurchaseInvoice(
-            company=command.company_id,
-            supplier_id=command.supplier_id,
-            supplier_name=supplier.name,
-            supplier_invoice_no=command.supplier_invoice_no.strip(),
-            idempotency_key=command.idempotency_key,
-            document_type=PURCHASE_INVOICE,
-            posting_date=command.posting_date,
-            document_date=command.posting_date,
-            transaction_currency=command.transaction_currency,
-            base_currency=company.currency,
-            exchange_rate=rate,
-            purchase_order_id=command.purchase_order_id,
-            purchase_receipt_id=command.purchase_receipt_id,
-            tax_template_id=command.tax_template_id,
-            total=line_total,
-            base_total=_decimal(line_total * rate),
-            tax_total=tax_total,
-            grand_total=grand_total,
-            base_grand_total=_decimal(grand_total * rate),
-            outstanding_amount=grand_total,
-            base_outstanding_amount=_decimal(grand_total * rate),
-            remarks=command.remarks,
-            docstatus=0,
-            created_by=actor_id,
-        )
-        database.session.add(invoice)
-        database.session.flush()
-        assign_document_identifier(
-            document=invoice,
-            entity_type=PURCHASE_INVOICE,
-            posting_date_raw=command.posting_date,
-            naming_series_id=None,
-        )
-        for index, (line, item) in enumerate(zip(command.lines, validated, strict=True)):
-            invoice_line = PurchaseInvoiceItem(
-                purchase_invoice_id=invoice.id,
-                item_code=item.code,
-                item_name=item.name,
-                qty=line.quantity,
-                uom=line.uom or item.purchase_uom or item.default_uom,
-                rate=line.rate,
-                amount=line.amount,
-                base_rate=_decimal(line.rate * rate),
-                base_amount=_decimal(line.amount * rate),
-                expense_account_id=line.expense_account_id,
-            )
-            database.session.add(invoice_line)
-            database.session.flush()
-            if command.matching_mode == "THREE_WAY_MATCH":
-                if not line.purchase_receipt_item_id:
-                    raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _("Falta la recepción de una línea 3-way."))
-                create_document_relation(
-                    source_type="purchase_receipt",
-                    source_id=str(command.purchase_receipt_id),
-                    source_item_id=line.purchase_receipt_item_id,
-                    target_type=PURCHASE_INVOICE,
-                    target_id=invoice.id,
-                    target_item_id=invoice_line.id,
-                    qty=line.quantity,
-                    uom=invoice_line.uom,
-                    rate=line.rate,
-                    amount=line.amount,
-                )
-            elif command.matching_mode == "TWO_WAY_MATCH":
-                if not line.purchase_order_item_id:
-                    raise PurchaseInvoiceDraftError("LINE_UNRESOLVED", _("Falta la orden de una línea 2-way."))
-                create_document_relation(
-                    source_type="purchase_order",
-                    source_id=str(command.purchase_order_id),
-                    source_item_id=line.purchase_order_item_id,
-                    target_type=PURCHASE_INVOICE,
-                    target_id=invoice.id,
-                    target_item_id=invoice_line.id,
-                    qty=line.quantity,
-                    uom=invoice_line.uom,
-                    rate=line.rate,
-                    amount=line.amount,
-                )
+        _assert_expected_total(command, grand_total)
+        invoice = _build_draft_invoice(command, actor_id, company, supplier, rate, line_total, tax_total, grand_total)
+        _persist_draft_lines(invoice, command, validated, rate)
         refresh_source_caches_for_target(PURCHASE_INVOICE, invoice.id)
         log_create(invoice)
         if commit:
