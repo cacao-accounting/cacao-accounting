@@ -51,12 +51,16 @@ def create_default_entity(data: dict, status: str = "default", default: bool = T
     if not data.get("id") or not data.get("razon_social") or not data.get("id_fiscal"):
         raise ValueError(_("Los datos de la entidad son incompletos."))
 
-    existing_entity = database.session.execute(database.select(Entity).filter_by(code=data["id"])).scalar_one_or_none()
+    code = data.get("id")
+    if isinstance(code, str):
+        code = code.upper()
+
+    existing_entity = database.session.execute(database.select(Entity).filter_by(code=code)).scalar_one_or_none()
     if existing_entity is not None:
-        raise ValueError(_("La entidad con código '%(code)s' ya existe.") % {"code": data["id"]})
+        raise ValueError(_("La entidad con código '%(code)s' ya existe.") % {"code": code})
 
     entity = Entity(
-        code=data.get("id"),
+        code=code,
         company_name=data.get("razon_social"),
         name=data.get("nombre_comercial") or data.get("razon_social"),
         tax_id=data.get("id_fiscal"),
