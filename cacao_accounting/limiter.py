@@ -70,7 +70,7 @@ def init_limiter(app: Flask) -> None:
     app.config["RATELIMIT_ENABLED"] = enabled
 
     if enabled:
-        storage_uri = app.config.get("RATELIMIT_STORAGE_URI") or app.config.get("CACHE_REDIS_URL") or "memory://"
+        storage_uri = app.config.get("RATELIMIT_STORAGE_URI") or "memory://"
         app.config["RATELIMIT_STORAGE_URI"] = storage_uri
 
     limiter.init_app(app)

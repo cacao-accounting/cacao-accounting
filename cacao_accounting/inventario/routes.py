@@ -7,6 +7,7 @@ from decimal import Decimal
 
 
 from cacao_accounting.exceptions import flash_error
+from cacao_accounting.cache import invalidate_cache
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
@@ -358,6 +359,7 @@ def inventario_articulo_nuevo():
                 item = create_item_with_uoms(params)
                 _upload_item_image_if_available(item)
                 database.session.commit()
+                invalidate_cache("smart-select-master-data")
                 return redirect("/inventory/item/list")
             except InventoryServiceError as exc:
                 database.session.rollback()

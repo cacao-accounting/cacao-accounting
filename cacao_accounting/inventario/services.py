@@ -274,6 +274,9 @@ def _process_item_edit(item, formulario):
             except Exception as exc:
                 flash(_("Imagen no actualizada: %(error)s") % {"error": exc}, "warning")
         database.session.commit()
+        from cacao_accounting.cache import invalidate_cache
+
+        invalidate_cache("smart-select-master-data")
         flash(_("Artículo actualizado correctamente."), "success")
         return redirect(url_for("inventario.inventario_articulo", item_id=item.code))
     except ValueError as exc:

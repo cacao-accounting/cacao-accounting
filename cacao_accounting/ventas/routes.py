@@ -8,6 +8,7 @@ from decimal import Decimal
 
 
 from cacao_accounting.exceptions import flash_error
+from cacao_accounting.cache import invalidate_cache
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask.typing import ResponseReturnValue
@@ -877,6 +878,7 @@ def ventas_cliente_configuracion_compania(customer_id: str):
     try:
         upsert_party_company_settings_rows(customer_id, "customer", request.form)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         flash(_("Configuración por compañía del cliente guardada correctamente."), "success")
     except ValueError as exc:
         database.session.rollback()
@@ -2467,6 +2469,7 @@ def ventas_cliente_habilitar_proveedor(customer_id: str):
     try:
         toggle_party_supplier_role(customer_id, enable=True, user_id=current_user.id)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         flash(_("Cliente habilitado como proveedor exitosamente."), "success")
     except PartyRoleToggleError as exc:
         database.session.rollback()
@@ -2482,6 +2485,7 @@ def ventas_cliente_deshabilitar_proveedor(customer_id: str):
     try:
         toggle_party_supplier_role(customer_id, enable=False, user_id=current_user.id)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         flash(_("Rol de proveedor deshabilitado exitosamente."), "success")
     except PartyRoleToggleError as exc:
         database.session.rollback()

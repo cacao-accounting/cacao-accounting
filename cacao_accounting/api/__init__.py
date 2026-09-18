@@ -69,6 +69,7 @@ from cacao_accounting.document_flow.status import document_status_payload
 from cacao_accounting.document_flow.tracing import document_flow_tree
 from cacao_accounting.document_flow.tree import build_document_flow_tree
 from cacao_accounting.fiscal_preview_service import fiscal_preview
+from cacao_accounting.cache import user_scoped_cache
 from cacao_accounting.search_select import SearchSelectError, search_select
 from cacao_accounting.api.line_import import line_import_bp
 from cacao_accounting.api.dashboard import dashboard_api
@@ -81,10 +82,53 @@ api.register_blueprint(line_import_bp)
 api.register_blueprint(dashboard_api)
 
 HOME_ENDPOINT = "cacao_app.pagina_inicio"
+_CACHEABLE_SMART_SELECT_DOCTYPES = frozenset(
+    {
+        "account",
+        "account_code",
+        "account_id",
+        "business_unit",
+        "business_unit_id",
+        "company",
+        "cost_center",
+        "cost_center_id",
+        "customer",
+        "item",
+        "party",
+        "project",
+        "project_id",
+        "supplier",
+        "unit",
+        "unit_id",
+    }
+)
 
 rate_limit_blueprint(api)
 rate_limit_blueprint(line_import_bp)
 rate_limit_blueprint(dashboard_api)
+
+
+def _freeze_search_filters(filters: dict[str, list[str]]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """Convert request filters into a stable, cache-key-safe representation."""
+    return tuple(sorted((key, tuple(values)) for key, values in filters.items()))
+
+
+@user_scoped_cache("smart-select-master-data")
+def _cached_master_data_search(
+    doctype: str,
+    query: str,
+    filters: tuple[tuple[str, tuple[str, ...]], ...],
+    limit: int | None,
+    company_scope: tuple[str, ...],
+) -> dict[str, Any]:
+    """Return an already authorized master-data Smart Select result from Redis when available."""
+    return search_select(
+        doctype=doctype,
+        query=query,
+        filters={key: list(values) for key, values in filters},
+        limit=limit,
+        company_scope=set(company_scope),
+    )
 
 
 def _require_flow_company_access(payload: dict[str, Any], action: str = "crear") -> None:
@@ -362,10 +406,8 @@ def test_appy():
     return jsonify(responde_data)
 
 
-@api.route("/api/search-select")
-@login_required
-def api_search_select():
-    """Devuelve opciones para campos de seleccion asistida."""
+def _search_select_request_values() -> tuple[str, str, str | None, dict[str, list[str]]]:
+    """Extract and normalize the Smart Select request fields."""
     doctype = request.args.get("doctype", "").strip()
     query = request.args.get("q", "").strip()
     raw_limit = request.args.get("limit")
@@ -373,21 +415,30 @@ def api_search_select():
     filters = {
         key: request.args.getlist(key) for key in request.args if key not in reserved_params and request.args.getlist(key)
     }
+    return doctype, query, raw_limit, filters
+
+
+def _require_search_select_company_access(filters: dict[str, list[str]]) -> None:
+    """Reject explicit company filters outside the current user's RBAC scope."""
     requested_companies = {str(value) for value in filters.get("company", []) if str(value).strip()}
-    if requested_companies:
-        companies = (
-            database.session.execute(
-                database.select(Entity).where(Entity.code.in_(requested_companies) | Entity.id.in_(requested_companies))
-            )
-            .scalars()
-            .all()
+    if not requested_companies:
+        return
+    companies = (
+        database.session.execute(
+            database.select(Entity).where(Entity.code.in_(requested_companies) | Entity.id.in_(requested_companies))
         )
-        all_known = all(
-            any(str(company.code) == value or str(company.id) == value for company in companies)
-            for value in requested_companies
-        )
-        if not all_known or any(not user_can_access_company(current_user, company) for company in companies):
-            abort(403)
+        .scalars()
+        .all()
+    )
+    all_known = all(
+        any(str(company.code) == value or str(company.id) == value for company in companies) for value in requested_companies
+    )
+    if not all_known or any(not user_can_access_company(current_user, company) for company in companies):
+        abort(403)
+
+
+def _search_select_company_scope(doctype: str, filters: dict[str, list[str]]) -> set[str]:
+    """Build the current user's authorized company scope for the requested catalog."""
     scope_entities = database.select(Entity)
     if getattr(current_user, "classification", None) != "admin":
         scope_entities = scope_entities.where(Entity.enabled.is_(True))
@@ -396,24 +447,42 @@ def api_search_select():
         for company in database.session.execute(scope_entities).scalars()
         if getattr(current_user, "classification", None) == "admin" or user_can_access_company(current_user, company)
     }
-    if doctype == "company":
-        include_inactive = any(
-            value.strip().lower() in {"1", "true", "yes", "on"} for value in filters.get("include_inactive", [])
-        )
-        entity_query = database.select(Entity)
-        if not include_inactive or getattr(current_user, "classification", None) != "admin":
-            entity_query = entity_query.where(Entity.enabled.is_(True))
-        companies = database.session.execute(entity_query).scalars().all()
-        company_scope &= {str(company.code) for company in companies}
+    return _filter_company_scope_for_catalog(company_scope, doctype, filters)
+
+
+def _filter_company_scope_for_catalog(company_scope: set[str], doctype: str, filters: dict[str, list[str]]) -> set[str]:
+    """Remove inactive companies unless an administrator explicitly includes them."""
+    if doctype != "company":
+        return company_scope
+    include_inactive = any(
+        value.strip().lower() in {"1", "true", "yes", "on"} for value in filters.get("include_inactive", [])
+    )
+    entity_query = database.select(Entity)
+    if not include_inactive or getattr(current_user, "classification", None) != "admin":
+        entity_query = entity_query.where(Entity.enabled.is_(True))
+    visible_codes = {str(company.code) for company in database.session.execute(entity_query).scalars().all()}
+    return company_scope & visible_codes
+
+
+def _search_select_payload(
+    doctype: str, query: str, filters: dict[str, list[str]], raw_limit: str | None, company_scope: set[str]
+) -> dict[str, Any]:
+    """Run the selected catalog query, using the user-scoped cache where applicable."""
+    limit = int(raw_limit) if raw_limit else None
+    if doctype in _CACHEABLE_SMART_SELECT_DOCTYPES:
+        return _cached_master_data_search(doctype, query, _freeze_search_filters(filters), limit, tuple(sorted(company_scope)))
+    return search_select(doctype=doctype, query=query, filters=filters, limit=limit, company_scope=company_scope)
+
+
+@api.route("/api/search-select")
+@login_required
+def api_search_select():
+    """Devuelve opciones para campos de seleccion asistida."""
+    doctype, query, raw_limit, filters = _search_select_request_values()
+    _require_search_select_company_access(filters)
+    company_scope = _search_select_company_scope(doctype, filters)
     try:
-        limit = int(raw_limit) if raw_limit else None
-        payload = search_select(
-            doctype=doctype,
-            query=query,
-            filters=filters,
-            limit=limit,
-            company_scope=company_scope,
-        )
+        payload = _search_select_payload(doctype, query, filters, raw_limit, company_scope)
     except ValueError as exc:
         if not isinstance(exc, SearchSelectError):
             return jsonify({"error": _("Parametro inválido."), "message": str(exc)}), 400

@@ -13,6 +13,7 @@ from typing import Any, Sequence, cast
 from sqlalchemy import update
 
 from cacao_accounting.exceptions import flash_error
+from cacao_accounting.cache import invalidate_cache
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
@@ -603,6 +604,7 @@ def _handle_supplier_create(
         proveedor.code = generate_party_code(proveedor.id, selected_company, "supplier")
         upsert_party_company_settings_rows(proveedor.id, "supplier", form)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         return redirect("/buying/supplier/list")
     except ValueError as exc:
         database.session.rollback()
@@ -637,6 +639,7 @@ def _handle_supplier_update(
         apply_party_profile(proveedor, form)
         upsert_party_company_settings_rows(proveedor.id, "supplier", form)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         flash(_("Proveedor actualizado correctamente."), "success")
         return redirect(url_for(ROUTE_COMPRAS_PROVEEDOR, supplier_id=proveedor.id))
     except ValueError as exc:

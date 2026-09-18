@@ -5,6 +5,7 @@ from typing import Any, cast
 from decimal import Decimal
 
 from cacao_accounting.exceptions import flash_error
+from cacao_accounting.cache import invalidate_cache
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request
 
@@ -557,6 +558,8 @@ def nueva_entidad():
 
         seed_matching_config_for_company(ENTIDAD.code)
         database.session.commit()
+        invalidate_cache("companies")
+        invalidate_cache("smart-select-master-data")
 
         return LISTA_ENTIDADES
     elif request.method == "POST":
@@ -595,6 +598,8 @@ def editar_entidad(id_entidad):
         ENTIDAD.enabled = bool(request.form.get("habilitado"))
         database.session.add(ENTIDAD)
         database.session.commit()
+        invalidate_cache("companies")
+        invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=ENTIDAD.code))
     else:
         DATA = {
@@ -664,6 +669,8 @@ def eliminar_entidad(id_entidad):
         return redirect(url_for(CONTABILIDAD_ENTIDAD_ENDPOINT, entidad_id=company))
     database.session.delete(ENTIDAD[0])
     database.session.commit()
+    invalidate_cache("companies")
+    invalidate_cache("smart-select-master-data")
 
     return LISTA_ENTIDADES
 
@@ -687,6 +694,8 @@ def inactivar_entidad(id_entidad):
     ENTIDAD[0].enabled = False
     ENTIDAD[0].status = "inactivo"
     database.session.commit()
+    invalidate_cache("companies")
+    invalidate_cache("smart-select-master-data")
 
     return LISTA_ENTIDADES
 
@@ -706,6 +715,8 @@ def activar_entidad(id_entidad):
     if ENTIDAD[0].status != "predeterminado":
         ENTIDAD[0].status = "activo"
     database.session.commit()
+    invalidate_cache("companies")
+    invalidate_cache("smart-select-master-data")
 
     return LISTA_ENTIDADES
 
@@ -728,6 +739,8 @@ def predeterminar_entidad(id_entidad):
     ENTIDAD = database.session.execute(database.select(Entity).filter_by(id=id_entidad)).first()
     ENTIDAD[0].default = True
     database.session.commit()
+    invalidate_cache("companies")
+    invalidate_cache("smart-select-master-data")
 
     return LISTA_ENTIDADES
 
@@ -802,6 +815,7 @@ def eliminar_unidad(id_unidad):
             return redirect(url_for(CONTABILIDAD_UNIDADES))
         database.session.delete(unidad)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
     return redirect(url_for(CONTABILIDAD_UNIDADES))
 
 
@@ -846,6 +860,7 @@ def nueva_unidad():
         database.session.flush()
         update_hierarchy_attributes(DATA)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
 
         return redirect(url_for(CONTABILIDAD_UNIDADES))
     return render_template(
@@ -906,6 +921,7 @@ def editar_unidad(id_unidad):
         registro.parent_id = parent_id
         update_hierarchy_attributes(registro)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         return redirect(url_for("contabilidad.unidad", id_unidad=registro.code))
 
     return render_template(
@@ -1336,6 +1352,7 @@ def nueva_cuenta():
         )
         database.session.add(DATA)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_CUENTAS_ENDPOINT))
 
     return render_template(
@@ -1412,6 +1429,7 @@ def editar_cuenta(entity, id_cta):
     registro.active = bool(formulario.activo.data)
     registro.enabled = bool(formulario.activo.data)
     database.session.commit()
+    invalidate_cache("smart-select-master-data")
     return redirect(url_for("contabilidad.cuenta", entity=entity, id_cta=registro.code))
 
 
@@ -1503,6 +1521,7 @@ def nuevo_centro_costo():
         )
         database.session.add(DATA)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
     return render_template(
@@ -1576,6 +1595,7 @@ def editar_centro_costo(id_cc):
     registro.group = bool(formulario.grupo.data)
     registro.parent = parent_code
     database.session.commit()
+    invalidate_cache("smart-select-master-data")
     return redirect(url_for("contabilidad.centro_costo", id_cc=registro.code))
 
 
@@ -1624,6 +1644,7 @@ def eliminar_centro_costo(id_cc):
             return redirect(url_for(CONTABILIDAD_CCOSTOS))
         database.session.delete(registro)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
     return redirect(url_for(CONTABILIDAD_CCOSTOS))
 
 
@@ -1716,6 +1737,7 @@ def nuevo_proyecto():
         database.session.flush()
         update_hierarchy_attributes(DATA)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
     return render_template(
@@ -1780,6 +1802,7 @@ def editar_proyecto(project_id):
             return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
         _update_project_from_form(proyecto, formulario, budget_amount, budget_currency)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
     return _render_project_edit_form(formulario, TITULO, proyecto, entity_initial_label)
@@ -1811,6 +1834,7 @@ def eliminar_proyecto(project_id):
             return redirect(url_for(CONTABILIDAD_PROYECTOS))
         database.session.delete(proyecto)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
     return redirect(url_for(CONTABILIDAD_PROYECTOS))
 
 

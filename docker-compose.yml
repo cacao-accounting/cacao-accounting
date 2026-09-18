@@ -7,7 +7,8 @@ services:
       - "80:80"
     environment:
       - CACAO_DATABASE_URL=postgresql://${DB_USER:-cacao}:${DB_PASSWORD:-}@db:5432/${DB_NAME:-cacaodb}
-      - CACHE_REDIS_URL=redis://cache:6379/0
+      - CACHE_REDIS_URL=redis://cache:6379/2
+      - RATELIMIT_STORAGE_URI=redis://cache:6379/0
       - CACAO_USER=${CACAO_USER:-cacao}
       - CACAO_PSWD=${CACAO_PSWD:-}
       - SECRET_KEY=${SECRET_KEY:-}

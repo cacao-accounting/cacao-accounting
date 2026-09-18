@@ -19,7 +19,8 @@ es:
 | CACAO_THREADS    |        CPU threads to use.         |                         Default 4 |
 | CACAO_PORT       | POrt for the WSGI server to listen |                      Default 8080 |
 | PYTHON_CPU_COUNT |        Max CPU unit to use         |                    Container only |
-| CACHE_REDIS_URL  |  Redis service Connection String   | Example: redis://localhost:6379/1 |
+| CACHE_REDIS_URL  | Redis URL for application cache (database 2) | Example: redis://localhost:6379/2 |
+| RATELIMIT_STORAGE_URI | Redis URL for rate limiting (database 0) | Example: redis://localhost:6379/0 |
 
 ## Initial Setup
 

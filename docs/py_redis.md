@@ -16,8 +16,9 @@
     sudo systemctl enable redis.service --now
     ```
 
-Once Redis is available you can update your [systemd unit service](py_systemd.md) with
-the new enviromet variable `CACHE_REDIS_URL` pointing to `redis://localhost:6379/1`:
+Once Redis is available, update your [systemd unit service](py_systemd.md) with separate
+Redis URLs: `CACHE_REDIS_URL` points to database 2 for application cache, and
+`RATELIMIT_STORAGE_URI` points to database 0 for rate limiting:
 
 ```
 [Unit]
@@ -30,7 +31,8 @@ Restart=on-failure
 RestartSec=5
 Environment="CACAO_KEY=hajkañdkjda455654ASSDAFCAFADASDÑÑÑÑÑÑññññññlkadjasdkldaldkd"
 Environment="CACAO_DB=protocol+driver://user:password@host:port/dbname"
-Environment="CACHE_REDIS_URL= redis://localhost:6379/1"
+Environment="CACHE_REDIS_URL=redis://localhost:6379/2"
+Environment="RATELIMIT_STORAGE_URI=redis://localhost:6379/0"
 ExecStart=/opt/cacao-accounting/venv/bin/cacaoctl serve
 
 [Install]

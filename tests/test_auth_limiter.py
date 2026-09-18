@@ -40,21 +40,35 @@ def test_init_limiter_cloud_mode() -> None:
     """Verifica que el limitador de velocidad se configure correctamente en modo nube."""
     app = Flask("test_app")
     app.config["MODO_ESCRITORIO"] = False
-    app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/1"
+    app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/2"
+    app.config["RATELIMIT_STORAGE_URI"] = "redis://localhost:6379/0"
 
     with patch("cacao_accounting.config.TESTING_MODE", False):
         init_limiter(app)
 
     if _has_limiter:
         assert app.config.get("RATELIMIT_ENABLED") is True
-        assert app.config.get("RATELIMIT_STORAGE_URI") == "redis://localhost:6379/1"
+        assert app.config.get("RATELIMIT_STORAGE_URI") == "redis://localhost:6379/0"
+
+
+def test_init_limiter_does_not_inherit_cache_redis_url() -> None:
+    """Rate limiting never inherits the cache Redis database implicitly."""
+    app = Flask("test_app")
+    app.config["MODO_ESCRITORIO"] = False
+    app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/2"
+
+    with patch("cacao_accounting.config.TESTING_MODE", False):
+        init_limiter(app)
+
+    if _has_limiter:
+        assert app.config.get("RATELIMIT_STORAGE_URI") == "memory://"
 
 
 def test_init_cache_desktop_mode() -> None:
     """Verifica que init_cache configure SimpleCache y remueva Redis en modo escritorio."""
     app = Flask("test_app")
     app.config["MODO_ESCRITORIO"] = True
-    app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/0"
+    app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/2"
 
     init_cache(app)
 
@@ -66,10 +80,22 @@ def test_init_cache_cloud_mode() -> None:
     """Verifica que init_cache use Redis en modo nube si está configurado."""
     app = Flask("test_app")
     app.config["MODO_ESCRITORIO"] = False
-    app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/0"
+    app.config["CACHE_REDIS_URL"] = "redis://localhost:6379/2"
 
     with patch("cacao_accounting.cache.cache.init_app"):
         init_cache(app)
 
     assert app.config.get("CACHE_TYPE") == "RedisCache"
-    assert app.config.get("CACHE_REDIS_URL") == "redis://localhost:6379/0"
+    assert app.config.get("CACHE_REDIS_URL") == "redis://localhost:6379/2"
+
+
+def test_init_cache_does_not_inherit_generic_redis_url() -> None:
+    """Cloud cache only uses its explicit Redis URL."""
+    app = Flask("test_app")
+    app.config["MODO_ESCRITORIO"] = False
+    app.config["REDIS_URL"] = "redis://localhost:6379/0"
+
+    init_cache(app)
+
+    assert app.config["CACHE_TYPE"] == "SimpleCache"
+    assert "CACHE_REDIS_URL" not in app.config

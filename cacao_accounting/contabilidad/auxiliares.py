@@ -15,21 +15,31 @@
 # Recursos locales
 # ---------------------------------------------------------------------------------------
 from cacao_accounting.database import database
+from cacao_accounting.cache import user_scoped_cache
 
 
 def obtener_lista_entidades_por_id_razonsocial():
     """Devuelve únicamente compañías activas visibles para el usuario actual."""
-    from cacao_accounting.database import Entity
     from flask_login import current_user
     from cacao_accounting.auth.permisos import Permisos
     from cacao_accounting.database.helpers import obtener_id_modulo_por_nombre
 
-    query = database.select(Entity).where(Entity.enabled.is_(True)).order_by(Entity.code)
     if not getattr(current_user, "is_authenticated", False):
         return [("", "")]
+
     permisos = Permisos(modulo=obtener_id_modulo_por_nombre("accounting"), usuario=current_user.id)
-    if not permisos.administrador:
-        query = query.where(Entity.code.in_(permisos.obtener_companias_autorizadas()))
+    authorized_companies = None if permisos.administrador else tuple(permisos.obtener_companias_autorizadas())
+    return _lista_entidades_cacheada(authorized_companies)
+
+
+@user_scoped_cache("companies")
+def _lista_entidades_cacheada(authorized_companies: tuple[str, ...] | None) -> list[tuple[str, str]]:
+    """Load enabled company choices for an already evaluated access scope."""
+    from cacao_accounting.database import Entity
+
+    query = database.select(Entity).where(Entity.enabled.is_(True)).order_by(Entity.code)
+    if authorized_companies is not None:
+        query = query.where(Entity.code.in_(authorized_companies))
     entities = database.session.execute(query).scalars().all()
     return [("", "")] + [(entity.code, entity.name or entity.company_name) for entity in entities]
 

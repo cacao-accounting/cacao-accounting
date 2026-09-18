@@ -139,6 +139,9 @@ if environ.get("CACHE_REDIS_URL"):
 else:
     configuracion["CACHE_TYPE"] = "SimpleCache"
 
+if environ.get("RATELIMIT_STORAGE_URI"):
+    configuracion["RATELIMIT_STORAGE_URI"] = environ.get("RATELIMIT_STORAGE_URI") or ""
+
 
 def probar_modo_escritorio() -> bool:
     """Compatibility wrapper for the centralized runtime mode detector."""

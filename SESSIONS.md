@@ -2509,3 +2509,15 @@ manteniendo el movimiento positivo de inventario al aprobar el duplicado.
 - Verificación focalizada: 39 pruebas pasan y 5 se omiten por la dependencia opcional `polib`; Black, Ruff, Mypy,
   `msgfmt`, placeholders y `git diff --check` quedan limpios. Flake8, Pylint, pydocstyle y complexipy no están instalados
   en el entorno y el proxy bloqueó su instalación.
+
+## 2026-09-17 (cache Redis aislada por usuario)
+
+- Se agregó caché condicional para opciones de empresas en cloud con Redis. Cada llave incluye el ID del usuario y el alcance de empresas autorizado, que se vuelve a evaluar en cada solicitud.
+- Crear, editar, eliminar, activar, inactivar o cambiar empresa predeterminada invalida el namespace después del commit, actualizando la lista cacheada para todos los usuarios.
+- Docker Compose usa Redis DB 2 para `CACHE_REDIS_URL` y DB 0 para `RATELIMIT_STORAGE_URI`; el limitador ya no hereda la URL de caché.
+- El workflow incorpora pruebas focalizadas con PostgreSQL y Redis. La prueba de integración lleva `skipif` cuando no existe `CACHE_REDIS_URL`; las pruebas unitarias se ejecutan con backend simulado.
+- Verificación local: 16 pruebas pasan, 1 prueba de Redis se omite por no tener servicio configurado; Ruff, Flake8, Mypy, pydocstyle y complexipy pasan. La integración real queda cubierta por el job de CI.
+- Revisión de QA detectó y corrigió el fallback a `REDIS_URL`; la caché ahora requiere `CACHE_REDIS_URL` explícita. La verificación final suma 17 pruebas aprobadas y 1 omitida (Redis ausente), con cobertura de 96% en `cache.py`.
+- Se extendió el mismo contrato de caché a Smart Select para compañía, cuenta, centro de costos, unidad de negocio, proyecto, cliente, proveedor y artículo. La autorización y el alcance de compañías se calculan antes de leer Redis; la llave incorpora esos valores y el usuario autenticado.
+- Las mutaciones de estos catálogos invalidan el namespace de Smart Select después del commit. Los artículos siguen usando el alcance global ya definido por el modelo y no se alteró esa regla de negocio.
+- El TTL de las entradas de datos maestros se mantiene en 300 segundos. La invalidación por generación es inmediata tras los cambios conocidos; el TTL solo limita la antigüedad si aparece un futuro flujo de mutación sin invalidación.

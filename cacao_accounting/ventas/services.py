@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, NoReturn, Sequence, cast
 
 from cacao_accounting.exceptions import flash_error
+from cacao_accounting.cache import invalidate_cache
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 
@@ -748,6 +749,7 @@ def _handle_cliente_create(
         cliente.code = generate_party_code(cliente.id, form.get("company"), "customer")
         _upsert_customer_company_settings_from_request(cliente.id, form)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         return redirect("/sales/customer/list")
     except ValueError as exc:
         database.session.rollback()
@@ -783,6 +785,7 @@ def _handle_cliente_update(
         apply_party_profile(cliente, form)
         _upsert_customer_company_settings_from_request(cliente.id, form)
         database.session.commit()
+        invalidate_cache("smart-select-master-data")
         flash(_("Cliente actualizado correctamente."), "success")
         return redirect(url_for(_ENDPOINT_CLIENTE, customer_id=cliente.id))
     except ValueError as exc:
